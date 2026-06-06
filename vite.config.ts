@@ -5,5 +5,13 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Split Phaser into its own chunk — it rarely changes between game
+        // patches, so the browser keeps it cached across rebuilds.
+        // (Borrowed from the Phaser Editor Vite template.)
+        manualChunks: { phaser: ['phaser'] },
+      },
+    },
   },
 });
