@@ -37,7 +37,7 @@ export class GameScene extends Phaser.Scene {
     if (sceneFile.entities.length === 0) {
       this.add
         .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Describe your game\nin the chat!', {
-          fontFamily: 'Bangers',
+          fontFamily: 'Fredoka One',
           fontSize: '28px',
           color: '#ffffff',
           align: 'center',
