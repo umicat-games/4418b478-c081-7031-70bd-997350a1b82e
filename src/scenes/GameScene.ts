@@ -27,6 +27,12 @@ export class GameScene extends Phaser.Scene {
   // input
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: { w: Key; s: Key; a: Key; d: Key };
+  // Last-input-wins control state. `mouseTarget` is set ONLY by a real
+  // pointermove (mouse becomes the active device); cleared when a movement
+  // key is held or the target is reached. `facing` is the current nose angle
+  // (draw convention: 0 → up), held steady while the plane isn't moving.
+  private mouseTarget: { x: number; y: number } | null = null;
+  private facing = 0;
 
   // state
   private alive = true;
@@ -179,6 +185,13 @@ export class GameScene extends Phaser.Scene {
       a: kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       d: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+
+    // Moving the mouse hands control to it and sets a fly-to target. We only
+    // react to actual movement — a still mouse never tugs the plane, so it no
+    // longer fights the keyboard (keyboard clears this target in update()).
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      this.mouseTarget = { x: p.x, y: p.y };
+    });
   }
 
   // ── HUD ─────────────────────────────────────────────────────────────────────
@@ -569,7 +582,7 @@ export class GameScene extends Phaser.Scene {
     ).length;
     this.bulletText.setText(`BULLETS: ${activeBullets}`);
 
-    // ── Player movement ──
+    // ── Player movement (last-input-wins: keyboard vs mouse) ──
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const { left, right, up, down } = this.cursors;
     const { w, s, a, d } = this.wasd;
@@ -578,37 +591,43 @@ export class GameScene extends Phaser.Scene {
     const keyHeld = left.isDown || right.isDown || up.isDown || down.isDown
                   || w.isDown || s.isDown || a.isDown || d.isDown;
 
-    if (left.isDown  || a.isDown) vx -= PLAYER_SPEED;
-    if (right.isDown || d.isDown) vx += PLAYER_SPEED;
-    if (up.isDown    || w.isDown) vy -= PLAYER_SPEED;
-    if (down.isDown  || s.isDown) vy += PLAYER_SPEED;
-
-    // Normalise diagonal
-    if (vx !== 0 && vy !== 0) { vx *= 0.7071; vy *= 0.7071; }
-
-    // Mouse follow — active when no keys held
-    const mx = this.input.mousePointer.x;
-    const my = this.input.mousePointer.y;
-    if (!keyHeld) {
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, mx, my);
+    if (keyHeld) {
+      // Keyboard takes control; the mouse disengages until it's moved again.
+      this.mouseTarget = null;
+      if (left.isDown  || a.isDown) vx -= PLAYER_SPEED;
+      if (right.isDown || d.isDown) vx += PLAYER_SPEED;
+      if (up.isDown    || w.isDown) vy -= PLAYER_SPEED;
+      if (down.isDown  || s.isDown) vy += PLAYER_SPEED;
+      if (vx !== 0 && vy !== 0) { vx *= 0.7071; vy *= 0.7071; }   // normalise diagonal
+    } else if (this.mouseTarget) {
+      // Mouse is the active device — fly toward the point it last moved to,
+      // easing in as we close, then stop. Reaching it clears the target so the
+      // plane holds position instead of jittering on the spot.
+      const t = this.mouseTarget;
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, t.x, t.y);
       if (dist > 8) {
-        const mAng = Phaser.Math.Angle.Between(this.player.x, this.player.y, mx, my);
+        const mAng = Phaser.Math.Angle.Between(this.player.x, this.player.y, t.x, t.y);
         const mSpd = Math.min(dist * 4, PLAYER_SPEED);
         vx = Math.cos(mAng) * mSpd;
         vy = Math.sin(mAng) * mSpd;
+      } else {
+        this.mouseTarget = null;
       }
     }
+    // else: no key held and mouse idle → vx=vy=0 → plane holds position.
 
     body.setVelocity(vx, vy);
 
-    // ── Plane orientation — nose points toward mouse cursor ──
-    // Phaser.Math.Angle.Between returns standard angle (right=0, CCW positive in math, CW on screen).
-    // Our draw convention: angle=0 → nose up. Add PI/2 to convert.
-    const drawAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, mx, my) + Math.PI / 2;
+    // ── Plane orientation — face the direction of motion; hold last facing
+    // when idle (no more snapping the nose to a cursor we're not chasing).
     const spd = Math.sqrt(vx * vx + vy * vy);
+    if (spd > 1) {
+      // Angle.Between convention: right=0. Draw convention: 0 → nose up. +PI/2.
+      this.facing = Math.atan2(vy, vx) + Math.PI / 2;
+    }
 
-    this.drawPlane(this.player.x, this.player.y, drawAngle);
-    this.drawThruster(this.player.x, this.player.y, drawAngle, spd);
+    this.drawPlane(this.player.x, this.player.y, this.facing);
+    this.drawThruster(this.player.x, this.player.y, this.facing, spd);
 
     // ── Cull off-screen bullets ──
     const margin = 120;
