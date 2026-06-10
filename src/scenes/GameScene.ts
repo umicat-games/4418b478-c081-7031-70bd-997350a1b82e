@@ -13,6 +13,8 @@ const PIPE_W        = 68;     // visual pipe body width
 const PIPE_CAP_EXT  = 10;     // how much cap extends each side beyond body
 const PIPE_CAP_H    = 28;     // cap height
 const BIRD_X        = 200;    // fixed horizontal position of bird
+const BAT_SPAWN_MIN = 3200;   // ms between bat spawns (min)
+const BAT_SPAWN_MAX = 5800;   // ms between bat spawns (max)
 // ──────────────────────────────────────────────────────────────────────────────
 
 type GameState = 'idle' | 'playing' | 'dead';
@@ -24,6 +26,15 @@ interface PipePair {
   scored: boolean;
 }
 
+interface Bat {
+  img: Phaser.GameObjects.Image;
+  baseY: number;    // centre Y at spawn
+  speed: number;    // horizontal px/s
+  amp: number;      // sine-wave vertical amplitude px
+  freq: number;     // sine-wave frequency Hz
+  t: number;        // elapsed seconds (for sine)
+}
+
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
 
@@ -33,6 +44,10 @@ export class GameScene extends Phaser.Scene {
 
   // Pipe tracking (non-physics, moved manually)
   private pipePairs: PipePair[] = [];
+
+  // Bat enemies
+  private bats: Bat[] = [];
+  private batTimer?: Phaser.Time.TimerEvent;
 
   // Game state
   private state: GameState = 'idle';
@@ -63,6 +78,7 @@ export class GameScene extends Phaser.Scene {
     this.score       = 0;
     this.state       = 'idle';
     this.pipePairs   = [];
+    this.bats        = [];
     this.bestScore   = (this.registry.get('bestScore') as number) ?? 0;
 
     // Physics world gravity
@@ -81,6 +97,7 @@ export class GameScene extends Phaser.Scene {
 
   private buildTextures(): void {
     this.makeBirdTexture();
+    this.makeBatTexture();
   }
 
   private makeBirdTexture(): void {
@@ -117,6 +134,65 @@ export class GameScene extends Phaser.Scene {
     g.fillCircle(30, 10, 2);
 
     g.generateTexture('bird', 48, 36);
+    g.destroy();
+  }
+
+  private makeBatTexture(): void {
+    if (this.textures.exists('bat')) return;
+
+    const g  = this.make.graphics({ add: false });
+    const cx = 30, cy = 16;
+
+    const wingDark  = 0x2A1540;
+    const wingMid   = 0x3D2060;
+    const bodyColor = 0x4A2878;
+
+    // ── Left wing (two triangular membrane sections) ──
+    g.fillStyle(wingDark);
+    g.fillTriangle(cx, cy,  2, cy - 10,  7, cy + 13);
+    g.fillStyle(wingMid);
+    g.fillTriangle(cx, cy,  7, cy + 13, 18, cy + 15);
+
+    // ── Right wing ──
+    g.fillStyle(wingDark);
+    g.fillTriangle(cx, cy, 58, cy - 10, 53, cy + 13);
+    g.fillStyle(wingMid);
+    g.fillTriangle(cx, cy, 53, cy + 13, 42, cy + 15);
+
+    // Wing vein lines
+    g.lineStyle(1, 0x1A0C30, 0.7);
+    g.lineBetween(cx, cy, 2,  cy - 10);
+    g.lineBetween(cx, cy, 7,  cy + 13);
+    g.lineBetween(cx, cy, 58, cy - 10);
+    g.lineBetween(cx, cy, 53, cy + 13);
+
+    // ── Body ──
+    g.fillStyle(bodyColor);
+    g.fillEllipse(cx, cy, 18, 13);
+
+    // ── Ears (two triangles on top) ──
+    g.fillStyle(bodyColor);
+    g.fillTriangle(cx - 5, cy - 6,  cx - 8, cy - 15, cx - 1, cy - 6);
+    g.fillTriangle(cx + 5, cy - 6,  cx + 8, cy - 15, cx + 1, cy - 6);
+    // Inner ear pink
+    g.fillStyle(0xFF88AA, 0.6);
+    g.fillTriangle(cx - 5, cy - 7,  cx - 6, cy - 13, cx - 2, cy - 7);
+    g.fillTriangle(cx + 5, cy - 7,  cx + 6, cy - 13, cx + 2, cy - 7);
+
+    // ── Eyes (glowing red) ──
+    g.fillStyle(0xFF1111);
+    g.fillCircle(cx - 4, cy - 1, 3);
+    g.fillCircle(cx + 4, cy - 1, 3);
+    g.fillStyle(0xFF8888);
+    g.fillCircle(cx - 3, cy - 2, 1.5);
+    g.fillCircle(cx + 5, cy - 2, 1.5);
+
+    // ── Fangs ──
+    g.fillStyle(0xFFFFFF);
+    g.fillTriangle(cx - 2, cy + 6, cx - 4, cy + 11, cx,     cy + 6);
+    g.fillTriangle(cx + 2, cy + 6, cx + 4, cy + 11, cx,     cy + 6);
+
+    g.generateTexture('bat', 60, 32);
     g.destroy();
   }
 
@@ -306,6 +382,9 @@ export class GameScene extends Phaser.Scene {
       callbackScope:  this,
       loop:           true,
     });
+
+    // Bats start appearing after a short grace period
+    this.time.delayedCall(3000, () => this.scheduleBatSpawn());
   }
 
   private flap(): void {
@@ -318,9 +397,11 @@ export class GameScene extends Phaser.Scene {
     if (this.state === 'dead') return;
     this.state = 'dead';
     this.pipeTimer?.destroy();
+    this.batTimer?.destroy();
 
-    // Stop all pipe containers
+    // Stop all pipe containers and bats
     this.pipePairs.forEach(p => p.container.setActive(false));
+    this.bats.forEach(b => b.img.setActive(false));
 
     // White flash
     const flash = this.add
@@ -420,6 +501,39 @@ export class GameScene extends Phaser.Scene {
         this.scene.restart({ sceneId: this.sceneId })
       );
     });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Bat enemies
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private scheduleBatSpawn(): void {
+    if (this.state !== 'playing') return;
+    const delay = Phaser.Math.Between(BAT_SPAWN_MIN, BAT_SPAWN_MAX);
+    this.batTimer = this.time.delayedCall(delay, () => {
+      this.spawnBat();
+      this.scheduleBatSpawn();
+    });
+  }
+
+  private spawnBat(): void {
+    if (this.state !== 'playing') return;
+
+    const y     = Phaser.Math.Between(70, this.groundY - 70);
+    const speed = Phaser.Math.Between(300, 430);
+    const amp   = Phaser.Math.Between(22, 50);
+    const freq  = Phaser.Math.FloatBetween(1.0, 2.2);
+
+    const img = this.add.image(GAME_WIDTH + 50, y, 'bat').setDepth(7);
+
+    // Warn-in flash so the player notices the bat coming
+    this.tweens.add({
+      targets:  img,
+      alpha:    { from: 0, to: 1 },
+      duration: 200,
+    });
+
+    this.bats.push({ img, baseY: y, speed, amp, freq, t: 0 });
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -536,8 +650,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Collision detection (manual AABB)
+  // Collision detection (manual AABB / circle)
   // ──────────────────────────────────────────────────────────────────────────
+
+  private birdHitsBat(bat: Bat): boolean {
+    const dx = this.bird.x - bat.img.x;
+    const dy = this.bird.y - bat.img.y;
+    return dx * dx + dy * dy < 26 * 26; // 26 px combined radius
+  }
 
   private birdHitsPipe(pair: PipePair): boolean {
     // Bird AABB (using the shrunk hitbox size)
@@ -603,6 +723,26 @@ export class GameScene extends Phaser.Scene {
       if (pair.container.x < -200) {
         pair.container.destroy();
         this.pipePairs.splice(i, 1);
+      }
+    }
+
+    // ── Move bats & check collisions ──────────────────────────────────────
+    for (let i = this.bats.length - 1; i >= 0; i--) {
+      const bat = this.bats[i];
+      if (!bat.img.active) continue;
+
+      bat.t       += delta / 1000;
+      bat.img.x   -= bat.speed * (delta / 1000);
+      bat.img.y    = bat.baseY + Math.sin(bat.t * bat.freq * Math.PI * 2) * bat.amp;
+
+      if (this.birdHitsBat(bat)) {
+        this.die();
+        return;
+      }
+
+      if (bat.img.x < -80) {
+        bat.img.destroy();
+        this.bats.splice(i, 1);
       }
     }
   }

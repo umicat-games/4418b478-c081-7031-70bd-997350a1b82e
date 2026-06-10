@@ -7,6 +7,7 @@
 
 - **Bird** — Physics sprite with arcade gravity. Custom texture drawn with Phaser Graphics (golden body, orange wing, beak, eye with shine). Shrunk hitbox for fair play. Nose-down rotation when falling; pitches up on flap.
 - **Pipes** — Container-based (no physics); drawn with Phaser Graphics each spawn. Green body + darker right shadow + lighter left highlight + wider cap facing the gap. Moved manually each `update()` frame.
+- **Bat enemies** — Dart across the screen from right to left with a sine-wave vertical wobble. Dark purple with red glowing eyes, veined wings, and fangs drawn with Phaser Graphics (`generateTexture('bat')`). First bat appears after 3 s of play; subsequent bats spawn every 3.2–5.8 s. Circle collision (26 px radius). Freeze on death.
 - **Collision detection** — Manual AABB check: bird hitbox (26×20) vs pipe half-width (body + cap extension). Ground and ceiling kill check.
 - **Scoring** — Point awarded when pipe centre passes bird X. Score text pops with a tween + golden particle burst.
 - **Background** — 5-band sky gradient (cyan→light blue), white 3-puff clouds, grass + dirt ground strip with texture marks.
@@ -36,5 +37,5 @@
 
 ## Changed This Turn
 
-- Created full Flappy Bird game implementation in `GameScene.ts` (bird physics, pipe spawning, collision, scoring, idle/playing/dead states, game-over panel with best score)
-- Added `public/webfonts.json` to load the "Bangers" Google Font
+- Added flying bat enemies with sine-wave darting motion, glowing red eyes, and veined wings
+- Bats spawn after a 3 s grace period; new bat every 3.2–5.8 s at random height and speed
