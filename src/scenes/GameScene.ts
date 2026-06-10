@@ -36,7 +36,7 @@ export class GameScene extends Phaser.Scene {
 
     if (sceneFile.entities.length === 0) {
       this.add
-        .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'My game 4', {
+        .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'My game 5', {
           fontSize: '28px',
           color: '#ffffff',
           align: 'center',
