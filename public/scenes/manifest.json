@@ -5,10 +5,167 @@
   "version": "1.0.0",
   "initialScene": "main",
   "scenes": [
-    { "id": "main", "type": "world", "file": "world/main.json", "hud": "game-hud" }
+    {
+      "id": "main",
+      "type": "world",
+      "file": "world/main.json",
+      "hud": "game-hud"
+    }
   ],
   "huds": [
-    { "id": "game-hud", "file": "hud/game-hud.json" }
+    {
+      "id": "game-hud",
+      "file": "hud/game-hud.json"
+    }
   ],
-  "assets": []
+  "assets": [
+    {
+      "id": "grass_tile_layers",
+      "textureKey": "grass_tile_layers",
+      "path": "uploaded/grass_tile_layers.png",
+      "loadUrl": "https://unboxy-dev-local.s3.amazonaws.com/uploads/3d083502-8ccd-4815-8ad2-66c16ef70387/grass_tile_layers.png",
+      "kind": "image",
+      "tileset": {
+        "cellSize": {
+          "width": 16,
+          "height": 16
+        },
+        "cols": 11,
+        "rows": 7,
+        "autotile": {
+          "kind": "wang-8bit",
+          "terrains": [
+            {
+              "id": "grass",
+              "terrainTag": "grass",
+              "ruleMap": {
+                "0": 36,
+                "1": 25,
+                "4": 33,
+                "5": 37,
+                "7": 22,
+                "16": 3,
+                "17": 14,
+                "20": 4,
+                "21": 48,
+                "23": 15,
+                "28": 0,
+                "29": 26,
+                "31": 11,
+                "64": 35,
+                "65": 40,
+                "68": 34,
+                "69": 41,
+                "71": 39,
+                "80": 7,
+                "81": 51,
+                "84": 8,
+                "85": 52,
+                "87": 42,
+                "92": 6,
+                "93": 31,
+                "95": 50,
+                "112": 2,
+                "113": 29,
+                "116": 5,
+                "117": 32,
+                "119": 20,
+                "124": 1,
+                "125": 30,
+                "127": 28,
+                "193": 24,
+                "197": 38,
+                "199": 23,
+                "209": 18,
+                "213": 43,
+                "215": 19,
+                "221": 9,
+                "223": 17,
+                "241": 13,
+                "245": 49,
+                "247": 16,
+                "253": 27,
+                "255": 12
+              }
+            }
+          ]
+        }
+      },
+      "pixelArt": true
+    },
+    {
+      "id": "stone_ground_tiles",
+      "textureKey": "stone_ground_tiles",
+      "path": "uploaded/stone_ground_tiles.png",
+      "loadUrl": "https://unboxy-dev-local.s3.amazonaws.com/uploads/3d083502-8ccd-4815-8ad2-66c16ef70387/stone_ground_tiles.png",
+      "kind": "image",
+      "tileset": {
+        "cellSize": {
+          "width": 16,
+          "height": 16
+        },
+        "cols": 11,
+        "rows": 7,
+        "autotile": {
+          "kind": "wang-8bit",
+          "terrains": [
+            {
+              "id": "stone",
+              "terrainTag": "stone",
+              "ruleMap": {
+                "0": 36,
+                "1": 25,
+                "4": 33,
+                "5": 37,
+                "7": 22,
+                "16": 3,
+                "17": 14,
+                "20": 4,
+                "21": 48,
+                "23": 15,
+                "28": 0,
+                "29": 26,
+                "31": 11,
+                "64": 35,
+                "65": 40,
+                "68": 34,
+                "69": 41,
+                "71": 39,
+                "80": 7,
+                "81": 51,
+                "84": 8,
+                "85": 52,
+                "87": 42,
+                "92": 6,
+                "93": 31,
+                "95": 50,
+                "112": 2,
+                "113": 29,
+                "116": 5,
+                "117": 32,
+                "119": 20,
+                "124": 1,
+                "125": 30,
+                "127": 28,
+                "193": 24,
+                "197": 38,
+                "199": 23,
+                "209": 18,
+                "213": 43,
+                "215": 19,
+                "221": 9,
+                "223": 17,
+                "241": 13,
+                "245": 49,
+                "247": 16,
+                "253": 27,
+                "255": 12
+              }
+            }
+          ]
+        }
+      },
+      "pixelArt": true
+    }
+  ]
 }
