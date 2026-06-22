@@ -1,4 +1,7 @@
-import { createUmicatGame } from '@umicat/phaser-sdk';
+import { createUmicatGame, Umicat } from '@umicat/phaser-sdk';
+
+// Initialise platform services once; scenes import this promise.
+export const umicatReady = Umicat.init({ standaloneGameId: 'star-siege' }).catch(() => null);
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';

@@ -6,11 +6,22 @@
   "world": {
     "width": 1280,
     "height": 720,
-    "background": { "color": "#1a1a2e" }
+    "background": { "color": "#050510" }
   },
   "camera": {
     "follow": null,
     "bounds": { "x": 0, "y": 0, "width": 1280, "height": 720 }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-player",
+      "kind": "code-rendered",
+      "role": "player",
+      "transform": { "x": 640, "y": 360, "depth": 3 },
+      "script": "src/visuals/player.ts",
+      "width": 48,
+      "height": 40,
+      "params": { "color": "#00ccff", "accent": "#ff6600", "engineColor": "#ff8800" }
+    }
+  ]
 }
