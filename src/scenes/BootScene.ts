@@ -28,6 +28,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('bgm', 'uploaded/star_siege_bgm_rgqa5.mp3');
     this.load.audio('shoot', 'uploaded/shoot_sfx_tqeon.mp3');
     this.load.audio('explosion', 'uploaded/explosion_sfx_txq85.mp3');
+    this.load.audio('pickup', 'uploaded/pickup_sfx_v2td0.mp3');
   }
 
   create(): void {

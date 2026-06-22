@@ -28,6 +28,7 @@
 - **Background music**: AI-generated synthwave space combat track (`star_siege_bgm_rgqa5.mp3`). Starts on first user interaction (browser autoplay rule), loops through TitleScene → GameScene.
 - **Shoot SFX**: AI-generated sci-fi laser zap (`shoot_sfx_tqeon.mp3`). Plays at volume 0.35 on every bullet fired.
 - **Explosion SFX**: AI-generated electronic burst (`explosion_sfx_txq85.mp3`). Plays on every enemy kill — vol 0.45 for drones/zigzaggers, 0.7 for tankers.
+- **Pickup SFX**: AI-generated chime sparkle (`pickup_sfx_v2td0.mp3`). Plays at vol 0.6 when player collects any power-up.
 
 ## Key Files
 - `src/visuals/player.ts` — render script for player ship

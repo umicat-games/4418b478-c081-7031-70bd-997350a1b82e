@@ -539,6 +539,7 @@ export class GameScene extends Phaser.Scene {
     if (!pu.active || !this.playerAlive) return;
     const type = pu.getData('type') as PowerUpType;
     pu.destroy();
+    this.sound.play('pickup', { volume: 0.6 });
     if (type === 'rapid')  this.activateRapidFire();
     if (type === 'shield') this.activateShield();
     if (type === 'bomb')   this.activateBomb();
