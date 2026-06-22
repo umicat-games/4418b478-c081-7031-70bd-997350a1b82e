@@ -453,10 +453,11 @@ export class GameScene extends Phaser.Scene {
     // Shoot SFX
     this.sound.play('shoot', { volume: 0.35 });
 
-    // Muzzle flash
-    const flash = this.add.graphics().setDepth(4);
+    // Muzzle flash — Graphics must be positioned at (bx,by) so the tween
+    // scales it around the flash centre rather than the canvas corner.
+    const flash = this.add.graphics({ x: bx, y: by }).setDepth(4);
     flash.fillStyle(0xffff88, 0.9);
-    flash.fillCircle(bx, by, 7);
+    flash.fillCircle(0, 0, 7);
     this.tweens.add({
       targets: flash,
       alpha: 0,

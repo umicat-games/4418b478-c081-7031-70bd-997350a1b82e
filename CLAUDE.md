@@ -56,4 +56,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Added AI-generated background music (synthwave space combat). Loaded in BootScene, starts on first interaction in TitleScene (browser autoplay rule), loops continuously through TitleScene and GameScene.
+- Fixed muzzle flash bug: Graphics object was at (0,0) with circle drawn at (bx,by); tween scaling flew it to corner. Fixed by positioning Graphics at (bx,by) and drawing at (0,0).
