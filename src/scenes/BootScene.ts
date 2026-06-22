@@ -25,6 +25,7 @@ export class BootScene extends Phaser.Scene {
 
     // --- Uploaded assets ---
     this.load.image('star_siege_cover', 'uploaded/star_siege_cover.jpg');
+    this.load.audio('bgm', 'uploaded/star_siege_bgm_rgqa5.mp3');
   }
 
   create(): void {

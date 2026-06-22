@@ -25,6 +25,7 @@
 - **High score persistence**: Saved to `umicat.saves` key `'highScore'` between sessions.
 - **Background**: Gradient deep space, seeded starfield (200 stars), nebula blobs.
 - **Font**: Orbitron (Google Font via `public/webfonts.json`).
+- **Background music**: AI-generated synthwave space combat track (`star_siege_bgm_rgqa5.mp3`). Starts on first user interaction (browser autoplay rule), loops through TitleScene → GameScene.
 
 ## Key Files
 - `src/visuals/player.ts` — render script for player ship
@@ -35,6 +36,7 @@
 - `public/scenes/manifest.json` — title "Star Siege"
 - `public/webfonts.json` — ["Orbitron"]
 - `public/uploaded/star_siege_cover.jpg` — game cover image (used on title screen)
+- `public/uploaded/star_siege_bgm_rgqa5.mp3` — background music (looping, loaded via BootScene, key `bgm`)
 - `docs/design.md` — full game design document
 
 ## Controls
@@ -52,6 +54,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Added TitleScene: cover image fullscreen background, dark gradient overlay, "STAR SIEGE" title + slogan, interactive START button with hover/click feedback, fade-in/fade-out transitions to GameScene.
-- BootScene now routes to TitleScene instead of GameScene directly.
-- star_siege_cover.jpg imported and registered in BootScene.preload().
+- Added AI-generated background music (synthwave space combat). Loaded in BootScene, starts on first interaction in TitleScene (browser autoplay rule), loops continuously through TitleScene and GameScene.

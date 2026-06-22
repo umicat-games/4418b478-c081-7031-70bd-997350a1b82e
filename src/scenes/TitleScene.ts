@@ -98,6 +98,15 @@ export class TitleScene extends Phaser.Scene {
 
     drawBtn(false);
 
+    // Start BGM on first interaction (browser autoplay policy requires a user gesture)
+    const startBgm = (): void => {
+      if (!this.sound.get('bgm')?.isPlaying) {
+        this.sound.play('bgm', { loop: true, volume: 0.5 });
+      }
+    };
+    this.input.once('pointerdown', startBgm);
+    this.input.keyboard?.once('keydown', startBgm);
+
     hitZone.on('pointerover', () => {
       drawBtn(true);
       this.tweens.add({ targets: label, scaleX: 1.08, scaleY: 1.08, duration: 100, ease: 'Quad.Out' });
@@ -107,7 +116,8 @@ export class TitleScene extends Phaser.Scene {
       this.tweens.add({ targets: label, scaleX: 1, scaleY: 1, duration: 100, ease: 'Quad.Out' });
     });
     hitZone.on('pointerdown', () => {
-      // Flash the button white, then launch the game
+      startBgm(); // ensure music started even if keyboard listener fired first
+      // Flash the button, then launch the game
       this.tweens.add({
         targets: label,
         alpha: 0.3,
