@@ -754,7 +754,7 @@ export class GameScene extends Phaser.Scene {
       delay: 420, yoyo: true, repeat: 0 });
 
     // Best
-    const bestTxt = this.add.text(cx, cy + 22, `BEST  ${this.highScore}`, {
+    const bestTxt = this.add.text(cx, cy + 22, `BEST SCORE  ${this.highScore}`, {
       fontFamily: 'Orbitron', fontSize: '20px', color: '#ffaa00',
       stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(1002).setAlpha(0);
