@@ -28,11 +28,13 @@
 
 ## Key Files
 - `src/visuals/player.ts` — render script for player ship
+- `src/scenes/TitleScene.ts` — title/start screen (cover image, title, slogan, START button)
 - `src/scenes/GameScene.ts` — all game logic (movement, spawning, collisions, HUD, game over)
 - `src/main.ts` — exports `umicatReady` (Umicat platform promise)
 - `public/scenes/world/main.json` — player entity (`e-player`, role `player`, code-rendered)
 - `public/scenes/manifest.json` — title "Star Siege"
 - `public/webfonts.json` — ["Orbitron"]
+- `public/uploaded/star_siege_cover.jpg` — game cover image (used on title screen)
 - `docs/design.md` — full game design document
 
 ## Controls
@@ -50,4 +52,6 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Initial complete build: full game from scratch.
+- Added TitleScene: cover image fullscreen background, dark gradient overlay, "STAR SIEGE" title + slogan, interactive START button with hover/click feedback, fade-in/fade-out transitions to GameScene.
+- BootScene now routes to TitleScene instead of GameScene directly.
+- star_siege_cover.jpg imported and registered in BootScene.preload().

@@ -22,11 +22,14 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     drawLoadingBar(this);
     preloadManifest(this);
+
+    // --- Uploaded assets ---
+    this.load.image('star_siege_cover', 'uploaded/star_siege_cover.jpg');
   }
 
   create(): void {
     const manifest = getManifest(this);
-    this.scene.start('GameScene', { sceneId: manifest.initialScene });
+    this.scene.start('TitleScene', { sceneId: manifest.initialScene });
   }
 }
 
