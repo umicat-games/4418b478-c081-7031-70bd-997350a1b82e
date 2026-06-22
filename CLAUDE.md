@@ -26,6 +26,7 @@
 - **Background**: Gradient deep space, seeded starfield (200 stars), nebula blobs.
 - **Font**: Orbitron (Google Font via `public/webfonts.json`).
 - **Background music**: AI-generated synthwave space combat track (`star_siege_bgm_rgqa5.mp3`). Starts on first user interaction (browser autoplay rule), loops through TitleScene → GameScene.
+- **Shoot SFX**: AI-generated sci-fi laser zap (`shoot_sfx_tqeon.mp3`). Plays at volume 0.35 on every bullet fired.
 
 ## Key Files
 - `src/visuals/player.ts` — render script for player ship
@@ -37,6 +38,7 @@
 - `public/webfonts.json` — ["Orbitron"]
 - `public/uploaded/star_siege_cover.jpg` — game cover image (used on title screen)
 - `public/uploaded/star_siege_bgm_rgqa5.mp3` — background music (looping, loaded via BootScene, key `bgm`)
+- `public/uploaded/shoot_sfx_tqeon.mp3` — shoot sound effect (key `shoot`, played in fireBullet)
 - `docs/design.md` — full game design document
 
 ## Controls

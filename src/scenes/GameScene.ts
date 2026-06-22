@@ -450,6 +450,9 @@ export class GameScene extends Phaser.Scene {
       Math.sin(angle) * BULLET_SPEED,
     );
 
+    // Shoot SFX
+    this.sound.play('shoot', { volume: 0.35 });
+
     // Muzzle flash
     const flash = this.add.graphics().setDepth(4);
     flash.fillStyle(0xffff88, 0.9);
