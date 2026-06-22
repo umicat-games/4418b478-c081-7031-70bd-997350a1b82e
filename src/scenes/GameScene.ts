@@ -606,6 +606,9 @@ export class GameScene extends Phaser.Scene {
   // ─── Effects ──────────────────────────────────────────────────────────────
 
   private explodeAt(x: number, y: number, type: EnemyType): void {
+    // Explosion SFX — tanker gets a louder hit
+    this.sound.play('explosion', { volume: type === 'tanker' ? 0.7 : 0.45 });
+
     const count  = type === 'tanker' ? 16 : 9;
     const maxSpd = type === 'tanker' ? 220 : 150;
     const emitter = this.add.particles(x, y, 'particle', {
