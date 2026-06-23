@@ -29,6 +29,7 @@
 - **Background music**: AI-generated synthwave space combat track (`star_siege_bgm_rgqa5.mp3`). Starts on first user interaction (browser autoplay rule), loops through TitleScene → GameScene.
 - **Shoot SFX**: AI-generated sci-fi laser zap (`shoot_sfx_tqeon.mp3`). Plays at volume 0.35 on every bullet fired.
 - **Explosion SFX**: AI-generated electronic burst (`explosion_sfx_txq85.mp3`). Plays on every enemy kill — vol 0.45 for drones/zigzaggers, 0.7 for tankers.
+- **Hit SFX**: AI-generated metallic impact sound (`hit_sfx_v96l2.mp3`, key `hit`, vol 0.5). Plays when a bullet damages but doesn't kill an enemy (tanker taking hits).
 - **Pickup SFX**: Three distinct AI-generated sounds, one per power-up type (vol 0.6 each):
   - Rapid Fire → `pickup_rapid_v5raz.mp3` (snappy electric zap)
   - Shield → `pickup_shield_v5tdh.mp3` (warm rising hum)
@@ -63,4 +64,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Added global leaderboard via `umicat.gameData` key `'leaderboard'`. Top 8 shown on title screen (right-side panel). Top 5 shown on game over screen. Score submitted (auth-gated, retry on VERSION_MISMATCH) when the player dies.
+- Added hit SFX (`hit_sfx_v96l2.mp3`, key `hit`) that plays at vol 0.5 when a bullet damages a tanker but doesn't kill it (hp > 0 branch in onBulletHitEnemy).

@@ -490,7 +490,12 @@ export class GameScene extends Phaser.Scene {
       yoyo: true,
     });
 
-    if (hp <= 0) this.killEnemy(enemy);
+    if (hp <= 0) {
+      this.killEnemy(enemy);
+    } else {
+      // Enemy survived — play armour-hit sound
+      this.sound.play('hit', { volume: 0.5 });
+    }
   }
 
   private killEnemy(enemy: Phaser.Physics.Arcade.Image): void {
