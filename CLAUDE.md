@@ -24,7 +24,7 @@
 - **Game Over screen**: Overlay + panel, score, best, NEW BEST badge, PLAY AGAIN button, top-5 global leaderboard. Restarts the scene.
 - **High score persistence**: Saved to `umicat.saves` key `'highScore'` between sessions.
 - **Global leaderboard**: Stored in `umicat.gameData` key `'leaderboard'` (top 100, sorted by score desc). Submit on game over (auth required), fetch is public. Displayed: top 10 via modal (opened by 🏆 LEADERBOARD button on title screen), top 5 on game over screen.
-- **Background**: Gradient deep space, seeded starfield (200 stars), nebula blobs.
+- **Background**: Gradient deep space, nebula blobs, seeded starfield (200 stars), 18 drifting asteroid rocks (3 sizes: sm 22×18, md 40×30, lg 54×42). Asteroids drift slowly, rotate, wrap edges. Alpha 0.28–0.52 to stay clearly behind gameplay.
 - **Font**: Orbitron (Google Font via `public/webfonts.json`).
 - **Background music**: AI-generated synthwave space combat track (`star_siege_bgm_rgqa5.mp3`). Starts on first user interaction (browser autoplay rule), loops through TitleScene → GameScene.
 - **Shoot SFX**: AI-generated sci-fi laser zap (`shoot_sfx_tqeon.mp3`). Plays at volume 0.35 on every bullet fired.
@@ -64,4 +64,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Replaced always-visible title-screen leaderboard panel with a 🏆 LEADERBOARD button below START. Clicking it opens a centered modal overlay (top 10 entries, staggered fade-in, close button + click-outside-to-close).
+- Added drifting asteroid belt background to GameScene: 18 rocks (3 polygon shapes, 3 sizes), seeded random placement/velocity, per-rock rotation, screen-wrapping. Runs in update() before the gameplay guard so they drift even on the game over screen.

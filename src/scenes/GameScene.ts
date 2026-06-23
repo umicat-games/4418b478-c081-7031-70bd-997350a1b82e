@@ -72,6 +72,9 @@ export class GameScene extends Phaser.Scene {
   private gameOver = false;
   private powerupTextTimer: Phaser.Time.TimerEvent | null = null;
 
+  // Background asteroids
+  private asteroids: Array<{ obj: Phaser.GameObjects.Image; vx: number; vy: number; rotRate: number }> = [];
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -93,11 +96,15 @@ export class GameScene extends Phaser.Scene {
     this.shieldTimer  = null;
     this.rapidFireTimer = null;
     this.powerupTextTimer = null;
+    this.asteroids = [];
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 
   async create(): Promise<void> {
+    // 0. Generate asteroid textures (needed by createBackground)
+    this.generateAsteroidTextures();
+
     // 1. Draw background (depth 0)
     this.createBackground();
 
@@ -185,13 +192,59 @@ export class GameScene extends Phaser.Scene {
 
   // ─── Background ───────────────────────────────────────────────────────────
 
+  private generateAsteroidTextures(): void {
+    type AstDef = { key: string; w: number; h: number; pts: { x: number; y: number }[]; col: number; hi: number };
+    const defs: AstDef[] = [
+      {
+        key: 'ast-sm', w: 22, h: 18, col: 0x3a3530, hi: 0x504d4a,
+        pts: [{x:11,y:1},{x:17,y:3},{x:21,y:8},{x:20,y:14},{x:14,y:17},{x:6,y:17},{x:1,y:12},{x:2,y:5}],
+      },
+      {
+        key: 'ast-md', w: 40, h: 30, col: 0x302e2c, hi: 0x484644,
+        pts: [{x:20,y:1},{x:30,y:3},{x:38,y:11},{x:37,y:22},{x:28,y:29},{x:14,y:29},{x:4,y:22},{x:2,y:12},{x:8,y:4}],
+      },
+      {
+        key: 'ast-lg', w: 54, h: 42, col: 0x2c2e30, hi: 0x424446,
+        pts: [{x:27,y:1},{x:42,y:4},{x:52,y:16},{x:51,y:29},{x:40,y:40},{x:22,y:41},{x:8,y:34},{x:2,y:20},{x:5,y:9},{x:16,y:3}],
+      },
+    ];
+
+    for (const d of defs) {
+      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      // Base fill
+      g.fillStyle(d.col, 1);
+      g.fillPoints(d.pts, true);
+      // Subtle top-left highlight
+      g.fillStyle(d.hi, 0.35);
+      g.fillPoints(d.pts.slice(0, Math.ceil(d.pts.length / 2)).concat([d.pts[0]]), true);
+      // Outline
+      g.lineStyle(1, 0x505050, 0.6);
+      g.strokePoints(d.pts, true);
+      // Craters
+      g.fillStyle(0x181716, 0.65);
+      g.fillCircle(d.w * 0.38, d.h * 0.42, d.w * 0.09);
+      g.fillCircle(d.w * 0.64, d.h * 0.56, d.w * 0.055);
+      g.generateTexture(d.key, d.w, d.h);
+      g.destroy();
+    }
+  }
+
   private createBackground(): void {
     // Deep space gradient
     const bg = this.add.graphics().setDepth(0);
     bg.fillGradientStyle(0x030310, 0x030310, 0x08082a, 0x08082a, 1);
     bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Starfield (seeded so it's always the same)
+    // Subtle nebula blobs
+    const neb = this.add.graphics().setDepth(0);
+    neb.fillStyle(0x1a0044, 0.22);
+    neb.fillEllipse(220, 160, 340, 200);
+    neb.fillStyle(0x001a44, 0.18);
+    neb.fillEllipse(1050, 560, 300, 210);
+    neb.fillStyle(0x440033, 0.12);
+    neb.fillEllipse(700, 80, 260, 120);
+
+    // Starfield (seeded)
     const stars = this.add.graphics().setDepth(0);
     const rng = new Phaser.Math.RandomDataGenerator(['starseed-starsurge']);
     for (let i = 0; i < 200; i++) {
@@ -203,14 +256,25 @@ export class GameScene extends Phaser.Scene {
       stars.fillCircle(x, y, r);
     }
 
-    // Subtle nebula blobs
-    const neb = this.add.graphics().setDepth(0);
-    neb.fillStyle(0x1a0044, 0.22);
-    neb.fillEllipse(220, 160, 340, 200);
-    neb.fillStyle(0x001a44, 0.18);
-    neb.fillEllipse(1050, 560, 300, 210);
-    neb.fillStyle(0x440033, 0.12);
-    neb.fillEllipse(700, 80, 260, 120);
+    // Drifting asteroid debris
+    const astRng = new Phaser.Math.RandomDataGenerator(['asteroid-belt-v1']);
+    const astKeys = ['ast-sm', 'ast-sm', 'ast-sm', 'ast-md', 'ast-md', 'ast-lg'];
+    for (let i = 0; i < 18; i++) {
+      const key   = astKeys[astRng.between(0, astKeys.length - 1)];
+      const x     = astRng.between(-60, GAME_WIDTH  + 60);
+      const y     = astRng.between(-60, GAME_HEIGHT + 60);
+      const alpha = astRng.realInRange(0.28, 0.52);
+      const rot   = astRng.realInRange(0, Math.PI * 2);
+      const obj   = this.add.image(x, y, key)
+        .setDepth(0)
+        .setAlpha(alpha)
+        .setRotation(rot);
+
+      const speed   = astRng.realInRange(6, 26);
+      const angle   = astRng.realInRange(0, Math.PI * 2);
+      const rotRate = astRng.realInRange(-0.0018, 0.0018);
+      this.asteroids.push({ obj, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, rotRate });
+    }
   }
 
   // ─── Texture generation ───────────────────────────────────────────────────
@@ -860,6 +924,19 @@ export class GameScene extends Phaser.Scene {
   // ─── Update ───────────────────────────────────────────────────────────────
 
   update(_time: number, delta: number): void {
+    // ── Background asteroid drift (always runs) ───────────────────────────
+    const dt = delta / 1000;
+    const M  = 80;
+    for (const ast of this.asteroids) {
+      ast.obj.x        += ast.vx  * dt;
+      ast.obj.y        += ast.vy  * dt;
+      ast.obj.rotation += ast.rotRate * delta;
+      if (ast.obj.x < -M)              ast.obj.x = GAME_WIDTH  + M;
+      if (ast.obj.x > GAME_WIDTH  + M) ast.obj.x = -M;
+      if (ast.obj.y < -M)              ast.obj.y = GAME_HEIGHT + M;
+      if (ast.obj.y > GAME_HEIGHT + M) ast.obj.y = -M;
+    }
+
     if (!this.ready || this.gameOver || !this.playerAlive) return;
 
     // ── Player movement ──────────────────────────────────────────────────
