@@ -23,7 +23,7 @@
 - **HUD**: Score (top-left), Best (top-left below score), Level (top-right), Combo text (upper center), Power-up status (lower center).
 - **Game Over screen**: Overlay + panel, score, best, NEW BEST badge, PLAY AGAIN button, top-5 global leaderboard. Restarts the scene.
 - **High score persistence**: Saved to `umicat.saves` key `'highScore'` between sessions.
-- **Global leaderboard**: Stored in `umicat.gameData` key `'leaderboard'` (top 100, sorted by score desc). Submit on game over (auth required), fetch is public. Displayed: top 8 on TitleScene (right-side panel), top 5 on game over screen.
+- **Global leaderboard**: Stored in `umicat.gameData` key `'leaderboard'` (top 100, sorted by score desc). Submit on game over (auth required), fetch is public. Displayed: top 10 via modal (opened by 🏆 LEADERBOARD button on title screen), top 5 on game over screen.
 - **Background**: Gradient deep space, seeded starfield (200 stars), nebula blobs.
 - **Font**: Orbitron (Google Font via `public/webfonts.json`).
 - **Background music**: AI-generated synthwave space combat track (`star_siege_bgm_rgqa5.mp3`). Starts on first user interaction (browser autoplay rule), loops through TitleScene → GameScene.
@@ -38,7 +38,7 @@
 ## Key Files
 - `src/leaderboard.ts` — `fetchLeaderboard(limit)` + `submitScore(score)` shared leaderboard utilities
 - `src/visuals/player.ts` — render script for player ship
-- `src/scenes/TitleScene.ts` — title/start screen (cover image, title, slogan, START button, leaderboard panel)
+- `src/scenes/TitleScene.ts` — title/start screen (cover image, title, slogan, START button, LEADERBOARD button + modal)
 - `src/scenes/GameScene.ts` — all game logic (movement, spawning, collisions, HUD, game over)
 - `src/main.ts` — exports `umicatReady` (Umicat platform promise)
 - `public/scenes/world/main.json` — player entity (`e-player`, role `player`, code-rendered)
@@ -64,4 +64,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Added hit SFX (`hit_sfx_v96l2.mp3`, key `hit`) that plays at vol 0.5 when a bullet damages a tanker but doesn't kill it (hp > 0 branch in onBulletHitEnemy).
+- Replaced always-visible title-screen leaderboard panel with a 🏆 LEADERBOARD button below START. Clicking it opens a centered modal overlay (top 10 entries, staggered fade-in, close button + click-outside-to-close).

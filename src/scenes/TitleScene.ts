@@ -55,65 +55,14 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    // --- Leaderboard panel (right side) ---
-    this.createLeaderboardPanel();
-
     // --- START button ---
-    this.createStartButton(GAME_WIDTH / 2, GAME_HEIGHT - 108);
+    this.createStartButton(GAME_WIDTH / 2, GAME_HEIGHT - 148);
+
+    // --- LEADERBOARD button ---
+    this.createLeaderboardButton(GAME_WIDTH / 2, GAME_HEIGHT - 74);
   }
 
-  private createLeaderboardPanel(): void {
-    const px = 875, py = 88, pw = 375, ph = 516;
-    const cx = px + pw / 2;
-
-    // Panel background
-    const panel = this.add.graphics().setDepth(2);
-    panel.fillStyle(0x000820, 0.82);
-    panel.lineStyle(1, 0x0055aa, 0.7);
-    panel.fillRoundedRect(px, py, pw, ph, 10);
-    panel.strokeRoundedRect(px, py, pw, ph, 10);
-
-    // Header
-    this.add.text(cx, py + 30, 'LEADERBOARD', {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#00ccff',
-      stroke: '#000000', strokeThickness: 2,
-    }).setOrigin(0.5, 0.5).setDepth(3);
-
-    // Divider
-    const div = this.add.graphics().setDepth(3);
-    div.lineStyle(1, 0x0055aa, 0.6);
-    div.lineBetween(px + 16, py + 50, px + pw - 16, py + 50);
-
-    // Loading placeholder rows
-    const rows: Phaser.GameObjects.Text[] = [];
-    for (let i = 0; i < 8; i++) {
-      const ry = py + 68 + i * 54;
-      // Rank number
-      this.add.text(px + 22, ry, `${i + 1}`, {
-        fontFamily: 'Orbitron', fontSize: '13px', color: '#556677',
-        stroke: '#000', strokeThickness: 1,
-      }).setOrigin(0, 0.5).setDepth(3);
-      // Name + score placeholder
-      const row = this.add.text(px + 50, ry, '—', {
-        fontFamily: 'Orbitron', fontSize: '14px', color: '#334455',
-      }).setOrigin(0, 0.5).setDepth(3);
-      rows.push(row);
-    }
-
-    // Fetch and populate
-    fetchLeaderboard(8).then((entries: LeaderboardEntry[]) => {
-      if (!this.scene.isActive()) return;
-      const rankColors = ['#ffd700', '#c0c0c0', '#cd7f32'];
-      entries.forEach((e, i) => {
-        if (i >= rows.length) return;
-        const color = rankColors[i] ?? '#aabbcc';
-        const scoreStr = e.score.toString().padStart(6, ' ');
-        rows[i].setText(`${e.name.slice(0, 14).padEnd(14, ' ')}  ${scoreStr}`);
-        rows[i].setColor(color);
-        rows[i].setStyle({ fontFamily: 'Orbitron', fontSize: '14px', color });
-      });
-    });
-  }
+  // ── START button ────────────────────────────────────────────────────────────
 
   private createStartButton(cx: number, cy: number): void {
     const BW = 280;
@@ -173,8 +122,7 @@ export class TitleScene extends Phaser.Scene {
       this.tweens.add({ targets: label, scaleX: 1, scaleY: 1, duration: 100, ease: 'Quad.Out' });
     });
     hitZone.on('pointerdown', () => {
-      startBgm(); // ensure music started even if keyboard listener fired first
-      // Flash the button, then launch the game
+      startBgm();
       this.tweens.add({
         targets: label,
         alpha: 0.3,
@@ -191,5 +139,184 @@ export class TitleScene extends Phaser.Scene {
 
     // Entry fade-in
     this.cameras.main.fadeIn(500, 0, 0, 0);
+  }
+
+  // ── LEADERBOARD button + modal ───────────────────────────────────────────────
+
+  private createLeaderboardButton(cx: number, cy: number): void {
+    const BW = 220;
+    const BH = 44;
+
+    const bg = this.add.graphics().setDepth(3);
+    const label = this.add
+      .text(cx, cy, '🏆  LEADERBOARD', {
+        fontFamily: 'Orbitron',
+        fontSize: '17px',
+        color: '#ffdd44',
+        stroke: '#000000',
+        strokeThickness: 2,
+      })
+      .setOrigin(0.5)
+      .setDepth(4);
+
+    const hitZone = this.add
+      .zone(cx, cy, BW, BH)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(5);
+
+    const drawBtn = (hover: boolean): void => {
+      bg.clear();
+      bg.fillStyle(hover ? 0x443300 : 0x221a00, hover ? 0.95 : 0.85);
+      bg.fillRoundedRect(cx - BW / 2, cy - BH / 2, BW, BH, 8);
+      bg.lineStyle(1, hover ? 0xffdd44 : 0x887722, 1);
+      bg.strokeRoundedRect(cx - BW / 2, cy - BH / 2, BW, BH, 8);
+    };
+
+    drawBtn(false);
+
+    hitZone.on('pointerover', () => drawBtn(true));
+    hitZone.on('pointerout',  () => drawBtn(false));
+    hitZone.on('pointerdown', () => {
+      this.tweens.add({
+        targets: label, alpha: 0.4, duration: 55, yoyo: true,
+        onComplete: () => this.showLeaderboardModal(),
+      });
+    });
+  }
+
+  private showLeaderboardModal(): void {
+    const cx = GAME_WIDTH / 2;
+    const cy = GAME_HEIGHT / 2;
+    const PW = 520, PH = 580;
+
+    // ── Container so we can destroy everything at once ──
+    const container = this.add.container(0, 0).setDepth(100);
+
+    // Dim overlay (click outside to close)
+    const dimmer = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0)
+      .setDepth(100).setInteractive();
+    container.add(dimmer);
+    this.tweens.add({ targets: dimmer, fillAlpha: 0.78, duration: 240 });
+
+    // Panel
+    const panel = this.add.graphics().setDepth(101);
+    panel.fillStyle(0x060618, 0.97);
+    panel.lineStyle(2, 0x00ccff, 0.9);
+    panel.fillRoundedRect(cx - PW / 2, cy - PH / 2, PW, PH, 14);
+    panel.strokeRoundedRect(cx - PW / 2, cy - PH / 2, PW, PH, 14);
+    panel.setAlpha(0);
+    container.add(panel);
+    this.tweens.add({ targets: panel, alpha: 1, duration: 220 });
+
+    // Header
+    const header = this.add.text(cx, cy - PH / 2 + 38, '🏆  LEADERBOARD', {
+      fontFamily: 'Orbitron', fontSize: '26px', color: '#ffdd44',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(102).setAlpha(0);
+    container.add(header);
+    this.tweens.add({ targets: header, alpha: 1, delay: 100, duration: 200 });
+
+    // Divider
+    const div = this.add.graphics().setDepth(102).setAlpha(0);
+    div.lineStyle(1, 0x00ccff, 0.4);
+    div.lineBetween(cx - PW / 2 + 24, cy - PH / 2 + 72, cx + PW / 2 - 24, cy - PH / 2 + 72);
+    container.add(div);
+    this.tweens.add({ targets: div, alpha: 1, delay: 120, duration: 180 });
+
+    // Column labels
+    const colLabel = this.add.text(cx - PW / 2 + 28, cy - PH / 2 + 90, '#    PLAYER                   SCORE', {
+      fontFamily: 'Orbitron', fontSize: '11px', color: '#446688',
+    }).setDepth(102).setAlpha(0);
+    container.add(colLabel);
+    this.tweens.add({ targets: colLabel, alpha: 1, delay: 140, duration: 180 });
+
+    // Row placeholders
+    const rankColors = ['#ffd700', '#c0c0c0', '#cd7f32', '#aabbcc', '#8899aa',
+                        '#7788aa', '#6677aa', '#5566aa', '#445588', '#334477'];
+    const rowObjs: Array<{ rank: Phaser.GameObjects.Text; name: Phaser.GameObjects.Text; score: Phaser.GameObjects.Text }> = [];
+
+    for (let i = 0; i < 10; i++) {
+      const ry = cy - PH / 2 + 120 + i * 40;
+      const color = rankColors[i];
+
+      // Row background (subtle alternating)
+      if (i % 2 === 0) {
+        const rowBg = this.add.rectangle(cx, ry, PW - 24, 34, 0xffffff, 0.03).setDepth(101);
+        container.add(rowBg);
+      }
+
+      const rankTxt = this.add.text(cx - PW / 2 + 28, ry, `${i + 1}`, {
+        fontFamily: 'Orbitron', fontSize: '14px', color,
+        stroke: '#000', strokeThickness: 1,
+      }).setOrigin(0, 0.5).setDepth(102).setAlpha(0);
+
+      const nameTxt = this.add.text(cx - PW / 2 + 68, ry, '—', {
+        fontFamily: 'Orbitron', fontSize: '14px', color: '#334455',
+      }).setOrigin(0, 0.5).setDepth(102).setAlpha(0);
+
+      const scoreTxt = this.add.text(cx + PW / 2 - 28, ry, '', {
+        fontFamily: 'Orbitron', fontSize: '14px', color: '#334455',
+      }).setOrigin(1, 0.5).setDepth(102).setAlpha(0);
+
+      container.add([rankTxt, nameTxt, scoreTxt]);
+      rowObjs.push({ rank: rankTxt, name: nameTxt, score: scoreTxt });
+    }
+
+    // Fetch and populate rows
+    fetchLeaderboard(10).then((entries: LeaderboardEntry[]) => {
+      if (!this.scene.isActive('TitleScene')) return;
+      entries.forEach((e, i) => {
+        if (i >= rowObjs.length) return;
+        const color = rankColors[i];
+        rowObjs[i].name.setText(e.name.slice(0, 22));
+        rowObjs[i].name.setStyle({ fontFamily: 'Orbitron', fontSize: '14px', color });
+        rowObjs[i].score.setText(e.score.toLocaleString());
+        rowObjs[i].score.setStyle({ fontFamily: 'Orbitron', fontSize: '14px', color });
+      });
+      rowObjs.forEach((r, i) => {
+        const delay = i * 40;
+        this.tweens.add({ targets: r.rank,  alpha: 1, delay, duration: 180 });
+        this.tweens.add({ targets: r.name,  alpha: 1, delay, duration: 180 });
+        this.tweens.add({ targets: r.score, alpha: 1, delay, duration: 180 });
+      });
+    });
+
+    // ── Close button ──
+    const closeBg = this.add.graphics().setDepth(102);
+    const closeLabel = this.add.text(cx, cy + PH / 2 - 34, 'CLOSE', {
+      fontFamily: 'Orbitron', fontSize: '16px', color: '#88aacc',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(103).setAlpha(0).setInteractive({ useHandCursor: true });
+    container.add([closeBg, closeLabel]);
+    this.tweens.add({ targets: closeLabel, alpha: 1, delay: 200, duration: 200 });
+
+    const drawClose = (hover: boolean): void => {
+      closeBg.clear();
+      closeBg.fillStyle(hover ? 0x113355 : 0x0a1a2a, 0.9);
+      closeBg.fillRoundedRect(cx - 80, cy + PH / 2 - 54, 160, 40, 8);
+      closeBg.lineStyle(1, hover ? 0x88aacc : 0x334455, 1);
+      closeBg.strokeRoundedRect(cx - 80, cy + PH / 2 - 54, 160, 40, 8);
+    };
+    drawClose(false);
+
+    const closeModal = (): void => {
+      this.tweens.add({
+        targets: [dimmer, panel, header, div, colLabel, closeBg, closeLabel],
+        alpha: 0, duration: 180,
+        onComplete: () => container.destroy(),
+      });
+    };
+
+    closeLabel.on('pointerover', () => drawClose(true));
+    closeLabel.on('pointerout',  () => drawClose(false));
+    closeLabel.on('pointerdown', closeModal);
+
+    // Also close on clicking the dimmer outside the panel
+    dimmer.on('pointerdown', (_ptr: Phaser.Input.Pointer) => {
+      const px = cx - PW / 2, py = cy - PH / 2;
+      if (_ptr.x < px || _ptr.x > px + PW || _ptr.y < py || _ptr.y > py + PH) {
+        closeModal();
+      }
+    });
   }
 }
