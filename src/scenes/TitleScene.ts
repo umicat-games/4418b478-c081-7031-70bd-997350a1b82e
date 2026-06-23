@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { fetchLeaderboard, LeaderboardEntry } from '../leaderboard';
 
 export class TitleScene extends Phaser.Scene {
   private sceneId!: string;
@@ -54,8 +55,64 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
+    // --- Leaderboard panel (right side) ---
+    this.createLeaderboardPanel();
+
     // --- START button ---
     this.createStartButton(GAME_WIDTH / 2, GAME_HEIGHT - 108);
+  }
+
+  private createLeaderboardPanel(): void {
+    const px = 875, py = 88, pw = 375, ph = 516;
+    const cx = px + pw / 2;
+
+    // Panel background
+    const panel = this.add.graphics().setDepth(2);
+    panel.fillStyle(0x000820, 0.82);
+    panel.lineStyle(1, 0x0055aa, 0.7);
+    panel.fillRoundedRect(px, py, pw, ph, 10);
+    panel.strokeRoundedRect(px, py, pw, ph, 10);
+
+    // Header
+    this.add.text(cx, py + 30, 'LEADERBOARD', {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#00ccff',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 0.5).setDepth(3);
+
+    // Divider
+    const div = this.add.graphics().setDepth(3);
+    div.lineStyle(1, 0x0055aa, 0.6);
+    div.lineBetween(px + 16, py + 50, px + pw - 16, py + 50);
+
+    // Loading placeholder rows
+    const rows: Phaser.GameObjects.Text[] = [];
+    for (let i = 0; i < 8; i++) {
+      const ry = py + 68 + i * 54;
+      // Rank number
+      this.add.text(px + 22, ry, `${i + 1}`, {
+        fontFamily: 'Orbitron', fontSize: '13px', color: '#556677',
+        stroke: '#000', strokeThickness: 1,
+      }).setOrigin(0, 0.5).setDepth(3);
+      // Name + score placeholder
+      const row = this.add.text(px + 50, ry, '—', {
+        fontFamily: 'Orbitron', fontSize: '14px', color: '#334455',
+      }).setOrigin(0, 0.5).setDepth(3);
+      rows.push(row);
+    }
+
+    // Fetch and populate
+    fetchLeaderboard(8).then((entries: LeaderboardEntry[]) => {
+      if (!this.scene.isActive()) return;
+      const rankColors = ['#ffd700', '#c0c0c0', '#cd7f32'];
+      entries.forEach((e, i) => {
+        if (i >= rows.length) return;
+        const color = rankColors[i] ?? '#aabbcc';
+        const scoreStr = e.score.toString().padStart(6, ' ');
+        rows[i].setText(`${e.name.slice(0, 14).padEnd(14, ' ')}  ${scoreStr}`);
+        rows[i].setColor(color);
+        rows[i].setStyle({ fontFamily: 'Orbitron', fontSize: '14px', color });
+      });
+    });
   }
 
   private createStartButton(cx: number, cy: number): void {

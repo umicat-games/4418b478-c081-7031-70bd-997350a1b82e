@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { umicatReady } from '../main';
+import { fetchLeaderboard, submitScore, LeaderboardEntry } from '../leaderboard';
 
 // ─── Game constants ──────────────────────────────────────────────────────────
 
@@ -724,6 +725,9 @@ export class GameScene extends Phaser.Scene {
       this.saveHighScore();
     }
 
+    // Submit to global leaderboard (fire-and-forget, won't block game over UI)
+    submitScore(this.score);
+
     this.time.delayedCall(650, () => this.showGameOverScreen());
   }
 
@@ -733,28 +737,29 @@ export class GameScene extends Phaser.Scene {
 
     // Dark overlay
     const overlay = this.add.rectangle(
-      cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.72,
+      cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.75,
     ).setDepth(1000).setAlpha(0);
     this.tweens.add({ targets: overlay, alpha: 1, duration: 380 });
 
-    // Panel
+    // Expanded panel (taller to fit leaderboard)
+    const PW = 520, PH = 508;
     const panel = this.add.graphics().setDepth(1001);
-    panel.fillStyle(0x070722, 0.97);
+    panel.fillStyle(0x060618, 0.97);
     panel.lineStyle(2, 0x00ccff, 0.85);
-    panel.fillRoundedRect(cx - 230, cy - 170, 460, 340, 14);
-    panel.strokeRoundedRect(cx - 230, cy - 170, 460, 340, 14);
+    panel.fillRoundedRect(cx - PW / 2, cy - PH / 2, PW, PH, 14);
+    panel.strokeRoundedRect(cx - PW / 2, cy - PH / 2, PW, PH, 14);
     panel.setAlpha(0);
     this.tweens.add({ targets: panel, alpha: 1, delay: 220, duration: 300 });
 
-    // Title
-    const title = this.add.text(cx, cy - 118, 'GAME OVER', {
+    // GAME OVER title
+    const title = this.add.text(cx, cy - 220, 'GAME OVER', {
       fontFamily: 'Orbitron', fontSize: '42px', color: '#ff4444',
       stroke: '#660000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(1002).setAlpha(0);
     this.tweens.add({ targets: title, alpha: 1, delay: 320, duration: 280 });
 
     // Score
-    const scoreTxt = this.add.text(cx, cy - 32, `SCORE  ${this.score}`, {
+    const scoreTxt = this.add.text(cx, cy - 152, `SCORE  ${this.score}`, {
       fontFamily: 'Orbitron', fontSize: '30px', color: '#00ffcc',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(1002).setAlpha(0);
@@ -762,38 +767,83 @@ export class GameScene extends Phaser.Scene {
       delay: 420, yoyo: true, repeat: 0 });
 
     // Best
-    const bestTxt = this.add.text(cx, cy + 22, `BEST SCORE  ${this.highScore}`, {
-      fontFamily: 'Orbitron', fontSize: '20px', color: '#ffaa00',
+    const bestTxt = this.add.text(cx, cy - 105, `BEST SCORE  ${this.highScore}`, {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffaa00',
       stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(1002).setAlpha(0);
     this.tweens.add({ targets: bestTxt, alpha: 1, delay: 480, duration: 280 });
 
     // New best badge
     if (this.score >= this.highScore && this.score > 0) {
-      const nb = this.add.text(cx, cy + 56, '- NEW BEST -', {
-        fontFamily: 'Orbitron', fontSize: '17px', color: '#ffff00',
+      const nb = this.add.text(cx, cy - 75, '★  NEW BEST  ★', {
+        fontFamily: 'Orbitron', fontSize: '15px', color: '#ffff00',
         stroke: '#000', strokeThickness: 2,
       }).setOrigin(0.5).setDepth(1002).setAlpha(0);
       this.tweens.add({ targets: nb, alpha: 1, delay: 560, duration: 280 });
     }
 
-    // Restart button background
+    // Leaderboard divider + heading
+    const divGfx = this.add.graphics().setDepth(1002).setAlpha(0);
+    divGfx.lineStyle(1, 0x00ccff, 0.35);
+    divGfx.lineBetween(cx - 220, cy - 52, cx + 220, cy - 52);
+    this.tweens.add({ targets: divGfx, alpha: 1, delay: 580, duration: 200 });
+
+    const lbHead = this.add.text(cx, cy - 36, 'TOP SCORES', {
+      fontFamily: 'Orbitron', fontSize: '14px', color: '#00ccff',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(1002).setAlpha(0);
+    this.tweens.add({ targets: lbHead, alpha: 1, delay: 580, duration: 280 });
+
+    // Leaderboard rows (populated async)
+    const rankColors = ['#ffd700', '#c0c0c0', '#cd7f32', '#aabbcc', '#8899aa'];
+    const rowObjs: Array<{ rank: Phaser.GameObjects.Text; name: Phaser.GameObjects.Text }> = [];
+    for (let i = 0; i < 5; i++) {
+      const ry = cy - 14 + i * 34;
+      const rankTxt = this.add.text(cx - 218, ry, `${i + 1}`, {
+        fontFamily: 'Orbitron', fontSize: '12px', color: rankColors[i],
+        stroke: '#000', strokeThickness: 1,
+      }).setOrigin(0, 0.5).setDepth(1002).setAlpha(0);
+
+      const nameTxt = this.add.text(cx - 192, ry, '—', {
+        fontFamily: 'Orbitron', fontSize: '13px', color: '#334455',
+      }).setOrigin(0, 0.5).setDepth(1002).setAlpha(0);
+      rowObjs.push({ rank: rankTxt, name: nameTxt });
+    }
+
+    // Fetch leaderboard and fill rows, then fade everything in
+    fetchLeaderboard(5).then((entries: LeaderboardEntry[]) => {
+      if (!this.scene.isActive('GameScene')) return;
+      entries.forEach((e, i) => {
+        if (i >= rowObjs.length) return;
+        const color = rankColors[i] ?? '#8899aa';
+        const nameStr = e.name.slice(0, 15).padEnd(15, ' ');
+        rowObjs[i].name.setText(`${nameStr}  ${e.score}`);
+        rowObjs[i].name.setStyle({ fontFamily: 'Orbitron', fontSize: '13px', color });
+      });
+      rowObjs.forEach(r => {
+        this.tweens.add({ targets: r.rank, alpha: 1, duration: 250 });
+        this.tweens.add({ targets: r.name, alpha: 1, duration: 250 });
+      });
+    });
+
+    // PLAY AGAIN button
+    const btnY = cy + 192;
     const btnBg = this.add.graphics().setDepth(1002).setAlpha(0);
     const drawBtn = (col: number) => {
       btnBg.clear();
       btnBg.fillStyle(col, 1);
-      btnBg.fillRoundedRect(cx - 108, cy + 96, 216, 52, 10);
+      btnBg.fillRoundedRect(cx - 108, btnY - 26, 216, 52, 10);
       btnBg.lineStyle(2, 0x00eeff, 1);
-      btnBg.strokeRoundedRect(cx - 108, cy + 96, 216, 52, 10);
+      btnBg.strokeRoundedRect(cx - 108, btnY - 26, 216, 52, 10);
     };
     drawBtn(0x00aacc);
-    this.tweens.add({ targets: btnBg, alpha: 1, delay: 600, duration: 280 });
+    this.tweens.add({ targets: btnBg, alpha: 1, delay: 640, duration: 280 });
 
-    const btnTxt = this.add.text(cx, cy + 122, 'PLAY AGAIN', {
+    const btnTxt = this.add.text(cx, btnY, 'PLAY AGAIN', {
       fontFamily: 'Orbitron', fontSize: '21px', color: '#ffffff',
       stroke: '#002233', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(1003).setAlpha(0).setInteractive({ useHandCursor: true });
-    this.tweens.add({ targets: btnTxt, alpha: 1, delay: 600, duration: 280 });
+    this.tweens.add({ targets: btnTxt, alpha: 1, delay: 640, duration: 280 });
 
     btnTxt.on('pointerover',  () => drawBtn(0x00ccee));
     btnTxt.on('pointerout',   () => drawBtn(0x00aacc));

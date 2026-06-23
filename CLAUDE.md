@@ -21,8 +21,9 @@
 - **Scoring**: Points per kill × combo multiplier (combo grows with ≤1.2s between kills). Floating score text on kills.
 - **Difficulty ramp**: Every 15s a new level unlocks. Faster spawn, faster enemies. Tougher enemy mix from LV3+.
 - **HUD**: Score (top-left), Best (top-left below score), Level (top-right), Combo text (upper center), Power-up status (lower center).
-- **Game Over screen**: Overlay + panel, score, best, NEW BEST badge, PLAY AGAIN button. Restarts the scene.
+- **Game Over screen**: Overlay + panel, score, best, NEW BEST badge, PLAY AGAIN button, top-5 global leaderboard. Restarts the scene.
 - **High score persistence**: Saved to `umicat.saves` key `'highScore'` between sessions.
+- **Global leaderboard**: Stored in `umicat.gameData` key `'leaderboard'` (top 100, sorted by score desc). Submit on game over (auth required), fetch is public. Displayed: top 8 on TitleScene (right-side panel), top 5 on game over screen.
 - **Background**: Gradient deep space, seeded starfield (200 stars), nebula blobs.
 - **Font**: Orbitron (Google Font via `public/webfonts.json`).
 - **Background music**: AI-generated synthwave space combat track (`star_siege_bgm_rgqa5.mp3`). Starts on first user interaction (browser autoplay rule), loops through TitleScene → GameScene.
@@ -34,8 +35,9 @@
   - Bomb → `pickup_bomb_v5uw3.mp3` (heavy low-pitched charge)
 
 ## Key Files
+- `src/leaderboard.ts` — `fetchLeaderboard(limit)` + `submitScore(score)` shared leaderboard utilities
 - `src/visuals/player.ts` — render script for player ship
-- `src/scenes/TitleScene.ts` — title/start screen (cover image, title, slogan, START button)
+- `src/scenes/TitleScene.ts` — title/start screen (cover image, title, slogan, START button, leaderboard panel)
 - `src/scenes/GameScene.ts` — all game logic (movement, spawning, collisions, HUD, game over)
 - `src/main.ts` — exports `umicatReady` (Umicat platform promise)
 - `public/scenes/world/main.json` — player entity (`e-player`, role `player`, code-rendered)
@@ -61,4 +63,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Fixed muzzle flash bug: Graphics object was at (0,0) with circle drawn at (bx,by); tween scaling flew it to corner. Fixed by positioning Graphics at (bx,by) and drawing at (0,0).
+- Added global leaderboard via `umicat.gameData` key `'leaderboard'`. Top 8 shown on title screen (right-side panel). Top 5 shown on game over screen. Score submitted (auth-gated, retry on VERSION_MISMATCH) when the player dies.
