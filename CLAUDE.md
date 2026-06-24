@@ -64,4 +64,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Added drifting asteroid belt background to GameScene: 18 rocks (3 polygon shapes, 3 sizes), seeded random placement/velocity, per-rock rotation, screen-wrapping. Runs in update() before the gameplay guard so they drift even on the game over screen.
+- Removed duplicate "STAR SIEGE" text from TitleScene — the cover image already contains the title, so the extra rendered text was redundant.

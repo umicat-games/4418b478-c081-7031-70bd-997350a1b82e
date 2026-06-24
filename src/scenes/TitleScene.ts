@@ -30,19 +30,6 @@ export class TitleScene extends Phaser.Scene {
     band.fillStyle(0x000010, 0.65);
     band.fillRect(0, GAME_HEIGHT - 220, GAME_WIDTH, 220);
 
-    // --- Title ---
-    this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, 'STAR SIEGE', {
-        fontFamily: 'Orbitron',
-        fontSize: '72px',
-        color: '#ffffff',
-        stroke: '#0088ff',
-        strokeThickness: 6,
-        shadow: { offsetX: 0, offsetY: 0, color: '#0044cc', blur: 32, fill: true },
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
-
     // --- Slogan ---
     this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20, 'Survive the siege. Rule the stars.', {
