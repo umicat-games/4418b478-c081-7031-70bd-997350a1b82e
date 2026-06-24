@@ -715,21 +715,26 @@ export class WerewolfScene extends Phaser.Scene {
     label: string, bgColor: number, onClick: () => void
   ): Phaser.GameObjects.Container {
     const con = this.add.container(x, y);
+
+    // Base background — drawn once, never cleared
     const gr = this.add.graphics();
-    const draw = (hov: boolean) => {
-      gr.clear();
-      gr.fillStyle(hov ? bgColor + 0x222222 : bgColor, 1);
-      gr.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-    };
-    draw(false);
+    gr.fillStyle(bgColor, 1);
+    gr.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+
+    // Hover overlay — semi-transparent white brightens the button
+    const hov = this.add.graphics();
+    hov.fillStyle(0xffffff, 0.18);
+    hov.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+    hov.setVisible(false);
+
     const txt = this.add.text(0, 0, label, {
       fontFamily: fontFor(), fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
     const hit = this.add.rectangle(0, 0, w, h, 0, 0).setInteractive({ useHandCursor: true });
-    hit.on('pointerover', () => draw(true));
-    hit.on('pointerout', () => draw(false));
+    hit.on('pointerover', () => hov.setVisible(true));
+    hit.on('pointerout', () => hov.setVisible(false));
     hit.on('pointerdown', onClick);
-    con.add([gr, txt, hit]);
+    con.add([gr, hov, txt, hit]);
     return con;
   }
 
