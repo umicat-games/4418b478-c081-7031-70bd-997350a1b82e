@@ -964,8 +964,8 @@ export class GameScene extends Phaser.Scene {
     const angle = Math.atan2(ptr.y - this.player.y, ptr.x - this.player.x);
     this.player.setRotation(angle);
 
-    // ── Auto-fire on held left mouse button ──────────────────────────────
-    if (ptr.isDown && ptr.leftButtonDown()) this.fireBullet();
+    // ── Auto-fire continuously toward mouse ──────────────────────────────
+    this.fireBullet();
 
     // ── Engine trail (emits when moving) ─────────────────────────────────
     if (vx !== 0 || vy !== 0) {

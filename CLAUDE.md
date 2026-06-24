@@ -3,7 +3,7 @@
 ## Game
 - **Title**: Star Siege
 - **Genre**: Top-down arena space shooter
-- **Core mechanic**: Player ship moves freely (WASD/arrows), aims at mouse, fires on left-click (hold = auto-fire). Enemies swarm from all screen edges. One hit = game over. Score + combo system.
+- **Core mechanic**: Player ship moves freely (WASD/arrows), aims at mouse, fires automatically and continuously toward the cursor. Enemies swarm from all screen edges. One hit = game over. Score + combo system.
 
 ## Features Implemented
 - **Player ship**: Code-rendered modern triangle spacecraft (pointing right at angle 0, matching atan2). Rotates to face mouse. Arcade physics, tight cockpit hitbox (28×22).
@@ -55,7 +55,7 @@
 |---|---|
 | Move | WASD or Arrow keys |
 | Aim | Mouse cursor |
-| Fire / Auto-fire | Left mouse button (hold) |
+| Fire | Automatic (always firing toward mouse) |
 
 ## Architecture Notes
 - Player entity from scene JSON (`code-rendered`, script `src/visuals/player.ts`, width=48, height=40).
@@ -65,4 +65,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Added hover SFX (soft sci-fi UI blip) to START and LEADERBOARD buttons on the title screen.
+- Changed firing from hold-to-fire to always auto-firing toward the mouse cursor.
