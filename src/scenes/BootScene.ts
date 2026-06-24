@@ -32,6 +32,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('pickup-shield', 'uploaded/pickup_shield_v5tdh.mp3');
     this.load.audio('pickup-bomb',   'uploaded/pickup_bomb_v5uw3.mp3');
     this.load.audio('hit',           'uploaded/hit_sfx_v96l2.mp3');
+    this.load.audio('hover',         'uploaded/hover_sfx_c1h2p.mp3');
   }
 
   create(): void {

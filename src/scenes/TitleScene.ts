@@ -103,6 +103,7 @@ export class TitleScene extends Phaser.Scene {
     hitZone.on('pointerover', () => {
       drawBtn(true);
       this.tweens.add({ targets: label, scaleX: 1.08, scaleY: 1.08, duration: 100, ease: 'Quad.Out' });
+      this.sound.play('hover', { volume: 0.5 });
     });
     hitZone.on('pointerout', () => {
       drawBtn(false);
@@ -161,7 +162,7 @@ export class TitleScene extends Phaser.Scene {
 
     drawBtn(false);
 
-    hitZone.on('pointerover', () => drawBtn(true));
+    hitZone.on('pointerover', () => { drawBtn(true); this.sound.play('hover', { volume: 0.5 }); });
     hitZone.on('pointerout',  () => drawBtn(false));
     hitZone.on('pointerdown', () => {
       this.tweens.add({

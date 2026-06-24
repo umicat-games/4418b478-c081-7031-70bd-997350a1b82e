@@ -30,6 +30,7 @@
 - **Shoot SFX**: AI-generated sci-fi laser zap (`shoot_sfx_tqeon.mp3`). Plays at volume 0.35 on every bullet fired.
 - **Explosion SFX**: AI-generated electronic burst (`explosion_sfx_txq85.mp3`). Plays on every enemy kill — vol 0.45 for drones/zigzaggers, 0.7 for tankers.
 - **Hit SFX**: AI-generated metallic impact sound (`hit_sfx_v96l2.mp3`, key `hit`, vol 0.5). Plays when a bullet damages but doesn't kill an enemy (tanker taking hits).
+- **Hover SFX**: AI-generated soft sci-fi UI blip (`hover_sfx_c1h2p.mp3`, key `hover`, vol 0.5). Plays on pointerover for START and LEADERBOARD buttons on the title screen.
 - **Pickup SFX**: Three distinct AI-generated sounds, one per power-up type (vol 0.6 each):
   - Rapid Fire → `pickup_rapid_v5raz.mp3` (snappy electric zap)
   - Shield → `pickup_shield_v5tdh.mp3` (warm rising hum)
@@ -64,4 +65,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Removed duplicate "STAR SIEGE" text from TitleScene — the cover image already contains the title, so the extra rendered text was redundant.
+- Added hover SFX (soft sci-fi UI blip) to START and LEADERBOARD buttons on the title screen.
