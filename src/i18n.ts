@@ -80,6 +80,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     humanDead: 'You have been eliminated! Watch the game unfold...',
     playAgain: 'Play Again',
     round: 'Round',
+    // consent dialog
+    consent_title: 'Notice',
+    consent_msg: 'This game uses AI to power your opponents,\nsimulating real human-level play.\n\nEach game session consumes Credits from your account.',
+    consent_agree: 'Agree & Enter Game',
+    consent_back: 'Go Back',
     // errors
     signInRequired: 'Sign in to enable AI conversation',
     aiError: '...',
@@ -146,6 +151,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     humanDead: '你被淘汰了！继续观看游戏……',
     playAgain: '再来一局',
     round: '第',
+    // consent dialog
+    consent_title: '温馨提示',
+    consent_msg: '本游戏使用 AI 驱动对手，\n模拟真人级别的游戏行为。\n\n每局游戏会消耗您账户的 Credit，\n请确认后再继续。',
+    consent_agree: '同意，进入游戏',
+    consent_back: '返回',
     // errors
     signInRequired: '登录后才能启用AI对话',
     aiError: '……',

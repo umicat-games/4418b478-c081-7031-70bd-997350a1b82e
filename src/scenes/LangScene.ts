@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
-import { setLang, fontFor, type Lang } from '../i18n';
+import { setLang, fontFor, t, type Lang } from '../i18n';
 
 export class LangScene extends Phaser.Scene {
   constructor() {
@@ -137,8 +137,7 @@ export class LangScene extends Phaser.Scene {
       hit.on('pointerout', () => drawBtn(false));
       hit.on('pointerdown', () => {
         setLang(code);
-        this.cameras.main.fadeOut(350, 0, 0, 0);
-        this.time.delayedCall(360, () => this.scene.start('WerewolfScene'));
+        this.showConsentDialog();
       });
     });
 
@@ -177,5 +176,83 @@ export class LangScene extends Phaser.Scene {
 
     // Fade in
     this.cameras.main.fadeIn(500, 0, 0, 0);
+  }
+
+  // ─── Consent dialog ──────────────────────────────────────────────────────
+  private showConsentDialog(): void {
+    const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2;
+    const pw = 620, ph = 360;
+
+    // Collect every object for bulk cleanup
+    const modal: Phaser.GameObjects.GameObject[] = [];
+    const track = <T extends Phaser.GameObjects.GameObject>(o: T): T => { modal.push(o); return o; };
+    const dismiss = () => modal.forEach(o => o.destroy());
+
+    // Full-screen dark overlay — also blocks clicks through to buttons below
+    const ov = track(this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.78).setDepth(200));
+    ov.setInteractive();
+
+    // Dialog panel
+    const panel = track(this.add.graphics().setDepth(201));
+    panel.fillStyle(0x0f1f0f, 1);
+    panel.fillRoundedRect(cx - pw / 2, cy - ph / 2, pw, ph, 22);
+    panel.lineStyle(3, 0xf5d060, 0.85);
+    panel.strokeRoundedRect(cx - pw / 2, cy - ph / 2, pw, ph, 22);
+    // Subtle top accent bar
+    panel.fillStyle(0xd9a021, 1);
+    panel.fillRoundedRect(cx - pw / 2 + 3, cy - ph / 2 + 3, pw - 6, 8, { tl: 20, tr: 20, bl: 0, br: 0 });
+
+    // Warning icon + title
+    track(this.add.text(cx, cy - ph / 2 + 56, '⚠️', { fontSize: '38px' }).setOrigin(0.5).setDepth(202));
+    track(this.add.text(cx, cy - ph / 2 + 102, t('consent_title'), {
+      fontFamily: fontFor(), fontSize: '24px', color: '#f5d060', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(202));
+
+    // Divider
+    const div = track(this.add.graphics().setDepth(202));
+    div.lineStyle(1, 0xf5d060, 0.25);
+    div.lineBetween(cx - 220, cy - ph / 2 + 128, cx + 220, cy - ph / 2 + 128);
+
+    // Message
+    track(this.add.text(cx, cy - 10, t('consent_msg'), {
+      fontFamily: fontFor(), fontSize: '17px', color: '#d0c8a0',
+      wordWrap: { width: 530, useAdvancedWrap: true }, align: 'center', lineSpacing: 6,
+    }).setOrigin(0.5).setDepth(202));
+
+    // Helper to make a dialog button
+    const makeBtn = (bx: number, label: string, bgColor: number, onClick: () => void) => {
+      const bw = 220, bh = 52;
+      const by = cy + ph / 2 - 60;
+
+      const bg = track(this.add.graphics().setDepth(202));
+      bg.fillStyle(bgColor, 1);
+      bg.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 12);
+
+      const hovG = track(this.add.graphics().setDepth(202));
+      hovG.fillStyle(0xffffff, 0.15);
+      hovG.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 12);
+      hovG.setVisible(false);
+
+      track(this.add.text(bx, by, label, {
+        fontFamily: fontFor(), fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(203));
+
+      const hit = track(
+        this.add.rectangle(bx, by, bw, bh, 0, 0).setDepth(204).setInteractive({ useHandCursor: true }),
+      );
+      hit.on('pointerover', () => hovG.setVisible(true));
+      hit.on('pointerout', () => hovG.setVisible(false));
+      hit.on('pointerdown', onClick);
+    };
+
+    makeBtn(cx - 125, t('consent_agree'), 0x1a7a44, () => {
+      dismiss();
+      this.cameras.main.fadeOut(350, 0, 0, 0);
+      this.time.delayedCall(360, () => this.scene.start('WerewolfScene'));
+    });
+
+    makeBtn(cx + 125, t('consent_back'), 0x5a3a10, () => {
+      dismiss();
+    });
   }
 }
