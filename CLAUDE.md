@@ -27,8 +27,6 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 - **Canvas**: 1280×720 landscape
 
 ## Changed This Turn
-- Created the full game from scratch: i18n.ts, LangScene.ts, WerewolfScene.ts (~750 lines)
-- Modified main.ts: added `umicatReady` export, registered new scenes
-- Modified BootScene.ts: routes to LangScene instead of GameScene
-- Created public/webfonts.json for CJK font loading
-- Created docs/design.md
+- **Speech bubble enlarged**: 570×205 (was 520×136), with speaker/message divider line, font 17px, line spacing
+- **CJK word wrap fixed**: `wordWrap: { width: 520, useAdvancedWrap: true }` — Chinese text now wraps correctly
+- **Continue button**: `waitForContinue()` method shows "Next ▶ / 继续 ▶" button at bottom; AI discussion turns now gate on user click instead of auto-advancing after 3.2s

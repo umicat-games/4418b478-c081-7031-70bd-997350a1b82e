@@ -430,35 +430,41 @@ export class WerewolfScene extends Phaser.Scene {
 
   // ─── Speech bubble ───────────────────────────────────────────────────────
   private createSpeechBubble(): void {
-    this.speechBubble = this.add.container(640, 375).setDepth(30).setAlpha(0).setVisible(false);
+    this.speechBubble = this.add.container(640, 380).setDepth(30).setAlpha(0).setVisible(false);
 
     this.speechBg = this.add.graphics();
     this.speechBg.fillStyle(0xfefaf0, 0.97);
-    this.speechBg.fillRoundedRect(-260, -68, 520, 136, 16);
+    this.speechBg.fillRoundedRect(-285, -100, 570, 205, 18);
     this.speechBg.lineStyle(3, 0xc8a860, 0.9);
-    this.speechBg.strokeRoundedRect(-260, -68, 520, 136, 16);
+    this.speechBg.strokeRoundedRect(-285, -100, 570, 205, 18);
     // Tail pointing up (towards speaker area)
     this.speechBg.fillStyle(0xfefaf0, 0.97);
-    this.speechBg.fillTriangle(-20, -68, 20, -68, 0, -90);
-    this.speechBg.lineStyle(2, 0xc8a860, 0.5);
-    this.speechBg.strokeTriangle(-20, -68, 20, -68, 0, -90);
+    this.speechBg.fillTriangle(-22, -100, 22, -100, 0, -124);
+    this.speechBg.lineStyle(2, 0xc8a860, 0.6);
+    this.speechBg.strokeTriangle(-22, -100, 22, -100, 0, -124);
 
-    this.speechSpeaker = this.add.text(0, -52, '', {
+    this.speechSpeaker = this.add.text(0, -80, '', {
       fontFamily: fontFor(),
-      fontSize: '14px',
+      fontSize: '15px',
       color: '#8a5a20',
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    this.speechMsg = this.add.text(0, -10, '', {
+    // Divider line between speaker name and message
+    const dividerG = this.add.graphics();
+    dividerG.lineStyle(1, 0xc8a860, 0.35);
+    dividerG.lineBetween(-240, -58, 240, -58);
+
+    this.speechMsg = this.add.text(0, -46, '', {
       fontFamily: fontFor(),
-      fontSize: '16px',
-      color: '#3a2010',
-      wordWrap: { width: 490 },
+      fontSize: '17px',
+      color: '#2a1505',
+      wordWrap: { width: 520, useAdvancedWrap: true },
       align: 'center',
+      lineSpacing: 4,
     }).setOrigin(0.5, 0);
 
-    this.speechBubble.add([this.speechBg, this.speechSpeaker, this.speechMsg]);
+    this.speechBubble.add([this.speechBg, dividerG, this.speechSpeaker, this.speechMsg]);
   }
 
   private showBubble(player: Player, text: string): void {
@@ -676,6 +682,19 @@ export class WerewolfScene extends Phaser.Scene {
   private clearAction(): void {
     this.actionContainer.removeAll(true);
     this.removeHtmlInput();
+  }
+
+  /** Shows a "Next ▶ / 继续 ▶" button and waits for the player to click it. */
+  private waitForContinue(): Promise<void> {
+    return new Promise(resolve => {
+      this.clearAction();
+      const label = this.lang === 'zh-CN' ? '继续  ▶' : 'Next  ▶';
+      const btn = this.addPhaserButton(640, 660, 160, 46, label, 0x1a5c8a, () => {
+        this.actionContainer.remove(btn, true);
+        resolve();
+      });
+      this.actionContainer.add(btn);
+    });
   }
 
   private showActionMessage(msg: string): void {
@@ -1136,7 +1155,7 @@ export class WerewolfScene extends Phaser.Scene {
       const text = await this.callAiDiscuss(player);
       this.discussionLog.push({ name: this.pName(player), text });
       this.speechMsg.setFontFamily(fontFor()).setText(text);
-      await this.wait(3200);
+      await this.waitForContinue();
     }
 
     this.unhighlightCard(player.idx);
