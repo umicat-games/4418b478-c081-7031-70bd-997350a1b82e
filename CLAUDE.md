@@ -30,3 +30,4 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 - **Speech bubble enlarged**: 570×205 (was 520×136), with speaker/message divider line, font 17px, line spacing
 - **CJK word wrap fixed**: `wordWrap: { width: 520, useAdvancedWrap: true }` — Chinese text now wraps correctly
 - **Continue button**: `waitForContinue()` method shows "Next ▶ / 继续 ▶" button at bottom; AI discussion turns now gate on user click instead of auto-advancing after 3.2s
+- **Input/button alignment fixed**: HTML input top changed to `638*sy` so its vertical center (660) matches Phaser button centers; removed conflicting overlay text from human turn; input widened to 640px spanning x=200–840; buttons at x=870/983

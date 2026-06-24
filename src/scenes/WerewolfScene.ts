@@ -746,9 +746,9 @@ export class WerewolfScene extends Phaser.Scene {
     input.maxLength = 200;
     input.style.cssText = [
       'position:fixed',
-      `left:${rect.left + 290 * sx}px`,
-      `top:${rect.top + 660 * sy}px`,
-      `width:${520 * sx}px`,
+      `left:${rect.left + 200 * sx}px`,
+      `top:${rect.top + 638 * sy}px`,     // center = 638 + 44/2 = 660, matching button centers
+      `width:${640 * sx}px`,
       `height:${44 * sy}px`,
       `font-size:${Math.round(17 * Math.min(sx, sy))}px`,
       `font-family:'${fontFor()}',sans-serif`,
@@ -1120,19 +1120,19 @@ export class WerewolfScene extends Phaser.Scene {
 
     if (player.isHuman && player.isAlive) {
       this.updateBanner(t('yourTurn'));
-      this.showActionMessage(t('yourTurn'));
+      this.clearAction(); // no label — banner already says "your turn"
 
-      // HTML text input
+      // HTML text input — top offset set so its center aligns with button centers at y=660
       this.createHtmlInput(t('typeMsg'));
 
-      // Phaser Send + Pass buttons
-      const sendBtn = this.addPhaserButton(870, 660, 90, 40, t('send'), 0x1a9955, () => {
+      // Phaser Send + Pass buttons (centered at y=660)
+      const sendBtn = this.addPhaserButton(870, 660, 100, 44, t('send'), 0x1a9955, () => {
         const text = this.chatInput?.value.trim() ?? '';
         this.removeHtmlInput();
         this.humanInputResolve?.(text);
         this.humanInputResolve = null;
       });
-      const passBtn = this.addPhaserButton(975, 660, 90, 40, t('pass'), 0x7a5a20, () => {
+      const passBtn = this.addPhaserButton(983, 660, 100, 44, t('pass'), 0x7a5a20, () => {
         this.removeHtmlInput();
         this.humanInputResolve?.('');
         this.humanInputResolve = null;
