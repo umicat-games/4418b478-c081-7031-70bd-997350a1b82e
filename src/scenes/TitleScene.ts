@@ -25,11 +25,6 @@ export class TitleScene extends Phaser.Scene {
     overlay.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.15, 0.15, 0.75, 0.75);
     overlay.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // --- Bottom dark band to ground the UI ---
-    const band = this.add.graphics().setDepth(1);
-    band.fillStyle(0x000010, 0.65);
-    band.fillRect(0, GAME_HEIGHT - 220, GAME_WIDTH, 220);
-
     // --- Slogan ---
     this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20, 'Survive the siege. Rule the stars.', {
