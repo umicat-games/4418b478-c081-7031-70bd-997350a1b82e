@@ -957,10 +957,24 @@ export class GameScene extends Phaser.Scene {
       vy *= 0.7071;
     }
 
+    // ── Touch / click-to-move: move toward pointer when pressed ──────────
+    // Kick in only when no keyboard key is held so the two input modes
+    // don't fight each other.  A 30 px dead-zone prevents jitter when the
+    // finger is already on top of the ship.
+    const ptr = this.input.activePointer;
+    if (ptr.isDown && !left && !right && !up && !down) {
+      const tdx  = ptr.x - this.player.x;
+      const tdy  = ptr.y - this.player.y;
+      const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
+      if (tdist > 30) {
+        vx = (tdx / tdist) * PLAYER_SPEED;
+        vy = (tdy / tdist) * PLAYER_SPEED;
+      }
+    }
+
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(vx, vy);
 
-    // ── Rotation: always face mouse ──────────────────────────────────────
-    const ptr   = this.input.activePointer;
+    // ── Rotation: always face pointer (mouse or touch) ───────────────────
     const angle = Math.atan2(ptr.y - this.player.y, ptr.x - this.player.x);
     this.player.setRotation(angle);
 

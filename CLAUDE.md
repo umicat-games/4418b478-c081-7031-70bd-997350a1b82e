@@ -53,9 +53,9 @@
 ## Controls
 | Action | Input |
 |---|---|
-| Move | WASD or Arrow keys |
-| Aim | Mouse cursor |
-| Fire | Automatic (always firing toward mouse) |
+| Move | WASD / Arrow keys (desktop) OR touch & hold a point on screen (mobile) |
+| Aim | Mouse cursor / touch position |
+| Fire | Automatic (always firing toward aim point) |
 
 ## Architecture Notes
 - Player entity from scene JSON (`code-rendered`, script `src/visuals/player.ts`, width=48, height=40).
@@ -65,4 +65,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Changed firing from hold-to-fire to always auto-firing toward the mouse cursor.
+- Added touch-to-move: holding a finger on screen moves the player toward that point (30px dead zone). Keyboard movement still works alongside. Ship always rotates toward and auto-fires at the touch/pointer position.
