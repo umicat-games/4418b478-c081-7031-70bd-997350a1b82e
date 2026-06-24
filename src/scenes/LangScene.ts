@@ -213,11 +213,11 @@ export class LangScene extends Phaser.Scene {
     div.lineStyle(1, 0xf5d060, 0.25);
     div.lineBetween(cx - 220, cy - ph / 2 + 128, cx + 220, cy - ph / 2 + 128);
 
-    // Message
-    track(this.add.text(cx, cy - 10, t('consent_msg'), {
+    // Message — top-anchored so multi-line text grows downward, not into the title
+    track(this.add.text(cx, cy - ph / 2 + 146, t('consent_msg'), {
       fontFamily: fontFor(), fontSize: '17px', color: '#d0c8a0',
-      wordWrap: { width: 530, useAdvancedWrap: true }, align: 'center', lineSpacing: 6,
-    }).setOrigin(0.5).setDepth(202));
+      wordWrap: { width: 530, useAdvancedWrap: true }, align: 'center', lineSpacing: 8,
+    }).setOrigin(0.5, 0).setDepth(202));
 
     // Helper to make a dialog button
     const makeBtn = (bx: number, label: string, bgColor: number, onClick: () => void) => {
