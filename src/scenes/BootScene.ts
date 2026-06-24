@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
+import { preloadManifest } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
 /**
@@ -25,8 +25,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    const manifest = getManifest(this);
-    this.scene.start('GameScene', { sceneId: manifest.initialScene });
+    this.scene.start('LangScene');
   }
 }
 

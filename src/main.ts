@@ -1,14 +1,19 @@
-import { createUmicatGame } from '@umicat/phaser-sdk';
+import { createUmicatGame, Umicat } from '@umicat/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
+import { LangScene } from './scenes/LangScene';
+import { WerewolfScene } from './scenes/WerewolfScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { renderScripts } from './visuals';
+
+// Platform services — resolves to Umicat instance or null
+export const umicatReady = Umicat.init({ standaloneGameId: 'werewolf-ai' }).catch(() => null);
 
 function startGame(): void {
   createUmicatGame({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scenes: [BootScene, GameScene],
+    scenes: [BootScene, GameScene, LangScene, WerewolfScene],
     renderScripts,
   });
 }
