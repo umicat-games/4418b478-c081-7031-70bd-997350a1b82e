@@ -181,7 +181,7 @@ export class LangScene extends Phaser.Scene {
   // ─── Consent dialog ──────────────────────────────────────────────────────
   private showConsentDialog(): void {
     const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2;
-    const pw = 620, ph = 360;
+    const pw = 620, ph = 420;
 
     // Collect every object for bulk cleanup
     const modal: Phaser.GameObjects.GameObject[] = [];
