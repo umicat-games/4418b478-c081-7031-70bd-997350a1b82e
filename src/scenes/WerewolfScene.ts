@@ -391,7 +391,8 @@ export class WerewolfScene extends Phaser.Scene {
 
   private updateBanner(phase: string, round = this.round): void {
     this.phaseLabelText.setText(phase);
-    this.roundLabelText.setText(`${t('round')} ${round}`);
+    const roundLabel = this.lang === 'zh-CN' ? `第 ${round} 轮` : `Round ${round}`;
+    this.roundLabelText.setText(roundLabel);
   }
 
   // ─── Night overlay ───────────────────────────────────────────────────────
