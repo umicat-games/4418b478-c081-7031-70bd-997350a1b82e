@@ -365,30 +365,38 @@ export class WerewolfScene extends Phaser.Scene {
 
   // ─── Background drawing ──────────────────────────────────────────────────
   private drawBackground(): void {
-    const bg = this.add.graphics().setDepth(0);
-    // Base
-    bg.fillGradientStyle(0x050d05, 0x050d05, 0x0a1e08, 0x0a1e08, 1);
-    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // Pixel-art tavern background image
+    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_tavern')
+      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
+      .setDepth(0);
+
+    // Dark vignette overlay so the table pops
+    const vignette = this.add.graphics().setDepth(1);
+    vignette.fillStyle(0x020a02, 0.55);
+    vignette.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // Table on top of the image
+    const table = this.add.graphics().setDepth(2);
     // Wood table rim
-    bg.fillStyle(0x3a1f08, 1);
-    bg.fillEllipse(640, 385, 1120, 545);
+    table.fillStyle(0x3a1f08, 1);
+    table.fillEllipse(640, 385, 1120, 545);
     // Felt
-    bg.fillStyle(0x1d5212, 1);
-    bg.fillEllipse(640, 385, 1060, 500);
+    table.fillStyle(0x1d5212, 1);
+    table.fillEllipse(640, 385, 1060, 500);
     // Inner subtle highlight
-    bg.fillStyle(0x24681a, 0.4);
-    bg.fillEllipse(640, 380, 940, 410);
+    table.fillStyle(0x24681a, 0.4);
+    table.fillEllipse(640, 380, 940, 410);
     // Felt border
-    bg.lineStyle(5, 0x2d8a20, 0.7);
-    bg.strokeEllipse(640, 385, 1060, 500);
-    bg.lineStyle(2, 0x3aaa28, 0.3);
-    bg.strokeEllipse(640, 385, 1040, 482);
+    table.lineStyle(5, 0x2d8a20, 0.7);
+    table.strokeEllipse(640, 385, 1060, 500);
+    table.lineStyle(2, 0x3aaa28, 0.3);
+    table.strokeEllipse(640, 385, 1040, 482);
     // Subtle center texture dots
     for (let i = 0; i < 40; i++) {
       const tx = 250 + Math.sin(i * 137.5) * 350;
       const ty = 280 + Math.cos(i * 97.3) * 165;
-      bg.fillStyle(0x2a6a18, 0.18);
-      bg.fillCircle(tx, ty, 3);
+      table.fillStyle(0x2a6a18, 0.18);
+      table.fillCircle(tx, ty, 3);
     }
   }
 

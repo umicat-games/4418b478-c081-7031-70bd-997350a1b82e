@@ -23,6 +23,7 @@ export class BootScene extends Phaser.Scene {
     drawLoadingBar(this);
     preloadManifest(this);
     this.load.audio('bgm_ambient', 'uploaded/bgm_ambient_ubprd.mp3');
+    this.load.image('bg_tavern', 'uploaded/bg_tavern.jpg');
   }
 
   create(): void {
