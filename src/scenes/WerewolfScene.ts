@@ -365,10 +365,12 @@ export class WerewolfScene extends Phaser.Scene {
 
   // ─── Background drawing ──────────────────────────────────────────────────
   private drawBackground(): void {
-    // Pixel-art tavern background image
-    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_tavern')
-      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
-      .setDepth(0);
+    // Pixel-art tavern background image — cover-fill: scale proportionally so
+    // no distortion; the slightly-wider image is centred and edge-crops a tiny bit.
+    const bgImg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_tavern').setDepth(0);
+    const scaleX = GAME_WIDTH / bgImg.width;
+    const scaleY = GAME_HEIGHT / bgImg.height;
+    bgImg.setScale(Math.max(scaleX, scaleY));
 
     // Dark vignette overlay so the table pops
     const vignette = this.add.graphics().setDepth(1);
