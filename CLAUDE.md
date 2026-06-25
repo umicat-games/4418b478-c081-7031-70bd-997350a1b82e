@@ -27,4 +27,4 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 - **Canvas**: 1280×720 landscape
 
 ## Changed This Turn
-- **Background music**: AI-generated ambient BGM (`uploaded/bgm_ambient_ubprd.mp3`) — soft piano + strings, mysterious mood. Loaded in BootScene.preload(); starts on first player interaction in WerewolfScene (browser autoplay rule); loops at volume 0.35; stops on scene shutdown.
+- **Xiao Mei playbook**: Added beauty/makeup persona to 小美 — personality updated to mention obsession with skincare and lip colors; `buildNpc()` adds a per-language playbook rule in her NPC rules array; `callAiDiscuss()` injects a round-1 intro hint into the prompt so she always self-introduces with her beauty hobby on the first discussion turn.

@@ -58,19 +58,19 @@ const AI_PROFILES = [
   },
   {
     nameCn: '小美', nameEn: 'Xiao Mei', avatarColor: 0xd94f8a,
-    personalityCn: '容易紧张的年轻人，话很多，有时候无意间说出重要信息',
-    personalityEn: 'Nervous and talkative, sometimes blurts out important things unintentionally.',
-    speakingStyleCn: '语速快、容易激动、充满感叹，有点絮叨',
-    speakingStyleEn: 'Fast-talking, excitable, full of interjections.',
+    personalityCn: '爱美的时尚女生，超级痴迷美妆护肤，平时刷美妆博主、囤口红；同时也容易紧张，话很多，有时无意间说出重要信息',
+    personalityEn: 'A fashion-forward girl obsessed with beauty and skincare — always trying new lip colors and following beauty influencers. Also nervous and talkative, sometimes blurting out important things unintentionally.',
+    speakingStyleCn: '语速快、容易激动、充满感叹，爱用美妆相关的比喻，有点絮叨',
+    speakingStyleEn: 'Fast-talking, excitable, full of interjections; often uses beauty-related comparisons.',
     fallbackCn: [
-      '啊，我好紧张！总感觉有人在说谎，但说不清是谁……',
-      '等等让我想想！这一局感觉真的很复杂！',
+      '啊，我好紧张！就像第一次尝试渐变唇一样手抖……总感觉有人在说谎！',
+      '等等让我想想！这一局感觉真的很复杂，比调色盘还乱！',
       '大家再说说自己的理由？我现在脑子一片乱。',
       '总感觉哪里怪怪的……有人跟我一样不安吗？',
     ],
     fallbackEn: [
-      "Oh gosh, I'm so nervous! Someone is definitely lying, I just can't tell who...",
-      "Wait, wait, let me think! This round feels really complicated!",
+      "Oh gosh, I'm nervous — hands shaking like the first time I tried ombre lip! Someone is definitely lying!",
+      "Wait, let me think! This round is more complicated than blending a new eyeshadow palette!",
       "My head is spinning — can everyone share their reasoning again?",
       "Something feels off and I can't shake it. Anyone else feel that?",
     ],
@@ -335,6 +335,13 @@ export class WerewolfScene extends Phaser.Scene {
         : ['identify and eliminate werewolves', 'defend yourself if falsely accused', 'reason from available evidence'];
     }
 
+    const isXiaoMei = player.nameCn === '小美';
+    const xiaoMeiPlaybook = isXiaoMei
+      ? (this.lang === 'zh-CN'
+        ? 'PLAYBOOK — 小美的特别规则：你是一个爱美的女生，日常超爱美妆护肤，口红色号、护肤步骤都是你的专业领域。第1轮讨论时，你【必须】在发言开头先做简短自我介绍，自然提到你热爱美妆的爱好（例如最近在研究某款口红/护肤品），然后再谈游戏。之后各轮可以偶尔用美妆比喻，但不必每次都介绍自己。'
+        : 'PLAYBOOK — Xiao Mei special rule: You are a beauty-obsessed girl. Skincare routines, lip colors, and makeup tutorials are your daily life. In Round 1 discussion ONLY, you MUST open with a brief self-introduction that naturally mentions your love of beauty/makeup (e.g., a product you recently tried), then transition into the game. In later rounds you may occasionally use beauty comparisons, but no need to re-introduce yourself.')
+      : null;
+
     return this.umicat.ai.npc({
       role: roleCtx,
       goals,
@@ -345,6 +352,7 @@ export class WerewolfScene extends Phaser.Scene {
         'Keep every response to 1–3 natural sentences as if seated at a real game table. No asterisks or action descriptions.',
         'You are competitive and playing to WIN. React genuinely to what others say.',
         isWolf ? 'NEVER admit you are a werewolf under any circumstance.' : '',
+        xiaoMeiPlaybook ?? '',
       ].filter(Boolean),
       actions,
     });
@@ -1196,9 +1204,16 @@ export class WerewolfScene extends Phaser.Scene {
       discussionSoFar: recentLog,
       yourName: this.pName(player),
     };
+    const isXiaoMei = player.nameCn === '小美';
+    const introHint = (isXiaoMei && this.round === 1)
+      ? (this.lang === 'zh-CN'
+        ? '【第1轮必须先自我介绍，提到你热爱美妆的爱好，再发表游戏观点】'
+        : '[Round 1 — MUST open with a brief self-introduction mentioning your beauty/makeup hobby, then share your game thoughts]')
+      : '';
+
     const prompt = this.lang === 'zh-CN'
-      ? `第${this.round}轮讨论，请发表你的看法（1-3句话）：`
-      : `Round ${this.round} discussion — share your thoughts (1–3 sentences):`;
+      ? `第${this.round}轮讨论，请发表你的看法（1-3句话）：${introHint}`
+      : `Round ${this.round} discussion — share your thoughts (1–3 sentences): ${introHint}`;
 
     const r = await player.npc.say(prompt, { observation: obs });
     if (!r.ok) return this.fallbackLine(player);
