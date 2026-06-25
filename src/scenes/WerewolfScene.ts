@@ -28,11 +28,11 @@ interface Player {
 
 // ─── Static player profiles ───────────────────────────────────────────────────
 const SEAT_POSITIONS: [number, number][] = [
-  [182, 248],  // AI 0
-  [402, 154],  // AI 1
-  [640, 124],  // AI 2
-  [878, 154],  // AI 3
-  [1098, 248], // AI 4
+  [182, 288],  // AI 0  — shifted down 40px so all card tops clear the 60px banner
+  [402, 194],  // AI 1
+  [640, 164],  // AI 2
+  [878, 194],  // AI 3
+  [1098, 288], // AI 4
   [640, 594],  // Human
 ];
 
