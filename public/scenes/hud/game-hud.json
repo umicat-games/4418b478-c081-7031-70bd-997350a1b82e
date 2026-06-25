@@ -22,7 +22,7 @@
         "offsetY": 0
       },
       "layer": "base",
-      "label": "Button",
+      "label": "Text",
       "shape": "rounded-rect",
       "width": 96,
       "height": 48,
