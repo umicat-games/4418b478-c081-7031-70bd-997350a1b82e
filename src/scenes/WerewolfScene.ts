@@ -204,8 +204,20 @@ export class WerewolfScene extends Phaser.Scene {
 
     if (this.umicat) this.createAiNpcs();
 
+    // Background music — starts on first interaction (browser autoplay rule)
+    const startBgm = () => {
+      if (!this.sound.get('bgm_ambient')?.isPlaying) {
+        this.sound.play('bgm_ambient', { loop: true, volume: 0.35 });
+      }
+    };
+    this.input.once('pointerdown', startBgm);
+    this.input.keyboard?.once('keydown', startBgm);
+
     // Shutdown cleanup
-    this.events.once('shutdown', () => this.removeHtmlInput());
+    this.events.once('shutdown', () => {
+      this.sound.stopByKey('bgm_ambient');
+      this.removeHtmlInput();
+    });
 
     await this.wait(400);
     this.cameras.main.fadeIn(500, 0, 0, 0);

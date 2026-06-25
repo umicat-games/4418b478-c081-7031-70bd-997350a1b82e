@@ -22,6 +22,7 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     drawLoadingBar(this);
     preloadManifest(this);
+    this.load.audio('bgm_ambient', 'uploaded/bgm_ambient_ubprd.mp3');
   }
 
   create(): void {

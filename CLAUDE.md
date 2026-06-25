@@ -27,8 +27,4 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 - **Canvas**: 1280×720 landscape
 
 ## Changed This Turn
-- **Speech bubble enlarged**: 570×205 (was 520×136), with speaker/message divider line, font 17px, line spacing
-- **CJK word wrap fixed**: `wordWrap: { width: 520, useAdvancedWrap: true }` — Chinese text now wraps correctly
-- **Continue button**: `waitForContinue()` method shows "Next ▶ / 继续 ▶" button at bottom; AI discussion turns now gate on user click instead of auto-advancing after 3.2s
-- **Input/button alignment fixed**: HTML input top changed to `638*sy` so its vertical center (660) matches Phaser button centers; removed conflicting overlay text from human turn; input widened to 640px spanning x=200–840; buttons at x=870/983
-- **Consent dialog**: After selecting language, a modal appears warning about AI + Credit consumption; "同意，进入游戏" / "Agree & Enter Game" proceeds, "返回" / "Go Back" dismisses the modal; bilingual strings in i18n.ts
+- **Background music**: AI-generated ambient BGM (`uploaded/bgm_ambient_ubprd.mp3`) — soft piano + strings, mysterious mood. Loaded in BootScene.preload(); starts on first player interaction in WerewolfScene (browser autoplay rule); loops at volume 0.35; stops on scene shutdown.
