@@ -4,7 +4,7 @@
 Single-player AI Werewolf (social deduction game). Human always plays good side (Seer or Villager). 5 AI opponents powered by umicat.ai — lie, accuse, shift blame like real players. 6-player table: 2 Wolves, 1 Seer, 3 Villagers. Chinese/English bilingual.
 
 ## Implemented Features
-- **Language selection screen** (LangScene) — Chinese / English picker; persists to localStorage
+- **Main menu** (LangScene) — reads `umicat.locale` as default language (fallback: localStorage → zh-CN); two buttons: "Start Game" and "Select Language"; lang picker is a pixel-style popup dialog (ESC/click-outside to close); choosing a language rebuilds the UI with updated labels
 - **Role assignment** — Human always gets Seer or Villager; AI fills remaining roles (always 2 wolves)
 - **5 distinct AI personas**: Wang Gang (detective), Xiao Mei (nervous), Qiang Chen (hothead), Manager Li (smooth talker), Jing Zhao (silent observer)
 - **Night phase** — AI wolves pick a victim via `umicat.ai`; seer investigates (human UI or AI auto-check)
@@ -27,7 +27,5 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 - **Canvas**: 1280×720 landscape
 
 ## Changed This Turn
-- **Character pixel portraits**: Generated 6 pixel-art portraits (64×64) for all characters; registered in BootScene. Cards now show portrait images with colored ring backdrop instead of letter circles. CHAR_TEXTURES map added. Fallback to letter if texture missing.
-- **Pixel-art tavern background**: AI-generated `bg_tavern.jpg`; green felt table removed (user request); vignette at 0.35.
-- **Wang Gang playbook wired**: `public/playbooks/wanggang.md`; `buildNpc()` passes `playbook: 'wanggang'`.
-- **Xiao Mei playbook file**: `public/playbooks/xiaomei.md`; `buildNpc()` passes `playbook: 'xiaomei'`.
+- **Main menu redesign**: LangScene now has "Start Game" + "Select Language" buttons. Platform locale (`umicat.locale`) used as default; saved preference still wins. Language picker is a pixel-style modal popup (sharp corners, double gold border, two language buttons, ESC/click-outside to close). On language change, scene rebuilds via `this.children.removeAll(true)` + `buildUI()`.
+- **LangScene refactor**: Split into `buildUI()` (drawable, rebuilds on lang change) + `makePixelBtn()` (shared factory) + `showLangDialog()` + `showConsentDialog()`.

@@ -1,17 +1,29 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { setLang, fontFor, t, type Lang } from '../i18n';
+import { umicatReady } from '../main';
 
 export class LangScene extends Phaser.Scene {
   constructor() {
     super({ key: 'LangScene' });
   }
 
-  create(): void {
-    // Restore saved language preference
+  async create(): Promise<void> {
+    // Priority: saved preference > platform locale > default 'zh-CN'
     const saved = localStorage.getItem('game:lang') as Lang | null;
-    if (saved === 'en' || saved === 'zh-CN') setLang(saved);
+    if (saved === 'en' || saved === 'zh-CN') {
+      setLang(saved);
+    } else {
+      const umicat = await umicatReady;
+      const pl = umicat?.locale;
+      if (pl === 'en' || pl === 'zh-CN') setLang(pl as Lang);
+      else setLang('zh-CN');
+    }
 
+    this.buildUI();
+  }
+
+  private buildUI(): void {
     // ─── Pixel-art background image ───
     const bgImg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_title').setDepth(0);
     const scaleX = GAME_WIDTH / bgImg.width;
@@ -55,83 +67,30 @@ export class LangScene extends Phaser.Scene {
       div.lineBetween(dx, 248, dx + 8, 248);
     }
 
-    // Select language prompt
-    this.add.text(GAME_WIDTH / 2, 272, '— SELECT LANGUAGE —', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '11px',
-      color: '#a09060',
-    }).setOrigin(0.5).setDepth(10);
+    // ─── START GAME button (primary, big, red) ───
+    this.makePixelBtn(
+      GAME_WIDTH / 2, 360, 320, 90,
+      t('startGame'), 0xaa2020, 0x550000,
+      () => this.showConsentDialog(),
+    );
 
-    // ─── Pixel-style language buttons ───
-    const langs: Array<{ code: Lang; label: string; sub: string; accentColor: number; shadowColor: number }> = [
-      { code: 'zh-CN', label: '中文',    sub: '简体中文',  accentColor: 0xaa2020, shadowColor: 0x550000 },
-      { code: 'en',    label: 'ENGLISH', sub: 'English', accentColor: 0x1a5c99, shadowColor: 0x0a2a4a },
-    ];
-
-    langs.forEach(({ code, label, sub, accentColor, shadowColor }, i) => {
-      const bx = GAME_WIDTH / 2 + (i === 0 ? -175 : 175);
-      const by = 400;
-      const bw = 280;
-      const bh = 84;
-
-      // Pixel button shadow (offset block, no blur)
-      const shadow = this.add.graphics().setDepth(9);
-      shadow.fillStyle(shadowColor, 1);
-      shadow.fillRect(bx - bw / 2 + 5, by - bh / 2 + 5, bw, bh);
-
-      // Button base — sharp corners (pixel style)
-      const btnBg = this.add.graphics().setDepth(10);
-      btnBg.fillStyle(accentColor, 1);
-      btnBg.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
-      // Pixel 3-D inner highlight top+left
-      btnBg.lineStyle(3, 0xffffff, 0.25);
-      btnBg.lineBetween(bx - bw / 2, by - bh / 2, bx + bw / 2, by - bh / 2);
-      btnBg.lineBetween(bx - bw / 2, by - bh / 2, bx - bw / 2, by + bh / 2);
-      // Outer bright border
-      btnBg.lineStyle(2, 0xf5d060, 0.7);
-      btnBg.strokeRect(bx - bw / 2, by - bh / 2, bw, bh);
-
-      // Hover overlay
-      const btnHov = this.add.graphics().setDepth(10);
-      btnHov.fillStyle(0xffffff, 0.12);
-      btnHov.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
-      btnHov.setVisible(false);
-
-      // Primary label
-      const labelFont = code === 'zh-CN' ? 'Noto Sans SC' : '"Press Start 2P"';
-      const labelSize = code === 'zh-CN' ? '30px' : '20px';
-      this.add.text(bx, by - 10, label, {
-        fontFamily: labelFont,
-        fontSize: labelSize,
-        color: '#ffffff',
-        fontStyle: 'bold',
-      }).setOrigin(0.5).setDepth(11);
-
-      this.add.text(bx, by + 22, sub, {
-        fontFamily: 'Noto Sans SC',
-        fontSize: '13px',
-        color: 'rgba(255,255,255,0.65)',
-      }).setOrigin(0.5).setDepth(11);
-
-      const hit = this.add.rectangle(bx, by, bw, bh, 0, 0)
-        .setInteractive({ useHandCursor: true }).setDepth(12);
-
-      hit.on('pointerover', () => { btnHov.setVisible(true); });
-      hit.on('pointerout',  () => { btnHov.setVisible(false); });
-      hit.on('pointerdown', () => {
-        setLang(code);
-        this.showConsentDialog();
-      });
-    });
+    // ─── SELECT LANGUAGE button (secondary, smaller, dark) ───
+    this.makePixelBtn(
+      GAME_WIDTH / 2, 480, 240, 52,
+      t('selectLang'), 0x2a3a2a, 0x141e14,
+      () => this.showLangDialog(),
+      '#c8d0a0',
+      0.55,
+    );
 
     // ─── Info row ───
-    this.add.text(GAME_WIDTH / 2, 528, '6 PLAYERS  ·  AI OPPONENTS  ·  SOCIAL DEDUCTION', {
+    this.add.text(GAME_WIDTH / 2, 565, '6 PLAYERS  ·  AI OPPONENTS  ·  SOCIAL DEDUCTION', {
       fontFamily: '"Press Start 2P"',
       fontSize: '9px',
       color: '#7a9a70',
     }).setOrigin(0.5).setDepth(10);
 
-    this.add.text(GAME_WIDTH / 2, 555, '6人局  ·  AI真人级对手  ·  社交推理', {
+    this.add.text(GAME_WIDTH / 2, 590, '6人局  ·  AI真人级对手  ·  社交推理', {
       fontFamily: 'Noto Sans SC',
       fontSize: '15px',
       color: '#5a8050',
@@ -146,16 +105,165 @@ export class LangScene extends Phaser.Scene {
     const roleG = this.add.graphics().setDepth(9);
     roles.forEach(({ x, color }) => {
       roleG.fillStyle(color, 0.18);
-      roleG.fillRect(x - 28, 598, 56, 70);
+      roleG.fillRect(x - 28, 628, 56, 68);
       roleG.lineStyle(1, color, 0.5);
-      roleG.strokeRect(x - 28, 598, 56, 70);
+      roleG.strokeRect(x - 28, 628, 56, 68);
     });
     roles.forEach(({ x, emoji }) => {
-      this.add.text(x, 633, emoji, { fontSize: '28px' }).setOrigin(0.5).setDepth(10);
+      this.add.text(x, 662, emoji, { fontSize: '28px' }).setOrigin(0.5).setDepth(10);
     });
 
     // Fade in
     this.cameras.main.fadeIn(600, 0, 0, 0);
+  }
+
+  // ─── Reusable pixel button factory ──────────────────────────────────────────
+  private makePixelBtn(
+    bx: number, by: number, bw: number, bh: number,
+    label: string,
+    accentColor: number, shadowColor: number,
+    onClick: () => void,
+    textColor = '#ffffff',
+    borderAlpha = 0.7,
+  ): void {
+    const shadow = this.add.graphics().setDepth(9);
+    shadow.fillStyle(shadowColor, 1);
+    shadow.fillRect(bx - bw / 2 + 5, by - bh / 2 + 5, bw, bh);
+
+    const btnBg = this.add.graphics().setDepth(10);
+    btnBg.fillStyle(accentColor, 1);
+    btnBg.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
+    btnBg.lineStyle(3, 0xffffff, 0.18);
+    btnBg.lineBetween(bx - bw / 2, by - bh / 2, bx + bw / 2, by - bh / 2);
+    btnBg.lineBetween(bx - bw / 2, by - bh / 2, bx - bw / 2, by + bh / 2);
+    btnBg.lineStyle(2, 0xf5d060, borderAlpha);
+    btnBg.strokeRect(bx - bw / 2, by - bh / 2, bw, bh);
+
+    const btnHov = this.add.graphics().setDepth(10);
+    btnHov.fillStyle(0xffffff, 0.12);
+    btnHov.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
+    btnHov.setVisible(false);
+
+    const fontSize = bh >= 80 ? '18px' : '13px';
+    this.add.text(bx, by, label, {
+      fontFamily: `"Press Start 2P", "Noto Sans SC"`,
+      fontSize,
+      color: textColor,
+    }).setOrigin(0.5).setDepth(11);
+
+    const hit = this.add.rectangle(bx, by, bw, bh, 0, 0)
+      .setInteractive({ useHandCursor: true }).setDepth(12);
+    hit.on('pointerover', () => btnHov.setVisible(true));
+    hit.on('pointerout',  () => btnHov.setVisible(false));
+    hit.on('pointerdown', onClick);
+  }
+
+  // ─── Language selection dialog (pixel-style popup) ───────────────────────
+  private showLangDialog(): void {
+    const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2;
+    const pw = 560, ph = 330;
+
+    const modal: Phaser.GameObjects.GameObject[] = [];
+    const track = <T extends Phaser.GameObjects.GameObject>(o: T): T => { modal.push(o); return o; };
+    const dismiss = () => modal.forEach(o => o.destroy());
+
+    // Fullscreen block overlay
+    const ov = track(this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.72).setDepth(200));
+    ov.setInteractive();
+    ov.on('pointerdown', dismiss);
+
+    // Panel — sharp corners (pixel style)
+    const panel = track(this.add.graphics().setDepth(201));
+    panel.fillStyle(0x0e1a0e, 1);
+    panel.fillRect(cx - pw / 2, cy - ph / 2, pw, ph);
+    // Top accent bar
+    panel.fillStyle(0xd9a021, 1);
+    panel.fillRect(cx - pw / 2 + 2, cy - ph / 2 + 2, pw - 4, 7);
+    // Gold pixel border
+    panel.lineStyle(3, 0xf5d060, 0.85);
+    panel.strokeRect(cx - pw / 2, cy - ph / 2, pw, ph);
+    // Inner inset border (classic pixel dialog double-border)
+    panel.lineStyle(1, 0xf5d060, 0.25);
+    panel.strokeRect(cx - pw / 2 + 6, cy - ph / 2 + 12, pw - 12, ph - 18);
+
+    // Title
+    track(this.add.text(cx, cy - ph / 2 + 48, '— SELECT LANGUAGE —', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '11px',
+      color: '#f5d060',
+    }).setOrigin(0.5).setDepth(202));
+
+    // Dashed divider
+    const divG = track(this.add.graphics().setDepth(202));
+    divG.lineStyle(2, 0xf5d060, 0.35);
+    for (let dx = cx - 200; dx < cx + 200; dx += 14) {
+      divG.lineBetween(dx, cy - ph / 2 + 70, dx + 8, cy - ph / 2 + 70);
+    }
+
+    // Language buttons — side by side
+    const langs: Array<{ code: Lang; label: string; sub: string; ac: number; sc: number }> = [
+      { code: 'zh-CN', label: '中文',    sub: '简体中文', ac: 0xaa2020, sc: 0x550000 },
+      { code: 'en',    label: 'ENGLISH', sub: 'English', ac: 0x1a5c99, sc: 0x0a2a4a },
+    ];
+
+    langs.forEach(({ code, label, sub, ac, sc }, i) => {
+      const bx = cx + (i === 0 ? -130 : 130);
+      const by = cy + 30;
+      const bw = 210;
+      const bh = 84;
+
+      const sh = track(this.add.graphics().setDepth(201));
+      sh.fillStyle(sc, 1);
+      sh.fillRect(bx - bw / 2 + 5, by - bh / 2 + 5, bw, bh);
+
+      const bg = track(this.add.graphics().setDepth(202));
+      bg.fillStyle(ac, 1);
+      bg.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
+      bg.lineStyle(3, 0xffffff, 0.2);
+      bg.lineBetween(bx - bw / 2, by - bh / 2, bx + bw / 2, by - bh / 2);
+      bg.lineBetween(bx - bw / 2, by - bh / 2, bx - bw / 2, by + bh / 2);
+      bg.lineStyle(2, 0xf5d060, 0.7);
+      bg.strokeRect(bx - bw / 2, by - bh / 2, bw, bh);
+
+      const hov = track(this.add.graphics().setDepth(202));
+      hov.fillStyle(0xffffff, 0.12);
+      hov.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
+      hov.setVisible(false);
+
+      const lf = code === 'zh-CN' ? 'Noto Sans SC' : '"Press Start 2P"';
+      const ls = code === 'zh-CN' ? '26px' : '18px';
+      track(this.add.text(bx, by - 10, label, {
+        fontFamily: lf, fontSize: ls, color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(203));
+      track(this.add.text(bx, by + 22, sub, {
+        fontFamily: 'Noto Sans SC', fontSize: '13px', color: 'rgba(255,255,255,0.6)',
+      }).setOrigin(0.5).setDepth(203));
+
+      const hit = track(
+        this.add.rectangle(bx, by, bw, bh, 0, 0).setDepth(204).setInteractive({ useHandCursor: true }),
+      );
+      hit.on('pointerover',  () => hov.setVisible(true));
+      hit.on('pointerout',   () => hov.setVisible(false));
+      hit.on('pointerdown', () => {
+        setLang(code);
+        dismiss();
+        // Rebuild UI so button labels reflect new language
+        this.children.removeAll(true);
+        this.buildUI();
+      });
+    });
+
+    // Close hint
+    track(this.add.text(cx, cy + ph / 2 - 24, '[ ESC / click outside to close ]', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: '#607060',
+    }).setOrigin(0.5).setDepth(203));
+
+    // ESC key to close
+    const esc = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESCAPE);
+    const escHandler = () => { esc?.removeListener('down', escHandler); dismiss(); };
+    esc?.on('down', escHandler);
   }
 
   // ─── Consent dialog ──────────────────────────────────────────────────────
