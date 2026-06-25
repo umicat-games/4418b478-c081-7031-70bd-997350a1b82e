@@ -500,7 +500,7 @@ export class WerewolfScene extends Phaser.Scene {
 
   // ─── Info text ───────────────────────────────────────────────────────────
   private createInfoText(): void {
-    this.infoText = this.add.text(640, 510, '', {
+    this.infoText = this.add.text(640, 468, '', {
       fontFamily: fontFor(),
       fontSize: '18px',
       color: '#f5d060',
