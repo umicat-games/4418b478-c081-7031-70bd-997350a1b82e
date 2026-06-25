@@ -12,127 +12,112 @@ export class LangScene extends Phaser.Scene {
     const saved = localStorage.getItem('game:lang') as Lang | null;
     if (saved === 'en' || saved === 'zh-CN') setLang(saved);
 
-    // ─── Background ───
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0x050d05, 0x050d05, 0x0d200a, 0x0d200a, 1);
-    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // ─── Pixel-art background image ───
+    const bgImg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_title').setDepth(0);
+    const scaleX = GAME_WIDTH / bgImg.width;
+    const scaleY = GAME_HEIGHT / bgImg.height;
+    bgImg.setScale(Math.max(scaleX, scaleY));
 
-    // Wood table rim
-    bg.fillStyle(0x3a1f08, 1);
-    bg.fillEllipse(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 60, 1100, 530);
-    // Felt surface
-    bg.fillStyle(0x1d5212, 1);
-    bg.fillEllipse(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 60, 1040, 490);
-    bg.lineStyle(5, 0x2d8a20, 0.7);
-    bg.strokeEllipse(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 60, 1040, 490);
+    // Dark overlay so UI pops
+    const ov = this.add.graphics().setDepth(1);
+    ov.fillStyle(0x000000, 0.48);
+    ov.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // ─── Moon & stars ───
-    const deco = this.add.graphics();
-    // Moon crescent
-    deco.fillStyle(0xfffacd, 0.95);
-    deco.fillCircle(160, 100, 46);
-    deco.fillStyle(0x050d05, 1);
-    deco.fillCircle(178, 88, 40);
-    // Stars
-    const stars = [
-      [80, 60], [260, 50], [120, 180], [320, 90],
-      [1050, 55], [1180, 100], [1240, 50], [1110, 175],
-    ];
-    stars.forEach(([sx, sy]) => {
-      deco.fillStyle(0xffffcc, Math.random() * 0.5 + 0.5);
-      deco.fillCircle(sx, sy, 2.5);
-    });
+    // ─── Pixel scanline texture (horizontal lines every 4px for retro CRT feel) ───
+    const scan = this.add.graphics().setDepth(2);
+    for (let y = 0; y < GAME_HEIGHT; y += 4) {
+      scan.lineStyle(1, 0x000000, 0.08);
+      scan.lineBetween(0, y, GAME_WIDTH, y);
+    }
 
-    // ─── Decorative role cards at sides ───
-    const cardDeco = this.add.graphics();
-    const sideCards = [
-      { x: 160, y: 490, color: 0xcc2222, label: '🐺' },
-      { x: 1120, y: 490, color: 0x2266bb, label: '🔮' },
-    ];
-    sideCards.forEach(({ x, y, color }) => {
-      cardDeco.fillStyle(color, 0.25);
-      cardDeco.fillRoundedRect(x - 52, y - 75, 104, 150, 10);
-      cardDeco.lineStyle(2, color, 0.5);
-      cardDeco.strokeRoundedRect(x - 52, y - 75, 104, 150, 10);
-    });
+    // ─── Title: "Among Wolves" in pixel font ───
+    this.add.text(GAME_WIDTH / 2, 148, 'AMONG WOLVES', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '42px',
+      color: '#f5d060',
+      stroke: '#1a0800',
+      strokeThickness: 6,
+      shadow: { offsetX: 4, offsetY: 4, color: '#8b0000', blur: 0, fill: true },
+    }).setOrigin(0.5).setDepth(10);
 
-    // ─── Title ───
-    this.add
-      .text(GAME_WIDTH / 2, 165, '狼人杀   WEREWOLF', {
-        fontFamily: 'Noto Sans SC',
-        fontSize: '58px',
-        color: '#f5d060',
-        stroke: '#2a1205',
-        strokeThickness: 7,
-        shadow: { offsetX: 4, offsetY: 4, color: '#000', blur: 12, fill: true },
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
+    // Subtitle in Chinese
+    this.add.text(GAME_WIDTH / 2, 215, '狼人杀', {
+      fontFamily: 'Noto Sans SC',
+      fontSize: '26px',
+      color: '#d0b878',
+      letterSpacing: 10,
+    }).setOrigin(0.5).setDepth(10);
 
-    // Divider
-    const divider = this.add.graphics().setDepth(2);
-    divider.lineStyle(2, 0xf5d060, 0.4);
-    divider.lineBetween(GAME_WIDTH / 2 - 280, 225, GAME_WIDTH / 2 + 280, 225);
+    // Pixel divider — dashes
+    const div = this.add.graphics().setDepth(10);
+    div.lineStyle(2, 0xf5d060, 0.5);
+    for (let dx = GAME_WIDTH / 2 - 240; dx < GAME_WIDTH / 2 + 240; dx += 14) {
+      div.lineBetween(dx, 248, dx + 8, 248);
+    }
 
-    this.add
-      .text(GAME_WIDTH / 2, 255, '选择语言  /  Select Language', {
-        fontFamily: 'Noto Sans SC',
-        fontSize: '22px',
-        color: '#d0c4a0',
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
+    // Select language prompt
+    this.add.text(GAME_WIDTH / 2, 272, '— SELECT LANGUAGE —', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '11px',
+      color: '#a09060',
+    }).setOrigin(0.5).setDepth(10);
 
-    // ─── Language buttons ───
-    const langs: Array<{ code: Lang; label: string; sub: string; accentColor: number }> = [
-      { code: 'zh-CN', label: '中文', sub: '简体中文', accentColor: 0xe03a3a },
-      { code: 'en', label: 'English', sub: 'English', accentColor: 0x3a7ae0 },
+    // ─── Pixel-style language buttons ───
+    const langs: Array<{ code: Lang; label: string; sub: string; accentColor: number; shadowColor: number }> = [
+      { code: 'zh-CN', label: '中文',    sub: '简体中文',  accentColor: 0xaa2020, shadowColor: 0x550000 },
+      { code: 'en',    label: 'ENGLISH', sub: 'English', accentColor: 0x1a5c99, shadowColor: 0x0a2a4a },
     ];
 
-    langs.forEach(({ code, label, sub, accentColor }, i) => {
-      const bx = GAME_WIDTH / 2 + (i === 0 ? -160 : 160);
-      const by = 390;
-      const bw = 240;
-      const bh = 90;
+    langs.forEach(({ code, label, sub, accentColor, shadowColor }, i) => {
+      const bx = GAME_WIDTH / 2 + (i === 0 ? -175 : 175);
+      const by = 400;
+      const bw = 280;
+      const bh = 84;
 
-      // Base background — drawn once
-      const btnBg = this.add.graphics().setDepth(3);
-      btnBg.fillStyle(accentColor, 0.88);
-      btnBg.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
-      btnBg.lineStyle(2, 0xffffff, 0.45);
-      btnBg.strokeRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
+      // Pixel button shadow (offset block, no blur)
+      const shadow = this.add.graphics().setDepth(9);
+      shadow.fillStyle(shadowColor, 1);
+      shadow.fillRect(bx - bw / 2 + 5, by - bh / 2 + 5, bw, bh);
+
+      // Button base — sharp corners (pixel style)
+      const btnBg = this.add.graphics().setDepth(10);
+      btnBg.fillStyle(accentColor, 1);
+      btnBg.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
+      // Pixel 3-D inner highlight top+left
+      btnBg.lineStyle(3, 0xffffff, 0.25);
+      btnBg.lineBetween(bx - bw / 2, by - bh / 2, bx + bw / 2, by - bh / 2);
+      btnBg.lineBetween(bx - bw / 2, by - bh / 2, bx - bw / 2, by + bh / 2);
+      // Outer bright border
+      btnBg.lineStyle(2, 0xf5d060, 0.7);
+      btnBg.strokeRect(bx - bw / 2, by - bh / 2, bw, bh);
+
       // Hover overlay
-      const btnHov = this.add.graphics().setDepth(3);
-      btnHov.fillStyle(0xffffff, 0.14);
-      btnHov.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
+      const btnHov = this.add.graphics().setDepth(10);
+      btnHov.fillStyle(0xffffff, 0.12);
+      btnHov.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
       btnHov.setVisible(false);
 
-      this.add
-        .text(bx, by - 12, label, {
-          fontFamily: fontFor(code),
-          fontSize: '34px',
-          color: '#ffffff',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5)
-        .setDepth(4);
+      // Primary label
+      const labelFont = code === 'zh-CN' ? 'Noto Sans SC' : '"Press Start 2P"';
+      const labelSize = code === 'zh-CN' ? '30px' : '20px';
+      this.add.text(bx, by - 10, label, {
+        fontFamily: labelFont,
+        fontSize: labelSize,
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(11);
 
-      this.add
-        .text(bx, by + 22, sub, {
-          fontFamily: fontFor(code),
-          fontSize: '15px',
-          color: 'rgba(255,255,255,0.75)',
-        })
-        .setOrigin(0.5)
-        .setDepth(4);
+      this.add.text(bx, by + 22, sub, {
+        fontFamily: 'Noto Sans SC',
+        fontSize: '13px',
+        color: 'rgba(255,255,255,0.65)',
+      }).setOrigin(0.5).setDepth(11);
 
-      const hit = this.add
-        .rectangle(bx, by, bw, bh, 0, 0)
-        .setInteractive({ useHandCursor: true })
-        .setDepth(5);
+      const hit = this.add.rectangle(bx, by, bw, bh, 0, 0)
+        .setInteractive({ useHandCursor: true }).setDepth(12);
 
-      hit.on('pointerover', () => btnHov.setVisible(true));
-      hit.on('pointerout', () => btnHov.setVisible(false));
+      hit.on('pointerover', () => { btnHov.setVisible(true); });
+      hit.on('pointerout',  () => { btnHov.setVisible(false); });
       hit.on('pointerdown', () => {
         setLang(code);
         this.showConsentDialog();
@@ -140,40 +125,37 @@ export class LangScene extends Phaser.Scene {
     });
 
     // ─── Info row ───
-    this.add
-      .text(GAME_WIDTH / 2, 510, '6人局  ·  AI真人级对手  ·  社交推理', {
-        fontFamily: 'Noto Sans SC',
-        fontSize: '17px',
-        color: '#8aaf80',
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
+    this.add.text(GAME_WIDTH / 2, 528, '6 PLAYERS  ·  AI OPPONENTS  ·  SOCIAL DEDUCTION', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '9px',
+      color: '#7a9a70',
+    }).setOrigin(0.5).setDepth(10);
 
-    this.add
-      .text(GAME_WIDTH / 2, 540, '6 Players  ·  AI-Powered Opponents  ·  Social Deduction', {
-        fontFamily: 'Noto Sans',
-        fontSize: '15px',
-        color: '#6a8f60',
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
+    this.add.text(GAME_WIDTH / 2, 555, '6人局  ·  AI真人级对手  ·  社交推理', {
+      fontFamily: 'Noto Sans SC',
+      fontSize: '15px',
+      color: '#5a8050',
+    }).setOrigin(0.5).setDepth(10);
 
-    // ─── Role mini-cards (decorative) ───
-    const roleCards = [
-      { x: 250, y: 390, emoji: '🐺', label: '狼人', color: 0xcc2222 },
-      { x: 640, y: 390, emoji: '🔮', label: '预言家', color: 0x2266cc },
-      { x: 1030, y: 390, emoji: '🏘️', label: '平民', color: 0x22aa55 },
+    // ─── Role icons row (decorative) ───
+    const roles = [
+      { x: GAME_WIDTH / 2 - 120, emoji: '🐺', color: 0xcc2222 },
+      { x: GAME_WIDTH / 2,        emoji: '🔮', color: 0x2266cc },
+      { x: GAME_WIDTH / 2 + 120, emoji: '🏘️', color: 0x22aa55 },
     ];
-    const cardG = this.add.graphics().setDepth(1);
-    roleCards.forEach(({ x, y, color }) => {
-      cardG.fillStyle(color, 0.12);
-      cardG.fillRoundedRect(x - 40, y - 55, 80, 110, 8);
-      cardG.lineStyle(1, color, 0.3);
-      cardG.strokeRoundedRect(x - 40, y - 55, 80, 110, 8);
+    const roleG = this.add.graphics().setDepth(9);
+    roles.forEach(({ x, color }) => {
+      roleG.fillStyle(color, 0.18);
+      roleG.fillRect(x - 28, 598, 56, 70);
+      roleG.lineStyle(1, color, 0.5);
+      roleG.strokeRect(x - 28, 598, 56, 70);
+    });
+    roles.forEach(({ x, emoji }) => {
+      this.add.text(x, 633, emoji, { fontSize: '28px' }).setOrigin(0.5).setDepth(10);
     });
 
     // Fade in
-    this.cameras.main.fadeIn(500, 0, 0, 0);
+    this.cameras.main.fadeIn(600, 0, 0, 0);
   }
 
   // ─── Consent dialog ──────────────────────────────────────────────────────
