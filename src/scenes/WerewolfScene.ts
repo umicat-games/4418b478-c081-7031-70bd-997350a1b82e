@@ -26,6 +26,15 @@ interface Player {
   npc: any;
 }
 
+// ─── Character texture keys (maps Chinese name → preloaded key) ──────────────
+const CHAR_TEXTURES: Record<string, string> = {
+  '王刚':  'char_wanggang',
+  '小美':  'char_xiaomei',
+  '陈强':  'char_qiangchen',
+  '李经理': 'char_managerly',
+  '赵静':  'char_zhaojing',
+};
+
 // ─── Static player profiles ───────────────────────────────────────────────────
 const SEAT_POSITIONS: [number, number][] = [
   [182, 288],  // AI 0  — shifted down 40px so all card tops clear the 60px banner
@@ -544,25 +553,32 @@ export class WerewolfScene extends Phaser.Scene {
       hl.strokeRoundedRect(-CW / 2 - 4, -CH / 2 - 4, CW + 8, CH + 8, CR + 4);
       hl.setVisible(false);
 
-      // Avatar circle
-      const ava = this.add.graphics();
-      ava.fillStyle(player.avatarColor, 1);
-      ava.fillCircle(0, -28, 36);
-      // Subtle shadow on avatar
-      ava.lineStyle(3, 0x00000030, 0.3);
-      ava.strokeCircle(0, -28, 36);
+      // Avatar — pixel sprite portrait with colored ring
+      const texKey = player.isHuman ? 'char_player' : (CHAR_TEXTURES[player.nameCn] ?? '');
+      const avatarParts: Phaser.GameObjects.GameObject[] = [];
 
-      // Avatar letter
-      const letter = this.lang === 'zh-CN'
-        ? (player.isHuman ? '我' : player.nameCn.charAt(0))
-        : (player.isHuman ? '★' : player.nameEn.charAt(0));
-      const avatarLetter = this.add.text(0, -28, letter, {
-        fontFamily: fontFor(),
-        fontSize: '26px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-        shadow: { offsetX: 1, offsetY: 1, color: '#00000060', fill: true },
-      }).setOrigin(0.5);
+      // Colored ring backdrop
+      const ava = this.add.graphics();
+      ava.fillStyle(player.avatarColor, 0.85);
+      ava.fillCircle(0, -28, 37);
+      avatarParts.push(ava);
+
+      if (texKey && this.textures.exists(texKey)) {
+        // Pixel portrait — scale to fill the circle area (72×72)
+        const portrait = this.add.image(0, -28, texKey).setDisplaySize(72, 72).setOrigin(0.5);
+        this.textures.get(texKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+        avatarParts.push(portrait);
+      } else {
+        // Fallback: initial letter
+        const letter = this.lang === 'zh-CN'
+          ? (player.isHuman ? '我' : player.nameCn.charAt(0))
+          : (player.isHuman ? '★' : player.nameEn.charAt(0));
+        const avatarLetter = this.add.text(0, -28, letter, {
+          fontFamily: fontFor(), fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
+          shadow: { offsetX: 1, offsetY: 1, color: '#00000060', fill: true },
+        }).setOrigin(0.5);
+        avatarParts.push(avatarLetter);
+      }
 
       // Name
       const nameText = this.add.text(0, 18, this.pName(player), {
@@ -610,7 +626,7 @@ export class WerewolfScene extends Phaser.Scene {
       deadOverlay.lineBetween(28, -28, -28, 28);
       deadOverlay.setVisible(false);
 
-      const parts: Phaser.GameObjects.GameObject[] = [bg, hl, ava, avatarLetter, nameText, roleText, voteBadge, deadOverlay];
+      const parts: Phaser.GameObjects.GameObject[] = [bg, hl, ...avatarParts, nameText, roleText, voteBadge, deadOverlay];
       if (youBadge) parts.push(youBadge);
       con.add(parts);
 

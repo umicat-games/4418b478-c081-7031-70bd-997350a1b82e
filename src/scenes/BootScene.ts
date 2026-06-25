@@ -24,6 +24,13 @@ export class BootScene extends Phaser.Scene {
     preloadManifest(this);
     this.load.audio('bgm_ambient', 'uploaded/bgm_ambient_ubprd.mp3');
     this.load.image('bg_tavern', 'uploaded/bg_tavern.jpg');
+    // Character portrait sprites
+    this.load.image('char_wanggang',  'uploaded/char_wanggang.png');
+    this.load.image('char_xiaomei',   'uploaded/char_xiaomei.png');
+    this.load.image('char_qiangchen', 'uploaded/char_qiangchen.png');
+    this.load.image('char_managerly', 'uploaded/char_managerly.png');
+    this.load.image('char_zhaojing',  'uploaded/char_zhaojing.png');
+    this.load.image('char_player',    'uploaded/char_player.png');
   }
 
   create(): void {

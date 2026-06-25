@@ -27,6 +27,7 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 - **Canvas**: 1280×720 landscape
 
 ## Changed This Turn
-- **Pixel-art tavern background**: AI-generated `bg_tavern.jpg` added as full-screen background (depth 0); dark vignette overlay (depth 1) over it; green felt table graphics moved to depth 2. Registered in BootScene preload.
-- **Wang Gang playbook wired**: User created `public/playbooks/wanggang.md`; `buildNpc()` passes `playbook: 'wanggang'`.
-- **Xiao Mei playbook file**: Created `public/playbooks/xiaomei.md`. `buildNpc()` passes `playbook: 'xiaomei'`. Removed hardcoded intro-hint injection from `callAiDiscuss()`.
+- **Character pixel portraits**: Generated 6 pixel-art portraits (64×64) for all characters; registered in BootScene. Cards now show portrait images with colored ring backdrop instead of letter circles. CHAR_TEXTURES map added. Fallback to letter if texture missing.
+- **Pixel-art tavern background**: AI-generated `bg_tavern.jpg`; green felt table removed (user request); vignette at 0.35.
+- **Wang Gang playbook wired**: `public/playbooks/wanggang.md`; `buildNpc()` passes `playbook: 'wanggang'`.
+- **Xiao Mei playbook file**: `public/playbooks/xiaomei.md`; `buildNpc()` passes `playbook: 'xiaomei'`.
