@@ -355,6 +355,11 @@ export class WerewolfScene extends Phaser.Scene {
       npcConfig.playbook = 'xiaomei';
     }
 
+    const isWangGang = player.nameCn === '王刚';
+    if (isWangGang) {
+      npcConfig.playbook = 'wanggang';
+    }
+
     return this.umicat.ai.npc(npcConfig);
   }
 

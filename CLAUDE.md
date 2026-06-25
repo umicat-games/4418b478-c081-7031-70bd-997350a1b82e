@@ -27,4 +27,5 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 - **Canvas**: 1280×720 landscape
 
 ## Changed This Turn
-- **Xiao Mei playbook file**: Created `public/playbooks/xiaomei.md` — her full persona (beauty/makeup obsession, fast-talking style, round-1 self-intro rule) lives there as editable natural language. `buildNpc()` now passes `playbook: 'xiaomei'` for her NPC instead of inline rules. Removed the hardcoded intro-hint injection from `callAiDiscuss()` — the playbook + `round` in observation handles it.
+- **Wang Gang playbook wired**: User created `public/playbooks/wanggang.md`; `buildNpc()` now passes `playbook: 'wanggang'` for Wang Gang's NPC.
+- **Xiao Mei playbook file**: Created `public/playbooks/xiaomei.md` — her full persona lives there as editable natural language. `buildNpc()` passes `playbook: 'xiaomei'`. Removed hardcoded intro-hint injection from `callAiDiscuss()`.
