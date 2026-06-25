@@ -95,19 +95,17 @@ export class LangScene extends Phaser.Scene {
       const bw = 240;
       const bh = 90;
 
+      // Base background — drawn once
       const btnBg = this.add.graphics().setDepth(3);
-      const drawBtn = (hovered: boolean) => {
-        btnBg.clear();
-        btnBg.fillStyle(accentColor, hovered ? 1 : 0.85);
-        btnBg.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
-        btnBg.lineStyle(hovered ? 4 : 2, 0xffffff, hovered ? 0.8 : 0.4);
-        btnBg.strokeRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
-        if (hovered) {
-          btnBg.fillStyle(0xffffff, 0.1);
-          btnBg.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, 36, { tl: 18, tr: 18, bl: 0, br: 0 });
-        }
-      };
-      drawBtn(false);
+      btnBg.fillStyle(accentColor, 0.88);
+      btnBg.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
+      btnBg.lineStyle(2, 0xffffff, 0.45);
+      btnBg.strokeRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
+      // Hover overlay
+      const btnHov = this.add.graphics().setDepth(3);
+      btnHov.fillStyle(0xffffff, 0.14);
+      btnHov.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 18);
+      btnHov.setVisible(false);
 
       this.add
         .text(bx, by - 12, label, {
@@ -133,8 +131,8 @@ export class LangScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .setDepth(5);
 
-      hit.on('pointerover', () => drawBtn(true));
-      hit.on('pointerout', () => drawBtn(false));
+      hit.on('pointerover', () => btnHov.setVisible(true));
+      hit.on('pointerout', () => btnHov.setVisible(false));
       hit.on('pointerdown', () => {
         setLang(code);
         this.showConsentDialog();

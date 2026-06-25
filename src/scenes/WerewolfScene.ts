@@ -995,19 +995,22 @@ export class WerewolfScene extends Phaser.Scene {
       let bx = 640 - totalW / 2 + bw / 2;
 
       targets.forEach(target => {
+        // Base background — drawn once, never cleared
         const btnG = this.add.graphics().setDepth(55);
-        const drawB = (hov: boolean) => {
-          btnG.clear();
-          btnG.fillStyle(hov ? 0x4488cc : 0x2266aa, 1);
-          btnG.fillRoundedRect(bx - bw / 2, 650 - bh / 2, bw, bh, 8);
-        };
-        drawB(false);
+        btnG.fillStyle(0x2266aa, 1);
+        btnG.fillRoundedRect(bx - bw / 2, 650 - bh / 2, bw, bh, 8);
+        // Hover overlay — toggled on/off instead of redrawing
+        const hovG = this.add.graphics().setDepth(55);
+        hovG.fillStyle(0xffffff, 0.18);
+        hovG.fillRoundedRect(bx - bw / 2, 650 - bh / 2, bw, bh, 8);
+        hovG.setVisible(false);
+
         const btnT = this.add.text(bx, 650, this.pName(target), {
           fontFamily: fontFor(), fontSize: '15px', color: '#fff', fontStyle: 'bold',
         }).setOrigin(0.5).setDepth(56);
         const hit = this.add.rectangle(bx, 650, bw, bh, 0, 0).setDepth(57).setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => drawB(true));
-        hit.on('pointerout', () => drawB(false));
+        hit.on('pointerover', () => hovG.setVisible(true));
+        hit.on('pointerout', () => hovG.setVisible(false));
         hit.on('pointerdown', () => {
           btns.forEach(b => b.destroy());
           hit.destroy();
@@ -1017,7 +1020,7 @@ export class WerewolfScene extends Phaser.Scene {
           this.setInfo(`${t('checkResult')} ${this.pName(target)} — ${result}`);
           resolve();
         });
-        btns.push(btnG, btnT, hit);
+        btns.push(btnG, hovG, btnT, hit);
         bx += bw + gap;
       });
 
