@@ -5,10 +5,68 @@
   "version": "1.0.0",
   "initialScene": "main",
   "scenes": [
-    { "id": "main", "type": "world", "file": "world/main.json", "hud": "game-hud" }
+    {
+      "id": "main",
+      "type": "world",
+      "file": "world/main.json",
+      "hud": "game-hud"
+    }
   ],
   "huds": [
-    { "id": "game-hud", "file": "hud/game-hud.json" }
+    {
+      "id": "game-hud",
+      "file": "hud/game-hud.json"
+    }
   ],
-  "assets": []
+  "assets": [
+    {
+      "id": "basic_character_spritesheet",
+      "textureKey": "basic_character_spritesheet",
+      "path": "uploaded/basic_character_spritesheet.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "fps": 8,
+      "animations": [
+        {
+          "name": "walk-down",
+          "from": 0,
+          "to": 3,
+          "loop": true
+        },
+        {
+          "name": "walk-up",
+          "from": 4,
+          "to": 7,
+          "loop": true
+        },
+        {
+          "name": "walk-left",
+          "from": 8,
+          "to": 11,
+          "loop": true
+        },
+        {
+          "name": "walk-right",
+          "from": 12,
+          "to": 15,
+          "loop": true
+        }
+      ],
+      "hitbox": {
+        "kind": "rect",
+        "x": 19,
+        "y": 28,
+        "w": 8,
+        "h": 4
+      },
+      "depthAnchor": {
+        "x": 23,
+        "y": 31
+      },
+      "pixelArt": true
+    }
+  ]
 }

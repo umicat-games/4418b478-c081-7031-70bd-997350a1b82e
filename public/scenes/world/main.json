@@ -12,5 +12,13 @@
     "follow": null,
     "bounds": { "x": 0, "y": 0, "width": 1280, "height": 720 }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-player",
+      "kind": "sprite",
+      "role": "player",
+      "assetId": "basic_character_spritesheet",
+      "transform": { "x": 640, "y": 360, "depth": 2 }
+    }
+  ]
 }
