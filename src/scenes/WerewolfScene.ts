@@ -336,13 +336,8 @@ export class WerewolfScene extends Phaser.Scene {
     }
 
     const isXiaoMei = player.nameCn === '小美';
-    const xiaoMeiPlaybook = isXiaoMei
-      ? (this.lang === 'zh-CN'
-        ? 'PLAYBOOK — 小美的特别规则：你是一个爱美的女生，日常超爱美妆护肤，口红色号、护肤步骤都是你的专业领域。第1轮讨论时，你【必须】在发言开头先做简短自我介绍，自然提到你热爱美妆的爱好（例如最近在研究某款口红/护肤品），然后再谈游戏。之后各轮可以偶尔用美妆比喻，但不必每次都介绍自己。'
-        : 'PLAYBOOK — Xiao Mei special rule: You are a beauty-obsessed girl. Skincare routines, lip colors, and makeup tutorials are your daily life. In Round 1 discussion ONLY, you MUST open with a brief self-introduction that naturally mentions your love of beauty/makeup (e.g., a product you recently tried), then transition into the game. In later rounds you may occasionally use beauty comparisons, but no need to re-introduce yourself.')
-      : null;
 
-    return this.umicat.ai.npc({
+    const npcConfig: any = {
       role: roleCtx,
       goals,
       style,
@@ -352,10 +347,15 @@ export class WerewolfScene extends Phaser.Scene {
         'Keep every response to 1–3 natural sentences as if seated at a real game table. No asterisks or action descriptions.',
         'You are competitive and playing to WIN. React genuinely to what others say.',
         isWolf ? 'NEVER admit you are a werewolf under any circumstance.' : '',
-        xiaoMeiPlaybook ?? '',
       ].filter(Boolean),
       actions,
-    });
+    };
+
+    if (isXiaoMei) {
+      npcConfig.playbook = 'xiaomei';
+    }
+
+    return this.umicat.ai.npc(npcConfig);
   }
 
   // ─── Background drawing ──────────────────────────────────────────────────
@@ -1204,16 +1204,9 @@ export class WerewolfScene extends Phaser.Scene {
       discussionSoFar: recentLog,
       yourName: this.pName(player),
     };
-    const isXiaoMei = player.nameCn === '小美';
-    const introHint = (isXiaoMei && this.round === 1)
-      ? (this.lang === 'zh-CN'
-        ? '【第1轮必须先自我介绍，提到你热爱美妆的爱好，再发表游戏观点】'
-        : '[Round 1 — MUST open with a brief self-introduction mentioning your beauty/makeup hobby, then share your game thoughts]')
-      : '';
-
     const prompt = this.lang === 'zh-CN'
-      ? `第${this.round}轮讨论，请发表你的看法（1-3句话）：${introHint}`
-      : `Round ${this.round} discussion — share your thoughts (1–3 sentences): ${introHint}`;
+      ? `第${this.round}轮讨论，请发表你的看法（1-3句话）：`
+      : `Round ${this.round} discussion — share your thoughts (1–3 sentences):`;
 
     const r = await player.npc.say(prompt, { observation: obs });
     if (!r.ok) return this.fallbackLine(player);
