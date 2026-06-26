@@ -26,13 +26,13 @@ interface Player {
   npc: any;
 }
 
-// ─── Character texture keys (maps Chinese name → preloaded key) ──────────────
+// ─── Character texture keys (maps name → preloaded key) ──────────────────────
 const CHAR_TEXTURES: Record<string, string> = {
-  '王刚':  'char_wanggang',
-  '小美':  'char_xiaomei',
-  '陈强':  'char_qiangchen',
-  '李经理': 'char_managerly',
-  '赵静':  'char_zhaojing',
+  'Victor': 'char_wanggang',
+  'Lily':   'char_xiaomei',
+  'Marcus': 'char_qiangchen',
+  'Arthur': 'char_managerly',
+  'Serena': 'char_zhaojing',
 };
 
 // ─── Static player profiles ───────────────────────────────────────────────────
@@ -47,7 +47,7 @@ const SEAT_POSITIONS: [number, number][] = [
 
 const AI_PROFILES = [
   {
-    nameCn: '王刚', nameEn: 'Gang Wang', avatarColor: 0x1a5c8a,
+    nameCn: 'Victor', nameEn: 'Victor', avatarColor: 0x1a5c8a,
     personalityCn: '退休刑警，行事稳重，逻辑严密，喜欢收集所有证据再下结论',
     personalityEn: 'Retired detective. Methodical, logical. Collects all evidence before accusing.',
     speakingStyleCn: '冷静、正式，偶尔引用过去的办案经验',
@@ -66,7 +66,7 @@ const AI_PROFILES = [
     ],
   },
   {
-    nameCn: '小美', nameEn: 'Xiao Mei', avatarColor: 0xd94f8a,
+    nameCn: 'Lily', nameEn: 'Lily', avatarColor: 0xd94f8a,
     personalityCn: '爱美的时尚女生，超级痴迷美妆护肤，平时刷美妆博主、囤口红；同时也容易紧张，话很多，有时无意间说出重要信息',
     personalityEn: 'A fashion-forward girl obsessed with beauty and skincare — always trying new lip colors and following beauty influencers. Also nervous and talkative, sometimes blurting out important things unintentionally.',
     speakingStyleCn: '语速快、容易激动、充满感叹，爱用美妆相关的比喻，有点絮叨',
@@ -85,7 +85,7 @@ const AI_PROFILES = [
     ],
   },
   {
-    nameCn: '陈强', nameEn: 'Qiang Chen', avatarColor: 0x2d9e4a,
+    nameCn: 'Marcus', nameEn: 'Marcus', avatarColor: 0x2d9e4a,
     personalityCn: '热血健身教练，凭直觉行事，一旦认定了目标就穷追不舍',
     personalityEn: 'Hotheaded gym coach, gut-driven, pursues targets relentlessly once locked in.',
     speakingStyleCn: '强硬直接，不讲情面，喜欢用感叹句，声音大',
@@ -104,7 +104,7 @@ const AI_PROFILES = [
     ],
   },
   {
-    nameCn: '李经理', nameEn: 'Manager Li', avatarColor: 0x7a7a9a,
+    nameCn: 'Arthur', nameEn: 'Arthur', avatarColor: 0x7a7a9a,
     personalityCn: '老练的公司经理，擅长引导话题走向，从不轻易表态，总把球踢给别人',
     personalityEn: 'Seasoned manager, steers conversations his way, never commits early, deflects constantly.',
     speakingStyleCn: '圆滑、模糊，善于反问，把球踢给别人，偶尔无意义的废话',
@@ -123,7 +123,7 @@ const AI_PROFILES = [
     ],
   },
   {
-    nameCn: '赵静', nameEn: 'Jing Zhao', avatarColor: 0x8a4fd9,
+    nameCn: 'Serena', nameEn: 'Serena', avatarColor: 0x8a4fd9,
     personalityCn: '安静的图书馆管理员，话不多，但观察力极强，说话一针见血',
     personalityEn: 'Quiet librarian, rarely speaks, but her words cut straight to the point.',
     speakingStyleCn: '简短、精准，偶尔令人不安的冷静，字少意多',
@@ -344,7 +344,7 @@ export class WerewolfScene extends Phaser.Scene {
         : ['identify and eliminate werewolves', 'defend yourself if falsely accused', 'reason from available evidence'];
     }
 
-    const isXiaoMei = player.nameCn === '小美';
+    const isXiaoMei = player.nameCn === 'Lily';
 
     const npcConfig: any = {
       role: roleCtx,
@@ -364,8 +364,8 @@ export class WerewolfScene extends Phaser.Scene {
       npcConfig.playbook = 'xiaomei';
     }
 
-    const isWangGang = player.nameCn === '王刚';
-    if (isWangGang) {
+    const isVictor = player.nameCn === 'Victor';
+    if (isVictor) {
       npcConfig.playbook = 'wanggang';
     }
 

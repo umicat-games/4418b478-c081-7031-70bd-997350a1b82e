@@ -6,7 +6,7 @@ Single-player AI Werewolf (social deduction game). Human always plays good side 
 ## Implemented Features
 - **Main menu** (LangScene) — reads `umicat.locale` as default language (fallback: localStorage → zh-CN); two buttons: "Start Game" and "Select Language"; lang picker is a pixel-style popup dialog (ESC/click-outside to close); choosing a language rebuilds the UI with updated labels
 - **Role assignment** — Human always gets Seer or Villager; AI fills remaining roles (always 2 wolves)
-- **5 distinct AI personas**: Wang Gang (detective), Xiao Mei (nervous), Qiang Chen (hothead), Manager Li (smooth talker), Jing Zhao (silent observer)
+- **5 distinct AI personas**: Victor (suspicious artist), Lily (beauty-obsessed nervous), Marcus (hothead), Arthur (smooth talker), Serena (silent observer)
 - **Night phase** — AI wolves pick a victim via `umicat.ai`; seer investigates (human UI or AI auto-check)
 - **Dawn phase** — victim revealed, death animation, win check
 - **Discussion phase** — each alive player speaks in turn; human has real HTML `<input>` + Send/Pass buttons; AI responds dynamically to discussion log
