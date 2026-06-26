@@ -11,6 +11,15 @@
 **Platform**: Browser (landscape 1280×720)
 **Art Style**: Sprout Lands Asset Pack (Cup Nooble) — pixel art, warm and fresh palette, cozy island-life feel
 
+### Camera & Viewport
+
+- **Tile size**: 16×16 px (source art)
+- **Display scale**: 3× integer zoom — each tile renders as 48×48 px on screen
+- **Visible area**: ~26 tiles wide × ~15 tiles tall (1280÷48 ≈ 26.7, 720÷48 = 15)
+- **Feel**: Close-up, warm farm view — like Sprout Lands / Stardew Valley. Never pull so far out the character feels tiny
+- **Pixel fidelity**: Nearest-neighbor sampling, integer scaling only — absolutely no blur or sub-pixel smoothing. Pixels must stay sharp and crisp at all zoom levels
+- **Day & Night**: The island transitions between day and night in sync with in-game time. Lighting shift is achieved via a full-screen color tint overlay — warm golden daylight → soft blue-grey dusk → deep indigo night. The child's schedule (active during day, resting at night) maps to this cycle. Exact palette TBD, but the goal is *felt* atmosphere, not just a dark screen
+
 ### Core Premise
 
 > You are not the protagonist. Your child is.
