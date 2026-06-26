@@ -1,27 +1,28 @@
 import Phaser from 'phaser';
-import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
+import {
+  loadWorldScene,
+  getEntityRegistry,
+  getManifest,
+  applyAssetHitbox,
+  addTilemapCollider,
+} from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
-/**
- * GameScene — generic loader for world scene files (`scenes/world/*.json`).
- *
- * Takes a `sceneId` via init data and asks the SDK to spawn its entities,
- * configure the camera, and register them. Behavior code lives in
- * `update()` and per-role helpers; it looks entities up via the entity
- * registry rather than holding direct references to objects created here.
- *
- * Example (the agent writes this kind of thing in update or pointer
- * handlers, NOT in create — entities come from the scene file now):
- *
- * ```ts
- * const player = getEntityRegistry(this)?.byRole('player')[0];
- * if (player && this.input.keyboard?.checkDown(this.cursors.up)) {
- *   (player as Phaser.GameObjects.Sprite).y -= 4;
- * }
- * ```
- */
+// --- Wander tuning ---
+const CHILD_SPEED = 55;               // world-px per second
+const WANDER_MIN_MS = 1500;
+const WANDER_MAX_MS = 3500;
+
+// Tilemap entity id for the grass island (from scene JSON)
+const GRASS_ISLAND_ENTITY_ID = 'e-mqveju7y-sk2r';
+
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
+
+  // Child spirit
+  private child?: Phaser.GameObjects.Sprite;
+  private wanderTimer = 0;
+  private wanderInterval = 2000;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -34,10 +35,39 @@ export class GameScene extends Phaser.Scene {
   async create(): Promise<void> {
     const { sceneFile } = await loadWorldScene(this, this.sceneId);
 
-    // 3× integer zoom: each 16×16 source tile renders as 48×48 px on screen.
-    // roundPixels keeps pixel art sharp (no sub-pixel blurring on camera pan).
+    // 3× integer zoom: each 16-px source tile renders as 48-px on screen.
+    // roundPixels prevents sub-pixel blur on camera pan.
     this.cameras.main.setZoom(3);
     this.cameras.main.roundPixels = true;
+
+    const reg = getEntityRegistry(this)!;
+    const childGO = reg.byRole('child')[0] as Phaser.GameObjects.Sprite | undefined;
+
+    if (childGO) {
+      this.child = childGO;
+
+      // Give the child an Arcade physics body (must come before applyAssetHitbox)
+      this.physics.add.existing(this.child);
+      const body = this.child.body as Phaser.Physics.Arcade.Body;
+      // Island tiles are the boundary — no need for world-bounds clamping
+      body.setCollideWorldBounds(false);
+
+      // Apply the vision-authored foot-area hitbox from the asset record
+      const manifest = getManifest(this);
+      const assetId = this.child.getData('assetId') as string;
+      const asset = manifest?.assets.find((a: { id: string }) => a.id === assetId);
+      if (asset?.hitbox) {
+        applyAssetHitbox(this.child, asset);
+      }
+
+      // Wire solid-tile collision with the grass-island tilemap.
+      // grass_tiles_v2 has detailed sub-tile collisionRects on boundary tiles;
+      // addTilemapCollider handles both cell-rect and sub-tile groups in one call.
+      addTilemapCollider(this, GRASS_ISLAND_ENTITY_ID, this.child);
+
+      // Start wandering
+      this.pickNewWanderDirection();
+    }
 
     if (sceneFile.entities.length === 0) {
       this.add
@@ -48,13 +78,36 @@ export class GameScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
     }
-
-    // Behavior wiring goes below this line. Look entities up via
-    //   const player = getEntityRegistry(this)?.byRole('player')[0];
-    // See SDK-GUIDE.md and `scenes/manifest.json`.
   }
 
-  update(_time: number, _delta: number): void {
-    // Agent-written game-loop logic. Empty by default.
+  /** Pick a fresh random movement direction and reset the wander timer. */
+  private pickNewWanderDirection(): void {
+    if (!this.child?.body) return;
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    body.setVelocity(
+      Math.cos(angle) * CHILD_SPEED,
+      Math.sin(angle) * CHILD_SPEED,
+    );
+    this.wanderInterval = Phaser.Math.Between(WANDER_MIN_MS, WANDER_MAX_MS);
+    this.wanderTimer = 0;
+  }
+
+  update(_time: number, delta: number): void {
+    if (!this.child?.body) return;
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+
+    // If the child hits an island boundary tile, immediately pick a new
+    // direction so they don't get stuck sliding along a wall.
+    if (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down) {
+      this.pickNewWanderDirection();
+      return;
+    }
+
+    // Otherwise, change direction on a random interval
+    this.wanderTimer += delta;
+    if (this.wanderTimer >= this.wanderInterval) {
+      this.pickNewWanderDirection();
+    }
   }
 }

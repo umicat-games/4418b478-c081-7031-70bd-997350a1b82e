@@ -72,6 +72,802 @@
         },
         "cols": 11,
         "rows": 7,
+        "tiles": {
+          "0": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 1,
+                "y": 3,
+                "w": 6,
+                "h": 13
+              },
+              {
+                "x": 7,
+                "y": 1,
+                "w": 9,
+                "h": 4
+              }
+            ]
+          },
+          "1": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 1,
+                "w": 16,
+                "h": 5
+              }
+            ]
+          },
+          "2": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 1,
+                "w": 15,
+                "h": 5
+              },
+              {
+                "x": 7,
+                "y": 5,
+                "w": 8,
+                "h": 11
+              }
+            ]
+          },
+          "3": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 3,
+                "w": 4,
+                "h": 13
+              },
+              {
+                "x": 1,
+                "y": 3,
+                "w": 4,
+                "h": 13
+              }
+            ]
+          },
+          "4": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 1,
+                "y": 3,
+                "w": 5,
+                "h": 13
+              },
+              {
+                "x": 10,
+                "y": 9,
+                "w": 6,
+                "h": 7
+              }
+            ]
+          },
+          "5": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 10,
+                "y": 8,
+                "w": 6,
+                "h": 8
+              }
+            ]
+          },
+          "6": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 9,
+                "w": 6,
+                "h": 7
+              }
+            ]
+          },
+          "7": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 10,
+                "y": 3,
+                "w": 5,
+                "h": 13
+              },
+              {
+                "x": 0,
+                "y": 9,
+                "w": 6,
+                "h": 7
+              }
+            ]
+          },
+          "8": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 9,
+                "w": 5,
+                "h": 7
+              },
+              {
+                "x": 0,
+                "y": 9,
+                "w": 5,
+                "h": 7
+              }
+            ]
+          },
+          "9": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 10,
+                "y": 0,
+                "w": 6,
+                "h": 5
+              },
+              {
+                "x": 0,
+                "y": 9,
+                "w": 7,
+                "h": 7
+              }
+            ]
+          },
+          "11": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 8,
+                "h": 16
+              }
+            ]
+          },
+          "13": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 8,
+                "y": 0,
+                "w": 7,
+                "h": 16
+              }
+            ]
+          },
+          "14": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 12,
+                "y": 0,
+                "w": 3,
+                "h": 16
+              },
+              {
+                "x": 1,
+                "y": 0,
+                "w": 4,
+                "h": 16
+              }
+            ]
+          },
+          "15": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 1,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              },
+              {
+                "x": 10,
+                "y": 10,
+                "w": 6,
+                "h": 6
+              }
+            ]
+          },
+          "16": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 8,
+                "y": 7,
+                "w": 8,
+                "h": 9
+              }
+            ]
+          },
+          "17": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 7,
+                "w": 8,
+                "h": 9
+              }
+            ]
+          },
+          "18": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 0,
+                "w": 4,
+                "h": 16
+              },
+              {
+                "x": 0,
+                "y": 11,
+                "w": 4,
+                "h": 5
+              }
+            ]
+          },
+          "19": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 10,
+                "w": 4,
+                "h": 6
+              },
+              {
+                "x": 11,
+                "y": 9,
+                "w": 5,
+                "h": 7
+              }
+            ]
+          },
+          "20": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 3
+              },
+              {
+                "x": 9,
+                "y": 9,
+                "w": 7,
+                "h": 7
+              }
+            ]
+          },
+          "22": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 8,
+                "h": 15
+              },
+              {
+                "x": 0,
+                "y": 7,
+                "w": 16,
+                "h": 8
+              }
+            ]
+          },
+          "23": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 7,
+                "w": 16,
+                "h": 8
+              }
+            ]
+          },
+          "24": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 8,
+                "y": 0,
+                "w": 7,
+                "h": 15
+              },
+              {
+                "x": 0,
+                "y": 7,
+                "w": 15,
+                "h": 8
+              }
+            ]
+          },
+          "25": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 15
+              },
+              {
+                "x": 11,
+                "y": 0,
+                "w": 4,
+                "h": 15
+              },
+              {
+                "x": 5,
+                "y": 11,
+                "w": 6,
+                "h": 4
+              }
+            ]
+          },
+          "26": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 1,
+                "y": 0,
+                "w": 4,
+                "h": 16
+              },
+              {
+                "x": 11,
+                "y": 0,
+                "w": 5,
+                "h": 3
+              }
+            ]
+          },
+          "27": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 0,
+                "w": 5,
+                "h": 4
+              }
+            ]
+          },
+          "28": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 4
+              }
+            ]
+          },
+          "29": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 3,
+                "h": 2
+              },
+              {
+                "x": 11,
+                "y": 0,
+                "w": 4,
+                "h": 16
+              }
+            ]
+          },
+          "30": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 4,
+                "h": 3
+              },
+              {
+                "x": 13,
+                "y": 0,
+                "w": 3,
+                "h": 3
+              }
+            ]
+          },
+          "31": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 4,
+                "h": 2
+              },
+              {
+                "x": 12,
+                "y": 0,
+                "w": 4,
+                "h": 2
+              },
+              {
+                "x": 0,
+                "y": 9,
+                "w": 7,
+                "h": 7
+              }
+            ]
+          },
+          "32": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 3
+              },
+              {
+                "x": 12,
+                "y": 0,
+                "w": 4,
+                "h": 2
+              },
+              {
+                "x": 11,
+                "y": 9,
+                "w": 5,
+                "h": 7
+              }
+            ]
+          },
+          "33": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 2,
+                "y": 3,
+                "w": 7,
+                "h": 12
+              },
+              {
+                "x": 9,
+                "y": 9,
+                "w": 7,
+                "h": 6
+              }
+            ]
+          },
+          "34": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 8,
+                "w": 16,
+                "h": 7
+              }
+            ]
+          },
+          "35": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 9,
+                "y": 3,
+                "w": 5,
+                "h": 12
+              },
+              {
+                "x": 0,
+                "y": 9,
+                "w": 14,
+                "h": 6
+              }
+            ]
+          },
+          "36": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 12,
+                "y": 3,
+                "w": 3,
+                "h": 12
+              },
+              {
+                "x": 1,
+                "y": 3,
+                "w": 4,
+                "h": 12
+              },
+              {
+                "x": 5,
+                "y": 10,
+                "w": 7,
+                "h": 5
+              }
+            ]
+          },
+          "37": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 1,
+                "y": 0,
+                "w": 5,
+                "h": 15
+              },
+              {
+                "x": 6,
+                "y": 9,
+                "w": 10,
+                "h": 6
+              },
+              {
+                "x": 13,
+                "y": 0,
+                "w": 3,
+                "h": 2
+              }
+            ]
+          },
+          "38": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 9,
+                "w": 16,
+                "h": 6
+              },
+              {
+                "x": 11,
+                "y": 0,
+                "w": 5,
+                "h": 2
+              }
+            ]
+          },
+          "39": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 9,
+                "w": 16,
+                "h": 6
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 3
+              }
+            ]
+          },
+          "40": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 10,
+                "y": 0,
+                "w": 5,
+                "h": 15
+              },
+              {
+                "x": 0,
+                "y": 9,
+                "w": 15,
+                "h": 6
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "w": 4,
+                "h": 2
+              }
+            ]
+          },
+          "41": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 3,
+                "h": 2
+              },
+              {
+                "x": 12,
+                "y": 0,
+                "w": 4,
+                "h": 2
+              },
+              {
+                "x": 0,
+                "y": 8,
+                "w": 16,
+                "h": 7
+              }
+            ]
+          },
+          "42": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 4,
+                "h": 2
+              },
+              {
+                "x": 11,
+                "y": 9,
+                "w": 5,
+                "h": 7
+              },
+              {
+                "x": 0,
+                "y": 10,
+                "w": 5,
+                "h": 6
+              }
+            ]
+          },
+          "43": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 12,
+                "y": 0,
+                "w": 4,
+                "h": 3
+              },
+              {
+                "x": 11,
+                "y": 8,
+                "w": 5,
+                "h": 8
+              },
+              {
+                "x": 0,
+                "y": 9,
+                "w": 5,
+                "h": 7
+              }
+            ]
+          },
+          "48": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 6,
+                "h": 16
+              },
+              {
+                "x": 13,
+                "y": 0,
+                "w": 3,
+                "h": 2
+              },
+              {
+                "x": 11,
+                "y": 10,
+                "w": 5,
+                "h": 6
+              }
+            ]
+          },
+          "49": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 10,
+                "w": 5,
+                "h": 6
+              },
+              {
+                "x": 12,
+                "y": 0,
+                "w": 4,
+                "h": 3
+              }
+            ]
+          },
+          "50": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 3
+              },
+              {
+                "x": 0,
+                "y": 10,
+                "w": 6,
+                "h": 6
+              }
+            ]
+          },
+          "51": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 3,
+                "h": 2
+              },
+              {
+                "x": 11,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              },
+              {
+                "x": 0,
+                "y": 10,
+                "w": 4,
+                "h": 6
+              }
+            ]
+          },
+          "52": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 4,
+                "h": 2
+              },
+              {
+                "x": 12,
+                "y": 0,
+                "w": 4,
+                "h": 3
+              },
+              {
+                "x": 0,
+                "y": 10,
+                "w": 4,
+                "h": 6
+              },
+              {
+                "x": 11,
+                "y": 10,
+                "w": 5,
+                "h": 6
+              }
+            ]
+          }
+        },
         "autotile": {
           "kind": "wang-8bit",
           "terrains": [
@@ -130,6 +926,29 @@
             }
           ]
         }
+      },
+      "pixelArt": true
+    },
+    {
+      "id": "premium_character_spritesheet",
+      "textureKey": "premium_character_spritesheet",
+      "path": "uploaded/premium_character_spritesheet.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/premium_character_spritesheet.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "hitbox": {
+        "kind": "rect",
+        "x": 19,
+        "y": 28,
+        "w": 8,
+        "h": 4
+      },
+      "depthAnchor": {
+        "x": 23,
+        "y": 31
       },
       "pixelArt": true
     }

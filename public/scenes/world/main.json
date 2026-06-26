@@ -47,6 +47,19 @@
         "depth": 1
       },
       "name": "grass-island"
+    },
+    {
+      "id": "e-mqvfwxir-fuj2",
+      "kind": "sprite",
+      "transform": {
+        "x": 184.18241042345275,
+        "y": 120.18241042345274,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "premium_character_spritesheet"
     }
   ]
 }
