@@ -1,291 +1,291 @@
-# Catopia — 游戏设计文档
+# Catopia — Game Design Document
 
-> 版本：0.1 | 日期：2026-06-26 | 状态：讨论中
-
----
-
-## 一、游戏概述
-
-**游戏名称**：Catopia  
-**类型**：养成 / 社交 / 模拟  
-**平台**：浏览器（横屏 1280×720）  
-**美术风格**：Sprout Lands Asset Pack（Cup Nooble）——像素风，色调温暖清新，小岛生活感
-
-### 核心命题
-
-> 你不是主角。主角是你的孩子。
-
-你是一位"父母"，生活在一座属于你的小岛上。你的任务是照料一只**可爱的小精灵**——你的孩子。他不受你直接操控，有自己的意志、情绪、记忆和成长轨迹。  
-你所做的一切——种植、采集、建造、购物——都是为了给他创造更好的生活。  
-他是你和这个虚拟世界的**唯一联结**。
+> Version: 0.1 | Date: 2026-06-26 | Status: In Discussion
 
 ---
 
-## 二、核心区别于 Animal Crossing
+## 1. Game Overview
 
-| 维度 | Animal Crossing | 本游戏 |
-|------|----------------|--------|
-| 玩家角色 | 你就是那个角色（替身） | 你是"父母"，那只精灵是"孩子" |
-| 角色控制 | 直接操控 | 不能直接操控，他有自己的行为 |
-| 角色智能 | 游戏 NPC 剧本固定 | AI 驱动，有真实记忆和对话 |
-| 情感投入 | 我在建设自己的小屋 | 我在养育一条生命 |
-| 风险感 | 几乎零负面后果 | 真实忽视 → 真实后果，灵魂离去但可召回 |
-| 社交连接 | 玩家之间直接交流 | 通过孩子认识其他孩子，父母间接相连 |
+**Title**: Catopia
+**Genre**: Nurturing / Social / Simulation
+**Platform**: Browser (landscape 1280×720)
+**Art Style**: Sprout Lands Asset Pack (Cup Nooble) — pixel art, warm and fresh palette, cozy island-life feel
 
----
+### Core Premise
 
-## 三、孩子（精灵）系统
+> You are not the protagonist. Your child is.
 
-### 3.1 形态设定
-
-孩子是一只**可爱的小动物精灵**（非人类），视觉风格参考 Sprout Lands 素材包里的角色——小猫/小兔形态，表情丰富，穿着简单衣物，看起来既像野生小动物，又像一个真实的小孩。  
-每个玩家的孩子**外貌唯一**（颜色、耳朵形状、服装等有随机初始化差异，也可通过游戏内购置新衣物改变）。
-
-### 3.2 行为分层
-
-孩子的行为分为两层，清晰分工：
-
-**算法层（日常行为）**：
-- 在岛上随机漫步、探索
-- 自发进行小动作：坐在树下、看云、摆弄植物
-- 感到饥饿时会靠近食物存放处或找玩家
-- 天黑时自动回小屋休息
-- 情绪状态影响日常行为（开心 → 跑来跑去；忧郁 → 呆坐角落）
-
-**AI 层（互动时）**：
-- 当玩家主动与孩子对话时，AI 接管响应
-- AI 能感知当前游戏状态（饥饿值、天气、岛上资源、近期事件）
-- AI 持有与玩家互动的**历史记忆**（上次聊天说了什么、玩家兑现了哪些承诺）
-- 孩子会主动告诉玩家：他今天做了什么、遇到了谁、想要什么
-- 若玩家长期忽视孩子（不上线、不喂食），孩子的回应会越来越疏离，甚至沉默
-
-### 3.3 性格与情感系统
-
-孩子的性格不是固定的，会**随养育方式动态演变**：
-
-**核心维度**：
-- **安全感**：玩家回应越及时稳定，孩子越有安全感；长期不理 → 焦虑/冷漠
-- **好奇心**：孩子探索新事物被玩家鼓励 → 越来越爱冒险；被忽视 → 逐渐缩回
-- **社交性**：与其他孩子互动多 → 开朗外向；岛上孤独 → 内敛
-- **物质观**：玩家经常买好东西 → 可能变得贪心/也可能懂得感恩（有随机性）
-
-**情绪状态**（实时）：
-- 快乐 / 满足 / 无聊 / 饥饿 / 悲伤 / 生气 / 思念 / 期待
-
-情绪由多个因子驱动：饥饿度、最后一次互动时间、最近礼物、天气、社交状态。
-
-### 3.4 生存风险与灵魂召回
-
-本游戏设计为**高情感投入、有真实后果，但永远留有希望**：
-
-**衰退阶段（渐进式预警）**：
-- **饥饿**：孩子有饥饿值，不喂食会逐渐降低体力，日常行为变少，情绪低落
-- **虚弱**：持续饥饿后进入虚弱状态——孩子不再主动活动，只躺着，AI 对话声音变小，这是最后的警示
-- **系统提醒**：进入虚弱前，平台通知/站内信提醒玩家，绝不突然发生
-
-**灵魂离去（核心惩罚机制）**：
-- 长期极端忽视（真正意义上的断绝照料，而非偶尔没上线）后，孩子的灵魂悄然离开这座岛
-- 岛上留下一个发光的小小**灵龛**，和孩子最后留下的一封信——他没有消失，只是去了另一个世界
-- 游戏进入**"寻回"状态**：孩子不在了，但岛上的一切都还在，玩家仍然可以继续劳作
-
-**召回之路（救赎玩法）**：
-- 玩家通过**努力的行动**来唤回孩子的灵魂：
-  - 🌱 **种植与采集**：用心打理荒废的农田，积累一定数量的"爱的心意"
-  - 🏗️ **建造**：为孩子的回归做准备——翻新他的房间，添置新家具
-  - ✉️ **写信**：玩家可以给孩子写信，信件会穿越到"那个世界"被他读到（AI 孩子会在寻回完成后告诉你他读了哪些信、感受如何）
-- 积累到一定程度，灵龛发出温暖的光，孩子的身影重新出现在岛上
-- 孩子回来后记得一切——他知道你为他做了什么，这段经历会成为他们关系的一部分，永远留在记忆里
-
-**设计意图**：这不是惩罚玩家，而是一段关于**失去与找回**的故事。离去有重量，归来有意义。
+You are a "parent" living on your own island. Your task is to care for a **cute little spirit** — your child. They cannot be directly controlled by you; they have their own will, emotions, memories, and growth trajectory.
+Everything you do — farming, gathering, building, shopping — exists to give them a better life.
+They are your **only connection** to this virtual world.
 
 ---
 
-## 四、世界与经济系统
+## 2. How Catopia Differs from Animal Crossing
 
-### 4.1 小岛
+| Dimension | Animal Crossing | Catopia |
+|-----------|----------------|---------|
+| Player role | You ARE the character (avatar) | You are the "parent"; the spirit is the "child" |
+| Character control | Direct control | Cannot directly control — they have their own behavior |
+| Character intelligence | Scripted NPC dialogue | AI-driven, with real memory and conversation |
+| Emotional investment | I'm building my own home | I'm raising a living being |
+| Risk | Almost zero negative consequences | Real neglect → real consequences; soul departs but can return |
+| Social connection | Players interact directly | Players connect indirectly through their children |
 
-- 固定大小的岛屿，像素俯视角（Sprout Lands 风格）
-- 分区：**家园区**（玩家小屋 + 孩子的房间）、**农田区**（种植）、**自然区**（采集木材、矿石、野果）、**海滩区**（钓鱼）
-- 岛屿可随时间慢慢**升级扩建**（解锁新区域、新建筑）
+---
 
-### 4.2 资源与农业
+## 3. The Child (Spirit) System
 
-- **种植**：购买种子 → 浇水 → 等待成熟 → 收获
-- **采集**：砍树（木材）、挖石（矿石）、采野果、钓鱼
-- **加工**：简单制作台，将原料转化为更高价值商品（木材 → 家具、鱼 → 鱼干）
-- 所有这些都是**资金来源**
+### 3.1 Form & Appearance
 
-### 4.3 经济循环
+The child is a **cute little animal spirit** (non-human), visually inspired by Sprout Lands characters — a small cat or bunny form, expressive face, simple clothing, feeling like both a wild creature and a real little kid.
+Each player's child has a **unique appearance** (color, ear shape, outfit, etc. randomized at birth; new clothing can be purchased in-game to change their look).
+
+### 3.2 Behavior Layers
+
+The child's behavior is split into two clear layers:
+
+**Algorithmic Layer (daily life)**:
+- Wanders and explores the island
+- Spontaneous small actions: sitting under a tree, cloud-watching, fiddling with plants
+- Moves toward the food storage or the player when hungry
+- Automatically returns home to rest at nightfall
+- Emotional state influences daily behavior (happy → runs around; sad → sits quietly in a corner)
+
+**AI Layer (during interaction)**:
+- When the player actively talks to the child, AI takes over the response
+- The AI can perceive the current game state (hunger, weather, island resources, recent events)
+- The AI holds a **history of interactions with the player** (what was said last time, which promises the player kept)
+- The child proactively tells the player: what they did today, who they met, what they want
+- If the player neglects the child for a long time (not logging in, not feeding), responses become increasingly distant — eventually silence
+
+### 3.3 Personality & Emotional System
+
+The child's personality is not fixed — it **evolves dynamically based on how they are raised**:
+
+**Core Dimensions**:
+- **Security**: The more consistently and promptly the player responds, the more secure the child feels; long-term neglect → anxiety / detachment
+- **Curiosity**: Encouragement when the child explores → grows more adventurous; neglect → gradually withdraws
+- **Sociability**: More interactions with other children → outgoing and sociable; isolation on the island → introverted
+- **Materialism**: Frequent gifts of nice things → may become greedy OR may grow grateful (random element)
+
+**Emotional States** (real-time):
+- Happy / Content / Bored / Hungry / Sad / Angry / Longing / Anticipating
+
+Emotions are driven by multiple factors: hunger level, time since last interaction, recent gifts, weather, social status.
+
+### 3.4 Survival Risk & Soul Return
+
+The game is designed for **high emotional investment with real consequences — but always leaving room for hope**:
+
+**Decline Stages (progressive warnings)**:
+- **Hunger**: The child has a hunger meter; not feeding them gradually lowers their energy, reduces daily activity, and lowers their mood
+- **Weakness**: After sustained hunger, the child enters a weakened state — no longer moving on their own, just lying down; AI conversation becomes quieter. This is the final warning
+- **System Alert**: Before entering the weakened state, the player receives a platform notification / in-game message. Nothing happens abruptly
+
+**Soul Departure (core consequence mechanic)**:
+- After prolonged extreme neglect (genuinely abandoning care — not just missing a day or two), the child's soul quietly leaves the island
+- A glowing little **spirit shrine** remains, along with a letter the child left behind — they haven't disappeared, they've simply gone to another world
+- The game enters a **"Search & Return" state**: the child is gone, but everything on the island remains. The player can still tend to it
+
+**The Path of Return (redemption gameplay)**:
+- The player takes **deliberate action** to call the child's soul back:
+  - 🌱 **Farming & Gathering**: Lovingly tend the neglected fields, accumulate a certain amount of "tokens of love"
+  - 🏗️ **Building**: Prepare for the child's return — renovate their room, add new furniture
+  - ✉️ **Writing Letters**: The player can write letters to the child; they travel to "that other world" and the child reads them (after returning, the AI child will tell you which letters they read and how they felt)
+- Once enough is accumulated, the spirit shrine glows warmly and the child's silhouette reappears on the island
+- The child returns **remembering everything** — they know what you did for them. This experience becomes part of their shared history, kept in memory forever
+
+**Design Intent**: This is not about punishing the player — it's a story about **loss and finding again**. Departure carries weight; return carries meaning.
+
+---
+
+## 4. World & Economy System
+
+### 4.1 The Island
+
+- A fixed-size island in pixel top-down view (Sprout Lands style)
+- Zones: **Home Zone** (player's cottage + child's room), **Farm Zone** (planting), **Nature Zone** (gathering wood, ore, wild fruit), **Beach Zone** (fishing)
+- The island can slowly **grow and expand over time** (unlock new zones, new buildings)
+
+### 4.2 Resources & Farming
+
+- **Planting**: Buy seeds → water → wait to ripen → harvest
+- **Gathering**: Chop trees (wood), mine rocks (ore), pick wild fruit, go fishing
+- **Crafting**: Simple workbench — convert raw materials into higher-value goods (wood → furniture, fish → dried fish)
+- All of these are **sources of income**
+
+### 4.3 Economic Loop
 
 ```
-种植/采集/钓鱼 → 卖出换钱 → 买食物喂孩子
-                           → 买装饰品/家具改善生活
-                           → 买种子扩大生产
-                           → 还贷款
+Farming / Gathering / Fishing → Sell for coins → Buy food to feed the child
+                                               → Buy decorations / furniture to improve life
+                                               → Buy seeds to expand production
+                                               → Repay loans
 ```
 
-**贷款系统**（致敬动物森友会）：
-- 游戏开始时，玩家在岛上只有一间小屋
-- 可向岛上"银行"（可爱风格的建筑）申请贷款，升级小屋、扩建孩子的房间
-- 孩子的房间更好 → 孩子心情更好 → 更愿意和你互动
+**Loan System** (a nod to Animal Crossing):
+- At the start, the player has only a small cottage on the island
+- They can take a loan from the island's "bank" (an adorably styled building) to upgrade their home and expand the child's room
+- A better room → better child mood → more willing to interact with you
 
-### 4.4 岛内商店（网购平台）
+### 4.4 Island Shop (In-Game Online Store)
 
-- 一个可爱的"岛内网购界面"，可以购买：
-  - 食物（孩子的日常消耗）
-  - 玩具（提升孩子心情）
-  - 家具（装饰家园）
-  - 衣物（给孩子换装）
-  - 种子（扩大农业）
-- 订单需要"次日到货"（游戏内一天后送达），增加真实感
-
----
-
-## 五、AI 孩子的交流机制
-
-### 5.0 AI 驱动与 Credit 机制
-
-孩子的 AI 对话能力由平台提供，需要消耗用户的 credit。游戏本身不管理计费，由平台 SDK 统一处理：当 credit 不足时，SDK 返回对应错误，游戏需要**用游戏内语言**来呈现这个状态，而不是直接弹出技术性的充值弹窗。
-
-**推荐的游戏内呈现方式**：
-- credit 不足时，孩子不是"报错"，而是进入"安静状态"——他看起来有些心不在焉，喃喃说"我今天不太想说话……"或者只是摇摇头
-- 游戏以一封温柔的站内信通知玩家："你和 [孩子名] 的心灵连接需要续费才能继续……"，引导跳转充值
-- 孩子的算法层行为（走路、日常动作）不受影响，只有 AI 对话层暂停，让玩家感觉是孩子在"沉默"而不是游戏在"报错"
-
-这样的设计保持了沉浸感，同时把充值引导包裹在情感叙事里，转化率也会更自然。
-
-### 5.1 操作与对话触发
-
-**输入方式**：同时支持鼠标（桌面）和触屏（平板/手机），所有交互以"点/触+拖拽"为基础，无需键盘操控游戏世界。
-
-**建造与采集操作**（标准休闲游戏风格）：
-- **采集**：点击/触碰可采集的对象（树木、矿石、作物）→ 播放采集动画 → 资源自动进入背包
-- **种植**：点击农田格子 → 选择种子 → 确认种植
-- **建造**：从建造菜单选取建筑/物品 → 拖拽到目标位置 → 确认放置
-- **移动视角**：拖拽空白地面平移地图（小岛固定大小，不需要缩放）
-- 所有操作追求**一两步完成**，保持休闲节奏，不做复杂的合成/操作链
-
-**玩家主动发起对话**：
-- 点击/触碰岛上的孩子 → 弹出聊天框（类即时通讯风格，有输入框和对话气泡）→ AI 接管响应
-- 孩子的开场白取决于当前状态：
-  - 饥饿：「我好饿……你今天忘了我吗？」
-  - 开心：「你来啦！我今天做了一件很厉害的事！」
-  - 长期被忽视：「……（沉默，只是看着你）」
-- 聊天框关闭后，孩子回到算法驱动的日常行为
-
-**孩子主动发起对话**：
-- 孩子在特定触发条件下会**自动弹出对话框**打断玩家，类似手机推送消息跳出
-- 触发场景举例：
-  - 饥饿值到达警戒线：「我……我有点撑不住了……」
-  - 完成了某件有趣的事：「我发现了一个好地方！你快来看！」
-  - 其他孩子来访后：「刚才有个叫 XX 的来找我玩了，他好有意思！」
-  - 长时间玩家未上线后的第一次登录：「你终于来了……」
-- 这类主动弹窗有**冷却机制**，不会频繁打扰，保持惊喜感而非骚扰感
-
-### 5.2 记忆系统设计——用技术限制模拟真实遗忘
-
-孩子的记忆分两层，共同构成一个**比全知 AI 更真实**的记忆体验：
-
-**短期记忆（AI context window）**
-- 孩子当前"脑子里"记得的内容，就是 AI 的上下文窗口
-- 随着对话增加，最早的内容自然淡出——这不是缺陷，这就是真实的工作记忆
-- 近期发生的事：孩子直接记得，对话流畅自然
-
-**长期记忆（持久化存档）**
-- 游戏把关键事件、重要对话摘要、里程碑时刻以结构化数据存入平台存档
-- 当孩子在 context 里想不起某件事时，可以**主动触发"回忆"动作**：去查询历史存档，再把关键信息注入当前对话
-- 这个"翻记忆"的过程有游戏内的可见表现：孩子皱眉思考一下，然后恍然大悟说"哦！想起来了……"
-
-**三种记忆状态，对应不同回应**：
-- 🟢 **清晰记得**（在 context 内）：直接回答，流畅自然
-- 🟡 **需要回忆**（不在 context，但存档里有）：「等我想想……」→ 查询存档 →「哦对！我记得了！」
-- 🔴 **真的忘了**（太久远或未被存档）：「那是很久以前的事了，我真的想不起来了……」
-
-**设计意图**：遗忘不是故障，是人性。一个有时候会忘事、需要努力回想的孩子，比一个什么都记得的全知 AI 更令人相信他真实存在。某些记忆永远消失，反而让那些被记住的时刻更珍贵。
-
-### 5.3 孩子的感知（Observation）
-
-AI 在回应前能感知：
-- 当前饥饿值、心情值
-- 最近 N 天的玩家行为（有没有种地、买东西、上线频率）
-- 岛上当前资源状况（食物库存、金钱）
-- 最近与其他孩子的互动记录
-- 与玩家的历史对话摘要（长期记忆）
-- 当前天气、时间（早上/傍晚/下雨）
-
-### 5.4 孩子能做的事情
-
-孩子可以接受玩家的简单委托：
-- "帮我看看菜地有没有熟了"→ 跑去看，回来告诉你
-- "去和某某（其他孩子）打个招呼"→ 发送社交请求
-- "告诉我今天岛上发生了什么"→ 讲述他观察到的事情
-
-孩子也会**主动提出诉求**：
-- "我想要那个新玩具"
-- "我想去 XX 岛玩"
-- "我好久没吃好吃的了"
-
-玩家可以答应，也可以拒绝——孩子会记住。
+- A charming "island shopping interface" where players can buy:
+  - Food (the child's daily necessity)
+  - Toys (boost the child's mood)
+  - Furniture (decorate the home)
+  - Clothing (dress up the child)
+  - Seeds (expand farming)
+- Orders require "next-day delivery" (arrives one in-game day later), adding a sense of realism
 
 ---
 
-## 六、社交系统（孩子之间的世界）
+## 5. AI Child — Communication Mechanics
 
-> **版本范围说明**：社交系统分两阶段实现。**v1.0 只做异步社交**，专注于自己小岛上的核心体验。实时拜访（游乐场场景）列入后续更新，像 Animal Crossing 的 DLC 一样持续丰富。
+### 5.0 AI and the Credit System
 
-### 6.1 异步社交（v1.0 实现）
+The child's AI conversation capability is provided by the platform and consumes the user's credits. The game itself does not manage billing — the platform SDK handles it centrally. When credits run low, the SDK returns an error, and the game must **express this in game-world language** rather than popping up a technical top-up prompt.
 
-- 孩子在玩家不在线时，可自动"出岛拜访"其他孩子的岛
-- 玩家登录后，孩子会告诉你昨天去了谁家，发生了什么
-- 其他玩家的孩子也可能造访你的岛，留下礼物或留言
+**Recommended in-game presentation**:
+- When credits are insufficient, the child doesn't "error out" — instead they enter a "quiet state." They look a little absent-minded, murmuring "I don't really feel like talking today…" or just shaking their head
+- The game sends a gentle in-game message: "Your heart-to-heart connection with [child's name] needs a recharge to continue…" and guides the player to top up
+- The child's algorithmic-layer behavior (walking, daily actions) is unaffected — only the AI conversation layer pauses, so the player feels the child is "going quiet," not that the game is "throwing an error"
 
-### 6.2 实时拜访（后续更新）
+This design preserves immersion while wrapping the monetization prompt in an emotional narrative, making conversion feel more natural.
 
-- 专属"游乐场"场景，两个孩子相约在那里见面玩耍
-- 两位玩家只能通过各自的孩子交流，维持沉浸感
-- 两只 AI 孩子可以互相对话，玩家在旁边旁观、偶尔给孩子"提示"
-- **优先级**：待核心小岛体验稳定后再开发
+### 5.1 Controls & Dialogue Triggers
 
-### 6.2 社交关系链
+**Input**: Supports both mouse (desktop) and touch (tablet/phone) simultaneously. All interactions are "tap/click + drag" based — no keyboard needed to navigate the game world.
 
-- 孩子与孩子之间有**友好度**，多次互动后成为"好朋友"
-- 好朋友之间会互寄礼物（通过游戏内邮件系统）
-- 玩家通过孩子的关系，能看到"某某妈妈的岛"——一个你原本不认识的真实玩家的世界
-- 可以选择性地开放"父母联系方式"（仅站内私信），但不强制——你们的联结可以永远只通过孩子
+**Building & Gathering** (standard casual game style):
+- **Gathering**: Tap/click a harvestable object (tree, ore, crop) → play gather animation → resource auto-added to inventory
+- **Planting**: Tap a farm tile → choose a seed → confirm planting
+- **Building**: Select a structure / item from the build menu → drag to target position → confirm placement
+- **Panning the view**: Drag on empty ground to pan the map (island is fixed size, no zoom needed)
+- All actions aim to be **completed in one or two steps** — casual rhythm, no complex crafting chains
 
-### 6.3 隐私与安全
+**Player-initiated conversation**:
+- Tap/click the child on the island → chat window appears (IM-style, with an input field and speech bubbles) → AI takes over the response
+- The child's opening line reflects their current state:
+  - Hungry: "I'm so hungry… did you forget about me today?"
+  - Happy: "You're here! I did something really cool today!"
+  - Long neglected: "…(silence, just looking at you)"
+- When the chat window closes, the child returns to algorithmic daily behavior
 
-- 玩家不暴露真实姓名，只有游戏内的"某某爸爸/妈妈"称谓
-- 孩子的拜访需要玩家设置的"开放"权限才能成行
-- 可设置"仅好友孩子可来访"
+**Child-initiated conversation**:
+- Under specific trigger conditions, the child will **automatically pop up a dialogue** to interrupt the player — like a phone notification appearing
+- Example triggers:
+  - Hunger reaches warning threshold: "I… I'm not sure I can hold on much longer…"
+  - After completing something fun: "I found an amazing place! Come see!"
+  - After another child visits: "Someone named XX came to play with me today — they were so interesting!"
+  - First login after a long absence: "You finally came…"
+- These pop-ups have a **cooldown** and won't appear too frequently — maintaining surprise rather than annoyance
+
+### 5.2 Memory System — Using Technical Limits to Simulate Real Forgetting
+
+The child's memory has two layers, together creating a **more human memory experience than an all-knowing AI**:
+
+**Short-term Memory (AI context window)**
+- What the child currently "has in their head" is the AI's context window
+- As conversation grows, early content naturally fades out — this isn't a flaw, it's how working memory works
+- Recent events: the child remembers directly; conversation flows naturally
+
+**Long-term Memory (persistent save data)**
+- The game saves key events, important conversation summaries, and milestone moments as structured data in the platform's save system
+- When the child can't recall something from their context, they can **trigger a "recall" action**: query the historical save, then inject the key info back into the current conversation
+- This "flipping through memories" process has a visible in-game expression: the child furrows their brow in thought, then brightens: "Oh! Now I remember…"
+
+**Three memory states, three corresponding responses**:
+- 🟢 **Clearly remembers** (in context): responds directly, naturally
+- 🟡 **Needs to recall** (not in context, but in save data): "Let me think…" → queries save → "Oh right! I remember now!"
+- 🔴 **Truly forgot** (too long ago or never saved): "That was so long ago, I really can't remember…"
+
+**Design Intent**: Forgetting isn't a bug — it's humanity. A child who occasionally forgets and needs to try hard to remember is more believable than an AI that recalls everything perfectly. Some memories disappear forever, which makes the ones that are remembered all the more precious.
+
+### 5.3 Child's Perception (Observations)
+
+Before responding, the AI can perceive:
+- Current hunger and mood values
+- Player behavior over the last N days (farming, shopping, login frequency)
+- Current island resource status (food stock, money)
+- Recent interactions with other children
+- Historical conversation summaries with the player (long-term memory)
+- Current weather and time of day (morning / evening / rain)
+
+### 5.4 What the Child Can Do
+
+The child can accept simple requests from the player:
+- "Go check if the crops are ready" → runs over, comes back to tell you
+- "Go say hi to [someone] (another child)" → sends a social request
+- "Tell me what happened on the island today" → narrates what they observed
+
+The child also **proactively makes requests**:
+- "I want that new toy"
+- "I want to visit [X]'s island"
+- "I haven't had anything good to eat in a long time"
+
+The player can agree or decline — the child will remember.
 
 ---
 
-## 七、游戏节奏与时间设计
+## 6. Social System (The World Between Children)
 
-- **实时流逝**：游戏内时间与现实时间相关联（但不是 1:1，约 1 现实小时 = 1 游戏天）
-- **无强制上线**：不上线不会立刻有坏结果，但长期不上线会有积累影响
-- **季节变化**：游戏内有四季，影响可种植的作物和岛上的视觉风格
-- **每日小事件**：孩子每天会有"今天的小故事"等着玩家来听
+> **Scope note**: The social system is implemented in two phases. **v1.0 covers asynchronous social only**, focused on the core single-island experience. Real-time visits (the playground scene) are planned for future updates — like Animal Crossing DLC, continuously enriching the world.
+
+### 6.1 Asynchronous Social (v1.0)
+
+- When the player is offline, the child can automatically "leave the island" and visit other children's islands
+- When the player logs back in, the child tells them who they visited yesterday and what happened
+- Other players' children may also visit your island, leaving gifts or messages
+
+### 6.2 Real-Time Visits (Future Update)
+
+- A dedicated "Playground" scene where two children arrange to meet and play
+- The two players can only communicate through their respective children, maintaining immersion
+- The two AI children can talk to each other; the parents watch from the side and occasionally give their child a "nudge"
+- **Priority**: Develop after the core island experience is stable
+
+### 6.3 Social Relationship Chain
+
+- Children have **friendship levels** with each other; multiple interactions lead to becoming "best friends"
+- Best friends exchange gifts (via the in-game mail system)
+- Through their child's social connections, players can discover "someone's mom/dad's island" — a real player's world they'd never have found otherwise
+- Players can optionally share "parent contact info" (in-game private messages only) — but it's not required. Your connection can always remain only through the children
+
+### 6.4 Privacy & Safety
+
+- Players don't expose their real names — only in-game titles like "[child's name]'s parent"
+- The child's visits require the player to enable "open" permissions
+- "Only friends' children can visit" setting available
 
 ---
 
-## 八、设计支柱
+## 7. Game Pacing & Time Design
 
-1. **孩子是真实的**——玩家要相信孩子是一个有记忆、有情感的真实存在，哪怕他是代码
-2. **养育有重量**——行动有后果，爱是需要付出的，忽视是有代价的
-3. **连接是奇妙的**——你可能因为两个像素精灵的友谊，和地球另一端的人产生真实的情感联系
-4. **生活本身就是游戏**——没有明确的"赢"，只有你和孩子共同度过的时光
-5. **孩子是世界的入口**——所有新内容、新场景、新功能，都通过孩子来传达给玩家。他不只是养育对象，更是玩家感知这个虚拟世界的唯一眼睛和声音。游戏菜单不会告诉你"新内容上线了"——是孩子跑来说"我听说岛上新开了游乐场，你带我去嘛！"每一次更新都是一次父母与孩子之间的故事，而不是一个功能通知。
+- **Real-time passage**: In-game time is linked to real time (not 1:1 — approximately 1 real hour = 1 in-game day)
+- **No forced login**: Not logging in doesn't cause immediate negative consequences, but prolonged absence has cumulative effects
+- **Seasons**: The game has four seasons, affecting available crops and the island's visual style
+- **Daily vignettes**: The child has a "little story of the day" waiting for the player each day
 
 ---
 
-## 九、待讨论问题
+## 8. Design Pillars
 
-- [x] 游戏名字：**Catopia**
-- [x] 极端忽视结局：**灵魂离去 + 召回之路**——种植、建造、写信可唤回孩子，他回来后记得一切
-- [x] 孩子的名字：**玩家在游戏开始时命名**（如同父母给孩子取名）；终身限改 1 次，须向岛上"名册官"NPC 申请，等待约 1 游戏周后生效；孩子和他的朋友们都会记住这次改名
-- [ ] 贷款系统的利率和还款机制细节
-- [x] 实时拜访：**后续更新**，以"游乐场"专属场景实现，v1.0 只做异步社交
-- [ ] 孩子的长期记忆如何持久化和截断（token 限制的工程问题）
-- [x] 玩家称谓：**单亲设定**（v1.0 只有一位玩家照料孩子）；孩子叫玩家的名字或小名，由玩家在开场时设定（"你想让他叫你什么？"）——不强制"爸爸/妈妈"，保持中性温暖
+1. **The child is real** — Players must believe the child is a real being with memory and feelings, even if they are code
+2. **Nurturing has weight** — Actions have consequences. Love requires effort; neglect has a cost
+3. **Connection is magical** — You might form a genuine emotional bond with someone on the other side of the planet, through the friendship of two pixel spirits
+4. **Life itself is the game** — There is no clear "win condition" — only the time you and your child spend together
+5. **The child is the gateway to the world** — All new content, new scenes, and new features are delivered to the player through the child. They are not just the thing being raised — they are the player's only eyes and voice in this virtual world. The game menu won't tell you "new content is live" — the child comes running to say "I heard there's a new playground on the island — can you take me?" Every update is a story between parent and child, not a feature notification.
+
+---
+
+## 9. Open Questions
+
+- [x] Game name: **Catopia**
+- [x] Extreme neglect outcome: **Soul departure + Path of Return** — farming, building, and writing letters can call the child back; they remember everything upon their return
+- [x] Child's name: **Named by the player at game start** (just like a parent naming their child); can only be changed once in their lifetime — requires filing a request with the island's "Name Registry" NPC and waiting approximately 1 in-game week; the child and all their friends will remember the name change
+- [ ] Loan system interest rates and repayment mechanics (details TBD)
+- [x] Real-time visits: **Future update**, implemented as a dedicated "Playground" scene; v1.0 covers asynchronous social only
+- [ ] How to persist and truncate the child's long-term memory (token limit engineering problem)
+- [x] Player title: **Single-parent setup** (v1.0 has only one player caring for the child); the child calls the player by whatever name or nickname the player sets at the start ("What do you want them to call you?") — not forced to "Mom/Dad," kept neutral and warm
