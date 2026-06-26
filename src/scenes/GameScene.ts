@@ -38,11 +38,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
-    const { sceneFile } = await loadWorldScene(this, this.sceneId);
-
-    // 3× integer zoom; roundPixels keeps pixel art sharp on sub-pixel pans
+    // Set zoom + pre-position BEFORE awaiting scene load so the camera
+    // never shows the top-left corner during the loading frames.
     this.cameras.main.setZoom(3);
     this.cameras.main.roundPixels = true;
+    // Pre-center on the island (child's authored position) while loading
+    this.cameras.main.setScroll(
+      496 - GAME_WIDTH  / (2 * 3),
+      302 - GAME_HEIGHT / (2 * 3),
+    );
+
+    const { sceneFile } = await loadWorldScene(this, this.sceneId);
 
     const reg = getEntityRegistry(this)!;
     const childGO = reg.byRole('child')[0] as Phaser.GameObjects.Sprite | undefined;

@@ -11,7 +11,8 @@
 - **3× camera zoom** — each 16×16 source tile renders as 48×48 px on screen; `roundPixels = true` for crisp pixel art
 - **Child spirit sprite** (`premium_character_spritesheet`, role=`child`) placed at island center (496, 302)
 - **Wandering AI** — child walks automatically in random directions (55 px/s), changing direction every 1.5–3.5s; plays the matching `walk-down/up/left/right` animation based on the dominant velocity axis
-- **Camera follows child** — `cameras.main.startFollow` keeps the child centred; camera is clamped to world bounds
+- **Player-controlled camera** — drag to pan (mouse + touch, Rex Pan gesture threshold=10px); double-tap/double-click → smooth snap to cat (Quad.easeOut 520ms); "Find cat" pill button top-right corner
+- **Camera centered on cat at startup** — `setZoom(3)` + pre-position scroll set BEFORE `await loadWorldScene()` so first frame is already centered on cat; no top-left flash
 - **Tilemap collision** — child is blocked by grass island boundary tiles (`grass_tiles_v2` solid tiles with sub-tile collisionRects); uses `addTilemapCollider` + `applyAssetHitbox` from SDK
 - Immediate direction change when child hits a boundary (via `body.blocked.*` check in `update()`)
 
@@ -26,10 +27,5 @@
 - Design doc: `docs/design.md`
 
 ## What was changed this turn
-- Added `"role": "child"` to the sprite entity in `public/scenes/world/main.json`
-- Rewrote `GameScene.ts` to:
-  - Import `getManifest`, `applyAssetHitbox`, `addTilemapCollider` from SDK
-  - Add Arcade physics body to the child sprite after scene load
-  - Apply hitbox from asset metadata via `applyAssetHitbox`
-  - Wire tilemap collision with grass-island via `addTilemapCollider`
-  - Implement wandering AI with blocked-wall detection for smooth direction changes
+- Moved `setZoom(3)` + `roundPixels = true` + initial `setScroll` to BEFORE `await loadWorldScene()` in `GameScene.ts`
+  - Camera is pre-centered on island center (496, 302) from the very first frame — no top-left corner flash
