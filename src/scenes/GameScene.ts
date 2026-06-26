@@ -16,6 +16,9 @@ const WANDER_MAX_MS = 3500;
 // Tilemap entity id for the grass island (from scene JSON)
 const GRASS_ISLAND_ENTITY_ID = 'e-mqveju7y-sk2r';
 
+// 4-directional facing, used to pick walk/idle animation
+type FaceDir = 'down' | 'up' | 'left' | 'right';
+
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
 
@@ -23,6 +26,7 @@ export class GameScene extends Phaser.Scene {
   private child?: Phaser.GameObjects.Sprite;
   private wanderTimer = 0;
   private wanderInterval = 2000;
+  private faceDir: FaceDir = 'down';
 
   constructor() {
     super({ key: 'GameScene' });
@@ -68,7 +72,7 @@ export class GameScene extends Phaser.Scene {
       // Camera follows the child, clamped to the scene bounds
       this.cameras.main.startFollow(this.child, true);
 
-      // Start wandering
+      // Start wandering (first direction pick also starts the walk animation)
       this.pickNewWanderDirection();
     }
 
@@ -83,15 +87,29 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Pick a fresh random movement direction and reset the wander timer. */
+  /**
+   * Derive a FaceDir from a velocity vector.
+   * Uses the dominant axis (largest absolute component).
+   */
+  private velToDir(vx: number, vy: number): FaceDir {
+    if (Math.abs(vx) >= Math.abs(vy)) {
+      return vx >= 0 ? 'right' : 'left';
+    }
+    return vy >= 0 ? 'down' : 'up';
+  }
+
+  /** Pick a fresh random movement direction, update facing, start walk anim. */
   private pickNewWanderDirection(): void {
     if (!this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
     const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    body.setVelocity(
-      Math.cos(angle) * CHILD_SPEED,
-      Math.sin(angle) * CHILD_SPEED,
-    );
+    const vx = Math.cos(angle) * CHILD_SPEED;
+    const vy = Math.sin(angle) * CHILD_SPEED;
+    body.setVelocity(vx, vy);
+
+    this.faceDir = this.velToDir(vx, vy);
+    this.child.play(`walk-${this.faceDir}`, true);
+
     this.wanderInterval = Phaser.Math.Between(WANDER_MIN_MS, WANDER_MAX_MS);
     this.wanderTimer = 0;
   }

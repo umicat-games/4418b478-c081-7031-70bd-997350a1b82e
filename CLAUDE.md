@@ -10,7 +10,7 @@
 - Scene JSON defines world (1280×720), camera bounds, and tilemap-ref entities
 - **3× camera zoom** — each 16×16 source tile renders as 48×48 px on screen; `roundPixels = true` for crisp pixel art
 - **Child spirit sprite** (`premium_character_spritesheet`, role=`child`) placed at island center (496, 302)
-- **Wandering AI** — child walks automatically in random directions (55 px/s), changing direction every 1.5–3.5s
+- **Wandering AI** — child walks automatically in random directions (55 px/s), changing direction every 1.5–3.5s; plays the matching `walk-down/up/left/right` animation based on the dominant velocity axis
 - **Camera follows child** — `cameras.main.startFollow` keeps the child centred; camera is clamped to world bounds
 - **Tilemap collision** — child is blocked by grass island boundary tiles (`grass_tiles_v2` solid tiles with sub-tile collisionRects); uses `addTilemapCollider` + `applyAssetHitbox` from SDK
 - Immediate direction change when child hits a boundary (via `body.blocked.*` check in `update()`)
