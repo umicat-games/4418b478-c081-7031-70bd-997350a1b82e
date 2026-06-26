@@ -5,7 +5,29 @@
   "type": "hud",
   "design": {
     "designAspectRatio": "16:9",
-    "safeArea": { "top": 16, "right": 16, "bottom": 16, "left": 16 }
+    "safeArea": {
+      "top": 16,
+      "right": 16,
+      "bottom": 16,
+      "left": 16
+    }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-mqvhsx7u-et6p",
+      "kind": "icon-button",
+      "anchor": {
+        "side": "top-left",
+        "offsetX": 488,
+        "offsetY": 464
+      },
+      "layer": "base",
+      "label": "Button",
+      "shape": "rounded-rect",
+      "width": 96,
+      "height": 48,
+      "fillColor": "#3b82f6",
+      "textColor": "#ffffff"
+    }
+  ]
 }
