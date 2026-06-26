@@ -25,27 +25,28 @@
       "kind": "tilemap-ref",
       "tilemapId": "water",
       "transform": {
-        "x": 550.5695370662883,
-        "y": 450.70198688881004,
+        "x": 698.0477814749418,
+        "y": 554.0734904479259,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
         "depth": 1
       },
-      "name": "grass-land"
+      "name": "water"
     },
     {
       "id": "e-mqveju7y-sk2r",
       "kind": "tilemap-ref",
       "tilemapId": "grass-island",
       "transform": {
-        "x": 550.5695370662883,
-        "y": 346.44951140065143,
+        "x": 714.925062737709,
+        "y": 463.3371780245294,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
         "depth": 1
-      }
+      },
+      "name": "grass-island"
     }
   ]
 }
