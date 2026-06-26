@@ -65,6 +65,9 @@ export class GameScene extends Phaser.Scene {
       // addTilemapCollider handles both cell-rect and sub-tile groups in one call.
       addTilemapCollider(this, GRASS_ISLAND_ENTITY_ID, this.child);
 
+      // Camera follows the child, clamped to the scene bounds
+      this.cameras.main.startFollow(this.child, true);
+
       // Start wandering
       this.pickNewWanderDirection();
     }
