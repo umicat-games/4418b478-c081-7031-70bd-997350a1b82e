@@ -4,8 +4,8 @@
   "name": "Main",
   "type": "world",
   "world": {
-    "width": 1280,
-    "height": 720,
+    "width": 1600,
+    "height": 1200,
     "background": {
       "color": "#1a1a2e"
     }
@@ -15,8 +15,8 @@
     "bounds": {
       "x": 0,
       "y": 0,
-      "width": 1280,
-      "height": 720
+      "width": 1600,
+      "height": 1200
     }
   },
   "entities": [
@@ -51,9 +51,10 @@
     {
       "id": "e-mqvfwxir-fuj2",
       "kind": "sprite",
+      "role": "child",
       "transform": {
-        "x": 184.18241042345275,
-        "y": 120.18241042345274,
+        "x": 496,
+        "y": 302,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
