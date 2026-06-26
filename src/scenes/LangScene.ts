@@ -97,36 +97,6 @@ export class LangScene extends Phaser.Scene {
       0.55,
     );
 
-    // ─── Info row ───
-    this.add.text(GAME_WIDTH / 2, 565, '6 PLAYERS  ·  AI OPPONENTS  ·  SOCIAL DEDUCTION', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '9px',
-      color: '#7a9a70',
-    }).setOrigin(0.5).setDepth(10);
-
-    this.add.text(GAME_WIDTH / 2, 590, '6人局  ·  AI真人级对手  ·  社交推理', {
-      fontFamily: 'Noto Sans SC',
-      fontSize: '15px',
-      color: '#5a8050',
-    }).setOrigin(0.5).setDepth(10);
-
-    // ─── Role icons row (decorative) ───
-    const roles = [
-      { x: GAME_WIDTH / 2 - 120, emoji: '🐺', color: 0xcc2222 },
-      { x: GAME_WIDTH / 2,        emoji: '🔮', color: 0x2266cc },
-      { x: GAME_WIDTH / 2 + 120, emoji: '🏘️', color: 0x22aa55 },
-    ];
-    const roleG = this.add.graphics().setDepth(9);
-    roles.forEach(({ x, color }) => {
-      roleG.fillStyle(color, 0.18);
-      roleG.fillRect(x - 28, 628, 56, 68);
-      roleG.lineStyle(1, color, 0.5);
-      roleG.strokeRect(x - 28, 628, 56, 68);
-    });
-    roles.forEach(({ x, emoji }) => {
-      this.add.text(x, 662, emoji, { fontSize: '28px' }).setOrigin(0.5).setDepth(10);
-    });
-
     // Fade in
     this.cameras.main.fadeIn(600, 0, 0, 0);
   }
