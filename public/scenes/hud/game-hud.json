@@ -17,9 +17,9 @@
       "id": "e-mqvhsx7u-et6p",
       "kind": "icon-button",
       "anchor": {
-        "side": "top-left",
-        "offsetX": 488,
-        "offsetY": 464
+        "side": "bottom",
+        "offsetX": 0,
+        "offsetY": 0
       },
       "layer": "base",
       "label": "Button",
