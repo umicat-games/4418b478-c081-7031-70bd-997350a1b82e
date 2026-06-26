@@ -21,6 +21,20 @@ export class LangScene extends Phaser.Scene {
     }
 
     this.buildUI();
+
+    // BGM — starts on first user interaction (browser autoplay rule)
+    const startBgm = () => {
+      if (!this.sound.get('bgm_ambient')?.isPlaying) {
+        this.sound.play('bgm_ambient', { loop: true, volume: 0.35 });
+      }
+    };
+    this.input.once('pointerdown', startBgm);
+    this.input.keyboard?.once('keydown', startBgm);
+
+    // Stop BGM when leaving — WerewolfScene will restart it on first interaction
+    this.events.once('shutdown', () => {
+      this.sound.stopByKey('bgm_ambient');
+    });
   }
 
   private buildUI(): void {
