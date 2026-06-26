@@ -34,6 +34,11 @@ export class GameScene extends Phaser.Scene {
   async create(): Promise<void> {
     const { sceneFile } = await loadWorldScene(this, this.sceneId);
 
+    // 3× integer zoom: each 16×16 source tile renders as 48×48 px on screen.
+    // roundPixels keeps pixel art sharp (no sub-pixel blurring on camera pan).
+    this.cameras.main.setZoom(3);
+    this.cameras.main.roundPixels = true;
+
     if (sceneFile.entities.length === 0) {
       this.add
         .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Describe your game\nin the chat!', {
