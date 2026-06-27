@@ -12,6 +12,10 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
 
 // --- Wander tuning ---
+// Set to `false` to PIN the cat at its spawn position (no roaming) — useful
+// for verifying entity world coordinates against the editor rulers. Flip back
+// to `true` to restore the wandering behaviour.
+const CHILD_WANDER = false;
 const CHILD_SPEED = 55;               // world-px per second
 const WANDER_MIN_MS = 1500;
 const WANDER_MAX_MS = 3500;
@@ -98,7 +102,13 @@ export class GameScene extends Phaser.Scene {
       // ── "Find cat" button ──────────────────────────────────────────────
       this.buildFindCatButton();
 
-      this.pickNewWanderDirection();
+      if (CHILD_WANDER) {
+        this.pickNewWanderDirection();
+      } else {
+        // Pinned: no velocity, no walk animation — cat stands at spawn.
+        (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+        this.child.anims?.stop();
+      }
     }
 
     if (sceneFile.entities.length === 0) {
@@ -177,6 +187,7 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (!this.child?.body) return;
+    if (!CHILD_WANDER) return; // pinned — skip all wander logic
     const body = this.child.body as Phaser.Physics.Arcade.Body;
 
     if (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down) {
