@@ -45,8 +45,13 @@ export class GameScene extends Phaser.Scene {
     // Set zoom BEFORE awaiting scene load so the first frame is already correct.
     this.cameras.main.setZoom(3);
     this.cameras.main.roundPixels = true;
-    // Start camera at the world origin (top-left of the map).
-    this.cameras.main.setScroll(0, 0);
+    // Pin the world origin (0,0) to the screen's TOP-LEFT corner. Phaser zooms
+    // around the camera CENTER (default origin 0.5), so a raw setScroll(0,0) at
+    // zoom>1 would start the view at +426/+240, not the origin. We offset the
+    // scroll instead of changing the camera origin — setOrigin(0,0) breaks
+    // tilemap-layer culling (tiles vanish). See originTopLeftScroll().
+    const o = this.originTopLeftScroll();
+    this.cameras.main.setScroll(o.x, o.y);
 
     const { sceneFile } = await loadWorldScene(this, this.sceneId);
 
@@ -70,9 +75,10 @@ export class GameScene extends Phaser.Scene {
       // Tilemap collision
       addTilemapCollider(this, GRASS_ISLAND_ENTITY_ID, this.child);
 
-      // ── Camera: starts at world origin (0,0), player drives it ──────────
+      // ── Camera: starts with world origin (0,0) at the top-left, player drives it ──
       const cam = this.cameras.main;
-      cam.setScroll(0, 0);
+      const o2 = this.originTopLeftScroll();
+      cam.setScroll(o2.x, o2.y);
       // No startFollow — the player controls the camera manually.
 
       // Allow two simultaneous pointers (pan + button tap at the same time)
@@ -118,6 +124,20 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Scroll values that put world (0,0) at the screen's TOP-LEFT corner.
+   * Phaser's camera zooms around its CENTER (default origin 0.5), so the world
+   * coord at the left edge is `scrollX + (w/2)(1 - 1/zoom)`, not `scrollX`.
+   * Solving that = 0 gives the offset below.
+   */
+  private originTopLeftScroll(): { x: number; y: number } {
+    const z = this.cameras.main.zoom;
+    return {
+      x: -(GAME_WIDTH  / 2) * (1 - 1 / z),
+      y: -(GAME_HEIGHT / 2) * (1 - 1 / z),
+    };
+  }
+
   // ── "Find cat" — smooth tween back to the child ───────────────────────
 
   private snapToChild(): void {
@@ -125,10 +145,13 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     // Kill any previous snap tween so they don't stack
     this.tweens.killTweensOf(cam);
+    // Centre the child: with origin 0.5 the world coord at screen-centre is
+    // `scrollX + w/2`, so scrollX = child.x - w/2 (NOT /zoom — that was the
+    // origin-0 form and left the cat off-centre).
     this.tweens.add({
       targets: cam,
-      scrollX: this.child.x - GAME_WIDTH  / (2 * cam.zoom),
-      scrollY: this.child.y - GAME_HEIGHT / (2 * cam.zoom),
+      scrollX: this.child.x - GAME_WIDTH  / 2,
+      scrollY: this.child.y - GAME_HEIGHT / 2,
       duration: 520,
       ease: 'Quad.easeOut',
     });
