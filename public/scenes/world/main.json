@@ -25,8 +25,8 @@
       "kind": "tilemap-ref",
       "tilemapId": "water",
       "transform": {
-        "x": 0,
-        "y": -133.0029486110384,
+        "x": -5.684341886080802e-14,
+        "y": -101.00294861103839,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -40,7 +40,7 @@
       "tilemapId": "grass-island",
       "transform": {
         "x": 5.684341886080802e-14,
-        "y": -133.00294861103845,
+        "y": -101.00294861103833,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
