@@ -39,8 +39,8 @@
       "kind": "tilemap-ref",
       "tilemapId": "grass-island",
       "transform": {
-        "x": -85.65530570757636,
-        "y": -181.4638828248278,
+        "x": 15.843329404241842,
+        "y": -68.367188654521,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -53,8 +53,8 @@
       "kind": "sprite",
       "role": "child",
       "transform": {
-        "x": 93.69340257003961,
-        "y": 78.09912869350875,
+        "x": 71.63277747404258,
+        "y": 75.6190301617946,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
