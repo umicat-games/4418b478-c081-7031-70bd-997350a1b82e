@@ -6,7 +6,7 @@
   "world": {
     "width": 1280,
     "height": 720,
-    "background": { "color": "#1a1a2e" }
+    "background": { "color": "#04040f" }
   },
   "camera": {
     "follow": null,

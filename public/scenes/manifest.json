@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "umicat-game",
-  "title": "Umicat Game",
+  "title": "Star Siege",
   "version": "1.0.0",
   "initialScene": "main",
   "scenes": [
