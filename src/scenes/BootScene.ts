@@ -22,6 +22,8 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     drawLoadingBar(this);
     preloadManifest(this);
+    // Custom pointer-lock cursor — key must match CURSOR_KEY in GameScene.
+    this.load.image('cursor', 'uploaded/triangle_mouse_icon_1.png');
   }
 
   create(): void {

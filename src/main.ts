@@ -1,6 +1,7 @@
 import { createUmicatGame } from '@umicat/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
+import { CursorScene } from './scenes/CursorScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { renderScripts } from './visuals';
 
@@ -8,7 +9,9 @@ function startGame(): void {
   createUmicatGame({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scenes: [BootScene, GameScene],
+    // CursorScene is registered but not auto-started (only the first scene is);
+    // GameScene launches it after the HUD exists so it sits on top.
+    scenes: [BootScene, GameScene, CursorScene],
     renderScripts,
   });
 }
