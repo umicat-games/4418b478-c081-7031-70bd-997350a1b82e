@@ -38,15 +38,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
-    // Set zoom + pre-position BEFORE awaiting scene load so the camera
-    // never shows the top-left corner during the loading frames.
+    // Set zoom BEFORE awaiting scene load so the first frame is already correct.
     this.cameras.main.setZoom(3);
     this.cameras.main.roundPixels = true;
-    // Pre-center on the island (child's authored position) while loading
-    this.cameras.main.setScroll(
-      496 - GAME_WIDTH  / (2 * 3),
-      302 - GAME_HEIGHT / (2 * 3),
-    );
+    // Start camera at the world origin (top-left of the map).
+    this.cameras.main.setScroll(0, 0);
 
     const { sceneFile } = await loadWorldScene(this, this.sceneId);
 
@@ -70,12 +66,9 @@ export class GameScene extends Phaser.Scene {
       // Tilemap collision
       addTilemapCollider(this, GRASS_ISLAND_ENTITY_ID, this.child);
 
-      // ── Camera: starts on the cat, then player drives it ──────────────
+      // ── Camera: starts at world origin (0,0), player drives it ──────────
       const cam = this.cameras.main;
-      cam.setScroll(
-        this.child.x - GAME_WIDTH  / (2 * cam.zoom),
-        this.child.y - GAME_HEIGHT / (2 * cam.zoom),
-      );
+      cam.setScroll(0, 0);
       // No startFollow — the player controls the camera manually.
 
       // Allow two simultaneous pointers (pan + button tap at the same time)

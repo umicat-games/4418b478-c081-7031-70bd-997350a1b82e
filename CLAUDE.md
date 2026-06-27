@@ -12,7 +12,7 @@
 - **Child spirit sprite** (`premium_character_spritesheet`, role=`child`) placed at island center (496, 302)
 - **Wandering AI** — child walks automatically in random directions (55 px/s), changing direction every 1.5–3.5s; plays the matching `walk-down/up/left/right` animation based on the dominant velocity axis
 - **Player-controlled camera** — drag to pan (mouse + touch, Rex Pan gesture threshold=10px); double-tap/double-click → smooth snap to cat (Quad.easeOut 520ms); "Find cat" pill button top-right corner
-- **Camera centered on cat at startup** — `setZoom(3)` + pre-position scroll set BEFORE `await loadWorldScene()` so first frame is already centered on cat; no top-left flash
+- **Camera starts at world origin (0,0)** — `setZoom(3)` + `setScroll(0,0)` set BEFORE `await loadWorldScene()`; initial view shows the top-left of the map
 - **Tilemap collision** — child is blocked by grass island boundary tiles (`grass_tiles_v2` solid tiles with sub-tile collisionRects); uses `addTilemapCollider` + `applyAssetHitbox` from SDK
 - Immediate direction change when child hits a boundary (via `body.blocked.*` check in `update()`)
 
@@ -27,5 +27,4 @@
 - Design doc: `docs/design.md`
 
 ## What was changed this turn
-- Moved `setZoom(3)` + `roundPixels = true` + initial `setScroll` to BEFORE `await loadWorldScene()` in `GameScene.ts`
-  - Camera is pre-centered on island center (496, 302) from the very first frame — no top-left corner flash
+- Changed initial camera scroll to `setScroll(0, 0)` — game opens with the camera aligned to the world origin (map top-left), zoom stays at 3×
