@@ -5,6 +5,7 @@ import {
   getManifest,
   applyAssetHitbox,
   addTilemapCollider,
+  getHudObjects,
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 // Rex gesture helpers — no plugin registration needed
@@ -58,6 +59,11 @@ export class GameScene extends Phaser.Scene {
   private findCatBounds = new Phaser.Geom.Rectangle();
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
+
+  // Click-to-talk dialog (role 'cat-dialog' HUD widgets, authored visible:false).
+  // Opened by clicking the cat; an HTML <input> overlays the canvas for typing.
+  private dialogOpen = false;
+  private dialogInput?: HTMLInputElement;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -304,10 +310,20 @@ export class GameScene extends Phaser.Scene {
     // Click the canvas → capture the mouse. If already locked, the click is a
     // game/HUD action routed through the virtual cursor (the OS pointer is
     // frozen under lock, so Phaser's own hit-testing can't see the cursor).
-    this.input.on('pointerdown', () => {
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Dialog open: a canvas click (outside the HTML input, which sits on top
+      // and swallows its own clicks) dismisses it.
+      if (this.dialogOpen) { this.closeDialog(); return; }
       if (this.locked) { this.handleLockedClick(); return; }
+      // Not locked yet: clicking the cat opens the dialog; anything else
+      // captures the pointer (the normal edge-scroll / camera mode).
+      const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
       this.input.manager.mouse?.requestPointerLock();
     });
+
+    // Esc closes the dialog (also releases pointer lock — browser-enforced).
+    this.input.keyboard?.on('keydown-ESC', () => { if (this.dialogOpen) this.closeDialog(); });
 
     // While locked, accumulate RELATIVE mouse movement into the virtual cursor,
     // clamped to the canvas so it can never leave.
@@ -331,6 +347,8 @@ export class GameScene extends Phaser.Scene {
     document.addEventListener('pointerlockchange', onLockChange);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       document.removeEventListener('pointerlockchange', onLockChange);
+      this.dialogInput?.remove();
+      this.dialogInput = undefined;
     });
   }
 
@@ -338,7 +356,93 @@ export class GameScene extends Phaser.Scene {
   private handleLockedClick(): void {
     if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, this.vcursor.x, this.vcursor.y)) {
       this.snapToChild();
+      return;
     }
+    // The virtual cursor is in canvas px; convert to world to hit-test the cat.
+    const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
+    if (this.catContains(wp.x, wp.y)) this.openDialog();
+  }
+
+  // ── Click-to-talk dialog ──────────────────────────────────────────────
+
+  /** True if a world point lands on the cat sprite. */
+  private catContains(worldX: number, worldY: number): boolean {
+    if (!this.child) return false;
+    return this.child.getBounds().contains(worldX, worldY);
+  }
+
+  /** Reveal the 'cat-dialog' HUD widgets (fade in) + overlay a typing input. */
+  private openDialog(): void {
+    if (this.dialogOpen || !this.child) return;
+    this.dialogOpen = true;
+    // Free the OS cursor so the user can type into the HTML input (the custom
+    // cursor hides itself since `cursorState.visible` follows `locked`).
+    if (this.locked) document.exitPointerLock();
+    // Seed the body text (the NPC's line). The brain (umicat.ai.npc) wires in
+    // later — for now it's a static prompt the player answers.
+    this.registry.set('catDialogBody', 'Do you want me to travel to another island?');
+    for (const go of getHudObjects(this, 'cat-dialog')) {
+      const w = go as unknown as { setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void };
+      w.setVisible?.(true);
+      w.setAlpha?.(0);
+      this.tweens.add({ targets: go, alpha: 1, duration: 200, ease: 'Quad.easeOut' });
+    }
+    this.showDialogInput();
+  }
+
+  /** Hide the dialog (fade out) + tear down the typing input. */
+  private closeDialog(): void {
+    if (!this.dialogOpen) return;
+    this.dialogOpen = false;
+    for (const go of getHudObjects(this, 'cat-dialog')) {
+      this.tweens.add({
+        targets: go,
+        alpha: 0,
+        duration: 150,
+        onComplete: () => (go as unknown as { setVisible?: (v: boolean) => void }).setVisible?.(false),
+      });
+    }
+    this.dialogInput?.remove();
+    this.dialogInput = undefined;
+  }
+
+  /** Create + position the HTML <input> over the dialog and focus it. */
+  private showDialogInput(): void {
+    if (this.dialogInput) return;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Say something to Nico…';
+    input.style.cssText =
+      'position:fixed; z-index:99999; box-sizing:border-box;' +
+      'padding:8px 12px; border-radius:8px; border:2px solid #e8c87a;' +
+      'background:#3a2a14; color:#fff; font-size:15px; outline:none;' +
+      'font-family:sans-serif;';
+    this.positionDialogInput(input);
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // don't let game shortcuts swallow typing
+      if (e.key === 'Enter') this.submitDialog(input.value);
+      else if (e.key === 'Escape') this.closeDialog();
+    });
+    document.body.appendChild(input);
+    this.dialogInput = input;
+    setTimeout(() => input.focus(), 0);
+  }
+
+  /** Place the input over the dialog (bottom-centre of the canvas). */
+  private positionDialogInput(input: HTMLInputElement): void {
+    const r = this.game.canvas.getBoundingClientRect();
+    const w = Math.min(520, r.width * 0.8);
+    input.style.width = `${w}px`;
+    input.style.left = `${r.left + r.width / 2 - w / 2}px`;
+    input.style.top = `${r.bottom - r.height * 0.13}px`;
+  }
+
+  /** Player submitted a line. Echo it for now; umicat.ai.npc replaces this. */
+  private submitDialog(text: string): void {
+    const t = text.trim();
+    if (!t) return;
+    this.registry.set('catDialogBody', `You: ${t}`);
+    if (this.dialogInput) this.dialogInput.value = '';
   }
 
   // ── Wandering AI helpers ──────────────────────────────────────────────

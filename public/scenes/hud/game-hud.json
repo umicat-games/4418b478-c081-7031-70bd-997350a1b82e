@@ -28,6 +28,48 @@
       "height": 48,
       "fillColor": "#3b82f6",
       "textColor": "#ffffff"
+    },
+
+    {
+      "id": "cat-dialog-panel",
+      "kind": "panel",
+      "role": "cat-dialog",
+      "anchor": { "side": "bottom", "offsetX": 0, "offsetY": -80 },
+      "layer": "modal",
+      "width": 620,
+      "height": 130,
+      "backgroundColor": "#5c3e18",
+      "backgroundAlpha": 0.95,
+      "borderColor": "#e8c87a",
+      "borderWidth": 2,
+      "borderRadius": 12,
+      "visible": false
+    },
+    {
+      "id": "cat-dialog-name",
+      "kind": "text",
+      "role": "cat-dialog",
+      "anchor": { "side": "bottom", "offsetX": -270, "offsetY": -162 },
+      "layer": "modal",
+      "source": { "mode": "static", "text": "Nico" },
+      "fontFamily": "sans-serif",
+      "fontSize": 22,
+      "color": "#f5dfa0",
+      "align": "left",
+      "visible": false
+    },
+    {
+      "id": "cat-dialog-body",
+      "kind": "text",
+      "role": "cat-dialog",
+      "anchor": { "side": "bottom", "offsetX": 0, "offsetY": -100 },
+      "layer": "modal",
+      "source": { "mode": "dynamic", "binding": "catDialogBody", "fallback": "..." },
+      "fontFamily": "sans-serif",
+      "fontSize": 17,
+      "color": "#ffffff",
+      "align": "center",
+      "visible": false
     }
   ]
 }
