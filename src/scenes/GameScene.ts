@@ -173,11 +173,12 @@ export class GameScene extends Phaser.Scene {
     // Glow under ship
     this.playerGlow = this.add.graphics().setDepth(2);
 
-    this.player = this.physics.add.sprite(CX, CY, 'player_ship_pixel').setDepth(3);
+    this.player = this.physics.add.sprite(CX, CY, 'player_ship_tilt').setDepth(3);
     this.player.setCollideWorldBounds(true);
     // Shrink physics body to match ship silhouette
     this.player.body.setSize(32, 40);
     this.player.body.setOffset(16, 12);
+    this.player.setFrame(7); // start straight
   }
 
   private drawPlayerGlow(): void {
@@ -327,6 +328,15 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy =  PLAYER_SPEED;
     if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
     this.player.setVelocity(vx, vy);
+
+    // Directional tilt: pick frame based on horizontal movement
+    if (vx < 0) {
+      this.player.setFrame(2);  // banking left
+    } else if (vx > 0) {
+      this.player.setFrame(13); // banking right
+    } else {
+      this.player.setFrame(7);  // straight
+    }
   }
 
   private handleAutoFire(time: number): void {

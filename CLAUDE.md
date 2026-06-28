@@ -35,4 +35,4 @@ The player's spaceship is positioned at the centre of the screen and automatical
 - Shoot: automatic (4-way volley)
 
 ## What was changed this turn
-- Replaced the top-spawning enemy (e_top) with the user's pixel-art sprite (space_craft_enemy_1.png); loaded in BootScene with NEAREST filter alongside the player ship.
+- Added directional banking animation to the player ship using a 16-frame spritesheet (player_ship_tilt); frame 2 = left bank, frame 7 = straight, frame 13 = right bank; swapped per handleMovement() based on horizontal velocity.

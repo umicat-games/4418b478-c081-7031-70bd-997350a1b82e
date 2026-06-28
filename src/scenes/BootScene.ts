@@ -22,14 +22,30 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     drawLoadingBar(this);
     preloadManifest(this);
-    this.load.image('player_ship_pixel', 'uploaded/player_ship_pixel.png');
+    this.load.spritesheet('player_ship_tilt', 'uploaded/player_ship_tilt_fl0kn_sheet.png', { frameWidth: 64, frameHeight: 64 });
     this.load.image('space_craft_enemy_1', 'uploaded/space_craft_enemy_1.png');
   }
 
   create(): void {
     // Apply nearest-neighbour filter for crisp pixel art
-    this.textures.get('player_ship_pixel').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get('player_ship_tilt').setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.textures.get('space_craft_enemy_1').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    // Register directional tilt frames as animations (no looping — frames are selected manually)
+    this.anims.create({
+      key: 'ship_tilt_left',
+      frames: [{ key: 'player_ship_tilt', frame: 2 }],
+      frameRate: 1,
+    });
+    this.anims.create({
+      key: 'ship_tilt_right',
+      frames: [{ key: 'player_ship_tilt', frame: 13 }],
+      frameRate: 1,
+    });
+    this.anims.create({
+      key: 'ship_straight',
+      frames: [{ key: 'player_ship_tilt', frame: 7 }],
+      frameRate: 1,
+    });
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });
   }
