@@ -119,34 +119,6 @@ export class GameScene extends Phaser.Scene {
 
   // ── TEXTURES ─────────────────────────────────────────────────────────────────
   private makeTextures(): void {
-    // Player ship (top-down view)
-    if (this.textures.exists('ship')) { this.textures.remove('ship'); }
-    if (!this.textures.exists('ship')) {
-      const g = this.make.graphics();
-      // Engine glow
-      g.fillStyle(0xff4400, 0.25); g.fillEllipse(24, 44, 34, 14);
-      // Hull body
-      g.fillStyle(0xff5555, 1);
-      g.fillTriangle(24, 2, 2, 50, 46, 50);
-      // Center cockpit
-      g.fillStyle(0xaa0000, 1);
-      g.fillTriangle(24, 10, 13, 36, 35, 36);
-      // Cockpit glass
-      g.fillStyle(0xff9966, 0.85);
-      g.fillTriangle(24, 15, 17, 31, 31, 31);
-      // Wing panels
-      g.fillStyle(0x882222, 1);
-      g.fillTriangle(24, 36, 2, 50, 20, 46);
-      g.fillTriangle(24, 36, 46, 50, 28, 46);
-      // Engine nozzle
-      g.fillStyle(0xff6600, 1); g.fillRect(15, 46, 18, 6);
-      g.fillStyle(0xffffff, 0.9); g.fillRect(19, 46, 10, 4);
-      // Highlight stripe
-      g.fillStyle(0xffffff, 0.5); g.fillRect(22, 14, 3, 20);
-      g.generateTexture('ship', 48, 54);
-      g.destroy();
-    }
-
     // Energy bolt (bullet)
     if (!this.textures.exists('bolt')) {
       const g = this.make.graphics();
@@ -201,16 +173,19 @@ export class GameScene extends Phaser.Scene {
     // Glow under ship
     this.playerGlow = this.add.graphics().setDepth(2);
 
-    this.player = this.physics.add.sprite(CX, CY, 'ship').setDepth(3);
+    this.player = this.physics.add.sprite(CX, CY, 'player_ship_pixel').setDepth(3);
     this.player.setCollideWorldBounds(true);
+    // Shrink physics body to match ship silhouette
+    this.player.body.setSize(32, 40);
+    this.player.body.setOffset(16, 12);
   }
 
   private drawPlayerGlow(): void {
     this.playerGlow.clear();
-    this.playerGlow.fillStyle(0x0099ff, 0.18);
-    this.playerGlow.fillCircle(this.player.x, this.player.y, 36);
-    this.playerGlow.fillStyle(0x00ccff, 0.12);
-    this.playerGlow.fillCircle(this.player.x, this.player.y, 52);
+    this.playerGlow.fillStyle(0xff3300, 0.18);
+    this.playerGlow.fillCircle(this.player.x, this.player.y, 38);
+    this.playerGlow.fillStyle(0xff6600, 0.10);
+    this.playerGlow.fillCircle(this.player.x, this.player.y, 56);
   }
 
   // ── BULLETS ──────────────────────────────────────────────────────────────────

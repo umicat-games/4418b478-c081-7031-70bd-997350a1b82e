@@ -35,4 +35,4 @@ The player's spaceship is positioned at the centre of the screen and automatical
 - Shoot: automatic (4-way volley)
 
 ## What was changed this turn
-- Changed player ship color scheme from blue/cyan to red (hull: red, cockpit: dark red, glass: orange-red, nozzle: orange).
+- Replaced procedural player ship with a 64×64 pixel-art sprite (player_ship_pixel.png); loaded in BootScene with NEAREST filter; physics body trimmed to fit; glow updated to red/orange.
