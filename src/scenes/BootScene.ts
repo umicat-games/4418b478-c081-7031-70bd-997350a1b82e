@@ -22,7 +22,7 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     drawLoadingBar(this);
     preloadManifest(this);
-    this.load.image('player_ship_pixel', 'generated/player_ship_pixel.png');
+    this.load.image('player_ship_pixel', 'uploaded/player_ship_pixel.png');
   }
 
   create(): void {
