@@ -130,8 +130,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 4 enemy types (one per spawn side, distinct colours)
+    // e_top uses the pixel-art sprite loaded in BootScene — skip generating it
     const enemies = [
-      { key: 'e_top',    c: 0xff2233, hi: 0xff8899, accent: 0xff4455 },
       { key: 'e_bottom', c: 0xff8800, hi: 0xffcc44, accent: 0xffaa22 },
       { key: 'e_left',   c: 0x9933ff, hi: 0xcc99ff, accent: 0xbb66ff },
       { key: 'e_right',  c: 0x22ffaa, hi: 0x88ffdd, accent: 0x55ffcc },
@@ -212,7 +212,7 @@ export class GameScene extends Phaser.Scene {
 
   private spawnEnemy(side: 'top' | 'bottom' | 'left' | 'right'): void {
     const texKey: Record<string, string> = {
-      top: 'e_top', bottom: 'e_bottom', left: 'e_left', right: 'e_right',
+      top: 'space_craft_enemy_1', bottom: 'e_bottom', left: 'e_left', right: 'e_right',
     };
     const pad = 44;
     let ex = 0, ey = 0;

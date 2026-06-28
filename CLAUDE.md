@@ -35,4 +35,4 @@ The player's spaceship is positioned at the centre of the screen and automatical
 - Shoot: automatic (4-way volley)
 
 ## What was changed this turn
-- Replaced procedural player ship with a 64×64 pixel-art sprite (player_ship_pixel.png); loaded in BootScene with NEAREST filter; physics body trimmed to fit; glow updated to red/orange.
+- Replaced the top-spawning enemy (e_top) with the user's pixel-art sprite (space_craft_enemy_1.png); loaded in BootScene with NEAREST filter alongside the player ship.

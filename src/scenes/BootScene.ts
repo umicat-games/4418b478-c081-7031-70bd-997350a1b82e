@@ -23,11 +23,13 @@ export class BootScene extends Phaser.Scene {
     drawLoadingBar(this);
     preloadManifest(this);
     this.load.image('player_ship_pixel', 'uploaded/player_ship_pixel.png');
+    this.load.image('space_craft_enemy_1', 'uploaded/space_craft_enemy_1.png');
   }
 
   create(): void {
     // Apply nearest-neighbour filter for crisp pixel art
     this.textures.get('player_ship_pixel').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get('space_craft_enemy_1').setFilter(Phaser.Textures.FilterMode.NEAREST);
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });
   }
