@@ -362,29 +362,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * RTS / theme-park edge scrolling (desktop): when the mouse rests within
+   * RTS / theme-park edge scrolling (desktop): when the cursor rests within
    * EDGE_MARGIN of a canvas edge, scroll the camera that way at EDGE_SPEED
    * (screen px/s, divided by zoom so the on-screen speed is the same at any
-   * zoom). Touch is excluded — it pans by drag. Holding the cursor at the
-   * edge keeps scrolling because we read the stored position every frame.
+   * zoom). Holding the cursor at the edge keeps scrolling because we read the
+   * position every frame.
+   *
+   * Gated on pointer-lock: edge-scroll ONLY runs while the mouse is CAPTURED,
+   * driven by the virtual cursor (always clamped inside the canvas). When NOT
+   * locked the OS cursor can sit at — or leave through — the window edge, which
+   * used to keep pushing the camera even with the mouse off-screen. Click to
+   * capture first; touch pans by drag (and never locks), so it's unaffected.
    */
   private updateEdgeScroll(delta: number): void {
+    if (!this.locked) return;
     const cam = this.cameras.main;
-    let px: number;
-    let py: number;
-    if (this.locked) {
-      // Captured: the virtual cursor drives scrolling (always inside, clamped).
-      px = this.vcursor.x;
-      py = this.vcursor.y;
-      // Don't scroll while the cursor is over the Find-cat button.
-      if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, px, py)) return;
-    } else {
-      // Not captured: real mouse drives it (touch pans by drag instead).
-      const p = this.edgePointer;
-      if (!p.inside || !p.isMouse || this.overUi) return;
-      px = p.x;
-      py = p.y;
-    }
+    const px = this.vcursor.x;
+    const py = this.vcursor.y;
+    // Don't scroll while the cursor is over the Find-cat button.
+    if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, px, py)) return;
     let dx = 0;
     let dy = 0;
     if (px < EDGE_MARGIN) dx = -1;
