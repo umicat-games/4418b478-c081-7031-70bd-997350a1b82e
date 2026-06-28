@@ -120,25 +120,26 @@ export class GameScene extends Phaser.Scene {
   // ── TEXTURES ─────────────────────────────────────────────────────────────────
   private makeTextures(): void {
     // Player ship (top-down view)
+    if (this.textures.exists('ship')) { this.textures.remove('ship'); }
     if (!this.textures.exists('ship')) {
       const g = this.make.graphics();
       // Engine glow
-      g.fillStyle(0x00ccff, 0.2); g.fillEllipse(24, 44, 34, 14);
+      g.fillStyle(0xff4400, 0.25); g.fillEllipse(24, 44, 34, 14);
       // Hull body
-      g.fillStyle(0xbde8ff, 1);
+      g.fillStyle(0xff5555, 1);
       g.fillTriangle(24, 2, 2, 50, 46, 50);
       // Center cockpit
-      g.fillStyle(0x0077cc, 1);
+      g.fillStyle(0xaa0000, 1);
       g.fillTriangle(24, 10, 13, 36, 35, 36);
       // Cockpit glass
-      g.fillStyle(0x66ccff, 0.85);
+      g.fillStyle(0xff9966, 0.85);
       g.fillTriangle(24, 15, 17, 31, 31, 31);
       // Wing panels
-      g.fillStyle(0x3388aa, 1);
+      g.fillStyle(0x882222, 1);
       g.fillTriangle(24, 36, 2, 50, 20, 46);
       g.fillTriangle(24, 36, 46, 50, 28, 46);
       // Engine nozzle
-      g.fillStyle(0x00ffcc, 1); g.fillRect(15, 46, 18, 6);
+      g.fillStyle(0xff6600, 1); g.fillRect(15, 46, 18, 6);
       g.fillStyle(0xffffff, 0.9); g.fillRect(19, 46, 10, 4);
       // Highlight stripe
       g.fillStyle(0xffffff, 0.5); g.fillRect(22, 14, 3, 20);

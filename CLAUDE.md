@@ -35,4 +35,4 @@ The player's spaceship is positioned at the centre of the screen and automatical
 - Shoot: automatic (4-way volley)
 
 ## What was changed this turn
-- Built the entire game from scratch (new game — fresh project).
+- Changed player ship color scheme from blue/cyan to red (hull: red, cockpit: dark red, glass: orange-red, nozzle: orange).
