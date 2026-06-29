@@ -53,7 +53,7 @@ export class GameScene extends Phaser.Scene {
     if (hudScene) {
       hudScene.events.on('hud:press', (id: string) => {
         if (id === 'e-mqyj9om1-dftq') {
-          this.sound.play('bell_chime');
+          this.sound.play('cat_meow');
         }
       });
     }
