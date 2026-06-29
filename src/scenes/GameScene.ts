@@ -410,6 +410,7 @@ export class GameScene extends Phaser.Scene {
     // Explosion burst
     this.explosionEmitter.setPosition(enemy.x, enemy.y);
     this.explosionEmitter.explode(16);
+    this.sound.play('sfx_explosion', { volume: 0.6 });
 
     // Pop tween before destroy
     this.tweens.add({

@@ -35,4 +35,4 @@ The player's spaceship is positioned at the centre of the screen and automatical
 - Shoot: automatic (4-way volley)
 
 ## What was changed this turn
-- Added looping BGM (bgm_space_siege_ggac4.mp3); loaded in BootScene, starts on first player interaction (click or keydown) to satisfy browser autoplay policy.
+- Added explosion SFX (sfx_explosion_glgpn.mp3) that plays on every enemy kill; loaded in BootScene alongside the BGM.
