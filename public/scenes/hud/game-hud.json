@@ -32,6 +32,7 @@
     {
       "id": "e-mqz70k8c-2m6d",
       "kind": "panel",
+      "role": "chat-input",
       "anchor": {
         "side": "bottom",
         "offsetX": 0,
@@ -47,11 +48,13 @@
       "borderWidth": 1,
       "backgroundAssetId": "square_buttons_26x26",
       "backgroundRegion": "square-button-26_26-5",
-      "name": "chat-input"
+      "name": "chat-input",
+      "visible": false
     },
     {
       "id": "e-mqz71f9h-7wxk",
       "kind": "panel",
+      "role": "chat-message",
       "anchor": {
         "side": "bottom",
         "offsetX": 0,
@@ -67,7 +70,31 @@
       "borderWidth": 1,
       "name": "chat-message",
       "backgroundAssetId": "square_buttons_26x26",
-      "backgroundRegion": "square-button-26_26-6"
+      "backgroundRegion": "square-button-26_26-6",
+      "visible": false
+    },
+    {
+      "id": "cato-dialog-text",
+      "kind": "text",
+      "role": "chat-text",
+      "name": "chat-text",
+      "anchor": {
+        "side": "bottom",
+        "offsetX": 0,
+        "offsetY": -162
+      },
+      "layer": "overlay",
+      "source": {
+        "mode": "dynamic",
+        "binding": "catoDialogText",
+        "fallback": "…"
+      },
+      "fontFamily": "sans-serif",
+      "fontSize": 18,
+      "color": "#ffffff",
+      "align": "center",
+      "wrapWidth": 640,
+      "visible": false
     }
   ]
 }

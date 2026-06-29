@@ -5,7 +5,9 @@ import {
   getManifest,
   applyAssetHitbox,
   addTilemapCollider,
-  getHudObjects,
+  getHudObject,
+  Umicat,
+  type Npc,
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 // Rex gesture helpers — no plugin registration needed
@@ -60,10 +62,16 @@ export class GameScene extends Phaser.Scene {
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
 
-  // Click-to-talk dialog (role 'cat-dialog' HUD widgets, authored visible:false).
-  // Opened by clicking the cat; an HTML <input> overlays the canvas for typing.
+  // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
+  // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
+  // chat-input box for typing; replies come from Cato (umicat.ai + playbook).
   private dialogOpen = false;
   private dialogInput?: HTMLInputElement;
+  private cato?: Npc;
+  private aiBusy = false;
+  // Resting (anchored) y per dialog role — the open/close tween moves y, so we
+  // remember where to slide back to.
+  private dialogY: Record<string, number> = {};
 
   constructor() {
     super({ key: 'GameScene' });
@@ -170,6 +178,22 @@ export class GameScene extends Phaser.Scene {
 
       // ── Pointer lock + custom cursor (click to capture, Esc to release) ──
       this.setupPointerLock();
+
+      // ── Runtime AI: Cato, the island spirit you guard ──
+      // umicat.ai + the `cato` playbook (public/playbooks/cato.md). Fire-and-
+      // forget — the npc is ready well before the player opens the dialog +
+      // types. Inline role/style is a fallback if the playbook can't be loaded.
+      void Umicat.init({})
+        .then((u) => {
+          this.cato = u?.ai.npc({
+            playbook: 'cato',
+            role: 'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.',
+            style: "warm, whimsical, 1-3 short sentences; reply in the guardian's language",
+          });
+        })
+        .catch(() => {
+          /* leave this.cato undefined; submitDialog handles a missing npc */
+        });
 
       if (CHILD_WANDER) {
         this.pickNewWanderDirection();
@@ -371,56 +395,73 @@ export class GameScene extends Phaser.Scene {
     return this.child.getBounds().contains(worldX, worldY);
   }
 
-  /** Reveal the 'cat-dialog' HUD widgets (fade in) + overlay a typing input. */
+  /** The chat widgets, by role, that slide up together. */
+  private static DIALOG_ROLES = ['chat-message', 'chat-input', 'chat-text'];
+
+  /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input. */
   private openDialog(): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
-    // Free the OS cursor so the user can type into the HTML input (the custom
-    // cursor hides itself since `cursorState.visible` follows `locked`).
-    if (this.locked) document.exitPointerLock();
-    // Seed the body text (the NPC's line). The brain (umicat.ai.npc) wires in
-    // later — for now it's a static prompt the player answers.
-    this.registry.set('catDialogBody', 'Do you want me to travel to another island?');
-    for (const go of getHudObjects(this, 'cat-dialog')) {
-      const w = go as unknown as { setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void };
-      w.setVisible?.(true);
-      w.setAlpha?.(0);
-      this.tweens.add({ targets: go, alpha: 1, duration: 200, ease: 'Quad.easeOut' });
+    // Keep pointer lock (if held): typing goes to the focused <input>; the mouse
+    // staying captured means the custom game cursor doesn't pop back to the host
+    // cursor. Edge-scroll is suppressed while the dialog is open (see update).
+    this.registry.set('catoDialogText', 'Cato perks up, watching you.');
+    for (const role of GameScene.DIALOG_ROLES) {
+      const go = getHudObject(this, role) as unknown as
+        | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
+        | undefined;
+      if (!go) continue;
+      // Remember the anchored resting y the first time (the tween moves y).
+      if (this.dialogY[role] === undefined) this.dialogY[role] = go.y;
+      const restY = this.dialogY[role];
+      go.setVisible?.(true);
+      go.setAlpha?.(0);
+      go.y = restY + 140; // start below → slides up
+      this.tweens.add({ targets: go, y: restY, alpha: 1, duration: 300, ease: 'Back.easeOut' });
     }
     this.showDialogInput();
   }
 
-  /** Hide the dialog (fade out) + tear down the typing input. */
+  /** Hide the dialog (slide back down) + tear down the typing input. */
   private closeDialog(): void {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
-    for (const go of getHudObjects(this, 'cat-dialog')) {
+    for (const role of GameScene.DIALOG_ROLES) {
+      const go = getHudObject(this, role) as unknown as
+        | { y: number; setVisible?: (v: boolean) => void }
+        | undefined;
+      if (!go) continue;
+      const restY = this.dialogY[role] ?? go.y;
       this.tweens.add({
         targets: go,
+        y: restY + 140,
         alpha: 0,
-        duration: 150,
-        onComplete: () => (go as unknown as { setVisible?: (v: boolean) => void }).setVisible?.(false),
+        duration: 180,
+        ease: 'Quad.easeIn',
+        onComplete: () => {
+          go.setVisible?.(false);
+          go.y = restY; // reset for the next open
+        },
       });
     }
     this.dialogInput?.remove();
     this.dialogInput = undefined;
   }
 
-  /** Create + position the HTML <input> over the dialog and focus it. */
+  /** Create + position the HTML <input> over the chat-input box and focus it. */
   private showDialogInput(): void {
     if (this.dialogInput) return;
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Say something to Nico…';
+    input.placeholder = 'Talk to Cato…';
     input.style.cssText =
       'position:fixed; z-index:99999; box-sizing:border-box;' +
-      'padding:8px 12px; border-radius:8px; border:2px solid #e8c87a;' +
-      'background:#3a2a14; color:#fff; font-size:15px; outline:none;' +
-      'font-family:sans-serif;';
+      'padding:6px 14px; border:none; outline:none; background:transparent;' +
+      'color:#fff; font-family:sans-serif;';
     this.positionDialogInput(input);
     input.addEventListener('keydown', (e) => {
       e.stopPropagation(); // don't let game shortcuts swallow typing
-      if (e.key === 'Enter') this.submitDialog(input.value);
+      if (e.key === 'Enter') void this.submitDialog(input.value);
       else if (e.key === 'Escape') this.closeDialog();
     });
     document.body.appendChild(input);
@@ -428,21 +469,54 @@ export class GameScene extends Phaser.Scene {
     setTimeout(() => input.focus(), 0);
   }
 
-  /** Place the input over the dialog (bottom-centre of the canvas). */
+  /** Place the input over the chat-input box. Maps HUD-intrinsic (1280×720)
+   *  coords through the game's FIT scale + letterbox centering — a bare
+   *  width-ratio ignored the vertical bars and threw the input off. */
   private positionDialogInput(input: HTMLInputElement): void {
     const r = this.game.canvas.getBoundingClientRect();
-    const w = Math.min(520, r.width * 0.8);
+    const scale = Math.min(r.width / GAME_WIDTH, r.height / GAME_HEIGHT);
+    const offX = (r.width - GAME_WIDTH * scale) / 2;
+    const offY = (r.height - GAME_HEIGHT * scale) / 2;
+    // chat-input box: centred horizontally; centre ≈ (720 - 16 - 26) intrinsic.
+    const boxCx = GAME_WIDTH / 2;
+    const boxCy = GAME_HEIGHT - 16 - 26;
+    const w = 640 * scale;
+    const h = 40 * scale;
     input.style.width = `${w}px`;
-    input.style.left = `${r.left + r.width / 2 - w / 2}px`;
-    input.style.top = `${r.bottom - r.height * 0.13}px`;
+    input.style.height = `${h}px`;
+    input.style.left = `${r.left + offX + boxCx * scale - w / 2}px`;
+    input.style.top = `${r.top + offY + boxCy * scale - h / 2}px`;
+    input.style.fontSize = `${Math.round(16 * scale)}px`;
+    input.style.textAlign = 'center';
   }
 
-  /** Player submitted a line. Echo it for now; umicat.ai.npc replaces this. */
-  private submitDialog(text: string): void {
+  /** Player submitted a line → ask Cato (umicat.ai + the cato playbook). */
+  private async submitDialog(text: string): Promise<void> {
     const t = text.trim();
-    if (!t) return;
-    this.registry.set('catDialogBody', `You: ${t}`);
+    if (!t || this.aiBusy) return;
     if (this.dialogInput) this.dialogInput.value = '';
+    this.aiBusy = true;
+    this.registry.set('catoDialogText', 'Cato is thinking…');
+    try {
+      if (!this.cato) {
+        this.registry.set('catoDialogText', "Cato tilts its head — it can't quite hear you right now.");
+        return;
+      }
+      const r = await this.cato.say(t, {
+        observation: { island: 'home', timeOfDay: 'day' },
+      });
+      if (r.ok) {
+        this.registry.set('catoDialogText', r.say || 'Cato just blinks at you.');
+      } else if (r.reason === 'SIGN_IN_REQUIRED') {
+        this.registry.set('catoDialogText', "Cato peers past you — sign in and we can really talk.");
+      } else if (r.reason === 'INSUFFICIENT_CREDITS') {
+        this.registry.set('catoDialogText', 'Cato yawns — out of energy for now.');
+      } else {
+        this.registry.set('catoDialogText', "Cato's ears droop — it couldn't find the words just now.");
+      }
+    } finally {
+      this.aiBusy = false;
+    }
   }
 
   // ── Wandering AI helpers ──────────────────────────────────────────────
@@ -479,6 +553,7 @@ export class GameScene extends Phaser.Scene {
    * capture first; touch pans by drag (and never locks), so it's unaffected.
    */
   private updateEdgeScroll(delta: number): void {
+    if (this.dialogOpen) return; // typing — don't pan when the mouse moves
     if (!this.locked) return;
     const cam = this.cameras.main;
     const px = this.vcursor.x;
