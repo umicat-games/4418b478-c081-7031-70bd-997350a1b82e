@@ -30,7 +30,8 @@
       "textColor": "#080808",
       "editorLocked": false,
       "editorHidden": false,
-      "backgroundAssetId": "square_buttons_26x26"
+      "backgroundAssetId": "square_buttons_26x26",
+      "name": "meow"
     }
   ]
 }

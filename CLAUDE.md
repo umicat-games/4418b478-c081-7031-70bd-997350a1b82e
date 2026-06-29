@@ -18,10 +18,12 @@
   - Hitbox: bodyW=8, bodyH=4, offsetX=19, offsetY=28 (tiny foot-rect for top-down feel)
   - World bounds collision
 - **Camera follow** — camera smoothly follows the player (lerp 0.1, deadzone 80×60)
+- **Camera zoom** — 3× zoom so the sprite appears larger/closer
 - **Tilemap collision** — player cannot walk into grass tiles marked as solid in the Tileset Editor
   - Uses `addTilemapCollider(scene, 'e-mqyhplcx-udfj', player)` (grass entity ID)
   - SDK auto-arms `setCollisionByProperty({ solid: true })` at scene load
 - **24 animations** registered in manifest for the spritesheet (idle/walk/run/attack/hurt/die × 4 directions, fps: 8)
+- **Bell chime SFX** — `bell_chime` loaded in BootScene from `uploaded/bell_chime_jgkm4.mp3`; play with `this.sound.play('bell_chime')`
 
 ---
 
@@ -31,7 +33,8 @@
 - **World size:** 1088×1088px (matches 68×68 tile × 16px tilemap)
 - **Manifest:** `public/scenes/manifest.json` — `premium_character_spritesheet` asset has `fps: 8` and full `animations[]` array (SDK auto-registers them)
 - **GameScene.ts** — behavior code:
-  - `create()`: calls `loadWorldScene`, sets up WASD keys, looks up player by `byRole('player')[0]`, plays `idle-down`, starts camera follow, wires tilemap collider
+  - `create()`: calls `loadWorldScene`, sets up WASD keys, looks up player by `byRole('player')[0]`, plays `idle-down`, starts camera follow (zoom=3), wires tilemap collider
   - `update()`: reads WASD, sets velocity on the pre-existing Arcade body, switches `walk-{dir}` / `idle-{dir}` animations; `lastDir` tracks facing when stopped
 - **Animation priority:** horizontal direction wins over vertical when moving diagonally
 - **Grass tilemap entity ID:** `e-mqyhplcx-udfj` (used in addTilemapCollider)
+- **Audio:** `bell_chime` loaded globally in BootScene.preload() (not manifest-driven, since it's not tied to a scene entity)

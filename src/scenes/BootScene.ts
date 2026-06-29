@@ -22,6 +22,7 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     drawLoadingBar(this);
     preloadManifest(this);
+    this.load.audio('bell_chime', 'uploaded/bell_chime_jgkm4.mp3');
   }
 
   create(): void {
