@@ -6,11 +6,46 @@
   "world": {
     "width": 1280,
     "height": 720,
-    "background": { "color": "#1a1a2e" }
+    "background": {
+      "color": "#1a1a2e"
+    }
   },
   "camera": {
     "follow": null,
-    "bounds": { "x": 0, "y": 0, "width": 1280, "height": 720 }
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 720
+    }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-mqyhp1tl-f50n",
+      "kind": "tilemap-ref",
+      "tilemapId": "water",
+      "transform": {
+        "x": 640,
+        "y": 428.0107881920811,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      },
+      "name": "water"
+    },
+    {
+      "id": "e-mqyhplcx-udfj",
+      "kind": "tilemap-ref",
+      "tilemapId": "grass",
+      "transform": {
+        "x": 640,
+        "y": 428.0107881920811,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      }
+    }
+  ]
 }
