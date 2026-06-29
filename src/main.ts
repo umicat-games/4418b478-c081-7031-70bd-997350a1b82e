@@ -1,14 +1,18 @@
-import { createUmicatGame } from '@umicat/phaser-sdk';
+import { createUmicatGame, Umicat } from '@umicat/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
+import { TitleScene } from './scenes/TitleScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { renderScripts } from './visuals';
+
+// Platform services — available across all scenes
+export const umicatReady = Umicat.init({ standaloneGameId: 'star-siege' }).catch(() => null);
 
 function startGame(): void {
   createUmicatGame({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scenes: [BootScene, GameScene],
+    scenes: [BootScene, TitleScene, GameScene],
     renderScripts,
   });
 }

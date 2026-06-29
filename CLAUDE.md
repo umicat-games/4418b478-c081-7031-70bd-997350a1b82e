@@ -35,4 +35,8 @@ The player's spaceship is positioned at the centre of the screen and automatical
 - Shoot: automatic (4-way volley)
 
 ## What was changed this turn
-- Added explosion SFX (sfx_explosion_glgpn.mp3) that plays on every enemy kill; loaded in BootScene alongside the BGM.
+- Added TitleScene (start screen) with space background, animated title, leaderboard (top 5 personal scores via umicat.saves key 'highScores'), and "press any key to start".
+- GameScene now saves score+wave to highScores on game over (top 10 kept, sorted descending).
+- Game over screen now has two buttons: PLAY AGAIN (restart) and MAIN MENU (go to TitleScene).
+- BootScene now boots into TitleScene instead of directly into GameScene.
+- main.ts exports umicatReady (Umicat.init promise) for use across scenes.

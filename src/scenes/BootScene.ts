@@ -49,7 +49,7 @@ export class BootScene extends Phaser.Scene {
       frameRate: 1,
     });
     const manifest = getManifest(this);
-    this.scene.start('GameScene', { sceneId: manifest.initialScene });
+    this.scene.start('TitleScene', { sceneId: manifest.initialScene });
   }
 }
 

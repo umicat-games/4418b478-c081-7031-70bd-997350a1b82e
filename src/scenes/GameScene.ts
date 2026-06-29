@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { loadWorldScene } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { umicatReady } from '../main';
+import type { ScoreEntry } from './TitleScene';
 
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
@@ -508,7 +510,25 @@ export class GameScene extends Phaser.Scene {
         this.explosionEmitter.explode(22);
       });
     }
+
+    // Save score to leaderboard (non-blocking)
+    void this.saveScore(this.score, this.wave);
+
     this.time.delayedCall(1000, () => this.showGameOverScreen());
+  }
+
+  private async saveScore(score: number, wave: number): Promise<void> {
+    try {
+      const umicat = await umicatReady;
+      if (!umicat) return;
+      const raw = await umicat.saves.get<ScoreEntry[]>('highScores');
+      const list: ScoreEntry[] = Array.isArray(raw) ? raw : [];
+      list.push({ score, wave });
+      list.sort((a, b) => b.score - a.score);
+      await umicat.saves.set('highScores', list.slice(0, 10));
+    } catch (e) {
+      console.warn('[star-siege] failed to save score', e);
+    }
   }
 
   private showGameOverScreen(): void {
@@ -520,38 +540,50 @@ export class GameScene extends Phaser.Scene {
     // Panel
     const panel = this.add.graphics().setDepth(960);
     panel.fillStyle(0x080820, 0.96);
-    panel.fillRoundedRect(CX - 250, CY - 155, 500, 310, 30);
+    panel.fillRoundedRect(CX - 260, CY - 170, 520, 340, 30);
     panel.lineStyle(2, 0x4466ff, 1);
-    panel.strokeRoundedRect(CX - 250, CY - 155, 500, 310, 30);
+    panel.strokeRoundedRect(CX - 260, CY - 170, 520, 340, 30);
     panel.lineStyle(1, 0x334488, 0.6);
-    panel.strokeRoundedRect(CX - 242, CY - 147, 484, 294, 26);
+    panel.strokeRoundedRect(CX - 252, CY - 162, 504, 324, 26);
 
-    this.add.text(CX, CY - 98, 'GAME OVER', {
+    this.add.text(CX, CY - 112, 'GAME OVER', {
       fontFamily: 'monospace', fontSize: '46px', color: '#ff3355',
       stroke: '#881122', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(970);
 
-    this.add.text(CX, CY - 28, `FINAL SCORE  ${this.score}`, {
+    this.add.text(CX, CY - 42, `FINAL SCORE  ${this.score}`, {
       fontFamily: 'monospace', fontSize: '26px', color: '#aaeeff',
     }).setOrigin(0.5).setDepth(970);
 
-    this.add.text(CX, CY + 22, `REACHED WAVE  ${this.wave}`, {
+    this.add.text(CX, CY + 8, `REACHED WAVE  ${this.wave}`, {
       fontFamily: 'monospace', fontSize: '20px', color: '#ffdd88',
     }).setOrigin(0.5).setDepth(970);
 
-    const btn = this.add.text(CX, CY + 98, '[ PLAY AGAIN ]', {
-      fontFamily: 'monospace', fontSize: '24px', color: '#44ffcc',
+    // Play Again button
+    const btnPlay = this.add.text(CX - 90, CY + 100, '[ PLAY AGAIN ]', {
+      fontFamily: 'monospace', fontSize: '20px', color: '#44ffcc',
       backgroundColor: '#0d2e22',
-      padding: { x: 20, y: 10 },
+      padding: { x: 16, y: 10 },
     }).setOrigin(0.5).setDepth(970).setInteractive({ useHandCursor: true });
+    btnPlay.on('pointerover', () => { btnPlay.setColor('#ffffff'); btnPlay.setBackgroundColor('#1a5544'); });
+    btnPlay.on('pointerout',  () => { btnPlay.setColor('#44ffcc'); btnPlay.setBackgroundColor('#0d2e22'); });
+    btnPlay.on('pointerdown', () => { this.scene.restart({ sceneId: this.sceneId }); });
 
-    btn.on('pointerover', () => { btn.setColor('#ffffff'); btn.setBackgroundColor('#1a5544'); });
-    btn.on('pointerout',  () => { btn.setColor('#44ffcc'); btn.setBackgroundColor('#0d2e22'); });
-    btn.on('pointerdown', () => { this.scene.restart({ sceneId: this.sceneId }); });
+    // Main Menu button
+    const btnMenu = this.add.text(CX + 100, CY + 100, '[ MAIN MENU ]', {
+      fontFamily: 'monospace', fontSize: '20px', color: '#aaaaff',
+      backgroundColor: '#0d0d2e',
+      padding: { x: 16, y: 10 },
+    }).setOrigin(0.5).setDepth(970).setInteractive({ useHandCursor: true });
+    btnMenu.on('pointerover', () => { btnMenu.setColor('#ffffff'); btnMenu.setBackgroundColor('#1a1a55'); });
+    btnMenu.on('pointerout',  () => { btnMenu.setColor('#aaaaff'); btnMenu.setBackgroundColor('#0d0d2e'); });
+    btnMenu.on('pointerdown', () => {
+      this.sound.stopAll();
+      this.scene.start('TitleScene', { sceneId: this.sceneId });
+    });
 
-    // Entrance animation for panel
-    panel.setAlpha(0);
-    btn.setAlpha(0);
-    this.tweens.add({ targets: [panel, btn], alpha: 1, duration: 400, ease: 'Cubic.Out' });
+    // Entrance animation
+    panel.setAlpha(0); btnPlay.setAlpha(0); btnMenu.setAlpha(0);
+    this.tweens.add({ targets: [panel, btnPlay, btnMenu], alpha: 1, duration: 400, ease: 'Cubic.Out' });
   }
 }
