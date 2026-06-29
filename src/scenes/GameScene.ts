@@ -52,8 +52,8 @@ export class GameScene extends Phaser.Scene {
       playerGO.play('idle-down', true);
       this.player = playerGO;
 
-      // Camera follows the player with a gentle lerp, zoomed out 3×
-      this.cameras.main.setZoom(1 / 3);
+      // Camera follows the player with a gentle lerp, zoomed in 3×
+      this.cameras.main.setZoom(3);
       this.cameras.main.startFollow(playerGO, true, 0.1, 0.1);
       this.cameras.main.setDeadzone(80, 60);
 
