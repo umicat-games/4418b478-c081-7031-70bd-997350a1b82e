@@ -29,47 +29,45 @@
       "fillColor": "#3b82f6",
       "textColor": "#ffffff"
     },
-
     {
-      "id": "cat-dialog-panel",
+      "id": "e-mqz70k8c-2m6d",
       "kind": "panel",
-      "role": "cat-dialog",
-      "anchor": { "side": "bottom", "offsetX": 0, "offsetY": -80 },
-      "layer": "modal",
-      "width": 620,
-      "height": 130,
-      "backgroundColor": "#5c3e18",
-      "backgroundAlpha": 0.95,
-      "borderColor": "#e8c87a",
-      "borderWidth": 2,
-      "borderRadius": 12,
-      "visible": false
+      "anchor": {
+        "side": "bottom",
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "layer": "base",
+      "width": 700,
+      "height": 53,
+      "backgroundColor": "#000000",
+      "backgroundAlpha": 0.5,
+      "borderRadius": 8,
+      "borderColor": "#ffffff",
+      "borderWidth": 1,
+      "backgroundAssetId": "square_buttons_26x26",
+      "backgroundRegion": "square-button-26_26-5",
+      "name": "chat-input"
     },
     {
-      "id": "cat-dialog-name",
-      "kind": "text",
-      "role": "cat-dialog",
-      "anchor": { "side": "bottom", "offsetX": -270, "offsetY": -162 },
-      "layer": "modal",
-      "source": { "mode": "static", "text": "Nico" },
-      "fontFamily": "sans-serif",
-      "fontSize": 22,
-      "color": "#f5dfa0",
-      "align": "left",
-      "visible": false
-    },
-    {
-      "id": "cat-dialog-body",
-      "kind": "text",
-      "role": "cat-dialog",
-      "anchor": { "side": "bottom", "offsetX": 0, "offsetY": -100 },
-      "layer": "modal",
-      "source": { "mode": "dynamic", "binding": "catDialogBody", "fallback": "..." },
-      "fontFamily": "sans-serif",
-      "fontSize": 17,
-      "color": "#ffffff",
-      "align": "center",
-      "visible": false
+      "id": "e-mqz71f9h-7wxk",
+      "kind": "panel",
+      "anchor": {
+        "side": "bottom",
+        "offsetX": 0,
+        "offsetY": -60
+      },
+      "layer": "base",
+      "width": 700,
+      "height": 200,
+      "backgroundColor": "#000000",
+      "backgroundAlpha": 0.5,
+      "borderRadius": 8,
+      "borderColor": "#ffffff",
+      "borderWidth": 1,
+      "name": "chat-message",
+      "backgroundAssetId": "square_buttons_26x26",
+      "backgroundRegion": "square-button-26_26-6"
     }
   ]
 }

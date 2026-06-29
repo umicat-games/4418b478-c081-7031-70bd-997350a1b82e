@@ -941,30 +941,150 @@
       },
       "fps": 8,
       "animations": [
-        { "name": "idle-down",    "from": 0,   "to": 7,   "loop": true  },
-        { "name": "idle-up",      "from": 8,   "to": 15,  "loop": true  },
-        { "name": "idle-left",    "from": 16,  "to": 23,  "loop": true  },
-        { "name": "idle-right",   "from": 24,  "to": 31,  "loop": true  },
-        { "name": "walk-down",    "from": 32,  "to": 39,  "loop": true  },
-        { "name": "walk-up",      "from": 40,  "to": 47,  "loop": true  },
-        { "name": "walk-left",    "from": 48,  "to": 55,  "loop": true  },
-        { "name": "walk-right",   "from": 56,  "to": 63,  "loop": true  },
-        { "name": "run-down",     "from": 64,  "to": 71,  "loop": true  },
-        { "name": "run-up",       "from": 72,  "to": 79,  "loop": true  },
-        { "name": "run-left",     "from": 80,  "to": 87,  "loop": true  },
-        { "name": "run-right",    "from": 88,  "to": 95,  "loop": true  },
-        { "name": "attack-down",  "from": 96,  "to": 103, "loop": false },
-        { "name": "attack-up",    "from": 104, "to": 111, "loop": false },
-        { "name": "attack-left",  "from": 112, "to": 119, "loop": false },
-        { "name": "attack-right", "from": 120, "to": 127, "loop": false },
-        { "name": "hurt-down",    "from": 128, "to": 135, "loop": false },
-        { "name": "hurt-up",      "from": 136, "to": 143, "loop": false },
-        { "name": "hurt-left",    "from": 144, "to": 151, "loop": false },
-        { "name": "hurt-right",   "from": 152, "to": 159, "loop": false },
-        { "name": "die-down",     "from": 160, "to": 167, "loop": false },
-        { "name": "die-up",       "from": 168, "to": 175, "loop": false },
-        { "name": "die-left",     "from": 176, "to": 183, "loop": false },
-        { "name": "die-right",    "from": 184, "to": 191, "loop": false }
+        {
+          "name": "idle-down",
+          "from": 0,
+          "to": 7,
+          "loop": true
+        },
+        {
+          "name": "idle-up",
+          "from": 8,
+          "to": 15,
+          "loop": true
+        },
+        {
+          "name": "idle-left",
+          "from": 16,
+          "to": 23,
+          "loop": true
+        },
+        {
+          "name": "idle-right",
+          "from": 24,
+          "to": 31,
+          "loop": true
+        },
+        {
+          "name": "walk-down",
+          "from": 32,
+          "to": 39,
+          "loop": true
+        },
+        {
+          "name": "walk-up",
+          "from": 40,
+          "to": 47,
+          "loop": true
+        },
+        {
+          "name": "walk-left",
+          "from": 48,
+          "to": 55,
+          "loop": true
+        },
+        {
+          "name": "walk-right",
+          "from": 56,
+          "to": 63,
+          "loop": true
+        },
+        {
+          "name": "run-down",
+          "from": 64,
+          "to": 71,
+          "loop": true
+        },
+        {
+          "name": "run-up",
+          "from": 72,
+          "to": 79,
+          "loop": true
+        },
+        {
+          "name": "run-left",
+          "from": 80,
+          "to": 87,
+          "loop": true
+        },
+        {
+          "name": "run-right",
+          "from": 88,
+          "to": 95,
+          "loop": true
+        },
+        {
+          "name": "attack-down",
+          "from": 96,
+          "to": 103,
+          "loop": false
+        },
+        {
+          "name": "attack-up",
+          "from": 104,
+          "to": 111,
+          "loop": false
+        },
+        {
+          "name": "attack-left",
+          "from": 112,
+          "to": 119,
+          "loop": false
+        },
+        {
+          "name": "attack-right",
+          "from": 120,
+          "to": 127,
+          "loop": false
+        },
+        {
+          "name": "hurt-down",
+          "from": 128,
+          "to": 135,
+          "loop": false
+        },
+        {
+          "name": "hurt-up",
+          "from": 136,
+          "to": 143,
+          "loop": false
+        },
+        {
+          "name": "hurt-left",
+          "from": 144,
+          "to": 151,
+          "loop": false
+        },
+        {
+          "name": "hurt-right",
+          "from": 152,
+          "to": 159,
+          "loop": false
+        },
+        {
+          "name": "die-down",
+          "from": 160,
+          "to": 167,
+          "loop": false
+        },
+        {
+          "name": "die-up",
+          "from": 168,
+          "to": 175,
+          "loop": false
+        },
+        {
+          "name": "die-left",
+          "from": 176,
+          "to": 183,
+          "loop": false
+        },
+        {
+          "name": "die-right",
+          "from": 184,
+          "to": 191,
+          "loop": false
+        }
       ],
       "hitbox": {
         "kind": "rect",
@@ -978,6 +1098,16 @@
         "y": 31
       },
       "pixelArt": true
+    },
+    {
+      "id": "square_buttons_26x26",
+      "textureKey": "square_buttons_26x26",
+      "path": "uploaded/square_buttons_26x26.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/square_buttons_26x26.json",
+      "atlasFormat": "json",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/square_buttons_26x26.png",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/square_buttons_26x26.json"
     }
   ]
 }
