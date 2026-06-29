@@ -89,11 +89,32 @@
         "binding": "catoDialogText",
         "fallback": "…"
       },
-      "fontFamily": "sans-serif",
-      "fontSize": 18,
+      "fontFamily": "zpix",
+      "fontSize": 24,
       "color": "#ffffff",
       "align": "center",
       "wrapWidth": 640,
+      "visible": false
+    },
+    {
+      "id": "cato-chat-field",
+      "kind": "text-input",
+      "role": "chat-input-field",
+      "name": "chat-input-field",
+      "anchor": {
+        "side": "bottom",
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "layer": "overlay",
+      "width": 660,
+      "height": 44,
+      "fontFamily": "zpix",
+      "fontSize": 24,
+      "color": "#ffffff",
+      "align": "center",
+      "placeholder": "Talk to Cato…",
+      "maxLength": 200,
       "visible": false
     }
   ]

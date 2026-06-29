@@ -66,9 +66,15 @@ export class GameScene extends Phaser.Scene {
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
   // chat-input box for typing; replies come from Cato (umicat.ai + playbook).
   private dialogOpen = false;
-  private dialogInput?: HTMLInputElement;
   private cato?: Npc;
   private aiBusy = false;
+  // hud:submit (Enter) / hud:cancel (Esc) from the chat-input-field text-input.
+  private onHudSubmit = (_id: string, value: string): void => {
+    if (this.dialogOpen) void this.submitDialog(value);
+  };
+  private onHudCancel = (): void => {
+    if (this.dialogOpen) this.closeDialog();
+  };
   // Resting (anchored) y per dialog role — the open/close tween moves y, so we
   // remember where to slide back to.
   private dialogY: Record<string, number> = {};
@@ -194,6 +200,11 @@ export class GameScene extends Phaser.Scene {
         .catch(() => {
           /* leave this.cato undefined; submitDialog handles a missing npc */
         });
+
+      // The chat-input-field text-input (SDK 1.0.28) emits these on the global
+      // game bus: hud:submit (Enter) → ask Cato, hud:cancel (Esc) → close.
+      this.game.events.on('hud:submit', this.onHudSubmit);
+      this.game.events.on('hud:cancel', this.onHudCancel);
 
       if (CHILD_WANDER) {
         this.pickNewWanderDirection();
@@ -371,8 +382,8 @@ export class GameScene extends Phaser.Scene {
     document.addEventListener('pointerlockchange', onLockChange);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       document.removeEventListener('pointerlockchange', onLockChange);
-      this.dialogInput?.remove();
-      this.dialogInput = undefined;
+      this.game.events.off('hud:submit', this.onHudSubmit);
+      this.game.events.off('hud:cancel', this.onHudCancel);
     });
   }
 
@@ -395,8 +406,9 @@ export class GameScene extends Phaser.Scene {
     return this.child.getBounds().contains(worldX, worldY);
   }
 
-  /** The chat widgets, by role, that slide up together. */
-  private static DIALOG_ROLES = ['chat-message', 'chat-input', 'chat-text'];
+  /** The chat widgets, by role, that slide up together (the `chat-input-field`
+   *  text-input widget drives its own synced DOM <input> + emits hud:submit). */
+  private static DIALOG_ROLES = ['chat-message', 'chat-input', 'chat-text', 'chat-input-field'];
 
   /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input. */
   private openDialog(): void {
@@ -419,7 +431,8 @@ export class GameScene extends Phaser.Scene {
       go.y = restY + 140; // start below → slides up
       this.tweens.add({ targets: go, y: restY, alpha: 1, duration: 300, ease: 'Back.easeOut' });
     }
-    this.showDialogInput();
+    // The chat-input-field text-input widget shows + focuses its own DOM input
+    // (SDK 1.0.28) the moment it goes visible above — no manual input to create.
   }
 
   /** Hide the dialog (slide back down) + tear down the typing input. */
@@ -444,57 +457,13 @@ export class GameScene extends Phaser.Scene {
         },
       });
     }
-    this.dialogInput?.remove();
-    this.dialogInput = undefined;
   }
 
-  /** Create + position the HTML <input> over the chat-input box and focus it. */
-  private showDialogInput(): void {
-    if (this.dialogInput) return;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'Talk to Cato…';
-    input.style.cssText =
-      'position:fixed; z-index:99999; box-sizing:border-box;' +
-      'padding:6px 14px; border:none; outline:none; background:transparent;' +
-      'color:#fff; font-family:sans-serif;';
-    this.positionDialogInput(input);
-    input.addEventListener('keydown', (e) => {
-      e.stopPropagation(); // don't let game shortcuts swallow typing
-      if (e.key === 'Enter') void this.submitDialog(input.value);
-      else if (e.key === 'Escape') this.closeDialog();
-    });
-    document.body.appendChild(input);
-    this.dialogInput = input;
-    setTimeout(() => input.focus(), 0);
-  }
-
-  /** Place the input over the chat-input box. Maps HUD-intrinsic (1280×720)
-   *  coords through the game's FIT scale + letterbox centering — a bare
-   *  width-ratio ignored the vertical bars and threw the input off. */
-  private positionDialogInput(input: HTMLInputElement): void {
-    const r = this.game.canvas.getBoundingClientRect();
-    const scale = Math.min(r.width / GAME_WIDTH, r.height / GAME_HEIGHT);
-    const offX = (r.width - GAME_WIDTH * scale) / 2;
-    const offY = (r.height - GAME_HEIGHT * scale) / 2;
-    // chat-input box: centred horizontally; centre ≈ (720 - 16 - 26) intrinsic.
-    const boxCx = GAME_WIDTH / 2;
-    const boxCy = GAME_HEIGHT - 16 - 26;
-    const w = 640 * scale;
-    const h = 40 * scale;
-    input.style.width = `${w}px`;
-    input.style.height = `${h}px`;
-    input.style.left = `${r.left + offX + boxCx * scale - w / 2}px`;
-    input.style.top = `${r.top + offY + boxCy * scale - h / 2}px`;
-    input.style.fontSize = `${Math.round(16 * scale)}px`;
-    input.style.textAlign = 'center';
-  }
-
-  /** Player submitted a line → ask Cato (umicat.ai + the cato playbook). */
+  /** Player submitted a line (from the chat-input-field's `hud:submit` event)
+   *  → ask Cato (umicat.ai + the cato playbook). The widget clears itself. */
   private async submitDialog(text: string): Promise<void> {
     const t = text.trim();
-    if (!t || this.aiBusy) return;
-    if (this.dialogInput) this.dialogInput.value = '';
+    if (!t || this.aiBusy || !this.dialogOpen) return;
     this.aiBusy = true;
     this.registry.set('catoDialogText', 'Cato is thinking…');
     try {
