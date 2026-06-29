@@ -23,6 +23,7 @@ export class BootScene extends Phaser.Scene {
     drawLoadingBar(this);
     preloadManifest(this);
     this.load.audio('bell_chime', 'uploaded/bell_chime_jgkm4.mp3');
+    this.load.audio('cat_meow', 'uploaded/cat_meow_jw8bg.mp3');
   }
 
   create(): void {

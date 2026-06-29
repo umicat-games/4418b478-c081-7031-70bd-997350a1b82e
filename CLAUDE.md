@@ -24,6 +24,7 @@
   - SDK auto-arms `setCollisionByProperty({ solid: true })` at scene load
 - **24 animations** registered in manifest for the spritesheet (idle/walk/run/attack/hurt/die × 4 directions, fps: 8)
 - **Bell chime SFX** — `bell_chime` loaded in BootScene from `uploaded/bell_chime_jgkm4.mp3`; play with `this.sound.play('bell_chime')`
+- **Cat meow SFX** — `cat_meow` loaded in BootScene from `uploaded/cat_meow_jw8bg.mp3`; play with `this.sound.play('cat_meow')`
 
 ---
 
