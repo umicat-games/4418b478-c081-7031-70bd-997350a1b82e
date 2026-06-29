@@ -75,15 +75,17 @@
     },
     {
       "id": "cato-dialog-text",
-      "kind": "text",
+      "kind": "text-area",
       "role": "chat-text",
       "name": "chat-text",
       "anchor": {
         "side": "bottom",
         "offsetX": 0,
-        "offsetY": -162
+        "offsetY": -60
       },
       "layer": "overlay",
+      "width": 700,
+      "height": 200,
       "source": {
         "mode": "dynamic",
         "binding": "catoDialogText",
@@ -93,7 +95,7 @@
       "fontSize": 24,
       "color": "#ffffff",
       "align": "center",
-      "wrapWidth": 640,
+      "padding": 22,
       "visible": false
     },
     {

@@ -414,10 +414,12 @@ export class GameScene extends Phaser.Scene {
   private openDialog(): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
-    // Release pointer lock so the DOM <input> can take keyboard focus — a
-    // pointer-locked canvas keeps key focus, so typing wouldn't reach the field.
-    // The OS cursor returns (standard for a chat box); click to re-lock on close.
+    // Release pointer lock so the DOM <input> reliably takes keyboard focus (and
+    // a dialog WANTS a free cursor to click the field / scroll the message). To
+    // avoid the jarring jump to the host arrow, swap the canvas cursor to the
+    // game's own pixel cursor via CSS — visually seamless. Restored on close.
     if (this.locked) document.exitPointerLock();
+    this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
     this.registry.set('catoDialogText', 'Cato perks up, watching you.');
     for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
@@ -440,6 +442,9 @@ export class GameScene extends Phaser.Scene {
   private closeDialog(): void {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
+    // Drop the CSS game-cursor; clicking the canvas re-captures the pointer and
+    // the CursorScene's custom cursor takes over again.
+    this.game.canvas.style.cursor = '';
     for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
         | { y: number; setVisible?: (v: boolean) => void }
