@@ -22,12 +22,15 @@
         "offsetY": 0
       },
       "layer": "base",
-      "label": "Button",
+      "label": "Meow",
       "shape": "rounded-rect",
       "width": 96,
       "height": 48,
       "fillColor": "#3b82f6",
-      "textColor": "#ffffff"
+      "textColor": "#080808",
+      "editorLocked": false,
+      "editorHidden": false,
+      "backgroundAssetId": "square_buttons_26x26"
     }
   ]
 }

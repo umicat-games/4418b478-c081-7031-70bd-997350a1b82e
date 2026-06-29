@@ -1018,6 +1018,17 @@
           "loop": true
         }
       ]
+    },
+    {
+      "id": "square_buttons_26x26",
+      "textureKey": "square_buttons_26x26",
+      "path": "uploaded/square_buttons_26x26.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/square_buttons_26x26.json",
+      "atlasFormat": "json",
+      "loadUrl": "https://cdn.umicat.ai/uploads/cd14202f-7f81-4fa7-b081-8e0305abb356/square_buttons_26x26.png",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/cd14202f-7f81-4fa7-b081-8e0305abb356/square_buttons_26x26.json",
+      "pixelArt": true
     }
   ]
 }
