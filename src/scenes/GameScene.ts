@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
+import { loadWorldScene, getEntityRegistry, addTilemapCollider } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
 const SPEED = 120;
@@ -51,6 +51,11 @@ export class GameScene extends Phaser.Scene {
     if (playerGO) {
       playerGO.play('idle-down', true);
       this.player = playerGO;
+
+      // Wire solid-tile collision — grass tileset has collision zones authored
+      // in the Tileset Editor. SDK auto-armed setCollisionByProperty at load;
+      // addTilemapCollider just connects the player body to those solid tiles.
+      addTilemapCollider(this, 'e-mqyhplcx-udfj', playerGO);
     }
   }
 

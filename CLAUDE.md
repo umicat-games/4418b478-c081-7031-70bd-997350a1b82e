@@ -17,6 +17,9 @@
   - Physics body via entity `physics` block in main.json (SDK auto-wires at load)
   - Hitbox: bodyW=8, bodyH=4, offsetX=19, offsetY=28 (tiny foot-rect for top-down feel)
   - World bounds collision
+- **Tilemap collision** — player cannot walk into grass tiles marked as solid in the Tileset Editor
+  - Uses `addTilemapCollider(scene, 'e-mqyhplcx-udfj', player)` (grass entity ID)
+  - SDK auto-arms `setCollisionByProperty({ solid: true })` at scene load
 - **24 animations** registered in manifest for the spritesheet (idle/walk/run/attack/hurt/die × 4 directions, fps: 8)
 
 ---
@@ -26,6 +29,7 @@
 - **Scene data:** `public/scenes/world/main.json` — sprite entity has `role: "player"` and `physics` block (SDK auto-adds Arcade body at `loadWorldScene` time — no `physics.add.existing` in code)
 - **Manifest:** `public/scenes/manifest.json` — `premium_character_spritesheet` asset has `fps: 8` and full `animations[]` array (SDK auto-registers them)
 - **GameScene.ts** — behavior code:
-  - `create()`: calls `loadWorldScene`, sets up WASD keys, looks up player by `byRole('player')[0]`, plays `idle-down`
+  - `create()`: calls `loadWorldScene`, sets up WASD keys, looks up player by `byRole('player')[0]`, plays `idle-down`, wires tilemap collider
   - `update()`: reads WASD, sets velocity on the pre-existing Arcade body, switches `walk-{dir}` / `idle-{dir}` animations; `lastDir` tracks facing when stopped
 - **Animation priority:** horizontal direction wins over vertical when moving diagonally
+- **Grass tilemap entity ID:** `e-mqyhplcx-udfj` (used in addTilemapCollider)
