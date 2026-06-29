@@ -1,27 +1,19 @@
 import Phaser from 'phaser';
-import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
+import { loadWorldScene, getEntityRegistry, getManifest, applyAssetHitbox } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
-/**
- * GameScene — generic loader for world scene files (`scenes/world/*.json`).
- *
- * Takes a `sceneId` via init data and asks the SDK to spawn its entities,
- * configure the camera, and register them. Behavior code lives in
- * `update()` and per-role helpers; it looks entities up via the entity
- * registry rather than holding direct references to objects created here.
- *
- * Example (the agent writes this kind of thing in update or pointer
- * handlers, NOT in create — entities come from the scene file now):
- *
- * ```ts
- * const player = getEntityRegistry(this)?.byRole('player')[0];
- * if (player && this.input.keyboard?.checkDown(this.cursors.up)) {
- *   (player as Phaser.GameObjects.Sprite).y -= 4;
- * }
- * ```
- */
+const SPEED = 120;
+
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
+
+  private player: Phaser.GameObjects.Sprite | null = null;
+  private lastDir: 'down' | 'up' | 'left' | 'right' = 'down';
+
+  private keyW!: Phaser.Input.Keyboard.Key;
+  private keyA!: Phaser.Input.Keyboard.Key;
+  private keyS!: Phaser.Input.Keyboard.Key;
+  private keyD!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -44,12 +36,73 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5);
     }
 
-    // Behavior wiring goes below this line. Look entities up via
-    //   const player = getEntityRegistry(this)?.byRole('player')[0];
-    // See SDK-GUIDE.md and `scenes/manifest.json`.
+    // WASD keys
+    const kb = this.input.keyboard!;
+    this.keyW = kb.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.keyA = kb.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this.keyS = kb.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+    this.keyD = kb.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+
+    // Player setup
+    const registry = getEntityRegistry(this);
+    const playerGO = registry?.byRole('player')[0] as Phaser.GameObjects.Sprite | undefined;
+    if (playerGO) {
+      // Enable physics body
+      this.physics.add.existing(playerGO);
+      const body = playerGO.body as Phaser.Physics.Arcade.Body;
+      body.setCollideWorldBounds(true);
+
+      // Apply vision-authored hitbox from asset metadata
+      const manifest = getManifest(this);
+      const asset = manifest?.assets.find((a) => a.id === playerGO.getData('assetId'));
+      if (asset?.hitbox) {
+        applyAssetHitbox(playerGO, asset);
+      } else {
+        body.setSize(8, 4);
+        body.setOffset(19, 28);
+      }
+
+      // Start idle animation facing down
+      playerGO.play('idle-down', true);
+      this.player = playerGO;
+    }
   }
 
   update(_time: number, _delta: number): void {
-    // Agent-written game-loop logic. Empty by default.
+    const player = this.player;
+    if (!player) return;
+
+    const body = player.body as Phaser.Physics.Arcade.Body;
+
+    let vx = 0;
+    let vy = 0;
+
+    if (this.keyA.isDown) vx = -SPEED;
+    else if (this.keyD.isDown) vx = SPEED;
+
+    if (this.keyW.isDown) vy = -SPEED;
+    else if (this.keyS.isDown) vy = SPEED;
+
+    // Normalize diagonal movement
+    if (vx !== 0 && vy !== 0) {
+      vx *= Math.SQRT1_2;
+      vy *= Math.SQRT1_2;
+    }
+
+    body.setVelocity(vx, vy);
+
+    const moving = vx !== 0 || vy !== 0;
+
+    if (moving) {
+      // Horizontal direction takes priority when moving diagonally
+      if (Math.abs(vx) >= Math.abs(vy)) {
+        this.lastDir = vx > 0 ? 'right' : 'left';
+      } else {
+        this.lastDir = vy > 0 ? 'down' : 'up';
+      }
+      player.play(`walk-${this.lastDir}`, true);
+    } else {
+      player.play(`idle-${this.lastDir}`, true);
+    }
   }
 }

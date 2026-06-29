@@ -132,6 +132,29 @@
         }
       },
       "pixelArt": true
+    },
+    {
+      "id": "premium_character_spritesheet",
+      "textureKey": "premium_character_spritesheet",
+      "path": "uploaded/premium_character_spritesheet.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/cd14202f-7f81-4fa7-b081-8e0305abb356/premium_character_spritesheet.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "hitbox": {
+        "kind": "rect",
+        "x": 19,
+        "y": 28,
+        "w": 8,
+        "h": 4
+      },
+      "depthAnchor": {
+        "x": 23,
+        "y": 31
+      },
+      "pixelArt": true
     }
   ]
 }

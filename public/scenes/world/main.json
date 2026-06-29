@@ -46,6 +46,19 @@
         "scaleY": 1,
         "depth": 1
       }
+    },
+    {
+      "id": "e-mqyhxeb9-x3cf",
+      "kind": "sprite",
+      "transform": {
+        "x": 627.4966898660043,
+        "y": 428.0107881920811,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "premium_character_spritesheet"
     }
   ]
 }
