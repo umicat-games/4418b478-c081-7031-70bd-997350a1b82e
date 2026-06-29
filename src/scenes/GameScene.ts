@@ -73,6 +73,17 @@ export class GameScene extends Phaser.Scene {
     this.createInput();
     this.buildHUD();
     this.setupColliders();
+    this.startBGM();
+  }
+
+  private startBGM(): void {
+    const playBGM = () => {
+      if (!this.sound.get('bgm_space_siege')?.isPlaying) {
+        this.sound.play('bgm_space_siege', { loop: true, volume: 0.45 });
+      }
+    };
+    this.input.once('pointerdown', playBGM);
+    this.input.keyboard?.once('keydown', playBGM);
   }
 
   // ── BACKGROUND ───────────────────────────────────────────────────────────────

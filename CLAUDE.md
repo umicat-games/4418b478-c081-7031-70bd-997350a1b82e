@@ -35,4 +35,4 @@ The player's spaceship is positioned at the centre of the screen and automatical
 - Shoot: automatic (4-way volley)
 
 ## What was changed this turn
-- Added directional banking animation to the player ship using a 16-frame spritesheet (player_ship_tilt); frame 2 = left bank, frame 7 = straight, frame 13 = right bank; swapped per handleMovement() based on horizontal velocity.
+- Added looping BGM (bgm_space_siege_ggac4.mp3); loaded in BootScene, starts on first player interaction (click or keydown) to satisfy browser autoplay policy.

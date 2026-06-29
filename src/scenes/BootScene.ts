@@ -24,6 +24,7 @@ export class BootScene extends Phaser.Scene {
     preloadManifest(this);
     this.load.spritesheet('player_ship_tilt', 'uploaded/player_ship_tilt_fl0kn_sheet.png', { frameWidth: 64, frameHeight: 64 });
     this.load.image('space_craft_enemy_1', 'uploaded/space_craft_enemy_1.png');
+    this.load.audio('bgm_space_siege', 'uploaded/bgm_space_siege_ggac4.mp3');
   }
 
   create(): void {
