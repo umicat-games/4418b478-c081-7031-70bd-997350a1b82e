@@ -46,6 +46,13 @@ export class GameScene extends Phaser.Scene {
     // The entity's `physics` block in main.json already gave the sprite an
     // Arcade body (collideWorldBounds + hitbox offset from asset metadata).
     // Just look it up by role and play the default idle animation.
+    // Wire HUD button: play bell chime when "meow" button is pressed
+    this.events.on('hud:press', (id: string) => {
+      if (id === 'e-mqyj9om1-dftq') {
+        this.sound.play('bell_chime');
+      }
+    });
+
     const registry = getEntityRegistry(this);
     const playerGO = registry?.byRole('player')[0] as Phaser.GameObjects.Sprite | undefined;
     if (playerGO) {
