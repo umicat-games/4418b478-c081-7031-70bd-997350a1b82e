@@ -50,6 +50,7 @@
     {
       "id": "e-mqyhxeb9-x3cf",
       "kind": "sprite",
+      "role": "player",
       "transform": {
         "x": 627.4966898660043,
         "y": 428.0107881920811,
@@ -58,7 +59,14 @@
         "scaleY": 1,
         "depth": 10
       },
-      "assetId": "premium_character_spritesheet"
+      "assetId": "premium_character_spritesheet",
+      "physics": {
+        "bodyW": 8,
+        "bodyH": 4,
+        "offsetX": 19,
+        "offsetY": 28,
+        "collideWorldBounds": true
+      }
     }
   ]
 }

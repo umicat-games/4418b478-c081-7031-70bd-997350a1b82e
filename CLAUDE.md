@@ -14,7 +14,8 @@
   - **WASD movement** at 120 px/s, diagonal movement normalized
   - **4-direction walk animations**: `walk-down`, `walk-up`, `walk-left`, `walk-right`
   - **4-direction idle animations**: `idle-down`, `idle-up`, `idle-left`, `idle-right` (plays when stopped, keeps last-faced direction)
-  - Physics body with vision-authored hitbox (tiny foot-rect from `applyAssetHitbox`)
+  - Physics body via entity `physics` block in main.json (SDK auto-wires at load)
+  - Hitbox: bodyW=8, bodyH=4, offsetX=19, offsetY=28 (tiny foot-rect for top-down feel)
   - World bounds collision
 - **24 animations** registered in manifest for the spritesheet (idle/walk/run/attack/hurt/die × 4 directions, fps: 8)
 
@@ -22,17 +23,9 @@
 
 ## Key Implementation Details
 
-- **Scene data:** `public/scenes/world/main.json` — sprite entity has `role: "player"`
+- **Scene data:** `public/scenes/world/main.json` — sprite entity has `role: "player"` and `physics` block (SDK auto-adds Arcade body at `loadWorldScene` time — no `physics.add.existing` in code)
 - **Manifest:** `public/scenes/manifest.json` — `premium_character_spritesheet` asset has `fps: 8` and full `animations[]` array (SDK auto-registers them)
 - **GameScene.ts** — behavior code:
-  - `create()`: looks up player by `byRole('player')[0]`, adds physics, applies hitbox via `applyAssetHitbox`, plays `idle-down`
-  - `update()`: reads WASD, sets velocity, switches `walk-{dir}` / `idle-{dir}` animations based on movement; `lastDir` tracks facing when stopped
-- **Hitbox:** from asset metadata (x:19, y:28, w:8, h:4) — tiny foot-rect for top-down feel
+  - `create()`: calls `loadWorldScene`, sets up WASD keys, looks up player by `byRole('player')[0]`, plays `idle-down`
+  - `update()`: reads WASD, sets velocity on the pre-existing Arcade body, switches `walk-{dir}` / `idle-{dir}` animations; `lastDir` tracks facing when stopped
 - **Animation priority:** horizontal direction wins over vertical when moving diagonally
-
----
-
-## This Turn
-- Added `role: "player"` to the sprite entity in main.json
-- Added `fps: 8` and 12 looping animations (idle + walk + run × 4 dirs) to manifest
-- Rewrote GameScene.ts with WASD movement + directional walk/idle animation switching

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { loadWorldScene, getEntityRegistry, getManifest, applyAssetHitbox } from '@umicat/phaser-sdk';
+import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
 const SPEED = 120;
@@ -43,26 +43,12 @@ export class GameScene extends Phaser.Scene {
     this.keyS = kb.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD = kb.addKey(Phaser.Input.Keyboard.KeyCodes.D);
 
-    // Player setup
+    // The entity's `physics` block in main.json already gave the sprite an
+    // Arcade body (collideWorldBounds + hitbox offset from asset metadata).
+    // Just look it up by role and play the default idle animation.
     const registry = getEntityRegistry(this);
     const playerGO = registry?.byRole('player')[0] as Phaser.GameObjects.Sprite | undefined;
     if (playerGO) {
-      // Enable physics body
-      this.physics.add.existing(playerGO);
-      const body = playerGO.body as Phaser.Physics.Arcade.Body;
-      body.setCollideWorldBounds(true);
-
-      // Apply vision-authored hitbox from asset metadata
-      const manifest = getManifest(this);
-      const asset = manifest?.assets.find((a) => a.id === playerGO.getData('assetId'));
-      if (asset?.hitbox) {
-        applyAssetHitbox(playerGO, asset);
-      } else {
-        body.setSize(8, 4);
-        body.setOffset(19, 28);
-      }
-
-      // Start idle animation facing down
       playerGO.play('idle-down', true);
       this.player = playerGO;
     }
