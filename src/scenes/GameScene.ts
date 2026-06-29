@@ -414,9 +414,10 @@ export class GameScene extends Phaser.Scene {
   private openDialog(): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
-    // Keep pointer lock (if held): typing goes to the focused <input>; the mouse
-    // staying captured means the custom game cursor doesn't pop back to the host
-    // cursor. Edge-scroll is suppressed while the dialog is open (see update).
+    // Release pointer lock so the DOM <input> can take keyboard focus — a
+    // pointer-locked canvas keeps key focus, so typing wouldn't reach the field.
+    // The OS cursor returns (standard for a chat box); click to re-lock on close.
+    if (this.locked) document.exitPointerLock();
     this.registry.set('catoDialogText', 'Cato perks up, watching you.');
     for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
