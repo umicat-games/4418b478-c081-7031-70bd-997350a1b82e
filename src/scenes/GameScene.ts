@@ -52,6 +52,10 @@ export class GameScene extends Phaser.Scene {
       playerGO.play('idle-down', true);
       this.player = playerGO;
 
+      // Camera follows the player with a gentle lerp
+      this.cameras.main.startFollow(playerGO, true, 0.1, 0.1);
+      this.cameras.main.setDeadzone(80, 60);
+
       // Wire solid-tile collision — grass tileset has collision zones authored
       // in the Tileset Editor. SDK auto-armed setCollisionByProperty at load;
       // addTilemapCollider just connects the player body to those solid tiles.
