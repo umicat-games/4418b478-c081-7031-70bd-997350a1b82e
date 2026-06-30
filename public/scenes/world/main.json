@@ -75,20 +75,6 @@
       },
       "assetId": "boats_spritesheet",
       "animation": "boat-idle-dock"
-    },
-    {
-      "id": "e-mqzwlg4g-e3m9",
-      "kind": "sprite",
-      "transform": {
-        "x": 149.80756639422992,
-        "y": 112.6190301617946,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "boats_spritesheet",
-      "animation": "boat-idle-dock"
     }
   ]
 }
