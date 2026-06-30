@@ -8,8 +8,7 @@
     {
       "id": "main",
       "type": "world",
-      "file": "world/main.json",
-      "hud": "game-hud"
+      "file": "world/main.json"
     }
   ],
   "huds": [
