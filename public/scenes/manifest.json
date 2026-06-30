@@ -8,8 +8,7 @@
     {
       "id": "main",
       "type": "world",
-      "file": "world/main.json",
-      "hud": "game-hud-3"
+      "file": "world/main.json"
     }
   ],
   "huds": [
@@ -21,11 +20,6 @@
       "id": "game-hud-2",
       "name": "test-hud",
       "file": "hud/game-hud-2.json"
-    },
-    {
-      "id": "game-hud-3",
-      "name": "Game HUD",
-      "file": "hud/game-hud-3.json"
     }
   ],
   "assets": [
