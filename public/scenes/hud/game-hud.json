@@ -118,6 +118,28 @@
       "placeholder": "Talk to Cato…",
       "maxLength": 200,
       "visible": false
+    },
+    {
+      "id": "e-mr0l4e6p-5rhg",
+      "kind": "text-area",
+      "anchor": {
+        "side": "top-left",
+        "offsetX": 232,
+        "offsetY": 168
+      },
+      "layer": "overlay",
+      "width": 320,
+      "height": 160,
+      "source": {
+        "mode": "static",
+        "text": "Text area"
+      },
+      "fontSize": 18,
+      "color": "#ffffff",
+      "align": "left",
+      "padding": 8,
+      "backgroundAssetId": "square_buttons_26x26",
+      "backgroundRegion": "square-button-26_26-5"
     }
   ]
 }
