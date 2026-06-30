@@ -19,7 +19,7 @@
     },
     {
       "id": "game-hud-2",
-      "name": "Game HUD",
+      "name": "test-hud",
       "file": "hud/game-hud-2.json"
     }
   ],

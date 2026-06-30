@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "game-hud-2",
-  "name": "Game HUD",
+  "name": "test-hud",
   "type": "hud",
   "design": {
     "safeArea": {
