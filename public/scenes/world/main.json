@@ -61,6 +61,20 @@
         "depth": 10
       },
       "assetId": "premium_character_spritesheet"
+    },
+    {
+      "id": "e-mqzw3ld8-hra2",
+      "kind": "sprite",
+      "transform": {
+        "x": 148.9647671088896,
+        "y": 52.6190301617946,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "boats_spritesheet",
+      "animation": "boat-idle-dock"
     }
   ]
 }

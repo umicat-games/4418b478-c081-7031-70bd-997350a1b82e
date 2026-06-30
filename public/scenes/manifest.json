@@ -1108,6 +1108,29 @@
       "atlasFormat": "json",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/square_buttons_26x26.png",
       "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/square_buttons_26x26.json"
+    },
+    {
+      "id": "boats_spritesheet",
+      "textureKey": "boats_spritesheet",
+      "path": "uploaded/boats_spritesheet.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/boats_spritesheet.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 32
+      },
+      "hitbox": {
+        "kind": "rect",
+        "x": 8,
+        "y": 28,
+        "w": 32,
+        "h": 16
+      },
+      "depthAnchor": {
+        "x": 24,
+        "y": 44
+      },
+      "pixelArt": true
     }
   ]
 }
