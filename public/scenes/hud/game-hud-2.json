@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "game-hud-2",
+  "name": "Game HUD",
+  "type": "hud",
+  "design": {
+    "safeArea": {
+      "top": 16,
+      "right": 16,
+      "bottom": 16,
+      "left": 16
+    }
+  },
+  "entities": []
+}
