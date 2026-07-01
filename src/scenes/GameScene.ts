@@ -8,8 +8,15 @@ import {
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
-const RUN_SPEED = 450;       // px / second — forward speed
-const JUMP_VELOCITY = -600;  // px / second — upward burst (shorter arc with higher gravity)
+// ── GD-authentic physics ──────────────────────────────────────────────────────
+// Derived from GD's canonical 60fps values (5.77 px/frame speed, 15 px/frame
+// jump, 0.87 px/frame² gravity) scaled to our 16px tiles (factor = 16/30):
+//   Jump:    900 px/s × 0.533 = 480 px/s  → height = 480²/(2×1670) ≈ 69px (4.3 tiles)
+//   Gravity: 3132 px/s² × 0.533 = 1670 px/s²  → g/v₀ ratio = 3.48 (exact GD)
+//   Air time: 2 × 480/1670 = 0.575s (exact GD)
+//   Speed: GD crosses its ~27-block viewport in 3.2s → 1280/3.2 = 400 px/s
+const RUN_SPEED = 400;       // px / second — GD-authentic viewport-traverse speed
+const JUMP_VELOCITY = -480;  // px / second — tile-scaled from GD's 900; g/v₀ = 3.48
 const WORLD_WIDTH = 1600;    // must match world.width in main.json
 // Trigger win when the player reaches this world X (just before the right edge)
 const WIN_X = WORLD_WIDTH - 80;
@@ -62,8 +69,8 @@ export class GameScene extends Phaser.Scene {
       applyAssetHitbox(this.player, asset);
     }
 
-    // Cap fall speed so the cube doesn't phase through tiles at higher gravity
-    body.setMaxVelocityY(1400);
+    // Cap fall speed — symmetric with jump velocity (GD authentic)
+    body.setMaxVelocityY(900);
 
     // ── Platform collision ────────────────────────────────────────────────────
     addTilemapCollider(this, 'e-mr2him35-9l8w', this.player);
@@ -220,8 +227,8 @@ export class GameScene extends Phaser.Scene {
 
     // Rotation: only while airborne (GD rule — cube rolls in the air)
     if (!this.isOnGround) {
-      // One full clockwise revolution per ~0.6 s — snappier at higher speed
-      const rotSpeed = (Math.PI * 2) / 600; // rad/ms
+      // Exactly 1 full revolution per jump arc (0.575s = 575ms) — GD authentic
+      const rotSpeed = (Math.PI * 2) / 575; // rad/ms
       this.player.setRotation(this.player.rotation + rotSpeed * delta);
     }
 
