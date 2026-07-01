@@ -5,9 +5,9 @@
 - **Core mechanic:** The cube moves forward automatically at constant speed; the player taps Space or clicks/taps to jump over obstacles. The cube should never fall through the platform.
 
 ## Current features
-- **Auto-forward movement:** Constant 300 px/s right via `body.setVelocityX(RUN_SPEED)` each frame.
-- **Jump:** Space key or mouse/touch click. Only fires when `body.blocked.down` is true (grounded). Upward burst of −680 px/s.
-- **Gravity:** 800 px/s² set via `world.physics.gravity` in the scene JSON — no code needed.
+- **Auto-forward movement:** Constant 450 px/s right via `body.setVelocityX(RUN_SPEED)` each frame.
+- **Jump:** Space key or mouse/touch click. Only fires when `body.blocked.down` is true (grounded). Upward burst of −600 px/s.
+- **Gravity:** 1400 px/s² set via `world.physics.gravity` in the scene JSON — snappy arc, short peak.
 - **Tilemap collision:** `addTilemapCollider` wires the platform tilemap entity (`e-mr2him35-9l8w`) against the player. Tile 0 is marked `solid: true` in the tileset metadata.
 - **Camera:** Follows player's X instantly (lerp = 1); Y is locked (lerp = 0). Player offset to left-third of screen. `setBounds(0,0,1600,720)` prevents camera going out of map at the end.
 - **Jump-only rotation:** Cube rotates clockwise only while airborne (~1 full revolution per 0.9 s). On landing, snaps to nearest 90° so it looks flat.

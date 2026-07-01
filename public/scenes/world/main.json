@@ -10,7 +10,7 @@
       "color": "#1a1a2e"
     },
     "physics": {
-      "gravity": { "x": 0, "y": 800 }
+      "gravity": { "x": 0, "y": 1400 }
     }
   },
   "camera": {
@@ -42,7 +42,7 @@
       "role": "player",
       "transform": {
         "x": 32,
-        "y": 586.9668865338538,
+        "y": 558,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
