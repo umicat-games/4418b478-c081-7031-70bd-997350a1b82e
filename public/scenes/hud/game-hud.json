@@ -121,6 +121,20 @@
       "placeholder": "Talk to Cato…",
       "maxLength": 200,
       "visible": false
+    },
+    {
+      "id": "e-mr24ky44-k4d6",
+      "kind": "image",
+      "anchor": {
+        "side": "top-left",
+        "offsetX": 1288,
+        "offsetY": 80
+      },
+      "layer": "base",
+      "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
+      "width": 32,
+      "height": 32,
+      "animation": "blink-eye"
     }
   ]
 }

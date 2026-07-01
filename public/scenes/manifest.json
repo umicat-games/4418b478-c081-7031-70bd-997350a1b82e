@@ -1163,6 +1163,290 @@
       "atlasFormat": "json",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/all_ui_assets_on_one_sheet.png",
       "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/all_ui_assets_on_one_sheet.json"
+    },
+    {
+      "id": "teemo_premium_emote_animations_sprite_sheet-export",
+      "textureKey": "teemo_premium_emote_animations_sprite_sheet-export",
+      "path": "uploaded/teemo_premium_emote_animations_sprite_sheet-export.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/teemo_premium_emote_animations_sprite_sheet-export.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 32,
+        "frameHeight": 32
+      },
+      "animations": [
+        {
+          "name": "appear",
+          "from": 0,
+          "to": 19,
+          "loop": true
+        },
+        {
+          "name": "idle-no-animation",
+          "from": 26,
+          "to": 26,
+          "loop": true
+        },
+        {
+          "name": "idle-talk",
+          "from": 39,
+          "to": 41,
+          "loop": true
+        },
+        {
+          "name": "surprised",
+          "from": 52,
+          "to": 55,
+          "loop": true
+        },
+        {
+          "name": "blink-eye",
+          "from": 65,
+          "to": 68,
+          "loop": true
+        },
+        {
+          "name": "cry",
+          "from": 78,
+          "to": 81,
+          "loop": true
+        },
+        {
+          "name": "love",
+          "from": 91,
+          "to": 94,
+          "loop": true
+        },
+        {
+          "name": "cool",
+          "from": 104,
+          "to": 107,
+          "loop": true
+        },
+        {
+          "name": "wink",
+          "from": 117,
+          "to": 120,
+          "loop": true
+        },
+        {
+          "name": "think",
+          "from": 130,
+          "to": 133,
+          "loop": true
+        },
+        {
+          "name": "sleep",
+          "from": 143,
+          "to": 146,
+          "loop": true
+        },
+        {
+          "name": "wave",
+          "from": 156,
+          "to": 159,
+          "loop": true
+        },
+        {
+          "name": "dance",
+          "from": 169,
+          "to": 172,
+          "loop": true
+        },
+        {
+          "name": "thumbsup",
+          "from": 182,
+          "to": 185,
+          "loop": true
+        },
+        {
+          "name": "thumbsdown",
+          "from": 195,
+          "to": 198,
+          "loop": true
+        },
+        {
+          "name": "clap",
+          "from": 208,
+          "to": 211,
+          "loop": true
+        },
+        {
+          "name": "shrug",
+          "from": 221,
+          "to": 224,
+          "loop": true
+        },
+        {
+          "name": "anim-15",
+          "from": 234,
+          "to": 237,
+          "loop": true
+        },
+        {
+          "name": "anim-16",
+          "from": 247,
+          "to": 250,
+          "loop": true
+        },
+        {
+          "name": "anim-17",
+          "from": 260,
+          "to": 263,
+          "loop": true
+        },
+        {
+          "name": "anim-18",
+          "from": 273,
+          "to": 276,
+          "loop": true
+        },
+        {
+          "name": "anim-19",
+          "from": 286,
+          "to": 289,
+          "loop": true
+        },
+        {
+          "name": "anim-20",
+          "from": 299,
+          "to": 302,
+          "loop": true
+        },
+        {
+          "name": "anim-21",
+          "from": 312,
+          "to": 315,
+          "loop": true
+        },
+        {
+          "name": "anim-22",
+          "from": 325,
+          "to": 328,
+          "loop": true
+        },
+        {
+          "name": "anim-23",
+          "from": 338,
+          "to": 341,
+          "loop": true
+        },
+        {
+          "name": "anim-24",
+          "from": 351,
+          "to": 354,
+          "loop": true
+        },
+        {
+          "name": "anim-25",
+          "from": 364,
+          "to": 367,
+          "loop": true
+        },
+        {
+          "name": "anim-26",
+          "from": 377,
+          "to": 380,
+          "loop": true
+        },
+        {
+          "name": "anim-27",
+          "from": 390,
+          "to": 393,
+          "loop": true
+        },
+        {
+          "name": "anim-28",
+          "from": 403,
+          "to": 406,
+          "loop": true
+        },
+        {
+          "name": "anim-29",
+          "from": 416,
+          "to": 419,
+          "loop": true
+        },
+        {
+          "name": "anim-30",
+          "from": 429,
+          "to": 432,
+          "loop": true
+        },
+        {
+          "name": "anim-31",
+          "from": 442,
+          "to": 445,
+          "loop": true
+        },
+        {
+          "name": "anim-32",
+          "from": 455,
+          "to": 458,
+          "loop": true
+        },
+        {
+          "name": "anim-33",
+          "from": 468,
+          "to": 471,
+          "loop": true
+        },
+        {
+          "name": "anim-34",
+          "from": 481,
+          "to": 484,
+          "loop": true
+        },
+        {
+          "name": "anim-35",
+          "from": 494,
+          "to": 497,
+          "loop": true
+        },
+        {
+          "name": "anim-36",
+          "from": 507,
+          "to": 510,
+          "loop": true
+        },
+        {
+          "name": "anim-37",
+          "from": 520,
+          "to": 523,
+          "loop": true
+        },
+        {
+          "name": "anim-38",
+          "from": 533,
+          "to": 536,
+          "loop": true
+        },
+        {
+          "name": "anim-39",
+          "from": 546,
+          "to": 549,
+          "loop": true
+        },
+        {
+          "name": "anim-40",
+          "from": 559,
+          "to": 562,
+          "loop": true
+        },
+        {
+          "name": "anim-41",
+          "from": 572,
+          "to": 575,
+          "loop": true
+        },
+        {
+          "name": "anim-42",
+          "from": 585,
+          "to": 588,
+          "loop": true
+        }
+      ],
+      "fps": 4
     }
   ]
 }
