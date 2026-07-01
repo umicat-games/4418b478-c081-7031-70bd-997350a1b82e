@@ -968,14 +968,14 @@
         },
         {
           "name": "idle-left",
-          "from": 16,
-          "to": 23,
+          "from": 24,
+          "to": 31,
           "loop": true
         },
         {
           "name": "idle-right",
-          "from": 24,
-          "to": 31,
+          "from": 16,
+          "to": 23,
           "loop": true
         },
         {
@@ -992,14 +992,14 @@
         },
         {
           "name": "walk-left",
-          "from": 48,
-          "to": 55,
+          "from": 56,
+          "to": 63,
           "loop": true
         },
         {
           "name": "walk-right",
-          "from": 56,
-          "to": 63,
+          "from": 48,
+          "to": 55,
           "loop": true
         },
         {
@@ -1016,14 +1016,14 @@
         },
         {
           "name": "run-left",
-          "from": 80,
-          "to": 87,
+          "from": 88,
+          "to": 95,
           "loop": true
         },
         {
           "name": "run-right",
-          "from": 88,
-          "to": 95,
+          "from": 80,
+          "to": 87,
           "loop": true
         },
         {
@@ -1040,14 +1040,14 @@
         },
         {
           "name": "attack-left",
-          "from": 112,
-          "to": 119,
+          "from": 120,
+          "to": 127,
           "loop": false
         },
         {
           "name": "attack-right",
-          "from": 120,
-          "to": 127,
+          "from": 112,
+          "to": 119,
           "loop": false
         },
         {
@@ -1064,14 +1064,14 @@
         },
         {
           "name": "hurt-left",
-          "from": 144,
-          "to": 151,
+          "from": 152,
+          "to": 159,
           "loop": false
         },
         {
           "name": "hurt-right",
-          "from": 152,
-          "to": 159,
+          "from": 144,
+          "to": 151,
           "loop": false
         },
         {
@@ -1088,14 +1088,14 @@
         },
         {
           "name": "die-left",
-          "from": 176,
-          "to": 183,
+          "from": 184,
+          "to": 191,
           "loop": false
         },
         {
           "name": "die-right",
-          "from": 184,
-          "to": 191,
+          "from": 176,
+          "to": 183,
           "loop": false
         }
       ],

@@ -444,21 +444,33 @@ export class GameScene extends Phaser.Scene {
 
   // ── Wandering AI helpers ──────────────────────────────────────────────
 
-  private velToDir(vx: number, vy: number): FaceDir {
-    if (Math.abs(vx) >= Math.abs(vy)) return vx >= 0 ? 'right' : 'left';
-    return vy >= 0 ? 'down' : 'up';
-  }
+  // 4-directional headings only — the character sheet has walk anims for
+  // down/up/left/right but NO diagonal, so Cato moves along one axis at a time.
+  private static readonly WALK_DIRS: ReadonlyArray<{ dir: FaceDir; vx: number; vy: number }> = [
+    { dir: 'down',  vx: 0,  vy: 1 },
+    { dir: 'up',    vx: 0,  vy: -1 },
+    { dir: 'left',  vx: -1, vy: 0 },
+    { dir: 'right', vx: 1,  vy: 0 },
+  ];
 
-  /** Begin a WALK phase: pick a random heading, face + play the walk anim. */
+  /** Begin a WALK phase: pick a random CARDINAL heading, face + play the anim.
+   *  Prefers a direction that isn't currently blocked so a boundary bump turns
+   *  Cato a fresh way instead of re-walking into the same wall. */
   private startWanderWalk(): void {
     if (!this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
-    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    const vx = Math.cos(angle) * CHILD_SPEED;
-    const vy = Math.sin(angle) * CHILD_SPEED;
-    body.setVelocity(vx, vy);
-    this.faceDir = this.velToDir(vx, vy);
-    this.child.play(`walk-${this.faceDir}`, true);
+    const free = GameScene.WALK_DIRS.filter(
+      (d) =>
+        !((d.dir === 'left' && body.blocked.left) ||
+          (d.dir === 'right' && body.blocked.right) ||
+          (d.dir === 'up' && body.blocked.up) ||
+          (d.dir === 'down' && body.blocked.down)),
+    );
+    const choices = free.length > 0 ? free : GameScene.WALK_DIRS;
+    const pick = choices[Phaser.Math.Between(0, choices.length - 1)]!;
+    body.setVelocity(pick.vx * CHILD_SPEED, pick.vy * CHILD_SPEED);
+    this.faceDir = pick.dir;
+    this.child.play(`walk-${pick.dir}`, true);
     this.wanderState = 'walk';
     this.wanderInterval = Phaser.Math.Between(WALK_MIN_MS, WALK_MAX_MS);
     this.wanderTimer = 0;
