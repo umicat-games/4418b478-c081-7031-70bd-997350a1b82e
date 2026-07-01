@@ -32,6 +32,19 @@
         "scaleY": 1,
         "depth": 1
       }
+    },
+    {
+      "id": "e-mr2l2w1k-idbh",
+      "kind": "sprite",
+      "transform": {
+        "x": 183.1788038246507,
+        "y": 499.99999999999994,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "player-40x40"
     }
   ]
 }
