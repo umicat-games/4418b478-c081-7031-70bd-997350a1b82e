@@ -45,6 +45,19 @@
         "depth": 10
       },
       "assetId": "player-64x64"
+    },
+    {
+      "id": "e-mr2q4157-jxw7",
+      "kind": "tilemap-ref",
+      "tilemapId": "spikes",
+      "transform": {
+        "x": 1600,
+        "y": 432,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      }
     }
   ]
 }

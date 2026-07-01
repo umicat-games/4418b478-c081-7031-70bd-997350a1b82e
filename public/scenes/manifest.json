@@ -95,6 +95,34 @@
         "w": 43,
         "h": 35
       }
+    },
+    {
+      "id": "spike-64x64",
+      "textureKey": "spike-64x64",
+      "path": "uploaded/spike-64x64.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/c89b1365-de9b-4890-8e3b-4f447ca2d320/spike-64x64.png",
+      "kind": "image",
+      "tileset": {
+        "cellSize": {
+          "width": 64,
+          "height": 64
+        },
+        "cols": 1,
+        "rows": 1,
+        "tiles": {
+          "0": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 18,
+                "y": 38,
+                "w": 27,
+                "h": 26
+              }
+            ]
+          }
+        }
+      }
     }
   ]
 }
