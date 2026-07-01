@@ -24,8 +24,8 @@
       "layer": "base",
       "label": "",
       "shape": "rounded-rect",
-      "width": 42,
-      "height": 42,
+      "width": 64,
+      "height": 64,
       "fillColor": "#3b82f6",
       "textColor": "#ffffff",
       "backgroundAssetId": "all_ui_assets_on_one_sheet",
@@ -127,13 +127,13 @@
       "kind": "image",
       "anchor": {
         "side": "top-right",
-        "offsetX": -5,
-        "offsetY": 5
+        "offsetX": -12,
+        "offsetY": 12
       },
       "layer": "base",
       "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
-      "width": 32,
-      "height": 32,
+      "width": 40,
+      "height": 40,
       "animation": "blink-eye"
     }
   ]

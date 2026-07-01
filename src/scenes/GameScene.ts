@@ -16,12 +16,15 @@ import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
 
 // --- Wander tuning ---
 // Set to `false` to PIN the cat at its spawn position (no roaming) — useful
-// for verifying entity world coordinates against the editor rulers. Flip back
-// to `true` to restore the wandering behaviour.
-const CHILD_WANDER = false;
-const CHILD_SPEED = 55;               // world-px per second
-const WANDER_MIN_MS = 1500;
-const WANDER_MAX_MS = 3500;
+// for verifying entity world coordinates against the editor rulers.
+const CHILD_WANDER = true;
+const CHILD_SPEED = 50;               // world-px per second (leisurely stroll)
+// Cato strolls, then pauses (走走停停): alternate WALK phases and IDLE phases,
+// each a random duration in these ranges.
+const WALK_MIN_MS = 1200;
+const WALK_MAX_MS = 2800;
+const IDLE_MIN_MS = 900;
+const IDLE_MAX_MS = 2600;
 
 // --- Edge-scroll tuning (desktop / mouse, RTS / theme-park style) ---
 const EDGE_MARGIN = 48;   // px from a canvas edge where scrolling kicks in
@@ -41,6 +44,7 @@ export class GameScene extends Phaser.Scene {
   private child?: Phaser.GameObjects.Sprite;
   private wanderTimer = 0;
   private wanderInterval = 2000;
+  private wanderState: 'walk' | 'idle' = 'idle';
   private faceDir: FaceDir = 'down';
 
   // Edge-scroll: last mouse position over the canvas (game-resolution coords),
@@ -204,7 +208,7 @@ export class GameScene extends Phaser.Scene {
       this.game.events.on('hud:cancel', this.onHudCancel);
 
       if (CHILD_WANDER) {
-        this.pickNewWanderDirection();
+        this.startWanderIdle(); // stands a beat, then strolls off
       } else {
         // Pinned: no velocity, no walk animation — cat stands at spawn.
         (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
@@ -255,33 +259,24 @@ export class GameScene extends Phaser.Scene {
   // ── "Find cat" button — warm cozy pill, fixed to top-right ───────────
 
   private buildFindCatButton(): void {
-    const BW = 104; const BH = 32; const R = 10;
-    const bx = GAME_WIDTH - 14 - BW / 2;
-    const by = 14 + BH / 2;
-    // Remember bounds so the virtual cursor can hit-test the button under lock.
+    // Cato's portrait in the top-right photo-frame (a HUD widget) IS the
+    // "find cat" button \u2014 clicking it recenters the camera on Cato. Match the
+    // frame's screen rect (top-right anchor, 64x64, 16px safe-area) so the
+    // hit-test lands exactly on the frame. No extra chrome is drawn here \u2014 the
+    // frame + animated portrait ARE the button.
+    const BW = 64; const BH = 64;
+    const bx = GAME_WIDTH - 16 - BW / 2;
+    const by = 16 + BH / 2;
+    // Remember bounds so the virtual cursor can hit-test the frame under lock.
     this.findCatBounds.setTo(bx - BW / 2, by - BH / 2, BW, BH);
 
-    const bg = this.add.graphics().setDepth(1000).setScrollFactor(0);
-
-    const draw = (hover: boolean) => {
-      bg.clear();
-      bg.fillStyle(hover ? 0xa07840 : 0x5c3e18, 0.90);
-      bg.fillRoundedRect(bx - BW / 2, by - BH / 2, BW, BH, R);
-      bg.lineStyle(1.5, 0xe8c87a, 0.80);
-      bg.strokeRoundedRect(bx - BW / 2, by - BH / 2, BW, BH, R);
-    };
-    draw(false);
-
-    this.add.text(bx, by, 'Find cat  \u25cf', {
-      fontSize: '12px', color: '#f5dfa0', fontFamily: 'sans-serif',
-    }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
-
-    // Transparent hit-rectangle layered on top for clean touch target
+    // Transparent hit-rect for NON-locked clicks (under pointer lock,
+    // handleLockedClick reads findCatBounds instead).
     this.add.rectangle(bx, by, BW, BH, 0x000000, 0)
       .setDepth(1002).setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
-      .on('pointerover',  () => { this.overUi = true;  draw(true); })
-      .on('pointerout',   () => { this.overUi = false; draw(false); })
+      .on('pointerover',  () => { this.overUi = true; })
+      .on('pointerout',   () => { this.overUi = false; })
       .on('pointerdown',  () => this.snapToChild());
   }
 
@@ -454,7 +449,8 @@ export class GameScene extends Phaser.Scene {
     return vy >= 0 ? 'down' : 'up';
   }
 
-  private pickNewWanderDirection(): void {
+  /** Begin a WALK phase: pick a random heading, face + play the walk anim. */
+  private startWanderWalk(): void {
     if (!this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
     const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
@@ -463,7 +459,19 @@ export class GameScene extends Phaser.Scene {
     body.setVelocity(vx, vy);
     this.faceDir = this.velToDir(vx, vy);
     this.child.play(`walk-${this.faceDir}`, true);
-    this.wanderInterval = Phaser.Math.Between(WANDER_MIN_MS, WANDER_MAX_MS);
+    this.wanderState = 'walk';
+    this.wanderInterval = Phaser.Math.Between(WALK_MIN_MS, WALK_MAX_MS);
+    this.wanderTimer = 0;
+  }
+
+  /** Begin an IDLE phase: stop and play the idle anim facing the last way. */
+  private startWanderIdle(): void {
+    if (!this.child?.body) return;
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    this.child.play(`idle-${this.faceDir}`, true);
+    this.wanderState = 'idle';
+    this.wanderInterval = Phaser.Math.Between(IDLE_MIN_MS, IDLE_MAX_MS);
     this.wanderTimer = 0;
   }
 
@@ -513,14 +521,26 @@ export class GameScene extends Phaser.Scene {
     if (!CHILD_WANDER) return; // pinned — skip wander (edge-scroll already ran)
     const body = this.child.body as Phaser.Physics.Arcade.Body;
 
-    if (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down) {
-      this.pickNewWanderDirection();
+    // Cato stops to talk — freeze the stroll while the chat dialog is open.
+    if (this.dialogOpen) {
+      if (this.wanderState !== 'idle') this.startWanderIdle();
       return;
     }
 
+    // Bumped into a boundary mid-stroll → turn and head off a fresh way.
+    if (
+      this.wanderState === 'walk' &&
+      (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down)
+    ) {
+      this.startWanderWalk();
+      return;
+    }
+
+    // Alternate WALK ⇄ IDLE so Cato wanders, then pauses (走走停停).
     this.wanderTimer += delta;
     if (this.wanderTimer >= this.wanderInterval) {
-      this.pickNewWanderDirection();
+      if (this.wanderState === 'walk') this.startWanderIdle();
+      else this.startWanderWalk();
     }
   }
 }
