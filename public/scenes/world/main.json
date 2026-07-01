@@ -4,18 +4,21 @@
   "name": "Main",
   "type": "world",
   "world": {
-    "width": 1280,
+    "width": 3200,
     "height": 720,
+    "physics": {
+      "gravity": { "x": 0, "y": 2200 }
+    },
     "background": {
       "color": "#1a1a2e"
     }
   },
   "camera": {
-    "follow": null,
+    "follow": "e-mr2mk93q-kwj9",
     "bounds": {
       "x": 0,
       "y": 0,
-      "width": 1280,
+      "width": 3200,
       "height": 720
     }
   },
@@ -24,6 +27,7 @@
       "id": "e-mr2mi1gy-w2w0",
       "kind": "tilemap-ref",
       "tilemapId": "platform",
+      "role": "terrain",
       "transform": {
         "x": 1600,
         "y": 620,
@@ -36,6 +40,7 @@
     {
       "id": "e-mr2mk93q-kwj9",
       "kind": "sprite",
+      "role": "player",
       "transform": {
         "x": 115.86755826160464,
         "y": 500,
@@ -44,7 +49,11 @@
         "scaleY": 1,
         "depth": 10
       },
-      "assetId": "sprite-40x40"
+      "assetId": "sprite-40x40",
+      "physics": {
+        "bodyW": 36,
+        "bodyH": 36
+      }
     }
   ]
 }
