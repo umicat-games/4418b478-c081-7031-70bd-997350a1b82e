@@ -16,11 +16,6 @@
     {
       "id": "game-hud",
       "file": "hud/game-hud.json"
-    },
-    {
-      "id": "game-hud-2",
-      "name": "test-hud",
-      "file": "hud/game-hud-2.json"
     }
   ],
   "assets": [
