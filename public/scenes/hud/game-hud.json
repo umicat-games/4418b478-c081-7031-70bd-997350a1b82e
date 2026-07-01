@@ -123,12 +123,12 @@
       "visible": false
     },
     {
-      "id": "e-mr256zia-sxf9",
+      "id": "e-mr263q1l-h080",
       "kind": "image",
       "anchor": {
         "side": "top-left",
-        "offsetX": 1056,
-        "offsetY": -56
+        "offsetX": 1264,
+        "offsetY": 144
       },
       "layer": "base",
       "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
