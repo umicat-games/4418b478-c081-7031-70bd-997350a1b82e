@@ -18,34 +18,6 @@
   },
   "entities": [
     {
-      "id": "e-mqvdaooj-fzpk",
-      "kind": "tilemap-ref",
-      "tilemapId": "water",
-      "transform": {
-        "x": -117.6553057075763,
-        "y": -213.4638828248278,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 1
-      },
-      "name": "water"
-    },
-    {
-      "id": "e-mqveju7y-sk2r",
-      "kind": "tilemap-ref",
-      "tilemapId": "grass-island",
-      "transform": {
-        "x": -64.6864698858455,
-        "y": -133.00294861103845,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 1
-      },
-      "name": "grass-island"
-    },
-    {
       "id": "e-mqvfwxir-fuj2",
       "kind": "sprite",
       "role": "child",
@@ -57,21 +29,8 @@
         "scaleY": 1,
         "depth": 10
       },
-      "assetId": "premium_character_spritesheet"
-    },
-    {
-      "id": "e-mqzw3ld8-hra2",
-      "kind": "sprite",
-      "transform": {
-        "x": 147.736899142871,
-        "y": 72.6190301617946,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "boats_spritesheet",
-      "animation": "boat-idle-dock"
+      "assetId": "premium_character_spritesheet",
+      "name": "cato"
     },
     {
       "id": "e-mr00447u-c6q1",
@@ -85,7 +44,22 @@
         "depth": 10
       },
       "assetId": "boats_spritesheet",
-      "animation": "boat-idle-dock"
+      "animation": "boat-idle-dock",
+      "name": "boat"
+    },
+    {
+      "id": "e-mr1hag41-ar62",
+      "kind": "tilemap-ref",
+      "tilemapId": "water",
+      "transform": {
+        "x": 320,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      },
+      "name": "water"
     }
   ]
 }
