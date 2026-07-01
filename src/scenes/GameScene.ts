@@ -397,6 +397,12 @@ export class GameScene extends Phaser.Scene {
   private openDialog(): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
+    // Cato turns to FACE THE PLAYER (front) while chatting: stop + play the
+    // front idle. faceDir='down' so the wander-freeze in update() (which plays
+    // idle-{faceDir}) keeps him facing front for the whole conversation.
+    this.faceDir = 'down';
+    (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.child.play('idle-down', true);
     // Release pointer lock so the DOM <input> reliably takes keyboard focus (and
     // a dialog WANTS a free cursor to click the field / scroll the message). To
     // avoid the jarring jump to the host arrow, swap the canvas cursor to the
