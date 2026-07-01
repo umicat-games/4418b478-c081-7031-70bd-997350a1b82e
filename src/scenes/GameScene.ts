@@ -65,6 +65,9 @@ export class GameScene extends Phaser.Scene {
   private locked = false;
   private vcursor = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
   private findCatBounds = new Phaser.Geom.Rectangle();
+  // Camera lock: clicking Cato's portrait makes the camera FOLLOW him around;
+  // clicking elsewhere on the map releases it (back to manual edge-scroll pan).
+  private cameraFollow = false;
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
 
@@ -269,6 +272,21 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ── Camera lock: follow Cato ──────────────────────────────────────────
+
+  /** Lock the camera onto Cato — it follows him around the island until the
+   *  player clicks elsewhere on the map. The smooth follow runs in update(). */
+  private followCato(): void {
+    if (!this.child) return;
+    this.tweens.killTweensOf(this.cameras.main); // stop any in-flight snap tween
+    this.cameraFollow = true;
+  }
+
+  /** Release the camera lock — back to manual edge-scroll panning. */
+  private unfollowCato(): void {
+    this.cameraFollow = false;
+  }
+
   // ── "Find cat" button — warm cozy pill, fixed to top-right ───────────
 
   private buildFindCatButton(): void {
@@ -290,7 +308,7 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerover',  () => { this.overUi = true; })
       .on('pointerout',   () => { this.overUi = false; })
-      .on('pointerdown',  () => this.snapToChild());
+      .on('pointerdown',  () => this.followCato());
   }
 
   // ── Pointer lock + custom cursor ──────────────────────────────────────
@@ -350,13 +368,17 @@ export class GameScene extends Phaser.Scene {
 
   /** Route a click (while pointer-locked) to HUD via the virtual cursor. */
   private handleLockedClick(): void {
+    // Click Cato's portrait (top-right frame) → lock the camera onto Cato.
     if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, this.vcursor.x, this.vcursor.y)) {
-      this.snapToChild();
+      this.followCato();
       return;
     }
     // The virtual cursor is in canvas px; convert to world to hit-test the cat.
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
+    // Click Cato himself → talk. Click anywhere else on the map → release the
+    // camera lock (back to manual panning).
     if (this.catContains(wp.x, wp.y)) this.openDialog();
+    else if (this.cameraFollow) this.unfollowCato();
   }
 
   // ── Click-to-talk dialog ──────────────────────────────────────────────
@@ -515,6 +537,7 @@ export class GameScene extends Phaser.Scene {
    */
   private updateEdgeScroll(delta: number): void {
     if (this.dialogOpen) return; // typing — don't pan when the mouse moves
+    if (this.cameraFollow) return; // camera is locked onto Cato — no manual pan
     if (!this.locked) return;
     const cam = this.cameras.main;
     const px = this.vcursor.x;
@@ -536,6 +559,17 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.updateEdgeScroll(delta);
+
+    // Camera lock: smoothly keep Cato centred while following. Uses the proven
+    // origin-0.5 centring form (child.x − w/2, NOT /zoom — see snapToChild); a
+    // frame-rate-independent lerp eases the camera along as Cato strolls. The
+    // camera bounds clamp this on preRender, so it never pans past the ocean.
+    if (this.cameraFollow && this.child) {
+      const cam = this.cameras.main;
+      const t = 1 - Math.pow(1 - 0.15, delta / 16.6667);
+      cam.scrollX = Phaser.Math.Linear(cam.scrollX, this.child.x - GAME_WIDTH / 2, t);
+      cam.scrollY = Phaser.Math.Linear(cam.scrollY, this.child.y - GAME_HEIGHT / 2, t);
+    }
 
     // Publish the virtual cursor to CursorScene (renders it above the HUD).
     this.cursorState.x = this.vcursor.x;
