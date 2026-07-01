@@ -19,19 +19,5 @@
       "height": 720
     }
   },
-  "entities": [
-    {
-      "id": "e-mr2kcysd-dhr2",
-      "kind": "tilemap-ref",
-      "tilemapId": "platform",
-      "transform": {
-        "x": 1144,
-        "y": 840,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 1
-      }
-    }
-  ]
+  "entities": []
 }
