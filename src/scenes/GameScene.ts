@@ -33,7 +33,11 @@ const EDGE_SPEED  = 900;  // scroll speed in SCREEN px/s (zoom-independent feel)
 // Custom pointer-lock cursor: the texture key + hotspot live in CursorScene
 // (which renders it above the HUD); GameScene only drives its position.
 
-const GRASS_ISLAND_ENTITY_ID = 'e-mqveju7y-sk2r';
+// Fallback id for the grass-island tilemap. Re-dragging a tilemap in the editor
+// CHANGES its entity id, so we resolve it by the stable NAME ('island') at
+// runtime (see create()) and only fall back to this if the name lookup fails.
+const GRASS_ISLAND_ENTITY_ID = 'e-mr1hfmhm-totv';
+const GRASS_ISLAND_NAME = 'island';
 
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
@@ -131,8 +135,17 @@ export class GameScene extends Phaser.Scene {
       const asset = manifest?.assets.find((a: { id: string }) => a.id === assetId);
       if (asset?.hitbox) applyAssetHitbox(this.child, asset);
 
-      // Tilemap collision
-      addTilemapCollider(this, GRASS_ISLAND_ENTITY_ID, this.child);
+      // Tilemap collision — resolve the grass-island tilemap by its stable NAME
+      // ('island'); re-dragging it in the editor changes the entity id, which
+      // silently dropped collision (Cato wandered off the island). Fall back to
+      // the last-known id if the name isn't found.
+      const islandEntity = (sceneFile.entities as Array<{ kind: string; id: string; name?: string }>)
+        .find((e) => (e.kind === 'tilemap-ref' || e.kind === 'tilemap') && e.name === GRASS_ISLAND_NAME);
+      const islandId = islandEntity?.id ?? GRASS_ISLAND_ENTITY_ID;
+      if (!islandEntity) {
+        console.warn(`[catopia] grass-island tilemap named '${GRASS_ISLAND_NAME}' not found; collision may be off. Falling back to id '${GRASS_ISLAND_ENTITY_ID}'.`);
+      }
+      addTilemapCollider(this, islandId, this.child);
 
       // ── Camera: open CENTRED on the cat (the game's focus). Bounds were set
       // above; Phaser clamps this scroll into them. Player drives it after. ──

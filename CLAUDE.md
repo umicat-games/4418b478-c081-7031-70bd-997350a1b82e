@@ -29,8 +29,8 @@
 - `GameScene.ts`: loads world scene via SDK, sets 3× zoom + roundPixels, wires wandering behavior
 - Entity lookup by role (`byRole('child')`) — never by entity ID
 - Asset hitbox applied via `applyAssetHitbox` (asset has vision-authored foot-area hitbox: x=19,y=28,w=8,h=4)
-- Grass-island tilemap entity ID: `e-mqveju7y-sk2r` (used in `addTilemapCollider`)
-- Water tilemap entity ID: `e-mqvdaooj-fzpk` (`WATER_ENTITY_ID`, used for camera bounds). **Both ids are hardcoded** — if a tilemap is deleted + re-drawn its id changes; the camera-bounds path then falls back to the content union, collision would need the new id.
+- Grass-island tilemap: resolved by **name `'island'`** at runtime (`GRASS_ISLAND_NAME`) for `addTilemapCollider`, falling back to id `e-mr1hfmhm-totv` (`GRASS_ISLAND_ENTITY_ID`). **Was hardcoded to `e-mqveju7y-sk2r` — went stale after a re-drag → the collider targeted a non-existent entity → no collision → Cato walked off the island (2026-07-01).** Name-resolution survives re-drags (re-dragging changes the entity id but not the name).
+- Water tilemap entity id `e-mr1hag41-ar62` (name `'water'`), used for camera bounds via `camera.bounds: { fitTo }` in `main.json` (also went stale from `e-mqvdaooj-fzpk` after the re-drag; fixed 2026-07-01). **Lesson: re-dragging a tilemap changes its id — anything referencing a tilemap by hardcoded id (collider, camera `fitTo`) breaks silently. Prefer name-resolution.**
 - Sprite entity: `e-mqvfwxir-fuj2`, role=`child`, assetId=`premium_character_spritesheet`
 - `BootScene.ts`: loads manifest + the `cursor` texture, starts GameScene
 - `CursorScene.ts`: top-overlay scene that renders the custom pointer-lock cursor above the HUD (reads `registry.get('cursor')` published by GameScene). Registered in `main.ts`; GameScene launches it.
