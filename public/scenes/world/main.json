@@ -32,6 +32,19 @@
         "scaleY": 1,
         "depth": 1
       }
+    },
+    {
+      "id": "e-mr2prn3x-u6au",
+      "kind": "sprite",
+      "transform": {
+        "x": 89.42011611215642,
+        "y": 496,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "player-64x64"
     }
   ]
 }
