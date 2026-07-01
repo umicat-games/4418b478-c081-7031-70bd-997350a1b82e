@@ -31,8 +31,6 @@ const EDGE_SPEED  = 900;  // scroll speed in SCREEN px/s (zoom-independent feel)
 // (which renders it above the HUD); GameScene only drives its position.
 
 const GRASS_ISLAND_ENTITY_ID = 'e-mqveju7y-sk2r';
-// The water tilemap is the world's outer edge — the camera is clamped to it.
-const WATER_ENTITY_ID = 'e-mqvdaooj-fzpk';
 
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
@@ -101,12 +99,11 @@ export class GameScene extends Phaser.Scene {
 
     const { sceneFile } = await loadWorldScene(this, this.sceneId);
 
-    // Expand the camera bounds to enclose ALL painted content. The scene's
-    // default bounds are just (0,0,worldW,worldH) = the positive quadrant, so
-    // content placed at negative coords (up-left of the origin) was unreachable
-    // — the camera clamped at the origin. Then open at the map's top-left
-    // corner so the whole map is pannable.
-    this.fitCameraBoundsToContent();
+    // Camera bounds = the water tilemap's extent (the world's outer edge) — set
+    // DECLARATIVELY via `camera.bounds: { fitTo: "<water id>" }` in main.json, so
+    // the SDK resolves it inside loadWorldScene AND the visual editor draws the
+    // same boundary. (Was a hand-written fitCameraBoundsToContent() pass; SDK
+    // 1.0.54's camera-bounds primitive replaces it.)
     // Default initial view = centre of the map (overridden to the cat below if
     // there is one). Starting at the bounds CORNER opened on empty water, since
     // the water tilemap's corner is blank.
@@ -234,50 +231,6 @@ export class GameScene extends Phaser.Scene {
       x: -(GAME_WIDTH  / 2) * (1 - 1 / z),
       y: -(GAME_HEIGHT / 2) * (1 - 1 / z),
     };
-  }
-
-  /**
-   * Set the camera bounds = the WATER tilemap's extent. Water is the world's
-   * outer edge (the player's design), so the camera can never pan past it — no
-   * void beyond the ocean. Phaser clamps the camera's VIEW inside these bounds.
-   * Falls back to the tight union of all world content if the water layer can't
-   * be measured (so the bounds still cover everything, just without the
-   * water-is-canonical guarantee).
-   */
-  private fitCameraBoundsToContent(): void {
-    const cam = this.cameras.main;
-
-    // Preferred: clamp to the water tilemap exactly.
-    const waterGO = getEntityRegistry(this)?.byId(WATER_ENTITY_ID) as
-      | (Phaser.GameObjects.GameObject & { getBounds?: () => Phaser.Geom.Rectangle })
-      | undefined;
-    const wb = waterGO?.getBounds?.();
-    if (wb && isFinite(wb.width) && wb.width > 0 && wb.height > 0) {
-      cam.setBounds(wb.x, wb.y, wb.width, wb.height);
-      return;
-    }
-
-    // Fallback: tight union of all world content (no padding → flush to edge).
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const obj of this.children.list) {
-      const go = obj as Phaser.GameObjects.GameObject & {
-        getBounds?: () => Phaser.Geom.Rectangle;
-        scrollFactorX?: number;
-      };
-      if (typeof go.getBounds !== 'function') continue;
-      if (go.scrollFactorX === 0) continue; // screen-fixed HUD — not world content
-      const b = go.getBounds();
-      if (!isFinite(b.width) || !isFinite(b.height) || (b.width === 0 && b.height === 0)) continue;
-      minX = Math.min(minX, b.x);
-      minY = Math.min(minY, b.y);
-      maxX = Math.max(maxX, b.right);
-      maxY = Math.max(maxY, b.bottom);
-    }
-    if (!isFinite(minX)) return; // nothing to measure — keep the loader's bounds
-    cam.setBounds(minX, minY, maxX - minX, maxY - minY);
   }
 
   // ── "Find cat" — smooth tween back to the child ───────────────────────

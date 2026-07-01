@@ -13,10 +13,7 @@
   "camera": {
     "follow": null,
     "bounds": {
-      "x": 0,
-      "y": 0,
-      "width": 1600,
-      "height": 1200
+      "fitTo": "e-mqvdaooj-fzpk"
     }
   },
   "entities": [
