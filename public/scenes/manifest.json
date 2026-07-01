@@ -1153,6 +1153,16 @@
         }
       ],
       "fps": 2
+    },
+    {
+      "id": "all_ui_assets_on_one_sheet",
+      "textureKey": "all_ui_assets_on_one_sheet",
+      "path": "uploaded/all_ui_assets_on_one_sheet.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/all_ui_assets_on_one_sheet.json",
+      "atlasFormat": "json",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/all_ui_assets_on_one_sheet.png",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/all_ui_assets_on_one_sheet.json"
     }
   ]
 }

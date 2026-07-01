@@ -22,12 +22,15 @@
         "offsetY": 0
       },
       "layer": "base",
-      "label": "Button",
+      "label": "",
       "shape": "rounded-rect",
-      "width": 96,
-      "height": 48,
+      "width": 30,
+      "height": 30,
       "fillColor": "#3b82f6",
-      "textColor": "#ffffff"
+      "textColor": "#ffffff",
+      "backgroundAssetId": "all_ui_assets_on_one_sheet",
+      "backgroundRegion": "photo-frame-1-1",
+      "name": "photo-frame"
     },
     {
       "id": "e-mqz70k8c-2m6d",
