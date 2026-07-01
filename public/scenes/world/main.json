@@ -6,11 +6,32 @@
   "world": {
     "width": 1280,
     "height": 720,
-    "background": { "color": "#1a1a2e" }
+    "background": {
+      "color": "#1a1a2e"
+    }
   },
   "camera": {
     "follow": null,
-    "bounds": { "x": 0, "y": 0, "width": 1280, "height": 720 }
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 720
+    }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-mr2l0nlr-6cgs",
+      "kind": "tilemap-ref",
+      "tilemapId": "platform",
+      "transform": {
+        "x": 2000,
+        "y": 620,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      }
+    }
+  ]
 }
