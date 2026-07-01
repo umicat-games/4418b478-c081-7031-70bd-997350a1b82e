@@ -32,6 +32,19 @@
         "scaleY": 1,
         "depth": 1
       }
+    },
+    {
+      "id": "e-mr2mk93q-kwj9",
+      "kind": "sprite",
+      "transform": {
+        "x": 115.86755826160464,
+        "y": 500,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "sprite-40x40"
     }
   ]
 }

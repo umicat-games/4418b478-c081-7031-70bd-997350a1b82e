@@ -151,6 +151,13 @@
         "w": 40,
         "h": 40
       }
+    },
+    {
+      "id": "sprite-40x40",
+      "textureKey": "sprite-40x40",
+      "path": "uploaded/sprite-40x40.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/1357c61d-317d-4538-a9e3-e2f51cedf0ea/sprite-40x40.png",
+      "kind": "image"
     }
   ]
 }
