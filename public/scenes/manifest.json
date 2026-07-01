@@ -88,6 +88,69 @@
         "w": 40,
         "h": 40
       }
+    },
+    {
+      "id": "pf-top-40x40",
+      "textureKey": "pf-top-40x40",
+      "path": "uploaded/pf-top-40x40.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/1357c61d-317d-4538-a9e3-e2f51cedf0ea/pf-top-40x40.png",
+      "kind": "image",
+      "tileset": {
+        "cellSize": {
+          "width": 40,
+          "height": 40
+        },
+        "cols": 1,
+        "rows": 1,
+        "tiles": {
+          "0": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 40,
+                "h": 40
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "pf-bottom-40x40",
+      "textureKey": "pf-bottom-40x40",
+      "path": "uploaded/pf-bottom-40x40.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/1357c61d-317d-4538-a9e3-e2f51cedf0ea/pf-bottom-40x40.png",
+      "kind": "image",
+      "tileset": {
+        "cellSize": {
+          "width": 40,
+          "height": 40
+        },
+        "cols": 1,
+        "rows": 1,
+        "tiles": {
+          "0": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 40,
+                "h": 40
+              }
+            ]
+          }
+        }
+      },
+      "hitbox": {
+        "kind": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 40
+      }
     }
   ]
 }

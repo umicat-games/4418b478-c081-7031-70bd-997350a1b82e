@@ -21,11 +21,11 @@
   },
   "entities": [
     {
-      "id": "e-mr2l0nlr-6cgs",
+      "id": "e-mr2mi1gy-w2w0",
       "kind": "tilemap-ref",
       "tilemapId": "platform",
       "transform": {
-        "x": 2000,
+        "x": 1600,
         "y": 620,
         "rotation": 0,
         "scaleX": 1,
