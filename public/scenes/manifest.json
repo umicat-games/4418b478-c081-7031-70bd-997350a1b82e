@@ -60,6 +60,19 @@
         "w": 38,
         "h": 38
       }
+    },
+    {
+      "id": "gd_player_64x64",
+      "textureKey": "gd_player_64x64",
+      "path": "uploaded/gd-player-64x64.png",
+      "kind": "image",
+      "hitbox": {
+        "kind": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      }
     }
   ]
 }

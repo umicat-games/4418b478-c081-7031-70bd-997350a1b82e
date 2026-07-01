@@ -9,17 +9,18 @@
 - **Jump:** Space key or mouse/touch click. Only fires when `body.blocked.down` is true (grounded). Upward burst of −680 px/s.
 - **Gravity:** 800 px/s² set via `world.physics.gravity` in the scene JSON — no code needed.
 - **Tilemap collision:** `addTilemapCollider` wires the platform tilemap entity (`e-mr2him35-9l8w`) against the player. Tile 0 is marked `solid: true` in the tileset metadata.
-- **Camera:** Follows player's X instantly (lerp = 1); Y is locked (lerp = 0). Player offset to left-third of screen (`setFollowOffset(-256, 0)`). World bounds 1600 × 720.
-- **Cube rotation:** Rolls clockwise at one full revolution per second of running — proportional to forward velocity × delta.
-- **Landing dust:** Small particle puff emitted via `events.emit('player-land')` when the player touches down.
-- **Asset hitbox:** Uses `applyAssetHitbox(player, asset)` conditionally — no-op if hitbox metadata not yet in manifest; body defaults to full texture size.
+- **Camera:** Follows player's X instantly (lerp = 1); Y is locked (lerp = 0). Player offset to left-third of screen. `setBounds(0,0,1600,720)` prevents camera going out of map at the end.
+- **Jump-only rotation:** Cube rotates clockwise only while airborne (~1 full revolution per 0.9 s). On landing, snaps to nearest 90° so it looks flat.
+- **Landing dust:** Small particle puff when player touches down.
+- **Win condition:** When player.x >= WIN_X (1520), game stops, win overlay appears. SPACE or tap restarts.
+- **Asset hitbox:** Uses `applyAssetHitbox(player, asset)` — no-op if hitbox metadata missing; body defaults to texture size.
 
 ## Key implementation details
 
 ### Scene data (`public/scenes/world/main.json`)
 - World: 1600 × 720, gravity `{ x: 0, y: 800 }`
 - Camera bounds: 1600 × 720; camera.follow = null (handled in code)
-- Player entity: `e-mr2hj2ka-kqvr`, `kind: "sprite"`, `role: "player"`, assetId `geometry_dash_player_square_hfav1`
+- Player entity: `e-mr2hj2ka-kqvr`, `kind: "sprite"`, `role: "player"`, assetId `gd_player_64x64`
 - Tilemap ref: `e-mr2him35-9l8w`, tilemapId `platform`
 
 ### Platform tilemap (`public/tilemaps/platform.json`)
@@ -36,7 +37,7 @@
 - `isOnGround` tracked via `body.blocked.down` each frame
 
 ## This turn
-- Added `role: "player"` to player entity in scene JSON
-- Added `world.physics.gravity: { x:0, y:800 }` to scene JSON
-- Updated world + camera bounds width to 1600 to match tilemap extent
-- Implemented full GD-style behavior in GameScene.ts: auto-run, jump, tilemap collision, X-only camera follow, cube rotation, landing dust
+- Swapped player sprite to `gd_player_64x64` (gd-player-64x64.png, 64×64, has hitbox metadata)
+- Rotation is now jump-only — cube only spins in the air; snaps to nearest 90° on landing
+- Added win condition: when player.x >= 1520, movement stops and "LEVEL COMPLETE!" overlay appears
+- Camera `setBounds` already clamps to map width so it never overshoots the right edge

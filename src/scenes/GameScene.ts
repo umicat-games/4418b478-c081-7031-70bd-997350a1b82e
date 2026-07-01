@@ -8,14 +8,18 @@ import {
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
-const RUN_SPEED = 300;     // px / second — forward speed
-const JUMP_VELOCITY = -680; // px / second — upward burst
+const RUN_SPEED = 300;       // px / second — forward speed
+const JUMP_VELOCITY = -680;  // px / second — upward burst
+const WORLD_WIDTH = 1600;    // must match world.width in main.json
+// Trigger win when the player reaches this world X (just before the right edge)
+const WIN_X = WORLD_WIDTH - 80;
 
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
 
   private player!: Phaser.GameObjects.Sprite;
   private isOnGround = false;
+  private gameOver = false;    // true once win/lose is triggered
 
   constructor() {
     super({ key: 'GameScene' });
@@ -23,6 +27,7 @@ export class GameScene extends Phaser.Scene {
 
   init(data: { sceneId: string }): void {
     this.sceneId = data.sceneId;
+    this.gameOver = false;
   }
 
   async create(): Promise<void> {
@@ -47,33 +52,29 @@ export class GameScene extends Phaser.Scene {
     if (!playerGO) return;
     this.player = playerGO as Phaser.GameObjects.Sprite;
 
-    // Add Arcade physics body to the player sprite
+    // Add Arcade physics body
     this.physics.add.existing(this.player);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
-    // Apply hitbox from asset metadata if the user authored one in the editor.
-    // applyAssetHitbox is a safe no-op when asset.hitbox is unset — it covers
-    // both paths: authored hitbox → metadata wins; no metadata → body already
-    // defaults to the full texture dimensions (correct for a cube).
+    // Apply hitbox metadata from the editor if available; no-op otherwise.
     const asset = manifest.assets.find((a) => a.id === this.player.getData('assetId'));
     if (asset) {
       applyAssetHitbox(this.player, asset);
     }
 
-    // Cap fall speed so the cube doesn't phase through thin tiles
+    // Cap fall speed so the cube doesn't phase through tiles
     body.setMaxVelocityY(1000);
 
-    // ── Tilemap collision ────────────────────────────────────────────────────
-    // Entity 'e-mr2him35-9l8w' is the tilemap-ref for the platform.
-    // SDK auto-armed solid:true tile collision; addTilemapCollider wires
-    // both the layer collider AND any sub-tile static bodies.
+    // ── Platform collision ────────────────────────────────────────────────────
     addTilemapCollider(this, 'e-mr2him35-9l8w', this.player);
 
-    // ── Camera — GD style: follow X instantly, lock Y ───────────────────────
-    this.cameras.main.setBounds(0, 0, 1600, GAME_HEIGHT);
+    // ── Camera ────────────────────────────────────────────────────────────────
+    // Clamp to world bounds — camera will never scroll past the map edges,
+    // so the right boundary is respected even as the player nears the end.
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     // lerpX = 1 → instant X follow; lerpY = 0 → Y is locked (never moves)
     this.cameras.main.startFollow(this.player, false, 1, 0);
-    // Offset so the player sits in the left-third of screen (classic GD feel)
+    // Keep player in the left-third of screen (classic GD feel)
     this.cameras.main.setFollowOffset(-GAME_WIDTH * 0.2, 0);
 
     // ── Input ────────────────────────────────────────────────────────────────
@@ -104,15 +105,101 @@ export class GameScene extends Phaser.Scene {
 
   // ── Jump ───────────────────────────────────────────────────────────────────
   private doJump(): void {
-    if (!this.player?.body || !this.isOnGround) return;
+    if (this.gameOver || !this.player?.body || !this.isOnGround) return;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.setVelocityY(JUMP_VELOCITY);
     this.isOnGround = false;
   }
 
+  // ── Win ────────────────────────────────────────────────────────────────────
+  private triggerWin(): void {
+    if (this.gameOver) return;
+    this.gameOver = true;
+
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.setAllowGravity(false);
+
+    // Pop the cube up slightly then freeze
+    this.tweens.add({
+      targets: this.player,
+      y: this.player.y - 40,
+      rotation: this.player.rotation + Math.PI * 2,
+      duration: 500,
+      ease: 'Cubic.easeOut',
+    });
+
+    // Dark overlay (fixed to camera)
+    const overlay = this.add.rectangle(
+      this.cameras.main.scrollX + GAME_WIDTH / 2,
+      GAME_HEIGHT / 2,
+      GAME_WIDTH, GAME_HEIGHT,
+      0x000000, 0,
+    ).setDepth(1000);
+
+    // "LEVEL COMPLETE!" text
+    const msg = this.add
+      .text(
+        this.cameras.main.scrollX + GAME_WIDTH / 2,
+        GAME_HEIGHT / 2,
+        'LEVEL COMPLETE!',
+        {
+          fontSize: '64px',
+          color: '#ffe84d',
+          fontStyle: 'bold',
+          stroke: '#000000',
+          strokeThickness: 6,
+          shadow: { color: '#ffaa00', blur: 20, fill: true },
+        },
+      )
+      .setOrigin(0.5)
+      .setDepth(1001)
+      .setScale(0);
+
+    // Sub-text
+    const sub = this.add
+      .text(
+        this.cameras.main.scrollX + GAME_WIDTH / 2,
+        GAME_HEIGHT / 2 + 70,
+        'Press SPACE or tap to play again',
+        { fontSize: '24px', color: '#ffffff', alpha: 0 },
+      )
+      .setOrigin(0.5)
+      .setDepth(1001)
+      .setAlpha(0);
+
+    // Fade overlay in
+    this.tweens.add({
+      targets: overlay,
+      fillAlpha: 0.55,
+      duration: 600,
+      ease: 'Sine.easeIn',
+    });
+
+    // Pop text in after a short delay
+    this.time.delayedCall(400, () => {
+      this.tweens.add({
+        targets: msg,
+        scale: 1,
+        duration: 400,
+        ease: 'Back.easeOut',
+      });
+      this.tweens.add({
+        targets: sub,
+        alpha: 1,
+        duration: 500,
+        delay: 300,
+      });
+
+      // Restart on Space or tap
+      this.input.once('pointerdown', () => this.scene.restart());
+      this.input.keyboard?.once('keydown-SPACE', () => this.scene.restart());
+    });
+  }
+
   // ── Update loop ────────────────────────────────────────────────────────────
   update(_time: number, delta: number): void {
-    if (!this.player?.body) return;
+    if (!this.player?.body || this.gameOver) return;
 
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const wasOnGround = this.isOnGround;
@@ -123,13 +210,24 @@ export class GameScene extends Phaser.Scene {
     // Ground state
     this.isOnGround = body.blocked.down;
 
-    // Landing event → dust puff
+    // Landing event → dust puff + snap rotation to nearest 90°
     if (!wasOnGround && this.isOnGround) {
       this.events.emit('player-land');
+      // Snap to nearest quarter-turn so the cube looks flat on landing
+      const snapped = Math.round(this.player.rotation / (Math.PI / 2)) * (Math.PI / 2);
+      this.player.setRotation(snapped);
     }
 
-    // Cube rolls clockwise proportional to forward speed (one full revolution ~1 s)
-    const rotSpeed = (body.velocity.x / RUN_SPEED) * (Math.PI * 2) / 1000; // rad/ms
-    this.player.setRotation(this.player.rotation + rotSpeed * delta);
+    // Rotation: only while airborne (GD rule — cube rolls in the air)
+    if (!this.isOnGround) {
+      // One full clockwise revolution per ~0.9 s in the air
+      const rotSpeed = (Math.PI * 2) / 900; // rad/ms
+      this.player.setRotation(this.player.rotation + rotSpeed * delta);
+    }
+
+    // Win condition — player reached the end of the map
+    if (this.player.x >= WIN_X) {
+      this.triggerWin();
+    }
   }
 }
