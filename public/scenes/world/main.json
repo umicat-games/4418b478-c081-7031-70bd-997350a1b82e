@@ -6,11 +6,45 @@
   "world": {
     "width": 1280,
     "height": 720,
-    "background": { "color": "#1a1a2e" }
+    "background": {
+      "color": "#1a1a2e"
+    }
   },
   "camera": {
     "follow": null,
-    "bounds": { "x": 0, "y": 0, "width": 1280, "height": 720 }
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 720
+    }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-mr2him35-9l8w",
+      "kind": "tilemap-ref",
+      "tilemapId": "platform",
+      "transform": {
+        "x": 800,
+        "y": 480,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      }
+    },
+    {
+      "id": "e-mr2hj2ka-kqvr",
+      "kind": "sprite",
+      "transform": {
+        "x": 32,
+        "y": 586.9668865338538,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "geometry_dash_player_square_hfav1"
+    }
+  ]
 }
