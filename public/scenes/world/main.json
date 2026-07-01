@@ -4,10 +4,13 @@
   "name": "Main",
   "type": "world",
   "world": {
-    "width": 1280,
+    "width": 1600,
     "height": 720,
     "background": {
       "color": "#1a1a2e"
+    },
+    "physics": {
+      "gravity": { "x": 0, "y": 800 }
     }
   },
   "camera": {
@@ -15,7 +18,7 @@
     "bounds": {
       "x": 0,
       "y": 0,
-      "width": 1280,
+      "width": 1600,
       "height": 720
     }
   },
@@ -36,6 +39,7 @@
     {
       "id": "e-mr2hj2ka-kqvr",
       "kind": "sprite",
+      "role": "player",
       "transform": {
         "x": 32,
         "y": 586.9668865338538,

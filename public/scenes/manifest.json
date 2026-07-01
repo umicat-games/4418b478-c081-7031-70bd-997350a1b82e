@@ -52,7 +52,14 @@
       "textureKey": "geometry_dash_player_square_hfav1",
       "path": "uploaded/geometry_dash_player_square_hfav1.png",
       "loadUrl": "https://cdn.umicat.ai/uploads/49a81245-92ce-4e39-a347-29c8085bdfb7/geometry_dash_player_square_hfav1.png",
-      "kind": "image"
+      "kind": "image",
+      "hitbox": {
+        "kind": "rect",
+        "x": 13,
+        "y": 13,
+        "w": 38,
+        "h": 38
+      }
     }
   ]
 }
