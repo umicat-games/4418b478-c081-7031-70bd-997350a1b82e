@@ -4,10 +4,13 @@
   "name": "Main",
   "type": "world",
   "world": {
-    "width": 1280,
+    "width": 3200,
     "height": 720,
     "background": {
       "color": "#1a1a2e"
+    },
+    "physics": {
+      "gravity": { "x": 0, "y": 1575 }
     }
   },
   "camera": {
@@ -15,7 +18,7 @@
     "bounds": {
       "x": 0,
       "y": 0,
-      "width": 1280,
+      "width": 3200,
       "height": 720
     }
   },
@@ -23,6 +26,7 @@
     {
       "id": "e-mr2pqgpk-hqyk",
       "kind": "tilemap-ref",
+      "role": "platform",
       "tilemapId": "platform",
       "transform": {
         "x": 1600,
@@ -36,6 +40,7 @@
     {
       "id": "e-mr2prn3x-u6au",
       "kind": "sprite",
+      "role": "player",
       "transform": {
         "x": 89.42011611215642,
         "y": 496,
@@ -49,6 +54,7 @@
     {
       "id": "e-mr2q4157-jxw7",
       "kind": "tilemap-ref",
+      "role": "spikes",
       "tilemapId": "spikes",
       "transform": {
         "x": 1600,
