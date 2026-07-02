@@ -15,6 +15,13 @@ function startGame(): void {
     // GameScene reflows on scale 'resize' (adaptive integer zoom + re-centre).
     // width/height stay the DESIGN reference for the zoom baseline.
     scaleMode: 'resize',
+    // Pixel-art rendering: NEAREST texture sampling (antialias off). REQUIRED for
+    // a tile-based pixel game — without it Phaser uses LINEAR sampling, which
+    // bleeds neighbouring/transparent texels at tile edges whenever the camera
+    // sits on a sub-pixel scroll (e.g. mid edge-scroll), drawing a 1px seam line
+    // across a whole tile row. roundPixels alone can't fix it (it aligns vertices,
+    // not UV sampling). pixelArt:true also crisps up the sprites at integer zoom.
+    pixelArt: true,
     // CursorScene is registered but not auto-started (only the first scene is);
     // GameScene launches it after the HUD exists so it sits on top.
     scenes: [BootScene, GameScene, CursorScene],
