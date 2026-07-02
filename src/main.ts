@@ -9,6 +9,12 @@ function startGame(): void {
   createUmicatGame({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
+    // RESIZE: the canvas fills the screen edge-to-edge (no letterbox) — Catopia's
+    // world is bigger than the camera and you pan around it, so there's no fixed
+    // viewport; the camera just shows whatever fits, and the HUD is anchor-based.
+    // GameScene reflows on scale 'resize' (adaptive integer zoom + re-centre).
+    // width/height stay the DESIGN reference for the zoom baseline.
+    scaleMode: 'resize',
     // CursorScene is registered but not auto-started (only the first scene is);
     // GameScene launches it after the HUD exists so it sits on top.
     scenes: [BootScene, GameScene, CursorScene],

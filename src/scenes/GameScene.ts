@@ -30,6 +30,16 @@ const IDLE_MAX_MS = 2600;
 const EDGE_MARGIN = 48;   // px from a canvas edge where scrolling kicks in
 const EDGE_SPEED  = 900;  // scroll speed in SCREEN px/s (zoom-independent feel)
 
+// --- Adaptive zoom (RESIZE mode) ---
+// The canvas fills the screen (any size), so instead of a fixed zoom we pick an
+// INTEGER zoom that keeps ~the same amount of world visible across devices —
+// crisp pixels (integer only) + consistent framing. Reference: at the design
+// canvas (GAME_WIDTH×GAME_HEIGHT) the zoom is DESIGN_ZOOM, i.e. we want to show
+// ~ (GAME_WIDTH/DESIGN_ZOOM) × (GAME_HEIGHT/DESIGN_ZOOM) world px everywhere.
+const DESIGN_ZOOM = 3;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 8;
+
 // Custom pointer-lock cursor: the texture key + hotspot live in CursorScene
 // (which renders it above the HUD); GameScene only drives its position.
 
@@ -65,6 +75,7 @@ export class GameScene extends Phaser.Scene {
   private locked = false;
   private vcursor = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
   private findCatBounds = new Phaser.Geom.Rectangle();
+  private findCatHit?: Phaser.GameObjects.Rectangle;
   // Camera lock: clicking Cato's portrait makes the camera FOLLOW him around;
   // clicking elsewhere on the map releases it (back to manual edge-scroll pan).
   private cameraFollow = false;
@@ -98,8 +109,14 @@ export class GameScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     // Set zoom BEFORE awaiting scene load so the first frame is already correct.
-    this.cameras.main.setZoom(3);
+    this.cameras.main.setZoom(this.computeZoom());
     this.cameras.main.roundPixels = true;
+    // RESIZE mode: recompute zoom + re-centre + re-layout screen UI on any
+    // canvas resize (device rotation, window change, phone vs desktop).
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this),
+    );
     // Pin the world origin (0,0) to the screen's TOP-LEFT corner. Phaser zooms
     // around the camera CENTER (default origin 0.5), so a raw setScroll(0,0) at
     // zoom>1 would start the view at +426/+240, not the origin. We offset the
@@ -119,7 +136,7 @@ export class GameScene extends Phaser.Scene {
     // there is one). Starting at the bounds CORNER opened on empty water, since
     // the water tilemap's corner is blank.
     const cb = this.cameras.main.getBounds();
-    this.cameras.main.setScroll(cb.centerX - GAME_WIDTH / 2, cb.centerY - GAME_HEIGHT / 2);
+    this.cameras.main.setScroll(cb.centerX - this.scale.width / 2, cb.centerY - this.scale.height / 2);
 
     const reg = getEntityRegistry(this)!;
     const childGO = reg.byRole('child')[0] as Phaser.GameObjects.Sprite | undefined;
@@ -153,7 +170,7 @@ export class GameScene extends Phaser.Scene {
       // ── Camera: open CENTRED on the cat (the game's focus). Bounds were set
       // above; Phaser clamps this scroll into them. Player drives it after. ──
       const cam = this.cameras.main;
-      cam.setScroll(this.child.x - GAME_WIDTH / 2, this.child.y - GAME_HEIGHT / 2);
+      cam.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
       // No startFollow — the player controls the camera manually.
 
       // Allow two simultaneous pointers (pan + button tap at the same time)
@@ -233,7 +250,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (sceneFile.entities.length === 0) {
-      this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Describe your game\nin the chat!', {
+      this.add.text(this.scale.width / 2, this.scale.height / 2, 'Describe your game\nin the chat!', {
         fontSize: '28px', color: '#ffffff', align: 'center',
       }).setOrigin(0.5);
     }
@@ -248,9 +265,30 @@ export class GameScene extends Phaser.Scene {
   private originTopLeftScroll(): { x: number; y: number } {
     const z = this.cameras.main.zoom;
     return {
-      x: -(GAME_WIDTH  / 2) * (1 - 1 / z),
-      y: -(GAME_HEIGHT / 2) * (1 - 1 / z),
+      x: -(this.scale.width  / 2) * (1 - 1 / z),
+      y: -(this.scale.height / 2) * (1 - 1 / z),
     };
+  }
+
+  /** Integer zoom that keeps ~the design's visible world area on any screen. */
+  private computeZoom(): number {
+    const targetW = GAME_WIDTH / DESIGN_ZOOM;
+    const targetH = GAME_HEIGHT / DESIGN_ZOOM;
+    const ideal = Math.min(this.scale.width / targetW, this.scale.height / targetH);
+    return Phaser.Math.Clamp(Math.round(ideal), MIN_ZOOM, MAX_ZOOM);
+  }
+
+  /** Canvas resized (RESIZE mode) — re-pick the integer zoom, keep the same world
+   *  point centred, re-clamp to bounds, and re-lay-out the screen-fixed UI. */
+  private onResize(): void {
+    const cam = this.cameras.main;
+    // World point currently at screen centre (from the last render).
+    const cx = cam.worldView.centerX;
+    const cy = cam.worldView.centerY;
+    cam.setZoom(this.computeZoom());
+    cam.setScroll(cx - this.scale.width / 2, cy - this.scale.height / 2);
+    // (Camera bounds re-clamp the scroll on the next preRender.)
+    this.layoutFindCatButton();
   }
 
   // ── "Find cat" — smooth tween back to the child ───────────────────────
@@ -265,8 +303,8 @@ export class GameScene extends Phaser.Scene {
     // origin-0 form and left the cat off-centre).
     this.tweens.add({
       targets: cam,
-      scrollX: this.child.x - GAME_WIDTH  / 2,
-      scrollY: this.child.y - GAME_HEIGHT / 2,
+      scrollX: this.child.x - this.scale.width  / 2,
+      scrollY: this.child.y - this.scale.height / 2,
       duration: 520,
       ease: 'Quad.easeOut',
     });
@@ -291,24 +329,28 @@ export class GameScene extends Phaser.Scene {
 
   private buildFindCatButton(): void {
     // Cato's portrait in the top-right photo-frame (a HUD widget) IS the
-    // "find cat" button \u2014 clicking it recenters the camera on Cato. Match the
-    // frame's screen rect (top-right anchor, 64x64, 16px safe-area) so the
-    // hit-test lands exactly on the frame. No extra chrome is drawn here \u2014 the
-    // frame + animated portrait ARE the button.
-    const BW = 64; const BH = 64;
-    const bx = GAME_WIDTH - 16 - BW / 2;
-    const by = 16 + BH / 2;
-    // Remember bounds so the virtual cursor can hit-test the frame under lock.
-    this.findCatBounds.setTo(bx - BW / 2, by - BH / 2, BW, BH);
-
-    // Transparent hit-rect for NON-locked clicks (under pointer lock,
-    // handleLockedClick reads findCatBounds instead).
-    this.add.rectangle(bx, by, BW, BH, 0x000000, 0)
+    // "find cat" button \u2014 clicking it recenters the camera on Cato. The
+    // transparent hit-rect handles NON-locked clicks (under pointer lock,
+    // handleLockedClick reads findCatBounds instead). Created once; position +
+    // findCatBounds are set by layoutFindCatButton (also re-run on resize).
+    this.findCatHit = this.add.rectangle(0, 0, 64, 64, 0x000000, 0)
       .setDepth(1002).setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerover',  () => { this.overUi = true; })
       .on('pointerout',   () => { this.overUi = false; })
       .on('pointerdown',  () => this.followCato());
+    this.layoutFindCatButton();
+  }
+
+  /** Position the find-cat hit-rect + bounds at the top-right, matching the HUD
+   *  photo-frame (top-right anchor, 64x64, 16px safe-area). Live screen dims so
+   *  it tracks the frame when the canvas resizes (RESIZE mode). */
+  private layoutFindCatButton(): void {
+    const BW = 64; const BH = 64;
+    const bx = this.scale.width - 16 - BW / 2;
+    const by = 16 + BH / 2;
+    this.findCatBounds.setTo(bx - BW / 2, by - BH / 2, BW, BH);
+    this.findCatHit?.setPosition(bx, by);
   }
 
   // ── Pointer lock + custom cursor ──────────────────────────────────────
@@ -573,8 +615,8 @@ export class GameScene extends Phaser.Scene {
     if (this.cameraFollow && this.child) {
       const cam = this.cameras.main;
       const t = 1 - Math.pow(1 - 0.15, delta / 16.6667);
-      cam.scrollX = Phaser.Math.Linear(cam.scrollX, this.child.x - GAME_WIDTH / 2, t);
-      cam.scrollY = Phaser.Math.Linear(cam.scrollY, this.child.y - GAME_HEIGHT / 2, t);
+      cam.scrollX = Phaser.Math.Linear(cam.scrollX, this.child.x - this.scale.width / 2, t);
+      cam.scrollY = Phaser.Math.Linear(cam.scrollY, this.child.y - this.scale.height / 2, t);
     }
 
     // Publish the virtual cursor to CursorScene (renders it above the HUD).
