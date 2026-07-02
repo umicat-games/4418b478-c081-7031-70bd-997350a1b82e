@@ -1,6 +1,6 @@
 # Catopia — Game Design Document
 
-> Version: 0.1 | Date: 2026-06-26 | Status: In Discussion
+> Version: 0.2 | Date: 2026-07-02 | Status: In Discussion
 
 ---
 
@@ -40,6 +40,68 @@ They are your **only connection** to this virtual world.
 | Emotional investment | I'm building my own home | I'm raising a living being |
 | Risk | Almost zero negative consequences | Real neglect → real consequences; soul departs but can return |
 | Social connection | Players interact directly | Players connect indirectly through their children |
+
+---
+
+## Core Attraction — What Makes This Genre Work (and What Catopia Must Nail)
+
+> The surface mechanics of farming games (plant, harvest, sell) are the **engine**, not the **hook**. This section names what actually retains players in cozy nurture/farming games, and what that demands of Catopia — because Catopia keeps the engine but swaps the heart. It sharpens the Design Pillars in §8 with the *why* and the *risks*.
+
+### Why farming games actually hook
+
+Beneath "planting and trading" sit five real drivers:
+
+1. **Reliable compounding.** Sow one, reap many, reinvest — a slot machine whose payout is *guaranteed if you show up*. This is the "just one more day" motor.
+2. **Time as a resource → a daily ritual.** Growth is gated by day-cycles, so returning is driven by anticipation ("the crops are ready"). Desire lives in the *gap* between action and reward — the genre engineers the wait.
+3. **Order out of chaos, visible and permanent.** A wild plot becomes a tidy, productive, beautiful machine. Effort is externalized into a thing you can see — the farm is an "outer self."
+4. **Pressure-free, self-authored goals.** Little to no fail state; the player sets their own targets. A gentle optimization sandbox.
+5. **Relationships are the real retention.** In Stardew, the villagers (gifting, hearts, festivals) are why people stay; the crops merely *fund* the social layer. The mechanic is the means; the people are the reason.
+
+**Takeaway:** farming = a reliable-compounding + daily-ritual *engine* that funds *meaning* (beautification, relationships, self-expression).
+
+### Why Animal Crossing works (the design underneath)
+
+- **The real-world clock is the killer mechanic.** The game runs on your actual calendar, so the world keeps happening while you're away (villagers move, seasons turn, holidays arrive). This manufactures *aliveness*: you **visit** a world that exists independently of you. The player's absence is part of the design.
+- **No goals, no failure = permission to just *be*.** Pressure is removed; players project their own goals (complete the museum, design the island, collect villagers).
+- **Villagers are parasocial anchors.** Low-fidelity animals that **remember you**, greet you, write letters, and notice when you've been gone ("Where have you been?!"). Being *noticed and missed* by a small creature carries enormous emotional weight for very little content.
+- **Collection + completion** (bugs, fish, fossils, furniture) taps a deep set-completion drive.
+- **Self-expression + slow drip.** Your island/house/outfit is a shareable creative canvas; real-time build timers make each day scarce and precious.
+
+**Takeaway:** AC = *a world that lives without you* + *NPCs who notice your presence and absence* + *a pressure-free canvas for self-expression and collection*, all metered by real time.
+
+### The psychology beneath both
+
+- **Self-Determination Theory** — autonomy (own goals), competence (visible progress), relatedness (NPC bonds). Cozy games satisfy all three, gently.
+- **The care / being-needed drive** (Tamagotchi, Neko Atsume) — tending something that *needs you and responds to you* is a powerful hook; its core is **reciprocity**.
+- **Investment = ownership** — the more you put in, the more it's "yours," and sunk cost turns into love.
+
+### What this means for Catopia — we keep the engine, swap the heart
+
+Farming's "crop" is a passive machine that reflects your effort. Catopia's "crop" is an **active agent** — Cato — who reflects your effort back *with* agency, memory, and emotion. That is the differentiation and the risk. Concretely, five imperatives:
+
+1. **Being noticed and remembered IS the game, not a garnish.** Cato must perceive what you did and *remember* it (this is the load the Memory System in §5.2 must carry). "You brought me fish yesterday — thank you" is AC's "where have you been?" at 100×. Our reward currency is **Cato's reactions, growth, and memory of you**, not coins.
+2. **Uncontrollability = aliveness.** Because you can't puppet Cato, he must *feel alive* — wandering, preferences, moods, small surprises. His independence is the feature (as AC villagers live without you). Treat "you can't control him" as the emotional payoff, not a limitation: he is a being you *influence*, not a puppet.
+3. **Your agency is expressed through the environment.** You shape the *world* — plant his favorite flower, build a spot he likes, leave food — and he responds. This is the god-game / gardener model of *indirect* control.
+4. **Feedback legibility is the lifeline.** Indirect care only feels good when the player can plainly **see that it landed**. If the player can't perceive that their effort changed Cato, "indirect" becomes "powerless." Every act of care needs a visible, timely echo.
+5. **Rewards compound emotionally/narratively, not economically.** Not "harvest → coins → buy → repeat" but "provide → Cato's mood/state/memory shifts → new dialogue, behaviors, and milestones unlock." The long arc of 养成 (raising) is that **Cato grows into a specific individual because of how you raised him** (Tamagotchi/Chao, not a generic pet).
+
+### Design ancestors worth studying (closer to Catopia than AC)
+
+- **Chao Garden (Sonic Adventure)** — ★ closest: you feed / indirectly care, and each Chao grows a different personality, stats, and look from *how* you raise it.
+- **Viva Piñata** — you tend a garden to *attract and raise* creatures you don't directly control; agency is entirely environmental.
+- **Neko Atsume** — you place things to attract cats; they come and go freely and leave gifts. Pure indirect + collection + surprise.
+- **Spiritfarer** — caretaking-of-others *as the core loop*, with strong emotional relationships.
+- **Tamagotchi / Digimon** — how you care determines who they become.
+
+### Honest risks
+
+- If gathering is a chore and Cato's responses are shallow, Catopia is just a *worse* farming game. **The AI's reactions and memory must carry real emotional weight**, or the loop is hollow.
+- Losing direct control is frustrating unless *influence* is satisfying and legible (see imperative #4).
+- "No goals" still needs a gentle progression spine (Cato's needs + milestones) so the experience doesn't dissolve into aimlessness.
+
+### The core hook, in one line
+
+> **Not "plant and sell," but "a small being who lives in real time, remembers you, and changes because of you — with whom, through your care for the world, you slowly grow a relationship that is uniquely yours."** Farming/gathering is the **engine that supplies** it; memory + autonomy + legible response is the **heart**.
 
 ---
 
