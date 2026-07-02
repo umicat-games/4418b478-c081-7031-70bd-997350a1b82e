@@ -1,441 +1,373 @@
-# Catopia — Game Design Document
+# Catopia — 游戏设计文档
 
-> Version: 0.3 | Date: 2026-07-02 | Status: In Discussion
-
----
-
-## 1. Game Overview
-
-**Title**: Catopia
-**Genre**: Nurturing / Social / Simulation
-**Platform**: Browser (landscape 1280×720)
-**Art Style**: Sprout Lands Asset Pack (Cup Nooble) — pixel art, warm and fresh palette, cozy island-life feel
-
-### Camera & Viewport
-
-- **Tile size**: 16×16 px (source art)
-- **Display scale**: 3× integer zoom — each tile renders as 48×48 px on screen
-- **Visible area**: ~26 tiles wide × ~15 tiles tall (1280÷48 ≈ 26.7, 720÷48 = 15)
-- **Feel**: Close-up, warm farm view — like Sprout Lands / Stardew Valley. Never pull so far out the character feels tiny
-- **Pixel fidelity**: Nearest-neighbor sampling, integer scaling only — absolutely no blur or sub-pixel smoothing. Pixels must stay sharp and crisp at all zoom levels
-- **Day & Night**: The island transitions between day and night in sync with in-game time. Lighting shift is achieved via a full-screen color tint overlay — warm golden daylight → soft blue-grey dusk → deep indigo night. The child's schedule (active during day, resting at night) maps to this cycle. Exact palette TBD, but the goal is *felt* atmosphere, not just a dark screen
-
-### Core Premise
-
-> You and Cato are companions exploring this world together.
-
-You share an island with **Cato — a cute little cat-spirit**. Cato is **not a dependent child** you keep alive; he is a **self-sufficient companion** who lives his own small life (he plants and forages the basics on his own). You cannot directly control him — he has his own will, moods, memories, and reactions.
-
-Your role is to be his **partner and his window to the wider world**: you reach beyond the island — trade for new seeds he can't find alone, buy new recipes, open up new islands — and then **you explore all of it *together*, side by side**. The bond grows not from *caring for* him but from *doing things with* him: discovering the unknown, plus the small joys and gifts you share along the way.
-
-Cato is your companion **and** your bridge to this virtual world — new places, new content, and new adventures arrive through him.
-
-> **Relationship model:** companions / friends, **not** parent↔child. See "Relationship Model & The Core Loop" below — it is the current (v0.3) direction and supersedes the older parent/child framing still present in §3–§4.
+> 版本 0.4 | 日期 2026-07-02 | 状态：讨论中（设计方向已基本收敛）
 
 ---
 
-## 2. How Catopia Differs from Animal Crossing
+## 1. 游戏概述
 
-| Dimension | Animal Crossing | Catopia |
-|-----------|----------------|---------|
-| Player role | You ARE the character (avatar) | You are Cato's **companion** (not his parent) — a partner + his window to the world |
-| Character control | Direct control | Cannot directly control — Cato has his own behavior |
-| Character intelligence | Scripted NPC dialogue | AI-driven, with real memory and conversation |
-| Emotional investment | I'm building my own home | I'm exploring a world **together with a friend** |
-| Risk | Almost zero negative consequences | Cato is self-sufficient — neglect **cools the friendship** (recoverable), never kills him |
-| Social connection | Players interact directly | Players connect indirectly through their companions |
+- **标题**：Catopia
+- **类型**：伙伴 / 陪伴 / 探索 / 轻模拟经营
+- **平台**：浏览器（横屏 1280×720）
+- **美术**：Sprout Lands 素材风（Cup Nooble）——像素、温暖清新、cozy 海岛生活感
 
----
+### 1.1 相机与视口
 
-## Core Attraction — What Makes This Genre Work (and What Catopia Must Nail)
+- **瓦片尺寸**：源图 16×16 px
+- **显示缩放**：3× 整数缩放，每块瓦片屏幕上渲染成 48×48 px
+- **可视范围**：约 26 格宽 × 15 格高（贴近 Sprout Lands / Stardew 那种近景暖调，别拉太远让角色变小）
+- **像素保真**：NEAREST 采样、只做整数缩放，绝不模糊或次像素平滑，任何缩放下像素都要锐利
+- **昼夜**：岛屿随游戏内时间在白天/夜晚间过渡，靠一层全屏色调叠加实现（暖金 → 蓝灰黄昏 → 深靛蓝夜）。目标是"感受到"的氛围，不是单纯把屏幕调暗
 
-> The surface mechanics of farming games (plant, harvest, sell) are the **engine**, not the **hook**. This section names what actually retains players in cozy nurture/farming games, and what that demands of Catopia — because Catopia keeps the engine but swaps the heart. It sharpens the Design Pillars in §8 with the *why* and the *risks*.
+### 1.2 核心前提
 
-### Why farming games actually hook
+> **你和 Cato 是一起探索这个世界的伙伴。**
 
-Beneath "planting and trading" sit five real drivers:
+你和 **Cato——一只可爱的小猫灵**——住在一座岛上。Cato **不是需要你养活的孩子**，他是一个**自给自足的伙伴**，过着自己的小日子（基础的种植、采集他自己就能做）。你**不能直接操控他**——他有自己的意志、情绪、记忆和反应。
 
-1. **Reliable compounding.** Sow one, reap many, reinvest — a slot machine whose payout is *guaranteed if you show up*. This is the "just one more day" motor.
-2. **Time as a resource → a daily ritual.** Growth is gated by day-cycles, so returning is driven by anticipation ("the crops are ready"). Desire lives in the *gap* between action and reward — the genre engineers the wait.
-3. **Order out of chaos, visible and permanent.** A wild plot becomes a tidy, productive, beautiful machine. Effort is externalized into a thing you can see — the farm is an "outer self."
-4. **Pressure-free, self-authored goals.** Little to no fail state; the player sets their own targets. A gentle optimization sandbox.
-5. **Relationships are the real retention.** In Stardew, the villagers (gifting, hearts, festivals) are why people stay; the crops merely *fund* the social layer. The mechanic is the means; the people are the reason.
+你的角色是他的**伙伴，以及他通往更大世界的那扇窗**：你去触碰岛外的东西——交易换来他自己弄不到的新种子、买新食谱、开启新岛屿——然后**你俩并肩、一起去探索这一切**。羁绊不是从"照顾"里长出来的，是从"一起做事"里长出来的：一起发现未知，加上一路上共享的小欢乐和小礼物。
 
-**Takeaway:** farming = a reliable-compounding + daily-ritual *engine* that funds *meaning* (beautification, relationships, self-expression).
-
-### Why Animal Crossing works (the design underneath)
-
-- **The real-world clock is the killer mechanic.** The game runs on your actual calendar, so the world keeps happening while you're away (villagers move, seasons turn, holidays arrive). This manufactures *aliveness*: you **visit** a world that exists independently of you. The player's absence is part of the design.
-- **No goals, no failure = permission to just *be*.** Pressure is removed; players project their own goals (complete the museum, design the island, collect villagers).
-- **Villagers are parasocial anchors.** Low-fidelity animals that **remember you**, greet you, write letters, and notice when you've been gone ("Where have you been?!"). Being *noticed and missed* by a small creature carries enormous emotional weight for very little content.
-- **Collection + completion** (bugs, fish, fossils, furniture) taps a deep set-completion drive.
-- **Self-expression + slow drip.** Your island/house/outfit is a shareable creative canvas; real-time build timers make each day scarce and precious.
-
-**Takeaway:** AC = *a world that lives without you* + *NPCs who notice your presence and absence* + *a pressure-free canvas for self-expression and collection*, all metered by real time.
-
-### The psychology beneath both
-
-- **Self-Determination Theory** — autonomy (own goals), competence (visible progress), relatedness (NPC bonds). Cozy games satisfy all three, gently.
-- **The care / being-needed drive** (Tamagotchi, Neko Atsume) — tending something that *needs you and responds to you* is a powerful hook; its core is **reciprocity**.
-- **Investment = ownership** — the more you put in, the more it's "yours," and sunk cost turns into love.
-
-### What this means for Catopia — we keep the engine, swap the heart
-
-Farming's "crop" is a passive machine that reflects your effort. Catopia's "crop" is an **active agent** — Cato — who reflects your effort back *with* agency, memory, and emotion. That is the differentiation and the risk. Concretely, five imperatives:
-
-1. **Being noticed and remembered IS the game, not a garnish.** Cato must perceive what you did and *remember* it (this is the load the Memory System in §5.2 must carry). "You brought me fish yesterday — thank you" is AC's "where have you been?" at 100×. Our reward currency is **Cato's reactions, growth, and memory of you**, not coins.
-2. **Uncontrollability = aliveness.** Because you can't puppet Cato, he must *feel alive* — wandering, preferences, moods, small surprises. His independence is the feature (as AC villagers live without you). Treat "you can't control him" as the emotional payoff, not a limitation: he is a being you *influence*, not a puppet.
-3. **Your agency is expressed through the environment.** You shape the *world* — plant his favorite flower, build a spot he likes, leave food — and he responds. This is the god-game / gardener model of *indirect* control.
-4. **Feedback legibility is the lifeline.** Indirect care only feels good when the player can plainly **see that it landed**. If the player can't perceive that their effort changed Cato, "indirect" becomes "powerless." Every act of care needs a visible, timely echo.
-5. **Rewards compound emotionally/narratively, not economically.** Not "harvest → coins → buy → repeat" but "provide → Cato's mood/state/memory shifts → new dialogue, behaviors, and milestones unlock." The long arc of 养成 (raising) is that **Cato grows into a specific individual because of how you raised him** (Tamagotchi/Chao, not a generic pet).
-
-### Design ancestors worth studying (closer to Catopia than AC)
-
-- **Chao Garden (Sonic Adventure)** — ★ closest: you feed / indirectly care, and each Chao grows a different personality, stats, and look from *how* you raise it.
-- **Viva Piñata** — you tend a garden to *attract and raise* creatures you don't directly control; agency is entirely environmental.
-- **Neko Atsume** — you place things to attract cats; they come and go freely and leave gifts. Pure indirect + collection + surprise.
-- **Spiritfarer** — caretaking-of-others *as the core loop*, with strong emotional relationships.
-- **Tamagotchi / Digimon** — how you care determines who they become.
-
-### Honest risks
-
-- If gathering is a chore and Cato's responses are shallow, Catopia is just a *worse* farming game. **The AI's reactions and memory must carry real emotional weight**, or the loop is hollow.
-- Losing direct control is frustrating unless *influence* is satisfying and legible (see imperative #4).
-- "No goals" still needs a gentle progression spine (Cato's needs + milestones) so the experience doesn't dissolve into aimlessness.
-
-### The core hook, in one line
-
-> **Not "plant and sell," but "a small being who lives in real time, remembers you, and changes because of you — with whom, through your care for the world, you slowly grow a relationship that is uniquely yours."** Farming/gathering is the **engine that supplies** it; memory + autonomy + legible response is the **heart**.
+Cato 既是你的朋友，**也是你通往这个虚拟世界的纽带**——新地方、新内容、新冒险都通过他抵达。
 
 ---
 
-## Relationship Model & The Core Loop (v0.3 — current direction)
+## 2. 为什么这类游戏成立（核心吸引力）
 
-> This is the current converged direction. It **supersedes the parent/child, survival-dependency framing** in the older sections below (§3's "child," §3.4 "Survival Risk & Soul Return," §4's self-enrichment economy) — those are earlier v0.1 exploration, kept for reference and being revised to match this.
+> 牧场游戏表面的"种植、收成、买卖"是**引擎**，不是**钩子**。这一节讲清楚这类 cozy 陪伴/经营游戏真正留住人的是什么，以及它对 Catopia 意味着什么——因为 Catopia 保留引擎，但**替换心脏**。
 
-### Companions, not caretaking
+### 2.1 牧场游戏真正的钩子
 
-Cato is **not a dependent child** you keep alive — he is a **self-sufficient companion**. The relationship is **friend / partner**, not parent / child. This single reframe solves three problems at once:
+"种植买卖"底下藏着五个真实驱动：
 
-1. **It cures conversation fatigue.** Friends don't sit and *talk*; they *do things together*, and talk spills out of the doing. The main activity is shared adventure; conversation is the seasoning around it, so it never dries up — there's always something new in front of you both to react to.
-2. **It answers "why not just use ChatGPT?"** The value was never the chat. ChatGPT out-chats Cato any day — but it can't give you *a world you two share, a history of places you explored together, a companion who remembers the journey.* Catopia's moat is **world + shared history + joint activity**, not conversation quality. The talk earns its meaning from what you've done together — it's grounded, not free-floating.
-3. **It makes the bond fun.** You have a deep bond with your parents, yet hanging out with them isn't "fun" — fun comes from *peers* exploring together. Cato as a **companion** (not a ward) shifts the game's energy from duty / worry to curiosity / play. This also fits what a cat *is* — a semi-independent creature that *chooses* to be with you — and aligns with the playbook's existing "guardian ↔ guarded spirit, Pokémon-like, NOT parent/child" lean.
+1. **可靠的复利**：种一收多、再投入。一台"只要你来它就一定给"的老虎机，是"再玩一天"的发动机。
+2. **时间变成资源 → 每日仪式**：作物按日成熟，回来的动力是期待（"东西好了"）。欲望活在动作和奖励之间那段等待里。
+3. **把混乱整理成有序、可见、永久**：一片荒地变成整齐漂亮的生产机器，努力被外化成看得见的东西。
+4. **无压力、自定目标**：几乎没有失败态，玩家自己定目标。
+5. **关系层才是真正的留存**：Stardew 里留住人的是村民（送礼、好感、节日），种地只是给社交层供血。机制是手段，人才是理由。
 
-### The division of roles
+**结论**：牧场 = 一台"可靠复利 + 每日仪式"的**引擎**，去供养"意义"（美化、关系、自我表达）。
 
-- **Cato = the local & the basic.** He self-sustains: plants and forages basic crops, lives his own small daily life. He does **not** need you to survive.
-- **You = the beyond & the new.** You reach past the island — trade for seeds he can't get alone, buy new recipes, unlock new islands. **You are his window to the wider world.**
-- **Together = exploration.** New content (a new island, a new discovery) is experienced **side by side**. **Cato travels *with* you** (confirmed direction) — physically along for the adventure, not left at home.
+### 2.2 动森为什么成立
 
-### Why "travel together" matters: real-time, grounded conversation
+- **真实时钟是杀手级机制**：世界跑在真实日历上，你不在时它照常发生（村民搬家、换季、节日）。这制造出"活着"的感觉——你是去**拜访**一个独立于你而存在的世界，玩家的缺席是设计的一部分。
+- **没目标、没失败 = 允许你"只是存在"**：压力被抽走，玩家投射自己的目标（集齐博物馆、造岛、收集村民）。
+- **村民是"被记住的寄托"**：低精度的动物，却记得你、跟你打招呼、写信、你久没上会问"你跑哪去了"。**被一个小东西惦记，情感价值极高。**
+- **收集与完成**（虫/鱼/化石/家具）触发很深的"集齐"驱动。
+- **自我表达 + 慢滴灌**：你的岛/家/穿搭是可炫耀的创作画布；建造要真实时间，让每天都稀缺、珍贵。
 
-Cato being **present with you in a new place** is the engine that keeps talk fresh: standing next to you on a new island, reacting to what you're both seeing *right now* ("What is that thing?!" / "Let's go look!"). The conversation is anchored in a **live, shared, novel situation** — the strongest possible form of grounded talk, and the exact opposite of opening a chat box in a vacuum. **Exploration content directly becomes conversation content.**
+**结论**：动森 = *一个没有你也活着的世界* + *会注意到你在/不在的 NPC* + *无压力的自我表达和收集画布*，全部用真实时钟计量。
 
-*Design/tech consequence:* Cato's AI must be **scene-aware** — his observations include *where we are / what we just found / what you just did* — so he can comment in context. This is exactly the platform's runtime-AI Observation→Say/Do primitive (ADR-017); Catopia's core need drives the hardest, most differentiating platform work, which validates the "Catopia drives the platform" thesis.
+### 2.3 底层心理学
 
-### The core loop (light farming, heavy connection)
+- **自我决定论**：自主（自己定目标）、胜任（看得见的进步）、关联（和 NPC 的羁绊）。cozy 游戏温柔地把三样都占了。
+- **照顾 / 被需要的本能**（塔马奇、猫咪后院）：照顾一个"需要你又会回应你"的东西，核心是**互惠**。
+- **投入即拥有**：投得越多越是"你的"，沉没成本被转化成爱。
+
+### 2.4 对 Catopia 意味着什么
+
+牧场的"作物"是被动机器，只反射你的努力；Catopia 的"作物"是 **Cato——一个主动的 agent**，会带着能动性、记忆、情绪把你的努力反射回你身上。这是差异化，也是风险。据此几条铁律：
+
+1. **Cato 看得见、记得住你的付出——这是游戏本身，不是点缀。** 我们的奖励货币是 Cato 的反应、成长和对你的记忆，不是金币。
+2. **不可操控 = 活着。** 他必须显得活（游荡、有偏好、有情绪、会给你惊喜）。把"你控制不了他"当情感卖点，不是限制。
+3. **你的能动性通过"环境"表达。** 你塑造世界、他来回应——上帝游戏/园丁式的间接控制。
+4. **反馈可读性是生死线。** 间接照顾只有在玩家**看得见"起作用了"**时才爽。每一份付出都要有可见、及时的回响。
+5. **奖励是情感/叙事的复利，不是经济复利。** Cato 会因为你怎么陪他而长成一个具体的个体。
+
+### 2.5 头号风险：对话疲劳
+
+整个游戏押在 **Cato 能否长期保持鲜活** 上。AI 伙伴最常见的死法是"聊三次就都差不多了"。对话只有**扎根在一个不断更新的活情境**里才不腻。四根喂养它的支柱：
+
+1. **共享新鲜**——一起经历的新岛/新发现，给他源源不断、有上下文的可聊之物。
+2. **记忆**——每次交流都带着你们的共同历史。
+3. **成长/改变**——你们怎么一起冒险，塑造 Cato 变成谁；第四周的 Cato ≠ 第一天的他。
+4. **你刚做的事**——轻种植/交易给每次见面提供互惠和筹码。
+
+### 2.6 一句话核心钩子
+
+> **不是"种植买卖"，而是"一个活在真实时间里、记得你、因你而改变的小生命——你通过对世界的照料，和他慢慢长出一段独一无二的关系"。** 种植/采集是**供血的引擎**；记忆 + 自主 + 可读的回应是**心脏**。
+
+---
+
+## 3. 关系模型与核心循环（当前方向）
+
+> 本节是当前收敛的方向，**取代旧的"父母↔孩子、生存依赖"框架**。
+
+### 3.1 伙伴，不是养育
+
+Cato 不是要你养活的孩子，是**自给自足的伙伴**。关系是**朋友/同伴**，不是父母/孩子。这一个转变，一次性解决三个难题：
+
+1. **治"聊几句就尴尬死"**：朋友之间不是坐着聊天，是**一起干事**，话是从做事里自然溢出来的。主活动是一起冒险，聊天是调味——因为总有新东西在你俩眼前，所以不会枯。
+2. **回答"那我干嘛不去和 ChatGPT 聊"**：价值不在聊天本身。ChatGPT 聊得比 Cato 好，但它给不了你**一个你俩共享的世界、一段一起探索的历史、一个记得旅程的伙伴**。护城河是**世界 + 共同历史 + 一起做的事**。聊天的意义来自你们做过的事——它有根，不悬空。
+3. **让羁绊变好玩**：你和父母羁绊很深，但和父母待着不"好玩"；好玩来自**同龄人一起探索**。Cato 作为**伙伴**（而非被照顾者），把游戏能量从责任/操心变成好奇/一起玩。这也贴合猫本身——半独立、**选择**跟你在一起的生物，而不是无助的依赖者。（也和 playbook 里已有的"守护者↔被守护的精灵、Pokémon 式、非父母/孩子"一致。）
+
+### 3.2 分工
+
+- **Cato = 本地 & 基础**：自给自足，自己种/采基础作物、过自己的小日子。**不需要你才能活。**
+- **你 = 远方 & 新的**：你触碰岛外——交易换他弄不到的新种子、买新食谱、开新岛。**你是他通往更大世界的窗。**
+- **一起 = 探索**：新内容（新岛、新发现）是**并肩**经历的。**Cato 和你一起去**（已定），亲身同行，不是留在家里。
+
+### 3.3 为什么"一起去"很关键：实时、有根的对话
+
+Cato **人在新地方、和你看着同一个新东西**，是让对话保持新鲜的发动机：他站你旁边，对你俩**此刻**看到的东西做反应（"那是什么?!""我们去看看!"）。对话锚在一个**活的、共享的、新鲜的当下**——最强的"有根对话"，和"在真空里打开聊天框"正相反。**探索内容直接变成对话内容。**
+
+*设计/技术含义*：Cato 的 AI 必须**场景感知**——他的 observation 要包含"我们在哪 / 刚发现了什么 / 你刚做了什么"，才能就地接话。这正是平台 runtime-AI 的 Observation→Say/Do 原语（ADR-017）；Catopia 的核心需求倒逼平台最难、最差异化的能力。
+
+### 3.4 核心循环（轻种植·重联结）
 
 ```
-        You reach beyond ─────────────────────────────┐
-   (trade for new seeds / recipes / unlock new islands) │
-                                                        ▼
-              Explore the new — TOGETHER, side by side
-              (Cato reacts in real time, in context)
-                                                        │
-                    ┌───────────────────────────────────┤
-                    ▼                                    ▼
-   Gift / cook for him / bring things back        Shared discoveries + history
-   (deepens the friendship — optional,             (what you two did together;
-    NOT survival)                                   Cato remembers it)
-                    │                                    │
-                    └─────────────────┬──────────────────┘
-                                      ▼
-             Deeper bond → Cato opens up, grows, wants to go
-             further → drives the next expedition
+        你触碰岛外 ───────────────────────────────┐
+   (交易新种子 / 新食谱 / 开新岛)                    │
+                                                    ▼
+              一起探索"新" —— 并肩、同屏
+              (Cato 实时、就地反应)
+                                                    │
+                    ┌───────────────────────────────┤
+                    ▼                                ▼
+   送礼 / 做饭给他 / 带东西回来            共享的发现 + 历史
+   (加深友谊——可选，非生存必需)            (你俩一起干过什么；Cato 记得)
+                    │                                │
+                    └───────────────┬────────────────┘
+                                    ▼
+             羁绊变深 → Cato 敞开、成长、想走更远
+             → 驱动下一次远行
 
-   Meanwhile, back home: Cato self-farms the basics (light, autonomous).
+   同时，在家：Cato 自己种基础作物（轻、自主）。
 ```
 
-The relationship grows from **doing together**, not from **caring for**. Farming / trading is *light in time* but *essential in role* — it's the material and the stakes of your shared life (the well you draw from), never the main time-sink. **Most of a session may well be spent adventuring and talking with Cato, not tending crops — and that's correct** (light farming, heavy connection).
+羁绊从**一起做事**长出来，不是从**照顾**。种植/交易**时间上轻、角色上不可或缺**——它是你们共同生活的材料和筹码（你打水的那口井），绝不是主要时间消耗。**一局里大部分时间很可能花在和 Cato 一起冒险、聊天，而不是种地——这是对的。**
 
-### The #1 risk, and the four things that fight it
+### 3.5 冷落的代价（自给自足模型）
 
-The whole game rests on **Cato staying alive as a character over weeks**. The classic AI-companion death is "feels samey after three chats." Talk stays fresh only when grounded in a living context that keeps renewing. Four feeders keep it renewing:
+Cato 永远不会饿死、也不必被投喂。你久不上线 → 他就过他更寡淡的、自给自足的日子——而且（有记忆）他会**察觉**：友谊**变淡、需要重新捂热**，你也**错过了本可以一起经历的事**。代价是**关系层的、可恢复的**（疏远 + 错过），绝不是生存。（更重的"灵魂离开→呼唤归来"以后可能作为一个**可恢复的关系断裂**层回来，绝不是 v0 的生存失败态。）
 
-1. **Shared novelty** — new islands / discoveries you experience together give him fresh, in-context things to react to.
-2. **Memory** — every exchange carries your shared history ("remember that island with the glowing fish?").
-3. **Growth / change** — how you adventure together shapes who Cato becomes; week-4 Cato ≠ day-1 Cato.
-4. **What you just did** — the light farming / trading gives each meeting reciprocity and stakes ("did you find the seeds we needed?").
+### 3.6 v0 保留 vs 暂缓
 
-### Consequences of neglect (self-sustaining model)
-
-Cato never dies and never must-be-fed. Away a long time → he simply lives his plainer, self-sufficient life — and, with memory, *notices*: the friendship **cools and must be re-warmed**, and you **missed things you'd otherwise have shared**. The cost is **relational and recoverable** (drift + missed moments), never survival. This replaces §3.4's "hunger → weakness → soul departs." (A heavier "soul departs but returns" beat may return *later* as an optional, recoverable *relationship-rupture* layer — never a v0 survival-failure state.)
-
-### What v0 keeps vs. defers
-
-- **v0 keeps:** self-sufficient Cato + light farming (2–3 crops, one forage type, one small shop pointed at Cato / expeditions) + **travel-together exploration of a second island or two** + real-time in-context chat + memory of shared history + gifting.
-- **v0 defers:** seasons & four-season crops, building / furniture / loans, complex crafting & quality tiers, other players' islands (social), survival-failure / soul-departure, any self-enrichment economy.
+- **v0 保留**：自给自足的 Cato + 轻种植（2–3 种作物、一种采集、一个指向 Cato/远行的小商店）+ **和 Cato 一起探索一两座新岛** + 实时就地对话 + 共同历史的记忆 + 送礼。
+- **v0 暂缓**：季节与四季作物、建造/家具/贷款、复杂加工与品质星级、别的玩家的岛（社交）、生存失败/灵魂离开、任何"让玩家变富"的经济。
 
 ---
 
-## 3. The Child (Spirit) System
+## 4. Cato（猫灵）
 
-### 3.1 Form & Appearance
+### 4.1 形象
 
-The child is a **cute little animal spirit** (non-human), visually inspired by Sprout Lands characters — a small cat or bunny form, expressive face, simple clothing, feeling like both a wild creature and a real little kid.
-Each player's child has a **unique appearance** (color, ear shape, outfit, etc. randomized at birth; new clothing can be purchased in-game to change their look).
+一只可爱的小猫灵（非人），Sprout Lands 风——小猫形态、表情丰富、简单衣着，既像野生小动物又像个真的小家伙。每个玩家的 Cato 外观**独一无二**（颜色、耳型、衣着等出生时随机；可在游戏内买新衣服换装）。
 
-### 3.2 Behavior Layers
+### 4.2 行为模型：松散跟随 + 就近好奇 + 偶尔自己的主意
 
-The child's behavior is split into two clear layers:
+**替换掉"纯随机游走"**，改成基于真猫的行为——一个很轻的**算法**状态机（movement 全算法、免费、即时，不掺 AI）：
 
-**Algorithmic Layer (daily life)**:
-- Wanders and explores the island
-- Spontaneous small actions: sitting under a tree, cloud-watching, fiddling with plants
-- Moves toward the food storage or the player when hungry
-- Automatically returns home to rest at nightfall
-- Emotional state influences daily behavior (happy → runs around; sad → sits quietly in a corner)
+- **跟随**：你（相机焦点）移开、他掉出"舒适半径" → 他朝你靠过来（可以是猫那种小跑/窜一下，不是匀速走）。他跟的是**你的注意力 / 相机焦点 / 你正在操作的地方**（Catopia 里你没有 avatar，你是一只无形的手）。
+- **就近好奇**：他在你身边时 → 挑一个附近的**兴趣点（POI：这棵树、那朵花、这块石头、水边）**去嗅一嗅、拨一拨、蹲下看看，然后换下一个。猫有很强的好奇心。
+- **发呆/休息**：偶尔坐下理毛、看着你、打盹（尤其你停下不动久了）。
 
-**AI Layer (during interaction)**:
-- When the player actively talks to the child, AI takes over the response
-- The AI can perceive the current game state (hunger, weather, island resources, recent events)
-- The AI holds a **history of interactions with the player** (what was said last time, which promises the player kept)
-- The child proactively tells the player: what they did today, who they met, what they want
-- If the player neglects the child for a long time (not logging in, not feeding), responses become increasingly distant — eventually silence
+**让它像猫而不像无人机/跟踪狂的关键：**
 
-### 3.3 Personality & Emotional System
+1. **是松绳，不是粘脚。** 猫不像狗贴脚跟——它松散地跟：落在后面、被路边东西勾走、再窜上来追。这个"松"和"会走神"才是猫味。别做成"永远跟在你身后 2 格"。
+2. **POI 既是"好奇目标"，也是"反应/发现的发生器"。** 他去查看的树/花/石头，和**你正在做的事**（钓鱼、采集），本质是同一类 POI——都把他吸过来 → 冒 emoji、偶尔叼东西给你、偶尔说句话。
+3. **别机器化**：POI 选择随机 + 按新鲜度/距离加权、别立刻重复同一个；**偶尔他就无视你、干自己的**（猫不是随叫随到）。"大部分跟着、偶尔有自己的主意"才是猫，而"偶尔跑开"又喂给了同屏规则和重逢时刻（见 §6）。
+4. **快速平移追不上就是可爱本身**：你猛地划过半个岛，他没法瞬移——让他小跑着追，追不上就短暂落屏 + 一个"等等我!"的轻信号，你慢下来他就归队。"他在努力跟上"的落后感很萌，不用消除。
 
-The child's personality is not fixed — it **evolves dynamically based on how they are raised**:
+**这个行为设计顺手锁死了一个张力**：见 §6——"他只在同屏时才反应"，正因为他松散地跟着你，他大部分时间在你身边、在屏幕上，反应自然会发生；偶尔跑开又留给"重逢时他给你看东西"的时刻。
 
-**Core Dimensions**:
-- **Security**: The more consistently and promptly the player responds, the more secure the child feels; long-term neglect → anxiety / detachment
-- **Curiosity**: Encouragement when the child explores → grows more adventurous; neglect → gradually withdraws
-- **Sociability**: More interactions with other children → outgoing and sociable; isolation on the island → introverted
-- **Materialism**: Frequent gifts of nice things → may become greedy OR may grow grateful (random element)
+### 4.3 性格与情绪（随共同经历演变）
 
-**Emotional States** (real-time):
-- Happy / Content / Bored / Hungry / Sad / Angry / Longing / Anticipating
+Cato 的性格不固定，**随你们一起经历的事慢慢演变**（用行为和反应表达，**不做可见的数字好感条**）。粗略的维度：安全感、好奇心、亲密度等——你越常陪他一起探索、越用心，他越敞开。情绪（开心/满足/无聊/好奇/困/想你……）由多种因素驱动：距上次相处多久、最近一起干了什么、天气、发现的新东西。
 
-Emotions are driven by multiple factors: hunger level, time since last interaction, recent gifts, weather, social status.
+### 4.4 依赖模型：自给自足，因你而绽放
 
-### 3.4 Survival Risk & Soul Return
+> ⚠️ 取代旧的"饥饿→衰弱→灵魂离开"生存依赖模型。
 
-> ⚠️ **Superseded (v0.3).** This section reflects the earlier *parent/child, survival-dependency* model. Current direction (see "Relationship Model & The Core Loop") is a **self-sustaining companion**: Cato can't be starved and never dies; neglect **cools the friendship** (recoverable), it doesn't threaten his life. The "soul departs → path of return" idea may return LATER as an optional, recoverable *relationship-rupture* layer — never a v0 survival-failure state. Kept below for reference / future reworking.
+**Cato 能自己活下去（不会因你不管就饿死/离开），但只有在你的陪伴与照料下才能"过得好、长得好、和你更亲"。**
 
-The game is designed for **high emotional investment with real consequences — but always leaving room for hope**:
+- 没人管的 Cato：自己找点吃的凑合、精神平平、独来独往。**活着，但寡淡。**
+- 被你用心陪的 Cato：一起去新地方、吃到你带回来的好东西、更有活力、更爱表达、和你更亲、解锁更多成长。
 
-**Decline Stages (progressive warnings)**:
-- **Hunger**: The child has a hunger meter; not feeding them gradually lowers their energy, reduces daily activity, and lowers their mood
-- **Weakness**: After sustained hunger, the child enters a weakened state — no longer moving on their own, just lying down; AI conversation becomes quieter. This is the final warning
-- **System Alert**: Before entering the weakened state, the player receives a platform notification / in-game message. Nothing happens abruptly
+一个没人管的 Cato 和一个被爱的 Cato 之间，是"生存"和"绽放"的差距——而这差距是情感上**看得见**的。为什么选这个而不是"像真宠物一样等你投喂"：
+- **匹配网页休闲的现实**：玩家不规律登陆，塔马奇式死亡会在你离开时"杀死存档"，制造愧疚和流失。
+- **用更好的杠杆维持羁绊**：不是靠愧疚/恐惧绑定，是靠喜悦/互惠。
+- **避开变现道德雷区**：Cato 的 AI 要烧 credit，若他的**生存**依赖玩家付费/上线，就成了脏 pattern。
 
-**Soul Departure (core consequence mechanic)**:
-- After prolonged extreme neglect (genuinely abandoning care — not just missing a day or two), the child's soul quietly leaves the island
-- A glowing little **spirit shrine** remains, along with a letter the child left behind — they haven't disappeared, they've simply gone to another world
-- The game enters a **"Search & Return" state**: the child is gone, but everything on the island remains. The player can still tend to it
+### 4.5 记忆系统——用技术限制模拟真实遗忘
 
-**The Path of Return (redemption gameplay)**:
-- The player takes **deliberate action** to call the child's soul back:
-  - 🌱 **Farming & Gathering**: Lovingly tend the neglected fields, accumulate a certain amount of "tokens of love"
-  - 🏗️ **Building**: Prepare for the child's return — renovate their room, add new furniture
-  - ✉️ **Writing Letters**: The player can write letters to the child; they travel to "that other world" and the child reads them (after returning, the AI child will tell you which letters they read and how they felt)
-- Once enough is accumulated, the spirit shrine glows warmly and the child's silhouette reappears on the island
-- The child returns **remembering everything** — they know what you did for them. This experience becomes part of their shared history, kept in memory forever
+两层记忆，合起来做出"比全知 AI 更像人"的记忆体验：
 
-**Design Intent**: This is not about punishing the player — it's a story about **loss and finding again**. Departure carries weight; return carries meaning.
+- **短期记忆（AI 上下文窗口）**：他"脑子里"当前记得的。对话变长，最早的内容自然淡出——这不是 bug，就是工作记忆。
+- **长期记忆（持久存档）**：关键事件、重要对话摘要、里程碑存成结构化数据。上下文里想不起来时，他能**触发一次"回忆"**：查历史存档，把关键信息注回当前对话。这个"翻记忆"有可见的游戏内表达：皱眉思考 → "哦!我想起来了……"
+
+**三种记忆状态、三种回应：**
+- 🟢 **清楚记得**（在上下文里）：直接、自然地回应。
+- 🟡 **需要回忆**（不在上下文、但在存档里）："让我想想……" → 查存档 → "对哦!我想起来了!"
+- 🔴 **真的忘了**（太久或从没存）："那太久以前了，我真记不起来了……"
+
+**设计意图**：遗忘不是 bug，是人性。偶尔会忘、需要努力去想的 Cato，比什么都记得一清二楚的 AI 更可信。有些记忆永远消失，才让被记住的那些更珍贵。
 
 ---
 
-## 4. World & Economy System
+## 5. 核心活动：一起采集 & 一起钓鱼
 
-### 4.1 The Island
+### 5.1 通用原则
 
-- A fixed-size island in pixel top-down view (Sprout Lands style)
-- Zones: **Home Zone** (player's cottage + child's room), **Farm Zone** (planting), **Nature Zone** (gathering wood, ore, wild fruit), **Beach Zone** (fishing)
-- The island can slowly **grow and expand over time** (unlock new zones, new buildings)
+**"一起"不等于你操控 Cato 一起做**（你控制不了他）。而是 **Cato 自主地在你身边参与**——他自己凑过来、有反应、也捣鼓。每个活动都要满足五条：①他在场参与（不是旁观）②实时有反应 ③会记住 ④喂给关系 ⑤你看得见自己的付出落地。
 
-### 4.2 Resources & Farming
+### 5.2 一起采集
 
-- **Planting**: Buy seeds → water → wait to ripen → harvest
-- **Gathering**: Chop trees (wood), mine rocks (ore), pick wild fruit, go fishing
-- **Crafting**: Simple workbench — convert raw materials into higher-value goods (wood → furniture, fish → dried fish)
-- All of these are **sources of income**
+采集本身极简（点一下灌木/果树/沙滩贝壳，进背包）。让它"和 Cato 一起"有感觉的节拍：
 
-### 4.3 Economic Loop
+1. **他对你的发现有反应**：你摘到稀有/漂亮的 → 他跑过来嗅、眼睛发亮、"喵—!"（算法层，按稀有度触发）。
+2. **他自己也找东西，还叼来给你**：猫最杀的行为——扒出个小东西、叼过来丢你脚边。**"猫给你带东西" = 顶级互惠 + 羁绊时刻**，还顺便给你惊喜掉落。
+3. **他的好奇心当"软向导"**：你控制不了他，就让**他去拉你的注意力**——他在某丛草前扒个不停、盯着一只蝴蝶，你跟过去，那儿就有个发现。**不受控的伙伴靠"他拉、你跟"带你探索。**
+4. **有些采集是"为他"采的**：他有偏好（爱吃某种甜果）。你特地去摘 → 给他 → 他乐开花 + 记住："你又摘了甜莓……你记得呀。" ——**他的反应就是"你的用心落地了"的收据。**
+5. **随羁绊变化**：越熟他找得越勤、指出的东西越稀罕。用他的行为表达，别用数字。
+
+### 5.3 一起钓鱼
+
+钓鱼是"等待型"活动，天生适合做**并肩安静的相处**，而且有天然节奏（抛竿→等→咬钩→收→揭晓），每阶段都是参与点：
+
+1. **等待 = 一起发呆的温柔时刻**：他坐你旁边、尾巴一甩一甩盯着水面。"等"正是 cozy 陪伴所在，也是最自然的**聊天窗口**（有根："今天水好静啊"）。
+2. **咬钩 = 共享的紧张**：鱼一咬他"唰"地竖起来往前凑——"有动静!"。
+3. **收线 = 一起的成败**：拉上来他欢呼、跑脱了他泄气趴下。
+4. **揭晓 = 一起的 payoff**：看是什么鱼——大→"哇哦!"，怪→好奇嗅，他爱吃的→狂喜。
+5. **他也钓（用猫的方式）**：从浅水拨一条上来、得意地叼给你——又是"猫给你带鱼"的互惠节拍。
+6. **鱼常常是"给他的"**：鱼是他最爱的吃食。你钓→做/给→他满足+记住。**"你付出（钓）→为他→他看见→他记住"这条轻种植喂关系的循环，在这里最具体。**
+7. **难忘的一条 = 共享历史**："那条跑掉的大鱼""我们的老钓点""夜里钓到的怪鱼"——成了以后聊天的**回扣**（"还记得那条会发光的鱼吗?"），正是对抗尬聊的核心机制。不同时间/天气咬不同的鱼 → 有理由和他在不同时候来钓。
+
+### 5.4 贯穿两者：反馈可读性 + 一条护栏
+
+- **反馈可读性（生死线）**：你付出的"收据"永远是 **Cato 的反应本身**——他吃到你钓的爱吃鱼时的狂喜、叼东西回赠你、参与得越来越勤。不需要数字。
+- **护栏：别做成"刷"或"优化"。** 不要"钓鱼小游戏必须练到出品质星"。重点是**那个一起的瞬间**，不是产量。一旦追求效率最优解，情感核心又被稀释成 spreadsheet。
+
+---
+
+## 6. Cato 怎么表达（沟通机制 + UI）
+
+### 6.1 表达阶梯：emoji 默认，说话是例外
+
+**默认不是"说话"，是"表情"。** 一个啥都要说两句的 NPC 会烦死，而且他老说话每句就都不值钱了；反过来，大多数时候安静、只用一个眼神/一个 emoji 反应的伙伴，更像真的、更 cozy。真朋友本来就不会一直讲话。
+
+1. **表情 bubble（算法 / 免费 / 高频 / 完全不用理）**：❤️ / ! / ? / 🐟 / 💤 / 竖耳朵 / 瞄你一眼。飘上来、~1.5 秒淡出。**80–90% 的表达都在这层。**
+2. **短话 bubble（偶尔、稀有）**：只在**真正值得**的时刻（稀有发现、要变天了、里程碑）头顶冒一个**带字**气泡，一句短话，~4 秒淡出。**限量→才金贵。**
+3. **点开对话（按需、双向）**：玩家想说了 → **点 Cato** → 才滑出输入框（现有的木框聊天面板），带上下文进入。**他从不硬塞话给你。**
+
+### 6.2 UI 铁律：绝不强制弹输入框
+
+Cato 主动说的话，**头顶 bubble 冒出来、很简短、非阻塞、可无视**。**绝不**每次他一反应就强制弹出对话框+输入框——那会打断你正在钓鱼/采集、给你施压、破坏 cozy 感。**表达是氛围级、可无视的；真正的对话永远是"你主动点"才发生。**
+
+### 6.3 算法触发 AI（不是只有点他才说话）
+
+算法判定到特殊场景（稀有发现等）就可以**触发一次 AI**，让 Cato 主动开口；日常一般反应用算法。这让他显得**随时在参与**，实际是**算法驱动的 AI**。
+
+**省 credit 的妙招——"想说话"的廉价信号 + 点了才真调 AI：**
+- 算法发现稀有 → **先冒一个廉价的 "!"/✨ 注意力气泡（免费、即时）**；
+- **玩家点了才发起 AI 调用** → 他说出那句有根的话 + 进对话；
+- **玩家没理 → 这次 AI 根本不花。**
+
+### 6.4 稀有实时 AI + 延迟处理 + 没额度靠 emoji
+
+- 因为**说话稀有**（emoji 才是默认），所以**不需要**复杂的"预烘焙台词池 + 前提标签过滤"那套——**v0 就在稀有的特殊时刻实时调一次 AI 即可**，算法简单得多。groundedness 不丢：实时调用那一下本来就带当前 observation（在哪、刚发生什么、记忆）。
+- **延迟用算法盖住**：AI 要 1–3 秒 → **先给即时 emoji/"!"**，AI 的话再落进 bubble，别让玩家盯着空气等。
+- **credit 用光 → 自然退回"只用 emoji"**（他安静下来）——体面、贴合"没额度他就变安静"的设定，v0 够用。
+- *future note（暂不做）*：**若以后决定让 Cato 主动说话变频繁了**，"AI 批量预烘焙情景台词（喂快照+记忆+人格→结构化情景表、打前提标签、算法挑条件成立的来播）"就重新变得值钱，到时再上。那条"批量预生成"的调用形态，也许该沉淀成**平台原语**（别的高频 AI-NPC 游戏也会用到）。
+
+### 6.5 在场规则：同屏才反应
+
+**Cato 必须和你同屏/在身边，才会对你的行为主动反应/说话。** 他在岛另一头还能对你钓鱼做反应会很出戏——像个隔着第四面墙的全知 AI。同屏门槛让他像**有感官的真动物**：更可信 + 更简单 + 更省钱。近距离/同屏就是"他能感知到"的廉价代理。
+
+配套三点，让"在场规则"从限制变卖点：
+
+1. **不在场 ≠ 被冻住，而是"他去过自己的日子了"**：你移开镜头 = 他跑去忙自己的（游荡、采集）。于是**重逢变成一个时刻**：等他回到你身边，换成**他有东西要给你看**——"你看我刚才发现了这个!"。
+2. **防"石像"陷阱**：他在屏幕外时必须"真的在过日子"（算法继续游荡/采集，位置和状态有变化），你转回来看到的是一只动过、可能叼着东西的猫，不是被暂停的雕像。
+3. **温柔的例外**：屏幕外他发现好东西，可以给一个**很轻的信号**把你引过去（屏幕边缘小箭头 + emoji，或画外一声兴奋叫）——就是"伙伴拉你去探索"。但**只是拉注意力、不说整句话**（说话要同屏），而且稀有、克制。
+
+**顺带**：Cato 的 observation 也顺势**收窄成近场**（只喂"他身边此刻发生了什么"）——既更可信（他只感知得到身边），又更便宜（context 更小）。对话也天然被"在场"约束（他不在屏幕上你点不到）——"想聊就得先找到他/等他回来"，反而是好质感。（以后可加"呼唤 Cato"，v0 不用。）
+
+### 6.6 "话越来越多" = 关系弧线（白捡）
+
+让**说话的频率本身跟着羁绊走**：
+- **早期的 Cato = 一只安静的猫**，基本只用 emoji、偶尔蹦一个字。
+- **随着变熟，他"话变多了"**——开始主动说完整的话、分享更多。
+- **"他跟你话多了"本身就是亲密度的可读表**——不需要任何数字条，玩家能**感觉**到"他跟我熟了、愿意跟我说话了"。
+
+这与"用行为而非数字表达好感"一脉相承，从"克制"里自然长出，几乎零成本。
+
+---
+
+## 7. 世界与经济（轻）
+
+### 7.1 岛与分区
+
+一座固定大小的像素俯视岛（Sprout Lands 风）。分区：**家园区**（你的小屋 + Cato 的角落）、**农田区**、**自然区**（采集木/果）、**水边**（钓鱼）。发布后可慢慢开新岛、新区。
+
+### 7.2 种植 / 采集 / 钓鱼（保持轻）
+
+- **种植**：买种 → 浇水 → 等成熟 → 收获。一键种/浇/收（1–2 步，casual）。
+- **采集**：一种起步（钓鱼 or 摘果），一次点击。
+- **加工**：极简——最多一台工作台把原料变成"一道更好的食物"（体现"用心做"），别做多级配方链。
+
+### 7.3 经济链指向 Cato（不是"变富"）
+
+**整条经济链的终点必须掰向 Cato，而不是玩家自己的富有/最优解。** 钱和货的唯一意义，是让 Cato 和你们的探索更好：
 
 ```
-Farming / Gathering / Fishing → Sell for coins → Buy food to feed the child
-                                               → Buy decorations / furniture to improve life
-                                               → Buy seeds to expand production
-                                               → Repay loans
+种植 / 采集 / 钓鱼  →  卖 or 加工  →  买/做更好的食物&东西 / 换新种子 / 新食谱 / 开新岛
+                                              ↓
+                                          给 Cato / 一起远行
+                                              ↓
+                         Cato 的反应 / 成长 / 记忆（这才是"收益"）
 ```
 
-**Loan System** (a nod to Animal Crossing):
-- At the start, the player has only a small cottage on the island
-- They can take a loan from the island's "bank" (an adorably styled building) to upgrade their home and expand the child's room
-- A better room → better child mood → more willing to interact with you
+你的"收益"不是账户数字，是 Cato 吃到好东西的反应、他因此的成长、以及他记得"这是你辛苦弄来的"。**不做贷款、不做自我升级最优解**（那会把情感核心稀释成 spreadsheet）。
 
-### 4.4 Island Shop (In-Game Online Store)
+### 7.4 商店
 
-- A charming "island shopping interface" where players can buy:
-  - Food (the child's daily necessity)
-  - Toys (boost the child's mood)
-  - Furniture (decorate the home)
-  - Clothing (dress up the child)
-  - Seeds (expand farming)
-- Orders require "next-day delivery" (arrives one in-game day later), adding a sense of realism
+一个"岛屿小商店"，只卖**和 Cato / 远行直接相关**的东西：食物、能提升心情的小物、新种子、新食谱。（订单可"次日送达"，加一点真实感——细节 TBD。）
+
+### 7.5 新岛 / 新物品 = 发布后的内容，不是现在的设计重点
+
+**新岛屿只是把"同一套核心模式"搬到不同"地方"**——发布后慢慢加即可。但注意：**"同样的模式换个地方"只有当模式被重跑时"真的产出新体验"，加岛才是增长，否则就是换皮跑步机。** 而让"同样的玩法"每次都不一样的，**主要不是岛，是被带过去的 Cato**（他的记忆、成长、关系、新反应）。所以**可复用的核心必须围绕"Cato 的持续演变"来搭**，而不是围绕"岛上的设定关卡"。
 
 ---
 
-## 5. AI Child — Communication Mechanics
+## 8. 时间与节奏
 
-### 5.0 AI and the Credit System
-
-The child's AI conversation capability is provided by the platform and consumes the user's credits. The game itself does not manage billing — the platform SDK handles it centrally. When credits run low, the SDK returns an error, and the game must **express this in game-world language** rather than popping up a technical top-up prompt.
-
-**Recommended in-game presentation**:
-- When credits are insufficient, the child doesn't "error out" — instead they enter a "quiet state." They look a little absent-minded, murmuring "I don't really feel like talking today…" or just shaking their head
-- The game sends a gentle in-game message: "Your heart-to-heart connection with [child's name] needs a recharge to continue…" and guides the player to top up
-- The child's algorithmic-layer behavior (walking, daily actions) is unaffected — only the AI conversation layer pauses, so the player feels the child is "going quiet," not that the game is "throwing an error"
-
-This design preserves immersion while wrapping the monetization prompt in an emotional narrative, making conversion feel more natural.
-
-### 5.1 Controls & Dialogue Triggers
-
-**Input**: Supports both mouse (desktop) and touch (tablet/phone) simultaneously. All interactions are "tap/click + drag" based — no keyboard needed to navigate the game world.
-
-**Building & Gathering** (standard casual game style):
-- **Gathering**: Tap/click a harvestable object (tree, ore, crop) → play gather animation → resource auto-added to inventory
-- **Planting**: Tap a farm tile → choose a seed → confirm planting
-- **Building**: Select a structure / item from the build menu → drag to target position → confirm placement
-- **Panning the view**: Drag on empty ground to pan the map (island is fixed size, no zoom needed)
-- All actions aim to be **completed in one or two steps** — casual rhythm, no complex crafting chains
-
-**Player-initiated conversation**:
-- Tap/click the child on the island → chat window appears (IM-style, with an input field and speech bubbles) → AI takes over the response
-- The child's opening line reflects their current state:
-  - Hungry: "I'm so hungry… did you forget about me today?"
-  - Happy: "You're here! I did something really cool today!"
-  - Long neglected: "…(silence, just looking at you)"
-- When the chat window closes, the child returns to algorithmic daily behavior
-
-**Child-initiated conversation**:
-- Under specific trigger conditions, the child will **automatically pop up a dialogue** to interrupt the player — like a phone notification appearing
-- Example triggers:
-  - Hunger reaches warning threshold: "I… I'm not sure I can hold on much longer…"
-  - After completing something fun: "I found an amazing place! Come see!"
-  - After another child visits: "Someone named XX came to play with me today — they were so interesting!"
-  - First login after a long absence: "You finally came…"
-- These pop-ups have a **cooldown** and won't appear too frequently — maintaining surprise rather than annoyance
-
-### 5.2 Memory System — Using Technical Limits to Simulate Real Forgetting
-
-The child's memory has two layers, together creating a **more human memory experience than an all-knowing AI**:
-
-**Short-term Memory (AI context window)**
-- What the child currently "has in their head" is the AI's context window
-- As conversation grows, early content naturally fades out — this isn't a flaw, it's how working memory works
-- Recent events: the child remembers directly; conversation flows naturally
-
-**Long-term Memory (persistent save data)**
-- The game saves key events, important conversation summaries, and milestone moments as structured data in the platform's save system
-- When the child can't recall something from their context, they can **trigger a "recall" action**: query the historical save, then inject the key info back into the current conversation
-- This "flipping through memories" process has a visible in-game expression: the child furrows their brow in thought, then brightens: "Oh! Now I remember…"
-
-**Three memory states, three corresponding responses**:
-- 🟢 **Clearly remembers** (in context): responds directly, naturally
-- 🟡 **Needs to recall** (not in context, but in save data): "Let me think…" → queries save → "Oh right! I remember now!"
-- 🔴 **Truly forgot** (too long ago or never saved): "That was so long ago, I really can't remember…"
-
-**Design Intent**: Forgetting isn't a bug — it's humanity. A child who occasionally forgets and needs to try hard to remember is more believable than an AI that recalls everything perfectly. Some memories disappear forever, which makes the ones that are remembered all the more precious.
-
-### 5.3 Child's Perception (Observations)
-
-Before responding, the AI can perceive:
-- Current hunger and mood values
-- Player behavior over the last N days (farming, shopping, login frequency)
-- Current island resource status (food stock, money)
-- Recent interactions with other children
-- Historical conversation summaries with the player (long-term memory)
-- Current weather and time of day (morning / evening / rain)
-
-### 5.4 What the Child Can Do
-
-The child can accept simple requests from the player:
-- "Go check if the crops are ready" → runs over, comes back to tell you
-- "Go say hi to [someone] (another child)" → sends a social request
-- "Tell me what happened on the island today" → narrates what they observed
-
-The child also **proactively makes requests**:
-- "I want that new toy"
-- "I want to visit [X]'s island"
-- "I haven't had anything good to eat in a long time"
-
-The player can agree or decline — the child will remember.
+- **真实时间流逝**：游戏内时间与真实时间挂钩（非 1:1，约 1 真实小时 = 1 游戏日）。
+- **不强制登录**：不上线不会立刻有负面后果（Cato 自给自足）；长期不上只会让关系变淡、让你错过（见 §3.5）。
+- **季节**（暂缓到后期）：四季影响作物与岛屿视觉。
+- **每日小故事**：Cato 每天有个"今天的小故事"等你（尤其重逢时）。
 
 ---
 
-## 6. Social System (The World Between Children)
+## 9. 社交系统（暂缓到 v1+）
 
-> **Scope note**: The social system is implemented in two phases. **v1.0 covers asynchronous social only**, focused on the core single-island experience. Real-time visits (the playground scene) are planned for future updates — like Animal Crossing DLC, continuously enriching the world.
-
-### 6.1 Asynchronous Social (v1.0)
-
-- When the player is offline, the child can automatically "leave the island" and visit other children's islands
-- When the player logs back in, the child tells them who they visited yesterday and what happened
-- Other players' children may also visit your island, leaving gifts or messages
-
-### 6.2 Real-Time Visits (Future Update)
-
-- A dedicated "Playground" scene where two children arrange to meet and play
-- The two players can only communicate through their respective children, maintaining immersion
-- The two AI children can talk to each other; the parents watch from the side and occasionally give their child a "nudge"
-- **Priority**: Develop after the core island experience is stable
-
-### 6.3 Social Relationship Chain
-
-- Children have **friendship levels** with each other; multiple interactions lead to becoming "best friends"
-- Best friends exchange gifts (via the in-game mail system)
-- Through their child's social connections, players can discover "someone's mom/dad's island" — a real player's world they'd never have found otherwise
-- Players can optionally share "parent contact info" (in-game private messages only) — but it's not required. Your connection can always remain only through the children
-
-### 6.4 Privacy & Safety
-
-- Players don't expose their real names — only in-game titles like "[child's name]'s parent"
-- The child's visits require the player to enable "open" permissions
-- "Only friends' children can visit" setting available
+v0 只做单岛核心体验。以后再加（像动森 DLC 那样持续丰富世界）：
+- **异步社交**：你离线时 Cato 可"出岛"去别人的岛串门，回来告诉你昨天遇见了谁；别人的 Cato 也可能来你岛留下礼物/口信。
+- **实时相会**（更后期）：一个"游乐场"场景，两只 Cato 约着一起玩，两个玩家只通过各自的 Cato 交流，两只 AI 猫互相聊，玩家在旁偶尔"推一把"。
+- **隐私安全**：玩家不暴露真名，只用"某某的伙伴"这类称呼；串门需开权限。
 
 ---
 
-## 7. Game Pacing & Time Design
+## 10. 设计支柱
 
-- **Real-time passage**: In-game time is linked to real time (not 1:1 — approximately 1 real hour = 1 in-game day)
-- **No forced login**: Not logging in doesn't cause immediate negative consequences, but prolonged absence has cumulative effects
-- **Seasons**: The game has four seasons, affecting available crops and the island's visual style
-- **Daily vignettes**: The child has a "little story of the day" waiting for the player each day
-
----
-
-## 8. Design Pillars
-
-1. **The child is real** — Players must believe the child is a real being with memory and feelings, even if they are code
-2. **Nurturing has weight** — Actions have consequences. Love requires effort; neglect has a cost
-3. **Connection is magical** — You might form a genuine emotional bond with someone on the other side of the planet, through the friendship of two pixel spirits
-4. **Life itself is the game** — There is no clear "win condition" — only the time you and your child spend together
-5. **The child is the gateway to the world** — All new content, new scenes, and new features are delivered to the player through the child. They are not just the thing being raised — they are the player's only eyes and voice in this virtual world. The game menu won't tell you "new content is live" — the child comes running to say "I heard there's a new playground on the island — can you take me?" Every update is a story between parent and child, not a feature notification.
+1. **Cato 是真的** —— 玩家要相信他是一个有记忆、有感受的真生命，即便他是代码。
+2. **伙伴，不是养育** —— 乐趣不在照顾他，而在**一起探索世界、一起发现新东西**；种植/交易是一起做的事之一，聊天是一起做事时自然发生的。
+3. **轻种植，重联结** —— 种田是那口井（轻、少），联结是井水（重、多）；井小没关系，只要井水是活的。
+4. **克制才金贵** —— emoji 和沉默扛住"他一直在场"，话留给真正值得的时刻；话少反而更有分量、更便宜、更像真猫。
+5. **他必须在场才反应** —— Cato 是活在空间里的生物、有感官，不是全知 AI；同屏才对你的行为反应，不在场时他过自己的日子。
+6. **Cato 是通往世界的纽带** —— 所有新内容、新场景、新功能都通过他抵达。菜单不会告诉你"上新了"，是 Cato 跑来说"我听说远处有座新岛，带我去看看?"。每次更新都是你和他之间的一个故事，不是功能通知。
+7. **可复用核心 > 一次性内容** —— 把核心建在"Cato 持续演变"这根轴上；关卡内容会被玩腻，一个记得你、随你成长的伙伴不会。
 
 ---
 
-## 9. Open Questions
+## 11. 决策日志 / 待解决
 
-- [x] Game name: **Catopia**
-- [x] Relationship model (v0.3): **companions / friends, NOT parent↔child** — Cato is self-sufficient; the bond grows from exploring together, not from caretaking (see "Relationship Model & The Core Loop"). Supersedes the parent/child framing in §1–§4.
-- [x] Dependency model: **self-sustaining — Cato never starves/dies**; neglect cools the friendship (recoverable), not survival. Survival-failure / soul-departure (§3.4) deferred / reworked as an optional later relationship-rupture layer.
-- [x] Exploration of new islands: **Cato travels *with* the player, side by side** (enables real-time, in-context conversation grounded in a shared new place).
-- [ ] "Player title" / how Cato addresses the player: the old **single-parent** setup (§9 below) needs revisiting under the companion model — likely a name/nickname a *friend* would use, not "Mom/Dad."
-- [x] Extreme neglect outcome: **Soul departure + Path of Return** — farming, building, and writing letters can call the child back; they remember everything upon their return
-- [x] Child's name: **Named by the player at game start** (just like a parent naming their child); can only be changed once in their lifetime — requires filing a request with the island's "Name Registry" NPC and waiting approximately 1 in-game week; the child and all their friends will remember the name change
-- [ ] Loan system interest rates and repayment mechanics (details TBD)
-- [x] Real-time visits: **Future update**, implemented as a dedicated "Playground" scene; v1.0 covers asynchronous social only
-- [ ] How to persist and truncate the child's long-term memory (token limit engineering problem)
-- [x] Player title: **Single-parent setup** (v1.0 has only one player caring for the child); the child calls the player by whatever name or nickname the player sets at the start ("What do you want them to call you?") — not forced to "Mom/Dad," kept neutral and warm
+- [x] 游戏名：**Catopia**
+- [x] **关系模型**：**伙伴 / 朋友，不是父母↔孩子**——Cato 自给自足，羁绊靠一起探索而非照顾。
+- [x] **依赖模型**：**自给自足——Cato 不会饿死/离开**；冷落使友谊变淡（可恢复），不威胁生存。生存失败/灵魂离开暂缓，日后可作为可恢复的"关系断裂"层。
+- [x] **一起探索新岛**：**Cato 和你并肩同行**（这样才能在共享的新地方实时、有根地聊天）。
+- [x] **沟通模型**：emoji 默认 + 稀有时刻实时 AI（emoji 盖延迟）+ 点开双向对话；主动说话用头顶 bubble、绝不强制弹输入框；算法触发 AI、点了才调用省钱；**同屏才反应**。
+- [x] **行为模型**：松散跟随你的注意力 + 就近好奇查看 POI + 偶尔自己溜达（替换纯随机游走）。
+- [x] **表达频率随羁绊上升** = 天然的关系弧线（越熟话越多）。
+- [ ] **Cato 怎么称呼玩家**：旧的"单亲妈妈/爸爸"设定在伙伴模型下不合适了——应是**朋友之间的名字/昵称**，具体待定。
+- [ ] 长期记忆如何持久化与截断（token 限制的工程问题）。
+- [ ] 第一座"新岛"的最小可玩形态（发布前是否需要，还是先把家岛的核心模式打磨好）。
+- [ ] 商店订单/加工/食谱的具体最小集合。
