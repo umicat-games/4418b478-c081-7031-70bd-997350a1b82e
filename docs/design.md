@@ -1,6 +1,6 @@
 # Catopia — Game Design Document
 
-> Version: 0.2 | Date: 2026-07-02 | Status: In Discussion
+> Version: 0.3 | Date: 2026-07-02 | Status: In Discussion
 
 ---
 
@@ -22,11 +22,15 @@
 
 ### Core Premise
 
-> You are not the protagonist. Your child is.
+> You and Cato are companions exploring this world together.
 
-You are a "parent" living on your own island. Your task is to care for a **cute little spirit** — your child. They cannot be directly controlled by you; they have their own will, emotions, memories, and growth trajectory.
-Everything you do — farming, gathering, building, shopping — exists to give them a better life.
-They are your **only connection** to this virtual world.
+You share an island with **Cato — a cute little cat-spirit**. Cato is **not a dependent child** you keep alive; he is a **self-sufficient companion** who lives his own small life (he plants and forages the basics on his own). You cannot directly control him — he has his own will, moods, memories, and reactions.
+
+Your role is to be his **partner and his window to the wider world**: you reach beyond the island — trade for new seeds he can't find alone, buy new recipes, open up new islands — and then **you explore all of it *together*, side by side**. The bond grows not from *caring for* him but from *doing things with* him: discovering the unknown, plus the small joys and gifts you share along the way.
+
+Cato is your companion **and** your bridge to this virtual world — new places, new content, and new adventures arrive through him.
+
+> **Relationship model:** companions / friends, **not** parent↔child. See "Relationship Model & The Core Loop" below — it is the current (v0.3) direction and supersedes the older parent/child framing still present in §3–§4.
 
 ---
 
@@ -34,12 +38,12 @@ They are your **only connection** to this virtual world.
 
 | Dimension | Animal Crossing | Catopia |
 |-----------|----------------|---------|
-| Player role | You ARE the character (avatar) | You are the "parent"; the spirit is the "child" |
-| Character control | Direct control | Cannot directly control — they have their own behavior |
+| Player role | You ARE the character (avatar) | You are Cato's **companion** (not his parent) — a partner + his window to the world |
+| Character control | Direct control | Cannot directly control — Cato has his own behavior |
 | Character intelligence | Scripted NPC dialogue | AI-driven, with real memory and conversation |
-| Emotional investment | I'm building my own home | I'm raising a living being |
-| Risk | Almost zero negative consequences | Real neglect → real consequences; soul departs but can return |
-| Social connection | Players interact directly | Players connect indirectly through their children |
+| Emotional investment | I'm building my own home | I'm exploring a world **together with a friend** |
+| Risk | Almost zero negative consequences | Cato is self-sufficient — neglect **cools the friendship** (recoverable), never kills him |
+| Social connection | Players interact directly | Players connect indirectly through their companions |
 
 ---
 
@@ -105,6 +109,75 @@ Farming's "crop" is a passive machine that reflects your effort. Catopia's "crop
 
 ---
 
+## Relationship Model & The Core Loop (v0.3 — current direction)
+
+> This is the current converged direction. It **supersedes the parent/child, survival-dependency framing** in the older sections below (§3's "child," §3.4 "Survival Risk & Soul Return," §4's self-enrichment economy) — those are earlier v0.1 exploration, kept for reference and being revised to match this.
+
+### Companions, not caretaking
+
+Cato is **not a dependent child** you keep alive — he is a **self-sufficient companion**. The relationship is **friend / partner**, not parent / child. This single reframe solves three problems at once:
+
+1. **It cures conversation fatigue.** Friends don't sit and *talk*; they *do things together*, and talk spills out of the doing. The main activity is shared adventure; conversation is the seasoning around it, so it never dries up — there's always something new in front of you both to react to.
+2. **It answers "why not just use ChatGPT?"** The value was never the chat. ChatGPT out-chats Cato any day — but it can't give you *a world you two share, a history of places you explored together, a companion who remembers the journey.* Catopia's moat is **world + shared history + joint activity**, not conversation quality. The talk earns its meaning from what you've done together — it's grounded, not free-floating.
+3. **It makes the bond fun.** You have a deep bond with your parents, yet hanging out with them isn't "fun" — fun comes from *peers* exploring together. Cato as a **companion** (not a ward) shifts the game's energy from duty / worry to curiosity / play. This also fits what a cat *is* — a semi-independent creature that *chooses* to be with you — and aligns with the playbook's existing "guardian ↔ guarded spirit, Pokémon-like, NOT parent/child" lean.
+
+### The division of roles
+
+- **Cato = the local & the basic.** He self-sustains: plants and forages basic crops, lives his own small daily life. He does **not** need you to survive.
+- **You = the beyond & the new.** You reach past the island — trade for seeds he can't get alone, buy new recipes, unlock new islands. **You are his window to the wider world.**
+- **Together = exploration.** New content (a new island, a new discovery) is experienced **side by side**. **Cato travels *with* you** (confirmed direction) — physically along for the adventure, not left at home.
+
+### Why "travel together" matters: real-time, grounded conversation
+
+Cato being **present with you in a new place** is the engine that keeps talk fresh: standing next to you on a new island, reacting to what you're both seeing *right now* ("What is that thing?!" / "Let's go look!"). The conversation is anchored in a **live, shared, novel situation** — the strongest possible form of grounded talk, and the exact opposite of opening a chat box in a vacuum. **Exploration content directly becomes conversation content.**
+
+*Design/tech consequence:* Cato's AI must be **scene-aware** — his observations include *where we are / what we just found / what you just did* — so he can comment in context. This is exactly the platform's runtime-AI Observation→Say/Do primitive (ADR-017); Catopia's core need drives the hardest, most differentiating platform work, which validates the "Catopia drives the platform" thesis.
+
+### The core loop (light farming, heavy connection)
+
+```
+        You reach beyond ─────────────────────────────┐
+   (trade for new seeds / recipes / unlock new islands) │
+                                                        ▼
+              Explore the new — TOGETHER, side by side
+              (Cato reacts in real time, in context)
+                                                        │
+                    ┌───────────────────────────────────┤
+                    ▼                                    ▼
+   Gift / cook for him / bring things back        Shared discoveries + history
+   (deepens the friendship — optional,             (what you two did together;
+    NOT survival)                                   Cato remembers it)
+                    │                                    │
+                    └─────────────────┬──────────────────┘
+                                      ▼
+             Deeper bond → Cato opens up, grows, wants to go
+             further → drives the next expedition
+
+   Meanwhile, back home: Cato self-farms the basics (light, autonomous).
+```
+
+The relationship grows from **doing together**, not from **caring for**. Farming / trading is *light in time* but *essential in role* — it's the material and the stakes of your shared life (the well you draw from), never the main time-sink. **Most of a session may well be spent adventuring and talking with Cato, not tending crops — and that's correct** (light farming, heavy connection).
+
+### The #1 risk, and the four things that fight it
+
+The whole game rests on **Cato staying alive as a character over weeks**. The classic AI-companion death is "feels samey after three chats." Talk stays fresh only when grounded in a living context that keeps renewing. Four feeders keep it renewing:
+
+1. **Shared novelty** — new islands / discoveries you experience together give him fresh, in-context things to react to.
+2. **Memory** — every exchange carries your shared history ("remember that island with the glowing fish?").
+3. **Growth / change** — how you adventure together shapes who Cato becomes; week-4 Cato ≠ day-1 Cato.
+4. **What you just did** — the light farming / trading gives each meeting reciprocity and stakes ("did you find the seeds we needed?").
+
+### Consequences of neglect (self-sustaining model)
+
+Cato never dies and never must-be-fed. Away a long time → he simply lives his plainer, self-sufficient life — and, with memory, *notices*: the friendship **cools and must be re-warmed**, and you **missed things you'd otherwise have shared**. The cost is **relational and recoverable** (drift + missed moments), never survival. This replaces §3.4's "hunger → weakness → soul departs." (A heavier "soul departs but returns" beat may return *later* as an optional, recoverable *relationship-rupture* layer — never a v0 survival-failure state.)
+
+### What v0 keeps vs. defers
+
+- **v0 keeps:** self-sufficient Cato + light farming (2–3 crops, one forage type, one small shop pointed at Cato / expeditions) + **travel-together exploration of a second island or two** + real-time in-context chat + memory of shared history + gifting.
+- **v0 defers:** seasons & four-season crops, building / furniture / loans, complex crafting & quality tiers, other players' islands (social), survival-failure / soul-departure, any self-enrichment economy.
+
+---
+
 ## 3. The Child (Spirit) System
 
 ### 3.1 Form & Appearance
@@ -146,6 +219,8 @@ The child's personality is not fixed — it **evolves dynamically based on how t
 Emotions are driven by multiple factors: hunger level, time since last interaction, recent gifts, weather, social status.
 
 ### 3.4 Survival Risk & Soul Return
+
+> ⚠️ **Superseded (v0.3).** This section reflects the earlier *parent/child, survival-dependency* model. Current direction (see "Relationship Model & The Core Loop") is a **self-sustaining companion**: Cato can't be starved and never dies; neglect **cools the friendship** (recoverable), it doesn't threaten his life. The "soul departs → path of return" idea may return LATER as an optional, recoverable *relationship-rupture* layer — never a v0 survival-failure state. Kept below for reference / future reworking.
 
 The game is designed for **high emotional investment with real consequences — but always leaving room for hope**:
 
@@ -354,6 +429,10 @@ The player can agree or decline — the child will remember.
 ## 9. Open Questions
 
 - [x] Game name: **Catopia**
+- [x] Relationship model (v0.3): **companions / friends, NOT parent↔child** — Cato is self-sufficient; the bond grows from exploring together, not from caretaking (see "Relationship Model & The Core Loop"). Supersedes the parent/child framing in §1–§4.
+- [x] Dependency model: **self-sustaining — Cato never starves/dies**; neglect cools the friendship (recoverable), not survival. Survival-failure / soul-departure (§3.4) deferred / reworked as an optional later relationship-rupture layer.
+- [x] Exploration of new islands: **Cato travels *with* the player, side by side** (enables real-time, in-context conversation grounded in a shared new place).
+- [ ] "Player title" / how Cato addresses the player: the old **single-parent** setup (§9 below) needs revisiting under the companion model — likely a name/nickname a *friend* would use, not "Mom/Dad."
 - [x] Extreme neglect outcome: **Soul departure + Path of Return** — farming, building, and writing letters can call the child back; they remember everything upon their return
 - [x] Child's name: **Named by the player at game start** (just like a parent naming their child); can only be changed once in their lifetime — requires filing a request with the island's "Name Registry" NPC and waiting approximately 1 in-game week; the child and all their friends will remember the name change
 - [ ] Loan system interest rates and repayment mechanics (details TBD)
