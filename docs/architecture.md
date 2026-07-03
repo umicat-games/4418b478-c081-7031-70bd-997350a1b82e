@@ -1,6 +1,6 @@
 # Catopia — 系统架构设计（技术）
 
-> 版本 0.1 | 日期 2026-07-02 | 状态：讨论中
+> 版本 0.2 | 日期 2026-07-02 | 状态：讨论中（§4 已与真实代码核对）
 >
 > 本文是 **Catopia 的技术架构**（游戏端 / 平台端 / 交互协议）。游戏世界观、玩法与交互**设计**在 [`design.md`](./design.md)。本文只谈"怎么把那套设计跑起来"。
 
@@ -75,41 +75,64 @@ Catopia 的核心需求会**倒逼平台**长出两个通用能力（见 §2）�
 
 ---
 
-## 4. 交互协议（游戏端 ↔ 平台端，设计层数据形状）
+## 4. 交互协议（游戏端 ↔ 平台端）
 
-> 非最终 schema，描述数据"形状"与流向。
+> **本节已与真实代码核对（SDK 1.0.62 / game-manager RuntimeAiService，2026-07-02）。** 标注 ✅已实现 / ⬜待做。真实 API 是 `umicat.ai.act(params)`（`umicat.ai.npc({...}).say()` 是它的封装）。
 
-### 4.1 当场反应 / 对话（同步）
-- **游戏端 → 平台**：
-  ```
-  observation = {
-    sceneId, catoPos, catoState, catoMood,
-    timeOfDay, weather,
-    nearbyPOIs: [...],          // 近场，非全岛
-    playerJustDid: "...",       // 玩家刚做的事
-    relevantMemories: [...],    // 挑相关的，非全量
-    playerUtterance?: "..."     // 玩家这句话（若点开对话）
-  }
-  ```
-- **平台 → 游戏端**：
-  ```
-  { say?: "一句话", do?: { action: <词表内>, target } }
-  ```
-  `say` 空 = 只做动作/只 emoji；`do` 空 = 只说话。AI 只选**声明过的动作**，运动由游戏端执行。
+### 4.1 当场反应 / 对话 —— ✅ 已实现
 
-### 4.2 托付（异步，三段）
-1. **下达**：游戏端 → 平台 `{ requestText, observation }` → 平台（AI 解析）→
-   `{ intent: { primitive: fetch|discover|attempt|vignette, subject, condition, difficulty }, immediateSay }`
-2. **结算**（游戏端本地，真实时间 + 条件掷骰）→
-   `outcome = { primitive, subject, result: success|partial|empty|surprise, items[], detail, catoFeeling }`
-3. **叙述**：游戏端 → 平台 `{ outcome, observation, relevantMemories }` → 平台（AI）→ `{ say: 量身定做的小故事 }`
+**请求 `AiActParams`**（游戏端 → 平台，端点 `POST /games/{id}/ai/act`）：
+```
+{
+  playbook?:    string,                       // 如 'cato'（S3 读 games/{id}/playbooks/cato.md）
+  persona?:     { role?, goals?, style?, rules? },
+  observation?: <任意游戏自定义 JSON，无固定 schema>,   // 平台原样塞进系统提示
+  actions?:     [{ name, description?, args?: { 字段: "string"|"number"|"integer"|"boolean" } }],
+  history?:     [{ from: 'player'|'npc'|'event', text?, data? }],   // 游戏端/SDK 维护，每回合全发
+  options?:     { model?, maxTokens?, temperature? }   // ⚠️ npc() 不暴露，只在低层 act()
+}
+```
+- **observation 是任意 JSON、无固定 schema**（`unknown` / `JsonNode`）。设计里"近场场景上下文（时间/天气/附近 POI/刚做的事/相关记忆）"= 往这个字段放什么的问题。⬜ **目前 Catopia 只发写死的 `{ island:'home', timeOfDay:'day' }`（stub）**。
+- **actions[]** = Cato 能做的动作声明（= `do` 的词表，`args` 简写编译成 Anthropic tool schema）。⬜ **目前 Catopia 声明为空 = 纯说话，没有 Do**。
 
-### 4.3 记忆（`umicat.saves`）
-- `saves.set / get`：长期记忆条目（含"共同历史"）、关系状态、未结算托付列表。
-- AI 调用时游戏端挑**相关**记忆摘要塞进 observation（非全量）——省 token、更聚焦。
+**响应 `AiActResult`**（平台 → 游戏端，判别联合）：
+```
+成功: { ok: true, say?: string, do?: [{ name, args }], usage?: { credits, balanceCredits, limitReached, model } }
+失败: { ok: false, reason: 'SIGN_IN_REQUIRED' | 'INSUFFICIENT_CREDITS' | 'RATE_LIMITED' | 'UNAVAILABLE' }
+```
+- `say` = 台词（只显示、无副作用）；**`do` 是 AI 选的意图数组** `[{ name, args }]`，游戏端逐个**校验 + 执行**（平台永不改游戏状态）。
+- 模型默认 `claude-haiku-4-5`（可选 `claude-sonnet-4-6`）；`max_tokens` 默认 400 / 上限 1024；RPC 60s 超时；`act()` 从不抛错，失败也走 `{ok:false, reason}`。
 
-### 4.4 计费 / 降级
-- 每次 AI 调用在平台扣 credit；`SIGN_IN_REQUIRED` / 余额不足 → 游戏端收到信号 → **降级为纯 emoji**（用游戏内语言表达"Cato 变安静"，不弹技术提示）。
+### 4.2 托付（异步，三段）—— ⬜ 待做（新原语，平台侧尚不存在）
+
+> 现有 `ai.act` 是**当场**单发。托付需要平台新增"异步委托 / 延迟意图"能力。下面是提案形状。
+
+1. **下达**：游戏端 → 平台 `{ requestText, observation }` → 平台（AI 解析）→ `{ intent: { primitive: fetch|discover|attempt|vignette, subject, condition, difficulty }, immediateSay }`
+2. **结算**（游戏端本地，真实时间 + 条件掷骰）→ `outcome = { primitive, subject, result: success|partial|empty|surprise, items[], detail, catoFeeling }`
+3. **叙述**：游戏端 → 平台（可复用 `ai.act`，把 outcome 当 observation）→ `{ say: 量身定做的小故事 }`
+
+### 4.3 记忆（`umicat.saves`）—— API ✅ 已实现，⬜ Catopia 未接
+
+- 真实 API：`saves.get(key)` / `saves.set(key, value, {ifVersion?}) → version` / `saves.delete(key)` / `saves.list()`，全 async，走后端（登录）或 localStorage（匿名/单机）。限额：单值 100KB、单游戏单用户共 1MB、最多 64 key、key 需匹配 `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`。
+- ⬜ **目前 Catopia 完全没用 saves**：对话 `history` 只在内存 `Npc` 对象里、**重载即丢**。设计的三层记忆 / 长期记忆 / 共同历史**尚未落地**——接入记忆的第一步就是把它们 `saves.set` 持久化，并在 AI 调用时挑相关摘要塞进 observation。
+
+### 4.4 计费 / 降级 —— ✅ 已实现（降级表现待对齐）
+
+- 每次 AI 调用在 game-manager 扣 credit（`source="runtime_ai"`，与 agent 同池同 markup，进 Credit Usage）。**玩家付费、须登录。** 门控顺序：登录 → 是成员 → 限流(429) → 余额(402) → 游戏存在。
+- reason 门控已实现：匿名 → home-ui broker 直接返回 `SIGN_IN_REQUIRED`（不打后端、不扣费）；402→`INSUFFICIENT_CREDITS`；429→`RATE_LIMITED`；其余→`UNAVAILABLE`。
+- ⬜ **降级表现**：目前 Catopia 收到 reason 时显示**一句文字**（"Cato 打了个哈欠…"）；设计里是"降级成纯 emoji / 安静"——待对齐。
+
+### 4.5 当前实现状态小结（GAP 一览）
+
+| 项 | 状态 |
+|---|---|
+| Observation→Say+Do、`ai.act` 协议、reason 门控、playbook、billing | ✅ 已实现 |
+| 丰富的近场 observation（时间/天气/POI/刚做的事/记忆） | ⬜ 现在是 `{island, timeOfDay}` stub |
+| `actions[]`（Do 半边：可命令 / 一起做事 / 托付执行） | ⬜ 未声明，Cato 纯说话 |
+| `umicat.saves` 持久化记忆（三层记忆 / 共同历史） | ⬜ 完全没接，history 重载即丢 |
+| 托付（async commission） | ⬜ 平台新原语，未实现 |
+| credit 用尽降级成 emoji | ⬜ 现在是一句文字 |
+| emoji 默认 / 稀有实时 AI / 同屏才反应 / 行为状态机 | ⬜ 未实现（现在是点击→单发对话） |
 
 ---
 
