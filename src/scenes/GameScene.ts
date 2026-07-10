@@ -26,6 +26,13 @@ const WALK_MAX_MS = 2800;
 const IDLE_MIN_MS = 900;
 const IDLE_MAX_MS = 2600;
 
+// --- Player control (WASD / arrow keys) ---
+// When true the PLAYER drives Cato directly (WASD or arrow keys) and the camera
+// follows him; the autonomous wander (CHILD_WANDER) is suppressed. Flip to false
+// to go back to Cato roaming on his own.
+const PLAYER_CONTROL = true;
+const PLAYER_SPEED = 90; // world-px/s while a direction is held
+
 // --- Edge-scroll tuning (desktop / mouse, RTS / theme-park style) ---
 const EDGE_MARGIN = 48;   // px from a canvas edge where scrolling kicks in
 const EDGE_SPEED  = 900;  // scroll speed in SCREEN px/s (zoom-independent feel)
@@ -60,6 +67,12 @@ export class GameScene extends Phaser.Scene {
   private wanderInterval = 2000;
   private wanderState: 'walk' | 'idle' = 'idle';
   private faceDir: FaceDir = 'down';
+
+  // Player control (WASD / arrows) — registered when PLAYER_CONTROL.
+  private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
+  // Every world sprite (Cato + decoration props like the sunflower). Depth-
+  // sorted by foot Y each frame so Cato passes IN FRONT OF / BEHIND them.
+  private ySortSprites: Phaser.GameObjects.Sprite[] = [];
 
   // Edge-scroll: last mouse position over the canvas (game-resolution coords),
   // whether it's inside the canvas, and whether the last input was a mouse
@@ -140,6 +153,14 @@ export class GameScene extends Phaser.Scene {
 
     const reg = getEntityRegistry(this)!;
     const childGO = reg.byRole('child')[0] as Phaser.GameObjects.Sprite | undefined;
+
+    // Y-sort: collect every world sprite (Cato + decoration sprites like the
+    // sunflower). `applyYSort` (in update) sets each one's depth = its foot Y so
+    // whoever stands lower on the map draws IN FRONT — Cato walks before/behind
+    // props instead of always over/under them.
+    this.ySortSprites = reg.all().filter(
+      (go) => go.getData('entityKind') === 'sprite',
+    ) as Phaser.GameObjects.Sprite[];
 
     if (childGO) {
       this.child = childGO;
@@ -240,7 +261,13 @@ export class GameScene extends Phaser.Scene {
       this.game.events.on('hud:submit', this.onHudSubmit);
       this.game.events.on('hud:cancel', this.onHudCancel);
 
-      if (CHILD_WANDER) {
+      if (PLAYER_CONTROL) {
+        // Player drives Cato with WASD / arrow keys; the camera follows him.
+        this.setupPlayerKeys();
+        (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+        this.child.play('idle-down', true);
+        this.cameraFollow = true;
+      } else if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
       } else {
         // Pinned: no velocity, no walk animation — cat stands at spawn.
@@ -525,6 +552,70 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── Y-sort (depth by foot position) ───────────────────────────────────
+
+  /** Depth-sort every world sprite by its FOOT Y (visual bottom): a sprite
+   *  lower on the map draws IN FRONT, so Cato passes before/behind props like
+   *  the sunflower instead of always over or under them. Cheap — a handful of
+   *  sprites, one getBounds each per frame. Tilemaps keep their own (low) depth,
+   *  so sprites always sit above the ground. */
+  private applyYSort(): void {
+    for (const s of this.ySortSprites) {
+      if (!s.active) continue;
+      s.setDepth(Math.round(s.getBounds().bottom));
+    }
+  }
+
+  // ── Player control (WASD / arrow keys) ────────────────────────────────
+
+  /** Register WASD + arrow keys for player-driven walking (PLAYER_CONTROL). */
+  private setupPlayerKeys(): void {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    // Capture so arrow keys don't scroll the host page (editor iframe / browser).
+    kb.addCapture(['UP', 'DOWN', 'LEFT', 'RIGHT', 'W', 'A', 'S', 'D']);
+    this.keys = kb.addKeys({
+      up: Phaser.Input.Keyboard.KeyCodes.UP,
+      down: Phaser.Input.Keyboard.KeyCodes.DOWN,
+      left: Phaser.Input.Keyboard.KeyCodes.LEFT,
+      right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      w: Phaser.Input.Keyboard.KeyCodes.W,
+      a: Phaser.Input.Keyboard.KeyCodes.A,
+      s: Phaser.Input.Keyboard.KeyCodes.S,
+      d: Phaser.Input.Keyboard.KeyCodes.D,
+    }) as Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
+  }
+
+  /** Player-driven walking: 8-way movement (normalized so diagonals aren't
+   *  faster), 4-way animation (the sheet has no diagonal walk — face by the
+   *  dominant axis), camera follows while moving. Frozen while chatting. */
+  private updatePlayerMove(): void {
+    if (!this.child?.body) return;
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+    if (this.dialogOpen) { body.setVelocity(0, 0); return; } // typing — hold still
+    const k = this.keys;
+    let vx = 0;
+    let vy = 0;
+    if (k) {
+      if (k.left.isDown || k.a.isDown) vx -= 1;
+      if (k.right.isDown || k.d.isDown) vx += 1;
+      if (k.up.isDown || k.w.isDown) vy -= 1;
+      if (k.down.isDown || k.s.isDown) vy += 1;
+    }
+    if (vx === 0 && vy === 0) {
+      body.setVelocity(0, 0);
+      this.child.play(`idle-${this.faceDir}`, true);
+      return;
+    }
+    const len = Math.hypot(vx, vy);
+    body.setVelocity((vx / len) * PLAYER_SPEED, (vy / len) * PLAYER_SPEED);
+    // Face the DOMINANT axis (horizontal wins ties) — 4-direction anim set.
+    if (Math.abs(vx) >= Math.abs(vy)) this.faceDir = vx < 0 ? 'left' : 'right';
+    else this.faceDir = vy < 0 ? 'up' : 'down';
+    this.child.play(`walk-${this.faceDir}`, true);
+    this.cameraFollow = true; // keep the camera on Cato while the player drives
+  }
+
   // ── Wandering AI helpers ──────────────────────────────────────────────
 
   // 4-directional headings only — the character sheet has walk anims for
@@ -607,6 +698,7 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.updateEdgeScroll(delta);
+    this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
     // Camera lock: smoothly keep Cato centred while following. Uses the proven
     // origin-0.5 centring form (child.x − w/2, NOT /zoom — see snapToChild); a
@@ -625,6 +717,13 @@ export class GameScene extends Phaser.Scene {
     this.cursorState.visible = this.locked;
 
     if (!this.child?.body) return;
+
+    // Player-driven walking takes over from the autonomous wander.
+    if (PLAYER_CONTROL) {
+      this.updatePlayerMove();
+      return;
+    }
+
     if (!CHILD_WANDER) return; // pinned — skip wander (edge-scroll already ran)
     const body = this.child.body as Phaser.Physics.Arcade.Body;
 
