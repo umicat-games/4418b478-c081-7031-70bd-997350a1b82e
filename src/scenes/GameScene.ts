@@ -552,22 +552,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ── Y-sort (depth by screen position) ─────────────────────────────────
+  // ── Y-sort (depth by foot / base line) ────────────────────────────────
 
-  /** Depth-sort every world sprite by its Y POSITION: a sprite lower on the map
-   *  draws IN FRONT, so Cato passes before/behind props like the sunflower.
-   *
-   *  We sort by the sprite's position (its center, for a default-origin sprite),
-   *  NOT `getBounds().bottom`. For a TALL prop (the 16×32 sunflower) the bottom
-   *  is at the base of the stem, so Cato would only flip in front after clearing
-   *  the whole plant; sorting by the middle flips at the stem — which reads as
-   *  "walk in front of the flower" the moment Cato steps below its center.
-   *  Using the position also sidesteps reading a frame that may be mid-reload
-   *  (no getBounds crash). */
+  /** Depth-sort every world sprite by its BOTTOM edge (feet / base): whichever
+   *  sprite's bottom is LOWER on the map draws in front. So Cato is in front of
+   *  the sunflower exactly when his feet are BELOW the flower's base, and behind
+   *  it when his feet are above the base — the standard top-down "feet line"
+   *  rule. `getBounds().bottom` is the world-Y of the visible bottom for both.
+   *  Tilemaps keep their own (low) depth, so sprites always sit above the ground. */
   private applyYSort(): void {
     for (const s of this.ySortSprites) {
       if (!s.active) continue;
-      s.setDepth(Math.round(s.y));
+      // A sprite can briefly hold an invalid frame (an atlas texture mid-reload)
+      // whose null source makes getBounds() throw — skip it this tick rather
+      // than crash the whole update loop.
+      try {
+        s.setDepth(Math.round(s.getBounds().bottom));
+      } catch {
+        /* invalid frame this tick — leave its depth until it resolves */
+      }
     }
   }
 
