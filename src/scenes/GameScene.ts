@@ -33,6 +33,12 @@ const IDLE_MAX_MS = 2600;
 const PLAYER_CONTROL = true;
 const PLAYER_SPEED = 90; // world-px/s while a direction is held
 
+// --- Y-sort debug ---
+// Draws a magenta horizontal line at each sprite's FOOT line (the value used for
+// depth sorting) so you can SEE where the front/behind flip happens. Set false
+// to hide once the layering feels right.
+const YSORT_DEBUG = true;
+
 // --- Edge-scroll tuning (desktop / mouse, RTS / theme-park style) ---
 const EDGE_MARGIN = 48;   // px from a canvas edge where scrolling kicks in
 const EDGE_SPEED  = 900;  // scroll speed in SCREEN px/s (zoom-independent feel)
@@ -73,6 +79,7 @@ export class GameScene extends Phaser.Scene {
   // Every world sprite (Cato + decoration props like the sunflower). Depth-
   // sorted by foot Y each frame so Cato passes IN FRONT OF / BEHIND them.
   private ySortSprites: Phaser.GameObjects.Sprite[] = [];
+  private ysortDebug?: Phaser.GameObjects.Graphics;
 
   // Edge-scroll: last mouse position over the canvas (game-resolution coords),
   // whether it's inside the canvas, and whether the last input was a mouse
@@ -161,6 +168,7 @@ export class GameScene extends Phaser.Scene {
     this.ySortSprites = reg.all().filter(
       (go) => go.getData('entityKind') === 'sprite',
     ) as Phaser.GameObjects.Sprite[];
+    if (YSORT_DEBUG) this.ysortDebug = this.add.graphics().setDepth(1e9);
 
     if (childGO) {
       this.child = childGO;
@@ -554,23 +562,31 @@ export class GameScene extends Phaser.Scene {
 
   // ── Y-sort (depth by foot / base line) ────────────────────────────────
 
-  /** Depth-sort every world sprite by its BOTTOM edge (feet / base): whichever
-   *  sprite's bottom is LOWER on the map draws in front. So Cato is in front of
-   *  the sunflower exactly when his feet are BELOW the flower's base, and behind
-   *  it when his feet are above the base — the standard top-down "feet line"
-   *  rule. `getBounds().bottom` is the world-Y of the visible bottom for both.
-   *  Tilemaps keep their own (low) depth, so sprites always sit above the ground. */
+  /** The world-Y of a sprite's ground contact (feet for a character, base for a
+   *  prop). A sprite authored with a `depthAnchor` has its ORIGIN set at the
+   *  foot by the SDK, so `s.y` already IS the foot line — Cato's 48×48 frame has
+   *  ~17px of empty space below the feet, so his frame BOTTOM is NOT his feet;
+   *  the anchor is. A plain center-origin sprite (the sunflower region) has its
+   *  base half its height below `s.y`. Detect the anchored case via `originY`. */
+  private footLine(s: Phaser.GameObjects.Sprite): number {
+    return s.originY > 0.5 ? s.y : s.y + s.displayHeight * (1 - s.originY);
+  }
+
+  /** Depth-sort every world sprite by its foot line: whoever's feet/base is LOWER
+   *  on the map draws in front. So Cato is in front of the sunflower exactly when
+   *  his feet are BELOW the flower's base, behind when above — the standard
+   *  top-down feet-line rule. Tilemaps keep their own (low) depth, so sprites
+   *  always sit above the ground. */
   private applyYSort(): void {
+    const g = this.ysortDebug;
+    g?.clear();
+    g?.lineStyle(1, 0xff2d78, 0.9);
     for (const s of this.ySortSprites) {
       if (!s.active) continue;
-      // A sprite can briefly hold an invalid frame (an atlas texture mid-reload)
-      // whose null source makes getBounds() throw — skip it this tick rather
-      // than crash the whole update loop.
-      try {
-        s.setDepth(Math.round(s.getBounds().bottom));
-      } catch {
-        /* invalid frame this tick — leave its depth until it resolves */
-      }
+      const foot = this.footLine(s);
+      s.setDepth(Math.round(foot));
+      // Debug: draw the foot line so the flip point is visible on screen.
+      if (g) g.lineBetween(s.x - 24, foot, s.x + 24, foot);
     }
   }
 
