@@ -562,7 +562,15 @@ export class GameScene extends Phaser.Scene {
   private applyYSort(): void {
     for (const s of this.ySortSprites) {
       if (!s.active) continue;
-      s.setDepth(Math.round(s.getBounds().bottom));
+      // A sprite can briefly hold an invalid frame (an atlas texture mid-reload,
+      // or a region name whose frames haven't loaded yet) — getBounds() then
+      // throws on the null frame source. Skip it this frame instead of crashing
+      // the whole update loop.
+      try {
+        s.setDepth(Math.round(s.getBounds().bottom));
+      } catch {
+        /* invalid frame this tick — leave its depth until the frame resolves */
+      }
     }
   }
 
