@@ -35,9 +35,9 @@ const PLAYER_SPEED = 90; // world-px/s while a direction is held
 
 // --- Y-sort debug ---
 // Draws a magenta horizontal line at each sprite's FOOT line (the value used for
-// depth sorting) so you can SEE where the front/behind flip happens. Set false
-// to hide once the layering feels right.
-const YSORT_DEBUG = true;
+// depth sorting) so you can SEE where the front/behind flip happens. Set true
+// again if the layering ever needs re-checking.
+const YSORT_DEBUG = false;
 
 // --- Edge-scroll tuning (desktop / mouse, RTS / theme-park style) ---
 const EDGE_MARGIN = 48;   // px from a canvas edge where scrolling kicks in
