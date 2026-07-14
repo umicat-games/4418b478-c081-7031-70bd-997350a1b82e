@@ -74,20 +74,6 @@
         "depth": 1
       },
       "name": "island"
-    },
-    {
-      "id": "e-mrfuisnx-xrex",
-      "kind": "sprite",
-      "transform": {
-        "x": 208,
-        "y": 304,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "mushrooms_flowers_stones",
-      "frame": "sunflower-4"
     }
   ]
 }

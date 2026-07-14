@@ -967,15 +967,15 @@
           "loop": true
         },
         {
-          "name": "idle-left",
-          "from": 24,
-          "to": 31,
-          "loop": true
-        },
-        {
           "name": "idle-right",
           "from": 16,
           "to": 23,
+          "loop": true
+        },
+        {
+          "name": "idle-left",
+          "from": 24,
+          "to": 31,
           "loop": true
         },
         {
@@ -991,15 +991,15 @@
           "loop": true
         },
         {
-          "name": "walk-left",
-          "from": 56,
-          "to": 63,
-          "loop": true
-        },
-        {
           "name": "walk-right",
           "from": 48,
           "to": 55,
+          "loop": true
+        },
+        {
+          "name": "walk-left",
+          "from": 56,
+          "to": 63,
           "loop": true
         },
         {
@@ -1015,15 +1015,15 @@
           "loop": true
         },
         {
-          "name": "run-left",
-          "from": 88,
-          "to": 95,
-          "loop": true
-        },
-        {
           "name": "run-right",
           "from": 80,
           "to": 87,
+          "loop": true
+        },
+        {
+          "name": "run-left",
+          "from": 88,
+          "to": 95,
           "loop": true
         },
         {
@@ -1039,15 +1039,15 @@
           "loop": false
         },
         {
-          "name": "attack-left",
-          "from": 120,
-          "to": 127,
-          "loop": false
-        },
-        {
           "name": "attack-right",
           "from": 112,
           "to": 119,
+          "loop": false
+        },
+        {
+          "name": "attack-left",
+          "from": 120,
+          "to": 127,
           "loop": false
         },
         {
@@ -1063,15 +1063,15 @@
           "loop": false
         },
         {
-          "name": "hurt-left",
-          "from": 152,
-          "to": 159,
-          "loop": false
-        },
-        {
           "name": "hurt-right",
           "from": 144,
           "to": 151,
+          "loop": false
+        },
+        {
+          "name": "hurt-left",
+          "from": 152,
+          "to": 159,
           "loop": false
         },
         {
@@ -1087,15 +1087,15 @@
           "loop": false
         },
         {
-          "name": "die-left",
-          "from": 184,
-          "to": 191,
-          "loop": false
-        },
-        {
           "name": "die-right",
           "from": 176,
           "to": 183,
+          "loop": false
+        },
+        {
+          "name": "die-left",
+          "from": 184,
+          "to": 191,
           "loop": false
         }
       ],
