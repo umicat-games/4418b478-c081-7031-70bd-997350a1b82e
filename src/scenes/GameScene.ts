@@ -9,7 +9,7 @@ import {
   Umicat,
   type Npc,
 } from '@umicat/phaser-sdk';
-import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
@@ -46,10 +46,10 @@ const EDGE_SPEED  = 900;  // scroll speed in SCREEN px/s (zoom-independent feel)
 // --- Adaptive zoom (RESIZE mode) ---
 // The canvas fills the screen (any size), so instead of a fixed zoom we pick an
 // INTEGER zoom that keeps ~the same amount of world visible across devices —
-// crisp pixels (integer only) + consistent framing. Reference: at the design
-// canvas (GAME_WIDTH×GAME_HEIGHT) the zoom is DESIGN_ZOOM, i.e. we want to show
+// crisp pixels (integer only) + consistent framing. DESIGN_ZOOM (in config.ts,
+// also handed to the SDK via createUmicatGame's referenceZoom) is the reference:
+// at the design canvas the zoom is DESIGN_ZOOM, targeting
 // ~ (GAME_WIDTH/DESIGN_ZOOM) × (GAME_HEIGHT/DESIGN_ZOOM) world px everywhere.
-const DESIGN_ZOOM = 3;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
 

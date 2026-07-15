@@ -2,7 +2,7 @@ import { createUmicatGame } from '@umicat/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { CursorScene } from './scenes/CursorScene';
-import { GAME_WIDTH, GAME_HEIGHT } from './config';
+import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from './config';
 import { renderScripts } from './visuals';
 
 function startGame(): void {
@@ -15,6 +15,10 @@ function startGame(): void {
     // GameScene reflows on scale 'resize' (adaptive integer zoom + re-centre).
     // width/height stay the DESIGN reference for the zoom baseline.
     scaleMode: 'resize',
+    // The adaptive-zoom reference (GameScene.computeZoom targets it). Tells the
+    // editor's "Camera screen" rect to show the DESIGN view (1280/3 × 720/3 =
+    // 427×240) instead of the arbitrary editor-canvas size at the drifted zoom.
+    referenceZoom: DESIGN_ZOOM,
     // Pixel-art rendering: NEAREST texture sampling (antialias off). REQUIRED for
     // a tile-based pixel game — without it Phaser uses LINEAR sampling, which
     // bleeds neighbouring/transparent texels at tile edges whenever the camera
