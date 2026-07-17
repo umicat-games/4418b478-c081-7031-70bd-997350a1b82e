@@ -561,12 +561,13 @@ export class GameScene extends Phaser.Scene {
   // ── Hotbar: bottom tool bar (HotbarScene renders; GameScene owns the model) ──
 
   /** Define the hotbar slots, publish the model to HotbarScene, and bind the
-   *  number keys (1..N) to slot selection. Slot 0 = empty hand, slot 1 = hoe;
-   *  the rest are empty placeholders for future tools/items. */
+   *  number keys (1..N) to slot selection. Slot 0 = hoe; the rest are empty
+   *  placeholders for future tools/items. You start bare-handed (nothing
+   *  selected); selecting a slot equips it, re-selecting it puts the tool away. */
   private setupHotbar(): void {
     this.hotbarSlots = [
-      { toolId: 'hand' }, // 1 — empty hand (default)
-      { toolId: 'hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe' }, // 2 — hoe
+      { toolId: 'hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe' }, // 1 — hoe
+      { toolId: 'hand' }, // 2
       { toolId: 'hand' }, // 3
       { toolId: 'hand' }, // 4
       { toolId: 'hand' }, // 5
@@ -574,7 +575,7 @@ export class GameScene extends Phaser.Scene {
       { toolId: 'hand' }, // 7
       { toolId: 'hand' }, // 8
     ];
-    this.hotbarSelected = 0;
+    this.hotbarSelected = -1; // start with an empty hand (no slot highlighted)
     this.publishHotbar();
 
     // Number keys 1..N select the matching slot.
@@ -599,12 +600,19 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Select slot `i`: equip its tool + refresh the highlight. */
+  /** Select slot `i`: equip its tool + highlight it. Re-selecting the already-
+   *  selected slot TOGGLES it off — puts the tool away (empty hand, no
+   *  highlight), so clicking a slot again / re-pressing its number deselects. */
   private selectHotbarSlot(i: number): void {
     if (this.dialogOpen) return; // no tool switching while typing in chat
     if (i < 0 || i >= this.hotbarSlots.length) return;
-    this.hotbarSelected = i;
-    this.setTool(this.hotbarSlots[i].toolId);
+    if (this.hotbarSelected === i) {
+      this.hotbarSelected = -1;
+      this.setTool('hand');
+    } else {
+      this.hotbarSelected = i;
+      this.setTool(this.hotbarSlots[i].toolId);
+    }
     this.publishHotbar();
   }
 
