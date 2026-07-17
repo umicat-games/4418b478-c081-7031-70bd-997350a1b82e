@@ -562,8 +562,13 @@ export class GameScene extends Phaser.Scene {
     this.tilledCells.add(key);
 
     // The god-hand hoe swing (raise→strike, frames 29→28→27 — the reverse tag
-    // authored in the Spritesheet Editor). One-shot sprite above the cell.
-    const hoe = this.add.sprite(centerX, centerY - 2, 'tools', 29).setDepth(1e6 + 1);
+    // authored in the Spritesheet Editor). One-shot sprite above the cell,
+    // scaled up 3× so the tool reads as a big "god hand" over the tile (pixelArt
+    // NEAREST keeps it crisp). Sits a bit above the cell so it chops DOWN onto it.
+    const hoe = this.add
+      .sprite(centerX, centerY - TILE, 'tools', 29)
+      .setScale(3)
+      .setDepth(1e6 + 1);
     hoe.play('hoe-swing');
 
     // Flip the cell to soil as the hoe strikes, then clean up the swing sprite.
