@@ -534,19 +534,17 @@ export class GameScene extends Phaser.Scene {
   /** A short burst of pixel dirt clods flying up + out to both sides — played
    *  when the hoe strikes a cell. */
   private dirtBurst(x: number, y: number): void {
-    // eslint-disable-next-line no-console
-    console.log('[catopia] dirtBurst', Math.round(x), Math.round(y), 'tex?', this.textures.exists('dirt-particle'));
     const p = this.add.particles(x, y, 'dirt-particle', {
-      speed: { min: 45, max: 110 },
-      angle: { min: 210, max: 330 }, // up-left through up through up-right (both sides)
+      speed: { min: 22, max: 58 }, // slower → the clods stay close to the strike
+      angle: { min: 215, max: 325 }, // up-left through up through up-right (both sides)
       gravityY: 340,
-      lifespan: { min: 320, max: 600 },
+      lifespan: { min: 280, max: 480 },
       scale: { start: 1.4, end: 0.3 },
       emitting: false,
     });
     p.setDepth(1e6 - 1);
-    p.explode(12);
-    this.time.delayedCall(900, () => p.destroy());
+    p.explode(6); // a few clods, not a shower
+    this.time.delayedCall(700, () => p.destroy());
   }
 
   private setTool(tool: 'hand' | 'hoe'): void {
