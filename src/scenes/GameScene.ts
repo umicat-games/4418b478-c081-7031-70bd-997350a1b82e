@@ -511,8 +511,10 @@ export class GameScene extends Phaser.Scene {
     this.hoeIcon = this.add
       .image(0, 0, 'hoe-icon') // clean centred hoe item icon = "you're holding the hoe"
       .setOrigin(0.5, 0.5)
-      .setScale(1.4) // fill the bracket so the whole hoe reads clearly (pixelArt keeps it crisp)
-      .setDepth(1e6 + 0.5)
+      // Clearly ABOVE the bracket so the whole hoe shows on top of it (a small
+      // +0.5 wasn't enough — the bracket was covering the hoe, which is why a
+      // BIGGER hoe looked like LESS was visible).
+      .setDepth(1e6 + 100)
       .setVisible(false);
 
     // Tool select: 1 = empty hand (default), 2 = hoe. A visual hotbar is next.
