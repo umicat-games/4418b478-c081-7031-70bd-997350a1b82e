@@ -511,6 +511,7 @@ export class GameScene extends Phaser.Scene {
     this.hoeIcon = this.add
       .image(0, 0, 'hoe-icon') // clean centred hoe item icon = "you're holding the hoe"
       .setOrigin(0.5, 0.5)
+      .setScale(1.4) // fill the bracket so the whole hoe reads clearly (pixelArt keeps it crisp)
       .setDepth(1e6 + 0.5)
       .setVisible(false);
 
