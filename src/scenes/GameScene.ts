@@ -939,8 +939,14 @@ export class GameScene extends Phaser.Scene {
   /** Dispatch the actions the AI chose this turn. Unknown actions are ignored
    *  (the AI can only propose from the declared vocabulary anyway). */
   private runCatoActions(actions: Array<{ name: string; args: unknown }>): void {
+    let acted = false;
     for (const a of actions) {
-      if (a.name === 'till_plot') this.startTillTask(a.args);
+      if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
+    }
+    // Let the guardian read Cato's reply, then close the chat so he walks off to
+    // do it (he already starts moving; this just gets the box out of the way).
+    if (acted) {
+      this.time.delayedCall(1300, () => { if (this.dialogOpen) this.closeDialog(); });
     }
   }
 
@@ -1018,8 +1024,8 @@ export class GameScene extends Phaser.Scene {
     if (!task || !layer || !this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
 
-    // Hold still while the guardian is chatting (resume after).
-    if (this.dialogOpen) { body.setVelocity(0, 0); return; }
+    // NB: Cato keeps working even while the chat box is still up (the guardian
+    // just gave the order) — the dialog auto-closes shortly after (runCatoActions).
 
     // Pause on the cell being tilled so Cato's attack (hoe) animation plays out.
     // Don't replay idle here — that would interrupt the attack; loop:false holds
