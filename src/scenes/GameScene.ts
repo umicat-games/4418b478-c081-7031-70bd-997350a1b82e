@@ -517,12 +517,12 @@ export class GameScene extends Phaser.Scene {
       .setDepth(1e6 + 100)
       .setVisible(false);
 
-    // A 3×3 brown "dirt clod" texture for the till particle burst (pixelArt
+    // A small brown "dirt clod" texture for the till particle burst (pixelArt
     // NEAREST keeps the blocks crisp).
     if (!this.textures.exists('dirt-particle')) {
       const g = this.add.graphics();
-      g.fillStyle(0x6f4a2a, 1).fillRect(0, 0, 3, 3);
-      g.generateTexture('dirt-particle', 3, 3);
+      g.fillStyle(0x7a5230, 1).fillRect(0, 0, 4, 4);
+      g.generateTexture('dirt-particle', 4, 4);
       g.destroy();
     }
 
@@ -534,18 +534,19 @@ export class GameScene extends Phaser.Scene {
   /** A short burst of pixel dirt clods flying up + out to both sides — played
    *  when the hoe strikes a cell. */
   private dirtBurst(x: number, y: number): void {
+    // eslint-disable-next-line no-console
+    console.log('[catopia] dirtBurst', Math.round(x), Math.round(y), 'tex?', this.textures.exists('dirt-particle'));
     const p = this.add.particles(x, y, 'dirt-particle', {
-      speed: { min: 40, max: 95 },
-      angle: { min: 200, max: 340 }, // up-left through up through up-right (both sides)
+      speed: { min: 45, max: 110 },
+      angle: { min: 210, max: 330 }, // up-left through up through up-right (both sides)
       gravityY: 340,
-      lifespan: { min: 300, max: 560 },
-      scale: { start: 1, end: 0.5 },
-      tint: [0x6f4a2a, 0x8a5a2b, 0x53381d],
+      lifespan: { min: 320, max: 600 },
+      scale: { start: 1.4, end: 0.3 },
       emitting: false,
     });
     p.setDepth(1e6 - 1);
-    p.explode(10, x, y);
-    this.time.delayedCall(800, () => p.destroy());
+    p.explode(12);
+    this.time.delayedCall(900, () => p.destroy());
   }
 
   private setTool(tool: 'hand' | 'hoe'): void {
