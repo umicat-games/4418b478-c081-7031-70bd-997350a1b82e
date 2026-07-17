@@ -5,7 +5,10 @@ import Phaser from 'phaser';
 // 7/7/8/8). Loaded in BootScene as the `inventory` atlas.
 const ATLAS = 'inventory';
 const FRAME_PANEL = 'frame-medium';
-const FRAME_SLOT = 'slot-light';
+// Selection is shown by SHADE, not an overlay: unselected cells use the dark
+// slot, the selected cell the light one so it reads as lit-up / active.
+const FRAME_SLOT = 'slot-dark';
+const FRAME_SLOT_SELECTED = 'slot-light';
 
 // Slot art native size (px) and how big we draw it. Integer SLOT_SCALE keeps the
 // pixel art crisp; layout() drops below 2 only when the bar wouldn't fit a narrow
@@ -19,10 +22,6 @@ const PAD_Y = 12;
 const MARGIN_BOTTOM = 22; // gap from the canvas bottom edge
 const PANEL_SCALE = 2; // 9-slice corner scale for the frame panel
 
-// The selected-slot marker (Minecraft-style): a warm gold border + a small
-// upward nudge so the active tool reads at a glance.
-const SELECT_COLOR = 0xffe066;
-const SELECT_LIFT = 4;
 
 export interface HotbarSlotView {
   /** Atlas key for the tool icon (e.g. 'tools_and_meterials'), omitted = empty. */
@@ -137,9 +136,11 @@ export class HotbarScene extends Phaser.Scene {
     for (let i = 0; i < n; i++) {
       const cx = Math.round(startX + i * (slotW + GAP) + slotW / 2);
       const selected = i === model.selected;
-      const cy = rowY - (selected ? SELECT_LIFT : 0);
+      const cy = rowY;
 
-      const cell = this.add.image(cx, cy, ATLAS, FRAME_SLOT).setScale(s);
+      const cell = this.add
+        .image(cx, cy, ATLAS, selected ? FRAME_SLOT_SELECTED : FRAME_SLOT)
+        .setScale(s);
       c.add(cell);
 
       const slot = model.slots[i];
@@ -161,19 +162,6 @@ export class HotbarScene extends Phaser.Scene {
         .setOrigin(0, 0);
       label.setAlpha(0.75);
       c.add(label);
-
-      if (selected) {
-        const g = this.add.graphics();
-        g.lineStyle(Math.max(2, Math.round(1.5 * s)), SELECT_COLOR, 1);
-        g.strokeRoundedRect(
-          cx - slotW / 2 - 3,
-          cy - slotH / 2 - 3,
-          slotW + 6,
-          slotH + 6,
-          6,
-        );
-        c.add(g);
-      }
 
       bounds.push({ x: cx - slotW / 2, y: cy - slotH / 2, w: slotW, h: slotH });
     }
