@@ -113,6 +113,7 @@ export class GameScene extends Phaser.Scene {
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
   private tileCursor?: Phaser.GameObjects.Image;
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
+  private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
   private hoverCell: { cx: number; cy: number } | null = null; // farmable cell under cursor
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
@@ -569,12 +570,46 @@ export class GameScene extends Phaser.Scene {
 
     // Flip the cell to soil as the hoe strikes, then clean up the swing sprite.
     // Fixed timer (not the ANIMATION_COMPLETE event) so it still lands even if
-    // the animation didn't register. Drops the real Sprout Lands tilled-dirt
-    // tile (seamless interior — autotile edge-connection is the next iteration).
+    // the animation didn't register. Re-autotile this cell + its 4 neighbours
+    // (a new tilled cell changes their edges).
     this.time.delayedCall(240, () => {
-      this.add.image(centerX, centerY, 'tilled-dirt').setDepth(1.5);
+      this.refreshSoil(cx, cy);
+      this.refreshSoil(cx, cy - 1);
+      this.refreshSoil(cx + 1, cy);
+      this.refreshSoil(cx, cy + 1);
+      this.refreshSoil(cx - 1, cy);
       hoe.destroy();
     });
+  }
+
+  /** Neighbour bitmask for a tilled cell — N=1, E=2, S=4, W=8 (bit set when the
+   *  neighbour is also tilled). Matches the composed autotile sheet's frame order. */
+  private tilledMask(cx: number, cy: number): number {
+    let m = 0;
+    if (this.tilledCells.has(`${cx},${cy - 1}`)) m |= 1;
+    if (this.tilledCells.has(`${cx + 1},${cy}`)) m |= 2;
+    if (this.tilledCells.has(`${cx},${cy + 1}`)) m |= 4;
+    if (this.tilledCells.has(`${cx - 1},${cy}`)) m |= 8;
+    return m;
+  }
+
+  /** Create-or-update the soil sprite at a tilled cell with its autotile frame. */
+  private refreshSoil(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const key = `${cx},${cy}`;
+    if (!this.tilledCells.has(key)) return; // only tilled cells get soil
+    const frame = this.tilledMask(cx, cy);
+    const existing = this.tilledSoil.get(key);
+    if (existing) {
+      existing.setFrame(frame);
+      return;
+    }
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    const soil = this.add
+      .image(w.x + TILE / 2, w.y + TILE / 2, 'tilled-soil', frame)
+      .setDepth(1.5);
+    this.tilledSoil.set(key, soil);
   }
 
   // ── Click-to-talk dialog ──────────────────────────────────────────────

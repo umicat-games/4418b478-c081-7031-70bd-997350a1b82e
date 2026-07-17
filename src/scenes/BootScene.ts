@@ -35,10 +35,14 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
-    // Tilled-soil tile (16×16, from Sprout Lands Tilled_Dirt) — dropped on a cell
-    // when the player hoes it. (Autotile edge-connection is a follow-up; for now
-    // every tilled cell shows this seamless interior tile.)
-    this.load.image('tilled-dirt', 'uploaded/tilled_dirt.png');
+    // Tilled-soil AUTOTILE sheet (16 frames, 16×16 — a 4-bit cardinal blob
+    // composed from Sprout Lands Tilled_Dirt). Frame index = neighbour bitmask
+    // N=1/E=2/S=4/W=8, so hoed cells connect into smooth plots (rounded edges,
+    // seamless interior). Set per cell in GameScene.refreshSoil.
+    this.load.spritesheet('tilled-soil', 'uploaded/tilled_autotile.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
   }
 
   create(): void {
