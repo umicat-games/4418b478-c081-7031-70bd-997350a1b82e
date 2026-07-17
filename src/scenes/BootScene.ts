@@ -24,6 +24,17 @@ export class BootScene extends Phaser.Scene {
     preloadManifest(this);
     // Custom pointer-lock cursor — key must match CURSOR_KEY in GameScene.
     this.load.image('cursor', 'uploaded/triangle_mouse_icon_1.png');
+    // Tile-selection bracket cursor (24×24, frames a 16px cell) — the "you can
+    // till here" highlight that snaps to the hovered grass tile when the hoe is
+    // the active tool.
+    this.load.image('tile-select', 'uploaded/tile_select_cursor.png');
+    // Tools spritesheet (16×16) — the hoe swing (`hoe-swing` anim, frames
+    // 29→28→27, registered from the manifest) + the hotbar icons. Not a scene
+    // entity, so it's loaded here rather than on-demand by the scene loader.
+    this.load.spritesheet('tools', 'uploaded/tools.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
   }
 
   create(): void {

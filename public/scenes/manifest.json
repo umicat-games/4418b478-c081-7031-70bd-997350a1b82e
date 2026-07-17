@@ -1457,6 +1457,27 @@
       "atlasFormat": "json",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/mushrooms_flowers_stones.png",
       "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/mushrooms_flowers_stones.json"
+    },
+    {
+      "id": "tools",
+      "textureKey": "tools",
+      "path": "uploaded/tools.png",
+      "kind": "spritesheet",
+      "pixelArt": true,
+      "spriteSheetConfig": {
+        "frameWidth": 16,
+        "frameHeight": 16
+      },
+      "animations": [
+        {
+          "name": "hoe-swing",
+          "from": 27,
+          "to": 29,
+          "frames": [29, 28, 27],
+          "loop": false
+        }
+      ],
+      "fps": 12
     }
   ]
 }
