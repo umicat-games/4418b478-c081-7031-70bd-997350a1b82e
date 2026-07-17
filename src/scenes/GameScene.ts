@@ -187,7 +187,15 @@ export class GameScene extends Phaser.Scene {
   // `till_plot` action; we find an open grass patch near Cato, queue its cells,
   // and Cato walks over + hoes each one (reusing the farming tillCell mechanic).
   // A single active task at a time; it overrides the autonomous wander.
-  private catoTask: { type: 'till'; queue: Array<{ cx: number; cy: number }>; crop: string; cooldown: number } | null = null;
+  private catoTask: {
+    type: 'till';
+    queue: Array<{ cx: number; cy: number }>;
+    crop: string;
+    cooldown: number;
+    // Where Cato stands to hoe the CURRENT target (an adjacent cell) + which way
+    // he faces to swing at it. Computed once per target; null = recompute.
+    stand: { x: number; y: number; dir: FaceDir } | null;
+  } | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -964,7 +972,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     // A single active task; camera follows Cato so the guardian watches him work.
-    this.catoTask = { type: 'till', queue: cells, crop, cooldown: 0 };
+    this.catoTask = { type: 'till', queue: cells, crop, cooldown: 0, stand: null };
     this.cameraFollow = true;
   }
 
@@ -1040,18 +1048,18 @@ export class GameScene extends Phaser.Scene {
     if (!next) { this.finishCatoTask(); return; }
 
     // Skip a cell that got tilled some other way (idempotent).
-    if (this.tilledCells.has(`${next.cx},${next.cy}`)) { task.queue.shift(); return; }
+    if (this.tilledCells.has(`${next.cx},${next.cy}`)) { task.queue.shift(); task.stand = null; return; }
 
-    const w = layer.tileToWorldXY(next.cx, next.cy);
-    if (!w) { task.queue.shift(); return; }
-    const tx = w.x + TILE / 2;
-    const ty = w.y + TILE / 2;
-    const dx = tx - this.child.x;
-    const dy = ty - this.child.y;
+    // Stand on a cell ADJACENT to the target and face it, so the hoe swing lands
+    // ON the target (not under Cato's feet). Computed once per target.
+    if (!task.stand) task.stand = this.computeStand(next);
+    const s = task.stand;
+    const dx = s.x - this.child.x;
+    const dy = s.y - this.child.y;
     const dist = Math.hypot(dx, dy);
 
     if (dist > CATO_ARRIVE_DIST) {
-      // Walk toward the cell; face + animate along the dominant axis.
+      // Walk toward the stand cell; face + animate along the dominant axis.
       body.setVelocity((dx / dist) * CATO_TILL_SPEED, (dy / dist) * CATO_TILL_SPEED);
       if (Math.abs(dx) >= Math.abs(dy)) this.faceDir = dx < 0 ? 'left' : 'right';
       else this.faceDir = dy < 0 ? 'up' : 'down';
@@ -1059,14 +1067,41 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Arrived: stop and hoe this cell with Cato's OWN attack animation (in the
-    // direction he approached), then pause before the next. No god-hand hoe —
-    // Cato swings his own. The soil flips partway through the swing (commitCatoTill).
+    // Arrived beside the target: face it and hoe with Cato's OWN attack animation
+    // (no god-hand hoe). The soil flips partway through the swing (commitCatoTill).
     body.setVelocity(0, 0);
-    this.child.play(`attack-${this.faceDir}`, true);
+    this.faceDir = s.dir;
+    this.child.play(`attack-${s.dir}`, true);
     this.commitCatoTill(next.cx, next.cy);
     task.queue.shift();
+    task.stand = null;
     task.cooldown = CATO_TILL_STEP_MS;
+  }
+
+  /** Pick the cell Cato stands on to hoe `target`: an adjacent tile (preferring
+   *  ones on the island so he doesn't stand on water) nearest to where he is now,
+   *  plus the direction he faces to swing at the target. */
+  private computeStand(target: { cx: number; cy: number }): { x: number; y: number; dir: FaceDir } {
+    const layer = this.islandLayer!;
+    const cur = layer.worldToTileXY(this.child!.x, this.child!.y);
+    const ocx = cur ? Math.floor(cur.x) : target.cx;
+    const ocy = cur ? Math.floor(cur.y) : target.cy;
+    // Stand on each side, facing the target: below→up, above→down, left→right, right→left.
+    const cands: Array<{ cx: number; cy: number; dir: FaceDir }> = [
+      { cx: target.cx, cy: target.cy + 1, dir: 'up' },
+      { cx: target.cx, cy: target.cy - 1, dir: 'down' },
+      { cx: target.cx - 1, cy: target.cy, dir: 'right' },
+      { cx: target.cx + 1, cy: target.cy, dir: 'left' },
+    ];
+    const onIsland = cands.filter((c) => layer.getTileAt(c.cx, c.cy) != null);
+    const pool = onIsland.length ? onIsland : cands;
+    pool.sort(
+      (a, b) =>
+        (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
+    );
+    const best = pool[0];
+    const w = layer.tileToWorldXY(best.cx, best.cy);
+    return { x: (w?.x ?? 0) + TILE / 2, y: (w?.y ?? 0) + TILE / 2, dir: best.dir };
   }
 
   /** Cato hoes a cell himself (no god-hand hoe sprite): reserve it now, then flip
