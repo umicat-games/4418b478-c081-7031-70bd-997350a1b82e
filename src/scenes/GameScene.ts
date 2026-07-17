@@ -57,7 +57,10 @@ const TILE = 16;
 // --- Cato "till a plot" behaviour ---
 const CATO_TILL_SPEED = 60;   // world-px/s Cato walks toward each plot cell
 const CATO_ARRIVE_DIST = 3;   // px from a cell centre that counts as "arrived"
-const CATO_TILL_STEP_MS = 850; // pause on each cell so the hoe swing plays out
+// The attack (hoe) anim is 8 frames at the SDK's default 8fps ≈ 1000ms. Hold Cato
+// for the whole swing, and flip the cell to soil near the end (as the hoe lands).
+const CATO_TILL_STEP_MS = 1000; // pause on each cell = one full attack swing
+const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil + dirt
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 
@@ -1007,11 +1010,12 @@ export class GameScene extends Phaser.Scene {
     // Hold still while the guardian is chatting (resume after).
     if (this.dialogOpen) { body.setVelocity(0, 0); return; }
 
-    // Pause on the cell being tilled so the hoe swing plays before moving on.
+    // Pause on the cell being tilled so Cato's attack (hoe) animation plays out.
+    // Don't replay idle here — that would interrupt the attack; loop:false holds
+    // its last frame until the cooldown ends and he walks to the next cell.
     if (task.cooldown > 0) {
       task.cooldown -= delta;
       body.setVelocity(0, 0);
-      this.child.play(`idle-${this.faceDir}`, true);
       return;
     }
 
@@ -1038,13 +1042,35 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Arrived: stop, hoe this cell, and pause before the next.
+    // Arrived: stop and hoe this cell with Cato's OWN attack animation (in the
+    // direction he approached), then pause before the next. No god-hand hoe —
+    // Cato swings his own. The soil flips partway through the swing (commitCatoTill).
     body.setVelocity(0, 0);
-    this.faceDir = 'down';
-    this.child.play('idle-down', true);
-    this.tillCell(next.cx, next.cy);
+    this.child.play(`attack-${this.faceDir}`, true);
+    this.commitCatoTill(next.cx, next.cy);
     task.queue.shift();
     task.cooldown = CATO_TILL_STEP_MS;
+  }
+
+  /** Cato hoes a cell himself (no god-hand hoe sprite): reserve it now, then flip
+   *  it to soil + kick up dirt partway through his attack swing. */
+  private commitCatoTill(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    if (this.tilledCells.has(key)) return;
+    this.tilledCells.add(key); // reserve so it won't be re-queued mid-swing
+    // Fire slightly into the swing so dirt + soil appear as the hoe strikes. A
+    // delayedCall (not the anim's COMPLETE) so it still lands if the swing gets
+    // interrupted (e.g. the guardian opens the chat mid-till).
+    this.time.delayedCall(CATO_TILL_STRIKE_MS, () => {
+      if (!this.islandLayer) return;
+      const w = this.islandLayer.tileToWorldXY(cx, cy);
+      if (w) this.dirtBurst(w.x + TILE / 2, w.y + TILE / 2);
+      this.refreshSoil(cx, cy);
+      this.refreshSoil(cx, cy - 1);
+      this.refreshSoil(cx + 1, cy);
+      this.refreshSoil(cx, cy + 1);
+      this.refreshSoil(cx - 1, cy);
+    });
   }
 
   /** Plot finished: clear the task, tell Cato so he remembers, resume wander. */
