@@ -53,6 +53,9 @@ const EDGE_SPEED  = 900;  // scroll speed in SCREEN px/s (zoom-independent feel)
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
 
+// Tilemap cell size (px) — all Catopia tilesets are 16×16.
+const TILE = 16;
+
 // Custom pointer-lock cursor: the texture key + hotspot live in CursorScene
 // (which renders it above the HUD); GameScene only drives its position.
 
@@ -101,6 +104,16 @@ export class GameScene extends Phaser.Scene {
   private cameraFollow = false;
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
+
+  // ── Farming (hoe → till grass) ──────────────────────────────────────────
+  // Minecraft-style: pick the hoe (key 2; 1 = empty hand), a bracket cursor
+  // snaps to the grass tile under the mouse, click tills it. `islandLayer` is
+  // the grass-island TilemapLayer (for world↔tile snapping + "is this grass?").
+  private activeTool: 'hand' | 'hoe' = 'hand';
+  private islandLayer?: Phaser.Tilemaps.TilemapLayer;
+  private tileCursor?: Phaser.GameObjects.Image;
+  private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
+  private hoverCell: { cx: number; cy: number } | null = null; // farmable cell under cursor
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
@@ -195,6 +208,7 @@ export class GameScene extends Phaser.Scene {
         console.warn(`[catopia] grass-island tilemap named '${GRASS_ISLAND_NAME}' not found; collision may be off. Falling back to id '${GRASS_ISLAND_ENTITY_ID}'.`);
       }
       addTilemapCollider(this, islandId, this.child);
+      this.setupFarming(islandId);
 
       // ── Camera: open CENTRED on the cat (the game's focus). Bounds were set
       // above; Phaser clamps this scroll into them. Player drives it after. ──
@@ -445,6 +459,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Route a click (while pointer-locked) to HUD via the virtual cursor. */
   private handleLockedClick(): void {
+    // Hoe out + hovering a farmable tile → till it. Takes priority: a farming
+    // click is neither a portrait click nor a camera-release click.
+    if (this.activeTool === 'hoe' && this.hoverCell) {
+      this.tillCell(this.hoverCell.cx, this.hoverCell.cy);
+      return;
+    }
     // Click Cato's portrait (top-right frame) → lock the camera onto Cato.
     if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, this.vcursor.x, this.vcursor.y)) {
       this.followCato();
@@ -456,6 +476,104 @@ export class GameScene extends Phaser.Scene {
     // camera lock (back to manual panning).
     if (this.catContains(wp.x, wp.y)) this.openDialog();
     else if (this.cameraFollow) this.unfollowCato();
+  }
+
+  // ── Farming: hoe → till grass ─────────────────────────────────────────
+
+  /** Wire up the hoe tool: resolve the grass-island layer, spawn the bracket
+   *  cursor, bind the tool-select keys (1 = hand, 2 = hoe). */
+  private setupFarming(islandId: string): void {
+    // The SDK keeps a tilemap's Phaser layers under its Container's data; grab
+    // the first so world↔tile snapping + tile lookup handle the map's centred
+    // position for us (no manual origin math).
+    const container = getEntityRegistry(this)?.byId(islandId) as
+      | Phaser.GameObjects.Container
+      | undefined;
+    const layers = container?.getData('tilemapLayers') as
+      | Phaser.Tilemaps.TilemapLayer[]
+      | undefined;
+    this.islandLayer = layers?.[0];
+    if (!this.islandLayer) {
+      console.warn('[catopia] farming: grass-island layer not found; hoe cursor disabled.');
+    }
+
+    // Bracket cursor (24×24, frames a 16px cell). Hidden until the hoe is out +
+    // hovering a farmable tile. High depth so it reads over tiles + Cato.
+    this.tileCursor = this.add
+      .image(0, 0, 'tile-select')
+      .setOrigin(0.5, 0.5)
+      .setDepth(1e6)
+      .setVisible(false);
+
+    // Tool select: 1 = empty hand (default), 2 = hoe. A visual hotbar is next.
+    this.input.keyboard?.on('keydown-ONE', () => this.setTool('hand'));
+    this.input.keyboard?.on('keydown-TWO', () => this.setTool('hoe'));
+  }
+
+  private setTool(tool: 'hand' | 'hoe'): void {
+    if (this.dialogOpen) return; // don't switch tools while typing in chat
+    this.activeTool = tool;
+    if (tool !== 'hoe') {
+      this.tileCursor?.setVisible(false);
+      this.hoverCell = null;
+    }
+  }
+
+  /** Per-frame: snap the bracket cursor onto the grass tile under the virtual
+   *  cursor when the hoe is out; hide it otherwise. */
+  private updateTileCursor(): void {
+    const cursor = this.tileCursor;
+    if (!cursor || !this.islandLayer) return;
+    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen) {
+      cursor.setVisible(false);
+      this.hoverCell = null;
+      return;
+    }
+    const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
+    const tile = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
+    // Farmable = a grass tile is here AND it isn't already tilled.
+    if (!tile || this.tilledCells.has(`${tile.x},${tile.y}`)) {
+      cursor.setVisible(false);
+      this.hoverCell = null;
+      return;
+    }
+    const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
+    if (!w) {
+      cursor.setVisible(false);
+      this.hoverCell = null;
+      return;
+    }
+    cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true);
+    this.hoverCell = { cx: tile.x, cy: tile.y };
+  }
+
+  /** Till one grass cell: play the hoe swing at it, then flip it to soil. */
+  private tillCell(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const key = `${cx},${cy}`;
+    if (this.tilledCells.has(key)) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    const centerX = w.x + TILE / 2;
+    const centerY = w.y + TILE / 2;
+
+    // Mark it tilled NOW so the cursor leaves this cell + a double-click can't
+    // re-till it mid-swing.
+    this.tilledCells.add(key);
+
+    // The god-hand hoe swing (raise→strike, frames 29→28→27 — the reverse tag
+    // authored in the Spritesheet Editor). One-shot sprite above the cell.
+    const hoe = this.add.sprite(centerX, centerY - 2, 'tools', 29).setDepth(1e6 + 1);
+    hoe.play('hoe-swing');
+
+    // Flip the cell to soil as the hoe strikes, then clean up the swing sprite.
+    // Fixed timer (not the ANIMATION_COMPLETE event) so it still lands even if
+    // the animation didn't register. PLACEHOLDER flat-brown soil for now — the
+    // real Tilled_Dirt tileset + autotile edge-connection is the next iteration.
+    this.time.delayedCall(240, () => {
+      this.add.rectangle(centerX, centerY, TILE, TILE, 0x6f4a2a).setDepth(1.5);
+      hoe.destroy();
+    });
   }
 
   // ── Click-to-talk dialog ──────────────────────────────────────────────
@@ -739,6 +857,9 @@ export class GameScene extends Phaser.Scene {
     this.cursorState.x = this.vcursor.x;
     this.cursorState.y = this.vcursor.y;
     this.cursorState.visible = this.locked;
+
+    // Snap the hoe's tile-selection cursor to the grass tile under the mouse.
+    this.updateTileCursor();
 
     if (!this.child?.body) return;
 
