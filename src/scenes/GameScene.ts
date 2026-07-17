@@ -69,12 +69,24 @@ type FaceDir = 'down' | 'up' | 'left' | 'right';
 
 type ToolId = 'hand' | 'hoe';
 
-/** One hotbar slot: the tool it equips + the icon HotbarScene draws in the cell
- *  (from an atlas). An empty slot (no icon) equips the empty hand. */
-interface HotbarSlotDef {
-  toolId: ToolId;
+// Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
+// IS the hotbar (always visible); pressing E opens the full grid. Growing the
+// backpack later = bump INV_ROWS. Stackable items merge up to MAX_STACK per cell.
+const INV_COLS = 8;
+const INV_ROWS = 3;
+const MAX_STACK = 99;
+
+/** One stack of items in a single inventory/hotbar cell. Tools are
+ *  non-stackable (count 1, carry a `toolId` they equip on select); seeds /
+ *  materials stack up to MAX_STACK. `id` is the merge key. An empty cell = null. */
+interface ItemStack {
+  id: string;
+  label?: string;
   iconKey?: string;
   iconFrame?: string;
+  count: number;
+  stackable: boolean;
+  toolId?: ToolId;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -127,14 +139,20 @@ export class GameScene extends Phaser.Scene {
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
   private hoverCell: { cx: number; cy: number } | null = null; // farmable cell under cursor
 
-  // ── Hotbar (bottom tool bar, rendered by HotbarScene) ───────────────────
-  // GameScene owns the MODEL; HotbarScene draws it + writes each slot's canvas-px
-  // hit-box to the registry (`hotbarBounds`) for click routing. Each slot maps to
-  // a tool; number keys 1..N and clicking a slot both select it. `rev` is bumped
-  // on every change so HotbarScene re-renders.
-  private hotbarSlots: HotbarSlotDef[] = [];
-  private hotbarSelected = 0;
-  private hotbarRev = 0;
+  // ── Inventory + hotbar (HotbarScene + InventoryScene render; GameScene owns
+  //    the MODEL) ─────────────────────────────────────────────────────────
+  // `inventory` is the full INV_ROWS×INV_COLS backpack; row 0 (the first
+  // INV_COLS cells) is the hotbar. HotbarScene draws row 0 + writes each slot's
+  // canvas-px hit-box to `hotbarBounds`; InventoryScene draws the whole grid
+  // when `inventoryOpen` + writes `inventoryBounds`. Number keys 1..N and
+  // clicking a hotbar slot select it; E opens the backpack; clicking cells there
+  // picks up / drops / merges stacks (heldStack follows the cursor). `*Rev` is
+  // bumped on change so the scenes re-render.
+  private inventory: (ItemStack | null)[] = [];
+  private hotbarSelected = -1; // selected cell in row 0 (-1 = empty hand)
+  private inventoryOpen = false;
+  private heldStack: ItemStack | null = null; // picked-up stack following the cursor
+  private invRev = 0;
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
@@ -430,10 +448,12 @@ export class GameScene extends Phaser.Scene {
     // launch that overlay on top — AFTER loadWorldScene, so it sits above the
     // HUD scene the SDK created during the world load.
     this.registry.set('cursor', this.cursorState);
-    // Bottom tool hotbar overlay (below the cursor, above the world/HUD).
+    // Overlays, back-to-front: hotbar → full backpack → cursor (always topmost).
     if (!this.scene.isActive('HotbarScene')) this.scene.launch('HotbarScene');
+    if (!this.scene.isActive('InventoryScene')) this.scene.launch('InventoryScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
+    this.scene.bringToTop('InventoryScene');
     this.scene.bringToTop('CursorScene');
 
     // Click the canvas → capture the mouse. If already locked, the click is a
@@ -483,6 +503,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Route a click (while pointer-locked) to HUD via the virtual cursor. */
   private handleLockedClick(): void {
+    // Backpack open: clicks pick up / drop / merge stacks; nothing else fires.
+    if (this.inventoryOpen) { this.handleInventoryClick(); return; }
+
     // Hotbar first: a click on a slot selects that tool (never falls through to
     // tilling / portrait / camera-release).
     const slot = this.hotbarSlotAt(this.vcursor.x, this.vcursor.y);
@@ -555,69 +578,161 @@ export class GameScene extends Phaser.Scene {
       g.destroy();
     }
 
-    this.setupHotbar();
+    this.setupInventory();
   }
 
-  // ── Hotbar: bottom tool bar (HotbarScene renders; GameScene owns the model) ──
+  // ── Inventory + hotbar (GameScene owns the model; the scenes render it) ──
 
-  /** Define the hotbar slots, publish the model to HotbarScene, and bind the
-   *  number keys (1..N) to slot selection. Slot 0 = hoe; the rest are empty
-   *  placeholders for future tools/items. You start bare-handed (nothing
-   *  selected); selecting a slot equips it, re-selecting it puts the tool away. */
-  private setupHotbar(): void {
-    this.hotbarSlots = [
-      { toolId: 'hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe' }, // 1 — hoe
-      { toolId: 'hand' }, // 2
-      { toolId: 'hand' }, // 3
-      { toolId: 'hand' }, // 4
-      { toolId: 'hand' }, // 5
-      { toolId: 'hand' }, // 6
-      { toolId: 'hand' }, // 7
-      { toolId: 'hand' }, // 8
-    ];
-    this.hotbarSelected = -1; // start with an empty hand (no slot highlighted)
-    this.publishHotbar();
+  /** Seed the backpack, publish the model, and bind keys: number keys 1..N
+   *  select the matching hotbar (row-0) slot; E / I toggle the full backpack.
+   *  You start bare-handed (nothing selected). */
+  private setupInventory(): void {
+    // A tiny placeholder "seeds" icon so stacking / merging is testable before
+    // real seed art exists (two partial stacks in row 1 — merge them to test).
+    this.ensureSeedTexture();
 
-    // Number keys 1..N select the matching slot.
+    this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null);
+    // Row 0 (the hotbar): the hoe + the other two tools we have icons for.
+    this.inventory[0] = { id: 'hoe', label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
+    this.inventory[1] = { id: 'axe', label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
+    this.inventory[2] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false };
+    // Row 1: two demo seed stacks (placeholders) to exercise stacking + merge.
+    this.inventory[INV_COLS + 0] = { id: 'seeds', label: 'Seeds', iconKey: 'seeds', count: 40, stackable: true };
+    this.inventory[INV_COLS + 1] = { id: 'seeds', label: 'Seeds', iconKey: 'seeds', count: 20, stackable: true };
+
+    this.hotbarSelected = -1;
+    this.publishInventory();
+
     const codes = [
       'keydown-ONE', 'keydown-TWO', 'keydown-THREE', 'keydown-FOUR',
       'keydown-FIVE', 'keydown-SIX', 'keydown-SEVEN', 'keydown-EIGHT', 'keydown-NINE',
     ];
-    this.hotbarSlots.forEach((_slot, i) => {
-      if (i < codes.length) {
-        this.input.keyboard?.on(codes[i], () => this.selectHotbarSlot(i));
-      }
+    codes.slice(0, INV_COLS).forEach((code, i) => {
+      this.input.keyboard?.on(code, () => this.selectHotbarSlot(i));
     });
+    this.input.keyboard?.on('keydown-E', () => this.toggleInventory());
+    this.input.keyboard?.on('keydown-I', () => this.toggleInventory());
+    this.input.keyboard?.on('keydown-ESC', () => { if (this.inventoryOpen) this.toggleInventory(); });
   }
 
-  /** Push the current hotbar model to the registry so HotbarScene re-renders. */
-  private publishHotbar(): void {
+  /** Generate a small pixel "seeds" pouch texture (placeholder item art). */
+  private ensureSeedTexture(): void {
+    if (this.textures.exists('seeds')) return;
+    const g = this.add.graphics();
+    g.fillStyle(0x8a5a2b, 1).fillRoundedRect(3, 4, 10, 9, 3); // little brown pouch
+    g.fillStyle(0x6bbf59, 1); // green seeds spilling from the top
+    g.fillRect(5, 2, 2, 2); g.fillRect(8, 1, 2, 2); g.fillRect(10, 3, 2, 2);
+    g.generateTexture('seeds', 16, 16);
+    g.destroy();
+  }
+
+  /** Map a stack → the compact view the scenes render (icon + count). */
+  private stackView(s: ItemStack | null): { iconKey?: string; iconFrame?: string; count: number } | null {
+    if (!s) return null;
+    return { iconKey: s.iconKey, iconFrame: s.iconFrame, count: s.count };
+  }
+
+  /** Push the current inventory to the registry so both scenes re-render. */
+  private publishInventory(): void {
+    const rev = ++this.invRev;
+    // Hotbar = row 0 (hidden while chatting or while the full backpack is open —
+    // the backpack draws row 0 itself).
     this.registry.set('hotbar', {
-      slots: this.hotbarSlots.map((s) => ({ iconKey: s.iconKey, iconFrame: s.iconFrame })),
+      slots: this.inventory.slice(0, INV_COLS).map((s) => this.stackView(s)),
       selected: this.hotbarSelected,
-      visible: !this.dialogOpen,
-      rev: ++this.hotbarRev,
+      visible: !this.dialogOpen && !this.inventoryOpen,
+      rev,
+    });
+    this.registry.set('inventory', {
+      open: this.inventoryOpen,
+      cols: INV_COLS,
+      rows: INV_ROWS,
+      cells: this.inventory.map((s) => this.stackView(s)),
+      selected: this.hotbarSelected,
+      held: this.stackView(this.heldStack),
+      rev,
     });
   }
 
-  /** Select slot `i`: equip its tool + highlight it. Re-selecting the already-
-   *  selected slot TOGGLES it off — puts the tool away (empty hand, no
-   *  highlight), so clicking a slot again / re-pressing its number deselects. */
+  /** Select hotbar (row-0) slot `i`: equip its tool + highlight it. Re-selecting
+   *  the active slot TOGGLES it off → empty hand, no highlight. */
   private selectHotbarSlot(i: number): void {
-    if (this.dialogOpen) return; // no tool switching while typing in chat
-    if (i < 0 || i >= this.hotbarSlots.length) return;
-    if (this.hotbarSelected === i) {
-      this.hotbarSelected = -1;
-      this.setTool('hand');
-    } else {
-      this.hotbarSelected = i;
-      this.setTool(this.hotbarSlots[i].toolId);
-    }
-    this.publishHotbar();
+    if (this.dialogOpen || this.inventoryOpen) return;
+    if (i < 0 || i >= INV_COLS) return;
+    this.hotbarSelected = this.hotbarSelected === i ? -1 : i;
+    this.equipSelected();
+    this.publishInventory();
   }
 
-  /** Is the virtual cursor over a hotbar slot? Returns the slot index or null.
-   *  Reads the canvas-px hit-boxes HotbarScene published to the registry. */
+  /** Equip whatever tool the selected hotbar cell holds (empty / non-tool =
+   *  empty hand). Called after selection changes AND after the inventory is
+   *  rearranged (a cell's tool may have moved). */
+  private equipSelected(): void {
+    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    this.setTool(cell?.toolId ?? 'hand');
+  }
+
+  /** Open / close the full backpack grid (E / I / Esc). On close, a still-held
+   *  stack is returned to a free cell so nothing is lost. */
+  private toggleInventory(): void {
+    if (this.dialogOpen) return;
+    this.inventoryOpen = !this.inventoryOpen;
+    if (!this.inventoryOpen && this.heldStack) {
+      this.returnHeldToFreeCell();
+    }
+    this.publishInventory();
+  }
+
+  /** Put the held stack back into the first empty cell (fallback on close). */
+  private returnHeldToFreeCell(): void {
+    if (!this.heldStack) return;
+    const free = this.inventory.findIndex((c) => c === null);
+    if (free >= 0) this.inventory[free] = this.heldStack;
+    this.heldStack = null;
+    this.equipSelected();
+  }
+
+  /** A click inside the open backpack: pick up / drop / merge / swap the stack
+   *  under the cursor (Minecraft click-to-pick, click-to-place). */
+  private handleInventoryClick(): void {
+    const c = this.inventoryCellAt(this.vcursor.x, this.vcursor.y);
+    if (c === null) return; // clicked off the grid — keep holding
+    const target = this.inventory[c];
+    if (!this.heldStack) {
+      // Pick up the whole stack.
+      if (target) { this.heldStack = target; this.inventory[c] = null; }
+    } else if (!target) {
+      // Drop into an empty cell.
+      this.inventory[c] = this.heldStack; this.heldStack = null;
+    } else if (target.id === this.heldStack.id && target.stackable && this.heldStack.stackable) {
+      // Merge same-id stacks (overflow stays in hand).
+      const room = MAX_STACK - target.count;
+      const moved = Math.min(room, this.heldStack.count);
+      target.count += moved;
+      this.heldStack.count -= moved;
+      if (this.heldStack.count <= 0) this.heldStack = null;
+    } else {
+      // Swap held ↔ cell.
+      this.inventory[c] = this.heldStack; this.heldStack = target;
+    }
+    this.equipSelected(); // the selected hotbar cell may have changed tool
+    this.publishInventory();
+  }
+
+  /** Which backpack cell is under (x,y)? Reads InventoryScene's hit-boxes. */
+  private inventoryCellAt(x: number, y: number): number | null {
+    const b = this.registry.get('inventoryBounds') as
+      | { cells: Array<{ x: number; y: number; w: number; h: number }> }
+      | undefined;
+    if (!b) return null;
+    for (let i = 0; i < b.cells.length; i++) {
+      const s = b.cells[i];
+      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) return i;
+    }
+    return null;
+  }
+
+  /** Is the virtual cursor over a hotbar slot? Returns the slot index or null. */
   private hotbarSlotAt(x: number, y: number): number | null {
     const b = this.registry.get('hotbarBounds') as
       | { slots: Array<{ x: number; y: number; w: number; h: number }> }
@@ -685,7 +800,7 @@ export class GameScene extends Phaser.Scene {
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
     };
-    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen || this.pointerOverHotbar()) {
+    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
@@ -800,7 +915,7 @@ export class GameScene extends Phaser.Scene {
   private openDialog(): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
-    this.publishHotbar(); // hide the hotbar while chatting
+    this.publishInventory(); // hide the hotbar while chatting
     // Cato turns to FACE THE PLAYER (front) while chatting: stop + play the
     // front idle. faceDir='down' so the wander-freeze in update() (which plays
     // idle-{faceDir}) keeps him facing front for the whole conversation.
@@ -835,7 +950,7 @@ export class GameScene extends Phaser.Scene {
   private closeDialog(): void {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
-    this.publishHotbar(); // restore the hotbar after chatting
+    this.publishInventory(); // restore the hotbar after chatting
     // Drop the CSS game-cursor; clicking the canvas re-captures the pointer and
     // the CursorScene's custom cursor takes over again.
     this.game.canvas.style.cursor = '';
@@ -944,7 +1059,7 @@ export class GameScene extends Phaser.Scene {
   private updatePlayerMove(): void {
     if (!this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
-    if (this.dialogOpen) { body.setVelocity(0, 0); return; } // typing — hold still
+    if (this.dialogOpen || this.inventoryOpen) { body.setVelocity(0, 0); return; } // typing / backpack open — hold still
     const k = this.keys;
     let vx = 0;
     let vy = 0;
@@ -1027,7 +1142,7 @@ export class GameScene extends Phaser.Scene {
    * capture first; touch pans by drag (and never locks), so it's unaffected.
    */
   private updateEdgeScroll(delta: number): void {
-    if (this.dialogOpen) return; // typing — don't pan when the mouse moves
+    if (this.dialogOpen || this.inventoryOpen) return; // typing / backpack — don't pan
     if (this.cameraFollow) return; // camera is locked onto Cato — no manual pan
     if (!this.locked) return;
     const cam = this.cameras.main;

@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { CursorScene } from './scenes/CursorScene';
 import { HotbarScene } from './scenes/HotbarScene';
+import { InventoryScene } from './scenes/InventoryScene';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from './config';
 import { renderScripts } from './visuals';
 
@@ -32,7 +33,7 @@ function startGame(): void {
     // HotbarScene (bottom tool hotbar) + CursorScene are registered but not
     // auto-started; GameScene launches them after the HUD exists so they layer
     // above it (cursor stays topmost — see CursorScene.update bringToTop).
-    scenes: [BootScene, GameScene, HotbarScene, CursorScene],
+    scenes: [BootScene, GameScene, HotbarScene, InventoryScene, CursorScene],
     renderScripts,
   });
 }

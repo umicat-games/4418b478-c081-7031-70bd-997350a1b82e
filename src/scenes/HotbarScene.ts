@@ -28,10 +28,12 @@ export interface HotbarSlotView {
   iconKey?: string;
   /** Frame within iconKey (e.g. 'hoe'). */
   iconFrame?: string;
+  /** Stack size — a count badge shows when > 1. */
+  count?: number;
 }
 
 export interface HotbarModel {
-  slots: HotbarSlotView[];
+  slots: (HotbarSlotView | null)[];
   selected: number;
   visible: boolean;
   /** Bumped by GameScene whenever the model changes so we re-render. */
@@ -150,6 +152,20 @@ export class HotbarScene extends Phaser.Scene {
         const iconScale = (slotW * 0.62) / Math.max(icon.width, icon.height);
         icon.setScale(iconScale);
         c.add(icon);
+      }
+
+      // Stack count (bottom-right) for stackable items (> 1).
+      if (slot?.count && slot.count > 1) {
+        const badge = this.add
+          .text(cx + slotW / 2 - 4, cy + slotH / 2 - 4, String(slot.count), {
+            fontFamily: 'monospace',
+            fontSize: `${Math.round(10 * s)}px`,
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: Math.max(2, Math.round(2 * s)),
+          })
+          .setOrigin(1, 1);
+        c.add(badge);
       }
 
       // A subtle "1".."9" key hint in each slot's top-left corner.
