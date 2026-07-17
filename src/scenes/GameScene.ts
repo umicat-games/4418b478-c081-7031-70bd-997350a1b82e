@@ -63,6 +63,9 @@ const CATO_TILL_STEP_MS = 1000; // pause on each cell = one full attack swing
 const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil + dirt
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
+// DEV: press T to trigger a test 3×3 till near Cato WITHOUT the AI (no sign-in /
+// no credits) — for iterating on the tilling visuals. Set false before release.
+const CATO_DEBUG_TILL = true;
 
 // Custom pointer-lock cursor: the texture key + hotspot live in CursorScene
 // (which renders it above the HUD); GameScene only drives its position.
@@ -352,6 +355,14 @@ export class GameScene extends Phaser.Scene {
 
       // WASD / arrow keys pan the CAMERA (Cato roams on his own).
       this.setupPlayerKeys();
+      // DEV: T = test-till near Cato without the AI (see CATO_DEBUG_TILL).
+      if (CATO_DEBUG_TILL) {
+        this.input.keyboard?.on('keydown-T', () => {
+          if (!this.dialogOpen && !this.inventoryOpen && !this.catoTask) {
+            this.startTillTask({ crop: 'corn', size: 3 });
+          }
+        });
+      }
       if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
       } else {
