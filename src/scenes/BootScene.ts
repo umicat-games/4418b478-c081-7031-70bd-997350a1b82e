@@ -43,6 +43,9 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+    // Clean hoe ITEM icon (Sprout Lands, white-outlined, centred) — the held-tool
+    // icon shown inside the bracket cursor when the hoe is selected.
+    this.load.image('hoe-icon', 'uploaded/hoe_icon.png');
   }
 
   create(): void {
