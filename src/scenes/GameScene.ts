@@ -517,9 +517,35 @@ export class GameScene extends Phaser.Scene {
       .setDepth(1e6 + 100)
       .setVisible(false);
 
+    // A 3×3 brown "dirt clod" texture for the till particle burst (pixelArt
+    // NEAREST keeps the blocks crisp).
+    if (!this.textures.exists('dirt-particle')) {
+      const g = this.add.graphics();
+      g.fillStyle(0x6f4a2a, 1).fillRect(0, 0, 3, 3);
+      g.generateTexture('dirt-particle', 3, 3);
+      g.destroy();
+    }
+
     // Tool select: 1 = empty hand (default), 2 = hoe. A visual hotbar is next.
     this.input.keyboard?.on('keydown-ONE', () => this.setTool('hand'));
     this.input.keyboard?.on('keydown-TWO', () => this.setTool('hoe'));
+  }
+
+  /** A short burst of pixel dirt clods flying up + out to both sides — played
+   *  when the hoe strikes a cell. */
+  private dirtBurst(x: number, y: number): void {
+    const p = this.add.particles(x, y, 'dirt-particle', {
+      speed: { min: 40, max: 95 },
+      angle: { min: 200, max: 340 }, // up-left through up through up-right (both sides)
+      gravityY: 340,
+      lifespan: { min: 300, max: 560 },
+      scale: { start: 1, end: 0.5 },
+      tint: [0x6f4a2a, 0x8a5a2b, 0x53381d],
+      emitting: false,
+    });
+    p.setDepth(1e6 - 1);
+    p.explode(10, x, y);
+    this.time.delayedCall(800, () => p.destroy());
   }
 
   private setTool(tool: 'hand' | 'hoe'): void {
@@ -586,12 +612,12 @@ export class GameScene extends Phaser.Scene {
     // re-till it mid-swing.
     this.tilledCells.add(key);
 
-    // The god-hand hoe swing: raise up then chop down (hoe-swing = frames
-    // 28→29→28→27). Scaled up 2× so the swing reads clearly, sitting a bit above
-    // the cell so the strike comes DOWN onto it.
+    // The god-hand hoe swing: raise up then chop down (hoe-swing frames). Scaled
+    // 1.5× and nudged left so the hoe HEAD lands on the cell centre, sitting a
+    // bit above so the strike comes DOWN onto the tile.
     const hoe = this.add
-      .sprite(centerX, centerY - TILE / 2, 'tools', 28)
-      .setScale(2)
+      .sprite(centerX - 6, centerY - TILE / 2, 'tools', 28)
+      .setScale(1.5)
       .setDepth(1e6 + 1);
     hoe.play('hoe-swing');
 
@@ -604,6 +630,7 @@ export class GameScene extends Phaser.Scene {
     const flip = () => {
       if (flipped) return;
       flipped = true;
+      this.dirtBurst(centerX, centerY); // dirt clods fly out as the hoe hits
       this.refreshSoil(cx, cy);
       this.refreshSoil(cx, cy - 1);
       this.refreshSoil(cx + 1, cy);
