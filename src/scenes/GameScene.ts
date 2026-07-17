@@ -111,7 +111,8 @@ export class GameScene extends Phaser.Scene {
   // the grass-island TilemapLayer (for world↔tile snapping + "is this grass?").
   private activeTool: 'hand' | 'hoe' = 'hand';
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
-  private tileCursor?: Phaser.GameObjects.Image;
+  private tileCursor?: Phaser.GameObjects.Image; // bracket that frames the target cell
+  private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
   private hoverCell: { cx: number; cy: number } | null = null; // farmable cell under cursor
@@ -498,12 +499,19 @@ export class GameScene extends Phaser.Scene {
       console.warn('[catopia] farming: grass-island layer not found; hoe cursor disabled.');
     }
 
-    // Bracket cursor (24×24, frames a 16px cell). Hidden until the hoe is out +
-    // hovering a farmable tile. High depth so it reads over tiles + Cato.
+    // Bracket cursor (24×24, frames a 16px cell) + the held-tool icon inside it.
+    // Hidden until the hoe is out + hovering a farmable tile. High depth so they
+    // read over tiles + Cato. When shown, the bracket IS the cursor (the normal
+    // mouse pointer hides — see updateTileCursor).
     this.tileCursor = this.add
       .image(0, 0, 'tile-select')
       .setOrigin(0.5, 0.5)
       .setDepth(1e6)
+      .setVisible(false);
+    this.hoeIcon = this.add
+      .image(0, 0, 'tools', 29) // a raised-hoe frame = "you're holding the hoe"
+      .setOrigin(0.5, 0.5)
+      .setDepth(1e6 + 0.5)
       .setVisible(false);
 
     // Tool select: 1 = empty hand (default), 2 = hoe. A visual hotbar is next.
@@ -516,36 +524,49 @@ export class GameScene extends Phaser.Scene {
     this.activeTool = tool;
     if (tool !== 'hoe') {
       this.tileCursor?.setVisible(false);
+      this.hoeIcon?.setVisible(false);
       this.hoverCell = null;
     }
   }
 
-  /** Per-frame: snap the bracket cursor onto the grass tile under the virtual
-   *  cursor when the hoe is out; hide it otherwise. */
+  /** Per-frame: when the hoe is out, snap the bracket + hoe icon onto the grass
+   *  tile under the cursor and hide the normal mouse pointer (the bracket IS the
+   *  cursor there); over non-farmable ground / HUD, hide the bracket and restore
+   *  the mouse pointer so the player is never left without a cursor. */
   private updateTileCursor(): void {
     const cursor = this.tileCursor;
-    if (!cursor || !this.islandLayer) return;
-    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen) {
+    const icon = this.hoeIcon;
+    if (!cursor || !icon || !this.islandLayer) return;
+    // Fall back to the normal mouse cursor: hoe not out, or not over a tillable tile.
+    const showMouse = () => {
       cursor.setVisible(false);
+      icon.setVisible(false);
       this.hoverCell = null;
+      this.cursorState.visible = this.locked;
+    };
+    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen) {
+      showMouse();
       return;
     }
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
     const tile = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
     // Farmable = a grass tile is here AND it isn't already tilled.
     if (!tile || this.tilledCells.has(`${tile.x},${tile.y}`)) {
-      cursor.setVisible(false);
-      this.hoverCell = null;
+      showMouse();
       return;
     }
     const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
     if (!w) {
-      cursor.setVisible(false);
-      this.hoverCell = null;
+      showMouse();
       return;
     }
-    cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true);
+    const px = w.x + TILE / 2;
+    const py = w.y + TILE / 2;
+    cursor.setPosition(px, py).setVisible(true);
+    icon.setPosition(px, py).setVisible(true);
     this.hoverCell = { cx: tile.x, cy: tile.y };
+    // The bracket+hoe IS the cursor here → hide the triangle mouse pointer.
+    this.cursorState.visible = false;
   }
 
   /** Till one grass cell: play the hoe swing at it, then flip it to soil. */
