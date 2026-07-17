@@ -1473,11 +1473,11 @@
           "name": "hoe-swing",
           "from": 27,
           "to": 29,
-          "frames": [28, 29, 28, 27],
+          "frames": [28, 29, 29, 29, 28, 27],
           "loop": false
         }
       ],
-      "fps": 12
+      "fps": 8
     }
   ]
 }

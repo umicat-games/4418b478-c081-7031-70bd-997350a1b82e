@@ -511,7 +511,6 @@ export class GameScene extends Phaser.Scene {
     this.hoeIcon = this.add
       .image(0, 0, 'hoe-icon') // clean centred hoe item icon = "you're holding the hoe"
       .setOrigin(0.5, 0.5)
-      .setScale(1.5) // a bit bigger so the held hoe reads clearly (pixelArt keeps it crisp)
       // Clearly ABOVE the bracket so the whole hoe shows on top of it (a small
       // +0.5 wasn't enough — the bracket was covering the hoe, which is why a
       // BIGGER hoe looked like LESS was visible).
@@ -596,18 +595,24 @@ export class GameScene extends Phaser.Scene {
       .setDepth(1e6 + 1);
     hoe.play('hoe-swing');
 
-    // Flip the cell to soil as the hoe strikes, then clean up the swing sprite.
-    // Fixed timer (not the ANIMATION_COMPLETE event) so it still lands even if
-    // the animation didn't register. Re-autotile this cell + its 4 neighbours
-    // (a new tilled cell changes their edges).
-    this.time.delayedCall(240, () => {
+    // Flip the cell to soil when the swing lands (on the last frame / strike),
+    // then clean up the hoe. Tied to ANIMATION_COMPLETE so it stays in sync with
+    // the swing's speed + raised-hold; a delayedCall safety net covers the case
+    // where the animation somehow didn't register. Re-autotile this cell + its 4
+    // neighbours (a new tilled cell changes their edges).
+    let flipped = false;
+    const flip = () => {
+      if (flipped) return;
+      flipped = true;
       this.refreshSoil(cx, cy);
       this.refreshSoil(cx, cy - 1);
       this.refreshSoil(cx + 1, cy);
       this.refreshSoil(cx, cy + 1);
       this.refreshSoil(cx - 1, cy);
       hoe.destroy();
-    });
+    };
+    hoe.once(Phaser.Animations.Events.ANIMATION_COMPLETE, flip);
+    this.time.delayedCall(1200, flip);
   }
 
   /** Neighbour bitmask for a tilled cell — N=1, E=2, S=4, W=8 (bit set when the
