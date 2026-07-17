@@ -67,6 +67,16 @@ const GRASS_ISLAND_NAME = 'island';
 
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
+type ToolId = 'hand' | 'hoe';
+
+/** One hotbar slot: the tool it equips + the icon HotbarScene draws in the cell
+ *  (from an atlas). An empty slot (no icon) equips the empty hand. */
+interface HotbarSlotDef {
+  toolId: ToolId;
+  iconKey?: string;
+  iconFrame?: string;
+}
+
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
 
@@ -109,13 +119,22 @@ export class GameScene extends Phaser.Scene {
   // Minecraft-style: pick the hoe (key 2; 1 = empty hand), a bracket cursor
   // snaps to the grass tile under the mouse, click tills it. `islandLayer` is
   // the grass-island TilemapLayer (for world↔tile snapping + "is this grass?").
-  private activeTool: 'hand' | 'hoe' = 'hand';
+  private activeTool: ToolId = 'hand';
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
   private tileCursor?: Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
   private hoverCell: { cx: number; cy: number } | null = null; // farmable cell under cursor
+
+  // ── Hotbar (bottom tool bar, rendered by HotbarScene) ───────────────────
+  // GameScene owns the MODEL; HotbarScene draws it + writes each slot's canvas-px
+  // hit-box to the registry (`hotbarBounds`) for click routing. Each slot maps to
+  // a tool; number keys 1..N and clicking a slot both select it. `rev` is bumped
+  // on every change so HotbarScene re-renders.
+  private hotbarSlots: HotbarSlotDef[] = [];
+  private hotbarSelected = 0;
+  private hotbarRev = 0;
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
@@ -411,7 +430,10 @@ export class GameScene extends Phaser.Scene {
     // launch that overlay on top — AFTER loadWorldScene, so it sits above the
     // HUD scene the SDK created during the world load.
     this.registry.set('cursor', this.cursorState);
+    // Bottom tool hotbar overlay (below the cursor, above the world/HUD).
+    if (!this.scene.isActive('HotbarScene')) this.scene.launch('HotbarScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
+    this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('CursorScene');
 
     // Click the canvas → capture the mouse. If already locked, the click is a
@@ -461,6 +483,13 @@ export class GameScene extends Phaser.Scene {
 
   /** Route a click (while pointer-locked) to HUD via the virtual cursor. */
   private handleLockedClick(): void {
+    // Hotbar first: a click on a slot selects that tool (never falls through to
+    // tilling / portrait / camera-release).
+    const slot = this.hotbarSlotAt(this.vcursor.x, this.vcursor.y);
+    if (slot !== null) { this.selectHotbarSlot(slot); return; }
+    // A click anywhere else over the bar (padding/gaps) is swallowed too.
+    if (this.pointerOverHotbar()) return;
+
     // Hoe out + hovering a farmable tile → till it. Takes priority: a farming
     // click is neither a portrait click nor a camera-release click.
     if (this.activeTool === 'hoe' && this.hoverCell) {
@@ -526,9 +555,85 @@ export class GameScene extends Phaser.Scene {
       g.destroy();
     }
 
-    // Tool select: 1 = empty hand (default), 2 = hoe. A visual hotbar is next.
-    this.input.keyboard?.on('keydown-ONE', () => this.setTool('hand'));
-    this.input.keyboard?.on('keydown-TWO', () => this.setTool('hoe'));
+    this.setupHotbar();
+  }
+
+  // ── Hotbar: bottom tool bar (HotbarScene renders; GameScene owns the model) ──
+
+  /** Define the hotbar slots, publish the model to HotbarScene, and bind the
+   *  number keys (1..N) to slot selection. Slot 0 = empty hand, slot 1 = hoe;
+   *  the rest are empty placeholders for future tools/items. */
+  private setupHotbar(): void {
+    this.hotbarSlots = [
+      { toolId: 'hand' }, // 1 — empty hand (default)
+      { toolId: 'hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe' }, // 2 — hoe
+      { toolId: 'hand' }, // 3
+      { toolId: 'hand' }, // 4
+      { toolId: 'hand' }, // 5
+      { toolId: 'hand' }, // 6
+      { toolId: 'hand' }, // 7
+      { toolId: 'hand' }, // 8
+    ];
+    this.hotbarSelected = 0;
+    this.publishHotbar();
+
+    // Number keys 1..N select the matching slot.
+    const codes = [
+      'keydown-ONE', 'keydown-TWO', 'keydown-THREE', 'keydown-FOUR',
+      'keydown-FIVE', 'keydown-SIX', 'keydown-SEVEN', 'keydown-EIGHT', 'keydown-NINE',
+    ];
+    this.hotbarSlots.forEach((_slot, i) => {
+      if (i < codes.length) {
+        this.input.keyboard?.on(codes[i], () => this.selectHotbarSlot(i));
+      }
+    });
+  }
+
+  /** Push the current hotbar model to the registry so HotbarScene re-renders. */
+  private publishHotbar(): void {
+    this.registry.set('hotbar', {
+      slots: this.hotbarSlots.map((s) => ({ iconKey: s.iconKey, iconFrame: s.iconFrame })),
+      selected: this.hotbarSelected,
+      visible: !this.dialogOpen,
+      rev: ++this.hotbarRev,
+    });
+  }
+
+  /** Select slot `i`: equip its tool + refresh the highlight. */
+  private selectHotbarSlot(i: number): void {
+    if (this.dialogOpen) return; // no tool switching while typing in chat
+    if (i < 0 || i >= this.hotbarSlots.length) return;
+    this.hotbarSelected = i;
+    this.setTool(this.hotbarSlots[i].toolId);
+    this.publishHotbar();
+  }
+
+  /** Is the virtual cursor over a hotbar slot? Returns the slot index or null.
+   *  Reads the canvas-px hit-boxes HotbarScene published to the registry. */
+  private hotbarSlotAt(x: number, y: number): number | null {
+    const b = this.registry.get('hotbarBounds') as
+      | { slots: Array<{ x: number; y: number; w: number; h: number }> }
+      | undefined;
+    if (!b) return null;
+    for (let i = 0; i < b.slots.length; i++) {
+      const s = b.slots[i];
+      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) return i;
+    }
+    return null;
+  }
+
+  /** Is the virtual cursor over the hotbar area at all (panel + slots)? Used to
+   *  suppress the hoe tile-cursor so a click near the bar targets the UI. */
+  private pointerOverHotbar(): boolean {
+    const b = this.registry.get('hotbarBounds') as
+      | { bar: { x: number; y: number; w: number; h: number } | null }
+      | undefined;
+    const r = b?.bar;
+    if (!r) return false;
+    return (
+      this.vcursor.x >= r.x && this.vcursor.x <= r.x + r.w &&
+      this.vcursor.y >= r.y && this.vcursor.y <= r.y + r.h
+    );
   }
 
   /** A short burst of pixel dirt clods flying up + out to both sides — played
@@ -547,7 +652,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(700, () => p.destroy());
   }
 
-  private setTool(tool: 'hand' | 'hoe'): void {
+  private setTool(tool: ToolId): void {
     if (this.dialogOpen) return; // don't switch tools while typing in chat
     this.activeTool = tool;
     if (tool !== 'hoe') {
@@ -572,7 +677,7 @@ export class GameScene extends Phaser.Scene {
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
     };
-    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen) {
+    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
@@ -687,6 +792,7 @@ export class GameScene extends Phaser.Scene {
   private openDialog(): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
+    this.publishHotbar(); // hide the hotbar while chatting
     // Cato turns to FACE THE PLAYER (front) while chatting: stop + play the
     // front idle. faceDir='down' so the wander-freeze in update() (which plays
     // idle-{faceDir}) keeps him facing front for the whole conversation.
@@ -721,6 +827,7 @@ export class GameScene extends Phaser.Scene {
   private closeDialog(): void {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
+    this.publishHotbar(); // restore the hotbar after chatting
     // Drop the CSS game-cursor; clicking the canvas re-captures the pointer and
     // the CursorScene's custom cursor takes over again.
     this.game.canvas.style.cursor = '';

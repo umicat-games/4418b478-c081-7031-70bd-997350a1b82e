@@ -51,6 +51,14 @@ export class BootScene extends Phaser.Scene {
       'uploaded/tools_and_meterials.png',
       'uploaded/tools_and_meterials.json',
     );
+    // Inventory / hotbar UI atlas (region-tagged in the Asset Manager) — the
+    // `frame-medium` outer panel + `slot-light` item cells the bottom hotbar
+    // (HotbarScene) is built from. 9-slice insets live in the region JSON.
+    this.load.atlas(
+      'inventory',
+      'uploaded/inventory_spritesheet.png',
+      'uploaded/inventory_spritesheet.json',
+    );
   }
 
   create(): void {
