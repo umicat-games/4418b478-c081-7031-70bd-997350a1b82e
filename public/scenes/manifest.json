@@ -1478,6 +1478,15 @@
         }
       ],
       "fps": 8
+    },
+    {
+      "id": "tools_and_meterials",
+      "textureKey": "tools_and_meterials",
+      "path": "uploaded/tools_and_meterials.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/tools_and_meterials.json",
+      "atlasFormat": "json",
+      "pixelArt": true
     }
   ]
 }

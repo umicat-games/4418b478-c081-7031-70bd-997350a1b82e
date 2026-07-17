@@ -43,9 +43,14 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
-    // Clean hoe ITEM icon (Sprout Lands, white-outlined, centred) — the held-tool
-    // icon shown inside the bracket cursor when the hoe is selected.
-    this.load.image('hoe-icon', 'uploaded/hoe_icon.png');
+    // Tool ITEM icons atlas (Sprout Lands "tools and meterials", region-tagged in
+    // the Asset Manager's Region Editor — `hoe` / `axe` / `watering-can`). The
+    // held-tool icon in the bracket cursor uses the `hoe` region.
+    this.load.atlas(
+      'tools_and_meterials',
+      'uploaded/tools_and_meterials.png',
+      'uploaded/tools_and_meterials.json',
+    );
   }
 
   create(): void {

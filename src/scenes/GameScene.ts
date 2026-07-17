@@ -509,7 +509,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(1e6)
       .setVisible(false);
     this.hoeIcon = this.add
-      .image(0, 0, 'hoe-icon') // clean centred hoe item icon = "you're holding the hoe"
+      .image(0, 0, 'tools_and_meterials', 'hoe') // held-hoe icon = the `hoe` region
       .setOrigin(0.5, 0.5)
       // Clearly ABOVE the bracket so the whole hoe shows on top of it (a small
       // +0.5 wasn't enough — the bracket was covering the hoe, which is why a

@@ -1,0 +1,8 @@
+{
+  "frames": {
+    "watering-can": { "frame": { "x": 0, "y": 0, "w": 16, "h": 16 }, "sourceSize": { "w": 16, "h": 16 } },
+    "axe": { "frame": { "x": 16, "y": 0, "w": 16, "h": 16 }, "sourceSize": { "w": 16, "h": 16 } },
+    "hoe": { "frame": { "x": 32, "y": 0, "w": 16, "h": 16 }, "sourceSize": { "w": 16, "h": 16 } }
+  },
+  "meta": { "image": "tools_and_meterials.png", "size": { "w": 64, "h": 48 }, "scale": "1" }
+}
