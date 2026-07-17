@@ -511,6 +511,7 @@ export class GameScene extends Phaser.Scene {
     this.hoeIcon = this.add
       .image(0, 0, 'hoe-icon') // clean centred hoe item icon = "you're holding the hoe"
       .setOrigin(0.5, 0.5)
+      .setScale(1.5) // a bit bigger so the held hoe reads clearly (pixelArt keeps it crisp)
       // Clearly ABOVE the bracket so the whole hoe shows on top of it (a small
       // +0.5 wasn't enough — the bracket was covering the hoe, which is why a
       // BIGGER hoe looked like LESS was visible).
@@ -586,10 +587,13 @@ export class GameScene extends Phaser.Scene {
     // re-till it mid-swing.
     this.tilledCells.add(key);
 
-    // The god-hand hoe swing (raise→strike, frames 29→28→27 — the reverse tag
-    // authored in the Spritesheet Editor). One-shot sprite at the cell (native
-    // 16px — the swing reads best at tile scale, per playtest).
-    const hoe = this.add.sprite(centerX, centerY - 2, 'tools', 29).setDepth(1e6 + 1);
+    // The god-hand hoe swing: raise up then chop down (hoe-swing = frames
+    // 28→29→28→27). Scaled up 2× so the swing reads clearly, sitting a bit above
+    // the cell so the strike comes DOWN onto it.
+    const hoe = this.add
+      .sprite(centerX, centerY - TILE / 2, 'tools', 28)
+      .setScale(2)
+      .setDepth(1e6 + 1);
     hoe.play('hoe-swing');
 
     // Flip the cell to soil as the hoe strikes, then clean up the swing sprite.
