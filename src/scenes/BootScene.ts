@@ -35,6 +35,10 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+    // Tilled-soil tile (16×16, from Sprout Lands Tilled_Dirt) — dropped on a cell
+    // when the player hoes it. (Autotile edge-connection is a follow-up; for now
+    // every tilled cell shows this seamless interior tile.)
+    this.load.image('tilled-dirt', 'uploaded/tilled_dirt.png');
   }
 
   create(): void {

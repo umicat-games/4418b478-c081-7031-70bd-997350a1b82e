@@ -562,21 +562,17 @@ export class GameScene extends Phaser.Scene {
     this.tilledCells.add(key);
 
     // The god-hand hoe swing (raise→strike, frames 29→28→27 — the reverse tag
-    // authored in the Spritesheet Editor). One-shot sprite above the cell,
-    // scaled up 3× so the tool reads as a big "god hand" over the tile (pixelArt
-    // NEAREST keeps it crisp). Sits a bit above the cell so it chops DOWN onto it.
-    const hoe = this.add
-      .sprite(centerX, centerY - TILE, 'tools', 29)
-      .setScale(3)
-      .setDepth(1e6 + 1);
+    // authored in the Spritesheet Editor). One-shot sprite at the cell (native
+    // 16px — the swing reads best at tile scale, per playtest).
+    const hoe = this.add.sprite(centerX, centerY - 2, 'tools', 29).setDepth(1e6 + 1);
     hoe.play('hoe-swing');
 
     // Flip the cell to soil as the hoe strikes, then clean up the swing sprite.
     // Fixed timer (not the ANIMATION_COMPLETE event) so it still lands even if
-    // the animation didn't register. PLACEHOLDER flat-brown soil for now — the
-    // real Tilled_Dirt tileset + autotile edge-connection is the next iteration.
+    // the animation didn't register. Drops the real Sprout Lands tilled-dirt
+    // tile (seamless interior — autotile edge-connection is the next iteration).
     this.time.delayedCall(240, () => {
-      this.add.rectangle(centerX, centerY, TILE, TILE, 0x6f4a2a).setDepth(1.5);
+      this.add.image(centerX, centerY, 'tilled-dirt').setDepth(1.5);
       hoe.destroy();
     });
   }
