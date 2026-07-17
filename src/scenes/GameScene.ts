@@ -536,9 +536,9 @@ export class GameScene extends Phaser.Scene {
   private dirtBurst(x: number, y: number): void {
     const p = this.add.particles(x, y, 'dirt-particle', {
       speed: { min: 22, max: 58 }, // slower → the clods stay close to the strike
-      angle: { min: 215, max: 325 }, // up-left through up through up-right (both sides)
-      gravityY: 340,
-      lifespan: { min: 280, max: 480 },
+      angle: { min: 200, max: 340 }, // wide fan UP + out to both sides (nothing downward)
+      gravityY: 170, // gentle fall so they mostly go up/out, not straight down
+      lifespan: { min: 280, max: 470 },
       scale: { start: 1.4, end: 0.3 },
       emitting: false,
     });
