@@ -26,12 +26,10 @@ const WALK_MAX_MS = 2800;
 const IDLE_MIN_MS = 900;
 const IDLE_MAX_MS = 2600;
 
-// --- Player control (WASD / arrow keys) ---
-// When true the PLAYER drives Cato directly (WASD or arrow keys) and the camera
-// follows him; the autonomous wander (CHILD_WANDER) is suppressed. Flip to false
-// to go back to Cato roaming on his own.
-const PLAYER_CONTROL = true;
-const PLAYER_SPEED = 90; // world-px/s while a direction is held
+// --- Camera keys (WASD / arrow keys pan the camera) ---
+// Cato roams on his own (CHILD_WANDER); the PLAYER pans the camera with WASD /
+// arrow keys (in addition to mouse edge-scroll). Holding a key scrolls that way.
+const KEY_PAN_SPEED = 700; // screen px/s (÷ zoom → same on-screen feel at any zoom)
 
 // --- Y-sort debug ---
 // Draws a magenta horizontal line at each sprite's FOOT line (the value used for
@@ -55,6 +53,13 @@ const MAX_ZOOM = 8;
 
 // Tilemap cell size (px) — all Catopia tilesets are 16×16.
 const TILE = 16;
+
+// --- Cato "till a plot" behaviour ---
+const CATO_TILL_SPEED = 60;   // world-px/s Cato walks toward each plot cell
+const CATO_ARRIVE_DIST = 3;   // px from a cell centre that counts as "arrived"
+const CATO_TILL_STEP_MS = 850; // pause on each cell so the hoe swing plays out
+const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
+const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 
 // Custom pointer-lock cursor: the texture key + hotspot live in CursorScene
 // (which renders it above the HUD); GameScene only drives its position.
@@ -99,7 +104,7 @@ export class GameScene extends Phaser.Scene {
   private wanderState: 'walk' | 'idle' = 'idle';
   private faceDir: FaceDir = 'down';
 
-  // Player control (WASD / arrows) — registered when PLAYER_CONTROL.
+  // WASD / arrow keys — pan the camera (Cato roams on his own).
   private keys?: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   // Every world sprite (Cato + decoration props like the sunflower). Depth-
   // sorted by foot Y each frame so Cato passes IN FRONT OF / BEHIND them.
@@ -170,6 +175,13 @@ export class GameScene extends Phaser.Scene {
   // Resting (anchored) y per dialog role — the open/close tween moves y, so we
   // remember where to slide back to.
   private dialogY: Record<string, number> = {};
+
+  // ── Cato behaviours (runtime-AI `do` actions) ───────────────────────────
+  // When the guardian asks Cato (in chat) to prepare a plot, the AI returns a
+  // `till_plot` action; we find an open grass patch near Cato, queue its cells,
+  // and Cato walks over + hoes each one (reusing the farming tillCell mechanic).
+  // A single active task at a time; it overrides the autonomous wander.
+  private catoTask: { type: 'till'; queue: Array<{ cx: number; cy: number }>; crop: string; cooldown: number } | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -311,6 +323,19 @@ export class GameScene extends Phaser.Scene {
             playbook: 'cato',
             role: 'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.',
             style: "warm, whimsical, 1-3 short sentences; reply in the guardian's language",
+            // The vocabulary of things Cato can DO in the world. The AI picks one
+            // when the guardian's request fits; GameScene validates + executes it.
+            actions: [
+              {
+                name: 'till_plot',
+                description:
+                  'Walk to a nearby open patch of grass and hoe it into tilled soil so the guardian can plant crops. Use whenever the guardian asks you to clear / prepare / till ground, or make a plot / field / garden / patch for planting something (e.g. corn).',
+                args: {
+                  crop: 'string', // what the guardian wants to plant (flavour, e.g. "corn")
+                  size: 'integer', // side of the square plot in tiles (2-4); default 3
+                },
+              },
+            ],
           });
         })
         .catch(() => {
@@ -322,13 +347,9 @@ export class GameScene extends Phaser.Scene {
       this.game.events.on('hud:submit', this.onHudSubmit);
       this.game.events.on('hud:cancel', this.onHudCancel);
 
-      if (PLAYER_CONTROL) {
-        // Player drives Cato with WASD / arrow keys; the camera follows him.
-        this.setupPlayerKeys();
-        (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-        this.child.play('idle-down', true);
-        this.cameraFollow = true;
-      } else if (CHILD_WANDER) {
+      // WASD / arrow keys pan the CAMERA (Cato roams on his own).
+      this.setupPlayerKeys();
+      if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
       } else {
         // Pinned: no velocity, no walk animation — cat stands at spawn.
@@ -899,6 +920,142 @@ export class GameScene extends Phaser.Scene {
     this.tilledSoil.set(key, soil);
   }
 
+  // ── Cato behaviours (executing the AI's `do` actions) ─────────────────
+
+  /** Dispatch the actions the AI chose this turn. Unknown actions are ignored
+   *  (the AI can only propose from the declared vocabulary anyway). */
+  private runCatoActions(actions: Array<{ name: string; args: unknown }>): void {
+    for (const a of actions) {
+      if (a.name === 'till_plot') this.startTillTask(a.args);
+    }
+  }
+
+  /** Begin the "till a plot" behaviour: find an open grass patch near Cato and
+   *  queue its cells for hoeing. Cato walks the queue in update (updateCatoTask). */
+  private startTillTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const args = (rawArgs ?? {}) as { crop?: string; size?: number };
+    const size = Phaser.Math.Clamp(Math.round(args.size ?? 3), 1, CATO_PLOT_MAX);
+    const crop = (args.crop ?? 'crops').toString();
+    const cells = this.findPlot(size);
+    if (!cells || cells.length === 0) {
+      // No room — let Cato explain in-fiction (overrides the AI's say line).
+      this.registry.set('catoDialogText', "Cato pads around, but there's no clear ground nearby to dig.");
+      return;
+    }
+    // A single active task; camera follows Cato so the guardian watches him work.
+    this.catoTask = { type: 'till', queue: cells, crop, cooldown: 0 };
+    this.cameraFollow = true;
+  }
+
+  /** Is (cx,cy) a grass tile that can still be tilled? (Grass present + not yet
+   *  tilled.) Mirrors the hoe tool's farmable test. */
+  private isFarmable(cx: number, cy: number): boolean {
+    const layer = this.islandLayer;
+    if (!layer) return false;
+    const tile = layer.getTileAt(cx, cy);
+    return !!tile && !this.tilledCells.has(`${cx},${cy}`);
+  }
+
+  /** Find the nearest `size`×`size` block of farmable grass around Cato. Returns
+   *  its cells ordered nearest-first (natural walking order), or null if none. */
+  private findPlot(size: number): Array<{ cx: number; cy: number }> | null {
+    const layer = this.islandLayer;
+    if (!layer || !this.child) return null;
+    const origin = layer.worldToTileXY(this.child.x, this.child.y);
+    if (!origin) return null;
+    const ocx = Math.floor(origin.x);
+    const ocy = Math.floor(origin.y);
+    let best: { tx: number; ty: number } | null = null;
+    let bestD = Infinity;
+    const R = CATO_PLOT_SEARCH_R;
+    for (let ty = ocy - R; ty <= ocy + R; ty++) {
+      for (let tx = ocx - R; tx <= ocx + R; tx++) {
+        let ok = true;
+        for (let j = 0; j < size && ok; j++) {
+          for (let i = 0; i < size && ok; i++) {
+            if (!this.isFarmable(tx + i, ty + j)) ok = false;
+          }
+        }
+        if (!ok) continue;
+        const dcx = tx + size / 2 - origin.x;
+        const dcy = ty + size / 2 - origin.y;
+        const d = dcx * dcx + dcy * dcy;
+        if (d < bestD) { bestD = d; best = { tx, ty }; }
+      }
+    }
+    if (!best) return null;
+    const cells: Array<{ cx: number; cy: number }> = [];
+    for (let j = 0; j < size; j++) {
+      for (let i = 0; i < size; i++) cells.push({ cx: best.tx + i, cy: best.ty + j });
+    }
+    cells.sort(
+      (a, b) =>
+        (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
+    );
+    return cells;
+  }
+
+  /** Drive the active till task: walk Cato to the next cell, hoe it, repeat.
+   *  Frozen while chatting. Resumes the wander when the plot is done. */
+  private updateCatoTask(delta: number): void {
+    const task = this.catoTask;
+    const layer = this.islandLayer;
+    if (!task || !layer || !this.child?.body) return;
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+
+    // Hold still while the guardian is chatting (resume after).
+    if (this.dialogOpen) { body.setVelocity(0, 0); return; }
+
+    // Pause on the cell being tilled so the hoe swing plays before moving on.
+    if (task.cooldown > 0) {
+      task.cooldown -= delta;
+      body.setVelocity(0, 0);
+      this.child.play(`idle-${this.faceDir}`, true);
+      return;
+    }
+
+    const next = task.queue[0];
+    if (!next) { this.finishCatoTask(); return; }
+
+    // Skip a cell that got tilled some other way (idempotent).
+    if (this.tilledCells.has(`${next.cx},${next.cy}`)) { task.queue.shift(); return; }
+
+    const w = layer.tileToWorldXY(next.cx, next.cy);
+    if (!w) { task.queue.shift(); return; }
+    const tx = w.x + TILE / 2;
+    const ty = w.y + TILE / 2;
+    const dx = tx - this.child.x;
+    const dy = ty - this.child.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > CATO_ARRIVE_DIST) {
+      // Walk toward the cell; face + animate along the dominant axis.
+      body.setVelocity((dx / dist) * CATO_TILL_SPEED, (dy / dist) * CATO_TILL_SPEED);
+      if (Math.abs(dx) >= Math.abs(dy)) this.faceDir = dx < 0 ? 'left' : 'right';
+      else this.faceDir = dy < 0 ? 'up' : 'down';
+      this.child.play(`walk-${this.faceDir}`, true);
+      return;
+    }
+
+    // Arrived: stop, hoe this cell, and pause before the next.
+    body.setVelocity(0, 0);
+    this.faceDir = 'down';
+    this.child.play('idle-down', true);
+    this.tillCell(next.cx, next.cy);
+    task.queue.shift();
+    task.cooldown = CATO_TILL_STEP_MS;
+  }
+
+  /** Plot finished: clear the task, tell Cato so he remembers, resume wander. */
+  private finishCatoTask(): void {
+    const crop = this.catoTask?.crop ?? 'crops';
+    this.catoTask = null;
+    this.cameraFollow = false;
+    this.cato?.note(`You finished tilling a plot of soil, ready for the guardian to plant ${crop}.`);
+    if (CHILD_WANDER) this.startWanderIdle();
+  }
+
   // ── Click-to-talk dialog ──────────────────────────────────────────────
 
   /** True if a world point lands on the cat sprite. */
@@ -991,6 +1148,7 @@ export class GameScene extends Phaser.Scene {
       });
       if (r.ok) {
         this.registry.set('catoDialogText', r.say || 'Cato just blinks at you.');
+        if (r.do?.length) this.runCatoActions(r.do);
       } else if (r.reason === 'SIGN_IN_REQUIRED') {
         this.registry.set('catoDialogText', "Cato peers past you — sign in and we can really talk.");
       } else if (r.reason === 'INSUFFICIENT_CREDITS') {
@@ -1033,9 +1191,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ── Player control (WASD / arrow keys) ────────────────────────────────
+  // ── Camera keys (WASD / arrow keys pan the camera) ────────────────────
 
-  /** Register WASD + arrow keys for player-driven walking (PLAYER_CONTROL). */
+  /** Register WASD + arrow keys for camera panning. */
   private setupPlayerKeys(): void {
     const kb = this.input.keyboard;
     if (!kb) return;
@@ -1053,34 +1211,27 @@ export class GameScene extends Phaser.Scene {
     }) as Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   }
 
-  /** Player-driven walking: 8-way movement (normalized so diagonals aren't
-   *  faster), 4-way animation (the sheet has no diagonal walk — face by the
-   *  dominant axis), camera follows while moving. Frozen while chatting. */
-  private updatePlayerMove(): void {
-    if (!this.child?.body) return;
-    const body = this.child.body as Phaser.Physics.Arcade.Body;
-    if (this.dialogOpen || this.inventoryOpen) { body.setVelocity(0, 0); return; } // typing / backpack open — hold still
+  /** WASD / arrow keys pan the camera (screen-space, zoom-compensated). Holding
+   *  a key keeps scrolling; pressing one releases any Cato camera-follow so the
+   *  player takes manual control. Frozen while chatting / in the backpack. */
+  private updateCameraKeys(delta: number): void {
+    if (this.dialogOpen || this.inventoryOpen) return;
     const k = this.keys;
-    let vx = 0;
-    let vy = 0;
-    if (k) {
-      if (k.left.isDown || k.a.isDown) vx -= 1;
-      if (k.right.isDown || k.d.isDown) vx += 1;
-      if (k.up.isDown || k.w.isDown) vy -= 1;
-      if (k.down.isDown || k.s.isDown) vy += 1;
-    }
-    if (vx === 0 && vy === 0) {
-      body.setVelocity(0, 0);
-      this.child.play(`idle-${this.faceDir}`, true);
-      return;
-    }
-    const len = Math.hypot(vx, vy);
-    body.setVelocity((vx / len) * PLAYER_SPEED, (vy / len) * PLAYER_SPEED);
-    // Face the DOMINANT axis (horizontal wins ties) — 4-direction anim set.
-    if (Math.abs(vx) >= Math.abs(vy)) this.faceDir = vx < 0 ? 'left' : 'right';
-    else this.faceDir = vy < 0 ? 'up' : 'down';
-    this.child.play(`walk-${this.faceDir}`, true);
-    this.cameraFollow = true; // keep the camera on Cato while the player drives
+    if (!k) return;
+    let dx = 0;
+    let dy = 0;
+    if (k.left.isDown || k.a.isDown) dx -= 1;
+    if (k.right.isDown || k.d.isDown) dx += 1;
+    if (k.up.isDown || k.w.isDown) dy -= 1;
+    if (k.down.isDown || k.s.isDown) dy += 1;
+    if (dx === 0 && dy === 0) return;
+    this.cameraFollow = false; // manual pan wins over follow-Cato
+    const cam = this.cameras.main;
+    const step = (KEY_PAN_SPEED * delta) / 1000 / cam.zoom;
+    const len = Math.hypot(dx, dy);
+    cam.scrollX += (dx / len) * step;
+    cam.scrollY += (dy / len) * step;
+    // Camera bounds (set by loadWorldScene) auto-clamp on preRender.
   }
 
   // ── Wandering AI helpers ──────────────────────────────────────────────
@@ -1186,11 +1337,14 @@ export class GameScene extends Phaser.Scene {
     // Snap the hoe's tile-selection cursor to the grass tile under the mouse.
     this.updateTileCursor();
 
+    // WASD / arrows pan the camera (Cato roams on his own).
+    this.updateCameraKeys(delta);
+
     if (!this.child?.body) return;
 
-    // Player-driven walking takes over from the autonomous wander.
-    if (PLAYER_CONTROL) {
-      this.updatePlayerMove();
+    // A commanded behaviour (e.g. Cato tilling a plot) takes over the wander.
+    if (this.catoTask) {
+      this.updateCatoTask(delta);
       return;
     }
 
