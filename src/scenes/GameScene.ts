@@ -1006,16 +1006,75 @@ export class GameScene extends Phaser.Scene {
     this.publishInventory();
   }
 
-  /** Harvest a MATURE crop → add its produce to the inventory, free the soil. */
+  /** Harvest a MATURE crop → hoe swing, then the produce pops out of the ground
+   *  in a cute arc, and it's added to the inventory + the soil freed. */
   private harvestCrop(cx: number, cy: number): void {
     const key = `${cx},${cy}`;
     const crop = this.crops.get(key);
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return;
-    crop.sprite.destroy();
+    // Reserve immediately (no double-harvest) + bank the produce.
     this.crops.delete(key);
-    this.setSoilWet(key, false); // safety: leave the freed soil dry
+    this.setSoilWet(key, false);
     this.addToInventory(makeCrop(crop.name, 1));
     this.publishInventory();
+    this.hideTileCursor();
+
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    if (!w) { crop.sprite.destroy(); return; }
+    const centerX = w.x + TILE / 2;
+    const centerY = w.y + TILE / 2;
+    // Hoe swing; when it lands, uproot the plant + pop the produce out.
+    this.hoeSwingAt(centerX, centerY, () => {
+      crop.sprite.destroy();
+      this.playHarvestPop(centerX, centerY, crop.name);
+    });
+  }
+
+  /** The produce jumps OUT of the ground in a semicircular arc to one side,
+   *  bounces once, wobbles its size for cuteness, then vanishes. Pure flair —
+   *  the item is already banked in the inventory. */
+  private playHarvestPop(centerX: number, centerY: number, name: CropName): void {
+    const item = this.add
+      .image(centerX, centerY, 'farming_plants_items', `crop-${name}`)
+      .setOrigin(0.5, 0.5)
+      .setDepth(1e6 + 2);
+    const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1; // fly left or right
+    const dist = 20; // how far to the side
+    const arcH = 22; // arc (jump) height
+    const p = { t: 0 };
+    this.tweens.add({
+      targets: p,
+      t: 1,
+      duration: 520,
+      ease: 'Sine.easeOut',
+      onUpdate: () => {
+        const t = p.t;
+        item.x = centerX + dir * dist * t;
+        item.y = centerY - arcH * Math.sin(Math.PI * t); // up then down (semicircle)
+        item.setScale(0.85 + 0.3 * Math.sin(Math.PI * t)); // grows at the apex — cute
+      },
+      onComplete: () => {
+        // A little landing bounce, then a squash + fade out.
+        this.tweens.add({
+          targets: item,
+          y: item.y - 6,
+          duration: 120,
+          yoyo: true,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            this.tweens.add({
+              targets: item,
+              alpha: 0,
+              scaleX: 1.15,
+              scaleY: 0.65,
+              duration: 200,
+              ease: 'Quad.easeIn',
+              onComplete: () => item.destroy(),
+            });
+          },
+        });
+      },
+    });
   }
 
   /** Add a stack to the inventory: merge into a same-id stackable cell with room,
@@ -1138,34 +1197,38 @@ export class GameScene extends Phaser.Scene {
     // re-till it mid-swing.
     this.tilledCells.add(key);
 
-    // The god-hand hoe swing: raise up then chop down (hoe-swing frames). Scaled
-    // 1.5× and nudged left so the hoe HEAD lands on the cell centre, sitting a
-    // bit above so the strike comes DOWN onto the tile.
-    const hoe = this.add
-      .sprite(centerX - 6, centerY - TILE / 2, 'tools', 28)
-      .setScale(1.5)
-      .setDepth(1e6 + 1);
-    hoe.play('hoe-swing');
-
-    // Flip the cell to soil when the swing lands (on the last frame / strike),
-    // then clean up the hoe. Tied to ANIMATION_COMPLETE so it stays in sync with
-    // the swing's speed + raised-hold; a delayedCall safety net covers the case
-    // where the animation somehow didn't register. Re-autotile this cell + its 4
-    // neighbours (a new tilled cell changes their edges).
-    let flipped = false;
-    const flip = () => {
-      if (flipped) return;
-      flipped = true;
+    // God-hand hoe swing; when it lands, flip the cell to soil + re-autotile this
+    // cell and its 4 neighbours (a new tilled cell changes their edges).
+    this.hoeSwingAt(centerX, centerY, () => {
       this.dirtBurst(centerX, centerY); // dirt clods fly out as the hoe hits
       this.refreshSoil(cx, cy);
       this.refreshSoil(cx, cy - 1);
       this.refreshSoil(cx + 1, cy);
       this.refreshSoil(cx, cy + 1);
       this.refreshSoil(cx - 1, cy);
+    });
+  }
+
+  /** Spawn the god-hand hoe swing at a cell centre (raise → chop). `onStrike`
+   *  fires ONCE when the hoe lands (ANIMATION_COMPLETE, with a delayedCall
+   *  safety). Shared by tilling and harvesting. */
+  private hoeSwingAt(centerX: number, centerY: number, onStrike: () => void): void {
+    // Scaled 1.5× + nudged left so the hoe HEAD lands on the cell centre, sitting
+    // a bit above so the strike comes DOWN onto the tile.
+    const hoe = this.add
+      .sprite(centerX - 6, centerY - TILE / 2, 'tools', 28)
+      .setScale(1.5)
+      .setDepth(1e6 + 1);
+    hoe.play('hoe-swing');
+    let struck = false;
+    const strike = () => {
+      if (struck) return;
+      struck = true;
       hoe.destroy();
+      onStrike();
     };
-    hoe.once(Phaser.Animations.Events.ANIMATION_COMPLETE, flip);
-    this.time.delayedCall(1200, flip);
+    hoe.once(Phaser.Animations.Events.ANIMATION_COMPLETE, strike);
+    this.time.delayedCall(1200, strike);
   }
 
   /** Neighbour bitmask for a tilled cell — N=1, E=2, S=4, W=8 (bit set when the
