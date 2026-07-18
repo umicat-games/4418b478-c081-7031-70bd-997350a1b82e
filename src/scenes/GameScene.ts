@@ -118,6 +118,9 @@ const CROPS: Record<CropName, CropDef> = {
 // off when a crop advances a stage (re-water it to keep it fast). Demo timings.
 const CROP_STAGE_MS_WATERED = 3500;
 const CROP_STAGE_MS_DRY = 12000;
+// Watered soil looks darker/damp — the dirt tileset has no wet variant, so we
+// multiply-tint the soil sprite (cleared when it dries at the next stage-up).
+const WET_SOIL_TINT = 0xb0946a;
 
 /** A seed-bag inventory item for a crop (stackable, `plants` set). */
 function makeSeed(crop: CropName, count: number): ItemStack {
@@ -646,9 +649,9 @@ export class GameScene extends Phaser.Scene {
       this.playerPlant(this.hoverCell.cx, this.hoverCell.cy);
       return;
     }
-    // 4) watering can over a growing crop → water it.
+    // 4) watering can over a growing crop → water it (god-hand pour).
     if (this.activeTool === 'watering-can' && this.hoverCell) {
-      this.waterCropAt(this.hoverCell.cx, this.hoverCell.cy);
+      this.playerWater(this.hoverCell.cx, this.hoverCell.cy);
       return;
     }
     // Click Cato's portrait (top-right frame) → lock the camera onto Cato.
@@ -999,6 +1002,7 @@ export class GameScene extends Phaser.Scene {
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return;
     crop.sprite.destroy();
     this.crops.delete(key);
+    this.setSoilWet(key, false); // safety: leave the freed soil dry
     this.addToInventory(makeCrop(crop.name, 1));
     this.publishInventory();
   }
@@ -1023,7 +1027,7 @@ export class GameScene extends Phaser.Scene {
   /** Advance every growing crop; watered ones grow fast, dry ones crawl. Watering
    *  wears off on each stage-up (re-water to keep it fast). Mature crops stop. */
   private updateCrops(delta: number): void {
-    for (const crop of this.crops.values()) {
+    for (const [key, crop] of this.crops) {
       const max = CROPS[crop.name].stages - 1;
       if (crop.stage >= max) continue;
       crop.timer += delta;
@@ -1032,18 +1036,30 @@ export class GameScene extends Phaser.Scene {
         crop.timer = 0;
         crop.stage += 1;
         crop.watered = false; // needs watering again for the next stage
+        this.setSoilWet(key, false); // soil dries out
         crop.sprite.setFrame(`grow-${crop.name}-${crop.stage}`);
       }
     }
   }
 
-  /** Water a growing crop → it grows fast until its next stage. Plays the splash
-   *  effect on the tile. Shared by the player and Cato. Returns true if watered. */
+  /** Tint / un-tint the soil sprite at a cell to show the damp watered look. */
+  private setSoilWet(key: string, wet: boolean): void {
+    const soil = this.tilledSoil.get(key);
+    if (!soil) return;
+    if (wet) soil.setTint(WET_SOIL_TINT);
+    else soil.clearTint();
+  }
+
+  /** Water a growing crop → it grows fast until its next stage. Sets the damp soil
+   *  tint + plays the splash on the tile. Shared by the player and Cato. Returns
+   *  true if it actually watered (a growing, un-watered crop was there). */
   private waterCropAt(cx: number, cy: number): boolean {
     if (!this.islandLayer) return false;
-    const crop = this.crops.get(`${cx},${cy}`);
+    const key = `${cx},${cy}`;
+    const crop = this.crops.get(key);
     if (!crop || crop.stage >= CROPS[crop.name].stages - 1 || crop.watered) return false;
     crop.watered = true;
+    this.setSoilWet(key, true); // damp soil look until it dries at the next stage
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (w) {
       const splash = this.add
@@ -1053,6 +1069,24 @@ export class GameScene extends Phaser.Scene {
       splash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => splash.destroy());
     }
     return true;
+  }
+
+  /** Player waters a crop: the state change + splash + a god-hand watering-can
+   *  pour (the watering analogue of the hoe swing in tillCell). */
+  private playerWater(cx: number, cy: number): void {
+    if (!this.waterCropAt(cx, cy) || !this.islandLayer) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    const centerX = w.x + TILE / 2;
+    const centerY = w.y + TILE / 2;
+    // Watering can tips in from the upper-left and pours onto the crop.
+    const can = this.add
+      .sprite(centerX - 7, centerY - TILE / 2, 'tools', 0)
+      .setScale(1.5)
+      .setDepth(1e6 + 1);
+    can.play('water-pour');
+    can.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => can.destroy());
+    this.time.delayedCall(1200, () => can.destroy()); // safety net
   }
 
   /** Till one grass cell: play the hoe swing at it, then flip it to soil. */

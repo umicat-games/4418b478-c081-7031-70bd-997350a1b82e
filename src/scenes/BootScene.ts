@@ -92,6 +92,16 @@ export class BootScene extends Phaser.Scene {
         repeat: 0,
       });
     }
+    // God-hand watering-can pour (tools.png row 0-1: can upright→tilt→pour). The
+    // player's watering analogue of the hoe swing (`hoe-swing`).
+    if (!this.anims.exists('water-pour')) {
+      this.anims.create({
+        key: 'water-pour',
+        frames: this.anims.generateFrameNumbers('tools', { frames: [0, 1, 7, 7, 7, 1] }),
+        frameRate: 8,
+        repeat: 0,
+      });
+    }
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });
   }
