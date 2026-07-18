@@ -231,6 +231,7 @@ export class GameScene extends Phaser.Scene {
   private inventoryOpen = false;
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
   private invRev = 0;
+  private invDragFrom: number | null = null; // touch: cell a backpack drag started on
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
@@ -604,12 +605,29 @@ export class GameScene extends Phaser.Scene {
       this.input.manager.mouse?.requestPointerLock();
     });
 
-    // TOUCH: no pointer lock / virtual cursor — a TAP (pointerup with little
-    // movement; a drag is the Rex Pan camera pan) acts at the touched point.
-    // Routes through the SAME `actAt(x,y)` as the mouse, using the real tap px,
-    // so hotbar/tile/cat all work on a touch screen.
+    // TOUCH: no pointer lock / virtual cursor. Two gestures:
+    //  • In the open backpack → PRESS a cell to pick a stack up, DRAG, RELEASE on
+    //    a cell to drop/merge/swap (the natural touch move; the held stack follows
+    //    the finger). Release outside a cell returns it / (empty tap) closes.
+    //  • Elsewhere → a TAP (pointerup, <12px move; a bigger drag is the Rex-Pan
+    //    camera pan) acts at the touched point via the SAME `actAt(x,y)` as mouse.
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.wasTouch || !this.inventoryOpen) return;
+      const c = this.inventoryCellAt(pointer.x, pointer.y);
+      this.invDragFrom = c;
+      if (c !== null && !this.heldStack && this.inventory[c]) this.clickInventoryCell(c); // pick up
+      this.cursorState.x = pointer.x; // the held stack renders at the cursor pos
+      this.cursorState.y = pointer.y;
+    });
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch && this.inventoryOpen && this.heldStack) {
+        this.cursorState.x = pointer.x; // held stack follows the finger
+        this.cursorState.y = pointer.y;
+      }
+    });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
+      if (this.inventoryOpen) { this.endInventoryTouch(pointer.x, pointer.y); return; }
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       if (this.dialogOpen) { this.closeDialog(); return; }
       this.actAt(pointer.x, pointer.y);
@@ -868,6 +886,24 @@ export class GameScene extends Phaser.Scene {
     }
     this.equipSelected(); // the selected hotbar cell may have changed tool
     this.publishInventory();
+  }
+
+  /** End a touch drag in the open backpack: drop the held stack onto the cell
+   *  under the finger (or return it if released off-grid); a plain tap on empty
+   *  space (nothing picked up) closes the backpack. */
+  private endInventoryTouch(x: number, y: number): void {
+    const target = this.inventoryCellAt(x, y);
+    if (this.heldStack) {
+      if (target !== null) {
+        this.clickInventoryCell(target); // drop / merge / swap (+ publishes)
+      } else {
+        this.returnHeldToFreeCell(); // released off the grid → put it back safely
+        this.publishInventory();
+      }
+    } else if (target === null && this.invDragFrom === null) {
+      this.toggleInventory(); // tapped empty space with nothing held → close
+    }
+    this.invDragFrom = null;
   }
 
   /** Which backpack cell is under (x,y)? Reads InventoryScene's hit-boxes. */
