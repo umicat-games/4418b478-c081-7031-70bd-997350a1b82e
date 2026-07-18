@@ -1069,7 +1069,7 @@ export class GameScene extends Phaser.Scene {
       // ~(18,29) not (24,24) — so a plain tile-centre placement landed the water
       // low-left of the tile. Offset it so the splash lands ON the tile centre.
       const splash = this.add
-        .sprite(w.x + TILE / 2 + 6, w.y + TILE / 2 - 4, 'watering-splash')
+        .sprite(w.x + TILE / 2 + 6, w.y + TILE / 2 - 8, 'watering-splash')
         .setDepth(1e6)
         .play('water-splash');
       splash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => splash.destroy());
@@ -1092,7 +1092,7 @@ export class GameScene extends Phaser.Scene {
     // the crop and the (centred) splash reads as pouring out of it. One at a time.
     this.waterCan?.destroy();
     const can = this.add
-      .sprite(centerX + 11, centerY - 6, 'tools', 0)
+      .sprite(centerX + 11, centerY - 10, 'tools', 0)
       .setScale(1.5)
       .setDepth(1e6 + 1);
     can.play('water-pour');
