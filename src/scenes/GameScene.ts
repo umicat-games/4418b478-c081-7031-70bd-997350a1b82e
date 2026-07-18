@@ -1859,24 +1859,31 @@ export class GameScene extends Phaser.Scene {
   /** Persist now (fire-and-forget; anonymous → localStorage, signed-in → backend). */
   private saveGame(): void {
     if (!this.umicat || this.loadingSave) return;
-    this.umicat.saves.set('state', this.buildSave()).catch((e) => console.warn('[catopia] save failed', e));
+    const blob = this.buildSave();
+    console.log('[catopia][save] set state', { crops: blob.crops.length, tilled: blob.tilled.length, inv: blob.inventory.filter(Boolean).length });
+    this.umicat.saves.set('state', blob)
+      .then(() => console.log('[catopia][save] set OK'))
+      .catch((e) => console.warn('[catopia][save] set FAILED', e));
   }
 
-  /** Debounced save after a state change (many rapid actions coalesce into one). */
+  /** Debounced save after a state change (rapid actions coalesce). Short delay so
+   *  the state reaches the backend while the tab is still open — a save-on-close
+   *  is unreliable (the async backend write can't finish as the page tears down). */
   private scheduleSave(): void {
     if (!this.umicat || this.loadingSave) return;
     this.pendingSave?.remove();
-    this.pendingSave = this.time.delayedCall(1500, () => this.saveGame());
+    this.pendingSave = this.time.delayedCall(700, () => this.saveGame());
   }
 
   /** Load + apply the saved state on boot (no-op if none / wrong version). */
   private async loadGame(): Promise<void> {
-    if (!this.umicat) return;
+    if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v === 1) this.applySave(s);
+      console.log('[catopia][save] get state →', s ? { v: s.v, crops: s.crops?.length, tilled: s.tilled?.length } : 'NONE');
+      if (s && s.v === 1) { this.applySave(s); console.log('[catopia][save] applied'); }
     } catch (e) {
-      console.warn('[catopia] load failed', e);
+      console.warn('[catopia][save] load FAILED', e);
     }
   }
 
