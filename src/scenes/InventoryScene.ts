@@ -73,7 +73,8 @@ export class InventoryScene extends Phaser.Scene {
     // The held stack follows the cursor every frame (no full re-render).
     if (this.held && model?.open && model.held) {
       const c = this.registry.get('cursor') as { x: number; y: number } | undefined;
-      if (c) this.held.setPosition(c.x + 14, c.y + 14);
+      // Show the held stack ABOVE the pointer so a finger doesn't cover it.
+      if (c) this.held.setPosition(c.x, c.y - 30);
     }
   }
 
