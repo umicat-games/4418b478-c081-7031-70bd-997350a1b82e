@@ -63,6 +63,10 @@ const CATO_TILL_STEP_MS = 1000; // pause on each cell = one full attack swing
 const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil + dirt
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
+// Leash: Cato wanders near the CAMERA CENTRE instead of roaming the whole map.
+// Past LEASH_RADIUS (world px) he heads back until within LEASH_RETURN.
+const CATO_LEASH_RADIUS = 88;
+const CATO_LEASH_RETURN = 40;
 // DEV: press T to trigger a test 3×3 till near Cato WITHOUT the AI (no sign-in /
 // no credits) — for iterating on the tilling visuals. Set false before release.
 const CATO_DEBUG_TILL = true;
@@ -255,6 +259,7 @@ export class GameScene extends Phaser.Scene {
     // he faces to swing/tend it. Computed once per target; null = recompute.
     stand: { x: number; y: number; dir: FaceDir } | null;
   } | null = null;
+  private catoReturning = false; // walking back toward the camera centre (leash)
 
   constructor() {
     super({ key: 'GameScene' });
@@ -1794,6 +1799,29 @@ export class GameScene extends Phaser.Scene {
       if (this.wanderState !== 'idle') this.startWanderIdle();
       return;
     }
+
+    // Leash: Cato hangs around the CAMERA CENTRE (like a companion staying in
+    // view) rather than roaming the whole island. If he strays past the leash
+    // radius (or is on his way back), walk him toward the centre; once he's back
+    // inside the inner radius, resume the local walk/idle wander. This also brings
+    // him home after a task (he ends wherever the plot was).
+    const cam = this.cameras.main;
+    const ccx = cam.worldView.centerX;
+    const ccy = cam.worldView.centerY;
+    const dx = ccx - this.child.x;
+    const dy = ccy - this.child.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > CATO_LEASH_RADIUS || (this.catoReturning && dist > CATO_LEASH_RETURN)) {
+      this.catoReturning = true;
+      body.setVelocity((dx / dist) * CHILD_SPEED, (dy / dist) * CHILD_SPEED);
+      if (Math.abs(dx) >= Math.abs(dy)) this.faceDir = dx < 0 ? 'left' : 'right';
+      else this.faceDir = dy < 0 ? 'up' : 'down';
+      this.child.play(`walk-${this.faceDir}`, true);
+      this.wanderState = 'walk';
+      this.wanderTimer = 0;
+      return;
+    }
+    this.catoReturning = false;
 
     // Bumped into a boundary mid-stroll → turn and head off a fresh way.
     if (
