@@ -365,6 +365,8 @@ export class GameScene extends Phaser.Scene {
       panGesture.on('pan', (p: { dx: number; dy: number; pointer?: Phaser.Input.Pointer }) => {
         const pointer = p.pointer ?? this.input.activePointer;
         if (!pointer.wasTouch) return; // mouse → edge-scroll, not drag
+        if (this.dialogOpen || this.inventoryOpen) return; // don't pan behind a modal
+        this.cameraFollow = false; // manual pan wins over follow-Cato
         // dx/dy are screen pixels → divide by zoom to get world delta
         cam.scrollX -= p.dx / cam.zoom;
         cam.scrollY -= p.dy / cam.zoom;
@@ -585,10 +587,12 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('InventoryScene');
     this.scene.bringToTop('CursorScene');
 
-    // Click the canvas → capture the mouse. If already locked, the click is a
-    // game/HUD action routed through the virtual cursor (the OS pointer is
+    // MOUSE: click the canvas → capture the mouse. If already locked, the click
+    // is a game/HUD action routed through the virtual cursor (the OS pointer is
     // frozen under lock, so Phaser's own hit-testing can't see the cursor).
+    // Touch is handled separately (pointerup tap below) — it never locks.
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch) return;
       // Dialog open: a canvas click (outside the HTML input, which sits on top
       // and swallows its own clicks) dismisses it.
       if (this.dialogOpen) { this.closeDialog(); return; }
@@ -598,6 +602,17 @@ export class GameScene extends Phaser.Scene {
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
       this.input.manager.mouse?.requestPointerLock();
+    });
+
+    // TOUCH: no pointer lock / virtual cursor — a TAP (pointerup with little
+    // movement; a drag is the Rex Pan camera pan) acts at the touched point.
+    // Routes through the SAME `actAt(x,y)` as the mouse, using the real tap px,
+    // so hotbar/tile/cat all work on a touch screen.
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.wasTouch) return;
+      if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
+      if (this.dialogOpen) { this.closeDialog(); return; }
+      this.actAt(pointer.x, pointer.y);
     });
 
     // Esc closes the dialog (also releases pointer lock — browser-enforced).
@@ -630,56 +645,52 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Route a click (while pointer-locked) to HUD via the virtual cursor. */
+  /** Route a click while pointer-locked (mouse) via the virtual cursor. */
   private handleLockedClick(): void {
-    // Backpack open: clicks pick up / drop / merge stacks; nothing else fires.
-    if (this.inventoryOpen) { this.handleInventoryClick(); return; }
+    this.actAt(this.vcursor.x, this.vcursor.y);
+  }
 
-    // Hotbar first: a click on a slot selects that tool (never falls through to
-    // tilling / portrait / camera-release).
-    const slot = this.hotbarSlotAt(this.vcursor.x, this.vcursor.y);
+  /** Route an action at canvas-px (x,y). Shared by the pointer-locked mouse
+   *  (virtual cursor) AND touch taps — so it computes the target tile straight
+   *  from (x,y) rather than the hover cursor (which only exists under lock). */
+  private actAt(x: number, y: number): void {
+    // Backpack open: tap a cell to pick/drop/merge/swap; tap outside → close.
+    if (this.inventoryOpen) {
+      const c = this.inventoryCellAt(x, y);
+      if (c !== null) this.clickInventoryCell(c);
+      else this.toggleInventory();
+      return;
+    }
+    // Backpack button → open the full grid (mainly for touch — no E key).
+    if (this.overBackpackButton(x, y)) { this.toggleInventory(); return; }
+    // Hotbar slot → select that tool; elsewhere over the bar → swallow.
+    const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
-    // A click anywhere else over the bar (padding/gaps) is swallowed too.
-    if (this.pointerOverHotbar()) return;
+    if (this.overHotbarAt(x, y)) return;
 
-    // Farming clicks take priority over portrait / camera-release:
-    // 1) a MATURE crop under the cursor → harvest it — but ONLY with an empty
-    //    hand or the hoe (it swings the hoe). Holding the watering can / a seed
-    //    doesn't harvest (that was the "watering can harvests" confusion).
-    const canHarvest = !this.activeSeed && this.activeTool !== 'watering-can';
-    const wpc = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
-    const ctile = this.islandLayer?.getTileAtWorldXY(wpc.x, wpc.y);
-    if (canHarvest && ctile) {
-      const crop = this.crops.get(`${ctile.x},${ctile.y}`);
-      if (crop && crop.stage >= CROPS[crop.name].stages - 1) {
-        this.harvestCrop(ctile.x, ctile.y);
-        return;
+    // World-tile actions (validity computed here, so touch works without a hover
+    // cursor). Harvest takes priority; only the hoe / empty hand harvests.
+    const wp = this.cameras.main.getWorldPoint(x, y);
+    const tile = this.islandLayer?.getTileAtWorldXY(wp.x, wp.y);
+    if (tile) {
+      const key = `${tile.x},${tile.y}`;
+      const crop = this.crops.get(key);
+      const canHarvest = !this.activeSeed && this.activeTool !== 'watering-can';
+      if (canHarvest && crop && crop.stage >= CROPS[crop.name].stages - 1) {
+        this.harvestCrop(tile.x, tile.y); return;
+      }
+      if (this.activeTool === 'hoe' && !this.tilledCells.has(key)) {
+        this.tillCell(tile.x, tile.y); return;
+      }
+      if (this.activeSeed && this.tilledCells.has(key) && !this.crops.has(key)) {
+        this.playerPlant(tile.x, tile.y); return;
+      }
+      if (this.activeTool === 'watering-can' && this.tilledCells.has(key)) {
+        this.playerWater(tile.x, tile.y); return;
       }
     }
-    // 2) hoe over tillable grass → till.
-    if (this.activeTool === 'hoe' && this.hoverCell) {
-      this.tillCell(this.hoverCell.cx, this.hoverCell.cy);
-      return;
-    }
-    // 3) seed over empty soil → plant.
-    if (this.activeSeed && this.hoverCell) {
-      this.playerPlant(this.hoverCell.cx, this.hoverCell.cy);
-      return;
-    }
-    // 4) watering can over a growing crop → water it (god-hand pour).
-    if (this.activeTool === 'watering-can' && this.hoverCell) {
-      this.playerWater(this.hoverCell.cx, this.hoverCell.cy);
-      return;
-    }
-    // Click Cato's portrait (top-right frame) → lock the camera onto Cato.
-    if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, this.vcursor.x, this.vcursor.y)) {
-      this.followCato();
-      return;
-    }
-    // The virtual cursor is in canvas px; convert to world to hit-test the cat.
-    const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
-    // Click Cato himself → talk. Click anywhere else on the map → release the
-    // camera lock (back to manual panning).
+    // Cato's portrait (top-right) → follow; Cato himself → talk; else release follow.
+    if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, x, y)) { this.followCato(); return; }
     if (this.catContains(wp.x, wp.y)) this.openDialog();
     else if (this.cameraFollow) this.unfollowCato();
   }
@@ -740,16 +751,17 @@ export class GameScene extends Phaser.Scene {
    *  You start bare-handed (nothing selected). */
   private setupInventory(): void {
     this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null);
-    // Row 0 (the hotbar): the hoe + a few seed bags for quick planting.
+    // Row 0 (the hotbar) holds ALL the tools + seeds (8 slots) so touch players —
+    // who can't open the backpack as easily — reach everything from the bar.
+    // Harvested crops land in the backpack rows below.
     this.inventory[0] = { id: 'hoe', label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
-    this.inventory[1] = makeSeed('corn', 10);
-    this.inventory[2] = makeSeed('carrot', 10);
-    this.inventory[3] = makeSeed('tomato', 10);
-    // Row 1: the rest of the seed bags + the other tools.
-    this.inventory[INV_COLS + 0] = makeSeed('eggplant', 10);
-    this.inventory[INV_COLS + 1] = makeSeed('pumpkin', 10);
-    this.inventory[INV_COLS + 2] = { id: 'axe', label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
-    this.inventory[INV_COLS + 3] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
+    this.inventory[1] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
+    this.inventory[2] = makeSeed('corn', 10);
+    this.inventory[3] = makeSeed('carrot', 10);
+    this.inventory[4] = makeSeed('tomato', 10);
+    this.inventory[5] = makeSeed('eggplant', 10);
+    this.inventory[6] = makeSeed('pumpkin', 10);
+    this.inventory[7] = { id: 'axe', label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -833,11 +845,9 @@ export class GameScene extends Phaser.Scene {
     this.equipSelected();
   }
 
-  /** A click inside the open backpack: pick up / drop / merge / swap the stack
-   *  under the cursor (Minecraft click-to-pick, click-to-place). */
-  private handleInventoryClick(): void {
-    const c = this.inventoryCellAt(this.vcursor.x, this.vcursor.y);
-    if (c === null) return; // clicked off the grid — keep holding
+  /** Pick up / drop / merge / swap the stack in backpack cell `c` (Minecraft
+   *  click-to-pick, click-to-place). */
+  private clickInventoryCell(c: number): void {
     const target = this.inventory[c];
     if (!this.heldStack) {
       // Pick up the whole stack.
@@ -886,18 +896,30 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  /** Is the virtual cursor over the hotbar area at all (panel + slots)? Used to
-   *  suppress the hoe tile-cursor so a click near the bar targets the UI. */
-  private pointerOverHotbar(): boolean {
+  /** Is (x,y) over the backpack button (right of the hotbar)? */
+  private overBackpackButton(x: number, y: number): boolean {
+    const b = this.registry.get('hotbarBounds') as
+      | { backpack?: { x: number; y: number; w: number; h: number } }
+      | undefined;
+    const r = b?.backpack;
+    if (!r) return false;
+    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
+  /** Is (x,y) over the hotbar area (panel + slots)? */
+  private overHotbarAt(x: number, y: number): boolean {
     const b = this.registry.get('hotbarBounds') as
       | { bar: { x: number; y: number; w: number; h: number } | null }
       | undefined;
     const r = b?.bar;
     if (!r) return false;
-    return (
-      this.vcursor.x >= r.x && this.vcursor.x <= r.x + r.w &&
-      this.vcursor.y >= r.y && this.vcursor.y <= r.y + r.h
-    );
+    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
+  /** Is the virtual (mouse) cursor over the hotbar? Used to suppress the hoe
+   *  tile-cursor so a hover near the bar targets the UI. */
+  private pointerOverHotbar(): boolean {
+    return this.overHotbarAt(this.vcursor.x, this.vcursor.y);
   }
 
   /** A short burst of pixel dirt clods flying up + out to both sides — played

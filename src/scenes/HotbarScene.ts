@@ -182,12 +182,30 @@ export class HotbarScene extends Phaser.Scene {
       bounds.push({ x: cx - slotW / 2, y: cy - slotH / 2, w: slotW, h: slotH });
     }
 
-    // Publish hit-boxes (canvas px) for GameScene's pointer-lock click routing.
-    // The `bar` rect is the whole hotbar (used to suppress the hoe tile-cursor
-    // when the pointer is over the UI).
+    // Backpack button, anchored to the screen's RIGHT edge (level with the bar) —
+    // opens the full grid. Mainly for TOUCH (no E key); also works with the mouse.
+    // A `slot-light` cell + a small 2×2 "pouch" glyph.
+    const bx = Math.round(this.scale.width - PAD_X - slotW / 2);
+    const backpackBtn = this.add.image(bx, rowY, ATLAS, FRAME_SLOT_SELECTED).setScale(s);
+    c.add(backpackBtn);
+    const g = this.add.graphics();
+    g.fillStyle(0x3a2a1a, 0.9);
+    const d = Math.round(4 * s); // dot size
+    const gap = Math.round(3 * s);
+    for (let r = 0; r < 2; r++) {
+      for (let col = 0; col < 2; col++) {
+        g.fillRect(bx - d - gap / 2 + col * (d + gap), rowY - d - gap / 2 + r * (d + gap), d, d);
+      }
+    }
+    c.add(g);
+    const backpack = { x: bx - slotW / 2, y: rowY - slotH / 2, w: slotW, h: slotH };
+
+    // Publish hit-boxes (canvas px) for GameScene's click routing. The `bar` rect
+    // is the whole hotbar (used to suppress the hoe tile-cursor over the UI).
     const barTop = Math.min(...bounds.map((b) => b.y)) - PAD_Y;
     this.registry.set('hotbarBounds', {
       slots: bounds,
+      backpack,
       bar: {
         x: startX - PAD_X,
         y: barTop,
