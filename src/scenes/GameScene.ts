@@ -1405,7 +1405,8 @@ export class GameScene extends Phaser.Scene {
     // through the swing (commitCatoTill / delayed plant).
     body.setVelocity(0, 0);
     this.faceDir = s.dir;
-    this.child.play(`attack-${s.dir}`, true);
+    // Water uses Cato's watering animation; till/plant use his attack (hoe) swing.
+    this.child.play(`${task.type === 'water' ? 'water' : 'attack'}-${s.dir}`, true);
     const tx = next.cx, ty = next.cy;
     if (task.type === 'till') {
       this.commitCatoTill(tx, ty);

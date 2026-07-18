@@ -1075,25 +1075,25 @@
           "loop": false
         },
         {
-          "name": "die-down",
+          "name": "water-down",
           "from": 160,
           "to": 167,
           "loop": false
         },
         {
-          "name": "die-up",
+          "name": "water-up",
           "from": 168,
           "to": 175,
           "loop": false
         },
         {
-          "name": "die-right",
+          "name": "water-right",
           "from": 176,
           "to": 183,
           "loop": false
         },
         {
-          "name": "die-left",
+          "name": "water-left",
           "from": 184,
           "to": 191,
           "loop": false
