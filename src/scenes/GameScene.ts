@@ -1695,6 +1695,49 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** A compact snapshot of the current game state, sent to Cato as `observation`
+   *  each turn so he can SEE the backpack + farm and answer / act on them (what do
+   *  we have, what's growing, anything ripe / thirsty, room to plant). Cheap layer
+   *  before a real tool-agent: the game holds all this state locally already. */
+  private buildObservation(): Record<string, unknown> {
+    // Backpack: aggregate stacks by item name → one line each.
+    const bag = new Map<string, number>();
+    for (const c of this.inventory) {
+      if (c) bag.set(c.label ?? c.id, (bag.get(c.label ?? c.id) ?? 0) + c.count);
+    }
+    const backpack = [...bag].map(([item, count]) => ({ item, count }));
+
+    // Farm: crop counts by type + how many are ripe / still growing / thirsty,
+    // plus empty tilled soil ready to plant.
+    const byType: Record<string, number> = {};
+    let ripe = 0;
+    let growing = 0;
+    let thirsty = 0;
+    for (const [key, crop] of this.crops) {
+      byType[crop.name] = (byType[crop.name] ?? 0) + 1;
+      if (crop.stage >= CROPS[crop.name].stages - 1) ripe += 1;
+      else {
+        growing += 1;
+        if ((this.soilWet.get(key) ?? 0) <= 0) thirsty += 1;
+      }
+    }
+    let tilledEmpty = 0;
+    for (const key of this.tilledCells) if (!this.crops.has(key)) tilledEmpty += 1;
+
+    return {
+      island: 'home',
+      timeOfDay: 'day',
+      backpack, // e.g. [{item:'Corn seeds', count:10}, {item:'Hoe', count:1}]
+      farm: {
+        plantedByCrop: byType, // {corn:3, carrot:2}
+        ripe, // ready to harvest
+        growing, // still growing
+        thirsty, // growing on dry soil (would grow faster if watered)
+        tilledEmpty, // tilled soil with nothing planted yet
+      },
+    };
+  }
+
   /** Player submitted a line (from the chat-input-field's `hud:submit` event)
    *  → ask Cato (umicat.ai + the cato playbook). The widget clears itself. */
   private async submitDialog(text: string): Promise<void> {
@@ -1708,7 +1751,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const r = await this.cato.say(t, {
-        observation: { island: 'home', timeOfDay: 'day' },
+        observation: this.buildObservation(),
       });
       if (r.ok) {
         this.registry.set('catoDialogText', r.say || 'Cato just blinks at you.');
