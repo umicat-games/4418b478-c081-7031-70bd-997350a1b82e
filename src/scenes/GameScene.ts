@@ -1079,9 +1079,10 @@ export class GameScene extends Phaser.Scene {
     if (!w) return;
     const centerX = w.x + TILE / 2;
     const centerY = w.y + TILE / 2;
-    // Watering can tips in from the upper-left and pours onto the crop.
+    // Watering can tips in from the upper-right; its spout is on the LEFT of the
+    // sprite, so offset it RIGHT so the pour lands on THIS tile (not the one left).
     const can = this.add
-      .sprite(centerX - 7, centerY - TILE / 2, 'tools', 0)
+      .sprite(centerX + 6, centerY - TILE / 2, 'tools', 0)
       .setScale(1.5)
       .setDepth(1e6 + 1);
     can.play('water-pour');
