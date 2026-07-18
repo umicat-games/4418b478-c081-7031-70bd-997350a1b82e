@@ -1313,6 +1313,27 @@ export class GameScene extends Phaser.Scene {
     return Number.isFinite(max) ? cells.slice(0, max) : cells;
   }
 
+  /** Walk Cato toward (tx,ty) along ONE cardinal axis at a time (the dominant
+   *  remaining one) — the character sheet has no diagonal walk, so we never move
+   *  diagonally; the path is L-shaped. Sets velocity + facing + walk anim. */
+  private walkCardinalToward(tx: number, ty: number, speed: number): void {
+    if (!this.child?.body) return;
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+    const dx = tx - this.child.x;
+    const dy = ty - this.child.y;
+    const DZ = 1.5; // per-axis deadzone so we don't jitter when nearly aligned
+    if (Math.abs(dx) > DZ && Math.abs(dx) >= Math.abs(dy)) {
+      body.setVelocity(Math.sign(dx) * speed, 0);
+      this.faceDir = dx < 0 ? 'left' : 'right';
+    } else if (Math.abs(dy) > DZ) {
+      body.setVelocity(0, Math.sign(dy) * speed);
+      this.faceDir = dy < 0 ? 'up' : 'down';
+    } else {
+      body.setVelocity(0, 0);
+    }
+    this.child.play(`walk-${this.faceDir}`, true);
+  }
+
   /** Is (cx,cy) a grass tile that can still be tilled? (Grass present + not yet
    *  tilled.) Mirrors the hoe tool's farmable test. */
   private isFarmable(cx: number, cy: number): boolean {
@@ -1397,11 +1418,7 @@ export class GameScene extends Phaser.Scene {
     const dist = Math.hypot(dx, dy);
 
     if (dist > CATO_ARRIVE_DIST) {
-      // Walk toward the stand cell; face + animate along the dominant axis.
-      body.setVelocity((dx / dist) * CATO_TILL_SPEED, (dy / dist) * CATO_TILL_SPEED);
-      if (Math.abs(dx) >= Math.abs(dy)) this.faceDir = dx < 0 ? 'left' : 'right';
-      else this.faceDir = dy < 0 ? 'up' : 'down';
-      this.child.play(`walk-${this.faceDir}`, true);
+      this.walkCardinalToward(s.x, s.y, CATO_TILL_SPEED); // cardinal only (no diagonal anim)
       return;
     }
 
@@ -1813,10 +1830,7 @@ export class GameScene extends Phaser.Scene {
     const dist = Math.hypot(dx, dy);
     if (dist > CATO_LEASH_RADIUS || (this.catoReturning && dist > CATO_LEASH_RETURN)) {
       this.catoReturning = true;
-      body.setVelocity((dx / dist) * CHILD_SPEED, (dy / dist) * CHILD_SPEED);
-      if (Math.abs(dx) >= Math.abs(dy)) this.faceDir = dx < 0 ? 'left' : 'right';
-      else this.faceDir = dy < 0 ? 'up' : 'down';
-      this.child.play(`walk-${this.faceDir}`, true);
+      this.walkCardinalToward(ccx, ccy, CHILD_SPEED); // cardinal only (no diagonal anim)
       this.wanderState = 'walk';
       this.wanderTimer = 0;
       return;
