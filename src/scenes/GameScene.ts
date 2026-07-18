@@ -196,6 +196,7 @@ export class GameScene extends Phaser.Scene {
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
   private tileCursor?: Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
+  private waterCan?: Phaser.GameObjects.Sprite; // the god-hand watering-can pour (one at a time)
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
   private hoverCell: { cx: number; cy: number } | null = null; // actionable cell under cursor (till or plant)
@@ -1062,8 +1063,11 @@ export class GameScene extends Phaser.Scene {
     this.setSoilWet(key, true); // damp soil look until it dries at the next stage
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (w) {
+      // The splash art is NOT centred in its 48px frame — its content sits at
+      // ~(18,29) not (24,24) — so a plain tile-centre placement landed the water
+      // low-left of the tile. Offset it so the splash lands ON the tile centre.
       const splash = this.add
-        .sprite(w.x + TILE / 2, w.y + TILE / 2, 'watering-splash')
+        .sprite(w.x + TILE / 2 + 6, w.y + TILE / 2 - 4, 'watering-splash')
         .setDepth(1e6)
         .play('water-splash');
       splash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => splash.destroy());
@@ -1075,19 +1079,32 @@ export class GameScene extends Phaser.Scene {
    *  pour (the watering analogue of the hoe swing in tillCell). */
   private playerWater(cx: number, cy: number): void {
     if (!this.waterCropAt(cx, cy) || !this.islandLayer) return;
+    this.hideTileCursor(); // the crop is now watered → drop the bracket/icon at once
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (!w) return;
     const centerX = w.x + TILE / 2;
     const centerY = w.y + TILE / 2;
-    // Watering can tips in from the upper-right; its spout is on the LEFT of the
-    // sprite, so offset it RIGHT so the pour lands on THIS tile (not the one left).
+    // God-hand watering can, held ABOVE the tile, tilting to pour (frames 0→1;
+    // the messy top-right-drop frame 7 is dropped). The falling water itself is
+    // the splash above. Only one at a time — replace any lingering one.
+    this.waterCan?.destroy();
     const can = this.add
-      .sprite(centerX + 11, centerY - TILE, 'tools', 0)
+      .sprite(centerX + 4, centerY - 13, 'tools', 0)
       .setScale(1.5)
       .setDepth(1e6 + 1);
     can.play('water-pour');
-    can.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => can.destroy());
-    this.time.delayedCall(1200, () => can.destroy()); // safety net
+    this.waterCan = can;
+    this.time.delayedCall(950, () => { if (this.waterCan === can) this.waterCan = undefined; can.destroy(); });
+  }
+
+  /** Hide the tile bracket + held icon immediately (updateTileCursor re-shows it
+   *  next frame if still over a valid target). Prevents a stale bracket lingering
+   *  after an action changes the cell out from under it. */
+  private hideTileCursor(): void {
+    this.tileCursor?.setVisible(false);
+    this.hoeIcon?.setVisible(false);
+    this.hoverCell = null;
+    this.cursorState.visible = this.locked;
   }
 
   /** Till one grass cell: play the hoe swing at it, then flip it to soil. */

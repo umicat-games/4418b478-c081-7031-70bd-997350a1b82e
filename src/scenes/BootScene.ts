@@ -97,7 +97,7 @@ export class BootScene extends Phaser.Scene {
     if (!this.anims.exists('water-pour')) {
       this.anims.create({
         key: 'water-pour',
-        frames: this.anims.generateFrameNumbers('tools', { frames: [0, 1, 7, 7, 7, 1] }),
+        frames: this.anims.generateFrameNumbers('tools', { frames: [0, 0, 1, 1, 1, 0] }),
         frameRate: 8,
         repeat: 0,
       });
