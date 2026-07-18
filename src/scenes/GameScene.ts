@@ -89,7 +89,7 @@ const MAX_STACK = 99;
 
 /** One stack of items in a single inventory/hotbar cell. Tools are
  *  non-stackable (count 1, carry a `toolId` they equip on select); seeds /
- *  materials stack up to MAX_STACK. `id` is the merge key. An empty cell = null. */
+ *  materials / crops stack up to MAX_STACK. `id` is the merge key. Empty = null. */
 interface ItemStack {
   id: string;
   label?: string;
@@ -98,6 +98,48 @@ interface ItemStack {
   count: number;
   stackable: boolean;
   toolId?: ToolId;
+  plants?: CropName; // a seed bag: selecting it lets you plant this crop on soil
+}
+
+// --- Crops (Sprout Lands "Farming Plants") ---
+// Each crop grows through N stages (frames `grow-<name>-<stage>` in the
+// farming_plants atlas). Corn is TALL (16×32); the rest are 16×16. The seed bag +
+// harvested crop item icons live in the farming_plants_items atlas.
+type CropName = 'corn' | 'carrot' | 'tomato' | 'eggplant' | 'pumpkin';
+interface CropDef { stages: number; tall: boolean; label: string }
+const CROPS: Record<CropName, CropDef> = {
+  corn:     { stages: 5, tall: true,  label: 'Corn' },
+  carrot:   { stages: 4, tall: false, label: 'Carrot' },
+  tomato:   { stages: 4, tall: false, label: 'Tomato' },
+  eggplant: { stages: 4, tall: false, label: 'Eggplant' },
+  pumpkin:  { stages: 4, tall: false, label: 'Pumpkin' },
+};
+// Fast demo growth: ~3.5s per stage (tweak freely).
+const CROP_STAGE_MS = 3500;
+
+/** A seed-bag inventory item for a crop (stackable, `plants` set). */
+function makeSeed(crop: CropName, count: number): ItemStack {
+  return {
+    id: `${crop}-seed`,
+    label: `${CROPS[crop].label} seeds`,
+    iconKey: 'farming_plants_items',
+    iconFrame: `${crop}-seed-bag`,
+    count,
+    stackable: true,
+    plants: crop,
+  };
+}
+
+/** A harvested-crop inventory item (stackable). */
+function makeCrop(crop: CropName, count: number): ItemStack {
+  return {
+    id: `crop-${crop}`,
+    label: CROPS[crop].label,
+    iconKey: 'farming_plants_items',
+    iconFrame: `crop-${crop}`,
+    count,
+    stackable: true,
+  };
 }
 
 export class GameScene extends Phaser.Scene {
@@ -143,12 +185,19 @@ export class GameScene extends Phaser.Scene {
   // snaps to the grass tile under the mouse, click tills it. `islandLayer` is
   // the grass-island TilemapLayer (for world↔tile snapping + "is this grass?").
   private activeTool: ToolId = 'hand';
+  // When a seed bag is the selected hotbar item, planting mode is on: the tile
+  // cursor snaps to empty tilled soil and a click plants this crop there.
+  private activeSeed?: CropName;
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
   private tileCursor?: Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
-  private hoverCell: { cx: number; cy: number } | null = null; // farmable cell under cursor
+  private hoverCell: { cx: number; cy: number } | null = null; // actionable cell under cursor (till or plant)
+
+  // Planted crops: cell "cx,cy" → its growth state + sprite. Grows a stage every
+  // CROP_STAGE_MS; a mature crop can be harvested (→ crop item, soil stays).
+  private crops = new Map<string, { name: CropName; stage: number; timer: number; sprite: Phaser.GameObjects.Image }>();
 
   // ── Inventory + hotbar (HotbarScene + InventoryScene render; GameScene owns
   //    the MODEL) ─────────────────────────────────────────────────────────
@@ -556,10 +605,25 @@ export class GameScene extends Phaser.Scene {
     // A click anywhere else over the bar (padding/gaps) is swallowed too.
     if (this.pointerOverHotbar()) return;
 
-    // Hoe out + hovering a farmable tile → till it. Takes priority: a farming
-    // click is neither a portrait click nor a camera-release click.
+    // Farming clicks take priority over portrait / camera-release:
+    // 1) a MATURE crop under the cursor → harvest it (any tool).
+    const wpc = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
+    const ctile = this.islandLayer?.getTileAtWorldXY(wpc.x, wpc.y);
+    if (ctile) {
+      const crop = this.crops.get(`${ctile.x},${ctile.y}`);
+      if (crop && crop.stage >= CROPS[crop.name].stages - 1) {
+        this.harvestCrop(ctile.x, ctile.y);
+        return;
+      }
+    }
+    // 2) hoe over tillable grass → till.
     if (this.activeTool === 'hoe' && this.hoverCell) {
       this.tillCell(this.hoverCell.cx, this.hoverCell.cy);
+      return;
+    }
+    // 3) seed over empty soil → plant.
+    if (this.activeSeed && this.hoverCell) {
+      this.playerPlant(this.hoverCell.cx, this.hoverCell.cy);
       return;
     }
     // Click Cato's portrait (top-right frame) → lock the camera onto Cato.
@@ -630,18 +694,17 @@ export class GameScene extends Phaser.Scene {
    *  select the matching hotbar (row-0) slot; E / I toggle the full backpack.
    *  You start bare-handed (nothing selected). */
   private setupInventory(): void {
-    // A tiny placeholder "seeds" icon so stacking / merging is testable before
-    // real seed art exists (two partial stacks in row 1 — merge them to test).
-    this.ensureSeedTexture();
-
     this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null);
-    // Row 0 (the hotbar): the hoe + the other two tools we have icons for.
+    // Row 0 (the hotbar): the hoe + a few seed bags for quick planting.
     this.inventory[0] = { id: 'hoe', label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
-    this.inventory[1] = { id: 'axe', label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
-    this.inventory[2] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false };
-    // Row 1: two demo seed stacks (placeholders) to exercise stacking + merge.
-    this.inventory[INV_COLS + 0] = { id: 'seeds', label: 'Seeds', iconKey: 'seeds', count: 40, stackable: true };
-    this.inventory[INV_COLS + 1] = { id: 'seeds', label: 'Seeds', iconKey: 'seeds', count: 20, stackable: true };
+    this.inventory[1] = makeSeed('corn', 10);
+    this.inventory[2] = makeSeed('carrot', 10);
+    this.inventory[3] = makeSeed('tomato', 10);
+    // Row 1: the rest of the seed bags + the other tools.
+    this.inventory[INV_COLS + 0] = makeSeed('eggplant', 10);
+    this.inventory[INV_COLS + 1] = makeSeed('pumpkin', 10);
+    this.inventory[INV_COLS + 2] = { id: 'axe', label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
+    this.inventory[INV_COLS + 3] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false };
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -656,17 +719,6 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-E', () => this.toggleInventory());
     this.input.keyboard?.on('keydown-I', () => this.toggleInventory());
     this.input.keyboard?.on('keydown-ESC', () => { if (this.inventoryOpen) this.toggleInventory(); });
-  }
-
-  /** Generate a small pixel "seeds" pouch texture (placeholder item art). */
-  private ensureSeedTexture(): void {
-    if (this.textures.exists('seeds')) return;
-    const g = this.add.graphics();
-    g.fillStyle(0x8a5a2b, 1).fillRoundedRect(3, 4, 10, 9, 3); // little brown pouch
-    g.fillStyle(0x6bbf59, 1); // green seeds spilling from the top
-    g.fillRect(5, 2, 2, 2); g.fillRect(8, 1, 2, 2); g.fillRect(10, 3, 2, 2);
-    g.generateTexture('seeds', 16, 16);
-    g.destroy();
   }
 
   /** Map a stack → the compact view the scenes render (icon + count). */
@@ -713,6 +765,7 @@ export class GameScene extends Phaser.Scene {
   private equipSelected(): void {
     const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
     this.setTool(cell?.toolId ?? 'hand');
+    this.activeSeed = cell?.plants; // seed bag selected → planting mode
   }
 
   /** Open / close the full backpack grid (E / I / Esc). On close, a still-held
@@ -821,51 +874,131 @@ export class GameScene extends Phaser.Scene {
   private setTool(tool: ToolId): void {
     if (this.dialogOpen) return; // don't switch tools while typing in chat
     this.activeTool = tool;
-    if (tool !== 'hoe') {
-      this.tileCursor?.setVisible(false);
-      this.hoeIcon?.setVisible(false);
-      this.hoverCell = null;
-    }
+    // Visibility is managed each frame by updateTileCursor (hoe OR seed mode).
   }
 
-  /** Per-frame: when the hoe is out, snap the bracket + hoe icon onto the grass
-   *  tile under the cursor and hide the normal mouse pointer (the bracket IS the
-   *  cursor there); over non-farmable ground / HUD, hide the bracket and restore
-   *  the mouse pointer so the player is never left without a cursor. */
+  /** Per-frame: when the hoe OR a seed is selected, snap the bracket + a held
+   *  icon onto the actionable tile under the cursor (hoe → tillable grass; seed →
+   *  empty tilled soil) and hide the normal mouse pointer (the bracket IS the
+   *  cursor there). Otherwise restore the mouse pointer. */
   private updateTileCursor(): void {
     const cursor = this.tileCursor;
     const icon = this.hoeIcon;
     if (!cursor || !icon || !this.islandLayer) return;
-    // Fall back to the normal mouse cursor: hoe not out, or not over a tillable tile.
     const showMouse = () => {
       cursor.setVisible(false);
       icon.setVisible(false);
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
     };
-    if (this.activeTool !== 'hoe' || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
+    const planting = !!this.activeSeed;
+    const tilling = this.activeTool === 'hoe';
+    if ((!tilling && !planting) || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
     const tile = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
-    // Farmable = a grass tile is here AND it isn't already tilled.
-    if (!tile || this.tilledCells.has(`${tile.x},${tile.y}`)) {
-      showMouse();
-      return;
+    if (!tile) { showMouse(); return; }
+    const key = `${tile.x},${tile.y}`;
+    let valid = false;
+    if (tilling) {
+      // Till: grass present (tile exists) + not already tilled.
+      valid = !this.tilledCells.has(key);
+      if (valid) icon.setTexture('tools_and_meterials', 'hoe');
+    } else if (planting) {
+      // Plant: tilled soil that's empty (no crop yet).
+      valid = this.tilledCells.has(key) && !this.crops.has(key);
+      if (valid) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
     }
+    if (!valid) { showMouse(); return; }
     const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
-    if (!w) {
-      showMouse();
-      return;
-    }
+    if (!w) { showMouse(); return; }
     const px = w.x + TILE / 2;
     const py = w.y + TILE / 2;
     cursor.setPosition(px, py).setVisible(true);
     icon.setPosition(px, py).setVisible(true);
     this.hoverCell = { cx: tile.x, cy: tile.y };
-    // The bracket+hoe IS the cursor here → hide the triangle mouse pointer.
+    // The bracket+icon IS the cursor here → hide the triangle mouse pointer.
     this.cursorState.visible = false;
+  }
+
+  // ── Crops: plant → grow → harvest ─────────────────────────────────────
+
+  /** Plant a crop on a tilled, empty soil cell (stage 0). Shared by the player
+   *  and by Cato. Returns true if it planted. */
+  private plantCropAt(cx: number, cy: number, name: CropName): boolean {
+    if (!this.islandLayer) return false;
+    const key = `${cx},${cy}`;
+    if (!this.tilledCells.has(key) || this.crops.has(key)) return false;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    const footX = w.x + TILE / 2;
+    const footY = w.y + TILE; // bottom of the cell → the plant grows UP from here
+    const sprite = this.add
+      .image(footX, footY, 'farming_plants', `grow-${name}-0`)
+      .setOrigin(0.5, 1)
+      .setDepth(footY); // y-sorted like Cato so he passes in front/behind
+    this.crops.set(key, { name, stage: 0, timer: 0, sprite });
+    this.dirtBurst(footX, w.y + TILE / 2); // little poof as the seed goes in
+    return true;
+  }
+
+  /** Player plants with the selected seed bag: plant + consume one seed (empties
+   *  the slot when the bag runs out). */
+  private playerPlant(cx: number, cy: number): void {
+    const sel = this.hotbarSelected;
+    const bag = sel >= 0 ? this.inventory[sel] : null;
+    if (!bag?.plants) return;
+    if (!this.plantCropAt(cx, cy, bag.plants)) return;
+    bag.count -= 1;
+    if (bag.count <= 0) {
+      this.inventory[sel] = null;
+      this.equipSelected(); // bag empty → back to empty hand
+    }
+    this.publishInventory();
+  }
+
+  /** Harvest a MATURE crop → add its produce to the inventory, free the soil. */
+  private harvestCrop(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const crop = this.crops.get(key);
+    if (!crop || crop.stage < CROPS[crop.name].stages - 1) return;
+    crop.sprite.destroy();
+    this.crops.delete(key);
+    this.addToInventory(makeCrop(crop.name, 1));
+    this.publishInventory();
+  }
+
+  /** Add a stack to the inventory: merge into a same-id stackable cell with room,
+   *  else drop into the first empty cell. (Silently discards if totally full.) */
+  private addToInventory(item: ItemStack): void {
+    if (item.stackable) {
+      for (const cell of this.inventory) {
+        if (cell && cell.id === item.id && cell.stackable && cell.count < MAX_STACK) {
+          const moved = Math.min(MAX_STACK - cell.count, item.count);
+          cell.count += moved;
+          item.count -= moved;
+          if (item.count <= 0) return;
+        }
+      }
+    }
+    const free = this.inventory.findIndex((c) => c === null);
+    if (free >= 0) this.inventory[free] = item;
+  }
+
+  /** Advance every growing crop; a mature crop stops (waits to be harvested). */
+  private updateCrops(delta: number): void {
+    for (const crop of this.crops.values()) {
+      const max = CROPS[crop.name].stages - 1;
+      if (crop.stage >= max) continue;
+      crop.timer += delta;
+      if (crop.timer >= CROP_STAGE_MS) {
+        crop.timer = 0;
+        crop.stage += 1;
+        crop.sprite.setFrame(`grow-${crop.name}-${crop.stage}`);
+      }
+    }
   }
 
   /** Till one grass cell: play the hoe swing at it, then flip it to soil. */
@@ -1394,6 +1527,7 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.updateEdgeScroll(delta);
+    this.updateCrops(delta); // grow planted crops through their stages
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
     // Camera lock: smoothly keep Cato centred while following. Uses the proven

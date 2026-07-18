@@ -59,6 +59,20 @@ export class BootScene extends Phaser.Scene {
       'uploaded/inventory_spritesheet.png',
       'uploaded/inventory_spritesheet.json',
     );
+    // Farming: crop GROWTH stages (grid-sliced; corn is 16×32, others 16×16) and
+    // the seed-bag / harvested-crop ITEM icons (region-tagged in the Asset
+    // Manager). Frame keys: growth `grow-<crop>-<stage>`; items `<crop>-seed-bag`
+    // / `crop-<crop>` / `empty-seed-bag`.
+    this.load.atlas(
+      'farming_plants',
+      'uploaded/farming_plants.png',
+      'uploaded/farming_plants.json',
+    );
+    this.load.atlas(
+      'farming_plants_items',
+      'uploaded/farming_plants_items.png',
+      'uploaded/farming_plants_items.json',
+    );
   }
 
   create(): void {
