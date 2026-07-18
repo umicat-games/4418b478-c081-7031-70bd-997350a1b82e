@@ -154,6 +154,30 @@ function makeCrop(crop: CropName, count: number): ItemStack {
   };
 }
 
+/** Rebuild a full ItemStack from its saved `id` + count (the single source of
+ *  truth for tools too — setupInventory + save-load both go through it). */
+function itemFromId(id: string, count: number): ItemStack {
+  if (id === 'hoe') return { id, label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
+  if (id === 'watering-can') return { id, label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
+  if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
+  const seed = /^(\w+)-seed$/.exec(id);
+  if (seed && (seed[1] in CROPS)) return makeSeed(seed[1] as CropName, count);
+  const crop = /^crop-(\w+)$/.exec(id);
+  if (crop && (crop[1] in CROPS)) return makeCrop(crop[1] as CropName, count);
+  return { id, count, stackable: true }; // unknown → generic stack
+}
+
+/** The persisted save blob (`umicat.saves` key `state`). */
+interface SaveBlob {
+  v: number;
+  inventory: Array<{ id: string; count: number } | null>;
+  selected: number;
+  tilled: string[]; // "cx,cy"
+  soilWet: Array<[string, number]>; // [key, remaining ms]
+  crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
+  cato: { x: number; y: number } | null;
+}
+
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
 
@@ -232,6 +256,14 @@ export class GameScene extends Phaser.Scene {
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
   private invRev = 0;
   private invDragFrom: number | null = null; // touch: cell a backpack drag started on
+
+  // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
+  // Auto-save the whole game state (farm + backpack) so it restores next login.
+  // `umicat` is the SDK facade; `loadingSave` suppresses saves while restoring;
+  // `pendingSave` debounces action-triggered saves.
+  private umicat?: Umicat;
+  private loadingSave = false;
+  private pendingSave?: Phaser.Time.TimerEvent;
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
@@ -404,7 +436,8 @@ export class GameScene extends Phaser.Scene {
       // forget — the npc is ready well before the player opens the dialog +
       // types. Inline role/style is a fallback if the playbook can't be loaded.
       void Umicat.init({})
-        .then((u) => {
+        .then(async (u) => {
+          this.umicat = u;
           this.cato = u?.ai.npc({
             playbook: 'cato',
             role: 'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.',
@@ -440,6 +473,10 @@ export class GameScene extends Phaser.Scene {
               },
             ],
           });
+          // Restore the saved game (overrides the fresh-start defaults), then
+          // start auto-saving.
+          await this.loadGame();
+          this.setupAutosave();
         })
         .catch(() => {
           /* leave this.cato undefined; submitDialog handles a missing npc */
@@ -459,6 +496,8 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-T', () => { if (canAct()) this.startTillTask({ crop: 'corn', size: 3 }); });
         this.input.keyboard?.on('keydown-P', () => { if (canAct()) this.startPlantTask({ crop: 'corn' }); });
         this.input.keyboard?.on('keydown-O', () => { if (canAct()) this.startWaterTask({}); }); // O = water crops
+        // K = wipe the save (next reload starts fresh) — for testing save/load.
+        this.input.keyboard?.on('keydown-K', () => { void this.umicat?.saves.delete('state'); });
       }
       if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
@@ -772,14 +811,14 @@ export class GameScene extends Phaser.Scene {
     // Row 0 (the hotbar) holds ALL the tools + seeds (8 slots) so touch players —
     // who can't open the backpack as easily — reach everything from the bar.
     // Harvested crops land in the backpack rows below.
-    this.inventory[0] = { id: 'hoe', label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
-    this.inventory[1] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
+    this.inventory[0] = itemFromId('hoe', 1);
+    this.inventory[1] = itemFromId('watering-can', 1);
     this.inventory[2] = makeSeed('corn', 10);
     this.inventory[3] = makeSeed('carrot', 10);
     this.inventory[4] = makeSeed('tomato', 10);
     this.inventory[5] = makeSeed('eggplant', 10);
     this.inventory[6] = makeSeed('pumpkin', 10);
-    this.inventory[7] = { id: 'axe', label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
+    this.inventory[7] = itemFromId('axe', 1);
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -822,6 +861,7 @@ export class GameScene extends Phaser.Scene {
       held: this.stackView(this.heldStack),
       rev,
     });
+    this.scheduleSave(); // inventory / selection changed → persist
   }
 
   /** Select hotbar (row-0) slot `i`: equip its tool + highlight it. Re-selecting
@@ -1082,6 +1122,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(footY); // y-sorted like Cato so he passes in front/behind
     this.crops.set(key, { name, stage: 0, timer: 0, sprite });
     this.dirtBurst(footX, footY); // little poof as the seed goes in
+    this.scheduleSave();
     return true;
   }
 
@@ -1210,6 +1251,7 @@ export class GameScene extends Phaser.Scene {
         crop.timer = 0;
         crop.stage += 1;
         crop.sprite.setFrame(`grow-${crop.name}-${crop.stage}`);
+        this.scheduleSave(); // a crop advanced a stage → persist
       }
     }
   }
@@ -1232,6 +1274,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.tilledCells.has(key)) return false; // only tilled soil holds water
     this.soilWet.set(key, WET_DURATION_MS);
     this.setSoilWet(key, true); // damp soil look for WET_DURATION_MS
+    this.scheduleSave();
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (w) {
       // The splash art is NOT centred in its 48px frame — its content sits at
@@ -1304,6 +1347,7 @@ export class GameScene extends Phaser.Scene {
       this.refreshSoil(cx + 1, cy);
       this.refreshSoil(cx, cy + 1);
       this.refreshSoil(cx - 1, cy);
+      this.scheduleSave();
     });
   }
 
@@ -1660,6 +1704,7 @@ export class GameScene extends Phaser.Scene {
       this.refreshSoil(cx + 1, cy);
       this.refreshSoil(cx, cy + 1);
       this.refreshSoil(cx - 1, cy);
+      this.scheduleSave();
     });
   }
 
@@ -1794,6 +1839,114 @@ export class GameScene extends Phaser.Scene {
         tilledEmpty, // tilled soil with nothing planted yet
       },
     };
+  }
+
+  // ── Save data (auto-save + restore) ───────────────────────────────────
+
+  /** Serialize the whole game state into the save blob. */
+  private buildSave(): SaveBlob {
+    return {
+      v: 1,
+      inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
+      selected: this.hotbarSelected,
+      tilled: [...this.tilledCells],
+      soilWet: [...this.soilWet],
+      crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
+      cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
+    };
+  }
+
+  /** Persist now (fire-and-forget; anonymous → localStorage, signed-in → backend). */
+  private saveGame(): void {
+    if (!this.umicat || this.loadingSave) return;
+    this.umicat.saves.set('state', this.buildSave()).catch((e) => console.warn('[catopia] save failed', e));
+  }
+
+  /** Debounced save after a state change (many rapid actions coalesce into one). */
+  private scheduleSave(): void {
+    if (!this.umicat || this.loadingSave) return;
+    this.pendingSave?.remove();
+    this.pendingSave = this.time.delayedCall(1500, () => this.saveGame());
+  }
+
+  /** Load + apply the saved state on boot (no-op if none / wrong version). */
+  private async loadGame(): Promise<void> {
+    if (!this.umicat) return;
+    try {
+      const s = await this.umicat.saves.get<SaveBlob>('state');
+      if (s && s.v === 1) this.applySave(s);
+    } catch (e) {
+      console.warn('[catopia] load failed', e);
+    }
+  }
+
+  /** Restore state from a save blob (overrides the fresh-start defaults). */
+  private applySave(s: SaveBlob): void {
+    this.loadingSave = true;
+    try {
+      // Farm: tear down the current soil/crops, then rebuild from the save.
+      for (const soil of this.tilledSoil.values()) soil.destroy();
+      this.tilledSoil.clear();
+      for (const c of this.crops.values()) c.sprite.destroy();
+      this.crops.clear();
+      this.tilledCells.clear();
+      this.soilWet.clear();
+      if (this.islandLayer) {
+        for (const key of s.tilled ?? []) this.tilledCells.add(key);
+        for (const key of this.tilledCells) {
+          const [cx, cy] = key.split(',').map(Number);
+          this.refreshSoil(cx, cy); // autotile now sees all neighbours
+        }
+        for (const [key, ms] of s.soilWet ?? []) {
+          this.soilWet.set(key, ms);
+          this.setSoilWet(key, true);
+        }
+        for (const c of s.crops ?? []) this.restoreCrop(c.key, c.name, c.stage, c.timer);
+      }
+      // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
+      // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
+      const cells = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null);
+      const saved = s.inventory ?? [];
+      for (let i = 0; i < Math.min(saved.length, cells.length); i++) {
+        const c = saved[i];
+        cells[i] = c ? itemFromId(c.id, c.count) : null;
+      }
+      this.inventory = cells;
+      this.hotbarSelected = s.selected ?? -1;
+      if (s.cato && this.child) this.child.setPosition(s.cato.x, s.cato.y);
+      this.equipSelected();
+      this.publishInventory();
+    } finally {
+      this.loadingSave = false;
+    }
+  }
+
+  /** Recreate a crop sprite at (key) for a given growth stage (save restore). */
+  private restoreCrop(key: string, name: CropName, stage: number, timer: number): void {
+    if (!this.islandLayer) return;
+    const [cx, cy] = key.split(',').map(Number);
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    const footX = w.x + TILE / 2;
+    const footY = w.y + TILE / 2;
+    const sprite = this.add
+      .image(footX, footY, 'farming_plants', `grow-${name}-${stage}`)
+      .setOrigin(0.5, 1)
+      .setDepth(footY);
+    this.crops.set(key, { name, stage, timer, sprite });
+  }
+
+  /** Periodic backstop save + save when the tab is hidden / closed. */
+  private setupAutosave(): void {
+    this.time.addEvent({ delay: 15000, loop: true, callback: () => this.saveGame() });
+    const onVis = () => { if (document.visibilityState === 'hidden') this.saveGame(); };
+    document.addEventListener('visibilitychange', onVis);
+    const onHide = () => this.saveGame();
+    window.addEventListener('pagehide', onHide);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onHide);
+    });
   }
 
   /** Player submitted a line (from the chat-input-field's `hud:submit` event)
