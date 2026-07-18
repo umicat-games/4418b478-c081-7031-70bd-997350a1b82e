@@ -204,6 +204,7 @@ export class GameScene extends Phaser.Scene {
   private tileCursor?: Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private waterCan?: Phaser.GameObjects.Sprite; // the god-hand watering-can pour (one at a time)
+  private hoeSwing?: Phaser.GameObjects.Sprite; // the god-hand hoe swing (till / harvest)
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
   private hoverCell: { cx: number; cy: number } | null = null; // actionable cell under cursor (till or plant)
@@ -638,10 +639,13 @@ export class GameScene extends Phaser.Scene {
     if (this.pointerOverHotbar()) return;
 
     // Farming clicks take priority over portrait / camera-release:
-    // 1) a MATURE crop under the cursor → harvest it (any tool).
+    // 1) a MATURE crop under the cursor → harvest it — but ONLY with an empty
+    //    hand or the hoe (it swings the hoe). Holding the watering can / a seed
+    //    doesn't harvest (that was the "watering can harvests" confusion).
+    const canHarvest = !this.activeSeed && this.activeTool !== 'watering-can';
     const wpc = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
     const ctile = this.islandLayer?.getTileAtWorldXY(wpc.x, wpc.y);
-    if (ctile) {
+    if (canHarvest && ctile) {
       const crop = this.crops.get(`${ctile.x},${ctile.y}`);
       if (crop && crop.stage >= CROPS[crop.name].stages - 1) {
         this.harvestCrop(ctile.x, ctile.y);
@@ -930,12 +934,22 @@ export class GameScene extends Phaser.Scene {
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
     };
+    // While a tool-action animation plays (hoe swing / watering pour), show NO
+    // cursor at all — the swinging/pouring tool is the only feedback (and a
+    // second static tool icon on top looked like the bracket "won't disappear").
+    if (this.hoeSwing || this.waterCan) {
+      cursor.setVisible(false);
+      icon.setVisible(false);
+      this.hoverCell = null;
+      this.cursorState.visible = false;
+      return;
+    }
     const planting = !!this.activeSeed;
     const tilling = this.activeTool === 'hoe';
     const watering = this.activeTool === 'watering-can';
     const holdingTool = tilling || planting || watering;
-    // No tool held / not locked / over UI / dialog / backpack / mid-pour → mouse.
-    if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar() || this.waterCan) {
+    // No tool held / not locked / over UI / dialog / backpack → real mouse.
+    if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
@@ -1235,10 +1249,12 @@ export class GameScene extends Phaser.Scene {
       .setScale(1.5)
       .setDepth(1e6 + 1);
     hoe.play('hoe-swing');
+    this.hoeSwing = hoe; // suppress the tile cursor while it swings
     let struck = false;
     const strike = () => {
       if (struck) return;
       struck = true;
+      if (this.hoeSwing === hoe) this.hoeSwing = undefined;
       hoe.destroy();
       onStrike();
     };
