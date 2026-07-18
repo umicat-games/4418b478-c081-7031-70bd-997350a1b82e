@@ -78,7 +78,7 @@ const GRASS_ISLAND_NAME = 'island';
 
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
-type ToolId = 'hand' | 'hoe';
+type ToolId = 'hand' | 'hoe' | 'watering-can';
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -114,8 +114,10 @@ const CROPS: Record<CropName, CropDef> = {
   eggplant: { stages: 4, tall: false, label: 'Eggplant' },
   pumpkin:  { stages: 4, tall: false, label: 'Pumpkin' },
 };
-// Fast demo growth: ~3.5s per stage (tweak freely).
-const CROP_STAGE_MS = 3500;
+// Growth per stage: watered crops advance fast, dry ones crawl. Watering wears
+// off when a crop advances a stage (re-water it to keep it fast). Demo timings.
+const CROP_STAGE_MS_WATERED = 3500;
+const CROP_STAGE_MS_DRY = 12000;
 
 /** A seed-bag inventory item for a crop (stackable, `plants` set). */
 function makeSeed(crop: CropName, count: number): ItemStack {
@@ -197,7 +199,7 @@ export class GameScene extends Phaser.Scene {
 
   // Planted crops: cell "cx,cy" → its growth state + sprite. Grows a stage every
   // CROP_STAGE_MS; a mature crop can be harvested (→ crop item, soil stays).
-  private crops = new Map<string, { name: CropName; stage: number; timer: number; sprite: Phaser.GameObjects.Image }>();
+  private crops = new Map<string, { name: CropName; stage: number; timer: number; watered: boolean; sprite: Phaser.GameObjects.Image }>();
 
   // ── Inventory + hotbar (HotbarScene + InventoryScene render; GameScene owns
   //    the MODEL) ─────────────────────────────────────────────────────────
@@ -237,7 +239,7 @@ export class GameScene extends Phaser.Scene {
   // and Cato walks over + hoes each one (reusing the farming tillCell mechanic).
   // A single active task at a time; it overrides the autonomous wander.
   private catoTask: {
-    type: 'till' | 'plant';
+    type: 'till' | 'plant' | 'water';
     queue: Array<{ cx: number; cy: number }>;
     crop: string; // flavour label ('corn', 'crops', …)
     plantName?: CropName; // for a plant task: what to sow
@@ -408,6 +410,14 @@ export class GameScene extends Phaser.Scene {
                   count: 'integer', // how many to plant; 0 / omitted = fill all open soil
                 },
               },
+              {
+                name: 'water_crops',
+                description:
+                  'Walk to the planted crops and water them with the watering can so they grow fast (un-watered crops grow very slowly). Use when the guardian asks you to water / hydrate the crops or plants. Waters crops that still need it.',
+                args: {
+                  count: 'integer', // how many to water; 0 / omitted = water all that need it
+                },
+              },
             ],
           });
         })
@@ -428,6 +438,7 @@ export class GameScene extends Phaser.Scene {
         const canAct = () => !this.dialogOpen && !this.inventoryOpen && !this.catoTask;
         this.input.keyboard?.on('keydown-T', () => { if (canAct()) this.startTillTask({ crop: 'corn', size: 3 }); });
         this.input.keyboard?.on('keydown-P', () => { if (canAct()) this.startPlantTask({ crop: 'corn' }); });
+        this.input.keyboard?.on('keydown-O', () => { if (canAct()) this.startWaterTask({}); }); // O = water crops
       }
       if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
@@ -635,6 +646,11 @@ export class GameScene extends Phaser.Scene {
       this.playerPlant(this.hoverCell.cx, this.hoverCell.cy);
       return;
     }
+    // 4) watering can over a growing crop → water it.
+    if (this.activeTool === 'watering-can' && this.hoverCell) {
+      this.waterCropAt(this.hoverCell.cx, this.hoverCell.cy);
+      return;
+    }
     // Click Cato's portrait (top-right frame) → lock the camera onto Cato.
     if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, this.vcursor.x, this.vcursor.y)) {
       this.followCato();
@@ -713,7 +729,7 @@ export class GameScene extends Phaser.Scene {
     this.inventory[INV_COLS + 0] = makeSeed('eggplant', 10);
     this.inventory[INV_COLS + 1] = makeSeed('pumpkin', 10);
     this.inventory[INV_COLS + 2] = { id: 'axe', label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
-    this.inventory[INV_COLS + 3] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false };
+    this.inventory[INV_COLS + 3] = { id: 'watering-can', label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -902,7 +918,8 @@ export class GameScene extends Phaser.Scene {
     };
     const planting = !!this.activeSeed;
     const tilling = this.activeTool === 'hoe';
-    if ((!tilling && !planting) || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
+    const watering = this.activeTool === 'watering-can';
+    if ((!tilling && !planting && !watering) || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
@@ -919,6 +936,11 @@ export class GameScene extends Phaser.Scene {
       // Plant: tilled soil that's empty (no crop yet).
       valid = this.tilledCells.has(key) && !this.crops.has(key);
       if (valid) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
+    } else if (watering) {
+      // Water: a growing (not mature, not already watered) crop is here.
+      const crop = this.crops.get(key);
+      valid = !!crop && crop.stage < CROPS[crop.name].stages - 1 && !crop.watered;
+      if (valid) icon.setTexture('tools_and_meterials', 'watering-can');
     }
     if (!valid) { showMouse(); return; }
     const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
@@ -950,7 +972,7 @@ export class GameScene extends Phaser.Scene {
       .image(footX, footY, 'farming_plants', `grow-${name}-0`)
       .setOrigin(0.5, 1)
       .setDepth(footY); // y-sorted like Cato so he passes in front/behind
-    this.crops.set(key, { name, stage: 0, timer: 0, sprite });
+    this.crops.set(key, { name, stage: 0, timer: 0, watered: false, sprite });
     this.dirtBurst(footX, footY); // little poof as the seed goes in
     return true;
   }
@@ -998,18 +1020,39 @@ export class GameScene extends Phaser.Scene {
     if (free >= 0) this.inventory[free] = item;
   }
 
-  /** Advance every growing crop; a mature crop stops (waits to be harvested). */
+  /** Advance every growing crop; watered ones grow fast, dry ones crawl. Watering
+   *  wears off on each stage-up (re-water to keep it fast). Mature crops stop. */
   private updateCrops(delta: number): void {
     for (const crop of this.crops.values()) {
       const max = CROPS[crop.name].stages - 1;
       if (crop.stage >= max) continue;
       crop.timer += delta;
-      if (crop.timer >= CROP_STAGE_MS) {
+      const need = crop.watered ? CROP_STAGE_MS_WATERED : CROP_STAGE_MS_DRY;
+      if (crop.timer >= need) {
         crop.timer = 0;
         crop.stage += 1;
+        crop.watered = false; // needs watering again for the next stage
         crop.sprite.setFrame(`grow-${crop.name}-${crop.stage}`);
       }
     }
+  }
+
+  /** Water a growing crop → it grows fast until its next stage. Plays the splash
+   *  effect on the tile. Shared by the player and Cato. Returns true if watered. */
+  private waterCropAt(cx: number, cy: number): boolean {
+    if (!this.islandLayer) return false;
+    const crop = this.crops.get(`${cx},${cy}`);
+    if (!crop || crop.stage >= CROPS[crop.name].stages - 1 || crop.watered) return false;
+    crop.watered = true;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (w) {
+      const splash = this.add
+        .sprite(w.x + TILE / 2, w.y + TILE / 2, 'watering-splash')
+        .setDepth(1e6)
+        .play('water-splash');
+      splash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => splash.destroy());
+    }
+    return true;
   }
 
   /** Till one grass cell: play the hoe swing at it, then flip it to soil. */
@@ -1095,6 +1138,7 @@ export class GameScene extends Phaser.Scene {
     for (const a of actions) {
       if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
       else if (a.name === 'plant_crop') { this.startPlantTask(a.args); acted = true; }
+      else if (a.name === 'water_crops') { this.startWaterTask(a.args); acted = true; }
     }
     // Let the guardian read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
@@ -1158,6 +1202,41 @@ export class GameScene extends Phaser.Scene {
     const cells = [...this.tilledCells]
       .filter((k) => !this.crops.has(k))
       .map((k) => { const [cx, cy] = k.split(',').map(Number); return { cx, cy }; });
+    cells.sort(
+      (a, b) =>
+        (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
+    );
+    return Number.isFinite(max) ? cells.slice(0, max) : cells;
+  }
+
+  /** Begin the "water crops" behaviour: water `count` (0 = all) nearest growing,
+   *  un-watered crops. Needs planted crops that still need water. */
+  private startWaterTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const args = (rawArgs ?? {}) as { count?: number };
+    const max = args.count && args.count > 0 ? Math.round(args.count) : Infinity;
+    const cells = this.findWaterTargets(max);
+    if (cells.length === 0) {
+      this.registry.set('catoDialogText', "Cato peers around — nothing needs watering right now.");
+      return;
+    }
+    this.catoTask = { type: 'water', queue: cells, crop: 'crops', cooldown: 0, stand: null };
+    this.cameraFollow = true;
+  }
+
+  /** The nearest `max` growing, un-watered crop cells to Cato (for a water task). */
+  private findWaterTargets(max: number): Array<{ cx: number; cy: number }> {
+    const layer = this.islandLayer;
+    if (!layer || !this.child) return [];
+    const origin = layer.worldToTileXY(this.child.x, this.child.y);
+    const ocx = origin ? Math.floor(origin.x) : 0;
+    const ocy = origin ? Math.floor(origin.y) : 0;
+    const cells: Array<{ cx: number; cy: number }> = [];
+    for (const [k, crop] of this.crops) {
+      if (crop.stage >= CROPS[crop.name].stages - 1 || crop.watered) continue;
+      const [cx, cy] = k.split(',').map(Number);
+      cells.push({ cx, cy });
+    }
     cells.sort(
       (a, b) =>
         (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
@@ -1236,13 +1315,9 @@ export class GameScene extends Phaser.Scene {
     const next = task.queue[0];
     if (!next) { this.finishCatoTask(); return; }
 
-    // Skip a cell that's no longer a valid target (tilled already for a till task;
-    // not-empty-soil for a plant task) — idempotent / robust to concurrent edits.
-    const key = `${next.cx},${next.cy}`;
-    const invalid = task.type === 'till'
-      ? this.tilledCells.has(key)
-      : !this.tilledCells.has(key) || this.crops.has(key);
-    if (invalid) { task.queue.shift(); task.stand = null; return; }
+    // Skip a cell that's no longer a valid target for this task type — idempotent
+    // / robust to concurrent edits (the player may have acted on it meanwhile).
+    if (!this.taskCellValid(task.type, next.cx, next.cy)) { task.queue.shift(); task.stand = null; return; }
 
     // Stand on a cell ADJACENT to the target and face it, so the swing/tend lands
     // ON the target (not under Cato's feet). Computed once per target.
@@ -1267,16 +1342,28 @@ export class GameScene extends Phaser.Scene {
     body.setVelocity(0, 0);
     this.faceDir = s.dir;
     this.child.play(`attack-${s.dir}`, true);
+    const tx = next.cx, ty = next.cy;
     if (task.type === 'till') {
-      this.commitCatoTill(next.cx, next.cy);
-    } else if (task.plantName) {
+      this.commitCatoTill(tx, ty);
+    } else if (task.type === 'plant' && task.plantName) {
       const name = task.plantName;
-      const tx = next.cx, ty = next.cy;
       this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.plantCropAt(tx, ty, name));
+    } else if (task.type === 'water') {
+      this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.waterCropAt(tx, ty));
     }
     task.queue.shift();
     task.stand = null;
     task.cooldown = CATO_TILL_STEP_MS;
+  }
+
+  /** Is (cx,cy) still a valid target for a task of this type? */
+  private taskCellValid(type: 'till' | 'plant' | 'water', cx: number, cy: number): boolean {
+    const key = `${cx},${cy}`;
+    if (type === 'till') return !this.tilledCells.has(key) && this.isFarmable(cx, cy);
+    if (type === 'plant') return this.tilledCells.has(key) && !this.crops.has(key);
+    // water: a growing (not mature, not already watered) crop is here.
+    const crop = this.crops.get(key);
+    return !!crop && crop.stage < CROPS[crop.name].stages - 1 && !crop.watered;
   }
 
   /** Pick the cell Cato stands on to hoe `target`: an adjacent tile (preferring
@@ -1333,6 +1420,8 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = false;
     if (task?.type === 'plant') {
       this.cato?.note(`You planted ${task.crop} in the tilled soil; it will grow over time.`);
+    } else if (task?.type === 'water') {
+      this.cato?.note('You watered the crops; they will grow faster now.');
     } else {
       this.cato?.note(`You finished tilling a plot of soil, ready for the guardian to plant ${task?.crop ?? 'crops'}.`);
     }

@@ -55,6 +55,13 @@ the call in the same turn.
   exist — if there's none you'll say so; if the guardian says "till and plant",
   do BOTH (call till_plot then plant_crop). Say a short eager line and go sow them.
 
+- **water_crops** — water the planted crops with your watering can so they grow
+  fast (un-watered crops grow very slowly). Call it when the guardian asks you to
+  water / hydrate the crops or plants. Leave `count` at 0 to water all that need
+  it. If nothing needs watering you'll say so. If the guardian says "plant and
+  water" or "grow me some corn", chain the actions (till_plot → plant_crop →
+  water_crops) as needed.
+
 If the guardian asks for something you have NO action for, don't pretend it
 happened — you can still *wish* and *ask* about it.
 

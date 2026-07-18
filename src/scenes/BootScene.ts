@@ -73,9 +73,25 @@ export class BootScene extends Phaser.Scene {
       'uploaded/farming_plants_items.png',
       'uploaded/farming_plants_items.json',
     );
+    // Watering splash effect (Sprout Lands "water from wateringcan frames") — a
+    // 9×3 grid of 48×48 frames (NOT 32×32). One row = one splash cycle; played on
+    // a tile when it's watered.
+    this.load.spritesheet('watering-splash', 'uploaded/watering_splash.png', {
+      frameWidth: 48,
+      frameHeight: 48,
+    });
   }
 
   create(): void {
+    // Register the water-splash animation (row 0 = frames 0-8) once, globally.
+    if (!this.anims.exists('water-splash')) {
+      this.anims.create({
+        key: 'water-splash',
+        frames: this.anims.generateFrameNumbers('watering-splash', { start: 0, end: 8 }),
+        frameRate: 14,
+        repeat: 0,
+      });
+    }
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });
   }
