@@ -237,12 +237,13 @@ export class GameScene extends Phaser.Scene {
   // and Cato walks over + hoes each one (reusing the farming tillCell mechanic).
   // A single active task at a time; it overrides the autonomous wander.
   private catoTask: {
-    type: 'till';
+    type: 'till' | 'plant';
     queue: Array<{ cx: number; cy: number }>;
-    crop: string;
+    crop: string; // flavour label ('corn', 'crops', …)
+    plantName?: CropName; // for a plant task: what to sow
     cooldown: number;
-    // Where Cato stands to hoe the CURRENT target (an adjacent cell) + which way
-    // he faces to swing at it. Computed once per target; null = recompute.
+    // Where Cato stands to work the CURRENT target (an adjacent cell) + which way
+    // he faces to swing/tend it. Computed once per target; null = recompute.
     stand: { x: number; y: number; dir: FaceDir } | null;
   } | null = null;
 
@@ -398,6 +399,15 @@ export class GameScene extends Phaser.Scene {
                   size: 'integer', // side of the square plot in tiles (2-4); default 3
                 },
               },
+              {
+                name: 'plant_crop',
+                description:
+                  'Walk to nearby tilled soil and sow seeds there. Use when the guardian asks you to plant / sow / seed a specific crop (corn, carrot, tomato, eggplant, or pumpkin). Requires tilled soil to already exist — if there is none, till first (or say so). Fills the open soil with the crop.',
+                args: {
+                  crop: 'string', // one of: corn, carrot, tomato, eggplant, pumpkin
+                  count: 'integer', // how many to plant; 0 / omitted = fill all open soil
+                },
+              },
             ],
           });
         })
@@ -412,13 +422,12 @@ export class GameScene extends Phaser.Scene {
 
       // WASD / arrow keys pan the CAMERA (Cato roams on his own).
       this.setupPlayerKeys();
-      // DEV: T = test-till near Cato without the AI (see CATO_DEBUG_TILL).
+      // DEV: T = Cato test-tills, P = Cato test-plants corn, both without the AI
+      // (see CATO_DEBUG_TILL).
       if (CATO_DEBUG_TILL) {
-        this.input.keyboard?.on('keydown-T', () => {
-          if (!this.dialogOpen && !this.inventoryOpen && !this.catoTask) {
-            this.startTillTask({ crop: 'corn', size: 3 });
-          }
-        });
+        const canAct = () => !this.dialogOpen && !this.inventoryOpen && !this.catoTask;
+        this.input.keyboard?.on('keydown-T', () => { if (canAct()) this.startTillTask({ crop: 'corn', size: 3 }); });
+        this.input.keyboard?.on('keydown-P', () => { if (canAct()) this.startPlantTask({ crop: 'corn' }); });
       }
       if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
@@ -1083,6 +1092,7 @@ export class GameScene extends Phaser.Scene {
     let acted = false;
     for (const a of actions) {
       if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
+      else if (a.name === 'plant_crop') { this.startPlantTask(a.args); acted = true; }
     }
     // Let the guardian read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
@@ -1107,6 +1117,50 @@ export class GameScene extends Phaser.Scene {
     // A single active task; camera follows Cato so the guardian watches him work.
     this.catoTask = { type: 'till', queue: cells, crop, cooldown: 0, stand: null };
     this.cameraFollow = true;
+  }
+
+  /** Begin the "plant a crop" behaviour: sow `count` (0 = all) nearest empty
+   *  tilled cells with the crop. Needs tilled soil to exist. */
+  private startPlantTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const args = (rawArgs ?? {}) as { crop?: string; count?: number };
+    const crop = this.parseCrop(args.crop);
+    if (!crop) {
+      this.registry.set('catoDialogText', "Cato blinks — it doesn't have seeds for that. Try corn, carrot, tomato, eggplant, or pumpkin.");
+      return;
+    }
+    const max = args.count && args.count > 0 ? Math.round(args.count) : Infinity;
+    const cells = this.findEmptySoil(max);
+    if (cells.length === 0) {
+      this.registry.set('catoDialogText', 'Cato looks for tilled soil to plant in — there’s none ready yet. Ask it to till a plot first!');
+      return;
+    }
+    this.catoTask = { type: 'plant', queue: cells, crop: CROPS[crop].label, plantName: crop, cooldown: 0, stand: null };
+    this.cameraFollow = true;
+  }
+
+  /** Loose crop-name match (corn/carrot/tomato/eggplant/pumpkin), or null. */
+  private parseCrop(s: string | undefined): CropName | null {
+    const t = (s ?? '').toLowerCase();
+    const names: CropName[] = ['corn', 'carrot', 'tomato', 'eggplant', 'pumpkin'];
+    return names.find((n) => t.includes(n)) ?? null;
+  }
+
+  /** The nearest `max` empty tilled-soil cells to Cato (for a plant task). */
+  private findEmptySoil(max: number): Array<{ cx: number; cy: number }> {
+    const layer = this.islandLayer;
+    if (!layer || !this.child) return [];
+    const origin = layer.worldToTileXY(this.child.x, this.child.y);
+    const ocx = origin ? Math.floor(origin.x) : 0;
+    const ocy = origin ? Math.floor(origin.y) : 0;
+    const cells = [...this.tilledCells]
+      .filter((k) => !this.crops.has(k))
+      .map((k) => { const [cx, cy] = k.split(',').map(Number); return { cx, cy }; });
+    cells.sort(
+      (a, b) =>
+        (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
+    );
+    return Number.isFinite(max) ? cells.slice(0, max) : cells;
   }
 
   /** Is (cx,cy) a grass tile that can still be tilled? (Grass present + not yet
@@ -1180,10 +1234,15 @@ export class GameScene extends Phaser.Scene {
     const next = task.queue[0];
     if (!next) { this.finishCatoTask(); return; }
 
-    // Skip a cell that got tilled some other way (idempotent).
-    if (this.tilledCells.has(`${next.cx},${next.cy}`)) { task.queue.shift(); task.stand = null; return; }
+    // Skip a cell that's no longer a valid target (tilled already for a till task;
+    // not-empty-soil for a plant task) — idempotent / robust to concurrent edits.
+    const key = `${next.cx},${next.cy}`;
+    const invalid = task.type === 'till'
+      ? this.tilledCells.has(key)
+      : !this.tilledCells.has(key) || this.crops.has(key);
+    if (invalid) { task.queue.shift(); task.stand = null; return; }
 
-    // Stand on a cell ADJACENT to the target and face it, so the hoe swing lands
+    // Stand on a cell ADJACENT to the target and face it, so the swing/tend lands
     // ON the target (not under Cato's feet). Computed once per target.
     if (!task.stand) task.stand = this.computeStand(next);
     const s = task.stand;
@@ -1200,12 +1259,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Arrived beside the target: face it and hoe with Cato's OWN attack animation
-    // (no god-hand hoe). The soil flips partway through the swing (commitCatoTill).
+    // Arrived beside the target: face it and work with Cato's OWN attack anim.
+    // Till → flip to soil; plant → drop a seedling. The effect lands partway
+    // through the swing (commitCatoTill / delayed plant).
     body.setVelocity(0, 0);
     this.faceDir = s.dir;
     this.child.play(`attack-${s.dir}`, true);
-    this.commitCatoTill(next.cx, next.cy);
+    if (task.type === 'till') {
+      this.commitCatoTill(next.cx, next.cy);
+    } else if (task.plantName) {
+      const name = task.plantName;
+      const tx = next.cx, ty = next.cy;
+      this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.plantCropAt(tx, ty, name));
+    }
     task.queue.shift();
     task.stand = null;
     task.cooldown = CATO_TILL_STEP_MS;
@@ -1258,12 +1324,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Plot finished: clear the task, tell Cato so he remembers, resume wander. */
+  /** Task finished: clear it, tell Cato so he remembers, resume wander. */
   private finishCatoTask(): void {
-    const crop = this.catoTask?.crop ?? 'crops';
+    const task = this.catoTask;
     this.catoTask = null;
     this.cameraFollow = false;
-    this.cato?.note(`You finished tilling a plot of soil, ready for the guardian to plant ${crop}.`);
+    if (task?.type === 'plant') {
+      this.cato?.note(`You planted ${task.crop} in the tilled soil; it will grow over time.`);
+    } else {
+      this.cato?.note(`You finished tilling a plot of soil, ready for the guardian to plant ${task?.crop ?? 'crops'}.`);
+    }
     if (CHILD_WANDER) this.startWanderIdle();
   }
 
