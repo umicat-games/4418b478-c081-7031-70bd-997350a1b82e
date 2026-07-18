@@ -914,10 +914,12 @@ export class GameScene extends Phaser.Scene {
     // Visibility is managed each frame by updateTileCursor (hoe OR seed mode).
   }
 
-  /** Per-frame: when the hoe OR a seed is selected, snap the bracket + a held
-   *  icon onto the actionable tile under the cursor (hoe → tillable grass; seed →
-   *  empty tilled soil) and hide the normal mouse pointer (the bracket IS the
-   *  cursor there). Otherwise restore the mouse pointer. */
+  /** Per-frame tool cursor. While a tool/seed is held the cursor IS the tile
+   *  bracket + held-tool icon (the triangle mouse is hidden): BRIGHT + snapped to
+   *  the tile when you can act there, DIMMED (semi-transparent icon + light-gray
+   *  bracket) when you can't — so the held tool never just "vanishes" leaving you
+   *  wondering why. The real mouse only returns with an empty hand / over the UI /
+   *  in a dialog or the backpack. */
   private updateTileCursor(): void {
     const cursor = this.tileCursor;
     const icon = this.hoeIcon;
@@ -931,41 +933,54 @@ export class GameScene extends Phaser.Scene {
     const planting = !!this.activeSeed;
     const tilling = this.activeTool === 'hoe';
     const watering = this.activeTool === 'watering-can';
-    // While a watering pour is animating, hide the bracket/icon entirely (they'd
-    // otherwise sit on top of the pour — the "bracket won't disappear" bug).
-    if ((!tilling && !planting && !watering) || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar() || this.waterCan) {
+    const holdingTool = tilling || planting || watering;
+    // No tool held / not locked / over UI / dialog / backpack / mid-pour → mouse.
+    if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar() || this.waterCan) {
       showMouse();
       return;
     }
+
+    // The held tool's icon, always shown (dimmed when the spot is invalid).
+    if (tilling) icon.setTexture('tools_and_meterials', 'hoe');
+    else if (watering) icon.setTexture('tools_and_meterials', 'watering-can');
+    else if (this.activeSeed) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
+
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
     const tile = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
-    if (!tile) { showMouse(); return; }
-    const key = `${tile.x},${tile.y}`;
+
+    // Is this spot a valid target for the held tool?
     let valid = false;
-    if (tilling) {
-      // Till: grass present (tile exists) + not already tilled.
-      valid = !this.tilledCells.has(key);
-      if (valid) icon.setTexture('tools_and_meterials', 'hoe');
-    } else if (planting) {
-      // Plant: tilled soil that's empty (no crop yet).
-      valid = this.tilledCells.has(key) && !this.crops.has(key);
-      if (valid) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
-    } else if (watering) {
-      // Water: a growing (not mature, not already watered) crop is here.
-      const crop = this.crops.get(key);
-      valid = !!crop && crop.stage < CROPS[crop.name].stages - 1 && crop.wetMs <= 0;
-      if (valid) icon.setTexture('tools_and_meterials', 'watering-can');
+    if (tile) {
+      const key = `${tile.x},${tile.y}`;
+      if (tilling) valid = !this.tilledCells.has(key);
+      else if (planting) valid = this.tilledCells.has(key) && !this.crops.has(key);
+      else if (watering) {
+        const crop = this.crops.get(key);
+        valid = !!crop && crop.stage < CROPS[crop.name].stages - 1 && crop.wetMs <= 0;
+      }
     }
-    if (!valid) { showMouse(); return; }
-    const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
-    if (!w) { showMouse(); return; }
-    const px = w.x + TILE / 2;
-    const py = w.y + TILE / 2;
+
+    // Snap to the tile centre when there's a tile; else follow the free cursor.
+    let px = wp.x;
+    let py = wp.y;
+    if (tile) {
+      const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
+      if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
+    }
     cursor.setPosition(px, py).setVisible(true);
     icon.setPosition(px, py).setVisible(true);
-    this.hoverCell = { cx: tile.x, cy: tile.y };
-    // The bracket+icon IS the cursor here → hide the triangle mouse pointer.
-    this.cursorState.visible = false;
+    this.cursorState.visible = false; // the bracket IS the cursor (bright or dim)
+
+    if (valid && tile) {
+      cursor.setAlpha(1).clearTint();
+      icon.setAlpha(1);
+      this.hoverCell = { cx: tile.x, cy: tile.y };
+    } else {
+      // Disabled look: light-gray bracket + semi-transparent tool, no action.
+      cursor.setAlpha(0.55).setTint(0xbbbbbb);
+      icon.setAlpha(0.4);
+      this.hoverCell = null;
+    }
   }
 
   // ── Crops: plant → grow → harvest ─────────────────────────────────────
