@@ -966,7 +966,12 @@ export class GameScene extends Phaser.Scene {
     let valid = false;
     if (tile) {
       const key = `${tile.x},${tile.y}`;
-      if (tilling) valid = !this.tilledCells.has(key);
+      if (tilling) {
+        // Hoe: bright over tillable grass OR a MATURE crop (the hoe harvests it).
+        const crop = this.crops.get(key);
+        const harvestable = !!crop && crop.stage >= CROPS[crop.name].stages - 1;
+        valid = !this.tilledCells.has(key) || harvestable;
+      }
       else if (planting) valid = this.tilledCells.has(key) && !this.crops.has(key);
       else if (watering) {
         const crop = this.crops.get(key);
