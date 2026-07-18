@@ -211,7 +211,11 @@ export class GameScene extends Phaser.Scene {
 
   // Planted crops: cell "cx,cy" → its growth state + sprite. Grows a stage every
   // CROP_STAGE_MS; a mature crop can be harvested (→ crop item, soil stays).
-  private crops = new Map<string, { name: CropName; stage: number; timer: number; wetMs: number; sprite: Phaser.GameObjects.Image }>();
+  private crops = new Map<string, { name: CropName; stage: number; timer: number; sprite: Phaser.GameObjects.Image }>();
+  // Wetness lives on the SOIL cell (not the crop): key → remaining wet ms. Wet
+  // soil is tinted + makes any crop on it grow fast. Watering any tilled cell
+  // sets this; empty cells can be wet too (it just wets the ground).
+  private soilWet = new Map<string, number>();
 
   // ── Inventory + hotbar (HotbarScene + InventoryScene render; GameScene owns
   //    the MODEL) ─────────────────────────────────────────────────────────
@@ -973,10 +977,8 @@ export class GameScene extends Phaser.Scene {
         valid = !this.tilledCells.has(key) || harvestable;
       }
       else if (planting) valid = this.tilledCells.has(key) && !this.crops.has(key);
-      else if (watering) {
-        const crop = this.crops.get(key);
-        valid = !!crop && crop.stage < CROPS[crop.name].stages - 1 && crop.wetMs <= 0;
-      }
+      // Water: any tilled soil (crop or not, wet or not) — it just wets the ground.
+      else if (watering) valid = this.tilledCells.has(key);
     }
 
     // Snap to the tile centre when there's a tile; else follow the free cursor.
@@ -1020,7 +1022,7 @@ export class GameScene extends Phaser.Scene {
       .image(footX, footY, 'farming_plants', `grow-${name}-0`)
       .setOrigin(0.5, 1)
       .setDepth(footY); // y-sorted like Cato so he passes in front/behind
-    this.crops.set(key, { name, stage: 0, timer: 0, wetMs: 0, sprite });
+    this.crops.set(key, { name, stage: 0, timer: 0, sprite });
     this.dirtBurst(footX, footY); // little poof as the seed goes in
     return true;
   }
@@ -1046,9 +1048,9 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const crop = this.crops.get(key);
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return;
-    // Reserve immediately (no double-harvest) + bank the produce.
+    // Reserve immediately (no double-harvest) + bank the produce. The soil keeps
+    // its own wetness (harvesting doesn't dry it).
     this.crops.delete(key);
-    this.setSoilWet(key, false);
     this.addToInventory(makeCrop(crop.name, 1));
     this.publishInventory();
     this.hideTileCursor();
@@ -1128,20 +1130,24 @@ export class GameScene extends Phaser.Scene {
     if (free >= 0) this.inventory[free] = item;
   }
 
-  /** Advance every growing crop; watered ones grow fast, dry ones crawl. Watering
-   *  wears off on each stage-up (re-water to keep it fast). Mature crops stop. */
+  /** Count down soil wetness; when a cell dries, un-tint it. */
+  private updateSoil(delta: number): void {
+    for (const [key, ms] of this.soilWet) {
+      const left = ms - delta;
+      if (left <= 0) { this.soilWet.delete(key); this.setSoilWet(key, false); }
+      else this.soilWet.set(key, left);
+    }
+  }
+
+  /** Advance every growing crop; on WET soil it grows fast, on dry soil it crawls
+   *  (water it to speed it up). Mature crops stop. */
   private updateCrops(delta: number): void {
     for (const [key, crop] of this.crops) {
-      // Wetness is its own timer (not tied to stage-up): while wet the soil is
-      // tinted and growth is fast; when it runs out the soil dries.
-      if (crop.wetMs > 0) {
-        crop.wetMs -= delta;
-        if (crop.wetMs <= 0) { crop.wetMs = 0; this.setSoilWet(key, false); }
-      }
       const max = CROPS[crop.name].stages - 1;
       if (crop.stage >= max) continue;
       crop.timer += delta;
-      const need = crop.wetMs > 0 ? CROP_STAGE_MS_WATERED : CROP_STAGE_MS_DRY;
+      const wet = (this.soilWet.get(key) ?? 0) > 0;
+      const need = wet ? CROP_STAGE_MS_WATERED : CROP_STAGE_MS_DRY;
       if (crop.timer >= need) {
         crop.timer = 0;
         crop.stage += 1;
@@ -1158,15 +1164,15 @@ export class GameScene extends Phaser.Scene {
     else soil.clearTint();
   }
 
-  /** Water a growing crop → it grows fast until its next stage. Sets the damp soil
-   *  tint + plays the splash on the tile. Shared by the player and Cato. Returns
-   *  true if it actually watered (a growing, un-watered crop was there). */
+  /** Water any TILLED soil cell → wet the ground (tint) for WET_DURATION_MS + play
+   *  the splash. Any crop on it then grows fast. Crop or not, wet or not, you can
+   *  always water (re-watering just refreshes it). Shared by the player and Cato.
+   *  Returns true if it wet a tilled cell. */
   private waterCropAt(cx: number, cy: number): boolean {
     if (!this.islandLayer) return false;
     const key = `${cx},${cy}`;
-    const crop = this.crops.get(key);
-    if (!crop || crop.stage >= CROPS[crop.name].stages - 1 || crop.wetMs > 0) return false;
-    crop.wetMs = WET_DURATION_MS;
+    if (!this.tilledCells.has(key)) return false; // only tilled soil holds water
+    this.soilWet.set(key, WET_DURATION_MS);
     this.setSoilWet(key, true); // damp soil look for WET_DURATION_MS
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (w) {
@@ -1401,7 +1407,7 @@ export class GameScene extends Phaser.Scene {
     const ocy = origin ? Math.floor(origin.y) : 0;
     const cells: Array<{ cx: number; cy: number }> = [];
     for (const [k, crop] of this.crops) {
-      if (crop.stage >= CROPS[crop.name].stages - 1 || crop.wetMs > 0) continue;
+      if (crop.stage >= CROPS[crop.name].stages - 1 || (this.soilWet.get(k) ?? 0) > 0) continue;
       const [cx, cy] = k.split(',').map(Number);
       cells.push({ cx, cy });
     }
@@ -1547,9 +1553,9 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     if (type === 'till') return !this.tilledCells.has(key) && this.isFarmable(cx, cy);
     if (type === 'plant') return this.tilledCells.has(key) && !this.crops.has(key);
-    // water: a growing (not mature, not already watered) crop is here.
+    // water: a growing crop on DRY soil is here (Cato waters what needs it).
     const crop = this.crops.get(key);
-    return !!crop && crop.stage < CROPS[crop.name].stages - 1 && crop.wetMs <= 0;
+    return !!crop && crop.stage < CROPS[crop.name].stages - 1 && (this.soilWet.get(key) ?? 0) <= 0;
   }
 
   /** Pick the cell Cato stands on to hoe `target`: an adjacent tile (preferring
@@ -1874,6 +1880,7 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.updateEdgeScroll(delta);
+    this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
