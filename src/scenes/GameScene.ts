@@ -1087,12 +1087,12 @@ export class GameScene extends Phaser.Scene {
     if (!w) return;
     const centerX = w.x + TILE / 2;
     const centerY = w.y + TILE / 2;
-    // God-hand watering can held to the UPPER-LEFT, tilted so its spout points
-    // down-right onto the crop; the falling water is the splash below-right. Only
-    // one at a time — replace + reliably destroy any prior one.
+    // God-hand watering can: its SPOUT is on the LEFT of the sprite, so hold the
+    // can to the RIGHT of the crop and up a bit — the left spout then sits over
+    // the crop and the (centred) splash reads as pouring out of it. One at a time.
     this.waterCan?.destroy();
     const can = this.add
-      .sprite(centerX - 8, centerY - 8, 'tools', 0)
+      .sprite(centerX + 11, centerY - 6, 'tools', 0)
       .setScale(1.5)
       .setDepth(1e6 + 1);
     can.play('water-pour');
