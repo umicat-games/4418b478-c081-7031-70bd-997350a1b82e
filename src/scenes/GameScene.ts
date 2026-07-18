@@ -1996,9 +1996,14 @@ export class GameScene extends Phaser.Scene {
       cam.scrollY = Phaser.Math.Linear(cam.scrollY, this.child.y - this.scale.height / 2, t);
     }
 
-    // Publish the virtual cursor to CursorScene (renders it above the HUD).
-    this.cursorState.x = this.vcursor.x;
-    this.cursorState.y = this.vcursor.y;
+    // Publish the virtual cursor to CursorScene (renders it above the HUD). ONLY
+    // drive it from the virtual cursor while pointer-LOCKED (mouse); on TOUCH the
+    // position is set by the touch handlers (e.g. the dragged backpack stack), so
+    // overwriting it here each frame would fight them → a flickering "ghost".
+    if (this.locked) {
+      this.cursorState.x = this.vcursor.x;
+      this.cursorState.y = this.vcursor.y;
+    }
     this.cursorState.visible = this.locked;
 
     // Snap the hoe's tile-selection cursor to the grass tile under the mouse.
