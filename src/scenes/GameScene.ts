@@ -923,7 +923,9 @@ export class GameScene extends Phaser.Scene {
     const planting = !!this.activeSeed;
     const tilling = this.activeTool === 'hoe';
     const watering = this.activeTool === 'watering-can';
-    if ((!tilling && !planting && !watering) || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
+    // While a watering pour is animating, hide the bracket/icon entirely (they'd
+    // otherwise sit on top of the pour — the "bracket won't disappear" bug).
+    if ((!tilling && !planting && !watering) || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar() || this.waterCan) {
       showMouse();
       return;
     }
@@ -1071,6 +1073,7 @@ export class GameScene extends Phaser.Scene {
         .setDepth(1e6)
         .play('water-splash');
       splash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => splash.destroy());
+      this.time.delayedCall(1200, () => splash.destroy()); // safety if COMPLETE misses
     }
     return true;
   }
@@ -1084,17 +1087,19 @@ export class GameScene extends Phaser.Scene {
     if (!w) return;
     const centerX = w.x + TILE / 2;
     const centerY = w.y + TILE / 2;
-    // God-hand watering can, held ABOVE the tile, tilting to pour (frames 0→1;
-    // the messy top-right-drop frame 7 is dropped). The falling water itself is
-    // the splash above. Only one at a time — replace any lingering one.
+    // God-hand watering can held to the UPPER-LEFT, tilted so its spout points
+    // down-right onto the crop; the falling water is the splash below-right. Only
+    // one at a time — replace + reliably destroy any prior one.
     this.waterCan?.destroy();
     const can = this.add
-      .sprite(centerX + 4, centerY - 13, 'tools', 0)
+      .sprite(centerX - 8, centerY - 8, 'tools', 0)
       .setScale(1.5)
       .setDepth(1e6 + 1);
     can.play('water-pour');
     this.waterCan = can;
-    this.time.delayedCall(950, () => { if (this.waterCan === can) this.waterCan = undefined; can.destroy(); });
+    const clearCan = () => { if (this.waterCan === can) this.waterCan = undefined; can.destroy(); };
+    can.once(Phaser.Animations.Events.ANIMATION_COMPLETE, clearCan);
+    this.time.delayedCall(950, clearCan); // safety if COMPLETE misses
   }
 
   /** Hide the tile bracket + held icon immediately (updateTileCursor re-shows it
