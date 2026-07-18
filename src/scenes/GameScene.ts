@@ -943,13 +943,15 @@ export class GameScene extends Phaser.Scene {
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (!w) return false;
     const footX = w.x + TILE / 2;
-    const footY = w.y + TILE; // bottom of the cell → the plant grows UP from here
+    // Plant BASE sits at the MIDDLE of the soil tile (not the bottom edge) so the
+    // stalk looks rooted IN the soil with dirt showing below it.
+    const footY = w.y + TILE / 2;
     const sprite = this.add
       .image(footX, footY, 'farming_plants', `grow-${name}-0`)
       .setOrigin(0.5, 1)
       .setDepth(footY); // y-sorted like Cato so he passes in front/behind
     this.crops.set(key, { name, stage: 0, timer: 0, sprite });
-    this.dirtBurst(footX, w.y + TILE / 2); // little poof as the seed goes in
+    this.dirtBurst(footX, footY); // little poof as the seed goes in
     return true;
   }
 
