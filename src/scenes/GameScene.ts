@@ -264,6 +264,10 @@ export class GameScene extends Phaser.Scene {
   private umicat?: Umicat;
   private loadingSave = false;
   private pendingSave?: Phaser.Time.TimerEvent;
+  // Hide the world + hotbar until the save is restored, so there's no flash of
+  // the empty/default farm before the saved crops+soil pop in.
+  private gameReady = false;
+  private loadingCover?: Phaser.GameObjects.Container;
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
@@ -311,6 +315,10 @@ export class GameScene extends Phaser.Scene {
     // Set zoom BEFORE awaiting scene load so the first frame is already correct.
     this.cameras.main.setZoom(this.computeZoom());
     this.cameras.main.roundPixels = true;
+    // Cover the world until the save is restored (avoids the empty-farm flash).
+    // A fallback reveals it even if Umicat.init never resolves.
+    this.showLoadingCover();
+    this.time.delayedCall(5000, () => this.markReady());
     // RESIZE mode: recompute zoom + re-centre + re-layout screen UI on any
     // canvas resize (device rotation, window change, phone vs desktop).
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
@@ -473,13 +481,15 @@ export class GameScene extends Phaser.Scene {
               },
             ],
           });
-          // Restore the saved game (overrides the fresh-start defaults), then
-          // start auto-saving.
+          // Restore the saved game (overrides the fresh-start defaults), reveal
+          // the world, then start auto-saving.
           await this.loadGame();
+          this.markReady();
           this.setupAutosave();
         })
         .catch(() => {
           /* leave this.cato undefined; submitDialog handles a missing npc */
+          this.markReady(); // still reveal the game if init/AI failed
         });
 
       // The chat-input-field text-input (SDK 1.0.28) emits these on the global
@@ -849,7 +859,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('hotbar', {
       slots: this.inventory.slice(0, INV_COLS).map((s) => this.stackView(s)),
       selected: this.hotbarSelected,
-      visible: !this.dialogOpen && !this.inventoryOpen,
+      visible: this.gameReady && !this.dialogOpen && !this.inventoryOpen,
       rev,
     });
     this.registry.set('inventory', {
@@ -1839,6 +1849,35 @@ export class GameScene extends Phaser.Scene {
         tilledEmpty, // tilled soil with nothing planted yet
       },
     };
+  }
+
+  // ── Loading gate (hide content until the save is restored) ────────────
+
+  /** Cover the whole viewport with an opaque "Loading…" panel (above everything)
+   *  so the empty/default world isn't shown before the save is applied. */
+  private showLoadingCover(): void {
+    if (this.loadingCover) return;
+    const w = this.scale.width;
+    const h = this.scale.height;
+    // Oversized so it covers any canvas size during the brief load (no reflow).
+    const rect = this.add.rectangle(-2000, -2000, 8000, 8000, 0x2e2a24, 1).setOrigin(0, 0);
+    const txt = this.add
+      .text(w / 2, h / 2, 'Loading…', { fontFamily: 'zpix, sans-serif', fontSize: '28px', color: '#f4e4c1' })
+      .setOrigin(0.5);
+    this.loadingCover = this.add.container(0, 0, [rect, txt]).setScrollFactor(0).setDepth(1e7);
+  }
+
+  /** Reveal the game once the save is restored (or a fallback fires): fade the
+   *  cover out + let the hotbar show. */
+  private markReady(): void {
+    if (this.gameReady) return;
+    this.gameReady = true;
+    this.publishInventory(); // hotbar was suppressed until now
+    const c = this.loadingCover;
+    this.loadingCover = undefined;
+    if (c) {
+      this.tweens.add({ targets: c, alpha: 0, duration: 250, onComplete: () => c.destroy() });
+    }
   }
 
   // ── Save data (auto-save + restore) ───────────────────────────────────
