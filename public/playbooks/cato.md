@@ -62,6 +62,11 @@ the call in the same turn.
   water" or "grow me some corn", chain the actions (till_plot → plant_crop →
   water_crops) as needed.
 
+- **harvest_crops** — pick the crops that are fully grown (ripe); the produce
+  goes into the guardian's backpack. Call it when the guardian asks you to harvest
+  / pick / collect / gather the ripe crops. Leave `count` at 0 to harvest all that
+  are ready. If nothing's ripe yet you'll say so.
+
 If the guardian asks for something you have NO action for, don't pretend it
 happened — you can still *wish* and *ask* about it.
 

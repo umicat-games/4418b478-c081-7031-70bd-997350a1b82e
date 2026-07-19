@@ -296,7 +296,7 @@ export class GameScene extends Phaser.Scene {
   // and Cato walks over + hoes each one (reusing the farming tillCell mechanic).
   // A single active task at a time; it overrides the autonomous wander.
   private catoTask: {
-    type: 'till' | 'plant' | 'water';
+    type: 'till' | 'plant' | 'water' | 'harvest';
     queue: Array<{ cx: number; cy: number }>;
     crop: string; // flavour label ('corn', 'crops', …)
     plantName?: CropName; // for a plant task: what to sow
@@ -484,6 +484,14 @@ export class GameScene extends Phaser.Scene {
                   count: 'integer', // how many to water; 0 / omitted = water all that need it
                 },
               },
+              {
+                name: 'harvest_crops',
+                description:
+                  'Walk to the crops that are fully grown (ripe) and harvest them — the produce goes into the guardian\'s backpack. Use when the guardian asks you to harvest / pick / collect / gather the ripe crops. Only fully-grown crops are harvested.',
+                args: {
+                  count: 'integer', // how many to harvest; 0 / omitted = all ripe crops
+                },
+              },
             ],
           });
           // Restore the saved game (overrides the fresh-start defaults), reveal
@@ -511,6 +519,7 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-T', () => { if (canAct()) this.startTillTask({ crop: 'corn', size: 3 }); });
         this.input.keyboard?.on('keydown-P', () => { if (canAct()) this.startPlantTask({ crop: 'corn' }); });
         this.input.keyboard?.on('keydown-O', () => { if (canAct()) this.startWaterTask({}); }); // O = water crops
+        this.input.keyboard?.on('keydown-H', () => { if (canAct()) this.startHarvestTask({}); }); // H = harvest ripe crops
       }
       if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
@@ -1156,28 +1165,34 @@ export class GameScene extends Phaser.Scene {
     this.publishInventory();
   }
 
-  /** Harvest a MATURE crop → hoe swing, then the produce pops out of the ground
-   *  in a cute arc, and it's added to the inventory + the soil freed. */
+  /** PLAYER harvest of a MATURE crop → god-hand hoe swing, then (at the strike)
+   *  the produce pops out + is banked (`reapCrop`). */
   private harvestCrop(cx: number, cy: number): void {
     const key = `${cx},${cy}`;
     const crop = this.crops.get(key);
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return;
-    // Reserve immediately (no double-harvest) + bank the produce. The soil keeps
-    // its own wetness (harvesting doesn't dry it).
-    this.crops.delete(key);
-    this.addToInventory(makeCrop(crop.name, 1));
-    this.publishInventory();
     this.hideTileCursor();
-
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
-    if (!w) { crop.sprite.destroy(); return; }
+    if (!w) { this.reapCrop(cx, cy); return; }
     const centerX = w.x + TILE / 2;
     const centerY = w.y + TILE / 2;
-    // Hoe swing; when it lands, uproot the plant + pop the produce out.
-    this.hoeSwingAt(centerX, centerY, () => {
-      crop.sprite.destroy();
-      this.playHarvestPop(centerX, centerY, crop.name);
-    });
+    this.hoeSwingAt(centerX, centerY, () => this.reapCrop(cx, cy));
+  }
+
+  /** Uproot a MATURE crop: remove it, bank the produce, pop it out of the ground
+   *  in a cute arc. Shared by the player (at the hoe strike) and by Cato (at his
+   *  attack strike). Returns true if it harvested. The soil keeps its wetness. */
+  private reapCrop(cx: number, cy: number): boolean {
+    const key = `${cx},${cy}`;
+    const crop = this.crops.get(key);
+    if (!crop || crop.stage < CROPS[crop.name].stages - 1) return false;
+    this.crops.delete(key);
+    crop.sprite.destroy();
+    this.addToInventory(makeCrop(crop.name, 1));
+    this.publishInventory();
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    if (w) this.playHarvestPop(w.x + TILE / 2, w.y + TILE / 2, crop.name);
+    return true;
   }
 
   /** The produce jumps OUT of the ground in a semicircular arc to one side,
@@ -1430,6 +1445,7 @@ export class GameScene extends Phaser.Scene {
       if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
       else if (a.name === 'plant_crop') { this.startPlantTask(a.args); acted = true; }
       else if (a.name === 'water_crops') { this.startWaterTask(a.args); acted = true; }
+      else if (a.name === 'harvest_crops') { this.startHarvestTask(a.args); acted = true; }
     }
     // Let the guardian read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
@@ -1513,6 +1529,41 @@ export class GameScene extends Phaser.Scene {
     }
     this.catoTask = { type: 'water', queue: cells, crop: 'crops', cooldown: 0, stand: null };
     this.cameraFollow = true;
+  }
+
+  /** Begin the "harvest crops" behaviour: reap `count` (0 = all) nearest RIPE
+   *  crops (produce → the guardian's backpack). */
+  private startHarvestTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const args = (rawArgs ?? {}) as { count?: number };
+    const max = args.count && args.count > 0 ? Math.round(args.count) : Infinity;
+    const cells = this.findHarvestTargets(max);
+    if (cells.length === 0) {
+      this.registry.set('catoDialogText', "Cato looks over the plants — nothing's ripe to pick yet.");
+      return;
+    }
+    this.catoTask = { type: 'harvest', queue: cells, crop: 'crops', cooldown: 0, stand: null };
+    this.cameraFollow = true;
+  }
+
+  /** The nearest `max` RIPE (fully grown) crop cells to Cato (for a harvest task). */
+  private findHarvestTargets(max: number): Array<{ cx: number; cy: number }> {
+    const layer = this.islandLayer;
+    if (!layer || !this.child) return [];
+    const origin = layer.worldToTileXY(this.child.x, this.child.y);
+    const ocx = origin ? Math.floor(origin.x) : 0;
+    const ocy = origin ? Math.floor(origin.y) : 0;
+    const cells: Array<{ cx: number; cy: number }> = [];
+    for (const [k, crop] of this.crops) {
+      if (crop.stage < CROPS[crop.name].stages - 1) continue; // only ripe
+      const [cx, cy] = k.split(',').map(Number);
+      cells.push({ cx, cy });
+    }
+    cells.sort(
+      (a, b) =>
+        (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
+    );
+    return Number.isFinite(max) ? cells.slice(0, max) : cells;
   }
 
   /** The nearest `max` growing, un-watered crop cells to Cato (for a water task). */
@@ -1659,6 +1710,8 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.plantCropAt(tx, ty, name));
     } else if (task.type === 'water') {
       this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.waterCropAt(tx, ty));
+    } else if (task.type === 'harvest') {
+      this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.reapCrop(tx, ty));
     }
     task.queue.shift();
     task.stand = null;
@@ -1666,12 +1719,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Is (cx,cy) still a valid target for a task of this type? */
-  private taskCellValid(type: 'till' | 'plant' | 'water', cx: number, cy: number): boolean {
+  private taskCellValid(type: 'till' | 'plant' | 'water' | 'harvest', cx: number, cy: number): boolean {
     const key = `${cx},${cy}`;
     if (type === 'till') return !this.tilledCells.has(key) && this.isFarmable(cx, cy);
     if (type === 'plant') return this.tilledCells.has(key) && !this.crops.has(key);
-    // water: a growing crop on DRY soil is here (Cato waters what needs it).
     const crop = this.crops.get(key);
+    if (type === 'harvest') return !!crop && crop.stage >= CROPS[crop.name].stages - 1; // ripe
+    // water: a growing crop on DRY soil is here (Cato waters what needs it).
     return !!crop && crop.stage < CROPS[crop.name].stages - 1 && (this.soilWet.get(key) ?? 0) <= 0;
   }
 
@@ -1732,6 +1786,8 @@ export class GameScene extends Phaser.Scene {
       this.cato?.note(`You planted ${task.crop} in the tilled soil; it will grow over time.`);
     } else if (task?.type === 'water') {
       this.cato?.note('You watered the crops; they will grow faster now.');
+    } else if (task?.type === 'harvest') {
+      this.cato?.note("You harvested the ripe crops; the produce is in the guardian's backpack now.");
     } else {
       this.cato?.note(`You finished tilling a plot of soil, ready for the guardian to plant ${task?.crop ?? 'crops'}.`);
     }
