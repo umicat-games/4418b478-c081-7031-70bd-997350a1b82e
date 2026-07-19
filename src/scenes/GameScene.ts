@@ -1049,14 +1049,14 @@ export class GameScene extends Phaser.Scene {
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
     };
-    // While a tool-action animation plays (hoe swing / watering pour), show NO
-    // cursor at all — the swinging/pouring tool is the only feedback (and a
-    // second static tool icon on top looked like the bracket "won't disappear").
+    // While a tool-action animation plays (hoe swing / watering pour), hide the
+    // bracket + tool icon (the swinging/pouring tool is the feedback) but KEEP the
+    // mouse cursor so the pointer never vanishes.
     if (this.hoeSwing || this.waterCan) {
       cursor.setVisible(false);
       icon.setVisible(false);
       this.hoverCell = null;
-      this.cursorState.visible = false;
+      this.cursorState.visible = this.locked;
       return;
     }
     const planting = !!this.activeSeed;
@@ -1101,7 +1101,9 @@ export class GameScene extends Phaser.Scene {
     }
     cursor.setPosition(px, py).setVisible(true);
     icon.setPosition(px, py).setVisible(true);
-    this.cursorState.visible = false; // the bracket IS the cursor (bright or dim)
+    // Keep the mouse cursor visible too (it follows the exact pointer); the
+    // bracket just snaps to the tile the mouse is over — so movement reads clearly.
+    this.cursorState.visible = this.locked;
 
     if (valid && tile) {
       cursor.setAlpha(1).clearTint();
