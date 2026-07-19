@@ -1901,11 +1901,7 @@ export class GameScene extends Phaser.Scene {
   /** Persist now (fire-and-forget; anonymous → localStorage, signed-in → backend). */
   private saveGame(): void {
     if (!this.umicat || this.loadingSave || !this.saveArmed) return;
-    const blob = this.buildSave();
-    console.log('[catopia][save] set state', { crops: blob.crops.length, tilled: blob.tilled.length, inv: blob.inventory.filter(Boolean).length });
-    this.umicat.saves.set('state', blob)
-      .then(() => console.log('[catopia][save] set OK'))
-      .catch((e) => console.warn('[catopia][save] set FAILED', e));
+    this.umicat.saves.set('state', this.buildSave()).catch((e) => console.warn('[catopia][save] set failed', e));
   }
 
   /** Debounced save after a state change (rapid actions coalesce). Short delay so
@@ -1922,14 +1918,13 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      console.log('[catopia][save] get state →', s ? { v: s.v, crops: s.crops?.length, tilled: s.tilled?.length } : 'NONE');
-      if (s && s.v === 1) { this.applySave(s); console.log('[catopia][save] applied'); }
+      if (s && s.v === 1) this.applySave(s);
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
     } catch (e) {
       // Read failed — do NOT arm saving, so we can't clobber a save that exists
       // but momentarily failed to load. (Saving stays off for this session.)
-      console.warn('[catopia][save] load FAILED — saving disabled this session', e);
+      console.warn('[catopia][save] load failed — saving disabled this session', e);
     }
   }
 
