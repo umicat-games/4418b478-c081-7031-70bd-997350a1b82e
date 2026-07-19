@@ -1033,12 +1033,12 @@ export class GameScene extends Phaser.Scene {
     // Visibility is managed each frame by updateTileCursor (hoe OR seed mode).
   }
 
-  /** Per-frame tool cursor. While a tool/seed is held the cursor IS the tile
-   *  bracket + held-tool icon (the triangle mouse is hidden): BRIGHT + snapped to
-   *  the tile when you can act there, DIMMED (semi-transparent icon + light-gray
-   *  bracket) when you can't — so the held tool never just "vanishes" leaving you
-   *  wondering why. The real mouse only returns with an empty hand / over the UI /
-   *  in a dialog or the backpack. */
+  /** Per-frame tool cursor. While a tool/seed is held the mouse cursor stays
+   *  visible (it follows the exact pointer) AND a tile bracket + held-tool icon
+   *  snaps to the tile it's over: BRIGHT when you can act there, DIMMED
+   *  (semi-transparent icon + light-gray bracket) when you can't — so the held
+   *  tool never just "vanishes". With an empty hand / over the UI / in a dialog or
+   *  the backpack it's just the plain mouse cursor (no bracket). */
   private updateTileCursor(): void {
     const cursor = this.tileCursor;
     const icon = this.hoeIcon;
