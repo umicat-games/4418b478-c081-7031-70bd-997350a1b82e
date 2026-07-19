@@ -1190,7 +1190,7 @@
         {
           "name": "idle-talk",
           "from": 39,
-          "to": 41,
+          "to": 40,
           "loop": true
         },
         {
