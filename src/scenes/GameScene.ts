@@ -264,6 +264,10 @@ export class GameScene extends Phaser.Scene {
   private umicat?: Umicat;
   private loadingSave = false;
   private pendingSave?: Phaser.Time.TimerEvent;
+  // Saving is ARMED only after loadGame has actually READ the store — so a slow
+  // load (or a read error) can never let the default state overwrite the real
+  // save before it's restored.
+  private saveArmed = false;
   // Hide the world + hotbar until the save is restored, so there's no flash of
   // the empty/default farm before the saved crops+soil pop in.
   private gameReady = false;
@@ -316,9 +320,10 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(this.computeZoom());
     this.cameras.main.roundPixels = true;
     // Cover the world until the save is restored (avoids the empty-farm flash).
-    // A fallback reveals it even if Umicat.init never resolves.
+    // A fallback reveals it even if Umicat.init never resolves (saving stays
+    // disarmed until the real load, so revealing can't clobber the save).
     this.showLoadingCover();
-    this.time.delayedCall(5000, () => this.markReady());
+    this.time.delayedCall(8000, () => this.markReady());
     // RESIZE mode: recompute zoom + re-centre + re-layout screen UI on any
     // canvas resize (device rotation, window change, phone vs desktop).
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
@@ -506,8 +511,6 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-T', () => { if (canAct()) this.startTillTask({ crop: 'corn', size: 3 }); });
         this.input.keyboard?.on('keydown-P', () => { if (canAct()) this.startPlantTask({ crop: 'corn' }); });
         this.input.keyboard?.on('keydown-O', () => { if (canAct()) this.startWaterTask({}); }); // O = water crops
-        // K = wipe the save (next reload starts fresh) — for testing save/load.
-        this.input.keyboard?.on('keydown-K', () => { void this.umicat?.saves.delete('state'); });
       }
       if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
@@ -1897,7 +1900,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Persist now (fire-and-forget; anonymous → localStorage, signed-in → backend). */
   private saveGame(): void {
-    if (!this.umicat || this.loadingSave) return;
+    if (!this.umicat || this.loadingSave || !this.saveArmed) return;
     const blob = this.buildSave();
     console.log('[catopia][save] set state', { crops: blob.crops.length, tilled: blob.tilled.length, inv: blob.inventory.filter(Boolean).length });
     this.umicat.saves.set('state', blob)
@@ -1909,7 +1912,7 @@ export class GameScene extends Phaser.Scene {
    *  the state reaches the backend while the tab is still open — a save-on-close
    *  is unreliable (the async backend write can't finish as the page tears down). */
   private scheduleSave(): void {
-    if (!this.umicat || this.loadingSave) return;
+    if (!this.umicat || this.loadingSave || !this.saveArmed) return;
     this.pendingSave?.remove();
     this.pendingSave = this.time.delayedCall(700, () => this.saveGame());
   }
@@ -1921,8 +1924,12 @@ export class GameScene extends Phaser.Scene {
       const s = await this.umicat.saves.get<SaveBlob>('state');
       console.log('[catopia][save] get state →', s ? { v: s.v, crops: s.crops?.length, tilled: s.tilled?.length } : 'NONE');
       if (s && s.v === 1) { this.applySave(s); console.log('[catopia][save] applied'); }
+      // The store was read (found or empty) → NOW it's safe to overwrite it.
+      this.saveArmed = true;
     } catch (e) {
-      console.warn('[catopia][save] load FAILED', e);
+      // Read failed — do NOT arm saving, so we can't clobber a save that exists
+      // but momentarily failed to load. (Saving stays off for this session.)
+      console.warn('[catopia][save] load FAILED — saving disabled this session', e);
     }
   }
 
