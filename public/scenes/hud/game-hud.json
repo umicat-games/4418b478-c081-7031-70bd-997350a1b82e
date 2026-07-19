@@ -135,6 +135,68 @@
       "width": 40,
       "height": 40,
       "animation": "blink-eye"
+    },
+    {
+      "id": "cato-portrait",
+      "kind": "image",
+      "role": "cato-portrait",
+      "name": "cato-portrait",
+      "anchor": {
+        "side": "bottom",
+        "offsetX": -170,
+        "offsetY": -272
+      },
+      "layer": "base",
+      "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
+      "width": 88,
+      "height": 88,
+      "animation": "blink-eye",
+      "visible": false
+    },
+    {
+      "id": "cato-name-frame",
+      "kind": "panel",
+      "role": "cato-name-frame",
+      "name": "cato-name-frame",
+      "anchor": {
+        "side": "bottom",
+        "offsetX": -290,
+        "offsetY": -238
+      },
+      "layer": "base",
+      "width": 104,
+      "height": 44,
+      "backgroundColor": "#000000",
+      "backgroundAlpha": 0.5,
+      "borderRadius": 8,
+      "backgroundAssetId": "square_buttons_26x26",
+      "backgroundRegion": "square-button-26_26-6",
+      "visible": false
+    },
+    {
+      "id": "cato-name-text",
+      "kind": "text-area",
+      "role": "cato-name-text",
+      "name": "cato-name-text",
+      "anchor": {
+        "side": "bottom",
+        "offsetX": -290,
+        "offsetY": -238
+      },
+      "layer": "overlay",
+      "width": 104,
+      "height": 44,
+      "source": {
+        "mode": "dynamic",
+        "binding": "catoName",
+        "fallback": "Cato"
+      },
+      "fontFamily": "zpix",
+      "fontSize": 22,
+      "color": "#f4e4c1",
+      "align": "center",
+      "padding": 6,
+      "visible": false
     }
   ]
 }

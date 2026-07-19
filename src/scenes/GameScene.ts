@@ -1804,7 +1804,29 @@ export class GameScene extends Phaser.Scene {
 
   /** The chat widgets, by role, that slide up together (the `chat-input-field`
    *  text-input widget drives its own synced DOM <input> + emits hud:submit). */
-  private static DIALOG_ROLES = ['chat-message', 'chat-input', 'chat-text', 'chat-input-field'];
+  private static DIALOG_ROLES = ['chat-message', 'chat-input', 'chat-text', 'chat-input-field', 'cato-portrait', 'cato-name-frame', 'cato-name-text'];
+
+  /** Play an emote animation on Cato's dialog portrait (the teemo sprite). Talking
+   *  → 'idle-talk'; idle → 'blink-eye'. (More emotes per mood later.) */
+  private setCatoEmote(anim: string): void {
+    const go = getHudObject(this, 'cato-portrait') as unknown as
+      | { play?: (key: string, ignoreIfPlaying?: boolean) => void }
+      | undefined;
+    go?.play?.(anim, true);
+  }
+
+  /** Show Cato's talking animation for a beat (scaled to the reply length), then
+   *  settle back to blinking. */
+  private catoTalkFor(text: string): void {
+    if (!this.dialogOpen) return;
+    this.setCatoEmote('idle-talk');
+    this.catoTalkTimer?.remove();
+    const ms = Phaser.Math.Clamp(900 + text.length * 55, 1200, 5000);
+    this.catoTalkTimer = this.time.delayedCall(ms, () => {
+      if (this.dialogOpen) this.setCatoEmote('blink-eye');
+    });
+  }
+  private catoTalkTimer?: Phaser.Time.TimerEvent;
 
   /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input. */
   private openDialog(): void {
@@ -1839,12 +1861,14 @@ export class GameScene extends Phaser.Scene {
     }
     // The chat-input-field text-input widget shows + focuses its own DOM input
     // (SDK 1.0.28) the moment it goes visible above — no manual input to create.
+    this.setCatoEmote('blink-eye'); // idle emote until Cato replies
   }
 
   /** Hide the dialog (slide back down) + tear down the typing input. */
   private closeDialog(): void {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
+    this.catoTalkTimer?.remove(); // stop the talk→blink settle timer
     this.publishInventory(); // restore the hotbar after chatting
     // Drop the CSS game-cursor; clicking the canvas re-captures the pointer and
     // the CursorScene's custom cursor takes over again.
@@ -2071,7 +2095,9 @@ export class GameScene extends Phaser.Scene {
         observation: this.buildObservation(),
       });
       if (r.ok) {
-        this.registry.set('catoDialogText', r.say || 'Cato just blinks at you.');
+        const say = r.say || 'Cato just blinks at you.';
+        this.registry.set('catoDialogText', say);
+        this.catoTalkFor(say); // portrait plays idle-talk while "speaking"
         if (r.do?.length) this.runCatoActions(r.do);
       } else if (r.reason === 'SIGN_IN_REQUIRED') {
         this.registry.set('catoDialogText', "Cato peers past you — sign in and we can really talk.");
