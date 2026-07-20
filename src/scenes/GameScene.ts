@@ -495,9 +495,9 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'set_emote',
                 description:
-                  'Show a facial expression on your portrait matching your mood this turn. Pair it with your reply whenever your mood is clear. Choose the mood that fits what you\'re saying.',
+                  'Show a facial expression on your portrait matching your mood this turn. `mood` MUST be exactly one of: happy, surprised, thinking, playful, sad, excited. Pick the ONE that genuinely fits what you are saying right now — DO NOT default to the same mood every time; vary it with the conversation (e.g. sad when scolded, surprised at news, thinking when unsure). Pair it with your reply.',
                 args: {
-                  mood: 'string', // one of: happy, surprised, thinking, playful, sad, excited
+                  mood: 'string', // exactly one of: happy | surprised | thinking | playful | sad | excited
                 },
               },
             ],
@@ -1466,12 +1466,12 @@ export class GameScene extends Phaser.Scene {
   /** AI mood → teemo portrait animation (the tags on the emote sheet). Note the
    *  surprised tag is spelled "supprised" in the sheet. */
   private static EMOTE_ANIM: Record<string, string> = {
-    happy: 'love',
-    surprised: 'supprised',
-    thinking: 'think',
-    playful: 'wink',
-    sad: 'sad',
-    excited: 'dance',
+    happy: 'love', joyful: 'love', love: 'love',
+    surprised: 'supprised', shocked: 'supprised',
+    thinking: 'think', curious: 'think', unsure: 'think',
+    playful: 'wink', cheeky: 'wink', teasing: 'wink',
+    sad: 'sad', upset: 'sad',
+    excited: 'dance', happy_excited: 'dance',
   };
 
   /** Begin the "till a plot" behaviour: find an open grass patch near Cato and
