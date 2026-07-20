@@ -1857,11 +1857,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** A varied warm filler for when the AI returned no spoken text (only a tool
-   *  call, or an aside-only reply). Contextual when Cato is off doing a task. */
+   *  call, or an aside-only reply). ALWAYS Cato's OWN words/sounds (the box shows
+   *  what Cato SAYS — never a third-person description of him). Contextual when
+   *  he's off doing a task. */
   private fallbackSay(doingTask: boolean): string {
     const lines = doingTask
       ? ['Okay — on it!', 'Right away!', 'Mmhm, doing it now!', 'Hehe, okay!']
-      : ['Hehe.', 'Mm?', 'Cato peeks up at you.', 'Cato wiggles happily.'];
+      : ['Hehe.', 'Mm?', 'Hi hi!', 'Mrrp?', 'Yeah?'];
     return Phaser.Utils.Array.GetRandom(lines);
   }
 
@@ -1890,7 +1892,7 @@ export class GameScene extends Phaser.Scene {
     // game's own pixel cursor via CSS — visually seamless. Restored on close.
     if (this.locked) document.exitPointerLock();
     this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
-    this.registry.set('catoDialogText', 'Cato perks up, watching you.');
+    this.registry.set('catoDialogText', this.fallbackSay(false)); // Cato's own greeting
     for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
         | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
@@ -2131,7 +2133,7 @@ export class GameScene extends Phaser.Scene {
     const t = text.trim();
     if (!t || this.aiBusy || !this.dialogOpen) return;
     this.aiBusy = true;
-    this.registry.set('catoDialogText', 'Cato is thinking…');
+    this.registry.set('catoDialogText', 'Hmm…'); // Cato's own "thinking" beat, not a description
     try {
       if (!this.cato) {
         this.registry.set('catoDialogText', "Cato tilts its head — it can't quite hear you right now.");
