@@ -492,14 +492,9 @@ export class GameScene extends Phaser.Scene {
                   count: 'integer', // how many to harvest; 0 / omitted = all ripe crops
                 },
               },
-              {
-                name: 'set_emote',
-                description:
-                  'Show a facial expression on your portrait matching your mood this turn. `mood` MUST be exactly one of: happy, surprised, thinking, playful, sad, excited. Pick the ONE that genuinely fits what you are saying right now — DO NOT default to the same mood every time; vary it with the conversation (e.g. sad when scolded, surprised at news, thinking when unsure). Pair it with your reply.',
-                args: {
-                  mood: 'string', // exactly one of: happy | surprised | thinking | playful | sad | excited
-                },
-              },
+              // NB: emotes are NOT a tool — Haiku returned the tool call WITHOUT any
+              // spoken text (empty replies). Cato instead prefixes his reply with a
+              // [mood] marker (see the playbook), parsed in submitDialog.
             ],
           });
           // Restore the saved game (overrides the fresh-start defaults), reveal
@@ -1450,7 +1445,6 @@ export class GameScene extends Phaser.Scene {
   private runCatoActions(actions: Array<{ name: string; args: unknown }>): void {
     let acted = false;
     for (const a of actions) {
-      if (a.name === 'set_emote') continue; // handled in submitDialog (resting expression); not a task
       if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
       else if (a.name === 'plant_crop') { this.startPlantTask(a.args); acted = true; }
       else if (a.name === 'water_crops') { this.startWaterTask(a.args); acted = true; }
@@ -1867,12 +1861,14 @@ export class GameScene extends Phaser.Scene {
     return Phaser.Utils.Array.GetRandom(lines);
   }
 
-  /** The teemo animation for a set_emote action in this turn's `do` list, or null. */
-  private emoteAnimFor(actions: Array<{ name: string; args: unknown }> | undefined): string | null {
-    const e = actions?.find((a) => a.name === 'set_emote');
-    if (!e) return null;
-    const mood = String((e.args as { mood?: string })?.mood ?? '').toLowerCase();
-    return GameScene.EMOTE_ANIM[mood] ?? null;
+  /** Cato prefixes his reply with a [mood] marker (emotes are NOT a tool — that
+   *  made Haiku drop the spoken text). Pull the mood → teemo anim and strip the
+   *  marker from the text. */
+  private parseEmoteMarker(text: string): { anim: string | null; text: string } {
+    const m = /^\s*[[(]\s*([a-z_ -]+?)\s*[\])]\s*/i.exec(text);
+    if (!m) return { anim: null, text };
+    const mood = m[1].trim().toLowerCase();
+    return { anim: GameScene.EMOTE_ANIM[mood] ?? null, text: text.slice(m[0].length) };
   }
 
   /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input. */
@@ -2147,11 +2143,12 @@ export class GameScene extends Phaser.Scene {
         // asides the AI still writes ("*tilts head*") — display clean speech only.
         // Haiku sometimes returns no spoken text (only a tool call / an aside), so
         // fall back to a varied warm filler (contextual if it's doing something).
-        const say = this.stripAsides(r.say || '') || this.fallbackSay(!!r.do?.some((a) => a.name !== 'set_emote'));
+        const parsed = this.parseEmoteMarker(r.say || '');
+        const say = this.stripAsides(parsed.text) || this.fallbackSay(!!r.do?.length);
         this.registry.set('catoDialogText', say);
-        // The mood the AI set this turn becomes the resting expression (held until
-        // the next reply); no set_emote → a plain blink.
-        this.catoEmote = this.emoteAnimFor(r.do) ?? 'blink-eye';
+        // The [mood] marker becomes the resting expression (held until the next
+        // reply); no marker → a plain blink.
+        this.catoEmote = parsed.anim ?? 'blink-eye';
         this.catoTalkFor(say); // talk a beat, then settle onto catoEmote + hold
         if (r.do?.length) this.runCatoActions(r.do);
       } else if (r.reason === 'SIGN_IN_REQUIRED') {
