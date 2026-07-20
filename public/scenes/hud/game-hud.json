@@ -161,7 +161,7 @@
       "anchor": {
         "side": "bottom",
         "offsetX": -290,
-        "offsetY": -238
+        "offsetY": -262
       },
       "layer": "base",
       "width": 104,
@@ -181,7 +181,7 @@
       "anchor": {
         "side": "bottom",
         "offsetX": -290,
-        "offsetY": -238
+        "offsetY": -262
       },
       "layer": "overlay",
       "width": 104,
