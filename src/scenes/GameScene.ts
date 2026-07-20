@@ -630,6 +630,15 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = false;
   }
 
+  /** Clicking Cato's top-right portrait: aim the camera at him (follow) AND open
+   *  the chat dialog — one gesture to "go find Cato and talk". The camera-follow
+   *  lerp (update) slides onto the now-frozen Cato; openDialog is guarded so a
+   *  re-click while already chatting is a no-op. */
+  private focusCato(): void {
+    this.followCato();
+    this.openDialog();
+  }
+
   // ── "Find cat" button — warm cozy pill, fixed to top-right ───────────
 
   private buildFindCatButton(): void {
@@ -638,12 +647,36 @@ export class GameScene extends Phaser.Scene {
     // transparent hit-rect handles NON-locked clicks (under pointer lock,
     // handleLockedClick reads findCatBounds instead). Created once; position +
     // findCatBounds are set by layoutFindCatButton (also re-run on resize).
+    // Interactive only for the `overUi` hover flag + hand cursor. The CLICK is NOT
+    // handled here: the portrait is a HUD icon-button in the SEPARATE `UmicatHud`
+    // scene (rendered ABOVE GameScene), which swallows the pointer before any
+    // GameScene object — incl. this rect — can see it. So the click is wired via the
+    // HUD scene's `hud:press` event (below) for the unlocked mouse / touch case, and
+    // via actAt's findCatBounds check for the pointer-LOCKED-mouse case.
     this.findCatHit = this.add.rectangle(0, 0, 64, 64, 0x000000, 0)
       .setDepth(1002).setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerover',  () => { this.overUi = true; })
-      .on('pointerout',   () => { this.overUi = false; })
-      .on('pointerdown',  () => this.followCato());
+      .on('pointerout',   () => { this.overUi = false; });
+
+    // Clicking Cato's top-right portrait (the HUD `photo-frame` icon-button) → aim
+    // the camera at him + open the chat. The icon-button emits `hud:press` on the
+    // HUD scene's OWN event bus on pointer-up (mouse + touch) when not pointer-locked.
+    const hud = this.game.scene.getScene('UmicatHud');
+    if (hud) {
+      const onHudPress = (_id: string, entity?: { name?: string }): void => {
+        if (entity?.name === 'photo-frame') this.focusCato();
+      };
+      hud.events.on('hud:press', onHudPress);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => hud.events.off('hud:press', onHudPress));
+    }
+    // Pre-seed the dialog-text binding so the FIRST greeting renders. Phaser's
+    // DataManager emits `setdata` (not `changedata`) on a key's first set, and the
+    // SDK text-area only listens for `changedata-catoDialogText` — so without this
+    // the very first line (the open greeting) would silently stay on the "…"
+    // fallback until a second set. The HUD text-area already did its initial render
+    // (still hidden), so seeding "" here just makes the key exist.
+    this.registry.set('catoDialogText', '');
     this.layoutFindCatButton();
   }
 
@@ -684,8 +717,11 @@ export class GameScene extends Phaser.Scene {
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.locked) { this.handleLockedClick(); return; }
-      // Not locked yet: clicking the cat opens the dialog; anything else
-      // captures the pointer (the normal edge-scroll / camera mode).
+      // Not locked yet: clicking the cat opens the dialog; anything else captures
+      // the pointer (the normal edge-scroll / camera mode). NOTE: Cato's top-right
+      // portrait is handled by the findCatHit GameObject's own pointerdown (the
+      // HUD photo-frame icon-button stopPropagation()'s here, aborting this
+      // scene-level handler, so the portrait can't be routed through it).
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
       this.input.manager.mouse?.requestPointerLock();
@@ -803,8 +839,9 @@ export class GameScene extends Phaser.Scene {
         this.playerWater(tile.x, tile.y); return;
       }
     }
-    // Cato's portrait (top-right) → follow; Cato himself → talk; else release follow.
-    if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, x, y)) { this.followCato(); return; }
+    // Cato's portrait (top-right) → aim camera at him + open chat; Cato himself →
+    // talk; else release follow.
+    if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, x, y)) { this.focusCato(); return; }
     if (this.catContains(wp.x, wp.y)) this.openDialog();
     else if (this.cameraFollow) this.unfollowCato();
   }
