@@ -492,6 +492,14 @@ export class GameScene extends Phaser.Scene {
                   count: 'integer', // how many to harvest; 0 / omitted = all ripe crops
                 },
               },
+              {
+                name: 'set_emote',
+                description:
+                  'Show a facial expression on your portrait matching your mood this turn. Pair it with your reply whenever your mood is clear. Choose the mood that fits what you\'re saying.',
+                args: {
+                  mood: 'string', // one of: happy, surprised, thinking, playful, sad, excited
+                },
+              },
             ],
           });
           // Restore the saved game (overrides the fresh-start defaults), reveal
@@ -1442,6 +1450,7 @@ export class GameScene extends Phaser.Scene {
   private runCatoActions(actions: Array<{ name: string; args: unknown }>): void {
     let acted = false;
     for (const a of actions) {
+      if (a.name === 'set_emote') { this.playMoodEmote(a.args); continue; } // not a task — doesn't close the chat
       if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
       else if (a.name === 'plant_crop') { this.startPlantTask(a.args); acted = true; }
       else if (a.name === 'water_crops') { this.startWaterTask(a.args); acted = true; }
@@ -1452,6 +1461,25 @@ export class GameScene extends Phaser.Scene {
     if (acted) {
       this.time.delayedCall(1300, () => { if (this.dialogOpen) this.closeDialog(); });
     }
+  }
+
+  /** AI mood → teemo portrait animation (the tags on the emote sheet). Note the
+   *  surprised tag is spelled "supprised" in the sheet. */
+  private static EMOTE_ANIM: Record<string, string> = {
+    happy: 'love',
+    surprised: 'supprised',
+    thinking: 'think',
+    playful: 'wink',
+    sad: 'sad',
+    excited: 'dance',
+  };
+
+  /** Play the mood emote on Cato's portrait (from a set_emote action). It plays
+   *  over the default talking anim; catoTalkFor's timer settles it to blink. */
+  private playMoodEmote(rawArgs: unknown): void {
+    const mood = String((rawArgs as { mood?: string })?.mood ?? '').toLowerCase();
+    const anim = GameScene.EMOTE_ANIM[mood];
+    if (anim && this.dialogOpen) this.setCatoEmote(anim);
   }
 
   /** Begin the "till a plot" behaviour: find an open grass patch near Cato and
