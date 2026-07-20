@@ -1850,6 +1850,12 @@ export class GameScene extends Phaser.Scene {
   private catoTalkTimer?: Phaser.Time.TimerEvent;
   private catoEmote = 'blink-eye'; // resting expression, held until the next reply
 
+  /** Strip *italic stage-direction* asides ("*tilts head*") from a reply — the
+   *  portrait carries the mood now, so the text stays clean spoken dialogue. */
+  private stripAsides(text: string): string {
+    return text.replace(/\*[^*]*\*/g, '').replace(/\s{2,}/g, ' ').trim();
+  }
+
   /** The teemo animation for a set_emote action in this turn's `do` list, or null. */
   private emoteAnimFor(actions: Array<{ name: string; args: unknown }> | undefined): string | null {
     const e = actions?.find((a) => a.name === 'set_emote');
@@ -2126,7 +2132,9 @@ export class GameScene extends Phaser.Scene {
         observation: this.buildObservation(),
       });
       if (r.ok) {
-        const say = r.say || 'Cato just blinks at you.';
+        // Cato's feelings show on the portrait now, so strip any *stage-direction*
+        // asides the AI still writes ("*tilts head*") — display clean speech only.
+        const say = this.stripAsides(r.say || '') || 'Cato just blinks at you.';
         this.registry.set('catoDialogText', say);
         // The mood the AI set this turn becomes the resting expression (held until
         // the next reply); no set_emote → a plain blink.
