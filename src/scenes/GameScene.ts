@@ -1450,7 +1450,7 @@ export class GameScene extends Phaser.Scene {
   private runCatoActions(actions: Array<{ name: string; args: unknown }>): void {
     let acted = false;
     for (const a of actions) {
-      if (a.name === 'set_emote') { this.playMoodEmote(a.args); continue; } // not a task — doesn't close the chat
+      if (a.name === 'set_emote') continue; // handled in submitDialog (resting expression); not a task
       if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
       else if (a.name === 'plant_crop') { this.startPlantTask(a.args); acted = true; }
       else if (a.name === 'water_crops') { this.startWaterTask(a.args); acted = true; }
@@ -1473,14 +1473,6 @@ export class GameScene extends Phaser.Scene {
     sad: 'sad',
     excited: 'dance',
   };
-
-  /** Play the mood emote on Cato's portrait (from a set_emote action). It plays
-   *  over the default talking anim; catoTalkFor's timer settles it to blink. */
-  private playMoodEmote(rawArgs: unknown): void {
-    const mood = String((rawArgs as { mood?: string })?.mood ?? '').toLowerCase();
-    const anim = GameScene.EMOTE_ANIM[mood];
-    if (anim && this.dialogOpen) this.setCatoEmote(anim);
-  }
 
   /** Begin the "till a plot" behaviour: find an open grass patch near Cato and
    *  queue its cells for hoeing. Cato walks the queue in update (updateCatoTask). */
@@ -1843,18 +1835,28 @@ export class GameScene extends Phaser.Scene {
     go?.play?.(anim, true);
   }
 
-  /** Show Cato's talking animation for a beat (scaled to the reply length), then
-   *  settle back to blinking. */
+  /** Play the talking anim for a beat (scaled to reply length), then settle onto
+   *  the turn's resting expression (`catoEmote` — the mood the AI set, or a plain
+   *  blink) and HOLD it there until the next message. */
   private catoTalkFor(text: string): void {
     if (!this.dialogOpen) return;
     this.setCatoEmote('idle-talk');
     this.catoTalkTimer?.remove();
     const ms = Phaser.Math.Clamp(900 + text.length * 55, 1200, 5000);
     this.catoTalkTimer = this.time.delayedCall(ms, () => {
-      if (this.dialogOpen) this.setCatoEmote('blink-eye');
+      if (this.dialogOpen) this.setCatoEmote(this.catoEmote);
     });
   }
   private catoTalkTimer?: Phaser.Time.TimerEvent;
+  private catoEmote = 'blink-eye'; // resting expression, held until the next reply
+
+  /** The teemo animation for a set_emote action in this turn's `do` list, or null. */
+  private emoteAnimFor(actions: Array<{ name: string; args: unknown }> | undefined): string | null {
+    const e = actions?.find((a) => a.name === 'set_emote');
+    if (!e) return null;
+    const mood = String((e.args as { mood?: string })?.mood ?? '').toLowerCase();
+    return GameScene.EMOTE_ANIM[mood] ?? null;
+  }
 
   /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input. */
   private openDialog(): void {
@@ -1889,7 +1891,8 @@ export class GameScene extends Phaser.Scene {
     }
     // The chat-input-field text-input widget shows + focuses its own DOM input
     // (SDK 1.0.28) the moment it goes visible above — no manual input to create.
-    this.setCatoEmote('blink-eye'); // idle emote until Cato replies
+    this.catoEmote = 'blink-eye'; // reset the resting expression
+    this.setCatoEmote('blink-eye'); // idle until Cato replies
   }
 
   /** Hide the dialog (slide back down) + tear down the typing input. */
@@ -2125,7 +2128,10 @@ export class GameScene extends Phaser.Scene {
       if (r.ok) {
         const say = r.say || 'Cato just blinks at you.';
         this.registry.set('catoDialogText', say);
-        this.catoTalkFor(say); // portrait plays idle-talk while "speaking"
+        // The mood the AI set this turn becomes the resting expression (held until
+        // the next reply); no set_emote → a plain blink.
+        this.catoEmote = this.emoteAnimFor(r.do) ?? 'blink-eye';
+        this.catoTalkFor(say); // talk a beat, then settle onto catoEmote + hold
         if (r.do?.length) this.runCatoActions(r.do);
       } else if (r.reason === 'SIGN_IN_REQUIRED') {
         this.registry.set('catoDialogText', "Cato peers past you — sign in and we can really talk.");
