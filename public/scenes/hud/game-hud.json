@@ -65,7 +65,7 @@
       },
       "layer": "base",
       "width": 700,
-      "height": 200,
+      "height": 130,
       "backgroundColor": "#000000",
       "backgroundAlpha": 0.5,
       "borderRadius": 8,
@@ -88,7 +88,7 @@
       },
       "layer": "overlay",
       "width": 700,
-      "height": 200,
+      "height": 130,
       "source": {
         "mode": "dynamic",
         "binding": "catoDialogText",
@@ -97,7 +97,7 @@
       "fontFamily": "zpix",
       "fontSize": 24,
       "color": "#ffffff",
-      "align": "center",
+      "align": "start",
       "padding": 22,
       "visible": false
     },
@@ -144,7 +144,7 @@
       "anchor": {
         "side": "bottom",
         "offsetX": -170,
-        "offsetY": -261
+        "offsetY": -191
       },
       "layer": "base",
       "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
@@ -161,7 +161,7 @@
       "anchor": {
         "side": "bottom",
         "offsetX": -290,
-        "offsetY": -262
+        "offsetY": -192
       },
       "layer": "base",
       "width": 104,
@@ -181,7 +181,7 @@
       "anchor": {
         "side": "bottom",
         "offsetX": -290,
-        "offsetY": -262
+        "offsetY": -192
       },
       "layer": "overlay",
       "width": 104,
@@ -196,6 +196,24 @@
       "color": "#f4e4c1",
       "align": "center",
       "padding": 6,
+      "visible": false
+    },
+    {
+      "id": "cato-more-icon",
+      "kind": "image",
+      "role": "cato-more-icon",
+      "name": "cato-more-icon",
+      "anchor": {
+        "side": "bottom",
+        "offsetX": 312,
+        "offsetY": -68
+      },
+      "layer": "overlay",
+      "assetId": "all_icons",
+      "frame": "play-brown",
+      "tint": "#3f2c18",
+      "width": 28,
+      "height": 28,
       "visible": false
     }
   ]

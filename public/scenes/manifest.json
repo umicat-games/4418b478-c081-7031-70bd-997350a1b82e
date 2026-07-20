@@ -1494,6 +1494,15 @@
       "atlasPath": "uploaded/tools_and_meterials.json",
       "atlasFormat": "json",
       "pixelArt": true
+    },
+    {
+      "id": "all_icons",
+      "textureKey": "all_icons",
+      "path": "uploaded/all_icons.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/all_icons.json",
+      "atlasFormat": "json",
+      "pixelArt": true
     }
   ]
 }

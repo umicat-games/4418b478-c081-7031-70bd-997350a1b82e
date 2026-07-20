@@ -290,6 +290,16 @@ export class GameScene extends Phaser.Scene {
   // remember where to slide back to.
   private dialogY: Record<string, number> = {};
 
+  // ── RPG typewriter + pagination (Cato's reply reveals char-by-char; text that
+  //    overflows the box is split into pages, a "more" icon prompts to advance) ──
+  private dialogPages: string[] = []; // the reply split into box-fitting pages
+  private dialogPageIdx = 0; // which page is showing
+  private dialogCharIdx = 0; // chars revealed of the current page
+  private dialogTyping = false; // mid-typewriter on the current page
+  private dialogTypeTimer?: Phaser.Time.TimerEvent; // per-char reveal tick
+  private dialogMeasureEl?: HTMLDivElement; // hidden design-sized wrap-measurer
+  private moreIconTween?: Phaser.Tweens.Tween; // the "more" icon bob
+
   // ── Cato behaviours (runtime-AI `do` actions) ───────────────────────────
   // When the guardian asks Cato (in chat) to prepare a plot, the AI returns a
   // `till_plot` action; we find an open grass patch near Cato, queue its cells,
@@ -523,6 +533,17 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-P', () => { if (canAct()) this.startPlantTask({ crop: 'corn' }); });
         this.input.keyboard?.on('keydown-O', () => { if (canAct()) this.startWaterTask({}); }); // O = water crops
         this.input.keyboard?.on('keydown-H', () => { if (canAct()) this.startHarvestTask({}); }); // H = harvest ripe crops
+        // M = open the dialog with a long multi-page reply to exercise the RPG
+        // typewriter + pagination + "more" icon without the AI.
+        this.input.keyboard?.on('keydown-M', () => {
+          if (!this.dialogOpen) this.openDialog();
+          this.time.delayedCall(60, () => this.showDialogText(
+            "Oh! You're back — I missed you, guardian! I was just sitting by the water, " +
+            "watching the light dance on the waves, and I got to wondering about all the " +
+            "little islands out past the mist. Do you think there are other spirits like me " +
+            "over there? Maybe one day we could build a tiny boat and sail out together to " +
+            "meet them. I'd bring snacks. And I'd hold your hand the whole way, I promise!"));
+        });
       }
       if (CHILD_WANDER) {
         this.startWanderIdle(); // stands a beat, then strolls off
@@ -659,8 +680,9 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.wasTouch) return;
       // Dialog open: a canvas click (outside the HTML input, which sits on top
-      // and swallows its own clicks) dismisses it.
-      if (this.dialogOpen) { this.closeDialog(); return; }
+      // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
+      // page); once everything's shown, the same click dismisses it.
+      if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.locked) { this.handleLockedClick(); return; }
       // Not locked yet: clicking the cat opens the dialog; anything else
       // captures the pointer (the normal edge-scroll / camera mode).
@@ -693,12 +715,22 @@ export class GameScene extends Phaser.Scene {
       if (!pointer.wasTouch) return;
       if (this.inventoryOpen) { this.endInventoryTouch(pointer.x, pointer.y); return; }
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
-      if (this.dialogOpen) { this.closeDialog(); return; }
+      // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
+      if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
       this.actAt(pointer.x, pointer.y);
     });
 
     // Esc closes the dialog (also releases pointer lock — browser-enforced).
     this.input.keyboard?.on('keydown-ESC', () => { if (this.dialogOpen) this.closeDialog(); });
+    // Space advances the RPG text (reveal the rest / next page) — but ONLY when the
+    // chat input isn't focused, so typing a space in your message doesn't skip ahead.
+    this.input.keyboard?.on('keydown-SPACE', (e: KeyboardEvent) => {
+      if (!this.dialogOpen) return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+      e.preventDefault?.();
+      this.advanceDialog();
+    });
 
     // While locked, accumulate RELATIVE mouse movement into the virtual cursor,
     // clamped to the canvas so it can never leave.
@@ -1478,7 +1510,7 @@ export class GameScene extends Phaser.Scene {
     const cells = this.findPlot(size);
     if (!cells || cells.length === 0) {
       // No room — let Cato explain in-fiction (overrides the AI's say line).
-      this.registry.set('catoDialogText', "Cato pads around, but there's no clear ground nearby to dig.");
+      this.setImmediateDialog("Cato pads around, but there's no clear ground nearby to dig.");
       return;
     }
     // A single active task; camera follows Cato so the guardian watches him work.
@@ -1493,13 +1525,13 @@ export class GameScene extends Phaser.Scene {
     const args = (rawArgs ?? {}) as { crop?: string; count?: number };
     const crop = this.parseCrop(args.crop);
     if (!crop) {
-      this.registry.set('catoDialogText', "Cato blinks — it doesn't have seeds for that. Try corn, carrot, tomato, eggplant, or pumpkin.");
+      this.setImmediateDialog("Cato blinks — it doesn't have seeds for that. Try corn, carrot, tomato, eggplant, or pumpkin.");
       return;
     }
     const max = args.count && args.count > 0 ? Math.round(args.count) : Infinity;
     const cells = this.findEmptySoil(max);
     if (cells.length === 0) {
-      this.registry.set('catoDialogText', 'Cato looks for tilled soil to plant in — there’s none ready yet. Ask it to till a plot first!');
+      this.setImmediateDialog('Cato looks for tilled soil to plant in — there’s none ready yet. Ask it to till a plot first!');
       return;
     }
     this.catoTask = { type: 'plant', queue: cells, crop: CROPS[crop].label, plantName: crop, cooldown: 0, stand: null };
@@ -1538,7 +1570,7 @@ export class GameScene extends Phaser.Scene {
     const max = args.count && args.count > 0 ? Math.round(args.count) : Infinity;
     const cells = this.findWaterTargets(max);
     if (cells.length === 0) {
-      this.registry.set('catoDialogText', "Cato peers around — nothing needs watering right now.");
+      this.setImmediateDialog("Cato peers around — nothing needs watering right now.");
       return;
     }
     this.catoTask = { type: 'water', queue: cells, crop: 'crops', cooldown: 0, stand: null };
@@ -1553,7 +1585,7 @@ export class GameScene extends Phaser.Scene {
     const max = args.count && args.count > 0 ? Math.round(args.count) : Infinity;
     const cells = this.findHarvestTargets(max);
     if (cells.length === 0) {
-      this.registry.set('catoDialogText', "Cato looks over the plants — nothing's ripe to pick yet.");
+      this.setImmediateDialog("Cato looks over the plants — nothing's ripe to pick yet.");
       return;
     }
     this.catoTask = { type: 'harvest', queue: cells, crop: 'crops', cooldown: 0, stand: null };
@@ -1844,6 +1876,160 @@ export class GameScene extends Phaser.Scene {
   private catoTalkTimer?: Phaser.Time.TimerEvent;
   private catoEmote = 'blink-eye'; // resting expression, held until the next reply
 
+  // ── Typewriter reveal + pagination ──────────────────────────────────────
+  // Cato's reply is shown RPG-style: revealed one character at a time, and if it
+  // overflows the box it's split into pages. A "more" icon (bottom-right) prompts
+  // the player to advance (click anywhere / Space / tap) to the rest — no scroll.
+  // Fit target < the real 200px box: leaves a safety row so font-load rounding
+  // can't trip a scrollbar and the last line clears the bottom-right "more" icon.
+  private static DIALOG_FIT_H = 118;
+  private static TYPE_MS = 50; // per-character reveal interval (cozy RPG pace)
+
+  /** A hidden div sized EXACTLY like the runtime text-area at design scale (700
+   *  wide, font 24, line-height 34, padding 22, border-box, same wrap rules) but
+   *  with auto height — so its measured height predicts whether a string fits the
+   *  box without scrolling. Wrapping is scale-invariant, so design-scale measuring
+   *  is accurate at any canvas size. */
+  private measureEl(): HTMLDivElement {
+    if (!this.dialogMeasureEl) {
+      const d = document.createElement('div');
+      d.style.cssText =
+        'position:fixed; left:-9999px; top:0; visibility:hidden; box-sizing:border-box;' +
+        'overflow-wrap:break-word; white-space:pre-wrap; word-break:break-word;' +
+        'width:700px; padding:22px; font-size:24px; line-height:34px;' +
+        "font-family:zpix, sans-serif; text-align:start;";
+      document.body.appendChild(d);
+      this.dialogMeasureEl = d;
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { d.remove(); });
+    }
+    return this.dialogMeasureEl;
+  }
+
+  /** Does `s` fit the chat box (design height) without scrolling? */
+  private textFits(s: string): boolean {
+    const el = this.measureEl();
+    el.textContent = s;
+    return el.offsetHeight <= GameScene.DIALOG_FIT_H;
+  }
+
+  /** Split a reply into pages that each fill the box without overflowing. Grows a
+   *  prefix by binary search, then backs up to the last word break so words aren't
+   *  cut (CJK has no spaces → falls back to the char boundary). */
+  private paginate(text: string): string[] {
+    const pages: string[] = [];
+    let rest = text.trim();
+    // Safety cap so a pathological input can never loop forever.
+    for (let guard = 0; rest && guard < 64; guard++) {
+      if (this.textFits(rest)) { pages.push(rest); break; }
+      let lo = 1;
+      let hi = rest.length;
+      let best = 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (this.textFits(rest.slice(0, mid))) { best = mid; lo = mid + 1; }
+        else hi = mid - 1;
+      }
+      let cut = best;
+      const sp = rest.lastIndexOf(' ', best);
+      if (sp > best * 0.5) cut = sp; // prefer a word boundary if not too far back
+      pages.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    return pages.length ? pages : [''];
+  }
+
+  /** Show a full reply with the RPG typewriter: paginate, then type out page 0.
+   *  (Replaces a bare registry.set of the whole line.) */
+  private showDialogText(fullText: string): void {
+    this.stopTyping();
+    this.dialogPages = this.paginate(fullText);
+    this.dialogPageIdx = 0;
+    this.startTypingPage(0);
+  }
+
+  private stopTyping(): void {
+    this.dialogTypeTimer?.remove();
+    this.dialogTypeTimer = undefined;
+    this.dialogTyping = false;
+  }
+
+  /** Set a short line INSTANTLY (no typewriter) — greetings / "thinking…" beats /
+   *  error lines that are always one page. Resets the pagination state so a stale
+   *  "more" icon or half-typed page can't linger. */
+  private setImmediateDialog(text: string): void {
+    this.stopTyping();
+    this.dialogPages = [text];
+    this.dialogPageIdx = 0;
+    this.dialogCharIdx = text.length;
+    this.setMoreIcon(false);
+    this.registry.set('catoDialogText', text);
+  }
+
+  /** Begin revealing page `idx` one character at a time. */
+  private startTypingPage(idx: number): void {
+    this.stopTyping();
+    this.dialogPageIdx = idx;
+    this.dialogCharIdx = 0;
+    this.dialogTyping = true;
+    this.setMoreIcon(false); // hidden until this page finishes
+    const page = this.dialogPages[idx] ?? '';
+    this.registry.set('catoDialogText', '');
+    this.dialogTypeTimer = this.time.addEvent({
+      delay: GameScene.TYPE_MS,
+      loop: true,
+      callback: () => {
+        this.dialogCharIdx = Math.min(this.dialogCharIdx + 1, page.length);
+        this.registry.set('catoDialogText', page.slice(0, this.dialogCharIdx));
+        if (this.dialogCharIdx >= page.length) this.finishPage();
+      },
+    });
+  }
+
+  /** The current page is fully shown — stop typing + reveal the "more" icon when
+   *  there are still pages left. */
+  private finishPage(): void {
+    this.stopTyping();
+    const page = this.dialogPages[this.dialogPageIdx] ?? '';
+    this.dialogCharIdx = page.length;
+    this.registry.set('catoDialogText', page);
+    this.setMoreIcon(this.dialogPageIdx < this.dialogPages.length - 1);
+  }
+
+  /** Player pressed advance (click / Space / tap) while the dialog is open. If
+   *  the current page is still typing → snap it complete; else if more pages
+   *  remain → go to the next one. Returns true if it consumed the input (there
+   *  was something to reveal), false when everything is already shown (so the
+   *  caller can then close the dialog). */
+  private advanceDialog(): boolean {
+    if (this.dialogTyping) { this.finishPage(); return true; }
+    if (this.dialogPageIdx < this.dialogPages.length - 1) {
+      this.startTypingPage(this.dialogPageIdx + 1);
+      return true;
+    }
+    return false;
+  }
+
+  /** Show/hide the "more" pagination icon (a gentle alpha pulse while visible so
+   *  it reads as "there's more — tap to continue"). Alpha-only so it never fights
+   *  the HUD's anchored position. */
+  private setMoreIcon(show: boolean): void {
+    const go = getHudObject(this, 'cato-more-icon') as unknown as
+      | { setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
+      | undefined;
+    if (!go) return;
+    this.moreIconTween?.remove();
+    this.moreIconTween = undefined;
+    const on = show && this.dialogOpen;
+    go.setAlpha?.(1);
+    go.setVisible?.(on);
+    if (on) {
+      this.moreIconTween = this.tweens.add({
+        targets: go, alpha: 0.35, duration: 560,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
+  }
+
   /** Strip *italic stage-direction* asides ("*tilts head*") from a reply — the
    *  portrait carries the mood now, so the text stays clean spoken dialogue. */
   private stripAsides(text: string): string {
@@ -1888,7 +2074,7 @@ export class GameScene extends Phaser.Scene {
     // game's own pixel cursor via CSS — visually seamless. Restored on close.
     if (this.locked) document.exitPointerLock();
     this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
-    this.registry.set('catoDialogText', this.fallbackSay(false)); // Cato's own greeting
+    this.setImmediateDialog(this.fallbackSay(false)); // Cato's own greeting
     for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
         | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
@@ -1906,6 +2092,21 @@ export class GameScene extends Phaser.Scene {
     // (SDK 1.0.28) the moment it goes visible above — no manual input to create.
     this.catoEmote = 'blink-eye'; // reset the resting expression
     this.setCatoEmote('blink-eye'); // idle until Cato replies
+    this.makeDialogTextClickThrough();
+  }
+
+  /** The SDK renders `text-area` widgets (Cato's dialogue text + name) as DOM
+   *  <div> overlays with `pointer-events:auto` (z-index 99980), so they SWALLOW
+   *  clicks landing ON the box — advancing the RPG text only worked when you
+   *  clicked OUTSIDE the box (where the click reaches the canvas). These divs are
+   *  display-only, so make them click-through; clicks then fall to the canvas and
+   *  `advanceDialog` fires. The chat-input-field (text-input, z-index 99990) keeps
+   *  its pointer events so the player can still click it to type. Idempotent; the
+   *  SDK's per-frame sync doesn't touch pointer-events, so it sticks. */
+  private makeDialogTextClickThrough(): void {
+    document.querySelectorAll<HTMLDivElement>('body > div').forEach((d) => {
+      if (d.style.zIndex === '99980') d.style.pointerEvents = 'none';
+    });
   }
 
   /** Hide the dialog (slide back down) + tear down the typing input. */
@@ -1913,6 +2114,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
     this.catoTalkTimer?.remove(); // stop the talk→blink settle timer
+    this.stopTyping(); // stop any in-progress typewriter
+    this.setMoreIcon(false); // hide the pagination "more" icon
     this.publishInventory(); // restore the hotbar after chatting
     // Drop the CSS game-cursor; clicking the canvas re-captures the pointer and
     // the CursorScene's custom cursor takes over again.
@@ -2129,10 +2332,10 @@ export class GameScene extends Phaser.Scene {
     const t = text.trim();
     if (!t || this.aiBusy || !this.dialogOpen) return;
     this.aiBusy = true;
-    this.registry.set('catoDialogText', 'Hmm…'); // Cato's own "thinking" beat, not a description
+    this.setImmediateDialog('Hmm…'); // Cato's own "thinking" beat, not a description
     try {
       if (!this.cato) {
-        this.registry.set('catoDialogText', "Cato tilts its head — it can't quite hear you right now.");
+        this.setImmediateDialog("Cato tilts its head — it can't quite hear you right now.");
         return;
       }
       const r = await this.cato.say(t, {
@@ -2145,18 +2348,18 @@ export class GameScene extends Phaser.Scene {
         // fall back to a varied warm filler (contextual if it's doing something).
         const parsed = this.parseEmoteMarker(r.say || '');
         const say = this.stripAsides(parsed.text) || this.fallbackSay(!!r.do?.length);
-        this.registry.set('catoDialogText', say);
+        this.showDialogText(say); // RPG typewriter + pagination
         // The [mood] marker becomes the resting expression (held until the next
         // reply); no marker → a plain blink.
         this.catoEmote = parsed.anim ?? 'blink-eye';
         this.catoTalkFor(say); // talk a beat, then settle onto catoEmote + hold
         if (r.do?.length) this.runCatoActions(r.do);
       } else if (r.reason === 'SIGN_IN_REQUIRED') {
-        this.registry.set('catoDialogText', "Cato peers past you — sign in and we can really talk.");
+        this.setImmediateDialog("Cato peers past you — sign in and we can really talk.");
       } else if (r.reason === 'INSUFFICIENT_CREDITS') {
-        this.registry.set('catoDialogText', 'Cato yawns — out of energy for now.');
+        this.setImmediateDialog('Cato yawns — out of energy for now.');
       } else {
-        this.registry.set('catoDialogText', "Cato's ears droop — it couldn't find the words just now.");
+        this.setImmediateDialog("Cato's ears droop — it couldn't find the words just now.");
       }
     } finally {
       this.aiBusy = false;

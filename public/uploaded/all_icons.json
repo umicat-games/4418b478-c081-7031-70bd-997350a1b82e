@@ -1,0 +1,18 @@
+{
+  "frames": {
+    "play-brown": {
+      "frame": { "x": 144, "y": 48, "w": 16, "h": 16 },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "sourceSize": { "w": 16, "h": 16 }
+    }
+  },
+  "meta": {
+    "app": "catopia-hand-authored",
+    "image": "all_icons.png",
+    "format": "RGBA8888",
+    "size": { "w": 256, "h": 320 },
+    "scale": "1"
+  }
+}
