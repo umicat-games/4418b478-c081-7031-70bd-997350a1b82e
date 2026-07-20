@@ -1856,6 +1856,15 @@ export class GameScene extends Phaser.Scene {
     return text.replace(/\*[^*]*\*/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
+  /** A varied warm filler for when the AI returned no spoken text (only a tool
+   *  call, or an aside-only reply). Contextual when Cato is off doing a task. */
+  private fallbackSay(doingTask: boolean): string {
+    const lines = doingTask
+      ? ['Okay — on it!', 'Right away!', 'Mmhm, doing it now!', 'Hehe, okay!']
+      : ['Hehe.', 'Mm?', 'Cato peeks up at you.', 'Cato wiggles happily.'];
+    return Phaser.Utils.Array.GetRandom(lines);
+  }
+
   /** The teemo animation for a set_emote action in this turn's `do` list, or null. */
   private emoteAnimFor(actions: Array<{ name: string; args: unknown }> | undefined): string | null {
     const e = actions?.find((a) => a.name === 'set_emote');
@@ -2134,7 +2143,9 @@ export class GameScene extends Phaser.Scene {
       if (r.ok) {
         // Cato's feelings show on the portrait now, so strip any *stage-direction*
         // asides the AI still writes ("*tilts head*") — display clean speech only.
-        const say = this.stripAsides(r.say || '') || 'Cato just blinks at you.';
+        // Haiku sometimes returns no spoken text (only a tool call / an aside), so
+        // fall back to a varied warm filler (contextual if it's doing something).
+        const say = this.stripAsides(r.say || '') || this.fallbackSay(!!r.do?.some((a) => a.name !== 'set_emote'));
         this.registry.set('catoDialogText', say);
         // The mood the AI set this turn becomes the resting expression (held until
         // the next reply); no set_emote → a plain blink.
