@@ -1194,7 +1194,7 @@
           "loop": true
         },
         {
-          "name": "surprised",
+          "name": "think",
           "from": 52,
           "to": 55,
           "loop": true
@@ -1206,49 +1206,49 @@
           "loop": true
         },
         {
-          "name": "cry",
-          "from": 78,
-          "to": 81,
-          "loop": true
-        },
-        {
           "name": "love",
+          "from": 78,
+          "to": 84,
+          "loop": true
+        },
+        {
+          "name": "love-heart",
           "from": 91,
-          "to": 94,
+          "to": 92,
           "loop": true
         },
         {
-          "name": "cool",
+          "name": "talk-love",
           "from": 104,
-          "to": 107,
+          "to": 105,
           "loop": true
         },
         {
-          "name": "wink",
+          "name": "blink-love",
           "from": 117,
-          "to": 120,
+          "to": 119,
           "loop": true
         },
         {
-          "name": "think",
+          "name": "sweeting-dance",
           "from": 130,
-          "to": 133,
+          "to": 134,
           "loop": true
         },
         {
-          "name": "sleep",
+          "name": "talk-sweeting",
           "from": 143,
-          "to": 146,
+          "to": 144,
           "loop": true
         },
         {
-          "name": "wave",
+          "name": "sweeting",
           "from": 156,
-          "to": 159,
+          "to": 157,
           "loop": true
         },
         {
-          "name": "dance",
+          "name": "dance-sweeting",
           "from": 169,
           "to": 172,
           "loop": true
@@ -1256,19 +1256,19 @@
         {
           "name": "thumbsup",
           "from": 182,
-          "to": 185,
+          "to": 184,
           "loop": true
         },
         {
-          "name": "thumbsdown",
+          "name": "playful",
           "from": 195,
-          "to": 198,
+          "to": 201,
           "loop": true
         },
         {
           "name": "clap",
           "from": 208,
-          "to": 211,
+          "to": 214,
           "loop": true
         },
         {
@@ -1278,15 +1278,15 @@
           "loop": true
         },
         {
-          "name": "anim-15",
+          "name": "dance",
           "from": 234,
-          "to": 237,
+          "to": 238,
           "loop": true
         },
         {
-          "name": "anim-16",
+          "name": "wink",
           "from": 247,
-          "to": 250,
+          "to": 253,
           "loop": true
         },
         {
@@ -1332,9 +1332,9 @@
           "loop": true
         },
         {
-          "name": "anim-24",
+          "name": "sad",
           "from": 351,
-          "to": 354,
+          "to": 352,
           "loop": true
         },
         {
@@ -1380,9 +1380,9 @@
           "loop": true
         },
         {
-          "name": "anim-32",
+          "name": "supprised",
           "from": 455,
-          "to": 458,
+          "to": 466,
           "loop": true
         },
         {
@@ -1473,7 +1473,14 @@
           "name": "hoe-swing",
           "from": 27,
           "to": 29,
-          "frames": [28, 29, 29, 29, 28, 27],
+          "frames": [
+            28,
+            29,
+            29,
+            29,
+            28,
+            27
+          ],
           "loop": false
         }
       ],
