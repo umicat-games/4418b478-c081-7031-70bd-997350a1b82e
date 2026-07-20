@@ -19,12 +19,16 @@ import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
 // for verifying entity world coordinates against the editor rulers.
 const CHILD_WANDER = true;
 const CHILD_SPEED = 50;               // world-px per second (leisurely stroll)
-// Cato strolls, then pauses (走走停停): alternate WALK phases and IDLE phases,
-// each a random duration in these ranges.
-const WALK_MIN_MS = 1200;
-const WALK_MAX_MS = 2800;
-const IDLE_MIN_MS = 900;
-const IDLE_MAX_MS = 2600;
+// Cato is a calm companion: he mostly RESTS, and every so often ambles over to a
+// nearby point of interest (a crop or a prop that's in view) and lingers there —
+// "rest in front of something, occasionally wander" rather than constant random
+// walking. These tune how long he lingers and how often he decides to move.
+const REST_MIN_MS = 3000;     // min time Cato lingers before considering a move
+const REST_MAX_MS = 7000;     // max linger time
+const WANDER_MOVE_CHANCE = 0.65; // after a rest, chance he strolls to a real POI (else lingers)
+const WANDER_STROLL_CHANCE = 0.3; // when nothing's in reach, chance of an aimless amble
+const WANDER_ARRIVE = 16;     // stop ~a tile short of the POI ("in front of it")
+const WANDER_MIN_TRIP = 24;   // a POI must be at least this far to be worth walking to
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
 // Cato roams on his own (CHILD_WANDER); the PLAYER pans the camera with WASD /
@@ -63,10 +67,9 @@ const CATO_TILL_STEP_MS = 1000; // pause on each cell = one full attack swing
 const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil + dirt
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
-// Leash: Cato wanders near the CAMERA CENTRE instead of roaming the whole map.
-// Past LEASH_RADIUS (world px) he heads back until within LEASH_RETURN.
-const CATO_LEASH_RADIUS = 88;
-const CATO_LEASH_RETURN = 40;
+// Leash: Cato stays near the CAMERA CENTRE (in view) instead of roaming the whole
+// map. The radius ADAPTS to the visible area (`wanderLeashRadius`) so he keeps in
+// frame at any zoom; if he strays past it he heads back until within half of it.
 // DEV: press T to trigger a test 3×3 till near Cato WITHOUT the AI (no sign-in /
 // no credits) — for iterating on the tilling visuals. Set false before release.
 const CATO_DEBUG_TILL = true;
@@ -186,6 +189,7 @@ export class GameScene extends Phaser.Scene {
   private wanderTimer = 0;
   private wanderInterval = 2000;
   private wanderState: 'walk' | 'idle' = 'idle';
+  private wanderTarget: { x: number; y: number } | null = null; // the POI he's ambling to
   private faceDir: FaceDir = 'down';
 
   // WASD / arrow keys — pan the camera (Cato roams on his own).
@@ -1678,10 +1682,23 @@ export class GameScene extends Phaser.Scene {
     const dx = tx - this.child.x;
     const dy = ty - this.child.y;
     const DZ = 1.5; // per-axis deadzone so we don't jitter when nearly aligned
-    if (Math.abs(dx) > DZ && Math.abs(dx) >= Math.abs(dy)) {
+    // AXIS HYSTERESIS: keep finishing the axis we're ALREADY walking before we
+    // switch to the other one. Without this, when dx≈dy the "dominant axis" flips
+    // every frame as movement shaves one down past the other → a fast left/right
+    // (or up/down) WOBBLE. Committing to the current axis until it's aligned makes
+    // the path a clean L-shape and removes the shimmer.
+    const onX = this.faceDir === 'left' || this.faceDir === 'right';
+    const onY = this.faceDir === 'up' || this.faceDir === 'down';
+    let axis: 'x' | 'y' | null = null;
+    if (onX && Math.abs(dx) > DZ) axis = 'x';
+    else if (onY && Math.abs(dy) > DZ) axis = 'y';
+    else if (Math.abs(dx) > DZ && Math.abs(dx) >= Math.abs(dy)) axis = 'x';
+    else if (Math.abs(dy) > DZ) axis = 'y';
+    else if (Math.abs(dx) > DZ) axis = 'x';
+    if (axis === 'x') {
       body.setVelocity(Math.sign(dx) * speed, 0);
       this.faceDir = dx < 0 ? 'left' : 'right';
-    } else if (Math.abs(dy) > DZ) {
+    } else if (axis === 'y') {
       body.setVelocity(0, Math.sign(dy) * speed);
       this.faceDir = dy < 0 ? 'up' : 'down';
     } else {
@@ -2478,47 +2495,84 @@ export class GameScene extends Phaser.Scene {
 
   // ── Wandering AI helpers ──────────────────────────────────────────────
 
-  // 4-directional headings only — the character sheet has walk anims for
-  // down/up/left/right but NO diagonal, so Cato moves along one axis at a time.
-  private static readonly WALK_DIRS: ReadonlyArray<{ dir: FaceDir; vx: number; vy: number }> = [
-    { dir: 'down',  vx: 0,  vy: 1 },
-    { dir: 'up',    vx: 0,  vy: -1 },
-    { dir: 'left',  vx: -1, vy: 0 },
-    { dir: 'right', vx: 1,  vy: 0 },
-  ];
-
-  /** Begin a WALK phase: pick a random CARDINAL heading, face + play the anim.
-   *  Prefers a direction that isn't currently blocked so a boundary bump turns
-   *  Cato a fresh way instead of re-walking into the same wall. */
-  private startWanderWalk(): void {
-    if (!this.child?.body) return;
-    const body = this.child.body as Phaser.Physics.Arcade.Body;
-    const free = GameScene.WALK_DIRS.filter(
-      (d) =>
-        !((d.dir === 'left' && body.blocked.left) ||
-          (d.dir === 'right' && body.blocked.right) ||
-          (d.dir === 'up' && body.blocked.up) ||
-          (d.dir === 'down' && body.blocked.down)),
-    );
-    const choices = free.length > 0 ? free : GameScene.WALK_DIRS;
-    const pick = choices[Phaser.Math.Between(0, choices.length - 1)]!;
-    body.setVelocity(pick.vx * CHILD_SPEED, pick.vy * CHILD_SPEED);
-    this.faceDir = pick.dir;
-    this.child.play(`walk-${pick.dir}`, true);
-    this.wanderState = 'walk';
-    this.wanderInterval = Phaser.Math.Between(WALK_MIN_MS, WALK_MAX_MS);
-    this.wanderTimer = 0;
-  }
-
-  /** Begin an IDLE phase: stop and play the idle anim facing the last way. */
+  /** Begin a REST phase: stop and idle, facing the last way, for a good while.
+   *  (Cato lingers far more than he strolls — this is his default state.) */
   private startWanderIdle(): void {
     if (!this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
     body.setVelocity(0, 0);
     this.child.play(`idle-${this.faceDir}`, true);
     this.wanderState = 'idle';
-    this.wanderInterval = Phaser.Math.Between(IDLE_MIN_MS, IDLE_MAX_MS);
+    this.wanderTarget = null;
+    this.wanderInterval = Phaser.Math.Between(REST_MIN_MS, REST_MAX_MS);
     this.wanderTimer = 0;
+  }
+
+  /** Radius (world px) Cato is allowed to stray from the camera centre — sized to
+   *  the visible area so he keeps in frame at any zoom. */
+  private wanderLeashRadius(): number {
+    const v = this.cameras.main.worldView;
+    return Math.max(64, Math.min(v.width, v.height) / 2 - 28);
+  }
+
+  /** Turn Cato to face a point (used when he arrives at a POI so he "looks at" it). */
+  private faceTargetPoint(x: number, y: number): void {
+    if (!this.child) return;
+    const dx = x - this.child.x;
+    const dy = y - this.child.y;
+    if (Math.abs(dx) >= Math.abs(dy)) this.faceDir = dx < 0 ? 'left' : 'right';
+    else this.faceDir = dy < 0 ? 'up' : 'down';
+  }
+
+  /** A nearby thing worth ambling over to inspect — a planted CROP or a world PROP
+   *  (decoration sprite) that's within reach (inside the leash) and far enough to
+   *  be worth the trip. Returns one at random, or null if nothing qualifies. */
+  private pickWanderTarget(leashR: number): { x: number; y: number } | null {
+    if (!this.child) return null;
+    const cam = this.cameras.main;
+    const ccx = cam.worldView.centerX;
+    const ccy = cam.worldView.centerY;
+    const cx = this.child.x;
+    const cy = this.child.y;
+    const ok = (x: number, y: number): boolean =>
+      Math.hypot(x - ccx, y - ccy) < leashR - 8 &&      // reachable without tripping the leash
+      Math.hypot(x - cx, y - cy) > WANDER_MIN_TRIP;      // far enough to be worth moving
+    const cands: { x: number; y: number }[] = [];
+    for (const c of this.crops.values()) {
+      const s = c.sprite;
+      if (s && ok(s.x, s.y)) cands.push({ x: s.x, y: s.y });
+    }
+    for (const s of this.ySortSprites) {
+      if (s !== this.child && s.active && ok(s.x, s.y)) cands.push({ x: s.x, y: s.y });
+    }
+    return cands.length ? Phaser.Utils.Array.GetRandom(cands) : null;
+  }
+
+  /** A random spot near the camera centre for an aimless amble when nothing
+   *  interesting is in reach (kept inside the leash so he stays in view). */
+  private randomStrollPoint(leashR: number): { x: number; y: number } {
+    const v = this.cameras.main.worldView;
+    const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    const r = Phaser.Math.Between(Math.round(WANDER_MIN_TRIP + 8), Math.round(leashR - 12));
+    return { x: v.centerX + Math.cos(ang) * r, y: v.centerY + Math.sin(ang) * r };
+  }
+
+  /** A rest just ended: mostly he ambles to a nearby point of interest and lingers
+   *  there; sometimes (nothing in reach, or by chance) he just rests again. */
+  private beginNextWanderMove(): void {
+    const leashR = this.wanderLeashRadius();
+    const poi = this.pickWanderTarget(leashR);
+    if (poi && Phaser.Math.FloatBetween(0, 1) < WANDER_MOVE_CHANCE) {
+      this.wanderTarget = poi;
+      this.wanderState = 'walk';
+      return;
+    }
+    if (!poi && Phaser.Math.FloatBetween(0, 1) < WANDER_STROLL_CHANCE) {
+      this.wanderTarget = this.randomStrollPoint(leashR);
+      this.wanderState = 'walk';
+      return;
+    }
+    this.startWanderIdle(); // linger a while longer
   }
 
   /**
@@ -2606,40 +2660,42 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Leash: Cato hangs around the CAMERA CENTRE (like a companion staying in
-    // view) rather than roaming the whole island. If he strays past the leash
-    // radius (or is on his way back), walk him toward the centre; once he's back
-    // inside the inner radius, resume the local walk/idle wander. This also brings
-    // him home after a task (he ends wherever the plot was).
+    // Leash: Cato stays near the CAMERA CENTRE (in view). If he strays past the
+    // (view-sized) radius he heads back until within half of it, THEN rests. This
+    // also brings him home after a task (he ends wherever the plot was).
     const cam = this.cameras.main;
     const ccx = cam.worldView.centerX;
     const ccy = cam.worldView.centerY;
-    const dx = ccx - this.child.x;
-    const dy = ccy - this.child.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > CATO_LEASH_RADIUS || (this.catoReturning && dist > CATO_LEASH_RETURN)) {
+    const leashR = this.wanderLeashRadius();
+    const dist = Math.hypot(ccx - this.child.x, ccy - this.child.y);
+    if (dist > leashR || (this.catoReturning && dist > leashR * 0.5)) {
       this.catoReturning = true;
       this.walkCardinalToward(ccx, ccy, CHILD_SPEED); // cardinal only (no diagonal anim)
       this.wanderState = 'walk';
+      this.wanderTarget = null;
       this.wanderTimer = 0;
       return;
     }
-    this.catoReturning = false;
+    if (this.catoReturning) { this.catoReturning = false; this.startWanderIdle(); return; }
 
-    // Bumped into a boundary mid-stroll → turn and head off a fresh way.
-    if (
-      this.wanderState === 'walk' &&
-      (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down)
-    ) {
-      this.startWanderWalk();
+    // Ambling to a point of interest → head there, then rest FACING it ("stops in
+    // front of a crop and has a look"). A boundary bump also just ends the trip.
+    if (this.wanderState === 'walk' && this.wanderTarget) {
+      const tx = this.wanderTarget.x;
+      const ty = this.wanderTarget.y;
+      const d = Math.hypot(tx - this.child.x, ty - this.child.y);
+      const blocked = body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down;
+      if (d <= WANDER_ARRIVE || blocked) {
+        this.faceTargetPoint(tx, ty);
+        this.startWanderIdle();
+        return;
+      }
+      this.walkCardinalToward(tx, ty, CHILD_SPEED);
       return;
     }
 
-    // Alternate WALK ⇄ IDLE so Cato wanders, then pauses (走走停停).
+    // Resting: linger, then occasionally amble off to inspect a nearby thing.
     this.wanderTimer += delta;
-    if (this.wanderTimer >= this.wanderInterval) {
-      if (this.wanderState === 'walk') this.startWanderIdle();
-      else this.startWanderWalk();
-    }
+    if (this.wanderTimer >= this.wanderInterval) this.beginNextWanderMove();
   }
 }
