@@ -74,6 +74,13 @@ const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 // no credits) — for iterating on the tilling visuals. Set false before release.
 const CATO_DEBUG_TILL = true;
 
+// Un-till: hoeing EMPTY tilled soil once "loosens" it (furrow-lines mark); a
+// SECOND hoe within this window digs it back up to grass, otherwise it settles
+// back to plain dirt. Frame 47 = tile (3,4) in tilled_dirt_wide_v2 (the furrow
+// mark, transparent elsewhere — overlaid straight from the 'tilled-dirt' sheet).
+const LOOSEN_WINDOW_MS = 3000;
+const SOIL_LOOSEN_FRAME = 47;
+
 // Custom pointer-lock cursor: the texture key + hotspot live in CursorScene
 // (which renders it above the HUD); GameScene only drives its position.
 
@@ -131,6 +138,11 @@ const WET_DURATION_MS = 9000;
 // Watered soil looks darker/damp — the dirt tileset has no wet variant, so we
 // multiply-tint the soil sprite (cleared when it dries at the next stage-up).
 const WET_SOIL_TINT = 0xb0946a;
+// Grass on tilled-soil BORDERS: each exposed edge of a soil cell (side facing
+// un-tilled ground) grows a grass tuft with this probability — scattered, not
+// every edge. Deterministic per cell+edge (see `cellHash`) so it's stable across
+// saves/reloads and never flickers.
+const GRASS_EDGE_CHANCE = 0.55;
 
 /** A seed-bag inventory item for a crop (stackable, `plants` set). */
 function makeSeed(crop: CropName, count: number): ItemStack {
@@ -235,6 +247,8 @@ export class GameScene extends Phaser.Scene {
   private hoeSwing?: Phaser.GameObjects.Sprite; // the god-hand hoe swing (till / harvest)
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
+  private tilledGrass = new Map<string, Phaser.GameObjects.Image[]>(); // cell → grass-tuft edge overlays
+  private loosenedCells = new Map<string, { overlay: Phaser.GameObjects.Image; timer: Phaser.Time.TimerEvent }>(); // cell → transient "hoed once" state
   private hoverCell: { cx: number; cy: number } | null = null; // actionable cell under cursor (till or plant)
 
   // Planted crops: cell "cx,cy" → its growth state + sprite. Grows a stage every
@@ -836,6 +850,11 @@ export class GameScene extends Phaser.Scene {
       if (this.activeTool === 'hoe' && !this.tilledCells.has(key)) {
         this.tillCell(tile.x, tile.y); return;
       }
+      // Hoe on EMPTY tilled soil → loosen it (furrows); a 2nd hoe within the
+      // window digs it back up to grass (see hoeEmptySoil).
+      if (this.activeTool === 'hoe' && this.tilledCells.has(key) && !this.crops.has(key)) {
+        this.hoeEmptySoil(tile.x, tile.y); return;
+      }
       if (this.activeSeed && this.tilledCells.has(key) && !this.crops.has(key)) {
         this.playerPlant(tile.x, tile.y); return;
       }
@@ -1167,10 +1186,11 @@ export class GameScene extends Phaser.Scene {
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       if (tilling) {
-        // Hoe: bright over tillable grass OR a MATURE crop (the hoe harvests it).
+        // Hoe: bright over tillable grass, EMPTY tilled soil (loosen/un-till), OR a
+        // MATURE crop (harvest). Dim only over a still-growing crop.
         const crop = this.crops.get(key);
         const harvestable = !!crop && crop.stage >= CROPS[crop.name].stages - 1;
-        valid = !this.tilledCells.has(key) || harvestable;
+        valid = !this.tilledCells.has(key) || !crop || harvestable;
       }
       else if (planting) valid = this.tilledCells.has(key) && !this.crops.has(key);
       // Water: any tilled soil (crop or not, wet or not) — it just wets the ground.
@@ -1221,6 +1241,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(footY); // y-sorted like Cato so he passes in front/behind
     this.crops.set(key, { name, stage: 0, timer: 0, sprite });
+    this.settleLoosened(cx, cy); // planting cancels any pending "hoed once" furrows
     this.dirtBurst(footX, footY); // little poof as the seed goes in
     this.scheduleSave();
     return true;
@@ -1457,6 +1478,73 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Hoe an EMPTY tilled cell. The hoe swings; at the strike we decide by the
+   *  cell's state: first hit "loosens" it (furrow-lines mark + a short revert
+   *  timer); a second hit while still loosened DIGS IT UP back to grass. If the
+   *  timer lapses first, `settleLoosened` clears the furrows and it stays dirt. */
+  private hoeEmptySoil(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    const centerX = w.x + TILE / 2;
+    const centerY = w.y + TILE / 2;
+    const key = `${cx},${cy}`;
+    this.hoeSwingAt(centerX, centerY, () => {
+      if (this.loosenedCells.has(key)) this.untillCell(cx, cy); // 2nd strike → grass
+      else this.loosenCell(cx, cy);                             // 1st strike → furrows + timer
+    });
+  }
+
+  /** Mark a tilled cell "loosened": show the furrow-lines overlay + start the
+   *  revert timer. Hoe it again before the timer fires to dig it back to grass. */
+  private loosenCell(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const key = `${cx},${cy}`;
+    if (!this.tilledCells.has(key) || this.crops.has(key)) return;
+    const prev = this.loosenedCells.get(key);
+    if (prev) { prev.overlay.destroy(); prev.timer.remove(); }
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    // The furrow mark is baked into the LOWER part of tile (3,4) (rows ~10-11 of 16),
+    // so nudge the overlay UP ~3px to sit it in the cell's visual centre.
+    const overlay = this.add
+      .image(w.x + TILE / 2, w.y + TILE / 2 - 3, 'tilled-dirt', SOIL_LOOSEN_FRAME)
+      .setDepth(1.55);
+    const timer = this.time.delayedCall(LOOSEN_WINDOW_MS, () => this.settleLoosened(cx, cy));
+    this.loosenedCells.set(key, { overlay, timer });
+  }
+
+  /** The loosen window lapsed → drop the furrows; the cell stays plain tilled dirt. */
+  private settleLoosened(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const l = this.loosenedCells.get(key);
+    if (!l) return;
+    l.overlay.destroy();
+    this.loosenedCells.delete(key);
+  }
+
+  /** Dig a tilled cell back UP to grass: remove its soil + border grass + wetness,
+   *  and re-autotile the 4 neighbours (their edges/masks change). */
+  private untillCell(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const l = this.loosenedCells.get(key);
+    if (l) { l.overlay.destroy(); l.timer.remove(); this.loosenedCells.delete(key); }
+    if (!this.tilledCells.has(key)) return;
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    this.tilledCells.delete(key);
+    this.tilledSoil.get(key)?.destroy();
+    this.tilledSoil.delete(key);
+    const grass = this.tilledGrass.get(key);
+    if (grass) { for (const g of grass) g.destroy(); this.tilledGrass.delete(key); }
+    this.soilWet.delete(key);
+    if (w) this.dirtBurst(w.x + TILE / 2, w.y + TILE / 2); // clods fly as it's dug up
+    this.refreshSoil(cx, cy - 1);
+    this.refreshSoil(cx + 1, cy);
+    this.refreshSoil(cx, cy + 1);
+    this.refreshSoil(cx - 1, cy);
+    this.scheduleSave();
+  }
+
   /** Spawn the god-hand hoe swing at a cell centre (raise → chop). `onStrike`
    *  fires ONCE when the hoe lands (ANIMATION_COMPLETE, with a delayedCall
    *  safety). Shared by tilling and harvesting. */
@@ -1492,7 +1580,8 @@ export class GameScene extends Phaser.Scene {
     return m;
   }
 
-  /** Create-or-update the soil sprite at a tilled cell with its autotile frame. */
+  /** Create-or-update the soil sprite at a tilled cell with its autotile frame,
+   *  then refresh its border grass tufts. */
   private refreshSoil(cx: number, cy: number): void {
     if (!this.islandLayer) return;
     const key = `${cx},${cy}`;
@@ -1501,14 +1590,55 @@ export class GameScene extends Phaser.Scene {
     const existing = this.tilledSoil.get(key);
     if (existing) {
       existing.setFrame(frame);
-      return;
+    } else {
+      const w = this.islandLayer.tileToWorldXY(cx, cy);
+      if (!w) return;
+      const soil = this.add
+        .image(w.x + TILE / 2, w.y + TILE / 2, 'tilled-soil', frame)
+        .setDepth(1.5);
+      this.tilledSoil.set(key, soil);
     }
+    this.refreshSoilGrass(cx, cy);
+  }
+
+  // Grass-tuft overlay frames by the edge they decorate (indices into the
+  // `soil-grass` sheet; some vertical variants reuse the other side FLIPPED).
+  private static readonly SOIL_EDGES: ReadonlyArray<{
+    dx: number; dy: number; variants: ReadonlyArray<{ f: number; flip: boolean }>;
+  }> = [
+    { dx: 0,  dy: -1, variants: [{ f: 0, flip: false }, { f: 1, flip: false }, { f: 2, flip: false }] }, // top
+    { dx: 0,  dy: 1,  variants: [{ f: 3, flip: false }, { f: 4, flip: false }] },              // bottom
+    { dx: -1, dy: 0,  variants: [{ f: 5, flip: false }, { f: 6, flip: false }] },              // left (side tiles)
+    { dx: 1,  dy: 0,  variants: [{ f: 5, flip: true }, { f: 6, flip: true }] },                // right (side tiles, flipped)
+  ];
+
+  /** A stable [0,1) value from a cell + a salt — deterministic, so the border grass
+   *  is the same every load (no save needed, no per-frame flicker). */
+  private cellHash(cx: number, cy: number, salt: number): number {
+    let h = Math.imul(cx | 0, 0x27d4eb2d) ^ Math.imul(cy | 0, 0x165667b1) ^ Math.imul(salt | 0, 0x9e3779b1);
+    h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12;
+    return ((h >>> 0) % 100000) / 100000;
+  }
+
+  /** Rebuild a tilled cell's border grass: a scattered tuft on each EXPOSED edge
+   *  (side facing un-tilled ground), chosen deterministically so it's stable. */
+  private refreshSoilGrass(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const old = this.tilledGrass.get(key);
+    if (old) { for (const g of old) g.destroy(); this.tilledGrass.delete(key); }
+    if (!this.islandLayer || !this.tilledCells.has(key)) return;
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (!w) return;
-    const soil = this.add
-      .image(w.x + TILE / 2, w.y + TILE / 2, 'tilled-soil', frame)
-      .setDepth(1.5);
-    this.tilledSoil.set(key, soil);
+    const sprites: Phaser.GameObjects.Image[] = [];
+    GameScene.SOIL_EDGES.forEach((e, ei) => {
+      if (this.tilledCells.has(`${cx + e.dx},${cy + e.dy}`)) return; // interior edge → no border grass
+      if (this.cellHash(cx, cy, ei + 1) >= GRASS_EDGE_CHANCE) return; // this edge rolled "bare"
+      const v = e.variants[Math.floor(this.cellHash(cx, cy, (ei + 1) * 97) * e.variants.length)] ?? e.variants[0]!;
+      const g = this.add.image(w.x + TILE / 2, w.y + TILE / 2, 'soil-grass', v.f).setDepth(1.6);
+      if (v.flip) g.setFlipX(true);
+      sprites.push(g);
+    });
+    if (sprites.length) this.tilledGrass.set(key, sprites);
   }
 
   // ── Cato behaviours (executing the AI's `do` actions) ─────────────────
@@ -2318,6 +2448,10 @@ export class GameScene extends Phaser.Scene {
       // Farm: tear down the current soil/crops, then rebuild from the save.
       for (const soil of this.tilledSoil.values()) soil.destroy();
       this.tilledSoil.clear();
+      for (const arr of this.tilledGrass.values()) for (const g of arr) g.destroy();
+      this.tilledGrass.clear();
+      for (const l of this.loosenedCells.values()) { l.overlay.destroy(); l.timer.remove(); }
+      this.loosenedCells.clear();
       for (const c of this.crops.values()) c.sprite.destroy();
       this.crops.clear();
       this.tilledCells.clear();

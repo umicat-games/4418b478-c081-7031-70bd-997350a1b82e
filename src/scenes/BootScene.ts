@@ -43,6 +43,16 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+    // Grass-edge dirt tileset (Sprout Lands Tilled_Dirt_v2), imported via the Asset
+    // Manager. We don't paint it directly — at boot we CUT its green grass tufts into
+    // the `soil-grass` overlay sheet (see create/buildSoilGrassSheet), which the farm
+    // lays over tilled-soil borders. Kept as the source so the whole flow is
+    // reproducible in-platform (upload → load → process in game code), not an offline
+    // script.
+    this.load.spritesheet('tilled-dirt', 'uploaded/tilled_dirt_wide_v2.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
     // Tool ITEM icons atlas (Sprout Lands "tools and meterials", region-tagged in
     // the Asset Manager's Region Editor — `hoe` / `axe` / `watering-can`). The
     // held-tool icon in the bracket cursor uses the `hoe` region.
@@ -102,9 +112,49 @@ export class BootScene extends Phaser.Scene {
         repeat: 0,
       });
     }
+    buildSoilGrassSheet(this);
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });
   }
+}
+
+/**
+ * Build the `soil-grass` overlay sheet AT RUNTIME from the imported Tilled_Dirt_v2
+ * tileset: copy its 7 grass-edge tiles onto a canvas texture, then chroma-key so
+ * ONLY the green grass survives (dirt + background → transparent). This is the
+ * in-game equivalent of the offline cut we prototyped — the tileset lives in the
+ * Asset Manager and the game processes it itself, so a real user's path works.
+ *
+ * Frames (16×16): [top×3, bottom×2, side×2] — order MUST match GameScene's
+ * `SOIL_EDGES` frame indices. Source-tile coords are in the 176×112 sheet.
+ */
+function buildSoilGrassSheet(scene: Phaser.Scene): void {
+  const KEY = 'soil-grass';
+  if (scene.textures.exists(KEY)) return;
+  const src = scene.textures.get('tilled-dirt').getSourceImage() as CanvasImageSource;
+  // [x, y] top-left of each grass tile in Tilled_Dirt_Wide_v2 (see CLAUDE.md farming).
+  const TILES: ReadonlyArray<[number, number]> = [
+    [80, 80], [96, 80], [112, 80], // 0,1,2 grass on TOP edge     (cols 5,6,7 row 5)
+    [80, 96], [96, 96],            // 3,4   grass on BOTTOM edge   (cols 5,6 row 6)
+    [128, 80], [128, 96],          // 5,6   grass on a SIDE edge   (col 8 rows 5,6) — flipped for the other side
+  ];
+  const T = 16;
+  const W = TILES.length * T;
+  const tex = scene.textures.createCanvas(KEY, W, T);
+  if (!tex) return;
+  const ctx = tex.getContext();
+  TILES.forEach(([sx, sy], i) => ctx.drawImage(src, sx, sy, T, T, i * T, 0, T, T));
+  // Chroma-key: keep only grass-green pixels (dirt is tan → r>g; bg is transparent).
+  const img = ctx.getImageData(0, 0, W, T);
+  const d = img.data;
+  for (let p = 0; p < d.length; p += 4) {
+    const r = d[p], g = d[p + 1], b = d[p + 2], a = d[p + 3];
+    if (!(a > 10 && g >= r - 6 && g > b + 8 && g > 90)) d[p + 3] = 0;
+  }
+  ctx.putImageData(img, 0, 0);
+  // Register the 7 sub-frames so `add.image(x, y, 'soil-grass', i)` works.
+  for (let i = 0; i < TILES.length; i++) tex.add(i, 0, i * T, 0, T, T);
+  tex.refresh();
 }
 
 function drawLoadingBar(scene: Phaser.Scene): void {
