@@ -27,7 +27,7 @@ export interface HotbarSlotView {
   /** Atlas key for the tool icon (e.g. 'tools_and_meterials'), omitted = empty. */
   iconKey?: string;
   /** Frame within iconKey (e.g. 'hoe'). */
-  iconFrame?: string;
+  iconFrame?: string | number;
   /** Stack size — a count badge shows when > 1. */
   count?: number;
 }

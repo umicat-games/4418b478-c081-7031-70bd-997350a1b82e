@@ -16,7 +16,7 @@ const PANEL_SCALE = 2; // 9-slice corner scale
 
 interface CellView {
   iconKey?: string;
-  iconFrame?: string;
+  iconFrame?: string | number;
   count?: number;
 }
 

@@ -28,6 +28,14 @@ export class BootScene extends Phaser.Scene {
     // till here" highlight that snaps to the hovered grass tile when the hoe is
     // the active tool.
     this.load.image('tile-select', 'uploaded/tile_select_cursor.png');
+    // Rounded-square UI button sheet (96×192, 8 buttons) — region-tagged
+    // `white-button` in the Asset Manager (26×28 @ 11,11, nine-patch L6/R6/T7/B7).
+    // Used as the pixel background frame behind the build-palette orientation cells
+    // (registered as a frame in create() so a nine-slice can reference it).
+    this.load.image('square-buttons', 'uploaded/square_buttons_26x26.png');
+    // UI icon sheet (16×16 grid) — the confirm dialog uses frame 44 (✓ check) and
+    // 46 (⊘ cancel), dark-brown variants that read on the cream button.
+    this.load.spritesheet('ui-icons', 'uploaded/all_icons.png', { frameWidth: 16, frameHeight: 16 });
     // Tools spritesheet (16×16) — the hoe swing (`hoe-swing` anim, frames
     // 29→28→27, registered from the manifest) + the hotbar icons. Not a scene
     // entity, so it's loaded here rather than on-demand by the scene loader.
@@ -90,6 +98,29 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 48,
       frameHeight: 48,
     });
+
+    // ── House-building tilesets (Sprout Lands premium "Building parts", via the
+    //    Asset Manager). The player places these from the backpack (see GameScene
+    //    building system). All 16px cells except the door (16×32).
+    // Walls: 5×3 grid. The cols 0-2 block is a 3×3 wall autotile (corners+edges+
+    // window centre); extra wide pieces in cols 3-4. Frame = row*5 + col.
+    this.load.spritesheet('house-walls', 'uploaded/wooden_house_walls_tilset.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    // Furniture: 9×6 grid of 16×16 pieces (paintings, plants, lamps, chairs,
+    // tables, clocks, rugs; beds span 2 tall). Frame = row*9 + col.
+    this.load.spritesheet('furniture', 'uploaded/basic_furniture.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    // Door: 16×16 frames (288×32 = 18 cols × 2 rows). The DOOR + its swing anim is
+    // the TOP row (frames 0-5: 0=open … 5=closed); the bottom row is separate wall
+    // blocks (NOT part of the door — slicing it as 16×32 stacked a block below it).
+    this.load.spritesheet('door', 'uploaded/door_animation_sprites.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
   }
 
   create(): void {
@@ -112,6 +143,29 @@ export class BootScene extends Phaser.Scene {
         repeat: 0,
       });
     }
+    // Door open/close swing (16×32 door sheet). The `door-open` sequence runs the
+    // closed→open frames; `door-close` is the reverse. Frame list is a first pass —
+    // refine after seeing it in-game (see GameScene DOOR_* constants).
+    if (!this.anims.exists('door-open')) {
+      this.anims.create({
+        key: 'door-open',
+        frames: this.anims.generateFrameNumbers('door', { frames: [5, 4, 3, 2, 1, 0] }),
+        frameRate: 14,
+        repeat: 0,
+      });
+    }
+    if (!this.anims.exists('door-close')) {
+      this.anims.create({
+        key: 'door-close',
+        frames: this.anims.generateFrameNumbers('door', { frames: [0, 1, 2, 3, 4, 5] }),
+        frameRate: 14,
+        repeat: 0,
+      });
+    }
+    // Register the `white-button` region of the square-buttons sheet as a frame so
+    // the build palette can nine-slice it (26×28 @ 11,11, per the Asset Manager tag).
+    const btnTex = this.textures.get('square-buttons');
+    if (btnTex && !btnTex.has('white-button')) btnTex.add('white-button', 0, 11, 11, 26, 28);
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });

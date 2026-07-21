@@ -10,6 +10,7 @@ import {
   type Npc,
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
+import { t, initLang } from '../i18n';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
@@ -19,6 +20,11 @@ import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
 // for verifying entity world coordinates against the editor rulers.
 const CHILD_WANDER = true;
 const CHILD_SPEED = 50;               // world-px per second (leisurely stroll)
+// PLAYER CONTROL: when true, WASD / arrow keys drive Cato directly (the camera
+// follows him) instead of panning the camera + autonomous wander. Flip false to
+// restore the AI companion (roam + leash). Cato's chat-commanded tasks still run.
+const PLAYER_CONTROL = true;
+const PLAYER_SPEED = 80;              // world-px/s when the player drives Cato
 // Cato is a calm companion: he mostly RESTS, and every so often ambles over to a
 // nearby point of interest (a crop or a prop that's in view) and lingers there —
 // "rest in front of something, occasionally wander" rather than constant random
@@ -108,12 +114,62 @@ interface ItemStack {
   id: string;
   label?: string;
   iconKey?: string;
-  iconFrame?: string;
+  iconFrame?: string | number;
   count: number;
   stackable: boolean;
   toolId?: ToolId;
   plants?: CropName; // a seed bag: selecting it lets you plant this crop on soil
+  place?: PlaceKind; // a building material: selecting it enters placement mode
+  variant?: string; // furniture piece id (for place==='furniture')
 }
+
+// --- House building (Sprout Lands premium "Building parts") ---
+// The player places wooden walls, a door, and furniture from the backpack to
+// build Cato a house. Walls block Cato (static bodies); furniture is decorative;
+// the door opens (animation) when Cato is near.
+// Placement KINDS. Only WALL needs an orientation (the 3×3 build palette); floor /
+// window / door / furniture are single-orientation items (each its own backpack item).
+type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture';
+// Wall orientation → frame in the `house-walls` sheet (5×3, frame = row*5 + col).
+// The cols 0-2 block is the 3×3 nine-slice; walls are the 8 EDGES + CORNERS (the
+// centre frame 6 is the brick FLOOR, a separate item — not a wall orientation).
+type WallOrient = 'top' | 'bottom' | 'left' | 'right' | 'tl' | 'tr' | 'bl' | 'br' | 'window';
+const WALL_FRAME: Record<WallOrient, number> = {
+  tl: 0,  top: 1,    tr: 2,
+  left: 5, right: 7,
+  bl: 10, bottom: 11, br: 12,
+  window: 6, // legacy: old saves stored the brick FLOOR as orient 'window'; migrated
+};
+// The 8 wall orientations, laid out as the 3×3 build palette (row-major; centre is
+// empty — the brick floor is its own item). Used by the palette + the R shortcut.
+const WALL_PALETTE: Array<WallOrient | null> = [
+  'tl', 'top', 'tr',
+  'left', null, 'right',
+  'bl', 'bottom', 'br',
+];
+const WALL_ORIENTS: WallOrient[] = WALL_PALETTE.filter((o): o is WallOrient => o !== null);
+const FLOOR_FRAME = 6;  // brick floor (a ground-layer, non-solid item)
+const WINDOW_FRAME = 13; // a wall segment with a window (solid; future item)
+// Door: 16×16 top-row frames (0=open … 5=closed); the swing is the `door-open` anim.
+const DOOR_CLOSED_FRAME = 5;
+// Furniture pieces the `furniture` material cycles through (R key). Single 16×16
+// tiles from the `furniture` sheet (frame = row*9 + col). Frames refined visually.
+interface FurnPiece { id: string; label: string; frame: number }
+const FURNITURE: FurnPiece[] = [
+  { id: 'plant',   label: 'Potted plant', frame: 3 },
+  { id: 'flower',  label: 'Flowers',      frame: 5 },
+  { id: 'lamp',    label: 'Lamp',         frame: 13 },
+  { id: 'dresser', label: 'Dresser',      frame: 21 },
+  { id: 'chair',   label: 'Chair',        frame: 22 },
+  { id: 'stool',   label: 'Stool',        frame: 24 },
+  { id: 'clock',   label: 'Clock',        frame: 33 },
+  { id: 'rug',     label: 'Rug',          frame: 46 },
+];
+const FURN_BY_ID = new Map(FURNITURE.map((f) => [f.id, f]));
+// A non-solid (floor) wall tile renders as a GROUND layer — a low fixed depth so it
+// sits above the grass tilemap but always BEHIND Cato / walls / furniture (he walks
+// ON it). Solid walls + furniture y-sort by footY as usual.
+const FLOOR_DEPTH = 1.2;
 
 // --- Crops (Sprout Lands "Farming Plants") ---
 // Each crop grows through N stages (frames `grow-<name>-<stage>` in the
@@ -169,17 +225,55 @@ function makeCrop(crop: CropName, count: number): ItemStack {
   };
 }
 
+/** A building-material inventory item. Only WALL carries an orientation (picked via
+ *  the 3×3 build palette); floor / window / door / each furniture piece are their
+ *  own single-orientation item. Stackable so placing/removing decrements/refunds. */
+function makePlaceable(kind: PlaceKind, count: number, variant?: string): ItemStack {
+  if (kind === 'wall') {
+    return { id: 'wall', label: 'Wooden wall', iconKey: 'house-walls', iconFrame: WALL_FRAME.bottom, count, stackable: true, place: 'wall' };
+  }
+  if (kind === 'floor') {
+    return { id: 'floor', label: 'Brick floor', iconKey: 'house-walls', iconFrame: FLOOR_FRAME, count, stackable: true, place: 'floor' };
+  }
+  if (kind === 'window') {
+    return { id: 'window', label: 'Window', iconKey: 'house-walls', iconFrame: WINDOW_FRAME, count, stackable: true, place: 'window' };
+  }
+  if (kind === 'door') {
+    return { id: 'door-item', label: 'Door', iconKey: 'door', iconFrame: DOOR_CLOSED_FRAME, count, stackable: true, place: 'door' };
+  }
+  const piece = FURN_BY_ID.get(variant ?? '') ?? FURNITURE[0]!;
+  return { id: `furn-${piece.id}`, label: piece.label, iconKey: 'furniture', iconFrame: piece.frame, count, stackable: true, place: 'furniture', variant: piece.id };
+}
+
 /** Rebuild a full ItemStack from its saved `id` + count (the single source of
  *  truth for tools too — setupInventory + save-load both go through it). */
 function itemFromId(id: string, count: number): ItemStack {
   if (id === 'hoe') return { id, label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
   if (id === 'watering-can') return { id, label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
   if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
+  if (id === 'wall') return makePlaceable('wall', count);
+  if (id === 'floor') return makePlaceable('floor', count);
+  if (id === 'window') return makePlaceable('window', count);
+  if (id === 'door-item') return makePlaceable('door', count);
+  const furn = /^furn-(\w+)$/.exec(id);
+  if (furn) return makePlaceable('furniture', count, furn[1]);
   const seed = /^(\w+)-seed$/.exec(id);
   if (seed && (seed[1] in CROPS)) return makeSeed(seed[1] as CropName, count);
   const crop = /^crop-(\w+)$/.exec(id);
   if (crop && (crop[1] in CROPS)) return makeCrop(crop[1] as CropName, count);
   return { id, count, stackable: true }; // unknown → generic stack
+}
+
+/** A placed building structure at a cell (wall / door / furniture). */
+interface PlacedObj {
+  kind: PlaceKind;
+  variant?: string;       // furniture piece id
+  orient: WallOrient;     // wall facing chosen at placement ('auto' = follow neighbours)
+  frame: number;          // the sprite frame currently shown
+  sprite: Phaser.GameObjects.Sprite;
+  bodies?: Phaser.Physics.Arcade.Sprite[]; // invisible solid colliders (walls + closed door); N per authored collisionRect
+  open?: boolean;         // door state
+  animating?: boolean;    // door swing in flight
 }
 
 /** The persisted save blob (`umicat.saves` key `state`). */
@@ -191,6 +285,8 @@ interface SaveBlob {
   soilWet: Array<[string, number]>; // [key, remaining ms]
   crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
   cato: { x: number; y: number } | null;
+  placed?: Array<{ key: string; kind: PlaceKind; variant?: string; orient: WallOrient }>; // v2: house
+  floors?: Array<{ key: string; frame: number }>; // v2: floor tiles (a ground layer, can overlap walls)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -250,6 +346,16 @@ export class GameScene extends Phaser.Scene {
   private tilledGrass = new Map<string, Phaser.GameObjects.Image[]>(); // cell → grass-tuft edge overlays
   private loosenedCells = new Map<string, { overlay: Phaser.GameObjects.Image; timer: Phaser.Time.TimerEvent }>(); // cell → transient "hoed once" state
   private hoverCell: { cx: number; cy: number } | null = null; // actionable cell under cursor (till or plant)
+
+  // ── House building ──────────────────────────────────────────────────────
+  private activePlace?: PlaceKind; // a building material is selected → placement mode
+  private activeFurn = FURNITURE[0]!.id; // current furniture piece (R cycles through FURNITURE)
+  private wallOrient: WallOrient = 'bottom'; // current wall facing (R cycles through all 9)
+  private placed = new Map<string, PlacedObj>(); // "cx,cy" → placed wall/door/furniture
+  private floors = new Map<string, { sprite: Phaser.GameObjects.Sprite; frame: number }>(); // "cx,cy" → floor tile (ground layer; can overlap a wall so it tucks under it)
+  private wallGroup?: Phaser.Physics.Arcade.StaticGroup; // invisible solid colliders (walls + closed doors)
+  private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
+  private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
   // Planted crops: cell "cx,cy" → its growth state + sprite. Grows a stage every
   // CROP_STAGE_MS; a mature crop can be harvested (→ crop item, soil stays).
@@ -404,6 +510,15 @@ export class GameScene extends Phaser.Scene {
       const assetId = this.child.getData('assetId') as string;
       const asset = manifest?.assets.find((a: { id: string }) => a.id === assetId);
       if (asset?.hitbox) applyAssetHitbox(this.child, asset);
+      // FOOT collision box — the default body is the full 48×48 frame, which spans
+      // ~3 tiles and wedges Cato against opposite walls inside a small room (arcade
+      // physics can't separate a body touching solids on both sides → he tunnels
+      // through). A SMALL box at his feet collides cleanly with the walls AND fits
+      // comfortably through the 1-tile (16px) door — 10px wide leaves ~3px slack each
+      // side so entering is easy. (applyAssetHitbox above no-ops here — the asset-id
+      // lookup misses on Cato — so we set it directly.)
+      body.setSize(10, 7, false);
+      body.setOffset(19, 25);
 
       // Tilemap collision — resolve the grass-island tilemap by its stable NAME
       // ('island'); re-dragging it in the editor changes the entity id, which
@@ -416,6 +531,11 @@ export class GameScene extends Phaser.Scene {
         console.warn(`[catopia] grass-island tilemap named '${GRASS_ISLAND_NAME}' not found; collision may be off. Falling back to id '${GRASS_ISLAND_ENTITY_ID}'.`);
       }
       addTilemapCollider(this, islandId, this.child);
+      // Placed walls (+ closed doors) block Cato: invisible static bodies in one
+      // group, a single collider with Cato. Bodies are added/removed as the player
+      // builds (see addSolid / placeObject / removeObject).
+      this.wallGroup = this.physics.add.staticGroup();
+      this.physics.add.collider(this.child, this.wallGroup);
       this.setupFarming(islandId);
 
       // ── Camera: open CENTRED on the cat (the game's focus). Bounds were set
@@ -479,6 +599,7 @@ export class GameScene extends Phaser.Scene {
       void Umicat.init({})
         .then(async (u) => {
           this.umicat = u;
+          initLang(u?.locale); // default game UI text to the player's language
           this.cato = u?.ai.npc({
             playbook: 'cato',
             role: 'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.',
@@ -561,6 +682,14 @@ export class GameScene extends Phaser.Scene {
             "little islands out past the mist. Do you think there are other spirits like me " +
             "over there? Maybe one day we could build a tiny boat and sail out together to " +
             "meet them. I'd bring snacks. And I'd hold your hand the whole way, I promise!"));
+        });
+        // B = build a test house (wall ring + door + furniture) around the camera
+        // centre, without the inventory/cursor — for visual + collision testing.
+        this.input.keyboard?.on('keydown-B', () => this.debugBuildHouse());
+        // V = teleport Cato right at the built door (to verify it opens on proximity).
+        this.input.keyboard?.on('keydown-V', () => {
+          const door = [...this.placed.values()].find((o) => o.kind === 'door');
+          if (door && this.child) this.child.setPosition(door.sprite.x, door.sprite.y);
         });
       }
       if (CHILD_WANDER) {
@@ -719,10 +848,14 @@ export class GameScene extends Phaser.Scene {
     // Overlays, back-to-front: hotbar → full backpack → cursor (always topmost).
     if (!this.scene.isActive('HotbarScene')) this.scene.launch('HotbarScene');
     if (!this.scene.isActive('InventoryScene')) this.scene.launch('InventoryScene');
+    if (!this.scene.isActive('PaletteScene')) this.scene.launch('PaletteScene');
+    if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('InventoryScene');
+    this.scene.bringToTop('PaletteScene');
     this.scene.bringToTop('CursorScene');
+    this.publishBuildPalette();
 
     // MOUSE: click the canvas → capture the mouse. If already locked, the click
     // is a game/HUD action routed through the virtual cursor (the OS pointer is
@@ -775,7 +908,17 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Esc closes the dialog (also releases pointer lock — browser-enforced).
-    this.input.keyboard?.on('keydown-ESC', () => { if (this.dialogOpen) this.closeDialog(); });
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.confirmOpen) { this.closeConfirm(); return; } // Esc = cancel the confirm
+      if (this.dialogOpen) this.closeDialog();
+    });
+    // Enter confirms the modal dialog (✓); Esc above cancels it.
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (!this.confirmOpen) return;
+      const run = this.pendingConfirm;
+      this.closeConfirm();
+      run?.();
+    });
     // Space advances the RPG text (reveal the rest / next page) — but ONLY when the
     // chat input isn't focused, so typing a space in your message doesn't skip ahead.
     this.input.keyboard?.on('keydown-SPACE', (e: KeyboardEvent) => {
@@ -822,6 +965,8 @@ export class GameScene extends Phaser.Scene {
    *  (virtual cursor) AND touch taps — so it computes the target tile straight
    *  from (x,y) rather than the hover cursor (which only exists under lock). */
   private actAt(x: number, y: number): void {
+    // Modal confirm dialog (demolish, …) captures everything while open.
+    if (this.handleConfirmClick(x, y)) return;
     // Backpack open: tap a cell to pick/drop/merge/swap; tap outside → close.
     if (this.inventoryOpen) {
       const c = this.inventoryCellAt(x, y);
@@ -829,6 +974,8 @@ export class GameScene extends Phaser.Scene {
       else this.toggleInventory();
       return;
     }
+    // Build palette (wall facing) → pick that orientation.
+    if (this.handlePaletteClick(x, y)) return;
     // Backpack button → open the full grid (mainly for touch — no E key).
     if (this.overBackpackButton(x, y)) { this.toggleInventory(); return; }
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
@@ -842,6 +989,21 @@ export class GameScene extends Phaser.Scene {
     const tile = this.islandLayer?.getTileAtWorldXY(wp.x, wp.y);
     if (tile) {
       const key = `${tile.x},${tile.y}`;
+      // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
+      // a contextual orientation palette at the clicked cell (pick → place); door /
+      // window / furniture (single orientation) place directly on empty grass.
+      // Removal is done with the HOE, not here.
+      if (this.activePlace) {
+        if (this.isPlacingFloor()) { if (this.canPlaceFloor(tile.x, tile.y)) this.placeFloor(tile.x, tile.y); }
+        else if (this.activePlace === 'wall') { if (this.canPlaceAt(tile.x, tile.y)) this.openWallPalette(tile.x, tile.y); }
+        else if (this.canPlaceAt(tile.x, tile.y)) this.placeObject(tile.x, tile.y);
+        return;
+      }
+      // HOE on a placed tile (floor first, then wall/door/furniture) → dig it out:
+      // hit twice (like un-tilling soil), the piece pops out + returns to the backpack.
+      if (this.activeTool === 'hoe' && (this.floors.has(key) || this.placed.has(key))) {
+        this.hoePlacedTile(tile.x, tile.y); return;
+      }
       const crop = this.crops.get(key);
       const canHarvest = !this.activeSeed && this.activeTool !== 'watering-can';
       if (canHarvest && crop && crop.stage >= CROPS[crop.name].stages - 1) {
@@ -935,7 +1097,15 @@ export class GameScene extends Phaser.Scene {
     this.inventory[4] = makeSeed('tomato', 10);
     this.inventory[5] = makeSeed('eggplant', 10);
     this.inventory[6] = makeSeed('pumpkin', 10);
-    this.inventory[7] = itemFromId('axe', 1);
+    // No crafting yet, so the backpack comes pre-stocked with building materials.
+    // Wall on the hotbar (was the unused axe) for immediate building; the rest —
+    // floor / door / each furniture piece — in the backpack (drag to the hotbar).
+    this.inventory[7] = makePlaceable('wall', 99);
+    let slot = INV_COLS; // backpack starts at row 1
+    this.inventory[slot++] = makePlaceable('floor', 99);
+    this.inventory[slot++] = makePlaceable('window', 99);
+    this.inventory[slot++] = makePlaceable('door', 10);
+    for (const piece of FURNITURE) this.inventory[slot++] = makePlaceable('furniture', 10, piece.id);
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -950,10 +1120,12 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-E', () => this.toggleInventory());
     this.input.keyboard?.on('keydown-I', () => this.toggleInventory());
     this.input.keyboard?.on('keydown-ESC', () => { if (this.inventoryOpen) this.toggleInventory(); });
+    // R: rotate the wall facing / cycle the furniture piece while building.
+    this.input.keyboard?.on('keydown-R', () => this.rotatePlaceable());
   }
 
   /** Map a stack → the compact view the scenes render (icon + count). */
-  private stackView(s: ItemStack | null): { iconKey?: string; iconFrame?: string; count: number } | null {
+  private stackView(s: ItemStack | null): { iconKey?: string; iconFrame?: string | number; count: number } | null {
     if (!s) return null;
     return { iconKey: s.iconKey, iconFrame: s.iconFrame, count: s.count };
   }
@@ -998,6 +1170,9 @@ export class GameScene extends Phaser.Scene {
     const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
     this.setTool(cell?.toolId ?? 'hand');
     this.activeSeed = cell?.plants; // seed bag selected → planting mode
+    this.activePlace = cell?.place; // building material → placement mode
+    if (cell?.place === 'furniture' && cell.variant) this.activeFurn = cell.variant;
+    this.closeWallPalette(); // cancel any pending wall-orientation choice on tool change
   }
 
   /** Open / close the full backpack grid (E / I / Esc). On close, a still-held
@@ -1009,6 +1184,7 @@ export class GameScene extends Phaser.Scene {
       this.returnHeldToFreeCell();
     }
     this.publishInventory();
+    this.closeWallPalette(); // cancel a pending wall-orientation choice
   }
 
   /** Put the held stack back into the first empty cell (fallback on close). */
@@ -1115,6 +1291,15 @@ export class GameScene extends Phaser.Scene {
     return this.overHotbarAt(this.vcursor.x, this.vcursor.y);
   }
 
+  /** Is the virtual cursor over a build-palette cell? (Suppress the placement ghost
+   *  there so hovering the palette doesn't preview a tile behind it.) */
+  private pointerOverBuildPalette(): boolean {
+    const bounds = this.registry.get('buildPaletteBounds') as Array<{ x: number; y: number; w: number; h: number }> | undefined;
+    if (!bounds) return false;
+    const x = this.vcursor.x, y = this.vcursor.y;
+    return bounds.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+  }
+
   /** A short burst of pixel dirt clods flying up + out to both sides — played
    *  when the hoe strikes a cell. */
   private dirtBurst(x: number, y: number): void {
@@ -1147,12 +1332,28 @@ export class GameScene extends Phaser.Scene {
     const cursor = this.tileCursor;
     const icon = this.hoeIcon;
     if (!cursor || !icon || !this.islandLayer) return;
+    if (!this.activePlace) this.hidePlacePreview(); // drop the build ghost when not building
     const showMouse = () => {
       cursor.setVisible(false);
       icon.setVisible(false);
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
     };
+    // PLACEMENT MODE: a building material is held → show the tile bracket (圆角框,
+    // like the tools) snapped to the target cell + a ghost of the object inside it
+    // (bright/clear when it fits, dimmed/red when it can't go there).
+    if (this.activePlace) {
+      icon.setVisible(false); // the ghost IS the icon here
+      this.hoverCell = null;
+      this.cursorState.visible = this.locked;
+      if (this.buildPaletteCell || !this.locked || this.dialogOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar() || this.pointerOverBuildPalette() || this.hoeSwing || this.waterCan) {
+        cursor.setVisible(false);
+        this.hidePlacePreview();
+      } else {
+        this.updatePlacePreview();
+      }
+      return;
+    }
     // While a tool-action animation plays (hoe swing / watering pour), hide the
     // bracket + tool icon (the swinging/pouring tool is the feedback) but KEEP the
     // mouse cursor so the pointer never vanishes.
@@ -1168,7 +1369,7 @@ export class GameScene extends Phaser.Scene {
     const watering = this.activeTool === 'watering-can';
     const holdingTool = tilling || planting || watering;
     // No tool held / not locked / over UI / dialog / backpack → real mouse.
-    if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.pointerOverHotbar()) {
+    if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
@@ -1186,11 +1387,12 @@ export class GameScene extends Phaser.Scene {
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       if (tilling) {
-        // Hoe: bright over tillable grass, EMPTY tilled soil (loosen/un-till), OR a
-        // MATURE crop (harvest). Dim only over a still-growing crop.
+        // Hoe: bright over tillable grass, EMPTY tilled soil (loosen/un-till), a
+        // MATURE crop (harvest), OR a placed house tile (dig it out). Dim only over
+        // a still-growing crop.
         const crop = this.crops.get(key);
         const harvestable = !!crop && crop.stage >= CROPS[crop.name].stages - 1;
-        valid = !this.tilledCells.has(key) || !crop || harvestable;
+        valid = this.placed.has(key) || this.floors.has(key) || !this.tilledCells.has(key) || !crop || harvestable;
       }
       else if (planting) valid = this.tilledCells.has(key) && !this.crops.has(key);
       // Water: any tilled soil (crop or not, wet or not) — it just wets the ground.
@@ -1219,6 +1421,511 @@ export class GameScene extends Phaser.Scene {
       cursor.setAlpha(0.55).setTint(0xbbbbbb);
       icon.setAlpha(0.4);
       this.hoverCell = null;
+    }
+  }
+
+  // ── House building: placement cursor + rotate ─────────────────────────
+
+  private ensurePlacePreview(): Phaser.GameObjects.Sprite {
+    if (!this.placePreview) {
+      this.placePreview = this.add.sprite(0, 0, 'house-walls', 0).setOrigin(0.5, 1).setDepth(1e6 - 2);
+    }
+    return this.placePreview;
+  }
+  private hidePlacePreview(): void { this.placePreview?.setVisible(false); this.placeCell = null; }
+
+  /** Texture + frame for a placeable of `kind` (walls use the palette-chosen
+   *  `wallOrient`; furniture the selected piece `activeFurn`). */
+  private placeAppearance(kind: PlaceKind): { texture: string; frame: number } {
+    if (kind === 'wall') return { texture: 'house-walls', frame: WALL_FRAME[this.wallOrient] };
+    if (kind === 'floor') return { texture: 'house-walls', frame: FLOOR_FRAME };
+    if (kind === 'window') return { texture: 'house-walls', frame: WINDOW_FRAME };
+    if (kind === 'door') return { texture: 'door', frame: DOOR_CLOSED_FRAME };
+    return { texture: 'furniture', frame: (FURN_BY_ID.get(this.activeFurn) ?? FURNITURE[0]!).frame };
+  }
+
+  /** Can a building piece go on this cell? On-island grass, not on farm tiles (crop
+   *  / tilled soil), not under Cato. An EXISTING placed piece is allowed — placing
+   *  OVER it replaces it (the old one is refunded, so fixing a mis-placement is free). */
+  private canPlaceAt(cx: number, cy: number): boolean {
+    if (!this.islandLayer) return false;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // off-island / water
+    const key = `${cx},${cy}`;
+    if (this.crops.has(key) || this.tilledCells.has(key)) return false; // farm tile — not buildable
+    if (this.child) {
+      const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
+      if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // don't build on Cato
+    }
+    return true;
+  }
+
+  /** Is the currently-held material the FLOOR item? Floors are a ground layer that
+   *  can overlap walls, so they have their own placement rules. */
+  private isPlacingFloor(): boolean {
+    return this.activePlace === 'floor';
+  }
+
+  /** Can a FLOOR tile go on this cell? On-island, no floor there yet, and not on a
+   *  crop or tilled soil — but it CAN overlap a wall/door/furniture (it tucks under
+   *  as a ground layer), which is how the floor meets/overlaps the walls seamlessly. */
+  private canPlaceFloor(cx: number, cy: number): boolean {
+    if (!this.islandLayer) return false;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // off-island / water
+    const key = `${cx},${cy}`;
+    return !this.floors.has(key) && !this.crops.has(key) && !this.tilledCells.has(key);
+  }
+
+  /** Update the tile bracket + build ghost to the cell under the cursor (valid =
+   *  clear bracket + white ghost, else gray bracket + red ghost). */
+  private updatePlacePreview(): void {
+    const cursor = this.tileCursor;
+    if (!this.islandLayer || !this.activePlace || !cursor) { cursor?.setVisible(false); this.hidePlacePreview(); return; }
+    const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
+    const tile = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
+    if (!tile) { cursor.setVisible(false); this.hidePlacePreview(); return; }
+    const cx = tile.x, cy = tile.y;
+    const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    const valid = this.isPlacingFloor() ? this.canPlaceFloor(cx, cy) : this.canPlaceAt(cx, cy);
+    // The rounded tile bracket (圆角框), snapped to the cell centre — same as the tools.
+    cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true);
+    if (valid) cursor.setAlpha(1).clearTint();
+    else cursor.setAlpha(0.55).setTint(0xbbbbbb);
+    // The object ghost inside the bracket.
+    const look = this.placeAppearance(this.activePlace);
+    const ghost = this.ensurePlacePreview();
+    ghost.setTexture(look.texture, look.frame).setVisible(true);
+    ghost.setPosition(w.x + TILE / 2, w.y + TILE); // origin bottom → sits in the cell
+    ghost.setAlpha(0.55).setTint(valid ? 0xffffff : 0xff6666);
+    this.placeCell = valid ? { cx, cy } : null;
+  }
+
+  /** R (optional keyboard shortcut) cycles the wall facing used for the hover
+   *  preview / default. The main way to choose is the contextual build palette. */
+  private rotatePlaceable(): void {
+    if (this.dialogOpen || this.inventoryOpen || this.activePlace !== 'wall') return;
+    this.setWallOrient(WALL_ORIENTS[(WALL_ORIENTS.indexOf(this.wallOrient) + 1) % WALL_ORIENTS.length]!);
+  }
+
+  /** Set the wall facing (last-used / default) + reflect it on the held item icon. */
+  private setWallOrient(orient: WallOrient): void {
+    this.wallOrient = orient;
+    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    if (cell?.place === 'wall') { cell.iconFrame = WALL_FRAME[orient]; this.publishInventory(); }
+  }
+
+  // The cell awaiting a wall-orientation choice (non-null = the contextual palette
+  // is open, floating around that cell).
+  private buildPaletteCell: { cx: number; cy: number } | null = null;
+  private buildPaletteRev = 0;
+
+  /** Open the contextual 3×3 wall palette AROUND a clicked cell — the player taps an
+   *  orientation to place the wall there (or taps away to cancel). */
+  private openWallPalette(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const cam = this.cameras.main;
+    const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    // world → screen: use worldView (correct under center-zoom; scrollX is not).
+    const screenX = (w.x + TILE / 2 - cam.worldView.x) * cam.zoom;
+    const screenY = (w.y + TILE / 2 - cam.worldView.y) * cam.zoom;
+    this.buildPaletteCell = { cx, cy };
+    this.publishBuildPalette(screenX, screenY);
+  }
+
+  private closeWallPalette(chosen?: number): void {
+    if (!this.buildPaletteCell) return;
+    this.buildPaletteCell = null;
+    this.publishBuildPalette(0, 0, chosen);
+  }
+
+  private publishBuildPalette(screenX = 0, screenY = 0, chosen?: number): void {
+    // The CENTRE cell shows the DEFAULT / last-used facing (in the 圆角框) so a tap
+    // there places it straight away; the 8 ring cells are the alternative facings.
+    const cells = WALL_PALETTE.map((o, i) =>
+      i === 4
+        ? { orient: this.wallOrient, iconKey: 'house-walls', frame: WALL_FRAME[this.wallOrient], center: true }
+        : (o ? { orient: o, iconKey: 'house-walls', frame: WALL_FRAME[o] } : null),
+    );
+    // The centre 圆角框 keeps the SAME on-screen size as the hover bracket (24px tile
+    // frame at world scale) so it doesn't visibly shrink when the palette opens; the
+    // ring cells spread out around it (PaletteScene sizes RING from this).
+    const bracketPx = 24 * this.cameras.main.zoom;
+    this.registry.set('buildPalette', {
+      visible: !!this.buildPaletteCell, screenX, screenY, selected: this.wallOrient, cells, bracketPx,
+      chosen, rev: ++this.buildPaletteRev,
+    });
+  }
+
+  /** While the palette is open, a tap either picks an orientation (→ place the wall
+   *  at the pending cell) or misses (→ cancel). Consumes the tap either way. On a
+   *  pick we pass the chosen cell index so the palette can flash it before closing. */
+  private handlePaletteClick(x: number, y: number): boolean {
+    if (!this.buildPaletteCell) return false;
+    const bounds = this.registry.get('buildPaletteBounds') as
+      | Array<{ orient: string; idx: number; x: number; y: number; w: number; h: number }>
+      | undefined;
+    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    const cell = this.buildPaletteCell;
+    this.closeWallPalette(hit?.idx);
+    if (hit && cell) {
+      this.setWallOrient(hit.orient as WallOrient); // remember as the default facing
+      if (this.canPlaceAt(cell.cx, cell.cy)) this.placeObject(cell.cx, cell.cy);
+      // The tap landed on a RING cell (offset from the build spot), so the virtual
+      // cursor is now over the ring — snap it back onto the cell we just built on so
+      // the bracket stays there and the next placement continues from the same tile.
+      this.snapCursorToCell(cell.cx, cell.cy);
+    }
+    return true;
+  }
+
+  // ── Modal confirm dialog (e.g. demolish a house piece) ─────────────────────
+  private confirmOpen = false;
+  private confirmRev = 0;
+  private pendingConfirm?: () => void;
+
+  /** Pop a modal yes/no dialog (ConfirmScene renders it). `onOk` runs on confirm. */
+  private promptConfirm(title: string, onOk: () => void): void {
+    this.pendingConfirm = onOk;
+    this.confirmOpen = true;
+    this.registry.set('confirm', { visible: true, title, rev: ++this.confirmRev });
+  }
+
+  private closeConfirm(): void {
+    if (!this.confirmOpen) return;
+    this.confirmOpen = false;
+    this.pendingConfirm = undefined;
+    this.registry.set('confirm', { visible: false, title: '', rev: ++this.confirmRev });
+  }
+
+  /** Modal: while the confirm dialog is open, a tap hits ✓ (run + close), ⊘ / outside
+   *  (just close). Consumes the tap either way so nothing behind it fires. */
+  private handleConfirmClick(x: number, y: number): boolean {
+    if (!this.confirmOpen) return false;
+    const bounds = this.registry.get('confirmBounds') as
+      | Array<{ action: string; x: number; y: number; w: number; h: number }>
+      | undefined;
+    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    const ok = hit?.action === 'ok';
+    const run = ok ? this.pendingConfirm : undefined;
+    this.closeConfirm();
+    run?.();
+    return true;
+  }
+
+  private lastHoverIdx = -1;
+
+  /** Publish which palette cell the cursor is over (or -1) so PaletteScene can hover
+   *  it — highlight its button + preview that facing in the centre bracket. */
+  private updatePaletteHover(): void {
+    const open = !!this.buildPaletteCell;
+    let idx = -1;
+    if (open) {
+      const bounds = this.registry.get('buildPaletteBounds') as
+        | Array<{ idx: number; x: number; y: number; w: number; h: number }>
+        | undefined;
+      const x = this.vcursor.x, y = this.vcursor.y;
+      const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+      idx = hit ? hit.idx : -1;
+    }
+    if (idx !== this.lastHoverIdx) {
+      this.lastHoverIdx = idx;
+      this.registry.set('buildPaletteHover', idx);
+    }
+  }
+
+  /** Move the virtual (pointer-locked) cursor to a cell's on-screen centre. Used
+   *  after a ring-cell tap so the cursor returns to the build spot, not the ring. */
+  private snapCursorToCell(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const cam = this.cameras.main;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    this.vcursor.x = Phaser.Math.Clamp((w.x + TILE / 2 - cam.worldView.x) * cam.zoom, 0, cam.width);
+    this.vcursor.y = Phaser.Math.Clamp((w.y + TILE / 2 - cam.worldView.y) * cam.zoom, 0, cam.height);
+  }
+
+  /** Place the held building material at a cell (assumes canPlaceAt is true).
+   *  Creates the sprite (+ a solid collider for walls/doors), consumes 1 from the
+   *  held stack, re-autotiles neighbour walls, and saves. */
+  private placeObject(cx: number, cy: number): void {
+    if (!this.islandLayer || !this.activePlace) return;
+    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    if (!cell || cell.count <= 0) return;
+    const kind = this.activePlace;
+    const key = `${cx},${cy}`;
+    // OVERWRITE: replacing an existing piece refunds it first (so a swap costs nothing
+    // net; fixing a mis-placement is free). removeObject saves/publishes; we place after.
+    if (this.placed.has(key)) this.removeObject(cx, cy);
+    const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    const footX = w.x + TILE / 2;
+    const footY = w.y + TILE; // origin bottom sits the tile in its cell
+    const orient: WallOrient = this.wallOrient; // stored for walls; ignored otherwise
+    const variant = kind === 'furniture' ? this.activeFurn : undefined;
+    const look = this.placeAppearance(kind);
+    const sprite = this.add.sprite(footX, footY, look.texture, look.frame).setOrigin(0.5, 1).setDepth(footY);
+    const obj: PlacedObj = { kind, variant, orient, frame: look.frame, sprite };
+    // Walls + windows are solid (block Cato); door is solid-until-open; furniture is decorative.
+    if (kind === 'wall' || kind === 'window') obj.bodies = this.addSolid(cx, cy, look.texture, look.frame);
+    else if (kind === 'door') { obj.open = false; obj.bodies = this.addSolid(cx, cy, look.texture, look.frame); }
+    this.placed.set(key, obj);
+    this.consumeHeldMaterial();
+    this.scheduleSave();
+  }
+
+  /** Place a FLOOR tile — a non-solid brick/window tile stored in the `floors`
+   *  ground layer (`FLOOR_DEPTH`, below Cato/walls). It can overlap a wall, so the
+   *  wall draws over its opaque parts while its transparent edges reveal the brick —
+   *  the floor tucks under the wall seamlessly (no grass gap). */
+  private placeFloor(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    if (!cell || cell.count <= 0) return;
+    const key = `${cx},${cy}`;
+    // OVERWRITE: a floor dropped on a mis-placed component (wall/window/door/furniture)
+    // removes it (refunded) and leaves just the floor — same "fix a mistake" convenience
+    // as the components have. (So the seamless floor-UNDER-wall look now needs the floor
+    // laid FIRST, then walls placed over it — wall-over-floor still coexists.)
+    if (this.placed.has(key)) this.removeObject(cx, cy);
+    this.restoreFloor(key, FLOOR_FRAME);
+    this.consumeHeldMaterial();
+    this.scheduleSave();
+  }
+
+  /** (Re)create a floor tile sprite at a cell → the `floors` map. Used by placeFloor,
+   *  save restore, and the debug builder. */
+  private restoreFloor(key: string, frame: number): void {
+    if (!this.islandLayer) return;
+    const [cx, cy] = key.split(',').map(Number);
+    const w = this.islandLayer.tileToWorldXY(cx!, cy!);
+    if (!w) return;
+    this.floors.get(key)?.sprite.destroy();
+    const sprite = this.add.sprite(w.x + TILE / 2, w.y + TILE, 'house-walls', frame).setOrigin(0.5, 1).setDepth(FLOOR_DEPTH);
+    this.floors.set(key, { sprite, frame });
+  }
+
+  /** Consume one of the held building material; drop out of placement mode if the
+   *  stack empties. */
+  private consumeHeldMaterial(): void {
+    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    if (!cell) return;
+    cell.count -= 1;
+    if (cell.count <= 0 && this.hotbarSelected >= 0) this.inventory[this.hotbarSelected] = null;
+    this.equipSelected();
+    this.publishInventory();
+  }
+
+  /** Pick a placed piece back up (destroy it + refund the material). */
+  private removeObject(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const o = this.placed.get(key);
+    if (!o) return;
+    o.sprite.destroy();
+    o.bodies?.forEach((b) => b.destroy());
+    this.placed.delete(key);
+    this.placedHoedOnce.get(key)?.remove();
+    this.placedHoedOnce.delete(key);
+    const id = o.kind === 'wall' ? 'wall' : o.kind === 'window' ? 'window' : o.kind === 'door' ? 'door-item' : `furn-${o.variant}`;
+    this.addToInventory(itemFromId(id, 1));
+    this.publishInventory();
+    this.scheduleSave();
+  }
+
+  // Placed house tiles that have been HOED ONCE (armed for removal on the 2nd hit
+  // within the window); the timer clears the mark if the 2nd hit doesn't come.
+  private placedHoedOnce = new Map<string, Phaser.Time.TimerEvent>();
+
+  /** Hoe a placed house tile to DIG IT OUT. Like un-tilling soil: the 1st strike
+   *  loosens it (a dirt puff + arms a short window); a 2nd strike within the window
+   *  pops the piece out (harvest-style arc) and returns it to the backpack. */
+  private hoePlacedTile(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const key = `${cx},${cy}`;
+    if (!this.placed.has(key) && !this.floors.has(key)) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    const centerX = w.x + TILE / 2;
+    const centerY = w.y + TILE / 2;
+    this.hoeSwingAt(centerX, centerY, () => {
+      // One strike loosens it + asks to confirm (the old "hoe twice" was undiscoverable
+      // — players didn't know a 2nd hit was needed). Confirm → pop it out + refund. The
+      // prompt names the ACTUAL thing being removed (floor-first, matching the pop).
+      this.dirtBurst(centerX, centerY);
+      this.promptConfirm(t(this.demolishTargetKey(cx, cy)), () => this.removePlacedWithPop(cx, cy));
+    });
+  }
+
+  /** The i18n key for whatever a hoe strike would remove at this cell — floor FIRST
+   *  (it's the top layer, matching removePlacedWithPop), else the placed piece. */
+  private demolishTargetKey(cx: number, cy: number): string {
+    const key = `${cx},${cy}`;
+    if (this.floors.has(key)) return 'demolish_floor';
+    const o = this.placed.get(key);
+    if (!o) return 'demolish_generic';
+    if (o.kind === 'wall') return 'demolish_wall';
+    if (o.kind === 'window') return 'demolish_window';
+    if (o.kind === 'door') return 'demolish_door';
+    if (o.kind === 'furniture') return `demolish_furn_${o.variant ?? ''}`;
+    return 'demolish_generic';
+  }
+
+  /** Remove a house tile with a pop-out (its icon jumps out like a harvested crop),
+   *  then refund it. A FLOOR overlapping a wall is removed FIRST (it's the top layer
+   *  the player just added); a 2nd hoe-session then digs out the wall underneath. */
+  private removePlacedWithPop(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    const pop = (texture: string, frame: number) => { if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, texture, frame); };
+    const floor = this.floors.get(key);
+    if (floor) {
+      floor.sprite.destroy();
+      this.floors.delete(key);
+      this.addToInventory(itemFromId('floor', 1));
+      this.publishInventory();
+      this.scheduleSave();
+      pop('house-walls', floor.frame);
+      return;
+    }
+    const o = this.placed.get(key);
+    if (!o) return;
+    const texture = o.kind === 'wall' ? 'house-walls' : o.kind === 'door' ? 'door' : 'furniture';
+    const frame = o.frame;
+    this.removeObject(cx, cy); // destroy + refund + save
+    pop(texture, frame);
+  }
+
+  /** DEV: build a 5×5 hollow wall ring (door in the bottom edge) + a plant inside,
+   *  around the camera centre — for testing without the inventory/cursor flow. */
+  private debugBuildHouse(): void {
+    if (!this.islandLayer) return;
+    const cam = this.cameras.main;
+    const c = this.islandLayer.worldToTileXY(cam.worldView.centerX, cam.worldView.centerY);
+    if (!c) return;
+    const ccx = Math.floor(c.x), ccy = Math.floor(c.y), R = 2;
+    const doorCx = ccx, doorCy = ccy + R;
+    for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) {
+      if (Math.abs(dx) !== R && Math.abs(dy) !== R) continue; // edge only
+      const cx = ccx + dx, cy = ccy + dy, key = `${cx},${cy}`;
+      if ((cx === doorCx && cy === doorCy) || this.placed.has(key)) continue;
+      // Explicit per-cell facing (fully manual now): corners + edges.
+      const orient: WallOrient =
+        dx === -R && dy === -R ? 'tl' : dx === R && dy === -R ? 'tr' :
+        dx === -R && dy === R ? 'bl' : dx === R && dy === R ? 'br' :
+        dy === -R ? 'top' : dy === R ? 'bottom' : dx === -R ? 'left' : 'right';
+      this.restorePlaced(key, 'wall', orient);
+    }
+    // Brick FLOOR (window frame): fill the interior AND overlap the bottom wall row
+    // (dy=R) so it tucks under the wall — demonstrates the floor-over-wall overlap.
+    for (let dx = -(R - 1); dx <= R - 1; dx++) for (let dy = -(R - 1); dy <= R; dy++) {
+      this.restoreFloor(`${ccx + dx},${ccy + dy}`, FLOOR_FRAME);
+    }
+    this.restorePlaced(`${doorCx},${doorCy}`, 'door', 'bottom');
+    this.restorePlaced(`${ccx},${ccy - 1}`, 'furniture', 'bottom', 'plant');
+    this.scheduleSave();
+  }
+
+  /** Open placed doors as Cato nears (plays the swing + drops the collider so he
+   *  can pass); close them again when he's clear (hysteresis avoids flicker). No
+   *  pathfinding — since walls box Cato in, he only nears a door when entering. */
+  private updateDoors(): void {
+    if (!this.child) return;
+    const OPEN_R = TILE * 1.5;   // Cato this close (world px) → open
+    const CLOSE_R = TILE * 2.2;  // ... this far → close
+    for (const o of this.placed.values()) {
+      if (o.kind !== 'door' || o.animating) continue;
+      const bx = o.sprite.x;            // base-cell centre X
+      const by = o.sprite.y - TILE / 2; // base-cell centre Y (sprite is origin-bottom)
+      const d = Math.hypot(bx - this.child.x, by - this.child.y);
+      if (!o.open && d < OPEN_R) this.setDoorOpen(o, true);
+      else if (o.open && d > CLOSE_R) this.setDoorOpen(o, false);
+    }
+  }
+
+  /** Toggle a door: play the swing, and enable/disable its collider so Cato can (or
+   *  can't) pass. The collider drops immediately on open; it re-arms only after the
+   *  close swing finishes (and only fires when Cato is already clear). */
+  private setDoorOpen(o: PlacedObj, open: boolean): void {
+    o.open = open;
+    o.animating = true;
+    const setEnabled = (on: boolean) => o.bodies?.forEach((b) => { (b.body as Phaser.Physics.Arcade.StaticBody).enable = on; });
+    if (open) setEnabled(false);
+    o.sprite.play(open ? 'door-open' : 'door-close');
+    o.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      o.animating = false;
+      o.frame = o.sprite.frame.name as unknown as number; // remember the resting frame
+      if (!open) setEnabled(true);
+    });
+  }
+
+  /** Invisible static collider(s) at a cell, matching the SOLID region of the given
+   *  texture frame — so a thin side-wall strip only blocks Cato where the wall is.
+   *  For walls, the collision shape is **authored in the Tileset Editor** (per-tile
+   *  `collisionRects`, read from the manifest) — one body per rect (supports L/U
+   *  corner shapes). Falls back to the opaque-pixel bounding box when a frame has no
+   *  authored collision (and always for the door, which isn't a tileset). */
+  private addSolid(cx: number, cy: number, texture: string, frame: number): Phaser.Physics.Arcade.Sprite[] {
+    const w = this.islandLayer!.tileToWorldXY(cx, cy)!;
+    let rects: Array<{ x: number; y: number; w: number; h: number }>;
+    if (texture === 'house-walls') {
+      const tile = this.wallTile(frame);
+      // FLOOR tiles are authored NON-solid in the Tileset Editor (`solid:false`) →
+      // no collider, so Cato can walk on them. Walls are solid → collide.
+      if (tile?.solid === false) return [];
+      rects = tile?.collisionRects?.length ? tile.collisionRects : [this.frameSolidRect(texture, frame)];
+    } else {
+      rects = [this.frameSolidRect(texture, frame)];
+    }
+    return rects.map((r) => {
+      const body = this.wallGroup!.create(w.x + r.x + r.w / 2, w.y + r.y + r.h / 2, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+      body.setVisible(false).setDisplaySize(r.w, r.h).refreshBody();
+      return body;
+    });
+  }
+
+  /** The wall tileset's per-tile metadata for a frame (`solid` + `collisionRects`),
+   *  authored in the Tileset Editor UI (`asset.tileset.tiles[frame]`, carried in the
+   *  manifest). Cached. `solid:false` = a walkable floor tile. */
+  private wallTiles?: Record<number, { solid?: boolean; collisionRects?: Array<{ x: number; y: number; w: number; h: number }> }> | null;
+  private wallTile(frame: number): { solid?: boolean; collisionRects?: Array<{ x: number; y: number; w: number; h: number }> } | undefined {
+    if (this.wallTiles === undefined) {
+      const asset = getManifest(this)?.assets?.find((a: { textureKey?: string }) => a.textureKey === 'house-walls') as
+        | { tileset?: { tiles?: Record<number, { solid?: boolean; collisionRects?: Array<{ x: number; y: number; w: number; h: number }> }> } }
+        | undefined;
+      this.wallTiles = asset?.tileset?.tiles ?? null;
+    }
+    return this.wallTiles?.[frame];
+  }
+
+  /** The opaque bounding box (local px within the frame) of a texture frame —
+   *  computed once by reading its pixels (CDN uploads are CORS-clean, so no taint;
+   *  same read as buildSoilGrassSheet). Used to size wall/door colliders to the art. */
+  private solidRectCache = new Map<string, { x: number; y: number; w: number; h: number }>();
+  private frameSolidRect(key: string, frame: number): { x: number; y: number; w: number; h: number } {
+    const ck = `${key}:${frame}`;
+    const hit = this.solidRectCache.get(ck);
+    if (hit) return hit;
+    const tex = this.textures.get(key);
+    const f = tex.get(frame);
+    const cw = f.cutWidth, ch = f.cutHeight;
+    const full = { x: 0, y: 0, w: cw, h: ch };
+    try {
+      const src = tex.getSourceImage() as CanvasImageSource;
+      const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+      const ctx = cv.getContext('2d'); if (!ctx) throw 0;
+      ctx.drawImage(src, f.cutX, f.cutY, cw, ch, 0, 0, cw, ch);
+      const d = ctx.getImageData(0, 0, cw, ch).data;
+      let minx = cw, miny = ch, maxx = -1, maxy = -1;
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+        if (d[(y * cw + x) * 4 + 3]! > 20) { if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+      }
+      const rect = maxx < 0 ? full : { x: minx, y: miny, w: maxx - minx + 1, h: maxy - miny + 1 };
+      this.solidRectCache.set(ck, rect);
+      return rect;
+    } catch {
+      this.solidRectCache.set(ck, full); // pixel read failed → fall back to the full tile
+      return full;
     }
   }
 
@@ -1288,16 +1995,17 @@ export class GameScene extends Phaser.Scene {
     this.addToInventory(makeCrop(crop.name, 1));
     this.publishInventory();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
-    if (w) this.playHarvestPop(w.x + TILE / 2, w.y + TILE / 2, crop.name);
+    if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'farming_plants_items', `crop-${crop.name}`);
     return true;
   }
 
-  /** The produce jumps OUT of the ground in a semicircular arc to one side,
+  /** An item icon jumps OUT of the ground in a semicircular arc to one side,
    *  bounces once, wobbles its size for cuteness, then vanishes. Pure flair —
-   *  the item is already banked in the inventory. */
-  private playHarvestPop(centerX: number, centerY: number, name: CropName): void {
+   *  the item is already banked in the inventory. Shared by crop harvest + house
+   *  tile removal. */
+  private playPopOut(centerX: number, centerY: number, texture: string, frame: string | number): void {
     const item = this.add
-      .image(centerX, centerY, 'farming_plants_items', `crop-${name}`)
+      .image(centerX, centerY, texture, frame)
       .setOrigin(0.5, 0.5)
       .setDepth(1e6 + 2);
     const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1; // fly left or right
@@ -2246,6 +2954,7 @@ export class GameScene extends Phaser.Scene {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
     this.publishInventory(); // hide the hotbar while chatting
+    this.closeWallPalette(); // cancel a pending wall-orientation choice
     // Cato turns to FACE THE PLAYER (front) while chatting: stop + play the
     // front idle. faceDir='down' so the wander-freeze in update() (which plays
     // idle-{faceDir}) keeps him facing front for the whole conversation.
@@ -2401,13 +3110,15 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 1,
+      v: 2,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
       soilWet: [...this.soilWet],
       crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
+      placed: [...this.placed].map(([key, o]) => ({ key, kind: o.kind, variant: o.variant, orient: o.orient })),
+      floors: [...this.floors].map(([key, f]) => ({ key, frame: f.frame })),
     };
   }
 
@@ -2431,7 +3142,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v === 1) this.applySave(s);
+      if (s && (s.v === 1 || s.v === 2)) this.applySave(s); // v1 = pre-house (no placed)
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
     } catch (e) {
@@ -2456,6 +3167,13 @@ export class GameScene extends Phaser.Scene {
       this.crops.clear();
       this.tilledCells.clear();
       this.soilWet.clear();
+      // House: tear down placed structures + their colliders, then rebuild.
+      for (const o of this.placed.values()) { o.sprite.destroy(); o.bodies?.forEach((b) => b.destroy()); }
+      this.placed.clear();
+      for (const f of this.floors.values()) f.sprite.destroy();
+      this.floors.clear();
+      for (const t of this.placedHoedOnce.values()) t.remove();
+      this.placedHoedOnce.clear();
       if (this.islandLayer) {
         for (const key of s.tilled ?? []) this.tilledCells.add(key);
         for (const key of this.tilledCells) {
@@ -2467,6 +3185,8 @@ export class GameScene extends Phaser.Scene {
           this.setSoilWet(key, true);
         }
         for (const c of s.crops ?? []) this.restoreCrop(c.key, c.name, c.stage, c.timer);
+        for (const f of s.floors ?? []) this.restoreFloor(f.key, f.frame);
+        for (const p of s.placed ?? []) this.restorePlaced(p.key, p.kind, p.orient, p.variant);
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
@@ -2479,10 +3199,25 @@ export class GameScene extends Phaser.Scene {
       this.inventory = cells;
       this.hotbarSelected = s.selected ?? -1;
       if (s.cato && this.child) this.child.setPosition(s.cato.x, s.cato.y);
+      this.ensureBuildingMaterials(); // saves predating the house feature lack these
       this.equipSelected();
       this.publishInventory();
     } finally {
       this.loadingSave = false;
+    }
+  }
+
+  /** Grant the building materials to anyone who doesn't have them yet — so players
+   *  with a save from before the house feature still get walls/door/furniture (into
+   *  free backpack slots). Idempotent: only adds what's missing. */
+  private ensureBuildingMaterials(): void {
+    if (!this.inventory.some((c) => c?.id === 'wall')) this.addToInventory(makePlaceable('wall', 99));
+    if (!this.inventory.some((c) => c?.id === 'floor')) this.addToInventory(makePlaceable('floor', 99));
+    if (!this.inventory.some((c) => c?.id === 'window')) this.addToInventory(makePlaceable('window', 99));
+    if (!this.inventory.some((c) => c?.id === 'door-item')) this.addToInventory(makePlaceable('door', 10));
+    // Each furniture piece is its own item now — grant any that are missing.
+    for (const piece of FURNITURE) {
+      if (!this.inventory.some((c) => c?.id === `furn-${piece.id}`)) this.addToInventory(makePlaceable('furniture', 10, piece.id));
     }
   }
 
@@ -2499,6 +3234,34 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(footY);
     this.crops.set(key, { name, stage, timer, sprite });
+  }
+
+  /** Recreate a placed building piece (+ its collider) from a save / the debug
+   *  builder. Mirrors placeObject but doesn't touch the inventory. */
+  private restorePlaced(key: string, kind: PlaceKind, orient: WallOrient, variant?: string): void {
+    if (!this.islandLayer) return;
+    // MIGRATION: a non-solid wall tile is a FLOOR — older saves stored floors in
+    // `placed` (as 'window' walls), which would restore at footY depth and cover
+    // Cato. Route them to the `floors` ground layer instead.
+    if (kind === 'wall' && this.wallTile(WALL_FRAME[orient])?.solid === false) {
+      this.restoreFloor(key, WALL_FRAME[orient]);
+      return;
+    }
+    const [cx, cy] = key.split(',').map(Number);
+    const w = this.islandLayer.tileToWorldXY(cx!, cy!);
+    if (!w) return;
+    const footX = w.x + TILE / 2;
+    const footY = w.y + TILE;
+    const frame = kind === 'wall' ? WALL_FRAME[orient]
+      : kind === 'window' ? WINDOW_FRAME
+      : kind === 'door' ? DOOR_CLOSED_FRAME
+      : (FURN_BY_ID.get(variant ?? '') ?? FURNITURE[0]!).frame;
+    const texture = kind === 'wall' || kind === 'window' ? 'house-walls' : kind === 'door' ? 'door' : 'furniture';
+    const sprite = this.add.sprite(footX, footY, texture, frame).setOrigin(0.5, 1).setDepth(footY);
+    const obj: PlacedObj = { kind, variant, orient, frame, sprite };
+    if (kind === 'wall' || kind === 'window' || kind === 'door') obj.bodies = this.addSolid(cx!, cy!, texture, frame);
+    if (kind === 'door') obj.open = false;
+    this.placed.set(key, obj);
   }
 
   /** Periodic backstop save + save when the tab is hidden / closed. */
@@ -2602,6 +3365,35 @@ export class GameScene extends Phaser.Scene {
       s: Phaser.Input.Keyboard.KeyCodes.S,
       d: Phaser.Input.Keyboard.KeyCodes.D,
     }) as Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
+  }
+
+  /** PLAYER CONTROL: WASD / arrow keys drive Cato directly (velocity + walk anim);
+   *  the camera follows him and arcade collision stops him at walls. 8-directional
+   *  movement, facing by the dominant axis (the sheet has no diagonal walk). Frozen
+   *  while chatting / in the backpack. */
+  private updatePlayerMovement(): void {
+    if (!this.child?.body) return;
+    this.cameraFollow = true; // keep Cato centred while the player drives him
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+    if (this.dialogOpen || this.inventoryOpen) { body.setVelocity(0, 0); return; }
+    const k = this.keys;
+    let dx = 0, dy = 0;
+    if (k) {
+      if (k.left.isDown || k.a.isDown) dx -= 1;
+      if (k.right.isDown || k.d.isDown) dx += 1;
+      if (k.up.isDown || k.w.isDown) dy -= 1;
+      if (k.down.isDown || k.s.isDown) dy += 1;
+    }
+    if (dx === 0 && dy === 0) {
+      body.setVelocity(0, 0);
+      this.child.play(`idle-${this.faceDir}`, true);
+      return;
+    }
+    const len = Math.hypot(dx, dy);
+    body.setVelocity((dx / len) * PLAYER_SPEED, (dy / len) * PLAYER_SPEED);
+    if (Math.abs(dx) >= Math.abs(dy)) this.faceDir = dx < 0 ? 'left' : 'right';
+    else this.faceDir = dy < 0 ? 'up' : 'down';
+    this.child.play(`walk-${this.faceDir}`, true);
   }
 
   /** WASD / arrow keys pan the camera (screen-space, zoom-compensated). Holding
@@ -2748,6 +3540,7 @@ export class GameScene extends Phaser.Scene {
     this.updateEdgeScroll(delta);
     this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages
+    this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
     // Camera lock: smoothly keep Cato centred while following. Uses the proven
@@ -2773,18 +3566,23 @@ export class GameScene extends Phaser.Scene {
 
     // Snap the hoe's tile-selection cursor to the grass tile under the mouse.
     this.updateTileCursor();
+    // While the build palette is open, tell it which cell the cursor is over (hover).
+    this.updatePaletteHover();
 
-    // WASD / arrows pan the camera (Cato roams on his own).
-    this.updateCameraKeys(delta);
+    // Movement: WASD / arrows either DRIVE Cato (player control) or pan the camera
+    // (AI-companion mode). Player mode keeps the camera following Cato.
+    if (PLAYER_CONTROL) this.updatePlayerMovement();
+    else this.updateCameraKeys(delta);
 
     if (!this.child?.body) return;
 
-    // A commanded behaviour (e.g. Cato tilling a plot) takes over the wander.
+    // A commanded behaviour (e.g. Cato tilling a plot via chat) takes over.
     if (this.catoTask) {
       this.updateCatoTask(delta);
       return;
     }
 
+    if (PLAYER_CONTROL) return; // the player drives Cato → no autonomous wander
     if (!CHILD_WANDER) return; // pinned — skip wander (edge-scroll already ran)
     const body = this.child.body as Phaser.Physics.Arcade.Body;
 

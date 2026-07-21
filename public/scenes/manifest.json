@@ -1503,6 +1503,181 @@
       "atlasPath": "uploaded/all_icons.json",
       "atlasFormat": "json",
       "pixelArt": true
+    },
+    {
+      "id": "wooden_house_walls_tilset",
+      "textureKey": "house-walls",
+      "path": "uploaded/wooden_house_walls_tilset.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 16,
+        "frameHeight": 16
+      },
+      "pixelArt": true,
+      "tileset": {
+        "cellSize": {
+          "width": 16,
+          "height": 16
+        },
+        "cols": 5,
+        "rows": 3,
+        "tiles": {
+          "0": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              }
+            ]
+          },
+          "1": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          },
+          "2": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              }
+            ]
+          },
+          "3": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          },
+          "4": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          },
+          "5": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              }
+            ]
+          },
+          "6": {
+            "solid": false,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          },
+          "7": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              }
+            ]
+          },
+          "8": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          },
+          "9": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          },
+          "10": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 11,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              }
+            ]
+          },
+          "11": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          },
+          "12": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 5,
+                "h": 16
+              }
+            ]
+          },
+          "13": {
+            "solid": true,
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
+          }
+        }
+      }
     }
   ]
 }
