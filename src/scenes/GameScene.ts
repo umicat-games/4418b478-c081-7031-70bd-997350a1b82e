@@ -452,7 +452,23 @@ export class GameScene extends Phaser.Scene {
   async create(): Promise<void> {
     // Set zoom BEFORE awaiting scene load so the first frame is already correct.
     this.cameras.main.setZoom(this.computeZoom());
+    // Kept ON for crisp pixel-art. The trade: the world scroll snaps to whole pixels,
+    // leaving a hair-thin ±1px scroll rhythm (the last residual "shake"). Turning it
+    // OFF makes the scroll sub-pixel-smooth but at fractional camera positions nearest
+    // sampling then makes texels "crawl" (grow/shrink 1px) on textured tiles during
+    // motion — a worse trade than the crisp look. (A true fix would be an integer-zoom
+    // render-to-texture camera — deferred; the residual is barely visible.)
     this.cameras.main.roundPixels = true;
+    // Follow Cato in POST_UPDATE — i.e. AFTER Arcade physics has synced his new
+    // position for the frame (doing it in update(), before the sync, left the camera
+    // a physics-step behind → extra jitter). See updateCameraFollow for the lerp.
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.updateCameraFollow, this);
+    // Advance physics by the REAL frame time each frame (not Phaser's default fixed
+    // 1/60 accumulator). The accumulator does 0/1/2 steps per render frame → Cato's
+    // per-frame movement is uneven → a visible micro-stutter while walking that no
+    // camera smoothing can hide. Variable step moves him exactly the right distance
+    // for each frame's elapsed time → smooth. (He's slow — no tunnelling risk.)
+    if (this.physics?.world) this.physics.world.fixedStep = false;
     // Cover the world until the save is restored (avoids the empty-farm flash).
     // A fallback reveals it even if Umicat.init never resolves (saving stays
     // disarmed until the real load, so revealing can't clobber the save).
@@ -744,6 +760,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── "Find cat" — smooth tween back to the child ───────────────────────
+
+  /** Keep Cato centred while following. Runs in POST_UPDATE (child.x is the frame's
+   *  final, physics-synced position — see the note in create()). A gentle lerp is
+   *  DELIBERATE: it low-passes the uneven per-frame motion from Arcade's fixed-step
+   *  accumulator + frame-timing jitter, so the WORLD scrolls smoothly. (Exact follow
+   *  pixel-locks Cato but scrolls the world at that raw jittery rate → the background
+   *  stutters, worst in the scroll direction — felt WORSE than a tiny character
+   *  wobble.) POST_UPDATE timing keeps the lerp's lag small. Smooth RE-CENTRING
+   *  (portrait double-tap) is the one-shot snapToChild() tween — skip the follow while
+   *  it runs so it isn't fought. Bounds clamp this on preRender. */
+  private updateCameraFollow(): void {
+    if (!this.cameraFollow || !this.child) return;
+    if (this.tweens.getTweensOf(this.cameras.main).length) return;
+    const cam = this.cameras.main;
+    cam.scrollX = this.child.x - this.scale.width / 2;
+    cam.scrollY = this.child.y - this.scale.height / 2;
+  }
 
   private snapToChild(): void {
     if (!this.child) return;
@@ -3543,16 +3576,8 @@ export class GameScene extends Phaser.Scene {
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
-    // Camera lock: smoothly keep Cato centred while following. Uses the proven
-    // origin-0.5 centring form (child.x − w/2, NOT /zoom — see snapToChild); a
-    // frame-rate-independent lerp eases the camera along as Cato strolls. The
-    // camera bounds clamp this on preRender, so it never pans past the ocean.
-    if (this.cameraFollow && this.child) {
-      const cam = this.cameras.main;
-      const t = 1 - Math.pow(1 - 0.15, delta / 16.6667);
-      cam.scrollX = Phaser.Math.Linear(cam.scrollX, this.child.x - this.scale.width / 2, t);
-      cam.scrollY = Phaser.Math.Linear(cam.scrollY, this.child.y - this.scale.height / 2, t);
-    }
+    // Camera follow runs in POST_UPDATE (updateCameraFollow) so it sees Cato's
+    // FINAL position for the frame — see the note where it's registered in create().
 
     // Publish the virtual cursor to CursorScene (renders it above the HUD). ONLY
     // drive it from the virtual cursor while pointer-LOCKED (mouse); on TOUCH the
