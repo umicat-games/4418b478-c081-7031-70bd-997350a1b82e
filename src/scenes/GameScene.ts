@@ -98,7 +98,7 @@ const GRASS_ISLAND_NAME = 'island';
 
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
-type ToolId = 'hand' | 'hoe' | 'watering-can';
+type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe';
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -129,7 +129,7 @@ interface ItemStack {
 // the door opens (animation) when Cato is near.
 // Placement KINDS. Only WALL needs an orientation (the 3×3 build palette); floor /
 // window / door / furniture are single-orientation items (each its own backpack item).
-type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture';
+type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture' | 'tree';
 // Wall orientation → frame in the `house-walls` sheet (5×3, frame = row*5 + col).
 // The cols 0-2 block is the 3×3 nine-slice; walls are the 8 EDGES + CORNERS (the
 // centre frame 6 is the brick FLOOR, a separate item — not a wall orientation).
@@ -166,6 +166,24 @@ const FURNITURE: FurnPiece[] = [
   { id: 'rug',     label: 'Rug',          frame: 46 },
 ];
 const FURN_BY_ID = new Map(FURNITURE.map((f) => [f.id, f]));
+
+// --- Trees (placed from the backpack, chopped with the AXE) ---
+// Fruit trees drop 3 fruits when chopped (3 axe strikes, shakes 1→2→3) then become a
+// plain tree; a plain tree is felled (fall animation) on 3 strikes. Textures/anims
+// are registered in BootScene (`tree-<type>`, `tree-<type>-shake1..3`, `tree-fall`).
+type TreeType = 'apple' | 'pear' | 'peach' | 'plain';
+interface TreeDef { id: TreeType; label: string; fruit: boolean }
+const TREE_TYPES: TreeDef[] = [
+  { id: 'apple', label: 'Apple tree', fruit: true },
+  { id: 'pear', label: 'Pear tree', fruit: true },
+  { id: 'peach', label: 'Peach tree', fruit: true },
+  { id: 'plain', label: 'Tree', fruit: false },
+];
+const TREE_BY_ID = new Map(TREE_TYPES.map((t) => [t.id, t]));
+const TREE_CHOP_WINDOW_MS = 2000; // chop again within this to advance the shake combo
+const FRUIT_LABEL: Record<string, string> = { apple: 'Apple', pear: 'Pear', peach: 'Peach' };
+// Frame in the `fruit-items` sheet (4×2 of 16×16): apple=0, orange=1, pear=2, peach=3.
+const FRUIT_FRAME: Record<string, number> = { apple: 0, pear: 2, peach: 3 };
 // A non-solid (floor) wall tile renders as a GROUND layer — a low fixed depth so it
 // sits above the grass tilemap but always BEHIND Cato / walls / furniture (he walks
 // ON it). Solid walls + furniture y-sort by footY as usual.
@@ -241,6 +259,10 @@ function makePlaceable(kind: PlaceKind, count: number, variant?: string): ItemSt
   if (kind === 'door') {
     return { id: 'door-item', label: 'Door', iconKey: 'door', iconFrame: DOOR_CLOSED_FRAME, count, stackable: true, place: 'door' };
   }
+  if (kind === 'tree') {
+    const t = TREE_BY_ID.get((variant ?? '') as TreeType) ?? TREE_TYPES[0]!;
+    return { id: `tree-${t.id}`, label: t.label, iconKey: `tree-${t.id}`, iconFrame: 0, count, stackable: true, place: 'tree', variant: t.id };
+  }
   const piece = FURN_BY_ID.get(variant ?? '') ?? FURNITURE[0]!;
   return { id: `furn-${piece.id}`, label: piece.label, iconKey: 'furniture', iconFrame: piece.frame, count, stackable: true, place: 'furniture', variant: piece.id };
 }
@@ -250,7 +272,7 @@ function makePlaceable(kind: PlaceKind, count: number, variant?: string): ItemSt
 function itemFromId(id: string, count: number): ItemStack {
   if (id === 'hoe') return { id, label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
   if (id === 'watering-can') return { id, label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
-  if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false };
+  if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false, toolId: 'axe' };
   if (id === 'wall') return makePlaceable('wall', count);
   if (id === 'floor') return makePlaceable('floor', count);
   if (id === 'window') return makePlaceable('window', count);
@@ -261,7 +283,30 @@ function itemFromId(id: string, count: number): ItemStack {
   if (seed && (seed[1] in CROPS)) return makeSeed(seed[1] as CropName, count);
   const crop = /^crop-(\w+)$/.exec(id);
   if (crop && (crop[1] in CROPS)) return makeCrop(crop[1] as CropName, count);
+  const tree = /^tree-(\w+)$/.exec(id);
+  if (tree && TREE_BY_ID.has(tree[1] as TreeType)) return makePlaceable('tree', count, tree[1]);
+  const fruit = /^fruit-(\w+)$/.exec(id);
+  if (fruit) return makeFruit(fruit[1], count);
   return { id, count, stackable: true }; // unknown → generic stack
+}
+
+/** A harvested tree fruit (apple / pear / peach) as a backpack item. Icon = the
+ *  matching frame of the `fruit-items` sheet (fruit_and_berries_items.png). */
+function makeFruit(type: string, count: number): ItemStack {
+  return { id: `fruit-${type}`, label: FRUIT_LABEL[type] ?? type, iconKey: 'fruit-items', iconFrame: FRUIT_FRAME[type] ?? 0, count, stackable: true };
+}
+
+/** A placed tree at a cell. Fruit trees carry `hasFruit`; `stage` is the current
+ *  chop-combo count (0-3, reset if you don't strike again within the window);
+ *  `busy` locks it while the final shake / fall animation resolves. */
+interface TreeObj {
+  type: TreeType;
+  hasFruit: boolean;
+  sprite: Phaser.GameObjects.Sprite;
+  body?: Phaser.GameObjects.Sprite; // small invisible trunk collider
+  stage: number;
+  timer?: Phaser.Time.TimerEvent;
+  busy: boolean;
 }
 
 /** A placed building structure at a cell (wall / door / furniture). */
@@ -287,6 +332,7 @@ interface SaveBlob {
   cato: { x: number; y: number } | null;
   placed?: Array<{ key: string; kind: PlaceKind; variant?: string; orient: WallOrient }>; // v2: house
   floors?: Array<{ key: string; frame: number }>; // v2: floor tiles (a ground layer, can overlap walls)
+  trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
 }
 
 export class GameScene extends Phaser.Scene {
@@ -340,7 +386,7 @@ export class GameScene extends Phaser.Scene {
   private tileCursor?: Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private waterCan?: Phaser.GameObjects.Sprite; // the god-hand watering-can pour (one at a time)
-  private hoeSwing?: Phaser.GameObjects.Sprite; // the god-hand hoe swing (till / harvest)
+  private hoeSwing?: Phaser.GameObjects.GameObject; // the god-hand tool swing (hoe / axe) — suppresses the tile cursor
   private tilledCells = new Set<string>(); // "cx,cy" already tilled (idempotent)
   private tilledSoil = new Map<string, Phaser.GameObjects.Image>(); // cell → soil sprite (autotile frame)
   private tilledGrass = new Map<string, Phaser.GameObjects.Image[]>(); // cell → grass-tuft edge overlays
@@ -350,6 +396,8 @@ export class GameScene extends Phaser.Scene {
   // ── House building ──────────────────────────────────────────────────────
   private activePlace?: PlaceKind; // a building material is selected → placement mode
   private activeFurn = FURNITURE[0]!.id; // current furniture piece (R cycles through FURNITURE)
+  private activeTreeType: TreeType = 'apple'; // current tree kind to plant (from the held item)
+  private trees = new Map<string, TreeObj>(); // "cx,cy" → a placed tree (chop with the axe)
   private wallOrient: WallOrient = 'bottom'; // current wall facing (R cycles through all 9)
   private placed = new Map<string, PlacedObj>(); // "cx,cy" → placed wall/door/furniture
   private floors = new Map<string, { sprite: Phaser.GameObjects.Sprite; frame: number }>(); // "cx,cy" → floor tile (ground layer; can overlap a wall so it tucks under it)
@@ -1020,6 +1068,13 @@ export class GameScene extends Phaser.Scene {
     // cursor). Harvest takes priority; only the hoe / empty hand harvests.
     const wp = this.cameras.main.getWorldPoint(x, y);
     const tile = this.islandLayer?.getTileAtWorldXY(wp.x, wp.y);
+    // AXE chops any tree the click lands on. A tree sprite is ~3 tiles tall (its
+    // canopy sits ABOVE the trunk tile), so match by sprite bounds — clicking the
+    // leaves would otherwise map to an empty tile above the trunk and do nothing.
+    if (this.activeTool === 'axe' && !this.activePlace) {
+      const treeKey = this.treeAtPoint(wp.x, wp.y);
+      if (treeKey) { const [tx, ty] = treeKey.split(',').map(Number); this.chopTree(tx!, ty!); return; }
+    }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -1027,7 +1082,8 @@ export class GameScene extends Phaser.Scene {
       // window / furniture (single orientation) place directly on empty grass.
       // Removal is done with the HOE, not here.
       if (this.activePlace) {
-        if (this.isPlacingFloor()) { if (this.canPlaceFloor(tile.x, tile.y)) this.placeFloor(tile.x, tile.y); }
+        if (this.activePlace === 'tree') { if (this.canPlaceTree(tile.x, tile.y)) this.placeTree(tile.x, tile.y, this.activeTreeType); }
+        else if (this.isPlacingFloor()) { if (this.canPlaceFloor(tile.x, tile.y)) this.placeFloor(tile.x, tile.y); }
         else if (this.activePlace === 'wall') { if (this.canPlaceAt(tile.x, tile.y)) this.openWallPalette(tile.x, tile.y); }
         else if (this.canPlaceAt(tile.x, tile.y)) this.placeObject(tile.x, tile.y);
         return;
@@ -1139,6 +1195,9 @@ export class GameScene extends Phaser.Scene {
     this.inventory[slot++] = makePlaceable('window', 99);
     this.inventory[slot++] = makePlaceable('door', 10);
     for (const piece of FURNITURE) this.inventory[slot++] = makePlaceable('furniture', 10, piece.id);
+    // Axe (chops trees) + a tree of each kind to plant.
+    this.inventory[slot++] = itemFromId('axe', 1);
+    for (const t of TREE_TYPES) this.inventory[slot++] = makePlaceable('tree', 10, t.id);
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -1205,6 +1264,7 @@ export class GameScene extends Phaser.Scene {
     this.activeSeed = cell?.plants; // seed bag selected → planting mode
     this.activePlace = cell?.place; // building material → placement mode
     if (cell?.place === 'furniture' && cell.variant) this.activeFurn = cell.variant;
+    if (cell?.place === 'tree' && cell.variant) this.activeTreeType = cell.variant as TreeType;
     this.closeWallPalette(); // cancel any pending wall-orientation choice on tool change
   }
 
@@ -1400,7 +1460,8 @@ export class GameScene extends Phaser.Scene {
     const planting = !!this.activeSeed;
     const tilling = this.activeTool === 'hoe';
     const watering = this.activeTool === 'watering-can';
-    const holdingTool = tilling || planting || watering;
+    const chopping = this.activeTool === 'axe';
+    const holdingTool = tilling || planting || watering || chopping;
     // No tool held / not locked / over UI / dialog / backpack → real mouse.
     if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar()) {
       showMouse();
@@ -1410,14 +1471,18 @@ export class GameScene extends Phaser.Scene {
     // The held tool's icon, always shown (dimmed when the spot is invalid).
     if (tilling) icon.setTexture('tools_and_meterials', 'hoe');
     else if (watering) icon.setTexture('tools_and_meterials', 'watering-can');
+    else if (chopping) icon.setTexture('tools_and_meterials', 'axe');
     else if (this.activeSeed) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
 
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
     const tile = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
+    // Axe targets a TREE (by sprite bounds — canopy included), not a tile.
+    const treeKey = chopping ? this.treeAtPoint(wp.x, wp.y) : null;
 
     // Is this spot a valid target for the held tool?
     let valid = false;
-    if (tile) {
+    if (chopping) valid = !!treeKey;
+    else if (tile) {
       const key = `${tile.x},${tile.y}`;
       if (tilling) {
         // Hoe: bright over tillable grass, EMPTY tilled soil (loosen/un-till), a
@@ -1439,16 +1504,23 @@ export class GameScene extends Phaser.Scene {
       const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
       if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
     }
+    // Axe over a tree: snap the bracket to the tree's BASE (trunk tile), not the
+    // canopy tile the cursor happens to be over, so it clearly frames the target.
+    if (chopping && treeKey) {
+      const [tx, ty] = treeKey.split(',').map(Number);
+      const w = this.islandLayer.tileToWorldXY(tx!, ty!);
+      if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
+    }
     cursor.setPosition(px, py).setVisible(true);
     icon.setPosition(px, py).setVisible(true);
     // Keep the mouse cursor visible too (it follows the exact pointer); the
     // bracket just snaps to the tile the mouse is over — so movement reads clearly.
     this.cursorState.visible = this.locked;
 
-    if (valid && tile) {
+    if (valid) {
       cursor.setAlpha(1).clearTint();
       icon.setAlpha(1);
-      this.hoverCell = { cx: tile.x, cy: tile.y };
+      this.hoverCell = tile ? { cx: tile.x, cy: tile.y } : null;
     } else {
       // Disabled look: light-gray bracket + semi-transparent tool, no action.
       cursor.setAlpha(0.55).setTint(0xbbbbbb);
@@ -1474,6 +1546,7 @@ export class GameScene extends Phaser.Scene {
     if (kind === 'floor') return { texture: 'house-walls', frame: FLOOR_FRAME };
     if (kind === 'window') return { texture: 'house-walls', frame: WINDOW_FRAME };
     if (kind === 'door') return { texture: 'door', frame: DOOR_CLOSED_FRAME };
+    if (kind === 'tree') return { texture: `tree-${this.activeTreeType}`, frame: 0 };
     return { texture: 'furniture', frame: (FURN_BY_ID.get(this.activeFurn) ?? FURNITURE[0]!).frame };
   }
 
@@ -1522,7 +1595,9 @@ export class GameScene extends Phaser.Scene {
     if (!tile) { cursor.setVisible(false); this.hidePlacePreview(); return; }
     const cx = tile.x, cy = tile.y;
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
-    const valid = this.isPlacingFloor() ? this.canPlaceFloor(cx, cy) : this.canPlaceAt(cx, cy);
+    const valid = this.activePlace === 'tree' ? this.canPlaceTree(cx, cy)
+      : this.isPlacingFloor() ? this.canPlaceFloor(cx, cy)
+      : this.canPlaceAt(cx, cy);
     // The rounded tile bracket (圆角框), snapped to the cell centre — same as the tools.
     cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true);
     if (valid) cursor.setAlpha(1).clearTint();
@@ -1764,6 +1839,170 @@ export class GameScene extends Phaser.Scene {
     this.addToInventory(itemFromId(id, 1));
     this.publishInventory();
     this.scheduleSave();
+  }
+
+  // ── Trees: place → chop (shake combo) → drop fruit / fell ──────────────────
+
+  private canPlaceTree(cx: number, cy: number): boolean {
+    if (!this.islandLayer) return false;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
+    const key = `${cx},${cy}`;
+    if (this.trees.has(key) || this.crops.has(key) || this.tilledCells.has(key) || this.placed.has(key)) return false;
+    if (this.child) {
+      const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
+      if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // not on Cato
+    }
+    return true;
+  }
+
+  /** Place a full-grown tree at a cell (from the held tree item) + consume one. */
+  private placeTree(cx: number, cy: number, type: TreeType): void {
+    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    if (!cell || cell.count <= 0) return;
+    this.restoreTree(`${cx},${cy}`, type, TREE_BY_ID.get(type)?.fruit ?? false);
+    this.consumeHeldMaterial();
+    this.scheduleSave();
+  }
+
+  /** (Re)create a tree sprite (+ a small trunk collider) at a cell → the `trees`
+   *  map. Used by placeTree + save restore. */
+  private restoreTree(key: string, type: TreeType, hasFruit: boolean): void {
+    if (!this.islandLayer) return;
+    const [cx, cy] = key.split(',').map(Number);
+    const w = this.islandLayer.tileToWorldXY(cx!, cy!);
+    if (!w) return;
+    this.removeTree(cx!, cy!); // clear any existing tree at this cell first
+    const footX = w.x + TILE / 2, footY = w.y + TILE;
+    const sprite = this.add.sprite(footX, footY, `tree-${type}`, 0).setOrigin(0.5, 1).setDepth(footY);
+    this.ySortSprites.push(sprite); // y-sorted by foot → Cato passes in front / behind
+    // Small invisible trunk collider (the canopy stays passable) so Cato bumps trunks.
+    let body: Phaser.GameObjects.Sprite | undefined;
+    if (this.wallGroup) {
+      const b = this.wallGroup.create(footX, footY - 3, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+      b.setVisible(false).setDisplaySize(10, 6).refreshBody();
+      body = b;
+    }
+    this.trees.set(key, { type, hasFruit, sprite, body, stage: 0, busy: false });
+  }
+
+  /** The tree whose sprite the world-point (x,y) lands on — canopy included, since
+   *  the sprite spans ~3 tiles up from the trunk. Prefers the frontmost (lowest foot)
+   *  when canopies overlap. Returns its "cx,cy" key or null. */
+  private treeAtPoint(x: number, y: number): string | null {
+    let best: string | null = null;
+    let bestFoot = -Infinity;
+    for (const [key, t] of this.trees) {
+      if (t.sprite.active && t.sprite.getBounds().contains(x, y) && t.sprite.y > bestFoot) {
+        best = key;
+        bestFoot = t.sprite.y;
+      }
+    }
+    return best;
+  }
+
+  /** Chop a tree with the axe: an axe swing, then advance the shake combo. */
+  private chopTree(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const tree = this.trees.get(`${cx},${cy}`);
+    if (!tree || tree.busy) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    this.axeSwingAt(w.x + TILE / 2, w.y + TILE / 2, () => this.onChopStrike(cx, cy));
+  }
+
+  /** One landed axe strike: play shake-1/2/3 (resets to 1 if the previous strike's
+   *  2s window lapsed). The 3rd strike drops fruit (fruit tree → becomes plain) or
+   *  fells a plain tree. */
+  private onChopStrike(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const tree = this.trees.get(key);
+    if (!tree || tree.busy) return;
+    tree.stage = tree.timer ? Math.min(tree.stage + 1, 3) : 1; // advance within the window, else restart
+    tree.timer?.remove();
+    tree.timer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { tree.stage = 0; tree.timer = undefined; });
+    tree.sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE); // clear any prior settle/finish handler
+    tree.sprite.play(`tree-${tree.type}-shake${tree.stage}`);
+    if (tree.stage >= 3) {
+      tree.busy = true;
+      tree.timer.remove(); tree.timer = undefined;
+      tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        if (tree.hasFruit) this.harvestTree(cx, cy);
+        else this.fellTree(cx, cy);
+      });
+    } else {
+      // Settle back to idle so the tree is ready for the next strike.
+      tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        if (this.trees.get(key) === tree && !tree.busy) tree.sprite.setFrame(0);
+      });
+    }
+  }
+
+  /** Fruit tree, final chop: 3 fruits pop out beside it + bank to the backpack; the
+   *  tree loses its fruit and becomes a plain tree (which can then be felled). */
+  private harvestTree(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const tree = this.trees.get(key);
+    if (!tree || !this.islandLayer) return;
+    const type = tree.type;
+    const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    for (let i = 0; i < 3; i++) {
+      this.time.delayedCall(i * 130, () => this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'fruit-items', FRUIT_FRAME[type] ?? 0));
+    }
+    this.addToInventory(makeFruit(type, 3));
+    this.publishInventory();
+    tree.type = 'plain';
+    tree.hasFruit = false;
+    tree.stage = 0;
+    tree.busy = false;
+    tree.sprite.setTexture('tree-plain', 0);
+    this.scheduleSave();
+  }
+
+  /** Plain tree, final chop: play the fall animation, then remove it entirely. */
+  private fellTree(cx: number, cy: number): void {
+    const tree = this.trees.get(`${cx},${cy}`);
+    if (!tree) return;
+    tree.body?.destroy(); tree.body = undefined; // coming down → stop blocking Cato
+    // The fall sheet is 64px wide (standing trees are 48) with the trunk at x≈39.5,
+    // so re-anchor the origin to keep the trunk base pinned to the same spot.
+    tree.sprite.setOrigin(39.5 / 64, 1).setTexture('tree-fall', 0).play('tree-fall');
+    tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.removeTree(cx, cy));
+  }
+
+  private removeTree(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const tree = this.trees.get(key);
+    if (!tree) return;
+    const i = this.ySortSprites.indexOf(tree.sprite);
+    if (i >= 0) this.ySortSprites.splice(i, 1);
+    tree.sprite.destroy();
+    tree.body?.destroy();
+    tree.timer?.remove();
+    this.trees.delete(key);
+    this.scheduleSave();
+  }
+
+  /** God-hand AXE chop: the axe rears UP, holds a beat, then swings DOWN onto the
+   *  tree — the `axe-swing` anim (tools frames 12–14, `[13,14,14,14,13,12]`, mirrors
+   *  `hoe-swing`). The strike fires when it lands (animation complete). */
+  private axeSwingAt(centerX: number, centerY: number, onStrike: () => void): void {
+    const axe = this.add
+      .sprite(centerX + 6, centerY - TILE / 2, 'tools', 12)
+      .setScale(1.5)
+      .setDepth(1e6 + 1);
+    axe.play('axe-swing');
+    this.hoeSwing = axe; // suppress the tile cursor while it swings
+    let struck = false;
+    const strike = () => {
+      if (struck) return;
+      struck = true;
+      if (this.hoeSwing === axe) this.hoeSwing = undefined;
+      axe.destroy();
+      onStrike();
+    };
+    axe.once(Phaser.Animations.Events.ANIMATION_COMPLETE, strike);
+    this.time.delayedCall(1200, strike);
   }
 
   // Placed house tiles that have been HOED ONCE (armed for removal on the 2nd hit
@@ -3143,7 +3382,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 2,
+      v: 3,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -3152,6 +3391,7 @@ export class GameScene extends Phaser.Scene {
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       placed: [...this.placed].map(([key, o]) => ({ key, kind: o.kind, variant: o.variant, orient: o.orient })),
       floors: [...this.floors].map(([key, f]) => ({ key, frame: f.frame })),
+      trees: [...this.trees].map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
     };
   }
 
@@ -3175,7 +3415,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && (s.v === 1 || s.v === 2)) this.applySave(s); // v1 = pre-house (no placed)
+      if (s && (s.v === 1 || s.v === 2 || s.v === 3)) this.applySave(s); // v1 = pre-house, v2 = no trees
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
     } catch (e) {
@@ -3207,6 +3447,15 @@ export class GameScene extends Phaser.Scene {
       this.floors.clear();
       for (const t of this.placedHoedOnce.values()) t.remove();
       this.placedHoedOnce.clear();
+      // Trees: tear down sprites + trunk colliders (+ drop them from the y-sort list).
+      for (const t of this.trees.values()) {
+        const i = this.ySortSprites.indexOf(t.sprite);
+        if (i >= 0) this.ySortSprites.splice(i, 1);
+        t.sprite.destroy();
+        t.body?.destroy();
+        t.timer?.remove();
+      }
+      this.trees.clear();
       if (this.islandLayer) {
         for (const key of s.tilled ?? []) this.tilledCells.add(key);
         for (const key of this.tilledCells) {
@@ -3220,6 +3469,7 @@ export class GameScene extends Phaser.Scene {
         for (const c of s.crops ?? []) this.restoreCrop(c.key, c.name, c.stage, c.timer);
         for (const f of s.floors ?? []) this.restoreFloor(f.key, f.frame);
         for (const p of s.placed ?? []) this.restorePlaced(p.key, p.kind, p.orient, p.variant);
+        for (const t of s.trees ?? []) this.restoreTree(t.key, t.type, t.hasFruit);
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
@@ -3251,6 +3501,10 @@ export class GameScene extends Phaser.Scene {
     // Each furniture piece is its own item now — grant any that are missing.
     for (const piece of FURNITURE) {
       if (!this.inventory.some((c) => c?.id === `furn-${piece.id}`)) this.addToInventory(makePlaceable('furniture', 10, piece.id));
+    }
+    if (!this.inventory.some((c) => c?.id === 'axe')) this.addToInventory(itemFromId('axe', 1));
+    for (const t of TREE_TYPES) {
+      if (!this.inventory.some((c) => c?.id === `tree-${t.id}`)) this.addToInventory(makePlaceable('tree', 10, t.id));
     }
   }
 

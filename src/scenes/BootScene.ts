@@ -121,6 +121,23 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+
+    // ── Trees (48×48 frames). Placed from the backpack; chopped with the AXE. Each
+    //    sheet: row0 = idle, then shake animations of 4 / 6 / 12 frames (= shake-1/2/3;
+    //    frame = row*12 + col). Fruit sheets (12×5) drop their fruit during shake-3
+    //    and settle to a bare frame (row4); the plain sheet is 12×4. When a bare tree
+    //    is felled, the separate 17-frame fall sheet plays.
+    for (const t of ['plain', 'apple', 'pear', 'peach'] as const) {
+      const file = t === 'plain' ? 'tree_sprites' : `tree_${t}_sprites`;
+      this.load.spritesheet(`tree-${t}`, `uploaded/${file}.png`, { frameWidth: 48, frameHeight: 48 });
+    }
+    // Fall sheet is 64 WIDE (not 48 like the standing trees) — 13 frames × 64. The
+    // tree tips LEFT; its trunk sits at x≈40 in the 64px frame, so the placer must
+    // re-anchor the origin when it swaps to this texture (see fellTree).
+    this.load.spritesheet('tree-fall', 'uploaded/tree_fall_animation_sprite_sheet.png', { frameWidth: 64, frameHeight: 48 });
+    // Harvested-fruit item icons (4×2 grid of 16×16): apple=0, orange=1, pear=2,
+    // peach=3 (row 2 = berries/grapes). Used for the drop pop + the backpack item.
+    this.load.spritesheet('fruit-items', 'uploaded/fruit_and_berries_items.png', { frameWidth: 16, frameHeight: 16 });
   }
 
   create(): void {
@@ -166,6 +183,23 @@ export class BootScene extends Phaser.Scene {
     // the build palette can nine-slice it (26×28 @ 11,11, per the Asset Manager tag).
     const btnTex = this.textures.get('square-buttons');
     if (btnTex && !btnTex.has('white-button')) btnTex.add('white-button', 0, 11, 11, 26, 28);
+    // Tree chop animations: each type has 3 shake sequences (rows 1/2/3 = 4/6/12
+    // frames) played on successive axe strikes; fruit sheets drop fruit during shake3.
+    // The bare-tree fall is a separate 17-frame sheet. Registered once, globally.
+    for (const t of ['plain', 'apple', 'pear', 'peach']) {
+      const mk = (n: number, s: number, e: number) => {
+        const key = `tree-${t}-shake${n}`;
+        if (!this.anims.exists(key)) {
+          this.anims.create({ key, frames: this.anims.generateFrameNumbers(`tree-${t}`, { start: s, end: e }), frameRate: 16, repeat: 0 });
+        }
+      };
+      mk(1, 12, 15);
+      mk(2, 24, 29);
+      mk(3, 36, 47);
+    }
+    if (!this.anims.exists('tree-fall')) {
+      this.anims.create({ key: 'tree-fall', frames: this.anims.generateFrameNumbers('tree-fall', { start: 0, end: 12 }), frameRate: 16, repeat: 0 });
+    }
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });

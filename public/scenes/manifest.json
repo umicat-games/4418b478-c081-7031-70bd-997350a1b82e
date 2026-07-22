@@ -1482,6 +1482,20 @@
             27
           ],
           "loop": false
+        },
+        {
+          "name": "axe-swing",
+          "from": 12,
+          "to": 14,
+          "frames": [
+            13,
+            14,
+            14,
+            14,
+            13,
+            12
+          ],
+          "loop": false
         }
       ],
       "fps": 8
