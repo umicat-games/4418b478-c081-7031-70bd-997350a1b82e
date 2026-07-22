@@ -664,10 +664,19 @@ export class GameScene extends Phaser.Scene {
         .then(async (u) => {
           this.umicat = u;
           initLang(u?.locale); // default game UI text to the player's language
+          // The host gives us the signed-in player's display name — let Cato call
+          // them by it (instead of the generic "guardian"). Absent when anonymous /
+          // standalone → fall back to the guardian wording from the playbook.
+          const playerName = u?.user?.name?.trim();
           this.cato = u?.ai.npc({
             playbook: 'cato',
-            role: 'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.',
+            role:
+              'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.' +
+              (playerName ? ` Your guardian's name is ${playerName}.` : ''),
             style: "warm, whimsical, 1-3 short sentences; reply in the guardian's language",
+            rules: playerName
+              ? [`Address the player by their name, "${playerName}", not the word "guardian" (an occasional "guardian" is fine, but prefer their name).`]
+              : undefined,
             // The vocabulary of things Cato can DO in the world. The AI picks one
             // when the guardian's request fits; GameScene validates + executes it.
             actions: [
