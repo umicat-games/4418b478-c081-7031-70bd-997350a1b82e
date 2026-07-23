@@ -38,6 +38,14 @@ Placeable trees you fell/harvest with the **AXE** (not the hoe). Player-driven f
 - **Save v3:** `SaveBlob.trees[]` (`{key,type,hasFruit}`); `restoreTree` on load; teardown clears sprites+bodies+ySort. `loadGame` accepts v1/v2/v3.
 - **Assumptions (tell me to change):** fruit tree → plain tree after harvest (then fellable); no regrowth; felled tree fully removed (fall sheet ends on a stump — not kept); harvested fruit is lost if the backpack is full (same as crops).
 
+## Berry bushes — plant + grow + harvest (2026-07-22)
+Plant strawberry/grape/blueberry **bushes** from the backpack; they grow, bear 3 berries, and you pick them (by hand/hoe) — the bush stays and regrows. Assets: `trees_stumps_and_bushes.png` (Sprout Lands, region-tagged `empty-bush-small` / `empty-bush` / `<berry>-in-bush`) + `fruit_and_berries_items.png` (region-tagged `strawberry`/`grape`/`blueberry` = frames 4/5/6).
+- **BootScene** loads `bushes` (image + the 5 named frames registered from the regions). **Model:** `bushes: Map<"cx,cy", BushObj>` (`{type,stage,timer,base,berries[]}`). Placed like trees (`place:'bush'`, `variant:type`; 3 backpack items `makePlaceable('bush',…)`, icon = the full `bush-with-<type>` sprite so the PLANTING item looks different from the single harvested berry) on empty grass; base is a single `Image` (origin bottom, depth = footY, static like crops).
+- **Grow (`updateBushes`, `BUSH_STAGE_MS=9s`):** stage 0 `empty-bush-small` → 1 `empty-bush` → 2 ripe = `empty-bush` + **3 `<berry>-in-bush` overlays** (`setBushStage` positions them via `BERRY_OFFSETS`, depth base+1). No watering (perennial, self-growing).
+- **Harvest:** click a ripe (stage 2) bush by hand/hoe → the 3 berries `playPopOut` as the ripe `fruit-items` frame + bank 3 (`makeFruit`), then `setBushStage(1)` → regrows to ripe. No chop/removal (bushes are permanent for now).
+- **Save v4:** `SaveBlob.bushes[]` (`{key,type,stage}`); `restoreBush` on load. `loadGame` accepts v1–v4.
+- **Inventory bumped to `INV_ROWS=4`** (1 hotbar + 3 backpack rows) — the backpack was full after trees+axe; bushes needed the extra row. `INV_COLS`×`INV_ROWS` drives both the array size and the `InventoryScene` grid (via the `inventory` model's `rows`).
+
 ## Farming system (2026-07-16/17)
 The full loop: **till → plant → water → grow → harvest**, done by the PLAYER (hotbar tools) OR by **Cato on command** (runtime-AI actions). Assets are the Sprout Lands premium pack, pulled from the **Asset Manager** the real-user way (see "Assets" below).
 

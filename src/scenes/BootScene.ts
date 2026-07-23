@@ -138,6 +138,11 @@ export class BootScene extends Phaser.Scene {
     // Harvested-fruit item icons (4×2 grid of 16×16): apple=0, orange=1, pear=2,
     // peach=3 (row 2 = berries/grapes). Used for the drop pop + the backpack item.
     this.load.spritesheet('fruit-items', 'uploaded/fruit_and_berries_items.png', { frameWidth: 16, frameHeight: 16 });
+    // Berry BUSHES (Sprout Lands "Trees, stumps and bushes") — region-tagged (not a
+    // uniform grid), so loaded as an image + the named frames registered in create():
+    // grow stages `empty-bush-small`/`empty-bush` + one berry overlay per type
+    // (`<berry>-in-bush`, dropped 3× on a ripe bush).
+    this.load.image('bushes', 'uploaded/trees_stumps_and_bushes.png');
   }
 
   create(): void {
@@ -199,6 +204,18 @@ export class BootScene extends Phaser.Scene {
     }
     if (!this.anims.exists('tree-fall')) {
       this.anims.create({ key: 'tree-fall', frames: this.anims.generateFrameNumbers('tree-fall', { start: 0, end: 12 }), frameRate: 16, repeat: 0 });
+    }
+    // Register the region-tagged bush frames (16×16) on the `bushes` texture.
+    const bt = this.textures.get('bushes');
+    if (bt) {
+      const BUSH_FRAMES: Array<[string, number, number]> = [
+        ['empty-bush-small', 0, 48], ['empty-bush', 16, 48],
+        ['strawberry-in-bush', 0, 64], ['grape-in-bush', 32, 64], ['blueberry-in-bush', 64, 64],
+        // Full berry-bush sprites — used as the backpack planting-item icon (distinct
+        // from the single harvested berry from fruit-items).
+        ['bush-with-strawberry', 32, 48], ['bush-with-grape', 48, 48], ['bush-with-blueberry', 64, 48],
+      ];
+      for (const [n, x, y] of BUSH_FRAMES) if (!bt.has(n)) bt.add(n, 0, x, y, 16, 16);
     }
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);

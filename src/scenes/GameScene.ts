@@ -104,7 +104,7 @@ type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe';
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
 // backpack later = bump INV_ROWS. Stackable items merge up to MAX_STACK per cell.
 const INV_COLS = 8;
-const INV_ROWS = 3;
+const INV_ROWS = 4; // 1 hotbar row + 3 backpack rows (bumped from 3 for trees/bushes)
 const MAX_STACK = 99;
 
 /** One stack of items in a single inventory/hotbar cell. Tools are
@@ -129,7 +129,7 @@ interface ItemStack {
 // the door opens (animation) when Cato is near.
 // Placement KINDS. Only WALL needs an orientation (the 3×3 build palette); floor /
 // window / door / furniture are single-orientation items (each its own backpack item).
-type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture' | 'tree';
+type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture' | 'tree' | 'bush';
 // Wall orientation → frame in the `house-walls` sheet (5×3, frame = row*5 + col).
 // The cols 0-2 block is the 3×3 nine-slice; walls are the 8 EDGES + CORNERS (the
 // centre frame 6 is the brick FLOOR, a separate item — not a wall orientation).
@@ -181,9 +181,28 @@ const TREE_TYPES: TreeDef[] = [
 ];
 const TREE_BY_ID = new Map(TREE_TYPES.map((t) => [t.id, t]));
 const TREE_CHOP_WINDOW_MS = 2000; // chop again within this to advance the shake combo
-const FRUIT_LABEL: Record<string, string> = { apple: 'Apple', pear: 'Pear', peach: 'Peach' };
-// Frame in the `fruit-items` sheet (4×2 of 16×16): apple=0, orange=1, pear=2, peach=3.
-const FRUIT_FRAME: Record<string, number> = { apple: 0, pear: 2, peach: 3 };
+const FRUIT_LABEL: Record<string, string> = {
+  apple: 'Apple', pear: 'Pear', peach: 'Peach',
+  strawberry: 'Strawberry', grape: 'Grape', blueberry: 'Blueberry',
+};
+// Frame in the `fruit-items` sheet (4×2 of 16×16): apple=0, orange=1, pear=2, peach=3;
+// row 2 (region-tagged) = strawberry=4, grape=5, blueberry=6.
+const FRUIT_FRAME: Record<string, number> = {
+  apple: 0, pear: 2, peach: 3, strawberry: 4, grape: 5, blueberry: 6,
+};
+
+// --- Berry bushes (planted from the backpack, grow, harvested by hand/hoe) ---
+// A bush grows empty-bush-small (stage 0) → empty-bush (1) → empty-bush + 3 berries
+// (stage 2, ripe). Harvest drops 3 berries + reverts to stage 1; it regrows to 2.
+type BerryType = 'strawberry' | 'grape' | 'blueberry';
+const BERRY_TYPES: BerryType[] = ['strawberry', 'grape', 'blueberry'];
+const BUSH_STAGE_MS = 9000; // time per grow stage (0→1→2) + regrow (1→2)
+// The 3 berry overlays' offsets (px from the bush foot-centre). Matched to the
+// `bush-with-<type>` reference art: a triangle (upper-right / mid-left / lower-centre)
+// sitting a bit LOWER on the bush than a naive top placement.
+const BERRY_OFFSETS: ReadonlyArray<{ x: number; y: number }> = [
+  { x: 3, y: -1 }, { x: -3, y: 1 }, { x: 1, y: 5 },
+];
 // A non-solid (floor) wall tile renders as a GROUND layer — a low fixed depth so it
 // sits above the grass tilemap but always BEHIND Cato / walls / furniture (he walks
 // ON it). Solid walls + furniture y-sort by footY as usual.
@@ -263,6 +282,12 @@ function makePlaceable(kind: PlaceKind, count: number, variant?: string): ItemSt
     const t = TREE_BY_ID.get((variant ?? '') as TreeType) ?? TREE_TYPES[0]!;
     return { id: `tree-${t.id}`, label: t.label, iconKey: `tree-${t.id}`, iconFrame: 0, count, stackable: true, place: 'tree', variant: t.id };
   }
+  if (kind === 'bush') {
+    const b = (BERRY_TYPES.includes(variant as BerryType) ? variant : BERRY_TYPES[0]) as BerryType;
+    // Icon = the full berry-bush sprite (so the PLANTING item looks different from
+    // the single harvested berry it yields).
+    return { id: `bush-${b}`, label: `${FRUIT_LABEL[b]} bush`, iconKey: 'bushes', iconFrame: `bush-with-${b}`, count, stackable: true, place: 'bush', variant: b };
+  }
   const piece = FURN_BY_ID.get(variant ?? '') ?? FURNITURE[0]!;
   return { id: `furn-${piece.id}`, label: piece.label, iconKey: 'furniture', iconFrame: piece.frame, count, stackable: true, place: 'furniture', variant: piece.id };
 }
@@ -285,6 +310,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (crop && (crop[1] in CROPS)) return makeCrop(crop[1] as CropName, count);
   const tree = /^tree-(\w+)$/.exec(id);
   if (tree && TREE_BY_ID.has(tree[1] as TreeType)) return makePlaceable('tree', count, tree[1]);
+  const bush = /^bush-(\w+)$/.exec(id);
+  if (bush && BERRY_TYPES.includes(bush[1] as BerryType)) return makePlaceable('bush', count, bush[1]);
   const fruit = /^fruit-(\w+)$/.exec(id);
   if (fruit) return makeFruit(fruit[1], count);
   return { id, count, stackable: true }; // unknown → generic stack
@@ -294,6 +321,17 @@ function itemFromId(id: string, count: number): ItemStack {
  *  matching frame of the `fruit-items` sheet (fruit_and_berries_items.png). */
 function makeFruit(type: string, count: number): ItemStack {
   return { id: `fruit-${type}`, label: FRUIT_LABEL[type] ?? type, iconKey: 'fruit-items', iconFrame: FRUIT_FRAME[type] ?? 0, count, stackable: true };
+}
+
+/** A planted berry bush at a cell. `stage` 0=small / 1=full / 2=ripe (bears 3
+ *  berries — `berries` holds the 3 overlay sprites, empty otherwise). `timer` counts
+ *  growth ms toward the next stage (0→1→2) and the regrow (1→2 after a harvest). */
+interface BushObj {
+  type: BerryType;
+  stage: number;
+  timer: number;
+  base: Phaser.GameObjects.Image;
+  berries: Phaser.GameObjects.Image[];
 }
 
 /** A placed tree at a cell. Fruit trees carry `hasFruit`; `stage` is the current
@@ -333,6 +371,7 @@ interface SaveBlob {
   placed?: Array<{ key: string; kind: PlaceKind; variant?: string; orient: WallOrient }>; // v2: house
   floors?: Array<{ key: string; frame: number }>; // v2: floor tiles (a ground layer, can overlap walls)
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
+  bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
 }
 
 export class GameScene extends Phaser.Scene {
@@ -398,6 +437,8 @@ export class GameScene extends Phaser.Scene {
   private activeFurn = FURNITURE[0]!.id; // current furniture piece (R cycles through FURNITURE)
   private activeTreeType: TreeType = 'apple'; // current tree kind to plant (from the held item)
   private trees = new Map<string, TreeObj>(); // "cx,cy" → a placed tree (chop with the axe)
+  private activeBushType: BerryType = 'strawberry'; // current berry bush to plant
+  private bushes = new Map<string, BushObj>(); // "cx,cy" → a planted berry bush
   private wallOrient: WallOrient = 'bottom'; // current wall facing (R cycles through all 9)
   private placed = new Map<string, PlacedObj>(); // "cx,cy" → placed wall/door/furniture
   private floors = new Map<string, { sprite: Phaser.GameObjects.Sprite; frame: number }>(); // "cx,cy" → floor tile (ground layer; can overlap a wall so it tucks under it)
@@ -1092,6 +1133,7 @@ export class GameScene extends Phaser.Scene {
       // Removal is done with the HOE, not here.
       if (this.activePlace) {
         if (this.activePlace === 'tree') { if (this.canPlaceTree(tile.x, tile.y)) this.placeTree(tile.x, tile.y, this.activeTreeType); }
+        else if (this.activePlace === 'bush') { if (this.canPlaceBush(tile.x, tile.y)) this.plantBush(tile.x, tile.y, this.activeBushType); }
         else if (this.isPlacingFloor()) { if (this.canPlaceFloor(tile.x, tile.y)) this.placeFloor(tile.x, tile.y); }
         else if (this.activePlace === 'wall') { if (this.canPlaceAt(tile.x, tile.y)) this.openWallPalette(tile.x, tile.y); }
         else if (this.canPlaceAt(tile.x, tile.y)) this.placeObject(tile.x, tile.y);
@@ -1107,6 +1149,10 @@ export class GameScene extends Phaser.Scene {
       if (canHarvest && crop && crop.stage >= CROPS[crop.name].stages - 1) {
         this.harvestCrop(tile.x, tile.y); return;
       }
+      // A RIPE berry bush (stage 2) → pick it (3 berries pop + bank; the bush stays
+      // and regrows). Hand or hoe, not the seed / watering can.
+      const bush = this.bushes.get(key);
+      if (canHarvest && bush && bush.stage >= 2) { this.harvestBush(tile.x, tile.y); return; }
       if (this.activeTool === 'hoe' && !this.tilledCells.has(key)) {
         this.tillCell(tile.x, tile.y); return;
       }
@@ -1207,6 +1253,7 @@ export class GameScene extends Phaser.Scene {
     // Axe (chops trees) + a tree of each kind to plant.
     this.inventory[slot++] = itemFromId('axe', 1);
     for (const t of TREE_TYPES) this.inventory[slot++] = makePlaceable('tree', 10, t.id);
+    for (const b of BERRY_TYPES) this.inventory[slot++] = makePlaceable('bush', 10, b);
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -1274,6 +1321,7 @@ export class GameScene extends Phaser.Scene {
     this.activePlace = cell?.place; // building material → placement mode
     if (cell?.place === 'furniture' && cell.variant) this.activeFurn = cell.variant;
     if (cell?.place === 'tree' && cell.variant) this.activeTreeType = cell.variant as TreeType;
+    if (cell?.place === 'bush' && cell.variant) this.activeBushType = cell.variant as BerryType;
     this.closeWallPalette(); // cancel any pending wall-orientation choice on tool change
   }
 
@@ -1550,12 +1598,13 @@ export class GameScene extends Phaser.Scene {
 
   /** Texture + frame for a placeable of `kind` (walls use the palette-chosen
    *  `wallOrient`; furniture the selected piece `activeFurn`). */
-  private placeAppearance(kind: PlaceKind): { texture: string; frame: number } {
+  private placeAppearance(kind: PlaceKind): { texture: string; frame: string | number } {
     if (kind === 'wall') return { texture: 'house-walls', frame: WALL_FRAME[this.wallOrient] };
     if (kind === 'floor') return { texture: 'house-walls', frame: FLOOR_FRAME };
     if (kind === 'window') return { texture: 'house-walls', frame: WINDOW_FRAME };
     if (kind === 'door') return { texture: 'door', frame: DOOR_CLOSED_FRAME };
     if (kind === 'tree') return { texture: `tree-${this.activeTreeType}`, frame: 0 };
+    if (kind === 'bush') return { texture: 'bushes', frame: 'empty-bush-small' };
     return { texture: 'furniture', frame: (FURN_BY_ID.get(this.activeFurn) ?? FURNITURE[0]!).frame };
   }
 
@@ -1605,6 +1654,7 @@ export class GameScene extends Phaser.Scene {
     const cx = tile.x, cy = tile.y;
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
     const valid = this.activePlace === 'tree' ? this.canPlaceTree(cx, cy)
+      : this.activePlace === 'bush' ? this.canPlaceBush(cx, cy)
       : this.isPlacingFloor() ? this.canPlaceFloor(cx, cy)
       : this.canPlaceAt(cx, cy);
     // The rounded tile bracket (圆角框), snapped to the cell centre — same as the tools.
@@ -2012,6 +2062,108 @@ export class GameScene extends Phaser.Scene {
     };
     axe.once(Phaser.Animations.Events.ANIMATION_COMPLETE, strike);
     this.time.delayedCall(1200, strike);
+  }
+
+  // ── Berry bushes: plant → grow → harvest (3 berries) → regrow ──────────────
+
+  private canPlaceBush(cx: number, cy: number): boolean {
+    if (!this.islandLayer) return false;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
+    const key = `${cx},${cy}`;
+    if (this.bushes.has(key) || this.trees.has(key) || this.crops.has(key) || this.tilledCells.has(key) || this.placed.has(key)) return false;
+    if (this.child) {
+      const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
+      if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // not on Cato
+    }
+    return true;
+  }
+
+  /** Plant a berry bush at a cell (stage 0) from the held bush item + consume one. */
+  private plantBush(cx: number, cy: number, type: BerryType): void {
+    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    if (!cell || cell.count <= 0) return;
+    this.restoreBush(`${cx},${cy}`, type, 0);
+    this.consumeHeldMaterial();
+    this.scheduleSave();
+  }
+
+  /** (Re)create a bush at a cell at a given stage → the `bushes` map. Used by
+   *  plantBush + save restore. */
+  private restoreBush(key: string, type: BerryType, stage: number): void {
+    if (!this.islandLayer) return;
+    const [cx, cy] = key.split(',').map(Number);
+    const w = this.islandLayer.tileToWorldXY(cx!, cy!);
+    if (!w) return;
+    this.removeBush(cx!, cy!); // clear any existing bush at this cell first
+    const footX = w.x + TILE / 2, footY = w.y + TILE;
+    const base = this.add.image(footX, footY, 'bushes', 'empty-bush-small').setOrigin(0.5, 1).setDepth(footY);
+    const bush: BushObj = { type, stage: 0, timer: 0, base, berries: [] };
+    this.bushes.set(key, bush);
+    this.setBushStage(bush, stage);
+  }
+
+  /** Apply a grow stage: swap the base frame (0=small, 1/2=full) and add/remove the
+   *  3 berry overlays (only at stage 2). */
+  private setBushStage(bush: BushObj, stage: number): void {
+    bush.stage = stage;
+    bush.timer = 0;
+    bush.base.setFrame(stage === 0 ? 'empty-bush-small' : 'empty-bush');
+    // Berries only at stage 2.
+    for (const b of bush.berries) b.destroy();
+    bush.berries = [];
+    if (stage >= 2) {
+      const fx = bush.base.x, fy = bush.base.y;
+      for (const o of BERRY_OFFSETS) {
+        const berry = this.add.image(fx + o.x, fy + o.y, 'bushes', `${bush.type}-in-bush`).setOrigin(0.5, 1).setDepth(bush.base.depth + 1);
+        bush.berries.push(berry);
+      }
+    }
+  }
+
+  /** Grow bushes toward the next stage (0→1→2) + regrow (1→2) after a harvest. */
+  private updateBushes(delta: number): void {
+    for (const bush of this.bushes.values()) {
+      if (bush.stage >= 2) continue;
+      bush.timer += delta;
+      if (bush.timer >= BUSH_STAGE_MS) {
+        this.setBushStage(bush, bush.stage + 1);
+        this.scheduleSave();
+      }
+    }
+  }
+
+  /** Pick a ripe bush — swing the hoe first (like crop harvest), then reap on the
+   *  strike. */
+  private harvestBush(cx: number, cy: number): void {
+    const bush = this.bushes.get(`${cx},${cy}`);
+    if (!bush || bush.stage < 2) return;
+    this.hideTileCursor();
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    if (!w) { this.reapBush(cx, cy); return; }
+    this.hoeSwingAt(w.x + TILE / 2, w.y + TILE / 2, () => this.reapBush(cx, cy));
+  }
+
+  /** The actual pick: the 3 berries pop out (→ the ripe item) + bank, and the bush
+   *  drops back to stage 1 (full, no berries) to regrow. */
+  private reapBush(cx: number, cy: number): void {
+    const bush = this.bushes.get(`${cx},${cy}`);
+    if (!bush || bush.stage < 2) return;
+    for (const b of bush.berries) this.playPopOut(b.x, b.y, 'fruit-items', FRUIT_FRAME[bush.type]);
+    this.addToInventory(makeFruit(bush.type, 3));
+    this.publishInventory();
+    this.setBushStage(bush, 1); // back to full + no berries; regrows to ripe
+    this.scheduleSave();
+  }
+
+  private removeBush(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const bush = this.bushes.get(key);
+    if (!bush) return;
+    bush.base.destroy();
+    for (const b of bush.berries) b.destroy();
+    this.bushes.delete(key);
   }
 
   // Placed house tiles that have been HOED ONCE (armed for removal on the 2nd hit
@@ -3391,7 +3543,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 3,
+      v: 4,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -3401,6 +3553,7 @@ export class GameScene extends Phaser.Scene {
       placed: [...this.placed].map(([key, o]) => ({ key, kind: o.kind, variant: o.variant, orient: o.orient })),
       floors: [...this.floors].map(([key, f]) => ({ key, frame: f.frame })),
       trees: [...this.trees].map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
+      bushes: [...this.bushes].map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
     };
   }
 
@@ -3424,7 +3577,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && (s.v === 1 || s.v === 2 || s.v === 3)) this.applySave(s); // v1 = pre-house, v2 = no trees
+      if (s && s.v >= 1 && s.v <= 4) this.applySave(s); // v1 pre-house, v2 no trees, v3 no bushes
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
     } catch (e) {
@@ -3465,6 +3618,9 @@ export class GameScene extends Phaser.Scene {
         t.timer?.remove();
       }
       this.trees.clear();
+      // Bushes: tear down base + berry overlays.
+      for (const b of this.bushes.values()) { b.base.destroy(); for (const berry of b.berries) berry.destroy(); }
+      this.bushes.clear();
       if (this.islandLayer) {
         for (const key of s.tilled ?? []) this.tilledCells.add(key);
         for (const key of this.tilledCells) {
@@ -3479,6 +3635,7 @@ export class GameScene extends Phaser.Scene {
         for (const f of s.floors ?? []) this.restoreFloor(f.key, f.frame);
         for (const p of s.placed ?? []) this.restorePlaced(p.key, p.kind, p.orient, p.variant);
         for (const t of s.trees ?? []) this.restoreTree(t.key, t.type, t.hasFruit);
+        for (const b of s.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
@@ -3514,6 +3671,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.inventory.some((c) => c?.id === 'axe')) this.addToInventory(itemFromId('axe', 1));
     for (const t of TREE_TYPES) {
       if (!this.inventory.some((c) => c?.id === `tree-${t.id}`)) this.addToInventory(makePlaceable('tree', 10, t.id));
+    }
+    for (const b of BERRY_TYPES) {
+      if (!this.inventory.some((c) => c?.id === `bush-${b}`)) this.addToInventory(makePlaceable('bush', 10, b));
     }
   }
 
@@ -3836,6 +3996,7 @@ export class GameScene extends Phaser.Scene {
     this.updateEdgeScroll(delta);
     this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages
+    this.updateBushes(delta); // grow berry bushes (+ regrow after harvest)
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
