@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { applyCropData } from '../data/crops';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -143,6 +144,9 @@ export class BootScene extends Phaser.Scene {
     // grow stages `empty-bush-small`/`empty-bush` + one berry overlay per type
     // (`<berry>-in-bush`, dropped 3× on a ripe bush).
     this.load.image('bushes', 'uploaded/trees_stumps_and_bushes.png');
+    // Game DATA tables (config as data, not code) — crops: which crops exist + their
+    // stats/grow-times. Applied in create(). See src/data/crops.ts.
+    this.load.json('data-crops', 'data/crops.json');
   }
 
   create(): void {
@@ -217,6 +221,8 @@ export class BootScene extends Phaser.Scene {
       ];
       for (const [n, x, y] of BUSH_FRAMES) if (!bt.has(n)) bt.add(n, 0, x, y, 16, 16);
     }
+    // Apply the loaded crop data table (falls back to the built-in if absent).
+    applyCropData(this.cache.json.get('data-crops'));
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });

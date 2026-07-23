@@ -11,6 +11,7 @@ import {
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import { t, initLang } from '../i18n';
+import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
@@ -212,19 +213,10 @@ const FLOOR_DEPTH = 1.2;
 // Each crop grows through N stages (frames `grow-<name>-<stage>` in the
 // farming_plants atlas). Corn is TALL (16×32); the rest are 16×16. The seed bag +
 // harvested crop item icons live in the farming_plants_items atlas.
-type CropName = 'corn' | 'carrot' | 'tomato' | 'eggplant' | 'pumpkin';
-interface CropDef { stages: number; tall: boolean; label: string }
-const CROPS: Record<CropName, CropDef> = {
-  corn:     { stages: 5, tall: true,  label: 'Corn' },
-  carrot:   { stages: 4, tall: false, label: 'Carrot' },
-  tomato:   { stages: 4, tall: false, label: 'Tomato' },
-  eggplant: { stages: 4, tall: false, label: 'Eggplant' },
-  pumpkin:  { stages: 4, tall: false, label: 'Pumpkin' },
-};
-// Growth per stage: watered crops advance fast, dry ones crawl. Watering wears
-// off when a crop advances a stage (re-water it to keep it fast). Demo timings.
-const CROP_STAGE_MS_WATERED = 3500;
-const CROP_STAGE_MS_DRY = 12000;
+// Crop config is DATA-DRIVEN — the table lives in `public/data/crops.json` (loaded
+// in BootScene → applyCropData); `CROPS`/`CROP_NAMES` are the live references + a
+// built-in fallback. Per-crop grow times (`growWateredMs`/`growDryMs`) replace the
+// old global constant, so each crop can mature at its own rate.
 // How long a watering stays wet (soil tint + fast growth), independent of stage
 // advances, so the damp look persists and re-watering isn't instantly consumed.
 const WET_DURATION_MS = 9000;
@@ -2514,7 +2506,8 @@ export class GameScene extends Phaser.Scene {
       if (crop.stage >= max) continue;
       crop.timer += delta;
       const wet = (this.soilWet.get(key) ?? 0) > 0;
-      const need = wet ? CROP_STAGE_MS_WATERED : CROP_STAGE_MS_DRY;
+      const def = CROPS[crop.name];
+      const need = wet ? def.growWateredMs : def.growDryMs;
       if (crop.timer >= need) {
         crop.timer = 0;
         crop.stage += 1;
@@ -2850,11 +2843,10 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = true;
   }
 
-  /** Loose crop-name match (corn/carrot/tomato/eggplant/pumpkin), or null. */
+  /** Loose crop-name match against the (data-driven) crop list, or null. */
   private parseCrop(s: string | undefined): CropName | null {
     const t = (s ?? '').toLowerCase();
-    const names: CropName[] = ['corn', 'carrot', 'tomato', 'eggplant', 'pumpkin'];
-    return names.find((n) => t.includes(n)) ?? null;
+    return CROP_NAMES.find((n) => t.includes(n)) ?? null;
   }
 
   /** The nearest `max` empty tilled-soil cells to Cato (for a plant task). */
