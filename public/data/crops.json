@@ -1,7 +1,7 @@
 {
   "crops": [
     { "name": "corn",     "label": "Corn",     "stages": 5, "tall": true,  "growWateredSec": 3.5, "growDrySec": 12 },
-    { "name": "carrot",   "label": "Carrot",   "stages": 4, "tall": false, "growWateredSec": 7.77, "growDrySec": 9 },
+    { "name": "carrot",   "label": "Carrot",   "stages": 4, "tall": false, "growWateredSec": 2.5, "growDrySec": 9 },
     { "name": "tomato",   "label": "Tomato",   "stages": 4, "tall": false, "growWateredSec": 3,   "growDrySec": 10 },
     { "name": "eggplant", "label": "Eggplant", "stages": 4, "tall": false, "growWateredSec": 4,   "growDrySec": 14 },
     { "name": "pumpkin",  "label": "Pumpkin",  "stages": 4, "tall": false, "growWateredSec": 6,   "growDrySec": 20 }
