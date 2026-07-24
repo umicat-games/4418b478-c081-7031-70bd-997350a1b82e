@@ -1,0 +1,181 @@
+{
+ "frames": {
+  "weather-frame-big": {
+   "frame": {
+    "x": 119,
+    "y": 7,
+    "w": 92,
+    "h": 50
+   },
+   "sourceSize": {
+    "w": 92,
+    "h": 50
+   }
+  },
+  "balance-frame-big": {
+   "frame": {
+    "x": 263,
+    "y": 100,
+    "w": 51,
+    "h": 24
+   },
+   "sourceSize": {
+    "w": 51,
+    "h": 24
+   }
+  },
+  "time-bg": {
+   "frame": {
+    "x": 68,
+    "y": 102,
+    "w": 21,
+    "h": 35
+   },
+   "sourceSize": {
+    "w": 21,
+    "h": 35
+   }
+  },
+  "arrow-big-1": {
+   "frame": {
+    "x": 338,
+    "y": 1,
+    "w": 13,
+    "h": 13
+   },
+   "sourceSize": {
+    "w": 13,
+    "h": 13
+   }
+  },
+  "arrow-big-2": {
+   "frame": {
+    "x": 337,
+    "y": 18,
+    "w": 15,
+    "h": 12
+   },
+   "sourceSize": {
+    "w": 15,
+    "h": 12
+   }
+  },
+  "arrow-big-3": {
+   "frame": {
+    "x": 336,
+    "y": 34,
+    "w": 16,
+    "h": 12
+   },
+   "sourceSize": {
+    "w": 16,
+    "h": 12
+   }
+  },
+  "arrow-big-4": {
+   "frame": {
+    "x": 337,
+    "y": 50,
+    "w": 15,
+    "h": 12
+   },
+   "sourceSize": {
+    "w": 15,
+    "h": 12
+   }
+  },
+  "arrow-big-5": {
+   "frame": {
+    "x": 338,
+    "y": 66,
+    "w": 13,
+    "h": 13
+   },
+   "sourceSize": {
+    "w": 13,
+    "h": 13
+   }
+  },
+  "weather-frame-small": {
+   "frame": {
+    "x": 359,
+    "y": 7,
+    "w": 64,
+    "h": 33
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 33
+   }
+  },
+  "time-bg-small": {
+   "frame": {
+    "x": 369,
+    "y": 119,
+    "w": 13,
+    "h": 17
+   },
+   "sourceSize": {
+    "w": 13,
+    "h": 17
+   }
+  },
+  "arrow-small-up": {
+   "frame": {
+    "x": 340,
+    "y": 84,
+    "w": 9,
+    "h": 9
+   },
+   "sourceSize": {
+    "w": 9,
+    "h": 9
+   }
+  },
+  "arrow-small-middle": {
+   "frame": {
+    "x": 340,
+    "y": 101,
+    "w": 10,
+    "h": 8
+   },
+   "sourceSize": {
+    "w": 10,
+    "h": 8
+   }
+  },
+  "arrow-small-down": {
+   "frame": {
+    "x": 340,
+    "y": 116,
+    "w": 9,
+    "h": 9
+   },
+   "sourceSize": {
+    "w": 9,
+    "h": 9
+   }
+  },
+  "ballance-frame-small": {
+   "frame": {
+    "x": 264,
+    "y": 135,
+    "w": 48,
+    "h": 19
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 19
+   }
+  }
+ },
+ "meta": {
+  "image": "weather_ui.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 432,
+   "h": 176
+  },
+  "scale": "1"
+ }
+}

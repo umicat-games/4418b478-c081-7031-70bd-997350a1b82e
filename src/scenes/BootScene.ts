@@ -149,6 +149,11 @@ export class BootScene extends Phaser.Scene {
     this.load.atlas('forage', 'uploaded/mushrooms_flowers_stones.png', 'uploaded/mushrooms_flowers_stones.json');
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
+    // Top-left weather / time / money HUD (atlas frames: `weather-frame-big`,
+    // `balance-frame-big`, `time-bg`, `arrow-big-1..5`; icons `sunny`/…; `coin-…`).
+    this.load.atlas('weather-ui', 'uploaded/weather_ui.png', 'uploaded/weather_ui.json');
+    this.load.atlas('weather-icons', 'uploaded/weather_icons_big.png', 'uploaded/weather_icons_big.json');
+    this.load.atlas('coins', 'uploaded/coins.png', 'uploaded/coins.json');
     // Game DATA tables (config as data, not code) — crops: which crops exist + their
     // stats/grow-times. Applied in create(). See src/data/crops.ts.
     this.load.json('data-crops', 'data/crops.json');

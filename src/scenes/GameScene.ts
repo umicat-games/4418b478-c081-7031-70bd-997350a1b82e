@@ -80,6 +80,13 @@ const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil +
 const CATO_STUCK_MS = 2200; // no progress toward a target this long → it's unreachable, skip it
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
+// Day/time HUD: one full day loops in this many ms of play; the sun-arc pointer
+// steps through 5 frames (morning ↗ → evening ↘) across it, then wraps.
+const DAY_LEN_MS = 10 * 60 * 1000; // ~10 min per in-game day
+// Weather = a TIME-tinted background (fills the window) + a transparent weather icon
+// on top. Sunny only for now (decorative); the icon cycles per day for variety.
+const WEATHER_ICONS = ['sunny-no-bg', 'partial-sunny-no-bg', 'sunny-with-cloud-no-bg'];
+const WEATHER_BGS = ['background-morning', 'background-noon', 'background-night']; // by time of day
 // Leash: Cato stays near the CAMERA CENTRE (in view) instead of roaming the whole
 // map. The radius ADAPTS to the visible area (`wanderLeashRadius`) so he keeps in
 // frame at any zoom; if he strays past it he heads back until within half of it.
@@ -419,6 +426,9 @@ interface SaveBlob {
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
+  money?: number; // v6: coin balance (HUD)
+  dayTimeMs?: number; // v6: position in the in-game day loop (HUD sun-arc pointer)
+  dayCount?: number; // v6: whole days elapsed (weather pick)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -521,6 +531,15 @@ export class GameScene extends Phaser.Scene {
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
   private invRev = 0;
   private invDragFrom: number | null = null; // touch: cell a backpack drag started on
+
+  // ── Weather / time-of-day / money HUD (WeatherScene renders; GameScene owns
+  //    the MODEL, published to registry `weatherHud`) ───────────────────────
+  private money = 0; // coin balance (display-only for now — no economy yet)
+  private dayTimeMs = 0; // position within the current in-game day loop [0, DAY_LEN_MS)
+  private dayCount = 0; // whole days elapsed (drives the per-day weather pick)
+  private weatherHudRev = 0; // bumped on any HUD-visible change → WeatherScene re-renders
+  private lastPointerStep = -1; // last published pointer frame (1..5); republish only on change
+  private lastBgIndex = -1; // last published time-of-day background (0..2)
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -917,6 +936,10 @@ export class GameScene extends Phaser.Scene {
         // G = force-spawn a ring of foragables + a big-stone of each tier near the
         // camera centre (for testing the forage/mining systems without waiting).
         this.input.keyboard?.on('keydown-G', () => this.debugSpawnForage());
+        // Y = give coins, U = fast-forward the day clock by one pointer step — to
+        // exercise the weather/time/money HUD without waiting / an economy.
+        this.input.keyboard?.on('keydown-Y', () => this.addMoney(12345));
+        this.input.keyboard?.on('keydown-U', () => { this.dayTimeMs = (this.dayTimeMs + DAY_LEN_MS / 5) % DAY_LEN_MS; this.publishWeatherHud(); });
         // V = teleport Cato right at the built door (to verify it opens on proximity).
         this.input.keyboard?.on('keydown-V', () => {
           const door = [...this.placed.values()].find((o) => o.kind === 'door');
@@ -1095,15 +1118,18 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('cursor', this.cursorState);
     // Overlays, back-to-front: hotbar → full backpack → cursor (always topmost).
     if (!this.scene.isActive('HotbarScene')) this.scene.launch('HotbarScene');
+    if (!this.scene.isActive('WeatherScene')) this.scene.launch('WeatherScene');
     if (!this.scene.isActive('InventoryScene')) this.scene.launch('InventoryScene');
     if (!this.scene.isActive('PaletteScene')) this.scene.launch('PaletteScene');
     if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
+    this.scene.bringToTop('WeatherScene');
     this.scene.bringToTop('InventoryScene');
     this.scene.bringToTop('PaletteScene');
     this.scene.bringToTop('CursorScene');
     this.publishBuildPalette();
+    this.publishWeatherHud();
 
     // MOUSE: click the canvas → capture the mouse. If already locked, the click
     // is a game/HUD action routed through the virtual cursor (the OS pointer is
@@ -1446,6 +1472,53 @@ export class GameScene extends Phaser.Scene {
     this.scheduleSave(); // inventory / selection changed → persist
   }
 
+  /** Pointer step (1..5) for the current time of day: morning ↗ … evening ↘. */
+  private pointerStep(): number {
+    const t = (this.dayTimeMs % DAY_LEN_MS) / DAY_LEN_MS; // 0..1 through the day
+    return Phaser.Math.Clamp(Math.floor(t * 5) + 1, 1, 5);
+  }
+
+  /** Background index (0..2) for the current time of day: morning / noon / night. */
+  private bgIndex(): number {
+    const t = (this.dayTimeMs % DAY_LEN_MS) / DAY_LEN_MS;
+    return Phaser.Math.Clamp(Math.floor(t * WEATHER_BGS.length), 0, WEATHER_BGS.length - 1);
+  }
+
+  /** Push the weather / time / money model to WeatherScene (re-renders on rev bump). */
+  private publishWeatherHud(): void {
+    this.registry.set('weatherHud', {
+      visible: this.gameReady && !this.inventoryOpen,
+      bgFrame: WEATHER_BGS[this.bgIndex()], // time-tinted window background
+      weatherFrame: WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
+      pointerStep: this.pointerStep(),
+      money: this.money,
+      rev: ++this.weatherHudRev,
+    });
+    this.lastPointerStep = this.pointerStep();
+    this.lastBgIndex = this.bgIndex();
+  }
+
+  /** Give / take coins + refresh the HUD (single choke-point for the balance). */
+  private addMoney(delta: number): void {
+    this.money = Math.max(0, this.money + delta);
+    this.publishWeatherHud();
+    this.scheduleSave();
+  }
+
+  /** Advance the in-game day clock; re-publish only when the pointer step or day
+   *  flips (cheap — the pointer changes ~5×/day, not every frame). */
+  private updateDayClock(delta: number): void {
+    this.dayTimeMs += delta;
+    if (this.dayTimeMs >= DAY_LEN_MS) {
+      this.dayTimeMs %= DAY_LEN_MS;
+      this.dayCount += 1; // new day → new weather pick
+    }
+    if (this.pointerStep() !== this.lastPointerStep || this.bgIndex() !== this.lastBgIndex) {
+      this.publishWeatherHud(); // pointer / background changed → redraw + persist the clock
+      this.scheduleSave();
+    }
+  }
+
   /** Select hotbar (row-0) slot `i`: equip its tool + highlight it. Re-selecting
    *  the active slot TOGGLES it off → empty hand, no highlight. */
   private selectHotbarSlot(i: number): void {
@@ -1479,6 +1552,7 @@ export class GameScene extends Phaser.Scene {
       this.returnHeldToFreeCell();
     }
     this.publishInventory();
+    this.publishWeatherHud(); // hide the weather HUD behind the backpack overlay
     this.closeWallPalette(); // cancel a pending wall-orientation choice
   }
 
@@ -4272,7 +4346,7 @@ export class GameScene extends Phaser.Scene {
 
     return {
       island: 'home',
-      timeOfDay: 'day',
+      timeOfDay: ['morning', 'morning', 'midday', 'afternoon', 'evening'][this.pointerStep() - 1],
       backpack, // e.g. [{item:'Corn seeds', count:10}, {item:'Hoe', count:1}]
       farm: {
         plantedByCrop: byType, // {corn:3, carrot:2}
@@ -4313,6 +4387,7 @@ export class GameScene extends Phaser.Scene {
     if (this.gameReady) return;
     this.gameReady = true;
     this.publishInventory(); // hotbar was suppressed until now
+    this.publishWeatherHud(); // reveal the weather HUD now that gameReady is true
     const c = this.loadingCover;
     this.loadingCover = undefined;
     if (c) {
@@ -4325,7 +4400,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 5,
+      v: 6,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -4338,6 +4413,9 @@ export class GameScene extends Phaser.Scene {
       bushes: [...this.bushes].map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
       bigStones: [...this.bigStones].map(([key, s]) => ({ key, tier: s.tier, ready: s.ready })),
+      money: this.money,
+      dayTimeMs: Math.round(this.dayTimeMs),
+      dayCount: this.dayCount,
     };
   }
 
@@ -4361,7 +4439,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v >= 1 && s.v <= 5) this.applySave(s); // v1 pre-house … v4 no foragables/stones
+      if (s && s.v >= 1 && s.v <= 6) this.applySave(s); // v1 pre-house … v5 no money/clock
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
     } catch (e) {
@@ -4440,8 +4518,13 @@ export class GameScene extends Phaser.Scene {
       this.hotbarSelected = s.selected ?? -1;
       if (s.cato && this.child) this.child.setPosition(s.cato.x, s.cato.y);
       this.ensureBuildingMaterials(); // saves predating the house feature lack these
+      // Money + day clock (v6; older saves default to 0 = fresh morning, no coins).
+      this.money = s.money ?? 0;
+      this.dayTimeMs = s.dayTimeMs ?? 0;
+      this.dayCount = s.dayCount ?? 0;
       this.equipSelected();
       this.publishInventory();
+      this.publishWeatherHud();
     } finally {
       this.loadingSave = false;
     }
@@ -4798,6 +4881,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
     this.trySpawn(delta); // drop new foragables / big-stones onto empty grass
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
+    this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
     // Camera follow runs in POST_UPDATE (updateCameraFollow) so it sees Cato's

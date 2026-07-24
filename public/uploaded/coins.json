@@ -1,0 +1,37 @@
+{
+ "frames": {
+  "coin-white-border": {
+   "frame": {
+    "x": 16,
+    "y": 0,
+    "w": 16,
+    "h": 16
+   },
+   "sourceSize": {
+    "w": 16,
+    "h": 16
+   }
+  },
+  "coin-white-border-shadow-below": {
+   "frame": {
+    "x": 48,
+    "y": 0,
+    "w": 16,
+    "h": 16
+   },
+   "sourceSize": {
+    "w": 16,
+    "h": 16
+   }
+  }
+ },
+ "meta": {
+  "image": "coins.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 128,
+   "h": 48
+  },
+  "scale": "1"
+ }
+}
