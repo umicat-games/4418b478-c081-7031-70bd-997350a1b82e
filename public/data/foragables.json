@@ -1,0 +1,10 @@
+{
+  "foragables": [
+    { "name": "grass",          "label": "Grass",          "stages": 4, "tall": false, "growSec": 6,  "spawnWeight": 5, "yieldCount": 1 },
+    { "name": "sunflower",       "label": "Sunflower",      "stages": 4, "tall": true,  "growSec": 8,  "spawnWeight": 3, "yieldCount": 1 },
+    { "name": "wild-flower",     "label": "Wild Flower",    "stages": 3, "tall": false, "growSec": 7,  "spawnWeight": 3, "yieldCount": 1 },
+    { "name": "red-mushroom",    "label": "Red Mushroom",   "stages": 3, "tall": false, "growSec": 10, "spawnWeight": 2, "yieldCount": 1 },
+    { "name": "purple-mushroom", "label": "Purple Mushroom","stages": 4, "tall": false, "growSec": 12, "spawnWeight": 1, "yieldCount": 1 },
+    { "name": "small-stone",     "label": "Small Stone",    "stages": 6, "tall": false, "growSec": 9,  "spawnWeight": 2, "yieldCount": 1 }
+  ]
+}

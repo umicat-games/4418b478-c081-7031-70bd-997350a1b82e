@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { applyCropData } from '../data/crops';
+import { applyForagableData, applyBigStoneData } from '../data/foragables';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -144,9 +145,16 @@ export class BootScene extends Phaser.Scene {
     // grow stages `empty-bush-small`/`empty-bush` + one berry overlay per type
     // (`<berry>-in-bush`, dropped 3× on a ripe bush).
     this.load.image('bushes', 'uploaded/trees_stumps_and_bushes.png');
+    // Wild foragables + big-stones sheet (atlas-json: `<type>-<stage>`, `big-stone-<tier>`).
+    this.load.atlas('forage', 'uploaded/mushrooms_flowers_stones.png', 'uploaded/mushrooms_flowers_stones.json');
+    // Pickaxe tool icon (knocks big-stones).
+    this.load.image('pickaxe', 'uploaded/pickaxe.png');
     // Game DATA tables (config as data, not code) — crops: which crops exist + their
     // stats/grow-times. Applied in create(). See src/data/crops.ts.
     this.load.json('data-crops', 'data/crops.json');
+    // Foragables + big-stones data tables (see src/data/foragables.ts).
+    this.load.json('data-foragables', 'data/foragables.json');
+    this.load.json('data-big-stones', 'data/big-stones.json');
   }
 
   create(): void {
@@ -223,6 +231,8 @@ export class BootScene extends Phaser.Scene {
     }
     // Apply the loaded crop data table (falls back to the built-in if absent).
     applyCropData(this.cache.json.get('data-crops'));
+    applyForagableData(this.cache.json.get('data-foragables'));
+    applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);
     this.scene.start('GameScene', { sceneId: manifest.initialScene });

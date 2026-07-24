@@ -1,0 +1,7 @@
+{
+  "bigStones": [
+    { "tier": 1, "label": "Big Stone I",   "readyStones": 1, "regenSec": 30, "breakBonus": 1, "spawnWeight": 3 },
+    { "tier": 2, "label": "Big Stone II",  "readyStones": 2, "regenSec": 30, "breakBonus": 2, "spawnWeight": 2 },
+    { "tier": 3, "label": "Big Stone III", "readyStones": 3, "regenSec": 30, "breakBonus": 3, "spawnWeight": 1 }
+  ]
+}

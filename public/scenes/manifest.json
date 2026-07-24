@@ -1051,25 +1051,25 @@
           "loop": false
         },
         {
-          "name": "hurt-down",
+          "name": "axe-down",
           "from": 128,
           "to": 135,
           "loop": false
         },
         {
-          "name": "hurt-up",
+          "name": "axe-up",
           "from": 136,
           "to": 143,
           "loop": false
         },
         {
-          "name": "hurt-right",
+          "name": "axe-right",
           "from": 144,
           "to": 151,
           "loop": false
         },
         {
-          "name": "hurt-left",
+          "name": "axe-left",
           "from": 152,
           "to": 159,
           "loop": false

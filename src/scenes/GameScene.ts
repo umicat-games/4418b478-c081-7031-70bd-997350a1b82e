@@ -12,6 +12,11 @@ import {
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
+import {
+  FORAGABLES, FORAGABLE_NAMES, BIG_STONES, BIG_STONE_TIERS,
+  FORAGE_SPAWN_INTERVAL_MS, FORAGE_MAX_ON_MAP, BIG_STONE_SPAWN_CHANCE,
+  type ForagableName,
+} from '../data/foragables';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
@@ -72,6 +77,7 @@ const CATO_ARRIVE_DIST = 3;   // px from a cell centre that counts as "arrived"
 // for the whole swing, and flip the cell to soil near the end (as the hoe lands).
 const CATO_TILL_STEP_MS = 1000; // pause on each cell = one full attack swing
 const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil + dirt
+const CATO_STUCK_MS = 2200; // no progress toward a target this long → it's unreachable, skip it
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 // Leash: Cato stays near the CAMERA CENTRE (in view) instead of roaming the whole
@@ -99,13 +105,13 @@ const GRASS_ISLAND_NAME = 'island';
 
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
-type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe';
+type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
 // backpack later = bump INV_ROWS. Stackable items merge up to MAX_STACK per cell.
 const INV_COLS = 8;
-const INV_ROWS = 4; // 1 hotbar row + 3 backpack rows (bumped from 3 for trees/bushes)
+const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const MAX_STACK = 99;
 
 /** One stack of items in a single inventory/hotbar cell. Tools are
@@ -290,6 +296,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (id === 'hoe') return { id, label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
   if (id === 'watering-can') return { id, label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
   if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false, toolId: 'axe' };
+  if (id === 'pickaxe') return { id, label: 'Pickaxe', iconKey: 'pickaxe', count: 1, stackable: false, toolId: 'pickaxe' };
+  if (id === 'stone') return makeStone(count);
   if (id === 'wall') return makePlaceable('wall', count);
   if (id === 'floor') return makePlaceable('floor', count);
   if (id === 'window') return makePlaceable('window', count);
@@ -306,6 +314,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (bush && BERRY_TYPES.includes(bush[1] as BerryType)) return makePlaceable('bush', count, bush[1]);
   const fruit = /^fruit-(\w+)$/.exec(id);
   if (fruit) return makeFruit(fruit[1], count);
+  const forage = /^forage-([\w-]+)$/.exec(id);
+  if (forage) return makeForage(forage[1] as ForagableName, count);
   return { id, count, stackable: true }; // unknown → generic stack
 }
 
@@ -313,6 +323,49 @@ function itemFromId(id: string, count: number): ItemStack {
  *  matching frame of the `fruit-items` sheet (fruit_and_berries_items.png). */
 function makeFruit(type: string, count: number): ItemStack {
   return { id: `fruit-${type}`, label: FRUIT_LABEL[type] ?? type, iconKey: 'fruit-items', iconFrame: FRUIT_FRAME[type] ?? 0, count, stackable: true };
+}
+
+/** A harvested wild foragable (grass / sunflower / mushroom / …) as a backpack item.
+ *  Icon = the MATURE frame of the `forage` atlas (`<type>-<stages>`). small-stone
+ *  yields the generic `stone` item instead (banked via makeStone). */
+function makeForage(type: ForagableName, count: number): ItemStack {
+  if (type === 'small-stone') return makeStone(count);
+  const def = FORAGABLES[type];
+  return {
+    id: `forage-${type}`,
+    label: def?.label ?? type,
+    iconKey: 'forage',
+    iconFrame: `${type}-${def ? def.stages : 1}`,
+    count,
+    stackable: true,
+  };
+}
+
+/** A stone resource — from mining a big-stone OR harvesting a mature small-stone.
+ *  Icon = the largest small-stone frame. */
+function makeStone(count: number): ItemStack {
+  return { id: 'stone', label: 'Stone', iconKey: 'forage', iconFrame: 'small-stone-6', count, stackable: true };
+}
+
+/** A wild foragable at a cell: `type` + growth `stage` (1-based; frames `<type>-1`..
+ *  `<type>-<stages>`, mature = last) + a `timer` counting ms toward the next stage. */
+interface ForagObj {
+  type: ForagableName;
+  stage: number;
+  timer: number;
+  sprite: Phaser.GameObjects.Image;
+}
+
+/** A minable big-stone at a cell. `ready` = stones available to knock out right now;
+ *  `regen` holds the remaining-ms timers of stones currently regrowing (each pops
+ *  back a `ready` when it hits 0). `emptyKnocks` counts knocks while empty (2 → break). */
+interface BigStoneObj {
+  tier: number;
+  ready: number;
+  regen: number[];
+  emptyKnocks: number;
+  sprite: Phaser.GameObjects.Image;
+  body?: Phaser.GameObjects.Sprite; // invisible solid collider (Cato can't walk through)
 }
 
 /** A planted berry bush at a cell. `stage` 0=small / 1=full / 2=ripe (bears 3
@@ -364,6 +417,8 @@ interface SaveBlob {
   floors?: Array<{ key: string; frame: number }>; // v2: floor tiles (a ground layer, can overlap walls)
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
+  foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
+  bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
 }
 
 export class GameScene extends Phaser.Scene {
@@ -431,6 +486,11 @@ export class GameScene extends Phaser.Scene {
   private trees = new Map<string, TreeObj>(); // "cx,cy" → a placed tree (chop with the axe)
   private activeBushType: BerryType = 'strawberry'; // current berry bush to plant
   private bushes = new Map<string, BushObj>(); // "cx,cy" → a planted berry bush
+  // Wild foragables (auto-spawn on the grass, grow, harvest at max) + minable
+  // big-stones (knock with the pickaxe). Both spawn passively via the spawn ticker.
+  private foragables = new Map<string, ForagObj>(); // "cx,cy" → a wild foragable
+  private bigStones = new Map<string, BigStoneObj>(); // "cx,cy" → a minable big stone
+  private spawnTimer = 0; // ms accumulated toward the next spawn attempt
   private wallOrient: WallOrient = 'bottom'; // current wall facing (R cycles through all 9)
   private placed = new Map<string, PlacedObj>(); // "cx,cy" → placed wall/door/furniture
   private floors = new Map<string, { sprite: Phaser.GameObjects.Sprite; frame: number }>(); // "cx,cy" → floor tile (ground layer; can overlap a wall so it tucks under it)
@@ -511,14 +571,28 @@ export class GameScene extends Phaser.Scene {
   // and Cato walks over + hoes each one (reusing the farming tillCell mechanic).
   // A single active task at a time; it overrides the autonomous wander.
   private catoTask: {
-    type: 'till' | 'plant' | 'water' | 'harvest';
+    // Single-strike (one hit per cell → advance): till/plant/water/harvest/bush/forage.
+    // Multi-strike (keep hitting the SAME target until it's gone): chop/fruit/mine.
+    type: 'till' | 'plant' | 'water' | 'harvest' | 'chop' | 'fruit' | 'mine' | 'bush' | 'forage';
     queue: Array<{ cx: number; cy: number }>;
-    crop: string; // flavour label ('corn', 'crops', …)
+    crop: string; // flavour label ('corn', 'crops', 'trees', 'stones', …)
     plantName?: CropName; // for a plant task: what to sow
     cooldown: number;
-    // Where Cato stands to work the CURRENT target (an adjacent cell) + which way
-    // he faces to swing/tend it. Computed once per target; null = recompute.
+    // Multi-strike safety: hits landed on the CURRENT target (reset when it drops).
+    // chop/mine targets self-invalidate (felled / broken) via taskCellValid; this just
+    // backstops a target that somehow never clears so Cato can't flail forever.
+    strikes: number;
+    // Stall detector backstop: if Cato makes no progress toward the next path waypoint
+    // for a while (a wall placed mid-walk, a physics wedge), drop the stale path and
+    // re-plan; if that keeps failing the target is abandoned.
+    walkMs: number;
+    walkDist: number;
+    // Where Cato stands to work the CURRENT target (an adjacent cell) + which way he
+    // faces to swing/tend it. Computed once per target; null = recompute.
     stand: { x: number; y: number; dir: FaceDir } | null;
+    // A* route to `stand` as world-centre waypoints (last = the stand cell). Cato walks
+    // them one tile at a time (cardinal). null = (re)plan on the next tick.
+    path: Array<{ x: number; y: number }> | null;
   } | null = null;
   private catoReturning = false; // walking back toward the camera centre (leash)
 
@@ -747,6 +821,49 @@ export class GameScene extends Phaser.Scene {
                   count: 'integer', // how many to harvest; 0 / omitted = all ripe crops
                 },
               },
+              {
+                name: 'chop_trees',
+                description:
+                  'Walk to the nearby trees and chop them down for wood. Use when the guardian asks you to chop / cut down / fell / clear the trees (or get wood / lumber / logs). A fruit tree drops its fruit on the way down, then falls as a plain tree. Use harvest_fruit instead if they only want the fruit and the trees left standing.',
+                args: {
+                  count: 'integer', // how many trees to fell; 0 / omitted = all nearby trees
+                },
+              },
+              {
+                name: 'harvest_fruit',
+                description:
+                  'Walk to the trees that are bearing fruit and shake the fruit loose into the backpack, leaving the trees standing. Use when the guardian asks you to harvest / pick / gather the fruit from the trees. Only trees that currently have fruit are picked. If they name a SPECIFIC fruit, pass it as `fruit` so you pick only that kind (else you pick every fruit).',
+                args: {
+                  fruit: 'string', // apple, pear, or peach; omit to pick ALL fruit trees
+                  count: 'integer', // how many fruit trees to pick; 0 / omitted = all with fruit
+                },
+              },
+              {
+                name: 'mine_stones',
+                description:
+                  'Walk to the big rocks / boulders and mine them for stone — each knock chips off a stone, and once mined out the rock breaks apart for a bonus. Use when the guardian asks you to mine / dig / break / knock the rocks or big stones, or get stone / ore.',
+                args: {
+                  count: 'integer', // how many big stones to mine; 0 / omitted = all nearby
+                },
+              },
+              {
+                name: 'harvest_bushes',
+                description:
+                  'Walk to the berry bushes that are ripe and pick their berries into the backpack (the bush regrows afterwards). Use when the guardian asks you to pick / harvest / collect the berries or bushes. Only ripe bushes are picked. If they name a SPECIFIC berry, pass it as `berry` so you pick only that kind — otherwise you pick EVERY ripe bush (e.g. "pick the strawberries" must set berry:"strawberry", or you\'d grab the blueberries too).',
+                args: {
+                  berry: 'string', // strawberry, grape, or blueberry; omit to pick ALL ripe bushes
+                  count: 'integer', // how many bushes to pick; 0 / omitted = all ripe bushes
+                },
+              },
+              {
+                name: 'forage',
+                description:
+                  'Walk around and gather the wild growth scattered on the grass once it is fully grown — mushrooms, wild flowers, tall grass, small stones, etc. Use when the guardian asks you to forage / gather / collect / pick up / clear the wild things. If they name a SPECIFIC kind, pass it as `kind` so you gather ONLY that — otherwise you gather EVERYTHING (e.g. "clear the weeds" must set kind:"grass", or you\'d also take the mushrooms and flowers). Use "grass" for weeds/grass, "mushroom" for either mushroom, "flower" for the flowers, "stone" for loose small stones.',
+                args: {
+                  kind: 'string', // grass, mushroom, flower, or stone (or a specific name); omit to gather ALL
+                  count: 'integer', // how many to gather; 0 / omitted = all mature of that kind
+                },
+              },
               // NB: emotes are NOT a tool — Haiku returned the tool call WITHOUT any
               // spoken text (empty replies). Cato instead prefixes his reply with a
               // [mood] marker (see the playbook), parsed in submitDialog.
@@ -778,6 +895,11 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-P', () => { if (canAct()) this.startPlantTask({ crop: 'corn' }); });
         this.input.keyboard?.on('keydown-O', () => { if (canAct()) this.startWaterTask({}); }); // O = water crops
         this.input.keyboard?.on('keydown-H', () => { if (canAct()) this.startHarvestTask({}); }); // H = harvest ripe crops
+        this.input.keyboard?.on('keydown-C', () => { if (canAct()) this.startChopTask({}); });    // C = chop down trees
+        this.input.keyboard?.on('keydown-F', () => { if (canAct()) this.startFruitTask({}); });   // F = harvest tree fruit
+        this.input.keyboard?.on('keydown-N', () => { if (canAct()) this.startMineTask({}); });    // N = mine big stones
+        this.input.keyboard?.on('keydown-J', () => { if (canAct()) this.startBushTask({}); });    // J = pick berry bushes
+        this.input.keyboard?.on('keydown-K', () => { if (canAct()) this.startForageTask({}); });  // K = gather foragables
         // M = open the dialog with a long multi-page reply to exercise the RPG
         // typewriter + pagination + "more" icon without the AI.
         this.input.keyboard?.on('keydown-M', () => {
@@ -792,6 +914,9 @@ export class GameScene extends Phaser.Scene {
         // B = build a test house (wall ring + door + furniture) around the camera
         // centre, without the inventory/cursor — for visual + collision testing.
         this.input.keyboard?.on('keydown-B', () => this.debugBuildHouse());
+        // G = force-spawn a ring of foragables + a big-stone of each tier near the
+        // camera centre (for testing the forage/mining systems without waiting).
+        this.input.keyboard?.on('keydown-G', () => this.debugSpawnForage());
         // V = teleport Cato right at the built door (to verify it opens on proximity).
         this.input.keyboard?.on('keydown-V', () => {
           const door = [...this.placed.values()].find((o) => o.kind === 'door');
@@ -990,6 +1115,11 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      // Backpack open: route the click to actAt (pick/drop a cell, or click-outside to
+      // close) whether or not the pointer is locked — NEVER fall through to the world /
+      // Cato sitting BEHIND the panel. (Lock is often dropped after chatting, so an open
+      // backpack is commonly UNLOCKED, where this handler used to reach catContains.)
+      if (this.inventoryOpen) { this.locked ? this.handleLockedClick() : this.actAt(pointer.x, pointer.y); return; }
       if (this.locked) { this.handleLockedClick(); return; }
       // Not locked yet: clicking the cat opens the dialog; anything else captures
       // the pointer (the normal edge-scroll / camera mode). NOTE: Cato's top-right
@@ -1117,6 +1247,20 @@ export class GameScene extends Phaser.Scene {
       const treeKey = this.treeAtPoint(wp.x, wp.y);
       if (treeKey) { const [tx, ty] = treeKey.split(',').map(Number); this.chopTree(tx!, ty!); return; }
     }
+    // PICKAXE knocks any big-stone the click lands on (sprite bounds — the rock is
+    // ~2 tiles, taller than its foot cell).
+    if (this.activeTool === 'pickaxe' && !this.activePlace) {
+      const sk = this.stoneAtPoint(wp.x, wp.y);
+      if (sk) { const [sx, sy] = sk.split(',').map(Number); this.knockStone(sx!, sy!); return; }
+    }
+    // Empty hand / hoe harvests a MATURE wild foragable (sprite bounds — tall sunflower).
+    if (!this.activeSeed && !this.activePlace && this.activeTool !== 'watering-can' && this.activeTool !== 'axe' && this.activeTool !== 'pickaxe') {
+      const fk = this.foragAtPoint(wp.x, wp.y);
+      if (fk) {
+        const f = this.foragables.get(fk)!;
+        if (f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) { const [fx, fy] = fk.split(',').map(Number); this.harvestForagable(fx!, fy!); return; }
+      }
+    }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -1145,7 +1289,8 @@ export class GameScene extends Phaser.Scene {
       // and regrows). Hand or hoe, not the seed / watering can.
       const bush = this.bushes.get(key);
       if (canHarvest && bush && bush.stage >= 2) { this.harvestBush(tile.x, tile.y); return; }
-      if (this.activeTool === 'hoe' && !this.tilledCells.has(key)) {
+      if (this.activeTool === 'hoe' && !this.tilledCells.has(key) && !this.cellBlocksTill(key)
+          && !this.treeAtPoint(wp.x, wp.y) && !this.stoneAtPoint(wp.x, wp.y)) {
         this.tillCell(tile.x, tile.y); return;
       }
       // Hoe on EMPTY tilled soil → loosen it (furrows); a 2nd hoe within the
@@ -1212,6 +1357,13 @@ export class GameScene extends Phaser.Scene {
       g.generateTexture('dirt-particle', 4, 4);
       g.destroy();
     }
+    // White "chip" particle for the pickaxe knock on big-stones (like dirtBurst).
+    if (!this.textures.exists('white-particle')) {
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 1).fillRect(0, 0, 3, 3);
+      g.generateTexture('white-particle', 3, 3);
+      g.destroy();
+    }
 
     this.setupInventory();
   }
@@ -1242,8 +1394,9 @@ export class GameScene extends Phaser.Scene {
     this.inventory[slot++] = makePlaceable('window', 99);
     this.inventory[slot++] = makePlaceable('door', 10);
     for (const piece of FURNITURE) this.inventory[slot++] = makePlaceable('furniture', 10, piece.id);
-    // Axe (chops trees) + a tree of each kind to plant.
+    // Axe (chops trees) + pickaxe (knocks big-stones) + a tree of each kind to plant.
     this.inventory[slot++] = itemFromId('axe', 1);
+    this.inventory[slot++] = itemFromId('pickaxe', 1);
     for (const t of TREE_TYPES) this.inventory[slot++] = makePlaceable('tree', 10, t.id);
     for (const b of BERRY_TYPES) this.inventory[slot++] = makePlaceable('bush', 10, b);
 
@@ -1510,7 +1663,8 @@ export class GameScene extends Phaser.Scene {
     const tilling = this.activeTool === 'hoe';
     const watering = this.activeTool === 'watering-can';
     const chopping = this.activeTool === 'axe';
-    const holdingTool = tilling || planting || watering || chopping;
+    const mining = this.activeTool === 'pickaxe';
+    const holdingTool = tilling || planting || watering || chopping || mining;
     // No tool held / not locked / over UI / dialog / backpack → real mouse.
     if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar()) {
       showMouse();
@@ -1521,25 +1675,38 @@ export class GameScene extends Phaser.Scene {
     if (tilling) icon.setTexture('tools_and_meterials', 'hoe');
     else if (watering) icon.setTexture('tools_and_meterials', 'watering-can');
     else if (chopping) icon.setTexture('tools_and_meterials', 'axe');
+    else if (mining) icon.setTexture('pickaxe');
     else if (this.activeSeed) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
 
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
     const tile = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
-    // Axe targets a TREE (by sprite bounds — canopy included), not a tile.
+    // Axe targets a TREE, pickaxe a BIG-STONE (both by sprite bounds), not a tile.
     const treeKey = chopping ? this.treeAtPoint(wp.x, wp.y) : null;
+    const stoneKey = mining ? this.stoneAtPoint(wp.x, wp.y) : null;
 
     // Is this spot a valid target for the held tool?
     let valid = false;
     if (chopping) valid = !!treeKey;
+    else if (mining) valid = !!stoneKey;
     else if (tile) {
       const key = `${tile.x},${tile.y}`;
       if (tilling) {
         // Hoe: bright over tillable grass, EMPTY tilled soil (loosen/un-till), a
-        // MATURE crop (harvest), OR a placed house tile (dig it out). Dim only over
-        // a still-growing crop.
+        // MATURE crop / RIPE bush / mature foragable (harvest), OR a placed house tile
+        // (dig it out). DIM over a still-growing crop and over anything the hoe can't
+        // touch — a tree, big stone, or an immature bush/foragable (can't till under them).
         const crop = this.crops.get(key);
-        const harvestable = !!crop && crop.stage >= CROPS[crop.name].stages - 1;
-        valid = this.placed.has(key) || this.floors.has(key) || !this.tilledCells.has(key) || !crop || harvestable;
+        const cropHarvest = !!crop && crop.stage >= CROPS[crop.name].stages - 1;
+        const bush = this.bushes.get(key);
+        const forag = this.foragables.get(key);
+        const foragMature = !!forag && forag.stage >= (FORAGABLES[forag.type]?.stages ?? 1);
+        if (this.treeAtPoint(wp.x, wp.y) || this.stoneAtPoint(wp.x, wp.y)) valid = false; // over a tree/stone sprite
+        else if (this.placed.has(key) || this.floors.has(key)) valid = true;
+        else if (this.trees.has(key) || this.bigStones.has(key)) valid = false;
+        else if (bush) valid = bush.stage >= 2;
+        else if (forag) valid = foragMature;
+        else if (!this.tilledCells.has(key)) valid = true;
+        else valid = !crop || cropHarvest;
       }
       else if (planting) valid = this.tilledCells.has(key) && !this.crops.has(key);
       // Water: any tilled soil (crop or not, wet or not) — it just wets the ground.
@@ -1557,6 +1724,12 @@ export class GameScene extends Phaser.Scene {
     // canopy tile the cursor happens to be over, so it clearly frames the target.
     if (chopping && treeKey) {
       const [tx, ty] = treeKey.split(',').map(Number);
+      const w = this.islandLayer.tileToWorldXY(tx!, ty!);
+      if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
+    }
+    // Pickaxe over a big-stone: snap the bracket to the stone's base cell.
+    if (mining && stoneKey) {
+      const [tx, ty] = stoneKey.split(',').map(Number);
       const w = this.islandLayer.tileToWorldXY(tx!, ty!);
       if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
     }
@@ -2158,6 +2331,295 @@ export class GameScene extends Phaser.Scene {
     this.bushes.delete(key);
   }
 
+  // ── Wild foragables: auto-spawn → grow → harvest at max ────────────────────
+
+  /** (Re)create a foragable sprite at a cell for a given growth stage (1-based).
+   *  Frame = `<type>-<stage>` in the `forage` atlas. Used by the spawner + save
+   *  restore. Depth = foot Y so Cato passes in front / behind (tall sunflower). */
+  private restoreForagable(key: string, type: ForagableName, stage: number, timer: number): void {
+    if (!this.islandLayer) return;
+    const [cx, cy] = key.split(',').map(Number);
+    const w = this.islandLayer.tileToWorldXY(cx!, cy!);
+    if (!w) return;
+    this.removeForagable(cx!, cy!);
+    const footX = w.x + TILE / 2, footY = w.y + TILE;
+    const sprite = this.add.image(footX, footY, 'forage', `${type}-${stage}`).setOrigin(0.5, 1).setDepth(footY);
+    this.foragables.set(key, { type, stage, timer, sprite });
+  }
+
+  /** Grow every foragable toward its max stage; the max stage stops (harvestable). */
+  private updateForagables(delta: number): void {
+    for (const [key, f] of this.foragables) {
+      const def = FORAGABLES[f.type];
+      if (!def || f.stage >= def.stages) continue;
+      f.timer += delta;
+      if (f.timer >= def.growMs) {
+        f.timer = 0;
+        f.stage += 1;
+        f.sprite.setFrame(`${f.type}-${f.stage}`);
+        this.scheduleSave();
+      }
+    }
+  }
+
+  /** The mature foragable whose sprite the world-point lands on (sprite bounds, so a
+   *  tall sunflower is clickable up top), or null. */
+  private foragAtPoint(x: number, y: number): string | null {
+    let best: string | null = null, bestFoot = -Infinity;
+    for (const [key, f] of this.foragables) {
+      if (f.sprite.active && f.sprite.getBounds().contains(x, y) && f.sprite.y > bestFoot) { best = key; bestFoot = f.sprite.y; }
+    }
+    return best;
+  }
+
+  /** Harvest a MATURE foragable (empty hand / hoe): hoe-swing, then reap on the strike. */
+  private harvestForagable(cx: number, cy: number): void {
+    const f = this.foragables.get(`${cx},${cy}`);
+    if (!f || f.stage < (FORAGABLES[f.type]?.stages ?? 1)) return;
+    this.hideTileCursor();
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    if (!w) { this.reapForagable(cx, cy); return; }
+    this.hoeSwingAt(w.x + TILE / 2, w.y + TILE / 2, () => this.reapForagable(cx, cy));
+  }
+
+  private reapForagable(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const f = this.foragables.get(key);
+    const def = f && FORAGABLES[f.type];
+    if (!f || !def || f.stage < def.stages) return;
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    this.foragables.delete(key);
+    if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'forage', `${f.type}-${def.stages}`);
+    f.sprite.destroy();
+    this.addToInventory(makeForage(f.type, def.yieldCount));
+    this.publishInventory();
+    this.scheduleSave();
+  }
+
+  private removeForagable(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const f = this.foragables.get(key);
+    if (!f) return;
+    f.sprite.destroy();
+    this.foragables.delete(key);
+  }
+
+  // ── Big stones: knock with the PICKAXE → +1 (regenerates); empty → break for +N ──
+
+  /** (Re)create a big-stone sprite (+ solid collider) at a cell. Frame = `big-stone-<tier>`. */
+  private restoreBigStone(key: string, tier: number, ready: number): void {
+    if (!this.islandLayer) return;
+    const [cx, cy] = key.split(',').map(Number);
+    const w = this.islandLayer.tileToWorldXY(cx!, cy!);
+    if (!w) return;
+    this.removeBigStone(cx!, cy!);
+    const def = BIG_STONES[tier] ?? BIG_STONES[1]!;
+    const footX = w.x + TILE / 2, footY = w.y + TILE;
+    const sprite = this.add.image(footX, footY, 'forage', `big-stone-${def.tier}`).setOrigin(0.5, 1).setDepth(footY);
+    let body: Phaser.GameObjects.Sprite | undefined;
+    if (this.wallGroup) {
+      const b = this.wallGroup.create(footX, footY - 5, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+      b.setVisible(false).setDisplaySize(22, 10).refreshBody();
+      body = b;
+    }
+    this.bigStones.set(key, { tier: def.tier, ready: Math.max(0, Math.min(ready, def.readyStones)), regen: [], emptyKnocks: 0, sprite, body });
+  }
+
+  /** The big-stone whose sprite the world-point lands on (sprite bounds), or null. */
+  private stoneAtPoint(x: number, y: number): string | null {
+    let best: string | null = null, bestFoot = -Infinity;
+    for (const [key, s] of this.bigStones) {
+      if (s.sprite.active && s.sprite.getBounds().contains(x, y) && s.sprite.y > bestFoot) { best = key; bestFoot = s.sprite.y; }
+    }
+    return best;
+  }
+
+  /** Knock a big-stone with the pickaxe: swing the pick (raise → strike DOWN), then
+   *  apply the hit on the strike. */
+  private knockStone(cx: number, cy: number): void {
+    const stone = this.bigStones.get(`${cx},${cy}`);
+    if (!stone) return;
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    const cxw = w ? w.x + TILE / 2 : stone.sprite.x;
+    const cyw = w ? w.y + TILE / 2 : stone.sprite.y;
+    this.pickSwingAt(cxw, cyw, () => this.onKnockStrike(cx, cy));
+  }
+
+  /** God-hand PICKAXE swing — the pick rears back, holds a beat, then swings DOWN
+   *  onto the stone. No swing SHEET: it's the single `pickaxe` image rotated around
+   *  its grip (raise −55° → strike +18°), the hoe/axe analogue. Strike fires at the
+   *  bottom of the swing. */
+  private pickSwingAt(centerX: number, centerY: number, onStrike: () => void): void {
+    // The pickaxe art (public/uploaded/pickaxe.png) has its wooden GRIP at the
+    // bottom-left and the metal head up-right, so pivot on the grip and swing the
+    // head down onto the stone (rear back → strike), like the hoe.
+    const pick = this.add
+      .sprite(centerX - 3, centerY - TILE / 2 - 2, 'pickaxe')
+      .setOrigin(0.2, 0.82) // pivot at the bottom-left grip
+      // 1.3, not the hoe's 1.5: the pickaxe art fills its 16×16 frame edge-to-edge
+      // (the hoe frame has padding), so a smaller scale matches the hoe's on-screen size.
+      .setScale(1.3)
+      .setDepth(1e6 + 1)
+      .setAngle(-35); // reared back (head up)
+    this.hoeSwing = pick; // suppress the tile cursor while it swings (shared flag)
+    let struck = false;
+    const strike = () => {
+      if (struck) return;
+      struck = true;
+      if (this.hoeSwing === pick) this.hoeSwing = undefined;
+      onStrike();
+      this.tweens.add({ targets: pick, alpha: 0, duration: 110, delay: 50, onComplete: () => pick.destroy() });
+    };
+    // hold reared-back for a beat, then swing the head DOWN onto the stone.
+    this.tweens.add({ targets: pick, angle: 42, duration: 130, delay: 150, ease: 'Quad.easeIn', onComplete: strike });
+    this.time.delayedCall(1200, strike); // safety
+  }
+
+  /** The landed knock: white dust + shake. If a stone is ready → collect one (it
+   *  regenerates after regenSec). If empty → 1st knock does nothing, a 2nd empty
+   *  knock breaks the rock apart for the +breakBonus. */
+  private onKnockStrike(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const stone = this.bigStones.get(key);
+    if (!stone) return;
+    const def = BIG_STONES[stone.tier] ?? BIG_STONES[1]!;
+    const sx = stone.sprite.x, topY = stone.sprite.y - stone.sprite.displayHeight * 0.55;
+    this.whiteBurst(sx, topY);
+    // a quick left-right jitter to sell the impact
+    this.tweens.add({ targets: stone.sprite, x: sx + 1.5, duration: 45, yoyo: true, repeat: 1, onComplete: () => { stone.sprite.x = sx; } });
+    if (stone.ready > 0) {
+      stone.ready -= 1;
+      stone.emptyKnocks = 0;
+      stone.regen.push(def.regenMs);
+      this.playPopOut(sx, topY, 'forage', 'small-stone-6');
+      this.addToInventory(makeStone(1));
+      this.publishInventory();
+      this.scheduleSave();
+    } else {
+      stone.emptyKnocks += 1;
+      if (stone.emptyKnocks >= 2) this.breakBigStone(cx, cy);
+    }
+  }
+
+  /** The rock is knocked apart: pop the +breakBonus stones, bank them, remove it. */
+  private breakBigStone(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const stone = this.bigStones.get(key);
+    if (!stone) return;
+    const def = BIG_STONES[stone.tier] ?? BIG_STONES[1]!;
+    const sx = stone.sprite.x, topY = stone.sprite.y - stone.sprite.displayHeight * 0.55;
+    for (let i = 0; i < def.breakBonus; i++) {
+      this.time.delayedCall(i * 110, () => this.playPopOut(sx, topY, 'forage', 'small-stone-6'));
+    }
+    if (def.breakBonus > 0) { this.addToInventory(makeStone(def.breakBonus)); this.publishInventory(); }
+    this.removeBigStone(cx, cy);
+    this.scheduleSave();
+  }
+
+  /** Regenerate collected stones back into `ready` after their regen time elapses. */
+  private updateBigStones(delta: number): void {
+    for (const stone of this.bigStones.values()) {
+      if (stone.regen.length === 0) continue;
+      const def = BIG_STONES[stone.tier] ?? BIG_STONES[1]!;
+      for (let i = stone.regen.length - 1; i >= 0; i--) {
+        stone.regen[i]! -= delta;
+        if (stone.regen[i]! <= 0) {
+          stone.regen.splice(i, 1);
+          stone.ready = Math.min(stone.ready + 1, def.readyStones);
+        }
+      }
+    }
+  }
+
+  private removeBigStone(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const stone = this.bigStones.get(key);
+    if (!stone) return;
+    stone.sprite.destroy();
+    stone.body?.destroy();
+    this.bigStones.delete(key);
+  }
+
+  // ── Passive spawner: drop foragables + big-stones onto empty grass over time ──
+
+  /** Is this cell on-island grass AND empty (nothing planted / built / standing here)? */
+  /** A cell where you can't till the ground — something occupies it (a tree, big
+   *  stone, bush, or wild foragable). The hoe must not till under these. */
+  private cellBlocksTill(key: string): boolean {
+    return this.trees.has(key) || this.bigStones.has(key) || this.bushes.has(key) || this.foragables.has(key);
+  }
+
+  private cellSpawnable(cx: number, cy: number): boolean {
+    if (!this.islandLayer) return false;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
+    const key = `${cx},${cy}`;
+    if (this.crops.has(key) || this.trees.has(key) || this.bushes.has(key) || this.placed.has(key) ||
+        this.floors.has(key) || this.tilledCells.has(key) || this.foragables.has(key) || this.bigStones.has(key)) return false;
+    if (this.child) {
+      const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
+      if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // not on Cato
+    }
+    return true;
+  }
+
+  /** Pick a random empty grass cell (a few tries), or null if the map's crowded. */
+  private randomSpawnCell(): { cx: number; cy: number } | null {
+    const layer = this.islandLayer?.layer;
+    if (!layer) return null;
+    for (let i = 0; i < 16; i++) {
+      const cx = Phaser.Math.Between(0, layer.width - 1);
+      const cy = Phaser.Math.Between(0, layer.height - 1);
+      if (this.cellSpawnable(cx, cy)) return { cx, cy };
+    }
+    return null;
+  }
+
+  private weightedPick<T>(items: T[], weight: (t: T) => number): T | null {
+    const total = items.reduce((s, it) => s + Math.max(0, weight(it)), 0);
+    if (total <= 0) return null;
+    let r = Math.random() * total;
+    for (const it of items) { r -= Math.max(0, weight(it)); if (r <= 0) return it; }
+    return items[items.length - 1] ?? null;
+  }
+
+  /** Every FORAGE_SPAWN_INTERVAL_MS, drop one foragable (at stage 1) or a big-stone
+   *  (at a weighted tier) onto a random empty grass cell, up to the map cap. */
+  private trySpawn(delta: number): void {
+    if (!this.saveArmed) return; // don't spawn until the save has loaded (avoids dupes)
+    this.spawnTimer += delta;
+    if (this.spawnTimer < FORAGE_SPAWN_INTERVAL_MS) return;
+    this.spawnTimer = 0;
+    if (this.foragables.size + this.bigStones.size >= FORAGE_MAX_ON_MAP) return;
+    const cell = this.randomSpawnCell();
+    if (!cell) return;
+    const key = `${cell.cx},${cell.cy}`;
+    if (Math.random() < BIG_STONE_SPAWN_CHANCE && BIG_STONE_TIERS.length) {
+      const tier = this.weightedPick(BIG_STONE_TIERS, (t) => BIG_STONES[t]?.spawnWeight ?? 1);
+      if (tier != null) { this.restoreBigStone(key, tier, BIG_STONES[tier]!.readyStones); this.scheduleSave(); }
+    } else {
+      const type = this.weightedPick(FORAGABLE_NAMES, (n) => FORAGABLES[n]?.spawnWeight ?? 1) as ForagableName | null;
+      if (type) { this.restoreForagable(key, type, 1, 0); this.scheduleSave(); }
+    }
+  }
+
+  /** A small white dust burst — the "knock" feedback on a big-stone (the stone
+   *  analogue of the hoe's `dirtBurst`). */
+  private whiteBurst(x: number, y: number): void {
+    const p = this.add.particles(x, y, 'white-particle', {
+      speed: { min: 22, max: 58 },
+      angle: { min: 200, max: 340 },
+      gravityY: 150,
+      lifespan: { min: 260, max: 440 },
+      scale: { start: 1.3, end: 0.2 },
+      emitting: false,
+    });
+    p.setDepth(1e6 - 1);
+    p.explode(7);
+    this.time.delayedCall(650, () => p.destroy());
+  }
+
   // Placed house tiles that have been HOED ONCE (armed for removal on the 2nd hit
   // within the window); the timer clears the mark if the 2nd hit doesn't come.
   private placedHoedOnce = new Map<string, Phaser.Time.TimerEvent>();
@@ -2248,6 +2710,36 @@ export class GameScene extends Phaser.Scene {
     }
     this.restorePlaced(`${doorCx},${doorCy}`, 'door', 'bottom');
     this.restorePlaced(`${ccx},${ccy - 1}`, 'furniture', 'bottom', 'plant');
+    this.scheduleSave();
+  }
+
+  /** DEV: force-spawn one MATURE foragable of each type + a big-stone of each tier
+   *  around the camera centre (bypasses the slow passive spawner for testing). */
+  private debugSpawnForage(): void {
+    if (!this.islandLayer) return;
+    const cam = this.cameras.main;
+    const c = this.islandLayer.worldToTileXY(cam.worldView.centerX, cam.worldView.centerY);
+    if (!c) return;
+    const ccx = Math.floor(c.x), ccy = Math.floor(c.y);
+    // Foragables (at MAX stage → immediately harvestable) along a couple of rows.
+    let i = 0;
+    for (const type of FORAGABLE_NAMES) {
+      const cx = ccx - 3 + (i % 6), cy = ccy - 2 + Math.floor(i / 6);
+      if (this.cellSpawnable(cx, cy)) this.restoreForagable(`${cx},${cy}`, type, FORAGABLES[type]!.stages, 0);
+      i++;
+    }
+    // A big-stone of each tier a row below.
+    let j = 0;
+    for (const tier of BIG_STONE_TIERS) {
+      const cx = ccx - 2 + j * 2, cy = ccy + 2;
+      if (this.cellSpawnable(cx, cy)) this.restoreBigStone(`${cx},${cy}`, tier, BIG_STONES[tier]!.readyStones);
+      j++;
+    }
+    // A couple of fruit trees + a ripe berry bush a few rows down, so the
+    // chop / harvest_fruit / harvest_bushes tasks are testable too.
+    const treeSpots: Array<[number, TreeType]> = [[ccx - 3, 'apple'], [ccx + 3, 'peach']];
+    for (const [cx, t] of treeSpots) if (this.cellSpawnable(cx, ccy + 4)) this.restoreTree(`${cx},${ccy + 4}`, t, true);
+    if (this.cellSpawnable(ccx, ccy + 4)) this.restoreBush(`${ccx},${ccy + 4}`, 'strawberry', 2); // stage 2 = ripe
     this.scheduleSave();
   }
 
@@ -2786,6 +3278,11 @@ export class GameScene extends Phaser.Scene {
       else if (a.name === 'plant_crop') { this.startPlantTask(a.args); acted = true; }
       else if (a.name === 'water_crops') { this.startWaterTask(a.args); acted = true; }
       else if (a.name === 'harvest_crops') { this.startHarvestTask(a.args); acted = true; }
+      else if (a.name === 'chop_trees') { this.startChopTask(a.args); acted = true; }
+      else if (a.name === 'harvest_fruit') { this.startFruitTask(a.args); acted = true; }
+      else if (a.name === 'mine_stones') { this.startMineTask(a.args); acted = true; }
+      else if (a.name === 'harvest_bushes') { this.startBushTask(a.args); acted = true; }
+      else if (a.name === 'forage') { this.startForageTask(a.args); acted = true; }
     }
     // Let the guardian read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
@@ -2819,7 +3316,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     // A single active task; camera follows Cato so the guardian watches him work.
-    this.catoTask = { type: 'till', queue: cells, crop, cooldown: 0, stand: null };
+    this.catoTask = { type: 'till', queue: cells, crop, cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
     this.cameraFollow = true;
   }
 
@@ -2839,7 +3336,7 @@ export class GameScene extends Phaser.Scene {
       this.setImmediateDialog('Cato looks for tilled soil to plant in — there’s none ready yet. Ask it to till a plot first!');
       return;
     }
-    this.catoTask = { type: 'plant', queue: cells, crop: CROPS[crop].label, plantName: crop, cooldown: 0, stand: null };
+    this.catoTask = { type: 'plant', queue: cells, crop: CROPS[crop].label, plantName: crop, cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
     this.cameraFollow = true;
   }
 
@@ -2877,7 +3374,7 @@ export class GameScene extends Phaser.Scene {
       this.setImmediateDialog("Cato peers around — nothing needs watering right now.");
       return;
     }
-    this.catoTask = { type: 'water', queue: cells, crop: 'crops', cooldown: 0, stand: null };
+    this.catoTask = { type: 'water', queue: cells, crop: 'crops', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
     this.cameraFollow = true;
   }
 
@@ -2892,7 +3389,7 @@ export class GameScene extends Phaser.Scene {
       this.setImmediateDialog("Cato looks over the plants — nothing's ripe to pick yet.");
       return;
     }
-    this.catoTask = { type: 'harvest', queue: cells, crop: 'crops', cooldown: 0, stand: null };
+    this.catoTask = { type: 'harvest', queue: cells, crop: 'crops', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
     this.cameraFollow = true;
   }
 
@@ -2934,6 +3431,142 @@ export class GameScene extends Phaser.Scene {
         (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
     );
     return Number.isFinite(max) ? cells.slice(0, max) : cells;
+  }
+
+  // ── Cato world-object tasks: chop trees / harvest fruit / mine stones / pick
+  //    bushes / gather wild foragables ──────────────────────────────────────────
+  //
+  // These reuse the SAME task state machine + Cato's OWN attack (hoe) swing — Cato
+  // has no pickaxe/axe animation, so mining & chopping play the hoe swing too. The
+  // strike fires the DIRECT effect (onChopStrike / onKnockStrike / reapBush /
+  // reapForagable), NOT the player's god-hand-tool wrapper. Trees & stones are
+  // MULTI-STRIKE: Cato keeps hitting the same target until it's felled / broken
+  // (taskCellValid then drops it); bushes & foragables are a single hit.
+
+  /** The nearest `max` cells among `keys`, sorted by distance to Cato. */
+  private nearestCells(keys: string[], max: number): Array<{ cx: number; cy: number }> {
+    const layer = this.islandLayer;
+    if (!layer || !this.child) return [];
+    const origin = layer.worldToTileXY(this.child.x, this.child.y);
+    const ocx = origin ? Math.floor(origin.x) : 0;
+    const ocy = origin ? Math.floor(origin.y) : 0;
+    const cells = keys.map((k) => { const [cx, cy] = k.split(',').map(Number); return { cx, cy }; });
+    cells.sort((a, b) => (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2));
+    return Number.isFinite(max) ? cells.slice(0, max) : cells;
+  }
+
+  /** `count` arg → a max, 0 / omitted = all. */
+  private taskCount(rawArgs: unknown): number {
+    const args = (rawArgs ?? {}) as { count?: number };
+    return args.count && args.count > 0 ? Math.round(args.count) : Infinity;
+  }
+
+  /** "Chop down the trees": fell nearby trees. A fruit tree shakes its fruit loose
+   *  first, then fells as a plain tree. Multi-strike per tree until it's gone. */
+  private startChopTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const cells = this.nearestCells([...this.trees.keys()], this.taskCount(rawArgs));
+    if (cells.length === 0) { this.setImmediateDialog('Cato looks around — there are no trees nearby to chop.'); return; }
+    this.catoTask = { type: 'chop', queue: cells, crop: 'trees', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
+    this.cameraFollow = true;
+  }
+
+  /** "Harvest the fruit": chop only FRUIT trees to shake their fruit loose (each
+   *  becomes a plain tree, left standing). Multi-strike per tree until de-fruited. */
+  private startFruitTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const args = (rawArgs ?? {}) as { count?: number; fruit?: string };
+    const fruit = this.parseFruit(args.fruit); // null = any fruit tree
+    const keys = [...this.trees].filter(([, t]) => t.hasFruit && (!fruit || t.type === fruit)).map(([k]) => k);
+    const cells = this.nearestCells(keys, this.taskCount(rawArgs));
+    if (cells.length === 0) {
+      this.setImmediateDialog(fruit
+        ? `Cato peers up at the trees — there's no ripe ${FRUIT_LABEL[fruit]?.toLowerCase() ?? fruit} to pick right now.`
+        : 'Cato peers up at the trees — none have ripe fruit right now.');
+      return;
+    }
+    this.catoTask = { type: 'fruit', queue: cells, crop: fruit ?? 'fruit', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
+    this.cameraFollow = true;
+  }
+
+  /** Loose fruit-tree-type match (apple / pear / peach) against the AI's arg, or null. */
+  private parseFruit(s: string | undefined): TreeType | null {
+    const t = (s ?? '').toLowerCase();
+    return (['apple', 'pear', 'peach'] as TreeType[]).find((n) => t.includes(n)) ?? null;
+  }
+
+  /** "Mine the big stones": knock each big stone until it's mined out & breaks apart
+   *  (every knock chips off a stone; when empty it shatters for the bonus). */
+  private startMineTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const cells = this.nearestCells([...this.bigStones.keys()], this.taskCount(rawArgs));
+    if (cells.length === 0) { this.setImmediateDialog('Cato sniffs about — there are no big stones nearby to mine.'); return; }
+    this.catoTask = { type: 'mine', queue: cells, crop: 'stones', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
+    this.cameraFollow = true;
+  }
+
+  /** "Pick the berry bushes": harvest every RIPE bush (stage ≥ 2). One hit each.
+   *  A `berry` arg (strawberry/grape/blueberry) restricts it to that kind — else Cato
+   *  would grab every ripe bush (the "asked for strawberries, got blueberries too" bug). */
+  private startBushTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const args = (rawArgs ?? {}) as { count?: number; berry?: string };
+    const berry = this.parseBerry(args.berry); // null = any ripe bush
+    const keys = [...this.bushes].filter(([, b]) => b.stage >= 2 && (!berry || b.type === berry)).map(([k]) => k);
+    const cells = this.nearestCells(keys, this.taskCount(rawArgs));
+    if (cells.length === 0) {
+      this.setImmediateDialog(berry
+        ? `Cato checks the bushes — no ripe ${FRUIT_LABEL[berry]?.toLowerCase() ?? berry} bushes right now.`
+        : 'Cato checks the bushes — none are ripe with berries yet.');
+      return;
+    }
+    this.catoTask = { type: 'bush', queue: cells, crop: berry ? `${FRUIT_LABEL[berry]?.toLowerCase() ?? berry}` : 'berries', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
+    this.cameraFollow = true;
+  }
+
+  /** Loose berry-type match (strawberry / grape / blueberry) against the AI's arg, or null. */
+  private parseBerry(s: string | undefined): BerryType | null {
+    const t = (s ?? '').toLowerCase();
+    return BERRY_TYPES.find((n) => t.includes(n)) ?? null;
+  }
+
+  /** "Gather the wild growth": harvest MATURE foragables — mushrooms, flowers, grass,
+   *  small stones (each at its max stage). One hit each. A `kind` arg restricts it to
+   *  one category (grass/weeds, mushrooms, flowers, stones, or a specific name) — else
+   *  Cato grabs EVERYTHING (the "asked to clear the weeds, he took the mushrooms" bug). */
+  private startForageTask(rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const args = (rawArgs ?? {}) as { count?: number; kind?: string };
+    const kind = (args.kind ?? '').trim();
+    const keys = [...this.foragables]
+      .filter(([, f]) => f.stage >= (FORAGABLES[f.type]?.stages ?? 1) && (!kind || this.foragMatches(f.type, kind)))
+      .map(([k]) => k);
+    const cells = this.nearestCells(keys, this.taskCount(rawArgs));
+    if (cells.length === 0) {
+      this.setImmediateDialog(kind
+        ? `Cato pokes around the grass — no ripe ${kind} to gather right now.`
+        : "Cato pokes around the grass — nothing's grown enough to gather yet.");
+      return;
+    }
+    this.catoTask = { type: 'forage', queue: cells, crop: kind || 'wild growth', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
+    this.cameraFollow = true;
+  }
+
+  /** Does a foragable of `type` fall under the guardian's requested `kind`? Matches the
+   *  kind keyword (singular-ised) against the type's id + label — "mushroom(s)" → red &
+   *  purple mushroom, "flower(s)" → wild-flower & sunflower, "grass"/"weed(s)" → grass,
+   *  "stone(s)"/"rock(s)" → small-stone — plus a few synonyms. */
+  private foragMatches(type: ForagableName, kind: string): boolean {
+    const ks = kind.toLowerCase().trim().replace(/s$/, ''); // drop a trailing plural 's'
+    if (!ks) return true;
+    const name = type.toLowerCase();
+    const label = (FORAGABLES[type]?.label ?? '').toLowerCase();
+    if (name.includes(ks) || label.includes(ks)) return true; // grass/mushroom/flower/stone + specific names
+    if (ks === 'weed' && name === 'grass') return true;
+    if ((ks === 'rock' || ks === 'pebble') && name.includes('stone')) return true;
+    if ((ks === 'fungu' || ks === 'toadstool') && name.includes('mushroom')) return true;
+    if (ks === 'bloom' && name.includes('flower')) return true;
+    return false;
   }
 
   /** Walk Cato toward (tx,ty) along ONE cardinal axis at a time (the dominant
@@ -3043,18 +3676,35 @@ export class GameScene extends Phaser.Scene {
 
     // Skip a cell that's no longer a valid target for this task type — idempotent
     // / robust to concurrent edits (the player may have acted on it meanwhile).
-    if (!this.taskCellValid(task.type, next.cx, next.cy)) { task.queue.shift(); task.stand = null; return; }
+    if (!this.taskCellValid(task.type, next.cx, next.cy)) { task.queue.shift(); task.stand = null; task.strikes = 0; return; }
 
-    // Stand on a cell ADJACENT to the target and face it, so the swing/tend lands
-    // ON the target (not under Cato's feet). Computed once per target.
-    if (!task.stand) task.stand = this.computeStand(next);
+    // Plan a route: pick a reachable adjacent "stand" cell (facing the target) and an
+    // A* path to it (around walls / trees / stones / water). Computed once per target.
+    // If NO side is reachable, skip the target instead of shoving into a wall forever.
+    if (!task.stand) {
+      const planned = this.planStand(next);
+      if (!planned) { task.queue.shift(); task.stand = null; task.strikes = 0; return; }
+      task.stand = planned.stand;
+      task.path = planned.path;
+      task.walkMs = 0; task.walkDist = Infinity;
+    }
     const s = task.stand;
-    const dx = s.x - this.child.x;
-    const dy = s.y - this.child.y;
-    const dist = Math.hypot(dx, dy);
 
-    if (dist > CATO_ARRIVE_DIST) {
-      this.walkCardinalToward(s.x, s.y, CATO_TILL_SPEED); // cardinal only (no diagonal anim)
+    // Follow the A* path one tile at a time. Consecutive path cells are always walkable
+    // with nothing between them, so walkCardinalToward reaches each without wedging.
+    if (task.path && task.path.length > 0) {
+      const wp = task.path[0];
+      const d = Math.hypot(wp.x - this.child.x, wp.y - this.child.y);
+      if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; return; }
+      // Stall backstop for a DYNAMIC block (wall placed mid-walk / physics wedge): no
+      // progress for a while → abandon this target (A* already routed around all the
+      // static obstacles up front).
+      if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
+      else {
+        task.walkMs += delta;
+        if (task.walkMs > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
+      }
+      this.walkCardinalToward(wp.x, wp.y, CATO_TILL_SPEED); // cardinal step to the next tile
       return;
     }
 
@@ -3063,59 +3713,161 @@ export class GameScene extends Phaser.Scene {
     // through the swing (commitCatoTill / delayed plant).
     body.setVelocity(0, 0);
     this.faceDir = s.dir;
-    // Water uses Cato's watering animation; till/plant use his attack (hoe) swing.
-    this.child.play(`${task.type === 'water' ? 'water' : 'attack'}-${s.dir}`, true);
+    // Pick Cato's body animation for this task: water can, axe (chop/fruit — he has a
+    // real axe-swing sheet), else the generic attack (hoe) swing for till/plant/harvest/
+    // mine/bush/forage.
+    const animKind =
+      task.type === 'water' ? 'water'
+      : (task.type === 'chop' || task.type === 'fruit') ? 'axe'
+      : 'attack';
+    this.child.play(`${animKind}-${s.dir}`, true);
     const tx = next.cx, ty = next.cy;
+    const K = CATO_TILL_STRIKE_MS;
     if (task.type === 'till') {
       this.commitCatoTill(tx, ty);
     } else if (task.type === 'plant' && task.plantName) {
       const name = task.plantName;
-      this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.plantCropAt(tx, ty, name));
+      this.time.delayedCall(K, () => this.plantCropAt(tx, ty, name));
     } else if (task.type === 'water') {
-      this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.waterCropAt(tx, ty));
+      this.time.delayedCall(K, () => this.waterCropAt(tx, ty));
     } else if (task.type === 'harvest') {
-      this.time.delayedCall(CATO_TILL_STRIKE_MS, () => this.reapCrop(tx, ty));
+      this.time.delayedCall(K, () => this.reapCrop(tx, ty));
+    } else if (task.type === 'bush') {
+      this.time.delayedCall(K, () => this.reapBush(tx, ty));
+    } else if (task.type === 'forage') {
+      this.time.delayedCall(K, () => this.reapForagable(tx, ty));
+    } else if (task.type === 'chop' || task.type === 'fruit') {
+      this.time.delayedCall(K, () => this.onChopStrike(tx, ty)); // combo → fell / de-fruit on the 3rd
+    } else if (task.type === 'mine') {
+      this.time.delayedCall(K, () => this.onKnockStrike(tx, ty)); // chip a stone off / break it
     }
-    task.queue.shift();
-    task.stand = null;
     task.cooldown = CATO_TILL_STEP_MS;
+    // Multi-strike (chop/fruit/mine): stay beside the target and hit again next tick.
+    // It self-invalidates (felled / de-fruited / broken) and taskCellValid then drops
+    // it; a strike cap backstops any target that somehow never clears. Everything else
+    // finishes in one hit → advance to the next cell.
+    if (task.type === 'chop' || task.type === 'fruit' || task.type === 'mine') {
+      task.strikes += 1;
+      if (task.strikes >= 20) { task.queue.shift(); task.stand = null; task.strikes = 0; }
+    } else {
+      task.queue.shift();
+      task.stand = null;
+    }
   }
 
   /** Is (cx,cy) still a valid target for a task of this type? */
-  private taskCellValid(type: 'till' | 'plant' | 'water' | 'harvest', cx: number, cy: number): boolean {
+  private taskCellValid(
+    type: 'till' | 'plant' | 'water' | 'harvest' | 'chop' | 'fruit' | 'mine' | 'bush' | 'forage',
+    cx: number,
+    cy: number,
+  ): boolean {
     const key = `${cx},${cy}`;
     if (type === 'till') return !this.tilledCells.has(key) && this.isFarmable(cx, cy);
     if (type === 'plant') return this.tilledCells.has(key) && !this.crops.has(key);
+    if (type === 'chop') return this.trees.has(key); // any tree — chop until it's felled
+    if (type === 'fruit') return this.trees.get(key)?.hasFruit === true; // only while it still has fruit
+    if (type === 'mine') return this.bigStones.has(key); // knock until it breaks apart
+    if (type === 'bush') { const b = this.bushes.get(key); return !!b && b.stage >= 2; } // ripe with berries
+    if (type === 'forage') { const f = this.foragables.get(key); return !!f && f.stage >= (FORAGABLES[f.type]?.stages ?? 1); } // mature
     const crop = this.crops.get(key);
     if (type === 'harvest') return !!crop && crop.stage >= CROPS[crop.name].stages - 1; // ripe
     // water: a growing crop on DRY soil is here (Cato waters what needs it).
     return !!crop && crop.stage < CROPS[crop.name].stages - 1 && (this.soilWet.get(key) ?? 0) <= 0;
   }
 
-  /** Pick the cell Cato stands on to hoe `target`: an adjacent tile (preferring
-   *  ones on the island so he doesn't stand on water) nearest to where he is now,
-   *  plus the direction he faces to swing at the target. */
-  private computeStand(target: { cx: number; cy: number }): { x: number; y: number; dir: FaceDir } {
+  /** True if Cato can stand on / walk through this tile: on the island, no solid
+   *  tilemap tile, and nothing solid placed on it (wall / window / CLOSED door, a tree
+   *  trunk, or a big stone). Bushes / crops / foragables are passable. Mirrors exactly
+   *  what physically blocks him (the wallGroup colliders + off-island water). */
+  private isWalkableCell(cx: number, cy: number): boolean {
+    const layer = this.islandLayer;
+    if (!layer) return false;
+    const tile = layer.getTileAt(cx, cy);
+    if (!tile || tile.collides) return false; // off-island (water) or a solid tilemap tile
+    const key = `${cx},${cy}`;
+    if (this.trees.has(key) || this.bigStones.has(key)) return false;
+    const p = this.placed.get(key);
+    if (p && (p.kind === 'wall' || p.kind === 'window' || (p.kind === 'door' && !p.open))) return false;
+    return true;
+  }
+
+  /** The walkable adjacent tiles Cato could stand on to work `target` (facing it:
+   *  below→up, above→down, left→right, right→left), nearest to him first. */
+  private standCandidates(target: { cx: number; cy: number }): Array<{ cx: number; cy: number; dir: FaceDir }> {
     const layer = this.islandLayer!;
     const cur = layer.worldToTileXY(this.child!.x, this.child!.y);
     const ocx = cur ? Math.floor(cur.x) : target.cx;
     const ocy = cur ? Math.floor(cur.y) : target.cy;
-    // Stand on each side, facing the target: below→up, above→down, left→right, right→left.
     const cands: Array<{ cx: number; cy: number; dir: FaceDir }> = [
       { cx: target.cx, cy: target.cy + 1, dir: 'up' },
       { cx: target.cx, cy: target.cy - 1, dir: 'down' },
       { cx: target.cx - 1, cy: target.cy, dir: 'right' },
       { cx: target.cx + 1, cy: target.cy, dir: 'left' },
     ];
-    const onIsland = cands.filter((c) => layer.getTileAt(c.cx, c.cy) != null);
-    const pool = onIsland.length ? onIsland : cands;
-    pool.sort(
-      (a, b) =>
-        (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2),
-    );
-    const best = pool[0];
-    const w = layer.tileToWorldXY(best.cx, best.cy);
-    return { x: (w?.x ?? 0) + TILE / 2, y: (w?.y ?? 0) + TILE / 2, dir: best.dir };
+    return cands
+      .filter((c) => this.isWalkableCell(c.cx, c.cy))
+      .sort((a, b) => (a.cx - ocx) ** 2 + (a.cy - ocy) ** 2 - ((b.cx - ocx) ** 2 + (b.cy - ocy) ** 2));
+  }
+
+  /** Pick the nearest REACHABLE stand cell for `target` + the A* route to it (world-
+   *  centre waypoints, last = the stand cell). Tries each walkable side nearest-first
+   *  and returns the first that A* can reach; null if the target can't be worked. */
+  private planStand(target: { cx: number; cy: number }):
+    | { stand: { x: number; y: number; dir: FaceDir }; path: Array<{ x: number; y: number }> }
+    | null {
+    const layer = this.islandLayer;
+    if (!layer || !this.child) return null;
+    const cur = layer.worldToTileXY(this.child.x, this.child.y);
+    if (!cur) return null;
+    const scx = Math.floor(cur.x), scy = Math.floor(cur.y);
+    const toWorld = (cx: number, cy: number) => { const w = layer.tileToWorldXY(cx, cy)!; return { x: w.x + TILE / 2, y: w.y + TILE / 2 }; };
+    for (const cand of this.standCandidates(target)) {
+      const steps = this.findPath(scx, scy, cand.cx, cand.cy);
+      if (!steps) continue; // this side is walled off from Cato — try the next
+      return { stand: { ...toWorld(cand.cx, cand.cy), dir: cand.dir }, path: steps.map((s) => toWorld(s.cx, s.cy)) };
+    }
+    return null;
+  }
+
+  /** 4-connected A* over walkable tiles from (sx,sy) to (gx,gy). Returns the tile steps
+   *  AFTER the start (last = goal), [] if already there, or null if unreachable. Four-
+   *  connected (no diagonals) because Cato's sheet has no diagonal walk — the path is
+   *  naturally the L-shaped/staircase route walkCardinalToward can follow. */
+  private findPath(sx: number, sy: number, gx: number, gy: number): Array<{ cx: number; cy: number }> | null {
+    if (sx === gx && sy === gy) return [];
+    if (!this.isWalkableCell(gx, gy)) return null;
+    const K = (x: number, y: number) => `${x},${y}`;
+    const start = K(sx, sy), goal = K(gx, gy);
+    const h = (x: number, y: number) => Math.abs(x - gx) + Math.abs(y - gy);
+    const g = new Map<string, number>([[start, 0]]);
+    const f = new Map<string, number>([[start, h(sx, sy)]]);
+    const came = new Map<string, string>();
+    const open = new Set<string>([start]);
+    let guard = 0;
+    while (open.size) {
+      if (++guard > 4000) return null; // safety cap — the island is small; never trips in practice
+      let cur = '', best = Infinity; // lowest-f node (linear scan; paths are short)
+      for (const n of open) { const fn = f.get(n) ?? Infinity; if (fn < best) { best = fn; cur = n; } }
+      if (cur === goal) {
+        const path: Array<{ cx: number; cy: number }> = [];
+        for (let c = cur; c !== start; c = came.get(c)!) { const [x, y] = c.split(',').map(Number); path.push({ cx: x!, cy: y! }); }
+        return path.reverse();
+      }
+      open.delete(cur);
+      const [cx, cy] = cur.split(',').map(Number);
+      for (const [nx, ny] of [[cx! + 1, cy!], [cx! - 1, cy!], [cx!, cy! + 1], [cx!, cy! - 1]] as Array<[number, number]>) {
+        if (!this.isWalkableCell(nx, ny)) continue;
+        const tentative = (g.get(cur) ?? Infinity) + 1;
+        const nk = K(nx, ny);
+        if (tentative < (g.get(nk) ?? Infinity)) {
+          came.set(nk, cur);
+          g.set(nk, tentative);
+          f.set(nk, tentative + h(nx, ny));
+          open.add(nk);
+        }
+      }
+    }
+    return null;
   }
 
   /** Cato hoes a cell himself (no god-hand hoe sprite): reserve it now, then flip
@@ -3151,6 +3903,16 @@ export class GameScene extends Phaser.Scene {
       this.cato?.note('You watered the crops; they will grow faster now.');
     } else if (task?.type === 'harvest') {
       this.cato?.note("You harvested the ripe crops; the produce is in the guardian's backpack now.");
+    } else if (task?.type === 'chop') {
+      this.cato?.note("You chopped down the trees; the wood (and any fruit) is in the guardian's backpack now.");
+    } else if (task?.type === 'fruit') {
+      this.cato?.note("You picked the fruit from the trees and left them standing; it's in the guardian's backpack now.");
+    } else if (task?.type === 'mine') {
+      this.cato?.note("You mined the big stones; the stone is in the guardian's backpack now.");
+    } else if (task?.type === 'bush') {
+      this.cato?.note("You picked the ripe berry bushes; the berries are in the guardian's backpack now.");
+    } else if (task?.type === 'forage') {
+      this.cato?.note("You gathered the wild mushrooms, flowers and other growth; it's in the guardian's backpack now.");
     } else {
       this.cato?.note(`You finished tilling a plot of soil, ready for the guardian to plant ${task?.crop ?? 'crops'}.`);
     }
@@ -3159,10 +3921,23 @@ export class GameScene extends Phaser.Scene {
 
   // ── Click-to-talk dialog ──────────────────────────────────────────────
 
-  /** True if a world point lands on the cat sprite. */
+  /** True if a world point lands on the VISIBLE cat — an OPAQUE pixel of the current
+   *  frame, not just the 48×48 frame box (Cato fills only a small patch of it, so
+   *  getBounds alone triggered the chat from far away over the transparent padding). */
   private catContains(worldX: number, worldY: number): boolean {
-    if (!this.child) return false;
-    return this.child.getBounds().contains(worldX, worldY);
+    const c = this.child;
+    if (!c) return false;
+    if (!c.getBounds().contains(worldX, worldY)) return false; // cheap reject on the frame box
+    // Map the world point to a texel of the current frame (honour origin / scale / flip).
+    const frame = c.frame;
+    const fw = frame.width, fh = frame.height;
+    let fx = (worldX - c.x) / c.scaleX + c.originX * fw;
+    let fy = (worldY - c.y) / c.scaleY + c.originY * fh;
+    if (c.flipX) fx = fw - fx;
+    if (c.flipY) fy = fh - fy;
+    const alpha = this.textures.getPixelAlpha(Math.floor(fx), Math.floor(fy), c.texture.key, frame.name);
+    if (alpha == null) return c.getBounds().contains(worldX, worldY); // texture unreadable → fall back to the box
+    return alpha > 16; // opaque enough to count as "on the cat"
   }
 
   /** The chat widgets, by role, that slide up together (the `chat-input-field`
@@ -3487,6 +4262,14 @@ export class GameScene extends Phaser.Scene {
     let tilledEmpty = 0;
     for (const key of this.tilledCells) if (!this.crops.has(key)) tilledEmpty += 1;
 
+    // Wild world: what's out there for Cato to chop / mine / pick / forage.
+    let treesWithFruit = 0;
+    for (const t of this.trees.values()) if (t.hasFruit) treesWithFruit += 1;
+    let ripeBushes = 0;
+    for (const b of this.bushes.values()) if (b.stage >= 2) ripeBushes += 1;
+    let matureForageables = 0;
+    for (const f of this.foragables.values()) if (f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) matureForageables += 1;
+
     return {
       island: 'home',
       timeOfDay: 'day',
@@ -3497,6 +4280,13 @@ export class GameScene extends Phaser.Scene {
         growing, // still growing
         thirsty, // growing on dry soil (would grow faster if watered)
         tilledEmpty, // tilled soil with nothing planted yet
+      },
+      wild: {
+        trees: this.trees.size, // trees you can chop down (chop_trees)
+        treesWithFruit, // of those, how many are bearing fruit right now (harvest_fruit)
+        bigStones: this.bigStones.size, // big rocks you can mine (mine_stones)
+        ripeBushes, // berry bushes ready to pick (harvest_bushes)
+        matureForageables, // wild mushrooms/flowers/grass/stones grown enough to gather (forage)
       },
     };
   }
@@ -3535,7 +4325,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 4,
+      v: 5,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -3546,6 +4336,8 @@ export class GameScene extends Phaser.Scene {
       floors: [...this.floors].map(([key, f]) => ({ key, frame: f.frame })),
       trees: [...this.trees].map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
       bushes: [...this.bushes].map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
+      foragables: [...this.foragables].map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
+      bigStones: [...this.bigStones].map(([key, s]) => ({ key, tier: s.tier, ready: s.ready })),
     };
   }
 
@@ -3569,7 +4361,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v >= 1 && s.v <= 4) this.applySave(s); // v1 pre-house, v2 no trees, v3 no bushes
+      if (s && s.v >= 1 && s.v <= 5) this.applySave(s); // v1 pre-house … v4 no foragables/stones
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
     } catch (e) {
@@ -3613,6 +4405,11 @@ export class GameScene extends Phaser.Scene {
       // Bushes: tear down base + berry overlays.
       for (const b of this.bushes.values()) { b.base.destroy(); for (const berry of b.berries) berry.destroy(); }
       this.bushes.clear();
+      // Foragables + big-stones: tear down sprites (+ stone colliders).
+      for (const f of this.foragables.values()) f.sprite.destroy();
+      this.foragables.clear();
+      for (const s of this.bigStones.values()) { s.sprite.destroy(); s.body?.destroy(); }
+      this.bigStones.clear();
       if (this.islandLayer) {
         for (const key of s.tilled ?? []) this.tilledCells.add(key);
         for (const key of this.tilledCells) {
@@ -3628,6 +4425,8 @@ export class GameScene extends Phaser.Scene {
         for (const p of s.placed ?? []) this.restorePlaced(p.key, p.kind, p.orient, p.variant);
         for (const t of s.trees ?? []) this.restoreTree(t.key, t.type, t.hasFruit);
         for (const b of s.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
+        for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
+        for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
@@ -3661,6 +4460,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.inventory.some((c) => c?.id === `furn-${piece.id}`)) this.addToInventory(makePlaceable('furniture', 10, piece.id));
     }
     if (!this.inventory.some((c) => c?.id === 'axe')) this.addToInventory(itemFromId('axe', 1));
+    if (!this.inventory.some((c) => c?.id === 'pickaxe')) this.addToInventory(itemFromId('pickaxe', 1));
     for (const t of TREE_TYPES) {
       if (!this.inventory.some((c) => c?.id === `tree-${t.id}`)) this.addToInventory(makePlaceable('tree', 10, t.id));
     }
@@ -3822,6 +4622,11 @@ export class GameScene extends Phaser.Scene {
   private updatePlayerMovement(): void {
     if (!this.child?.body) return;
     this.cameraFollow = true; // keep Cato centred while the player drives him
+    // A chat-commanded task OWNS Cato (walk + tool swing). Bail so we don't stamp
+    // `idle-<dir>` over his strike animation every frame during the per-hit cooldown
+    // (updateCatoTask holds the swing's last frame; this used to clobber it → he
+    // looked like he was just standing there while chopping/tilling).
+    if (this.catoTask) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
     if (this.dialogOpen || this.inventoryOpen) { body.setVelocity(0, 0); return; }
     const k = this.keys;
@@ -3989,6 +4794,9 @@ export class GameScene extends Phaser.Scene {
     this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages
     this.updateBushes(delta); // grow berry bushes (+ regrow after harvest)
+    this.updateForagables(delta); // grow wild foragables toward their max stage
+    this.updateBigStones(delta); // regenerate mined stones back into big-stones
+    this.trySpawn(delta); // drop new foragables / big-stones onto empty grass
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
