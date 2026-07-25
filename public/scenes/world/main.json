@@ -256,6 +256,1083 @@
       },
       "assetId": "basic_furniture",
       "frame": "clock-3"
+    },
+    {
+      "id": "e-ms0htzrn-ojlj",
+      "kind": "sprite",
+      "transform": {
+        "x": 168,
+        "y": 168,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hu50r-6da6",
+      "kind": "sprite",
+      "transform": {
+        "x": 184,
+        "y": 136,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hu89b-715p",
+      "kind": "sprite",
+      "transform": {
+        "x": 216,
+        "y": 160,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites"
+    },
+    {
+      "id": "e-ms0hugef-xq1v",
+      "kind": "sprite",
+      "transform": {
+        "x": 224,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hukie-hu05",
+      "kind": "sprite",
+      "transform": {
+        "x": 272,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0huoz4-kbg3",
+      "kind": "sprite",
+      "transform": {
+        "x": 264,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_apple_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hurc8-r2tw",
+      "kind": "sprite",
+      "transform": {
+        "x": 184,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_apple_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0huzoq-ge0t",
+      "kind": "sprite",
+      "transform": {
+        "x": 328,
+        "y": 112,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hv2ro-qtdi",
+      "kind": "sprite",
+      "transform": {
+        "x": 344,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hv7uh-t4dq",
+      "kind": "sprite",
+      "transform": {
+        "x": 320,
+        "y": 176,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hvm9r-ur65",
+      "kind": "sprite",
+      "transform": {
+        "x": 264,
+        "y": 216,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-ms0hvonb-jxx6",
+      "kind": "sprite",
+      "transform": {
+        "x": 296,
+        "y": 232,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-2"
+    },
+    {
+      "id": "e-ms0hvqq1-q6gc",
+      "kind": "sprite",
+      "transform": {
+        "x": 328,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-3"
+    },
+    {
+      "id": "e-ms0hvsch-4hd7",
+      "kind": "sprite",
+      "transform": {
+        "x": 232,
+        "y": 251,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-4"
+    },
+    {
+      "id": "e-ms0hvwq5-kr2b",
+      "kind": "sprite",
+      "transform": {
+        "x": 304,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-2"
+    },
+    {
+      "id": "e-ms0hvyyj-zoae",
+      "kind": "sprite",
+      "transform": {
+        "x": 240,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-1"
+    },
+    {
+      "id": "e-ms0hw0r8-81yq",
+      "kind": "sprite",
+      "transform": {
+        "x": 384,
+        "y": 216,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-4"
+    },
+    {
+      "id": "e-ms0hw2ve-k6k1",
+      "kind": "sprite",
+      "transform": {
+        "x": 376,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-ms0hw5kf-it9q",
+      "kind": "sprite",
+      "transform": {
+        "x": 392,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-3"
+    },
+    {
+      "id": "e-ms0hw7yg-oqrj",
+      "kind": "sprite",
+      "transform": {
+        "x": 424,
+        "y": 248,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-2"
+    },
+    {
+      "id": "e-ms0hw9lx-ipng",
+      "kind": "sprite",
+      "transform": {
+        "x": 432,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-3"
+    },
+    {
+      "id": "e-ms0hwc7n-qr06",
+      "kind": "sprite",
+      "transform": {
+        "x": 488,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-3"
+    },
+    {
+      "id": "e-ms0hwif7-pq6r",
+      "kind": "sprite",
+      "transform": {
+        "x": 448,
+        "y": 312,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "red-mushroom-1"
+    },
+    {
+      "id": "e-ms0hwlf2-2h9d",
+      "kind": "sprite",
+      "transform": {
+        "x": 400,
+        "y": 112,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "big-stone-2"
+    },
+    {
+      "id": "e-ms0hwoa7-roe8",
+      "kind": "sprite",
+      "transform": {
+        "x": 264,
+        "y": 355.3416132708837,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "big-stone-3"
+    },
+    {
+      "id": "e-ms0hx1lv-fu1p",
+      "kind": "sprite",
+      "transform": {
+        "x": 440,
+        "y": 288,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hx3k8-ew13",
+      "kind": "sprite",
+      "transform": {
+        "x": 504,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hx6ue-ezv1",
+      "kind": "sprite",
+      "transform": {
+        "x": 296,
+        "y": 280,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hx8y8-7t3x",
+      "kind": "sprite",
+      "transform": {
+        "x": 488,
+        "y": 128,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hxcv4-g88c",
+      "kind": "sprite",
+      "transform": {
+        "x": 520,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hxgb9-qbyb",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 352,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_apple_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0hxo9m-4csh",
+      "kind": "sprite",
+      "transform": {
+        "x": 448,
+        "y": 208,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-grape"
+    },
+    {
+      "id": "e-ms0hxq1x-89al",
+      "kind": "sprite",
+      "transform": {
+        "x": 432,
+        "y": 224,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-blueberry"
+    },
+    {
+      "id": "e-ms0hxs1p-257a",
+      "kind": "sprite",
+      "transform": {
+        "x": 416,
+        "y": 200,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-strawberry"
+    },
+    {
+      "id": "e-ms0hxttj-uuu8",
+      "kind": "sprite",
+      "transform": {
+        "x": 400,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-grape"
+    },
+    {
+      "id": "e-ms0hxvnb-1i2k",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 288,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "empty-bush"
+    },
+    {
+      "id": "e-ms0hxxnx-b6ey",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 328,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-strawberry"
+    },
+    {
+      "id": "e-ms0hxz8o-7d4v",
+      "kind": "sprite",
+      "transform": {
+        "x": 368,
+        "y": 312,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-grape"
+    },
+    {
+      "id": "e-ms0hy2e3-xfxn",
+      "kind": "sprite",
+      "transform": {
+        "x": 536,
+        "y": 232,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "empty-bush-small"
+    },
+    {
+      "id": "e-ms0hy4vp-5n6h",
+      "kind": "sprite",
+      "transform": {
+        "x": 528,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-blueberry"
+    },
+    {
+      "id": "e-ms0hyhyj-vnar",
+      "kind": "sprite",
+      "transform": {
+        "x": 464,
+        "y": 192,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-3"
+    },
+    {
+      "id": "e-ms0hyk6f-ggru",
+      "kind": "sprite",
+      "transform": {
+        "x": 488,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-6"
+    },
+    {
+      "id": "e-ms0hylkh-1mkz",
+      "kind": "sprite",
+      "transform": {
+        "x": 488,
+        "y": 336,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-2"
+    },
+    {
+      "id": "e-ms0hyn5c-4c3t",
+      "kind": "sprite",
+      "transform": {
+        "x": 424,
+        "y": 328,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-3"
+    },
+    {
+      "id": "e-ms0hypct-a15l",
+      "kind": "sprite",
+      "transform": {
+        "x": 456,
+        "y": 336,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-ms0hyr6f-h8o2",
+      "kind": "sprite",
+      "transform": {
+        "x": 416,
+        "y": 352,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-2"
+    },
+    {
+      "id": "e-ms0hysou-f5xh",
+      "kind": "sprite",
+      "transform": {
+        "x": 536,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-6"
+    },
+    {
+      "id": "e-ms0hyv99-e1mh",
+      "kind": "sprite",
+      "transform": {
+        "x": 296,
+        "y": 336,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-3"
+    },
+    {
+      "id": "e-ms0hywx8-x3jt",
+      "kind": "sprite",
+      "transform": {
+        "x": 232,
+        "y": 320,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-2"
+    },
+    {
+      "id": "e-ms0hz1cz-icph",
+      "kind": "sprite",
+      "transform": {
+        "x": 256,
+        "y": 304,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-3"
+    },
+    {
+      "id": "e-ms0hz3u3-919m",
+      "kind": "sprite",
+      "transform": {
+        "x": 120,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-3"
+    },
+    {
+      "id": "e-ms0hz714-cct9",
+      "kind": "sprite",
+      "transform": {
+        "x": 144,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-2"
+    },
+    {
+      "id": "e-ms0hz8rl-tf9w",
+      "kind": "sprite",
+      "transform": {
+        "x": 136,
+        "y": 104,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-3"
+    },
+    {
+      "id": "e-ms0hzalf-8470",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 88,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-6"
+    },
+    {
+      "id": "e-ms0hze55-e6yq",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 136,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "big-stone-2"
+    },
+    {
+      "id": "e-ms0hzh99-lr6b",
+      "kind": "sprite",
+      "transform": {
+        "x": 120,
+        "y": 112,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-3"
+    },
+    {
+      "id": "e-ms0hziyk-roco",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 168,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-2"
+    },
+    {
+      "id": "e-ms0hzldx-rcx6",
+      "kind": "sprite",
+      "transform": {
+        "x": 104,
+        "y": 224,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-2"
+    },
+    {
+      "id": "e-ms0hznab-g754",
+      "kind": "sprite",
+      "transform": {
+        "x": 104,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-2"
+    },
+    {
+      "id": "e-ms0hzr0b-5e7f",
+      "kind": "sprite",
+      "transform": {
+        "x": 96,
+        "y": 192,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-4"
+    },
+    {
+      "id": "e-ms0i02lm-0r59",
+      "kind": "sprite",
+      "transform": {
+        "x": 144,
+        "y": 312,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0i04uo-8gsd",
+      "kind": "sprite",
+      "transform": {
+        "x": 96,
+        "y": 288,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0i0ahh-tn95",
+      "kind": "sprite",
+      "transform": {
+        "x": 448,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0i0d32-e86k",
+      "kind": "sprite",
+      "transform": {
+        "x": 464,
+        "y": 104,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0i0p84-hhlg",
+      "kind": "sprite",
+      "transform": {
+        "x": 512,
+        "y": 104,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0i0vcn-t1g6",
+      "kind": "sprite",
+      "transform": {
+        "x": 368,
+        "y": 224,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-shake-1"
+    },
+    {
+      "id": "e-ms0i163o-2z9k",
+      "kind": "sprite",
+      "transform": {
+        "x": 256,
+        "y": 192,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-3"
+    },
+    {
+      "id": "e-ms0i17ps-5fqx",
+      "kind": "sprite",
+      "transform": {
+        "x": 320,
+        "y": 224,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-1"
+    },
+    {
+      "id": "e-ms0i19le-sp38",
+      "kind": "sprite",
+      "transform": {
+        "x": 264,
+        "y": 248,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-1"
+    },
+    {
+      "id": "e-ms0i1c12-oj1y",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 168,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-2"
+    },
+    {
+      "id": "e-ms0i1dvb-la12",
+      "kind": "sprite",
+      "transform": {
+        "x": 400,
+        "y": 168,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-1"
+    },
+    {
+      "id": "e-ms0i1fi5-m72v",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 192,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-1"
+    },
+    {
+      "id": "e-ms0i1h4g-i7f1",
+      "kind": "sprite",
+      "transform": {
+        "x": 376,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-2"
+    },
+    {
+      "id": "e-ms0i1it4-hrpb",
+      "kind": "sprite",
+      "transform": {
+        "x": 424,
+        "y": 176,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-2"
+    },
+    {
+      "id": "e-ms0i1l0g-elhy",
+      "kind": "sprite",
+      "transform": {
+        "x": 280,
+        "y": 208,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-1"
+    },
+    {
+      "id": "e-ms0i1od0-0sxv",
+      "kind": "sprite",
+      "transform": {
+        "x": 456,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-3"
+    },
+    {
+      "id": "e-ms0i1qe0-kg0u",
+      "kind": "sprite",
+      "transform": {
+        "x": 472,
+        "y": 232,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-3"
     }
   ]
 }

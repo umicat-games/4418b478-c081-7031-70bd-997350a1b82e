@@ -1588,7 +1588,14 @@
           },
           "6": {
             "solid": false,
-            "collisionRects": []
+            "collisionRects": [
+              {
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 16
+              }
+            ]
           },
           "7": {
             "solid": true,
@@ -1713,6 +1720,168 @@
       "atlasPath": "uploaded/basic_furniture.json",
       "atlasFormat": "json",
       "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/basic_furniture.json"
+    },
+    {
+      "id": "tree_sprites",
+      "textureKey": "tree_sprites",
+      "path": "uploaded/tree_sprites.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/tree_sprites.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "animations": [
+        {
+          "name": "tree-idle",
+          "from": 0,
+          "to": 0,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-1",
+          "from": 12,
+          "to": 15,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-2",
+          "from": 24,
+          "to": 29,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-3",
+          "from": 36,
+          "to": 47,
+          "loop": true
+        }
+      ],
+      "fps": 8
+    },
+    {
+      "id": "tree_pear_sprites",
+      "textureKey": "tree_pear_sprites",
+      "path": "uploaded/tree_pear_sprites.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/tree_pear_sprites.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "animations": [
+        {
+          "name": "tree-idle",
+          "from": 0,
+          "to": 0,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-1",
+          "from": 12,
+          "to": 15,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-2",
+          "from": 24,
+          "to": 29,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-3",
+          "from": 36,
+          "to": 49,
+          "loop": true
+        }
+      ],
+      "fps": 8
+    },
+    {
+      "id": "tree_peach_sprites",
+      "textureKey": "tree_peach_sprites",
+      "path": "uploaded/tree_peach_sprites.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/tree_peach_sprites.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "animations": [
+        {
+          "name": "tree-idle",
+          "from": 0,
+          "to": 0,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-1",
+          "from": 12,
+          "to": 15,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-2",
+          "from": 24,
+          "to": 29,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-3",
+          "from": 36,
+          "to": 49,
+          "loop": true
+        }
+      ],
+      "fps": 8
+    },
+    {
+      "id": "tree_apple_sprites",
+      "textureKey": "tree_apple_sprites",
+      "path": "uploaded/tree_apple_sprites.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/tree_apple_sprites.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "animations": [
+        {
+          "name": "tree-idle",
+          "from": 0,
+          "to": 0,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-1",
+          "from": 12,
+          "to": 15,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-2",
+          "from": 24,
+          "to": 29,
+          "loop": true
+        },
+        {
+          "name": "tree-shake-3",
+          "from": 36,
+          "to": 49,
+          "loop": true
+        }
+      ],
+      "fps": 8
+    },
+    {
+      "id": "trees_stumps_and_bushes",
+      "textureKey": "trees_stumps_and_bushes",
+      "path": "uploaded/trees_stumps_and_bushes.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/trees_stumps_and_bushes.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/trees_stumps_and_bushes.json",
+      "atlasFormat": "json",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/trees_stumps_and_bushes.json"
     }
   ]
 }
