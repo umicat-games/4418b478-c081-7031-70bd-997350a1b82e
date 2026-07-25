@@ -1387,8 +1387,7 @@
         "scaleY": 1,
         "depth": 10
       },
-      "assetId": "chest",
-      "animation": "chest-open-front"
+      "assetId": "chest"
     }
   ]
 }
