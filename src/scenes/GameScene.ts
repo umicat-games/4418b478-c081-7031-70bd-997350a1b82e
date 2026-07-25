@@ -1413,6 +1413,7 @@ export class GameScene extends Phaser.Scene {
     this.stripFloorColliders();
     this.wireHouseFurniture();
     this.wireHouseDoor();
+    this.freezeChests();
 
     // Bracket cursor (24×24, frames a 16px cell) + the held-tool icon inside it.
     // Hidden until the hoe is out + hovering a farmable tile. High depth so they
@@ -2911,6 +2912,25 @@ export class GameScene extends Phaser.Scene {
     this.houseDoorAnimating = true;
     door.play(open ? 'door-open' : 'door-close');
     door.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { this.houseDoorAnimating = false; });
+  }
+
+  /** The editor-placed chest was dropped with a LOOPING open animation
+   *  (`chest-open-front`, 0→4), so it flaps open↔closed forever. Freeze every
+   *  `chest` sprite CLOSED (frame 0) at load — a chest should sit shut. Holds
+   *  regardless of the scene's autoplay binding (survives editor re-authoring);
+   *  if a chest should open later, drive it from behavior code like the door. */
+  private freezeChests(): void {
+    const reg = getEntityRegistry(this);
+    if (!reg) return;
+    let n = 0;
+    for (const go of reg.all()) {
+      if (go.getData('entityAssetId') !== 'chest') continue;
+      const s = go as Phaser.GameObjects.Sprite;
+      s.stop();
+      s.setFrame(0); // front-facing closed chest
+      n++;
+    }
+    if (n) console.warn(`[catopia] froze ${n} chest(s) to the closed frame`);
   }
 
   private updateDoors(): void {
