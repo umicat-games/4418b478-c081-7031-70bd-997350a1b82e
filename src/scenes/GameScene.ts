@@ -1403,6 +1403,7 @@ export class GameScene extends Phaser.Scene {
     // pathfinding (isWalkableCell) reads only the grass layer — so grab this layer
     // to also block those cells, and wire up the editor-placed furniture colliders.
     this.wallLayer = layers?.find((l) => l.layer?.name === 'wooden_house');
+    this.stripFloorColliders();
     this.wireHouseFurniture();
     this.wireHouseDoor();
 
@@ -2941,6 +2942,33 @@ export class GameScene extends Phaser.Scene {
    *  `collisionRects`, read from the manifest) — one body per rect (supports L/U
    *  corner shapes). Falls back to the opaque-pixel bounding box when a frame has no
    *  authored collision (and always for the door, which isn't a tileset). */
+  /** SDK-bug workaround: the tilemap sub-tile collider (`syncSubTileBodies`)
+   *  builds a static body for EVERY tile that has `collisionRects`, IGNORING the
+   *  tile's `solid` flag. Our floor (frame 6, authored `solid:false`) keeps a
+   *  leftover seed rect that the manifest metadata-sync KEEPS re-adding from the
+   *  asset record on each Build — so clearing it in the manifest doesn't stick and
+   *  the floor collides again after every save. Strip the sub-tile bodies sitting
+   *  on frame-6 (floor) cells so Cato can always walk into the house. Runs every
+   *  load, so it's immune to the manifest/record round-trip. (Real fix belongs in
+   *  the SDK: skip a tile's collisionRects when `solid === false`.) */
+  private stripFloorColliders(): void {
+    const layer = this.wallLayer;
+    if (!layer) return;
+    const grp = layer.getData('unboxySubTileStaticGroup') as
+      | Phaser.Physics.Arcade.StaticGroup
+      | undefined;
+    if (!grp) return;
+    let stripped = 0;
+    for (const body of grp.getChildren().slice()) {
+      const go = body as Phaser.GameObjects.GameObject & { x: number; y: number };
+      const t = layer.worldToTileXY(go.x, go.y);
+      if (!t) continue;
+      const tile = layer.getTileAt(Math.floor(t.x), Math.floor(t.y));
+      if (tile?.index === FLOOR_FRAME) { grp.remove(body, true, true); stripped++; }
+    }
+    if (stripped) console.warn(`[catopia] stripped ${stripped} floor collider(s) (SDK solid:false bug workaround)`);
+  }
+
   /** Give the editor-authored FURNITURE sprites (the `basic_furniture` atlas,
    *  frame = region name) real collision + block their cells for pathfinding.
    *  Each SOLID piece (see NON_SOLID_FURNITURE for the exceptions) gets one
