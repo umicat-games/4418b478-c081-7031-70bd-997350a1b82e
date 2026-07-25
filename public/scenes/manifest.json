@@ -1676,6 +1676,50 @@
           }
         }
       }
+    },
+    {
+      "id": "door_animation_sprites",
+      "textureKey": "door_animation_sprites",
+      "path": "uploaded/door_animation_sprites.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/door_animation_sprites.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 16,
+        "frameHeight": 16
+      },
+      "animations": [
+        {
+          "name": "door-close",
+          "from": 0,
+          "to": 5,
+          "loop": true
+        },
+        {
+          "name": "door-open",
+          "from": 0,
+          "to": 5,
+          "frames": [
+            5,
+            4,
+            3,
+            2,
+            1,
+            0
+          ],
+          "loop": true
+        }
+      ],
+      "fps": 4
+    },
+    {
+      "id": "basic_furniture",
+      "textureKey": "basic_furniture",
+      "path": "uploaded/basic_furniture.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/basic_furniture.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/basic_furniture.json",
+      "atlasFormat": "json",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/basic_furniture.json"
     }
   ]
 }
