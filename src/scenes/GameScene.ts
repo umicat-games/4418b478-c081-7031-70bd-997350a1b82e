@@ -2900,7 +2900,7 @@ export class GameScene extends Phaser.Scene {
     const layer = this.islandLayer;
     if (!reg || !layer || !this.wallGroup) return;
     const sprites = reg.all().filter(
-      (go) => go.getData('assetId') === 'basic_furniture',
+      (go) => go.getData('entityAssetId') === 'basic_furniture', // SDK's key (NOT 'assetId')
     ) as Phaser.GameObjects.Sprite[];
     for (const s of sprites) {
       const frameName = String(s.frame?.name ?? s.getData('frame') ?? '');
