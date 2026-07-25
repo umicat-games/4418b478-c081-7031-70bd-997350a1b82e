@@ -1402,7 +1402,14 @@ export class GameScene extends Phaser.Scene {
     // Its solid tiles already collide (SDK arms them from the tileset), but Cato's
     // pathfinding (isWalkableCell) reads only the grass layer — so grab this layer
     // to also block those cells, and wire up the editor-placed furniture colliders.
-    this.wallLayer = layers?.find((l) => l.layer?.name === 'wooden_house');
+    // NOTE: the SDK builds each layer via `createLayer(0,…)` and does NOT preserve
+    // the JSON layer NAME — so match on the tileset id it DOES stash
+    // (`tilemapTilesetId`), else the layer is never found (silently disabling the
+    // wall pathfinding + the floor-collider strip below). Name is a fallback.
+    this.wallLayer =
+      layers?.find((l) => l.getData('tilemapTilesetId') === 'wooden_house_walls_tilset') ??
+      layers?.find((l) => l.layer?.name === 'wooden_house');
+    if (!this.wallLayer) console.warn('[catopia] wooden_house wall layer not found — wall pathfinding + floor strip disabled');
     this.stripFloorColliders();
     this.wireHouseFurniture();
     this.wireHouseDoor();
