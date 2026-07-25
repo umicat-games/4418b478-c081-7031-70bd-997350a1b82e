@@ -1470,35 +1470,19 @@
       },
       "animations": [
         {
-          "name": "hoe-swing",
+          "name": "hoe-swing-right",
           "from": 27,
           "to": 29,
-          "frames": [
-            28,
-            29,
-            29,
-            29,
-            28,
-            27
-          ],
-          "loop": false
+          "loop": true
         },
         {
-          "name": "axe-swing",
+          "name": "axe-swing-left",
           "from": 12,
           "to": 14,
-          "frames": [
-            13,
-            14,
-            14,
-            14,
-            13,
-            12
-          ],
-          "loop": false
+          "loop": true
         }
       ],
-      "fps": 8
+      "fps": 4
     },
     {
       "id": "tools_and_meterials",
