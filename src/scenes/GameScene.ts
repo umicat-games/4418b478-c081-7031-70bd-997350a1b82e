@@ -529,6 +529,12 @@ export class GameScene extends Phaser.Scene {
   // interior, and the furniture also gets real colliders in wallGroup.
   private wallLayer?: Phaser.Tilemaps.TilemapLayer;
   private houseBlocked = new Set<string>(); // "cx,cy" of solid furniture (pathfinding)
+  // The editor-placed door sprite (door_animation_sprites). Swings open as Cato
+  // nears + closes when he leaves — cosmetic only (the doorway is a walkable floor
+  // tile, and Cato is the only physics body, so no collider to toggle).
+  private houseDoor?: Phaser.GameObjects.Sprite;
+  private houseDoorOpen = false;
+  private houseDoorAnimating = false;
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
@@ -1395,6 +1401,7 @@ export class GameScene extends Phaser.Scene {
     // to also block those cells, and wire up the editor-placed furniture colliders.
     this.wallLayer = layers?.find((l) => l.layer?.name === 'wooden_house');
     this.wireHouseFurniture();
+    this.wireHouseDoor();
 
     // Bracket cursor (24×24, frames a 16px cell) + the held-tool icon inside it.
     // Hidden until the hoe is out + hovering a farmable tile. High depth so they
@@ -2859,6 +2866,42 @@ export class GameScene extends Phaser.Scene {
   /** Open placed doors as Cato nears (plays the swing + drops the collider so he
    *  can pass); close them again when he's clear (hysteresis avoids flicker). No
    *  pathfinding — since walls box Cato in, he only nears a door when entering. */
+  /** Find the editor-placed door sprite and force it onto BootScene's `door`
+   *  sheet (which carries the door-open/close anims) at the closed frame. The
+   *  manifest asset is the SAME 16×16-sliced PNG, so the frames line up. */
+  private wireHouseDoor(): void {
+    const reg = getEntityRegistry(this);
+    if (!reg) return;
+    const door = reg.all().find(
+      (go) => go.getData('entityAssetId') === 'door_animation_sprites',
+    ) as Phaser.GameObjects.Sprite | undefined;
+    if (!door) return;
+    this.houseDoor = door;
+    door.stop();
+    door.setTexture('door', DOOR_CLOSED_FRAME); // start closed, on the anim-bearing sheet
+  }
+
+  /** Swing the editor door open as Cato approaches, close when he leaves
+   *  (hysteresis so it never shuts on him). Cosmetic — no collider, the doorway
+   *  cell is already a walkable floor tile. */
+  private updateHouseDoor(): void {
+    const door = this.houseDoor;
+    if (!door || !this.child || this.houseDoorAnimating) return;
+    const OPEN_R = TILE * 1.5;
+    const CLOSE_R = TILE * 2.2;
+    const d = Math.hypot(door.x - this.child.x, door.y - this.child.y);
+    if (!this.houseDoorOpen && d < OPEN_R) this.setHouseDoorOpen(true);
+    else if (this.houseDoorOpen && d > CLOSE_R) this.setHouseDoorOpen(false);
+  }
+
+  private setHouseDoorOpen(open: boolean): void {
+    const door = this.houseDoor!;
+    this.houseDoorOpen = open;
+    this.houseDoorAnimating = true;
+    door.play(open ? 'door-open' : 'door-close');
+    door.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { this.houseDoorAnimating = false; });
+  }
+
   private updateDoors(): void {
     if (!this.child) return;
     const OPEN_R = TILE * 1.5;   // Cato this close (world px) → open
@@ -4986,6 +5029,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
     if (SPAWN_WILD) this.trySpawn(delta); // drop new foragables / big-stones onto empty grass (TEMP off while authoring)
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
+    this.updateHouseDoor(); // the editor-authored default-house door
     this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
