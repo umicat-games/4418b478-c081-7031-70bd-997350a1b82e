@@ -1588,14 +1588,7 @@
           },
           "6": {
             "solid": false,
-            "collisionRects": [
-              {
-                "x": 0,
-                "y": 0,
-                "w": 16,
-                "h": 16
-              }
-            ]
+            "collisionRects": []
           },
           "7": {
             "solid": true,
