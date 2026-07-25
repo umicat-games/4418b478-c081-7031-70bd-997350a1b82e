@@ -233,6 +233,12 @@ const BERRY_OFFSETS: ReadonlyArray<{ x: number; y: number }> = [
 // sits above the grass tilemap but always BEHIND Cato / walls / furniture (he walks
 // ON it). Solid walls + furniture y-sort by footY as usual.
 const FLOOR_DEPTH = 1.2;
+// Rugs are flat ground decor: pinned just above the floor + PULLED OUT of the
+// foot-Y y-sort, so a chair/table placed over a rug always draws on top (and Cato
+// walks over it). Reordering entities in the editor can't fix this — the game
+// re-sorts every sprite's depth by foot Y each frame; a rug's low foot made it
+// cover furniture. Below FLOOR_DEPTH-adjacent floor tiles? No — just above them.
+const RUG_DEPTH = 1.5;
 
 // --- Crops (Sprout Lands "Farming Plants") ---
 // Each crop grows through N stages (frames `grow-<name>-<stage>` in the
@@ -2904,6 +2910,13 @@ export class GameScene extends Phaser.Scene {
     ) as Phaser.GameObjects.Sprite[];
     for (const s of sprites) {
       const frameName = String(s.frame?.name ?? s.getData('frame') ?? '');
+      // Rugs lie flat: fixed low depth + out of the y-sort so furniture drops on
+      // top of them and Cato walks over them (never occluded by a rug).
+      if (frameName.startsWith('rug')) {
+        s.setDepth(RUG_DEPTH);
+        this.ySortSprites = this.ySortSprites.filter((g) => g !== s);
+        continue;
+      }
       if (NON_SOLID_FURNITURE.has(frameName)) continue;
       const b = s.getBounds();
       const inset = 2; // pull the box in from the art edge so Cato can nuzzle up
