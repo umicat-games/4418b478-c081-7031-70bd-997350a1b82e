@@ -169,6 +169,15 @@ const FLOOR_FRAME = 6;  // brick floor (a ground-layer, non-solid item)
 const WINDOW_FRAME = 13; // a wall segment with a window (solid; future item)
 // Door: 16×16 top-row frames (0=open … 5=closed); the swing is the `door-open` anim.
 const DOOR_CLOSED_FRAME = 5;
+// Editor-authored furniture sprites use the `basic_furniture` atlas REGION names
+// (bed-pink / table / …). These regions are NOT solid: rugs lie flat (Cato walks
+// on them) and wall pictures/clocks sit on the wall row (the wall already
+// collides). Everything else (beds, tables, drawers, chairs, pot-flowers, lamps)
+// gets a collider + blocks pathfinding. Tell me to move a piece across the line.
+const NON_SOLID_FURNITURE = new Set<string>([
+  'rug-green', 'rug-pink', 'rug-blue', 'rug-small-green', 'rug-small-pink', 'rug-small-blue',
+  'picture-1', 'picture-2', 'picture-3', 'clock-1', 'clock-2', 'clock-3',
+]);
 // Furniture pieces the `furniture` material cycles through (R key). Single 16×16
 // tiles from the `furniture` sheet (frame = row*9 + col). Frames refined visually.
 interface FurnPiece { id: string; label: string; frame: number }
@@ -508,6 +517,12 @@ export class GameScene extends Phaser.Scene {
   private placed = new Map<string, PlacedObj>(); // "cx,cy" → placed wall/door/furniture
   private floors = new Map<string, { sprite: Phaser.GameObjects.Sprite; frame: number }>(); // "cx,cy" → floor tile (ground layer; can overlap a wall so it tucks under it)
   private wallGroup?: Phaser.Physics.Arcade.StaticGroup; // invisible solid colliders (walls + closed doors)
+  // Editor-authored house: the `wooden_house` tilemap layer (walls painted by the
+  // creator — solid via the tileset) + a set of cells occupied by SOLID furniture
+  // sprites. Both feed pathfinding (isWalkableCell) so Cato routes around the house
+  // interior, and the furniture also gets real colliders in wallGroup.
+  private wallLayer?: Phaser.Tilemaps.TilemapLayer;
+  private houseBlocked = new Set<string>(); // "cx,cy" of solid furniture (pathfinding)
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
@@ -1368,6 +1383,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.islandLayer) {
       console.warn('[catopia] farming: grass-island layer not found; hoe cursor disabled.');
     }
+    // The creator paints the house walls into a SECOND tilemap layer ('wooden_house').
+    // Its solid tiles already collide (SDK arms them from the tileset), but Cato's
+    // pathfinding (isWalkableCell) reads only the grass layer — so grab this layer
+    // to also block those cells, and wire up the editor-placed furniture colliders.
+    this.wallLayer = layers?.find((l) => l.layer?.name === 'wooden_house');
+    this.wireHouseFurniture();
 
     // Bracket cursor (24×24, frames a 16px cell) + the held-tool icon inside it.
     // Hidden until the hoe is out + hovering a farmable tile. High depth so they
@@ -2868,6 +2889,46 @@ export class GameScene extends Phaser.Scene {
    *  `collisionRects`, read from the manifest) — one body per rect (supports L/U
    *  corner shapes). Falls back to the opaque-pixel bounding box when a frame has no
    *  authored collision (and always for the door, which isn't a tileset). */
+  /** Give the editor-authored FURNITURE sprites (the `basic_furniture` atlas,
+   *  frame = region name) real collision + block their cells for pathfinding.
+   *  Each SOLID piece (see NON_SOLID_FURNITURE for the exceptions) gets one
+   *  invisible static body in `wallGroup` sized to its footprint, so Cato bumps
+   *  it and routes around it. Called once after the tilemap layers resolve;
+   *  these are fixed decor, so there's no teardown/refund. */
+  private wireHouseFurniture(): void {
+    const reg = getEntityRegistry(this);
+    const layer = this.islandLayer;
+    if (!reg || !layer || !this.wallGroup) return;
+    const sprites = reg.all().filter(
+      (go) => go.getData('assetId') === 'basic_furniture',
+    ) as Phaser.GameObjects.Sprite[];
+    for (const s of sprites) {
+      const frameName = String(s.frame?.name ?? s.getData('frame') ?? '');
+      if (NON_SOLID_FURNITURE.has(frameName)) continue;
+      const b = s.getBounds();
+      const inset = 2; // pull the box in from the art edge so Cato can nuzzle up
+      const bw = Math.max(4, b.width - inset * 2);
+      const bh = Math.max(4, b.height - inset * 2);
+      const body = this.wallGroup.create(b.centerX, b.centerY, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+      body.setVisible(false).setDisplaySize(bw, bh).refreshBody();
+      // Block every cell whose centre falls inside the footprint (tight — a hair
+      // of padding won't sacrifice a neighbouring walkable cell).
+      const t0 = layer.worldToTileXY(b.left + inset, b.top + inset);
+      const t1 = layer.worldToTileXY(b.right - inset, b.bottom - inset);
+      if (t0 && t1) {
+        for (let cy = Math.floor(t0.y); cy <= Math.floor(t1.y); cy++) {
+          for (let cx = Math.floor(t0.x); cx <= Math.floor(t1.x); cx++) {
+            const c = layer.tileToWorldXY(cx, cy);
+            if (!c) continue;
+            const ccx = c.x + 8, ccy = c.y + 8; // cell centre (16px tiles)
+            if (ccx >= b.left + inset && ccx <= b.right - inset && ccy >= b.top + inset && ccy <= b.bottom - inset)
+              this.houseBlocked.add(`${cx},${cy}`);
+          }
+        }
+      }
+    }
+  }
+
   private addSolid(cx: number, cy: number, texture: string, frame: number): Phaser.Physics.Arcade.Sprite[] {
     const w = this.islandLayer!.tileToWorldXY(cx, cy)!;
     let rects: Array<{ x: number; y: number; w: number; h: number }>;
@@ -3871,6 +3932,8 @@ export class GameScene extends Phaser.Scene {
     const tile = layer.getTileAt(cx, cy);
     if (!tile || tile.collides) return false; // off-island (water) or a solid tilemap tile
     const key = `${cx},${cy}`;
+    if (this.wallLayer?.getTileAt(cx, cy)?.collides) return false; // creator-painted house wall
+    if (this.houseBlocked.has(key)) return false; // solid furniture (bed/table/…)
     if (this.trees.has(key) || this.bigStones.has(key)) return false;
     const p = this.placed.get(key);
     if (p && (p.kind === 'wall' || p.kind === 'window' || (p.kind === 'door' && !p.open))) return false;
