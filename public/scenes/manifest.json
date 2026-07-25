@@ -1882,6 +1882,102 @@
       "atlasPath": "uploaded/trees_stumps_and_bushes.json",
       "atlasFormat": "json",
       "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/trees_stumps_and_bushes.json"
+    },
+    {
+      "id": "mailbox_animation_frames",
+      "textureKey": "mailbox_animation_frames",
+      "path": "uploaded/mailbox_animation_frames.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/mailbox_animation_frames.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 32,
+        "frameHeight": 48
+      },
+      "animations": [
+        {
+          "name": "mailbox-idle",
+          "from": 0,
+          "to": 0,
+          "loop": true
+        },
+        {
+          "name": "mailbox-new-mail",
+          "from": 5,
+          "to": 8,
+          "loop": true
+        },
+        {
+          "name": "mailbox-mail-stays",
+          "from": 10,
+          "to": 11,
+          "loop": true
+        },
+        {
+          "name": "mailbox-open-mail",
+          "from": 15,
+          "to": 25,
+          "loop": true
+        },
+        {
+          "name": "mailbox-open-empty",
+          "from": 30,
+          "to": 32,
+          "loop": true
+        }
+      ],
+      "fps": 8
+    },
+    {
+      "id": "chest",
+      "textureKey": "chest",
+      "path": "uploaded/chest.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/chest.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 48,
+        "frameHeight": 48
+      },
+      "animations": [
+        {
+          "name": "chest-open-front",
+          "from": 0,
+          "to": 4,
+          "loop": true
+        },
+        {
+          "name": "chest-close-front",
+          "from": 0,
+          "to": 4,
+          "frames": [
+            4,
+            3,
+            2,
+            1,
+            0
+          ],
+          "loop": true
+        },
+        {
+          "name": "chest-open-side",
+          "from": 5,
+          "to": 9,
+          "loop": true
+        },
+        {
+          "name": "chest-close-side",
+          "from": 5,
+          "to": 9,
+          "frames": [
+            9,
+            8,
+            7,
+            6,
+            5
+          ],
+          "loop": true
+        }
+      ],
+      "fps": 8
     }
   ]
 }

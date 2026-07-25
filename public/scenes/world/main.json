@@ -1100,8 +1100,8 @@
       "id": "e-ms0i02lm-0r59",
       "kind": "sprite",
       "transform": {
-        "x": 144,
-        "y": 312,
+        "x": 136,
+        "y": 315.18977987440803,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -1361,6 +1361,34 @@
       },
       "assetId": "tree_peach_sprites",
       "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0kfdd4-gjms",
+      "kind": "sprite",
+      "transform": {
+        "x": 151,
+        "y": 280,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mailbox_animation_frames",
+      "animation": "mailbox-idle"
+    },
+    {
+      "id": "e-ms0kfylz-2ekq",
+      "kind": "sprite",
+      "transform": {
+        "x": 187,
+        "y": 288,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "chest",
+      "animation": "chest-open-front"
     }
   ]
 }
