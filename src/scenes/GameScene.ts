@@ -83,6 +83,9 @@ const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 // Day/time HUD: one full day loops in this many ms of play; the sun-arc pointer
 // steps through 5 frames (morning ↗ → evening ↘) across it, then wraps.
 const DAY_LEN_MS = 10 * 60 * 1000; // ~10 min per in-game day
+// TEMP (restore to true): random wild spawning (grass/foragables + big-stones) is
+// OFF while the creator arranges the default layout, so it doesn't clutter the map.
+const SPAWN_WILD = false;
 // Weather = a TIME-tinted background (fills the window) + a transparent weather icon
 // on top. Sunny only for now (decorative); the icon cycles per day for variety.
 const WEATHER_ICONS = ['sunny-no-bg', 'partial-sunny-no-bg', 'sunny-with-cloud-no-bg'];
@@ -940,6 +943,15 @@ export class GameScene extends Phaser.Scene {
         // exercise the weather/time/money HUD without waiting / an economy.
         this.input.keyboard?.on('keydown-Y', () => this.addMoney(12345));
         this.input.keyboard?.on('keydown-U', () => { this.dayTimeMs = (this.dayTimeMs + DAY_LEN_MS / 5) % DAY_LEN_MS; this.publishWeatherHud(); });
+        // Shift+Delete (or Shift+Backspace — the Mac "delete" key is Backspace) =
+        // WIPE this game's save + reload to a fresh EMPTY map. Shift-guarded so it's
+        // deliberate; preventDefault stops any browser back-nav on Shift+Backspace.
+        const wipeOnShift = (e: KeyboardEvent) => {
+          console.warn('[catopia] wipe key:', e.key, 'shift=', e.shiftKey);
+          if (e.shiftKey) { e.preventDefault?.(); this.debugWipeSave(); }
+        };
+        this.input.keyboard?.on('keydown-DELETE', wipeOnShift);
+        this.input.keyboard?.on('keydown-BACKSPACE', wipeOnShift);
         // V = teleport Cato right at the built door (to verify it opens on proximity).
         this.input.keyboard?.on('keydown-V', () => {
           const door = [...this.placed.values()].find((o) => o.kind === 'door');
@@ -4425,6 +4437,23 @@ export class GameScene extends Phaser.Scene {
     this.umicat.saves.set('state', this.buildSave()).catch((e) => console.warn('[catopia][save] set failed', e));
   }
 
+  /** DEV (Shift+Delete): wipe this game's save + reload to a fresh EMPTY map, so a
+   *  default layout can be arranged from scratch. Disarms saving + cancels the
+   *  pending debounced save FIRST so the current in-memory state can't re-save over
+   *  the delete before the reload lands. */
+  private async debugWipeSave(): Promise<void> {
+    if (!this.umicat) return;
+    this.saveArmed = false;
+    this.pendingSave?.remove();
+    try {
+      await this.umicat.saves.delete('state');
+      console.warn('[catopia] save WIPED — reloading to an empty map');
+    } catch (e) {
+      console.warn('[catopia] save wipe failed', e);
+    }
+    if (typeof window !== 'undefined') window.location.reload();
+  }
+
   /** Debounced save after a state change (rapid actions coalesce). Short delay so
    *  the state reaches the backend while the tab is still open — a save-on-close
    *  is unreliable (the async backend write can't finish as the page tears down). */
@@ -4879,7 +4908,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBushes(delta); // grow berry bushes (+ regrow after harvest)
     this.updateForagables(delta); // grow wild foragables toward their max stage
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
-    this.trySpawn(delta); // drop new foragables / big-stones onto empty grass
+    if (SPAWN_WILD) this.trySpawn(delta); // drop new foragables / big-stones onto empty grass (TEMP off while authoring)
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
