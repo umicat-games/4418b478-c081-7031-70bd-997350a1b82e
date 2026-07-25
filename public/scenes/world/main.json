@@ -22,8 +22,8 @@
       "kind": "sprite",
       "role": "child",
       "transform": {
-        "x": 245.85584710444184,
-        "y": 255,
+        "x": 399,
+        "y": 159,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -1167,20 +1167,6 @@
       "animation": "tree-idle"
     },
     {
-      "id": "e-ms0i0vcn-t1g6",
-      "kind": "sprite",
-      "transform": {
-        "x": 368,
-        "y": 224,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "tree_pear_sprites",
-      "animation": "tree-shake-1"
-    },
-    {
       "id": "e-ms0i163o-2z9k",
       "kind": "sprite",
       "transform": {
@@ -1333,6 +1319,48 @@
       },
       "assetId": "mushrooms_flowers_stones",
       "frame": "sunflower-3"
+    },
+    {
+      "id": "e-ms0ieixt-1yfv",
+      "kind": "sprite",
+      "transform": {
+        "x": 336,
+        "y": 232,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0iejg6-l934",
+      "kind": "sprite",
+      "transform": {
+        "x": 352,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-ms0iely8-tgvk",
+      "kind": "sprite",
+      "transform": {
+        "x": 368,
+        "y": 208,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_peach_sprites",
+      "animation": "tree-idle"
     }
   ]
 }
