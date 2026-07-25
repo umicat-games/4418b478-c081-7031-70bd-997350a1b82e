@@ -177,10 +177,10 @@ const DOOR_CLOSED_FRAME = 5;
 const NON_SOLID_FURNITURE = new Set<string>([
   'rug-green', 'rug-pink', 'rug-blue', 'rug-small-green', 'rug-small-pink', 'rug-small-blue',
   'picture-1', 'picture-2', 'picture-3', 'clock-1', 'clock-2', 'clock-3',
-  // Beds are walkable so Cato can climb ON to rest/sleep (a future behaviour).
-  // They still y-sort (only rugs are pulled from the sort), so occlusion reads right.
-  'bed-green', 'bed-blue', 'bed-pink',
 ]);
+// Beds Cato can climb ONTO (walkable, no collider) but y-sorted by their TOP edge
+// (ysortBias) so he draws over them when on/in front — see wireHouseFurniture.
+const BED_FRAMES = new Set<string>(['bed-green', 'bed-blue', 'bed-pink']);
 // Furniture pieces the `furniture` material cycles through (R key). Single 16×16
 // tiles from the `furniture` sheet (frame = row*9 + col). Frames refined visually.
 interface FurnPiece { id: string; label: string; frame: number }
@@ -2963,6 +2963,13 @@ export class GameScene extends Phaser.Scene {
         this.ySortSprites = this.ySortSprites.filter((g) => g !== s);
         continue;
       }
+      if (BED_FRAMES.has(frameName)) {
+        // Walkable (no collider) + y-sort by the bed's TOP edge, so Cato lying on
+        // the bed draws OVER it (his feet sit below the top) while a north-side
+        // approach still gets occluded by the headboard.
+        s.setData('ysortBias', -s.displayHeight);
+        continue;
+      }
       if (NON_SOLID_FURNITURE.has(frameName)) continue;
       const b = s.getBounds();
       const inset = 2; // pull the box in from the art edge so Cato can nuzzle up
@@ -4822,7 +4829,9 @@ export class GameScene extends Phaser.Scene {
     g?.lineStyle(1, 0xff2d78, 0.9);
     for (const s of this.ySortSprites) {
       if (!s.active) continue;
-      const foot = this.footLine(s);
+      // `ysortBias` lets a "stand-on" piece (a bed) sort by its TOP edge instead
+      // of its foot, so Cato lying on it draws in front instead of under it.
+      const foot = this.footLine(s) + ((s.getData('ysortBias') as number) ?? 0);
       s.setDepth(Math.round(foot));
       // Debug: draw the foot line so the flip point is visible on screen.
       if (g) g.lineBetween(s.x - 24, foot, s.x + 24, foot);
