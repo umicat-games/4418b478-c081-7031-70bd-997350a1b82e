@@ -177,6 +177,9 @@ const DOOR_CLOSED_FRAME = 5;
 const NON_SOLID_FURNITURE = new Set<string>([
   'rug-green', 'rug-pink', 'rug-blue', 'rug-small-green', 'rug-small-pink', 'rug-small-blue',
   'picture-1', 'picture-2', 'picture-3', 'clock-1', 'clock-2', 'clock-3',
+  // Beds are walkable so Cato can climb ON to rest/sleep (a future behaviour).
+  // They still y-sort (only rugs are pulled from the sort), so occlusion reads right.
+  'bed-green', 'bed-blue', 'bed-pink',
 ]);
 // Furniture pieces the `furniture` material cycles through (R key). Single 16×16
 // tiles from the `furniture` sheet (frame = row*9 + col). Frames refined visually.
