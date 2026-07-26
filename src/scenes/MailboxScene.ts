@@ -22,8 +22,6 @@ const GAP = 16;              // native px between slots
 // Close button anchored to the mailbox's TOP-RIGHT corner, inset (native px) so it
 // clears the Cato portrait that lives at the screen's top-right corner.
 const CLOSE = { insetX: 120, insetY: 210, scale: 2 };
-// Gray mask over the scene behind the mailbox (makes the mailbox pop).
-const OVERLAY = { color: 0x63676b, alpha: 0.62 };
 
 export interface MailItem { iconKey: string; iconFrame: number | string; count: number; }
 export interface MailboxModel { visible: boolean; rev: number; items?: MailItem[]; }
@@ -54,11 +52,6 @@ export class MailboxScene extends Phaser.Scene {
     const c = this.add.container(0, 0);
     this.root = c;
 
-    // Gray overlay mask over the scene (fades in) — makes the mailbox stand out.
-    const dim = this.add.rectangle(0, 0, W, H, OVERLAY.color, 0).setOrigin(0, 0);
-    this.tweens.add({ targets: dim, alpha: OVERLAY.alpha, duration: 180 });
-    c.add(dim);
-
     // Mailbox + items, grouped so they SLIDE UP together from below the screen.
     const box = this.add.container(0, 0);
     c.add(box);
@@ -75,10 +68,13 @@ export class MailboxScene extends Phaser.Scene {
     const cy0 = (CONTENT.y - img.height / 2) * fit;
     const gap = GAP * fit;
     const cell = (CONTENT.w * fit - gap * (COLS - 1)) / COLS;
+    const rows = Math.max(1, Math.ceil(items.length / COLS));
+    const gridH = rows * cell + (rows - 1) * gap;
+    const offY = Math.max(0, (CONTENT.h * fit - gridH) / 2); // vertically centre the grid in the window
     items.forEach((it, i) => {
       const col = i % COLS, row = Math.floor(i / COLS);
       const sx = cx0 + cell / 2 + col * (cell + gap);
-      const sy = cy0 + cell / 2 + row * (cell + gap);
+      const sy = cy0 + offY + cell / 2 + row * (cell + gap);
       box.add(this.add.image(sx, sy, ITEM_BG).setDisplaySize(cell, cell));
       if (this.textures.exists(it.iconKey)) {
         const icon = this.add.image(sx, sy, it.iconKey, it.iconFrame);
