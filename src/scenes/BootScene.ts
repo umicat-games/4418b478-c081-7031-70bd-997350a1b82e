@@ -160,6 +160,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('mail-box', 'uploaded/mail-box.png');
     this.load.image('mail-box-item-bg', 'uploaded/mail-box-item-bg.png');
     this.load.image('envelope-zipper', 'uploaded/envelope-zipper.png');
+    // Icon buttons atlas (region-tagged) — the mailbox modal's close button
+    // (`close-light-big`).
+    this.load.atlas('icon-buttons', 'uploaded/icon_buttons_spritesheet.png', 'uploaded/icon_buttons_spritesheet.json');
     // Game DATA tables (config as data, not code) — crops: which crops exist + their
     // stats/grow-times. Applied in create(). See src/data/crops.ts.
     this.load.json('data-crops', 'data/crops.json');

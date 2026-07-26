@@ -10,6 +10,7 @@ import {
   type Npc,
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
+import type { MailItem } from './MailboxScene';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import {
@@ -1191,8 +1192,8 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
-      // Mail modal open: any click closes it.
-      if (this.mailboxOpen) { this.closeMailbox(); return; }
+      // Mail modal open: route the click (only the close button closes it).
+      if (this.mailboxOpen) { this.handleMailboxClick(pointer.x, pointer.y); return; }
       // Backpack open: route the click to actAt (pick/drop a cell, or click-outside to
       // close) whether or not the pointer is locked — NEVER fall through to the world /
       // Cato sitting BEHIND the panel. (Lock is often dropped after chatting, so an open
@@ -1236,7 +1237,7 @@ export class GameScene extends Phaser.Scene {
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
-      if (this.mailboxOpen) { this.closeMailbox(); return; }
+      if (this.mailboxOpen) { this.handleMailboxClick(pointer.x, pointer.y); return; }
       this.actAt(pointer.x, pointer.y);
     });
 
@@ -1300,8 +1301,8 @@ export class GameScene extends Phaser.Scene {
   private actAt(x: number, y: number): void {
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
-    // Modal mail box: any tap closes it.
-    if (this.handleMailboxClick()) return;
+    // Modal mail box: consumes taps; only the close button closes it.
+    if (this.handleMailboxClick(x, y)) return;
     // Backpack open: tap a cell to pick/drop/merge/swap; tap outside → close.
     if (this.inventoryOpen) {
       const c = this.inventoryCellAt(x, y);
@@ -2960,22 +2961,45 @@ export class GameScene extends Phaser.Scene {
     const openAnim = this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open';
     this.mailbox?.play({ key: openAnim, repeat: 0 });
     if (this.locked) this.input.manager.mouse?.releasePointerLock();
-    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev });
+    this.hideHotbar(true);
+    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, items: this.buildTestMail() });
   }
 
   private closeMailbox(): void {
     if (!this.mailboxOpen) return;
     this.mailboxOpen = false;
-    this.mailbox?.stop();
-    this.mailbox?.setFrame(0); // mailbox back to its closed/idle frame
+    this.mailbox?.play({ key: 'mailbox-close', repeat: 0 }); // play the close swing on the placed mailbox
+    this.hideHotbar(false);
     this.registry.set('mailbox', { visible: false, rev: ++this.mailboxRev });
   }
 
-  /** Modal: while the mail modal is open, ANY tap closes it + is consumed. */
-  private handleMailboxClick(): boolean {
+  /** Modal: while the mail modal is open, ONLY the top-right close button closes
+   *  it. Every tap is consumed (nothing behind the modal acts). */
+  private handleMailboxClick(x: number, y: number): boolean {
     if (!this.mailboxOpen) return false;
-    this.closeMailbox();
+    const cb = this.registry.get('mailboxCloseBounds') as
+      | { x: number; y: number; w: number; h: number }
+      | null;
+    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) this.closeMailbox();
     return true;
+  }
+
+  /** Random test mail — fruit-item icons in slots (until a real mail system).
+   *  15 fills a 5×3 grid; bump past that once scrolling lands. */
+  private buildTestMail(): MailItem[] {
+    const out: MailItem[] = [];
+    for (let i = 0; i < 15; i++) {
+      out.push({ iconKey: 'fruit-items', iconFrame: (i * 3 + 1) % 8, count: 1 + ((i * 7) % 9) });
+    }
+    return out;
+  }
+
+  /** Slide the tool hotbar down off-screen (open) / back up (close), so the mail
+   *  modal owns the screen. Moves the HotbarScene camera viewport. */
+  private hideHotbar(hide: boolean): void {
+    const hb = this.scene.get('HotbarScene');
+    if (!hb) return;
+    this.tweens.add({ targets: hb.cameras.main, y: hide ? this.scale.height : 0, duration: 240, ease: 'Cubic.easeInOut' });
   }
 
   private updateDoors(): void {
