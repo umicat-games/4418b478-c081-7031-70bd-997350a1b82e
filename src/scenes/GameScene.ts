@@ -538,6 +538,12 @@ export class GameScene extends Phaser.Scene {
   private houseDoor?: Phaser.GameObjects.Sprite;
   private houseDoorOpen = false;
   private houseDoorAnimating = false;
+  // The editor-placed mailbox (mailbox_animation_frames). Clicking it plays the
+  // open animation + pops the big-mailbox modal (MailboxScene). Modal-close is
+  // routed like the Cato dialog / confirm.
+  private mailbox?: Phaser.GameObjects.Sprite;
+  private mailboxOpen = false;
+  private mailboxRev = 0;
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
@@ -1164,6 +1170,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('InventoryScene')) this.scene.launch('InventoryScene');
     if (!this.scene.isActive('PaletteScene')) this.scene.launch('PaletteScene');
     if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
+    if (!this.scene.isActive('MailboxScene')) this.scene.launch('MailboxScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
@@ -1183,6 +1190,8 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      // Mail modal open: any click closes it.
+      if (this.mailboxOpen) { this.closeMailbox(); return; }
       // Backpack open: route the click to actAt (pick/drop a cell, or click-outside to
       // close) whether or not the pointer is locked — NEVER fall through to the world /
       // Cato sitting BEHIND the panel. (Lock is often dropped after chatting, so an open
@@ -1196,6 +1205,7 @@ export class GameScene extends Phaser.Scene {
       // scene-level handler, so the portrait can't be routed through it).
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
+      if (this.mailboxContains(wp.x, wp.y)) { this.openMailbox(); return; }
       this.input.manager.mouse?.requestPointerLock();
     });
 
@@ -1225,6 +1235,7 @@ export class GameScene extends Phaser.Scene {
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.mailboxOpen) { this.closeMailbox(); return; }
       this.actAt(pointer.x, pointer.y);
     });
 
@@ -1288,6 +1299,8 @@ export class GameScene extends Phaser.Scene {
   private actAt(x: number, y: number): void {
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
+    // Modal mail box: any tap closes it.
+    if (this.handleMailboxClick()) return;
     // Backpack open: tap a cell to pick/drop/merge/swap; tap outside → close.
     if (this.inventoryOpen) {
       const c = this.inventoryCellAt(x, y);
@@ -1329,6 +1342,10 @@ export class GameScene extends Phaser.Scene {
         if (f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) { const [fx, fy] = fk.split(',').map(Number); this.harvestForagable(fx!, fy!); return; }
       }
     }
+    // The mailbox at the door → open the mail modal (empty hand or any tool, but
+    // not while placing). Checked before the tile actions so it wins over tilling
+    // the grass under it.
+    if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailbox(); return; }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -1413,6 +1430,7 @@ export class GameScene extends Phaser.Scene {
     this.stripFloorColliders();
     this.wireHouseFurniture();
     this.wireHouseDoor();
+    this.wireMailbox();
 
     // Bracket cursor (24×24, frames a 16px cell) + the held-tool icon inside it.
     // Hidden until the hoe is out + hovering a farmable tile. High depth so they
@@ -2911,6 +2929,48 @@ export class GameScene extends Phaser.Scene {
     this.houseDoorAnimating = true;
     door.play(open ? 'door-open' : 'door-close');
     door.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { this.houseDoorAnimating = false; });
+  }
+
+  /** Find the editor-placed mailbox sprite so clicking it opens the mail modal. */
+  private wireMailbox(): void {
+    const reg = getEntityRegistry(this);
+    if (!reg) return;
+    this.mailbox = reg.all().find(
+      (go) => go.getData('entityAssetId') === 'mailbox_animation_frames',
+    ) as Phaser.GameObjects.Sprite | undefined;
+  }
+
+  /** Is a world point on the mailbox sprite? (Bounds + a little touch padding.) */
+  private mailboxContains(wx: number, wy: number): boolean {
+    if (!this.mailbox) return false;
+    const b = this.mailbox.getBounds();
+    return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
+  }
+
+  /** Open the mailbox: play its flag-up open animation + pop the big-mailbox modal
+   *  (MailboxScene). Releases pointer lock so the real cursor shows over the modal
+   *  (the modal is closed by ANY click — handled in the pointer routers). */
+  private openMailbox(): void {
+    if (this.mailboxOpen) return;
+    this.mailboxOpen = true;
+    this.mailbox?.play('mailbox-open-mail');
+    if (this.locked) this.input.manager.mouse?.releasePointerLock();
+    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev });
+  }
+
+  private closeMailbox(): void {
+    if (!this.mailboxOpen) return;
+    this.mailboxOpen = false;
+    this.mailbox?.stop();
+    this.mailbox?.setFrame(0); // mailbox back to its closed/idle frame
+    this.registry.set('mailbox', { visible: false, rev: ++this.mailboxRev });
+  }
+
+  /** Modal: while the mail modal is open, ANY tap closes it + is consumed. */
+  private handleMailboxClick(): boolean {
+    if (!this.mailboxOpen) return false;
+    this.closeMailbox();
+    return true;
   }
 
   private updateDoors(): void {

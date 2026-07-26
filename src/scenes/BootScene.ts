@@ -154,6 +154,12 @@ export class BootScene extends Phaser.Scene {
     this.load.atlas('weather-ui', 'uploaded/weather_ui.png', 'uploaded/weather_ui.json');
     this.load.atlas('weather-icons', 'uploaded/weather_icons_big.png', 'uploaded/weather_icons_big.json');
     this.load.atlas('coins', 'uploaded/coins.png', 'uploaded/coins.json');
+    // Mailbox UI — click the placed mailbox to open this big-mailbox modal.
+    // `mail-box` = the big open mailbox frame; `mail-box-item-bg` = a mail-slot bg,
+    // `envelope-zipper` = a piece of mail (both used when mail items are wired in).
+    this.load.image('mail-box', 'uploaded/mail-box.png');
+    this.load.image('mail-box-item-bg', 'uploaded/mail-box-item-bg.png');
+    this.load.image('envelope-zipper', 'uploaded/envelope-zipper.png');
     // Game DATA tables (config as data, not code) — crops: which crops exist + their
     // stats/grow-times. Applied in create(). See src/data/crops.ts.
     this.load.json('data-crops', 'data/crops.json');
