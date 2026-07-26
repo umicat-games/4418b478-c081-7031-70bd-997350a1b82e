@@ -94,11 +94,10 @@ export class MailboxScene extends Phaser.Scene {
       const half = (32 * CLOSE.scale) / 2;
       this.registry.set('mailboxCloseBounds', { x: restX + lx - half, y: restY + ly - half, w: half * 2, h: half * 2 });
     }
-    box.setPosition(restX, H + img.displayHeight);
-    this.tweens.add({ targets: box, x: restX, y: restY, duration: 300, ease: 'Back.easeOut' });
+    box.setPosition(restX, restY);
 
-    // Item layer (fades in at rest, same local frame as `box`).
-    const content = this.add.container(restX, restY).setAlpha(0);
+    // Item layer (same local frame as `box`; slides up WITH it as one unit).
+    const content = this.add.container(restX, restY);
     c.add(content);
     const slots = this.add.container(0, 0);
     content.add(slots);
@@ -125,7 +124,10 @@ export class MailboxScene extends Phaser.Scene {
     this.registry.set('mailboxRail', { x: restX + cx(SCROLL.x), top: restY + this.thumbTop, bottom: restY + this.thumbBot, pages: this.pages });
 
     this.renderPage(0);
-    this.tweens.add({ targets: content, alpha: 1, duration: 220, delay: 120 });
+    // Slide the WHOLE modal (frame + items + thumb) up from below as ONE unit —
+    // the mirror of the close slide, so it reads as a single object.
+    c.setY(H * 1.15);
+    this.tweens.add({ targets: c, y: 0, duration: 300, ease: 'Back.easeOut' });
   }
 
   /** Rebuild the item slots for page `p` + move the thumb to match. */
