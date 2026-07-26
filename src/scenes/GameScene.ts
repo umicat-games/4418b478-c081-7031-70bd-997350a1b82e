@@ -2953,7 +2953,9 @@ export class GameScene extends Phaser.Scene {
   private openMailbox(): void {
     if (this.mailboxOpen) return;
     this.mailboxOpen = true;
-    this.mailbox?.play('mailbox-open-mail');
+    // Play the open swing ONCE (the asset's animation is authored loop:true, so
+    // override repeat) → it opens + holds on the last frame instead of flapping.
+    this.mailbox?.play({ key: 'mailbox-open-mail', repeat: 0 });
     if (this.locked) this.input.manager.mouse?.releasePointerLock();
     this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev });
   }
