@@ -1913,13 +1913,25 @@
           "loop": true
         },
         {
-          "name": "mailbox-open-mail",
+          "name": "mailbox-mail-open",
           "from": 15,
+          "to": 19,
+          "loop": true
+        },
+        {
+          "name": "mailbox-empty-open",
+          "from": 20,
+          "to": 24,
+          "loop": true
+        },
+        {
+          "name": "mail-box-idle-open",
+          "from": 25,
           "to": 25,
           "loop": true
         },
         {
-          "name": "mailbox-open-empty",
+          "name": "mailbox-close",
           "from": 30,
           "to": 32,
           "loop": true

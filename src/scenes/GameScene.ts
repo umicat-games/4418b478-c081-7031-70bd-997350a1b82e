@@ -544,6 +544,7 @@ export class GameScene extends Phaser.Scene {
   private mailbox?: Phaser.GameObjects.Sprite;
   private mailboxOpen = false;
   private mailboxRev = 0;
+  private mailboxHasMail = false; // drives which open anim plays; no mail system yet → empty
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
@@ -2953,9 +2954,11 @@ export class GameScene extends Phaser.Scene {
   private openMailbox(): void {
     if (this.mailboxOpen) return;
     this.mailboxOpen = true;
-    // Play the open swing ONCE (the asset's animation is authored loop:true, so
-    // override repeat) → it opens + holds on the last frame instead of flapping.
-    this.mailbox?.play({ key: 'mailbox-open-mail', repeat: 0 });
+    // Play the open swing ONCE (the asset anims are authored loop:true, so override
+    // repeat) → opens + holds on the last frame. Which one depends on mail state:
+    // has-mail → mailbox-mail-open, empty → mailbox-empty-open.
+    const openAnim = this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open';
+    this.mailbox?.play({ key: openAnim, repeat: 0 });
     if (this.locked) this.input.manager.mouse?.releasePointerLock();
     this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev });
   }
