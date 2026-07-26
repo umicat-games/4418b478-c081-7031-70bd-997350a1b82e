@@ -19,7 +19,11 @@ const FIT_H = 0.94, FIT_W = 0.6, X_BIAS = 0.19;
 const CONTENT = { x: 105, y: 490, w: 845, h: 620 };
 const COLS = 5;
 const GAP = 16;              // native px between slots
-const CLOSE = { rx: 60, ry: 60, scale: 2 }; // close button: px from screen top-right + scale
+// Close button anchored to the mailbox's TOP-RIGHT corner, inset (native px) so it
+// clears the Cato portrait that lives at the screen's top-right corner.
+const CLOSE = { insetX: 120, insetY: 210, scale: 2 };
+// Gray mask over the scene behind the mailbox (makes the mailbox pop).
+const OVERLAY = { color: 0x63676b, alpha: 0.62 };
 
 export interface MailItem { iconKey: string; iconFrame: number | string; count: number; }
 export interface MailboxModel { visible: boolean; rev: number; items?: MailItem[]; }
@@ -50,9 +54,9 @@ export class MailboxScene extends Phaser.Scene {
     const c = this.add.container(0, 0);
     this.root = c;
 
-    // Dim modal backdrop.
-    const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0).setOrigin(0, 0);
-    this.tweens.add({ targets: dim, alpha: 0.5, duration: 180 });
+    // Gray overlay mask over the scene (fades in) — makes the mailbox stand out.
+    const dim = this.add.rectangle(0, 0, W, H, OVERLAY.color, 0).setOrigin(0, 0);
+    this.tweens.add({ targets: dim, alpha: OVERLAY.alpha, duration: 180 });
     c.add(dim);
 
     // Mailbox + items, grouped so they SLIDE UP together from below the screen.
@@ -96,14 +100,15 @@ export class MailboxScene extends Phaser.Scene {
     box.setPosition(restX, H + img.displayHeight);
     this.tweens.add({ targets: box, x: restX, y: restY, duration: 300, ease: 'Back.easeOut' });
 
-    // Close button — screen top-right, fixed (fades in). GameScene reads its
-    // hit-box (mailboxCloseBounds) and closes ONLY on a hit.
+    // Close button — anchored to the mailbox's TOP-RIGHT corner (inset down so it
+    // clears the Cato portrait at the screen corner); slides up with the box.
+    // GameScene reads its REST hit-box (mailboxCloseBounds) and closes ONLY on a hit.
     if (this.textures.exists(CLOSE_ATLAS)) {
-      const btn = this.add.image(W - CLOSE.rx, CLOSE.ry, CLOSE_ATLAS, CLOSE_FRAME).setScale(CLOSE.scale).setAlpha(0);
-      this.tweens.add({ targets: btn, alpha: 1, duration: 200 });
-      c.add(btn);
-      const bb = btn.getBounds();
-      this.registry.set('mailboxCloseBounds', { x: bb.x, y: bb.y, w: bb.width, h: bb.height });
+      const lx = (img.width / 2 - CLOSE.insetX) * fit;
+      const ly = (-img.height / 2 + CLOSE.insetY) * fit;
+      box.add(this.add.image(lx, ly, CLOSE_ATLAS, CLOSE_FRAME).setScale(CLOSE.scale));
+      const half = (32 * CLOSE.scale) / 2;
+      this.registry.set('mailboxCloseBounds', { x: restX + lx - half, y: restY + ly - half, w: half * 2, h: half * 2 });
     }
   }
 
