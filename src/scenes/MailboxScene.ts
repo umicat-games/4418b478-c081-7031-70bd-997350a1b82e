@@ -19,7 +19,10 @@ const FIT_H = 0.94, FIT_W = 0.6, X_BIAS = 0.19;
 const CONTENT = { x: 105, y: 490, w: 845, h: 620 };
 const COLS = 5, ROWS = 3;      // one page = 5×3 = 15 items
 const GAP = 16;
-const SCROLL = { x: 972, top: 575, bottom: 1030, thumbScale: 1.0 };
+// top/bottom = thumb-CENTRE native y at page 0 / last page. The zipper's white tab
+// is 24.5px above its centre; the rail's top cap centres at ~544.5 → top ≈ 566 so
+// the tab lines up with the rail's white box.
+const SCROLL = { x: 972, top: 566, bottom: 1030, thumbScale: 1.0 };
 const CLOSE = { insetX: 120, insetY: 210, scale: 2 };
 
 export interface MailItem { iconKey: string; iconFrame: number | string; count: number; }
