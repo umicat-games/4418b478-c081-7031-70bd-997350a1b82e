@@ -4,8 +4,8 @@
   "name": "Boot",
   "type": "world",
   "world": {
-    "width": 960,
-    "height": 540,
+    "width": 1280,
+    "height": 720,
     "background": {
       "color": "#1a1a2e"
     }
@@ -19,8 +19,8 @@
       "kind": "sprite",
       "role": "play-button",
       "transform": {
-        "x": 800,
-        "y": 470,
+        "x": 1110,
+        "y": 640,
         "rotation": 0,
         "scaleX": 3,
         "scaleY": 3,
