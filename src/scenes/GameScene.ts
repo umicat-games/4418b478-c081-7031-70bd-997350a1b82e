@@ -2985,10 +2985,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Random test mail — fruit-item icons in slots (until a real mail system).
-   *  15 fills a 5×3 grid; bump past that once scrolling lands. */
+   *  28 overflows the 5-wide window so the scroll rail is exercised. */
   private buildTestMail(): MailItem[] {
     const out: MailItem[] = [];
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 28; i++) {
       out.push({ iconKey: 'fruit-items', iconFrame: (i * 3 + 1) % 8, count: 1 + ((i * 7) % 9) });
     }
     return out;
