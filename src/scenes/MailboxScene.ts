@@ -21,7 +21,7 @@ const COLS = 5, ROWS = 3;      // one page = 5×3 = 15 items
 const GAP = 16;
 // x = thumb-CENTRE native x; top/bottom = thumb-CENTRE native y at page 0 / last
 // page. Nudged right + down so the zipper's white tab lines up with the rail's cap.
-const SCROLL = { x: 981, top: 574, bottom: 1036, thumbScale: 1.0 };
+const SCROLL = { x: 976, top: 570, bottom: 1032, thumbScale: 1.0 };
 const CLOSE = { insetX: 120, insetY: 210, scale: 2 };
 
 export interface MailItem { iconKey: string; iconFrame: number | string; count: number; }
