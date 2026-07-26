@@ -170,6 +170,14 @@ export class MailboxScene extends Phaser.Scene {
     const root = this.root;
     this.root = undefined;
     if (!root) return;
-    this.tweens.add({ targets: root, alpha: 0, duration: 140, onComplete: () => root.destroy() });
+    this.tweens.killTweensOf(root);
+    // Reverse of the open — the whole modal SLIDES back DOWN off the bottom.
+    this.tweens.add({
+      targets: root,
+      y: this.scale.height * 1.15,
+      duration: 300,
+      ease: 'Back.easeIn',
+      onComplete: () => root.destroy(),
+    });
   }
 }
