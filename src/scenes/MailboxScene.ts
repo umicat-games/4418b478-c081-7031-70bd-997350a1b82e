@@ -4,9 +4,11 @@ import { dialogFont } from '../i18n';
 // The mailbox modal: click the mailbox → the big open mailbox (`mail-box.png`)
 // SLIDES UP from below; its content window shows ONE PAGE of mail (5×3 = 15 items,
 // mail-box-item-bg slot + icon + count), fading in. A close button (icon-buttons
-// `close-light-big`) at the mailbox's top-right is the ONLY way to close (GameScene
-// routes it; the hotbar slides down while open). Overflow PAGES: dragging the
-// envelope-zipper thumb down the right rail (or wheeling) flips to the next page.
+// `close-light-big`) at the mailbox's top-right is the ONLY way to close. Overflow
+// PAGES: flip pages with the mouse wheel OR by dragging the right-hand rail (the
+// envelope-zipper thumb) — GameScene routes BOTH the close + the rail drag (a
+// cross-scene interactive drag on the thumb is unreliable), driving the current
+// page via the `mailboxPage` registry value that this scene renders.
 const MAILBOX = 'mail-box';
 const ITEM_BG = 'mail-box-item-bg';
 const SCROLL_THUMB = 'envelope-zipper';
@@ -14,7 +16,6 @@ const CLOSE_ATLAS = 'icon-buttons';
 const CLOSE_FRAME = 'close-light-big';
 
 const FIT_H = 0.94, FIT_W = 0.6, X_BIAS = 0.19;
-// Item window + scroll rail INSIDE the mailbox, in the art's NATIVE px (1096×1426).
 const CONTENT = { x: 105, y: 490, w: 845, h: 620 };
 const COLS = 5, ROWS = 3;      // one page = 5×3 = 15 items
 const GAP = 16;
@@ -35,7 +36,6 @@ export class MailboxScene extends Phaser.Scene {
   private thumb?: Phaser.GameObjects.Image;
   private thumbTop = 0;
   private thumbBot = 0;
-  // grid geometry for the current open (local to the item layer)
   private gx0 = 0; private gy0 = 0; private cell = 0; private gap = 0;
 
   constructor() {
@@ -43,18 +43,26 @@ export class MailboxScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Mouse-wheel flips pages while the mailbox is open.
+    // Mouse-wheel flips pages (touch uses the rail drag, routed by GameScene).
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (this.shown && this.pages > 1) this.setPage(this.page + (dy > 0 ? 1 : -1));
+      if (this.shown && this.pages > 1) {
+        this.registry.set('mailboxPage', Phaser.Math.Clamp(this.page + (dy > 0 ? 1 : -1), 0, this.pages - 1));
+      }
     });
   }
 
   update(): void {
     const m = this.registry.get('mailbox') as MailboxModel | undefined;
-    if (!m || m.rev === this.lastRev) return;
-    this.lastRev = m.rev;
-    if (m.visible) this.open(m);
-    else this.close();
+    if (m && m.rev !== this.lastRev) {
+      this.lastRev = m.rev;
+      if (m.visible) this.open(m); else this.close();
+      return;
+    }
+    // Page changes (wheel here, rail-drag from GameScene) arrive via `mailboxPage`.
+    if (this.shown) {
+      const p = (this.registry.get('mailboxPage') as number) ?? 0;
+      if (p !== this.page) this.renderPage(p);
+    }
   }
 
   private open(m: MailboxModel): void {
@@ -94,41 +102,28 @@ export class MailboxScene extends Phaser.Scene {
     content.add(slots);
     this.slots = slots;
 
-    // Grid geometry: a 3-row block, vertically centred in the window; items fill it
-    // from the top row (so the last page's items start at the same place).
     this.items = m.items ?? [];
     const per = COLS * ROWS;
     this.pages = Math.max(1, Math.ceil(this.items.length / per));
     this.gap = GAP * fit;
     this.cell = (CONTENT.w * fit - this.gap * (COLS - 1)) / COLS;
     const blockH = ROWS * this.cell + (ROWS - 1) * this.gap;
-    const offY = (CONTENT.h * fit - blockH) / 2;
     this.gx0 = cx(CONTENT.x);
-    this.gy0 = cy(CONTENT.y) + offY;
+    this.gy0 = cy(CONTENT.y) + (CONTENT.h * fit - blockH) / 2; // 3-row block, centred
 
-    // Scroll thumb on the right rail (drag flips pages; snaps to the nearest page).
+    // Scroll thumb (display-only; GameScene drags the rail).
     this.thumbTop = cy(SCROLL.top);
     this.thumbBot = cy(SCROLL.bottom);
-    const thumb = this.add.image(cx(SCROLL.x), this.thumbTop, SCROLL_THUMB).setScale(SCROLL.thumbScale * fit);
-    content.add(thumb);
-    this.thumb = thumb;
-    if (this.pages > 1) {
-      thumb.setInteractive({ draggable: true, useHandCursor: true });
-      this.input.setDraggable(thumb);
-      thumb.on('drag', (_p: Phaser.Input.Pointer, _dx: number, dy: number) => {
-        const t = Phaser.Math.Clamp((dy - this.thumbTop) / (this.thumbBot - this.thumbTop), 0, 1);
-        this.setPage(Math.round(t * (this.pages - 1)));
-      });
-    }
+    this.thumb = this.add.image(cx(SCROLL.x), this.thumbTop, SCROLL_THUMB).setScale(SCROLL.thumbScale * fit);
+    content.add(this.thumb);
+
+    // Publish the rail (SCREEN coords) so GameScene can drag it — reliable for
+    // mouse AND touch (no wheel on touch).
+    this.registry.set('mailboxPage', 0);
+    this.registry.set('mailboxRail', { x: restX + cx(SCROLL.x), top: restY + this.thumbTop, bottom: restY + this.thumbBot, pages: this.pages });
 
     this.renderPage(0);
     this.tweens.add({ targets: content, alpha: 1, duration: 220, delay: 120 });
-  }
-
-  private setPage(p: number): void {
-    const np = Phaser.Math.Clamp(p, 0, this.pages - 1);
-    if (np === this.page && this.slots && this.slots.length) return;
-    this.renderPage(np);
   }
 
   /** Rebuild the item slots for page `p` + move the thumb to match. */
@@ -165,6 +160,7 @@ export class MailboxScene extends Phaser.Scene {
 
   private close(): void {
     this.registry.set('mailboxCloseBounds', null);
+    this.registry.set('mailboxRail', null);
     this.thumb = undefined;
     this.slots = undefined;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; return; }

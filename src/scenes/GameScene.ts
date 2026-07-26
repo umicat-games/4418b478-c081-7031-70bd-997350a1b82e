@@ -546,6 +546,7 @@ export class GameScene extends Phaser.Scene {
   private mailboxOpen = false;
   private mailboxRev = 0;
   private mailboxHasMail = false; // drives which open anim plays; no mail system yet → empty
+  private mailboxDragging = false; // dragging the mail scroll rail
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
@@ -1192,8 +1193,12 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
-      // Mail modal open: route the click (only the close button closes it).
-      if (this.mailboxOpen) { this.handleMailboxClick(pointer.x, pointer.y); return; }
+      // Mail modal open: dragging the rail flips pages; else only the close button
+      // closes it (works for mouse AND touch — both reach this handler).
+      if (this.mailboxOpen) {
+        if (this.mailboxRailAt(pointer.x, pointer.y)) { this.mailboxDragging = true; this.mailboxDragTo(pointer.y); return; }
+        this.handleMailboxClick(pointer.x, pointer.y); return;
+      }
       // Backpack open: route the click to actAt (pick/drop a cell, or click-outside to
       // close) whether or not the pointer is locked — NEVER fall through to the world /
       // Cato sitting BEHIND the panel. (Lock is often dropped after chatting, so an open
@@ -1226,11 +1231,13 @@ export class GameScene extends Phaser.Scene {
       this.cursorState.y = pointer.y;
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.mailboxDragging) { this.mailboxDragTo(pointer.y); return; } // drag the mail rail (mouse + touch)
       if (pointer.wasTouch && this.inventoryOpen && this.heldStack) {
         this.cursorState.x = pointer.x; // held stack follows the finger
         this.cursorState.y = pointer.y;
       }
     });
+    this.input.on('pointerup', () => { this.mailboxDragging = false; }); // end a rail drag (mouse + touch)
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
       if (this.inventoryOpen) { this.endInventoryTouch(pointer.x, pointer.y); return; }
@@ -2982,6 +2989,20 @@ export class GameScene extends Phaser.Scene {
       | null;
     if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) this.closeMailbox();
     return true;
+  }
+
+  /** Is (x,y) on the mail scroll rail? (Reads the rail bounds MailboxScene published.) */
+  private mailboxRailAt(x: number, y: number): boolean {
+    const r = this.registry.get('mailboxRail') as { x: number; top: number; bottom: number; pages: number } | null;
+    return !!r && r.pages > 1 && Math.abs(x - r.x) < 48 && y >= r.top - 40 && y <= r.bottom + 40;
+  }
+
+  /** Drag the rail → map the pointer's y to the nearest page (sets mailboxPage). */
+  private mailboxDragTo(y: number): void {
+    const r = this.registry.get('mailboxRail') as { x: number; top: number; bottom: number; pages: number } | null;
+    if (!r || r.pages <= 1) return;
+    const t = Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1);
+    this.registry.set('mailboxPage', Math.round(t * (r.pages - 1)));
   }
 
   /** Random test mail — fruit-item icons in slots (until a real mail system).
