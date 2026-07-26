@@ -1,0 +1,24 @@
+{
+  "frames": {
+    "play-light-bg": {
+      "frame": {
+        "x": 3,
+        "y": 34,
+        "w": 90,
+        "h": 27
+      },
+      "sourceSize": {
+        "w": 90,
+        "h": 27
+      }
+    }
+  },
+  "meta": {
+    "image": "ui_big_play_button.png",
+    "size": {
+      "w": 192,
+      "h": 64
+    },
+    "scale": "1"
+  }
+}

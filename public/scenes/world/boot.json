@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "boot",
+  "name": "Boot",
+  "type": "world",
+  "world": {
+    "width": 960,
+    "height": 540,
+    "background": {
+      "color": "#1a1a2e"
+    }
+  },
+  "camera": {
+    "follow": null
+  },
+  "entities": [
+    {
+      "id": "play-button",
+      "kind": "sprite",
+      "role": "play-button",
+      "transform": {
+        "x": 800,
+        "y": 470,
+        "rotation": 0,
+        "scaleX": 3,
+        "scaleY": 3,
+        "depth": 10
+      },
+      "assetId": "ui_big_play_button",
+      "frame": "play-light-bg"
+    }
+  ]
+}

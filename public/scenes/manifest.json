@@ -3,8 +3,13 @@
   "id": "umicat-game",
   "title": "Umicat Game",
   "version": "1.0.0",
-  "initialScene": "main",
+  "initialScene": "boot",
   "scenes": [
+    {
+      "id": "boot",
+      "type": "world",
+      "file": "world/boot.json"
+    },
     {
       "id": "main",
       "type": "world",
@@ -1990,6 +1995,16 @@
         }
       ],
       "fps": 8
+    },
+    {
+      "id": "ui_big_play_button",
+      "textureKey": "ui_big_play_button",
+      "path": "uploaded/ui_big_play_button.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/ui_big_play_button.json",
+      "atlasFormat": "json",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/ui_big_play_button.png",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/ui_big_play_button.json"
     }
   ]
 }

@@ -249,7 +249,12 @@ export class BootScene extends Phaser.Scene {
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);
-    this.scene.start('GameScene', { sceneId: manifest.initialScene });
+    // Route by initial scene: the `boot` data scene → BootMenuScene (renders the
+    // boot screen + wires Play → game); any other scene (incl. a Play-Scene
+    // `?umicatScene=` override, which skips the boot screen) → GameScene.
+    const sid = manifest.initialScene;
+    if (sid === 'boot') this.scene.start('BootMenuScene', { sceneId: sid });
+    else this.scene.start('GameScene', { sceneId: sid });
   }
 }
 
