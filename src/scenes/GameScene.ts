@@ -11,6 +11,8 @@ import {
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import type { MailItem } from './MailboxScene';
+import type { OrderCatalogEntry } from './OrderBookScene';
+import { ORDERABLE_IDS, buyPrice, sellPrice } from '../data/prices';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import {
@@ -28,9 +30,11 @@ import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
 const CHILD_WANDER = true;
 const CHILD_SPEED = 50;               // world-px per second (leisurely stroll)
 // PLAYER CONTROL: when true, WASD / arrow keys drive Cato directly (the camera
-// follows him) instead of panning the camera + autonomous wander. Flip false to
-// restore the AI companion (roam + leash). Cato's chat-commanded tasks still run.
-const PLAYER_CONTROL = true;
+// follows him) instead of panning the camera + autonomous wander. Cato's
+// chat-commanded tasks still run. This is now RUNTIME-TOGGLEABLE via an on-screen
+// TEST button (`this.playerControl` / `createControlToggle`) — the const below is
+// only the STARTING mode. Default false = AI companion (roam + leash).
+const PLAYER_CONTROL_DEFAULT = false;
 const PLAYER_SPEED = 80;              // world-px/s when the player drives Cato
 // Cato is a calm companion: he mostly RESTS, and every so often ambles over to a
 // nearby point of interest (a crop or a prop that's in view) and lingers there —
@@ -383,6 +387,7 @@ interface ForagObj {
   stage: number;
   timer: number;
   sprite: Phaser.GameObjects.Image;
+  sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
 
 /** A minable big-stone at a cell. `ready` = stones available to knock out right now;
@@ -395,6 +400,7 @@ interface BigStoneObj {
   emptyKnocks: number;
   sprite: Phaser.GameObjects.Image;
   body?: Phaser.GameObjects.Sprite; // invisible solid collider (Cato can't walk through)
+  sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
 
 /** A planted berry bush at a cell. `stage` 0=small / 1=full / 2=ripe (bears 3
@@ -406,6 +412,7 @@ interface BushObj {
   timer: number;
   base: Phaser.GameObjects.Image;
   berries: Phaser.GameObjects.Image[];
+  sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
 
 /** A placed tree at a cell. Fruit trees carry `hasFruit`; `stage` is the current
@@ -419,6 +426,7 @@ interface TreeObj {
   stage: number;
   timer?: Phaser.Time.TimerEvent;
   busy: boolean;
+  sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
 
 /** A placed building structure at a cell (wall / door / furniture). */
@@ -451,6 +459,10 @@ interface SaveBlob {
   money?: number; // v6: coin balance (HUD)
   dayTimeMs?: number; // v6: position in the in-game day loop (HUD sun-arc pointer)
   dayCount?: number; // v6: whole days elapsed (weather pick)
+  mailbox?: Array<{ id: string; count: number }>; // v7: mailbox contents
+  chest?: Array<{ id: string; count: number }>; // v7: chest contents
+  order?: Array<{ id: string; count: number }>; // v8: today's order (editable; ships next morning)
+  orderDeliverDay?: number; // v8: the dayCount the order delivers + is charged
 }
 
 export class GameScene extends Phaser.Scene {
@@ -489,6 +501,10 @@ export class GameScene extends Phaser.Scene {
   // Camera lock: clicking Cato's portrait makes the camera FOLLOW him around;
   // clicking elsewhere on the map releases it (back to manual edge-scroll pan).
   private cameraFollow = false;
+  // RUNTIME control mode (toggled by the on-screen TEST button): true = WASD/arrows
+  // drive Cato + camera follows; false = arrows/drag pan the camera + Cato wanders.
+  private playerControl = PLAYER_CONTROL_DEFAULT;
+  private controlToggleBtn?: HTMLButtonElement; // the test-only DOM toggle button
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
 
@@ -547,6 +563,26 @@ export class GameScene extends Phaser.Scene {
   private mailboxRev = 0;
   private mailboxHasMail = false; // drives which open anim plays; no mail system yet → empty
   private mailboxDragging = false; // dragging the mail scroll rail
+  private chest?: Phaser.GameObjects.Sprite;
+  private chestOpen = false;
+  private chestRev = 0;
+  private chestDragging = false; // dragging the chest scroll rail
+  // Persistent CONTENTS of the mailbox + chest (real ItemStacks). Clicking an item
+  // opens an action menu (Take → backpack / Sell → mailbox / Delete). Saved (v7).
+  private mailboxStore: ItemStack[] = [];
+  private chestStore: ItemStack[] = [];
+  private itemMenu: { kind: 'mailbox' | 'chest'; index: number } | null = null; // open item menu
+  private itemMenuRev = 0;
+  // Order book (bottom-right button): catalog → draft → place order → arrives in the
+  // mailbox next morning. `orderDraft` = the current selection (id → qty).
+  private orderOpen = false;
+  private orderRev = 0;
+  private orderDraft = new Map<string, number>(); // today's editable order (id → qty)
+  private orderSelectedId?: string;
+  private orderDeliverDay = -1; // dayCount on which the current order delivers (-1 = none)
+  private orderDragging = false; // dragging the catalog scroll rail
+  private modalCloseBtn?: Phaser.GameObjects.Image; // HUD close button shown while a modal is open
+  private portraitRestY = 0; // photo-frame rest y (restored when the modal closes)
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
@@ -1174,6 +1210,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('PaletteScene')) this.scene.launch('PaletteScene');
     if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
     if (!this.scene.isActive('MailboxScene')) this.scene.launch('MailboxScene');
+    if (!this.scene.isActive('ChestScene')) this.scene.launch('ChestScene');
+    if (!this.scene.isActive('OrderBookScene')) this.scene.launch('OrderBookScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
@@ -1199,6 +1237,14 @@ export class GameScene extends Phaser.Scene {
         if (this.mailboxRailAt(pointer.x, pointer.y)) { this.mailboxDragging = true; this.mailboxDragTo(pointer.y); return; }
         this.handleMailboxClick(pointer.x, pointer.y); return;
       }
+      if (this.chestOpen) {
+        if (this.chestRailAt(pointer.x, pointer.y)) { this.chestDragging = true; this.chestDragTo(pointer.y); return; }
+        this.handleChestClick(pointer.x, pointer.y); return;
+      }
+      if (this.orderOpen) {
+        if (this.orderRailAt(pointer.x, pointer.y)) { this.orderDragging = true; this.orderDragTo(pointer.y); return; }
+        this.handleOrderClick(pointer.x, pointer.y); return;
+      }
       // Backpack open: route the click to actAt (pick/drop a cell, or click-outside to
       // close) whether or not the pointer is locked — NEVER fall through to the world /
       // Cato sitting BEHIND the panel. (Lock is often dropped after chatting, so an open
@@ -1213,6 +1259,7 @@ export class GameScene extends Phaser.Scene {
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
       if (this.mailboxContains(wp.x, wp.y)) { this.openMailbox(); return; }
+      if (this.chestContains(wp.x, wp.y)) { this.openChest(); return; }
       this.input.manager.mouse?.requestPointerLock();
     });
 
@@ -1223,7 +1270,10 @@ export class GameScene extends Phaser.Scene {
     //  • Elsewhere → a TAP (pointerup, <12px move; a bigger drag is the Rex-Pan
     //    camera pan) acts at the touched point via the SAME `actAt(x,y)` as mouse.
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!pointer.wasTouch || !this.inventoryOpen) return;
+      if (!pointer.wasTouch) return;
+      // Order book open: a touch on the catalog scroll rail starts a drag-scroll.
+      if (this.orderOpen) { if (this.orderRailAt(pointer.x, pointer.y)) { this.orderDragging = true; this.orderDragTo(pointer.y); } return; }
+      if (!this.inventoryOpen) return;
       const c = this.inventoryCellAt(pointer.x, pointer.y);
       this.invDragFrom = c;
       if (c !== null && !this.heldStack && this.inventory[c]) this.clickInventoryCell(c); // pick up
@@ -1232,12 +1282,14 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.mailboxDragging) { this.mailboxDragTo(pointer.y); return; } // drag the mail rail (mouse + touch)
+      if (this.chestDragging) { this.chestDragTo(pointer.y); return; } // drag the chest rail (mouse + touch)
+      if (this.orderDragging) { this.orderDragTo(pointer.y); return; } // drag the order catalog rail (mouse + touch)
       if (pointer.wasTouch && this.inventoryOpen && this.heldStack) {
         this.cursorState.x = pointer.x; // held stack follows the finger
         this.cursorState.y = pointer.y;
       }
     });
-    this.input.on('pointerup', () => { this.mailboxDragging = false; }); // end a rail drag (mouse + touch)
+    this.input.on('pointerup', () => { this.mailboxDragging = false; this.chestDragging = false; this.orderDragging = false; }); // end a rail drag (mouse + touch)
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
       if (this.inventoryOpen) { this.endInventoryTouch(pointer.x, pointer.y); return; }
@@ -1245,6 +1297,8 @@ export class GameScene extends Phaser.Scene {
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.mailboxOpen) { this.handleMailboxClick(pointer.x, pointer.y); return; }
+      if (this.chestOpen) { this.handleChestClick(pointer.x, pointer.y); return; }
+      if (this.orderOpen) { this.handleOrderClick(pointer.x, pointer.y); return; }
       this.actAt(pointer.x, pointer.y);
     });
 
@@ -1308,8 +1362,10 @@ export class GameScene extends Phaser.Scene {
   private actAt(x: number, y: number): void {
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
-    // Modal mail box: consumes taps; only the close button closes it.
+    // Modal mail box + chest: consume taps; only the close button closes them.
     if (this.handleMailboxClick(x, y)) return;
+    if (this.handleChestClick(x, y)) return;
+    if (this.handleOrderClick(x, y)) return;
     // Backpack open: tap a cell to pick/drop/merge/swap; tap outside → close.
     if (this.inventoryOpen) {
       const c = this.inventoryCellAt(x, y);
@@ -1321,6 +1377,7 @@ export class GameScene extends Phaser.Scene {
     if (this.handlePaletteClick(x, y)) return;
     // Backpack button → open the full grid (mainly for touch — no E key).
     if (this.overBackpackButton(x, y)) { this.toggleInventory(); return; }
+    if (this.overOrderButton(x, y)) { this.openOrderBook(); return; }
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
@@ -1355,6 +1412,7 @@ export class GameScene extends Phaser.Scene {
     // not while placing). Checked before the tile actions so it wins over tilling
     // the grass under it.
     if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailbox(); return; }
+    if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChest(); return; }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -1440,6 +1498,11 @@ export class GameScene extends Phaser.Scene {
     this.wireHouseFurniture();
     this.wireHouseDoor();
     this.wireMailbox();
+    this.wireChest();
+    this.wireSceneTrees();
+    this.wireSceneBushes();
+    this.wireSceneForageAndStones();
+    this.createControlToggle(); // on-screen TEST button: drive Cato ↔ pan camera
 
     // Bracket cursor (24×24, frames a 16px cell) + the held-tool icon inside it.
     // Hidden until the hoe is out + hovering a farmable tile. High depth so they
@@ -1509,6 +1572,7 @@ export class GameScene extends Phaser.Scene {
     this.inventory[slot++] = itemFromId('pickaxe', 1);
     for (const t of TREE_TYPES) this.inventory[slot++] = makePlaceable('tree', 10, t.id);
     for (const b of BERRY_TYPES) this.inventory[slot++] = makePlaceable('bush', 10, b);
+    this.seedTestStores(); // pre-stock the mailbox + chest with test contents (until a real mail/loot system)
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -1596,6 +1660,7 @@ export class GameScene extends Phaser.Scene {
     if (this.dayTimeMs >= DAY_LEN_MS) {
       this.dayTimeMs %= DAY_LEN_MS;
       this.dayCount += 1; // new day → new weather pick
+      this.settleDay(); // sell whatever's in the mailbox, then deliver any pending order
     }
     if (this.pointerStep() !== this.lastPointerStep || this.bgIndex() !== this.lastBgIndex) {
       this.publishWeatherHud(); // pointer / background changed → redraw + persist the clock
@@ -1724,6 +1789,16 @@ export class GameScene extends Phaser.Scene {
       | { backpack?: { x: number; y: number; w: number; h: number } }
       | undefined;
     const r = b?.backpack;
+    if (!r) return false;
+    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
+  /** Is (x,y) over the bottom-right order button? (Reads the bounds HotbarScene published.) */
+  private overOrderButton(x: number, y: number): boolean {
+    const b = this.registry.get('hotbarBounds') as
+      | { order?: { x: number; y: number; w: number; h: number } }
+      | undefined;
+    const r = b?.order;
     if (!r) return false;
     return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
@@ -1859,6 +1934,8 @@ export class GameScene extends Phaser.Scene {
         const forag = this.foragables.get(key);
         const foragMature = !!forag && forag.stage >= (FORAGABLES[forag.type]?.stages ?? 1);
         if (this.treeAtPoint(wp.x, wp.y) || this.stoneAtPoint(wp.x, wp.y)) valid = false; // over a tree/stone sprite
+        else if (this.isDefaultHouseCell(key)) valid = false; // the fixed starter house — not tillable/diggable
+        else if (this.treeOrStoneOverCell(tile.x, tile.y)) valid = false; // a tree/stone footprint covers this cell
         else if (this.placed.has(key) || this.floors.has(key)) valid = true;
         else if (this.trees.has(key) || this.bigStones.has(key)) valid = false;
         else if (bush) valid = bush.stage >= 2;
@@ -2267,6 +2344,121 @@ export class GameScene extends Phaser.Scene {
       body = b;
     }
     this.trees.set(key, { type, hasFruit, sprite, body, stage: 0, busy: false });
+  }
+
+  /** Wire the trees placed in the visual EDITOR (scene-data sprites) into the live
+   *  tree system — collision + chop + fruit — so they behave exactly like planted
+   *  trees. Each editor tree's render sprite is replaced by a real `restoreTree`
+   *  at its cell (the runtime uses the `tree-<type>` texture + shake/fall anims,
+   *  which the raw manifest sprite doesn't have). Fruit trees (apple/pear/peach)
+   *  start bearing fruit; plain trees don't. (Same as planted trees — there's no
+   *  regrow yet, for either.) */
+  private wireSceneTrees(): void {
+    const reg = getEntityRegistry(this);
+    const layer = this.islandLayer;
+    if (!reg || !layer) return;
+    const ASSET_TYPE: Record<string, TreeType> = {
+      tree_sprites: 'plain',
+      tree_apple_sprites: 'apple',
+      tree_pear_sprites: 'pear',
+      tree_peach_sprites: 'peach',
+    };
+    const editorTrees = reg.all().filter(
+      (go) => !!ASSET_TYPE[(go.getData('entityAssetId') as string) ?? ''],
+    ) as Phaser.GameObjects.Sprite[];
+    if (!editorTrees.length) return;
+    // Drop the editor render sprites from the y-sort list before replacing them.
+    const drop = new Set(editorTrees);
+    this.ySortSprites = this.ySortSprites.filter((g) => !drop.has(g));
+    for (const s of editorTrees) {
+      const type = ASSET_TYPE[(s.getData('entityAssetId') as string) ?? '']!;
+      const b = s.getBounds();
+      const foot = layer.worldToTileXY((b.left + b.right) / 2, b.bottom - 2); // trunk cell from the sprite's foot
+      s.destroy();
+      if (!foot) continue;
+      const key = `${Math.floor(foot.x)},${Math.floor(foot.y)}`;
+      if (this.trees.has(key)) continue; // one tree per cell — keep the first
+      this.restoreTree(key, type, TREE_BY_ID.get(type)?.fruit ?? false);
+      const t = this.trees.get(key);
+      if (t) t.sceneWired = true; // mark: comes from the scene, not the save
+    }
+  }
+
+  /** Wire the berry bushes placed in the visual EDITOR (`trees_stumps_and_bushes`
+   *  sprites) into the live bush system — so they grow, bear berries, are harvestable,
+   *  AND block tilling. `bush-with-<berry>` → that berry, ripe now (stage 2);
+   *  `empty-bush`/`empty-bush-small` → a deterministic berry, growing (stage 1/0). Like
+   *  `wireSceneTrees`, the editor sprite is replaced by a real `restoreBush` and marked
+   *  `sceneWired` (excluded from the save; re-derived from the scene each load). */
+  private wireSceneBushes(): void {
+    const reg = getEntityRegistry(this);
+    const layer = this.islandLayer;
+    if (!reg || !layer) return;
+    const editorBushes = reg.all().filter(
+      (go) => (go.getData('entityAssetId') as string) === 'trees_stumps_and_bushes',
+    ) as Phaser.GameObjects.Sprite[];
+    if (!editorBushes.length) return;
+    const drop = new Set(editorBushes);
+    this.ySortSprites = this.ySortSprites.filter((g) => !drop.has(g));
+    for (const s of editorBushes) {
+      const frame = String(s.frame?.name ?? '');
+      const b = s.getBounds();
+      const foot = layer.worldToTileXY((b.left + b.right) / 2, b.bottom - 2);
+      s.destroy();
+      if (!foot) continue;
+      const cx = Math.floor(foot.x), cy = Math.floor(foot.y);
+      const key = `${cx},${cy}`;
+      if (this.bushes.has(key)) continue;
+      // `bush-with-<berry>` names the berry + is ripe; an empty bush gets a stable
+      // berry (cell-hashed) and starts growing (empty → will ripen).
+      const named = BERRY_TYPES.find((t) => frame.includes(t));
+      const type = named ?? BERRY_TYPES[(Math.abs(cx * 7 + cy * 13)) % BERRY_TYPES.length]!;
+      const stage = named ? 2 : (frame === 'empty-bush' ? 1 : 0);
+      this.restoreBush(key, type, stage);
+      const bush = this.bushes.get(key);
+      if (bush) bush.sceneWired = true;
+    }
+  }
+
+  /** Wire the mushrooms/flowers/stones placed in the visual EDITOR (the
+   *  `mushrooms_flowers_stones` atlas) into the live systems: `big-stone-<tier>` →
+   *  a minable big-stone WITH A COLLIDER (Cato bumps it), everything else
+   *  (`<type>-<stage>`: grass / sunflower / flower / mushroom / small-stone) → a wild
+   *  foragable that grows + is harvestable. Editor sprite replaced by a real
+   *  restore*, marked `sceneWired` (excluded from the save; re-derived each load). */
+  private wireSceneForageAndStones(): void {
+    const reg = getEntityRegistry(this);
+    const layer = this.islandLayer;
+    if (!reg || !layer) return;
+    const editor = reg.all().filter(
+      (go) => (go.getData('entityAssetId') as string) === 'mushrooms_flowers_stones',
+    ) as Phaser.GameObjects.Sprite[];
+    if (!editor.length) return;
+    const drop = new Set(editor);
+    this.ySortSprites = this.ySortSprites.filter((g) => !drop.has(g));
+    for (const s of editor) {
+      const frame = String(s.frame?.name ?? '');
+      const b = s.getBounds();
+      const foot = layer.worldToTileXY((b.left + b.right) / 2, b.bottom - 2);
+      s.destroy();
+      if (!foot) continue;
+      const key = `${Math.floor(foot.x)},${Math.floor(foot.y)}`;
+      if (this.bigStones.has(key) || this.foragables.has(key)) continue;
+      if (frame.startsWith('big-stone-')) {
+        const tier = parseInt(frame.slice('big-stone-'.length), 10) || 1;
+        this.restoreBigStone(key, tier, BIG_STONES[tier]?.readyStones ?? 0);
+        const st = this.bigStones.get(key);
+        if (st) st.sceneWired = true;
+      } else {
+        const type = FORAGABLE_NAMES.find((n) => frame.startsWith(`${n}-`));
+        if (!type) continue;
+        const def = FORAGABLES[type];
+        const stage = Phaser.Math.Clamp(parseInt(frame.slice(type.length + 1), 10) || 1, 1, def?.stages ?? 1);
+        this.restoreForagable(key, type, stage, 0);
+        const f = this.foragables.get(key);
+        if (f) f.sceneWired = true;
+      }
+    }
   }
 
   /** The tree whose sprite the world-point (x,y) lands on — canopy included, since
@@ -2704,7 +2896,29 @@ export class GameScene extends Phaser.Scene {
   /** A cell where you can't till the ground — something occupies it (a tree, big
    *  stone, bush, or wild foragable). The hoe must not till under these. */
   private cellBlocksTill(key: string): boolean {
-    return this.trees.has(key) || this.bigStones.has(key) || this.bushes.has(key) || this.foragables.has(key);
+    if (this.trees.has(key) || this.bigStones.has(key) || this.bushes.has(key) || this.foragables.has(key)) return true;
+    if (this.isDefaultHouseCell(key)) return true; // the fixed starter house (painted walls/floor + solid furniture)
+    const [cx, cy] = key.split(',').map(Number);
+    return this.treeOrStoneOverCell(cx!, cy!); // footprint UNDER a tree/stone (editor trees may straddle cells)
+  }
+
+  /** A cell belonging to the fixed starter house — its painted `wooden_house`
+   *  tilemap tiles (walls AND floor) or a solid furniture footprint. Non-tillable
+   *  and non-demolishable (unlike the player's own placed pieces). */
+  private isDefaultHouseCell(key: string): boolean {
+    if (this.houseBlocked.has(key)) return true;
+    const [cx, cy] = key.split(',').map(Number);
+    return !!this.wallLayer?.getTileAt(cx!, cy!);
+  }
+
+  /** A tree / big-stone sprite covering this cell's CENTRE (canopy included). Blocks
+   *  tilling even when the registered trunk cell isn't this one — an editor-placed
+   *  tree can sit off-grid and straddle two cells. */
+  private treeOrStoneOverCell(cx: number, cy: number): boolean {
+    const w = this.islandLayer?.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    const mx = w.x + TILE / 2, my = w.y + TILE / 2;
+    return !!this.treeAtPoint(mx, my) || !!this.stoneAtPoint(mx, my);
   }
 
   private cellSpawnable(cx: number, cy: number): boolean {
@@ -2965,30 +3179,39 @@ export class GameScene extends Phaser.Scene {
     // Play the open swing ONCE (the asset anims are authored loop:true, so override
     // repeat) → opens + holds on the last frame. Which one depends on mail state:
     // has-mail → mailbox-mail-open, empty → mailbox-empty-open.
+    this.mailboxHasMail = this.mailboxStore.length > 0;
     const openAnim = this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open';
     this.mailbox?.play({ key: openAnim, repeat: 0 });
     if (this.locked) this.input.manager.mouse?.releasePointerLock();
     this.hideHotbar(true);
-    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, items: this.buildTestMail() });
+    this.setModalChrome(true);
+    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, items: this.storeToItems(this.mailboxStore) });
   }
 
   private closeMailbox(): void {
     if (!this.mailboxOpen) return;
     this.mailboxOpen = false;
+    this.closeItemMenu();
     this.mailbox?.play({ key: 'mailbox-close', repeat: 0 }); // play the close swing on the placed mailbox
     this.hideHotbar(false);
+    this.setModalChrome(false);
     this.registry.set('mailbox', { visible: false, rev: ++this.mailboxRev });
   }
 
-  /** Modal: while the mail modal is open, ONLY the top-right close button closes
-   *  it. Every tap is consumed (nothing behind the modal acts). */
+  /** Modal routing while the mail modal is open: a tap on an OPEN item menu picks
+   *  the action; a tap on an item opens its menu (Take / Delete); anything else
+   *  cancels the menu / is swallowed (the top-right HUD button is the closer). */
   private handleMailboxClick(x: number, y: number): boolean {
     if (!this.mailboxOpen) return false;
-    const cb = this.registry.get('mailboxCloseBounds') as
-      | { x: number; y: number; w: number; h: number }
-      | null;
-    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) this.closeMailbox();
-    return true;
+    if (this.itemMenu) {
+      const opt = this.menuOptionAt('mailbox', x, y);
+      if (opt) this.performItemAction(opt);
+      else this.closeItemMenu();
+      return true;
+    }
+    const idx = this.itemSlotAt('mailboxSlots', x, y);
+    if (idx !== null && idx < this.mailboxStore.length) this.openItemMenu('mailbox', idx, x, y);
+    return true; // modal — always consume
   }
 
   /** Is (x,y) on the mail scroll rail? (Reads the rail bounds MailboxScene published.) */
@@ -3005,14 +3228,27 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('mailboxPage', Math.round(t * (r.pages - 1)));
   }
 
-  /** Random test mail — fruit-item icons in slots (until a real mail system).
-   *  28 overflows the 5-wide window so the scroll rail is exercised. */
-  private buildTestMail(): MailItem[] {
-    const out: MailItem[] = [];
-    for (let i = 0; i < 28; i++) {
-      out.push({ iconKey: 'fruit-items', iconFrame: (i * 3 + 1) % 8, count: 1 + ((i * 7) % 9) });
-    }
-    return out;
+  /** Map a store (real ItemStacks) → the modal's display items (icon + count),
+   *  carrying the id so a Take can rebuild a proper backpack stack. */
+  private storeToItems(store: ItemStack[]): MailItem[] {
+    return store.map((it) => ({ id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count }));
+  }
+
+  /** Pre-stock the mailbox + chest with test contents (real ItemStacks) so the item
+   *  actions have something to act on — until a real mail/loot economy exists. */
+  private seedTestStores(): void {
+    this.mailboxStore = [
+      makeFruit('apple', 6), makeFruit('pear', 3), makeForage('red-mushroom', 4),
+      makeStone(9), makeFruit('peach', 2), makeForage('wild-flower', 1),
+      makeFruit('strawberry', 5), makeForage('sunflower', 2),
+    ];
+    this.chestStore = [
+      makeFruit('apple', 12), makeFruit('pear', 7), makeFruit('peach', 4), makeFruit('strawberry', 9),
+      makeFruit('grape', 6), makeFruit('blueberry', 8), makeForage('red-mushroom', 5), makeForage('purple-mushroom', 3),
+      makeForage('wild-flower', 2), makeForage('sunflower', 1), makeForage('grass', 9), makeStone(15),
+      makeCrop('corn', 4), makeCrop('carrot', 6), makeCrop('tomato', 3), makeCrop('eggplant', 2),
+      makeCrop('pumpkin', 1), makeSeed('corn', 10),
+    ];
   }
 
   /** Slide the tool hotbar down off-screen (open) / back up (close), so the mail
@@ -3021,6 +3257,332 @@ export class GameScene extends Phaser.Scene {
     const hb = this.scene.get('HotbarScene');
     if (!hb) return;
     this.tweens.add({ targets: hb.cameras.main, y: hide ? this.scale.height : 0, duration: 240, ease: 'Cubic.easeInOut' });
+  }
+
+  // ── Chest modal — the mirror of the mailbox (ChestScene) ───────────────────
+  private wireChest(): void {
+    const reg = getEntityRegistry(this);
+    if (!reg) return;
+    this.chest = reg.all().find(
+      (go) => go.getData('entityAssetId') === 'chest',
+    ) as Phaser.GameObjects.Sprite | undefined;
+  }
+
+  private chestContains(wx: number, wy: number): boolean {
+    if (!this.chest) return false;
+    const b = this.chest.getBounds();
+    return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
+  }
+
+  /** Open the chest: play its open animation ONCE (asset anims are authored loop:true,
+   *  so override repeat) + pop the big-chest modal (ChestScene). */
+  private openChest(): void {
+    if (this.chestOpen) return;
+    this.chestOpen = true;
+    this.chest?.play({ key: 'chest-open-front', repeat: 0 });
+    if (this.locked) this.input.manager.mouse?.releasePointerLock();
+    this.hideHotbar(true);
+    this.setModalChrome(true);
+    this.registry.set('chest', { visible: true, rev: ++this.chestRev, items: this.storeToItems(this.chestStore) });
+  }
+
+  private closeChest(): void {
+    if (!this.chestOpen) return;
+    this.chestOpen = false;
+    this.closeItemMenu();
+    this.chest?.play({ key: 'chest-close-front', repeat: 0 });
+    this.hideHotbar(false);
+    this.setModalChrome(false);
+    this.registry.set('chest', { visible: false, rev: ++this.chestRev });
+  }
+
+  /** Modal routing while the chest is open: mirror of the mailbox, but the item
+   *  menu has an extra Sell (→ mailbox) action. */
+  private handleChestClick(x: number, y: number): boolean {
+    if (!this.chestOpen) return false;
+    if (this.itemMenu) {
+      const opt = this.menuOptionAt('chest', x, y);
+      if (opt) this.performItemAction(opt);
+      else this.closeItemMenu();
+      return true;
+    }
+    const idx = this.itemSlotAt('chestSlots', x, y);
+    if (idx !== null && idx < this.chestStore.length) this.openItemMenu('chest', idx, x, y);
+    return true; // modal — always consume
+  }
+
+  private chestRailAt(x: number, y: number): boolean {
+    const r = this.registry.get('chestRail') as { x: number; top: number; bottom: number; pages: number } | null;
+    return !!r && r.pages > 1 && Math.abs(x - r.x) < 48 && y >= r.top - 40 && y <= r.bottom + 40;
+  }
+
+  private chestDragTo(y: number): void {
+    const r = this.registry.get('chestRail') as { x: number; top: number; bottom: number; pages: number } | null;
+    if (!r || r.pages <= 1) return;
+    const t = Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1);
+    this.registry.set('chestPage', Math.round(t * (r.pages - 1)));
+  }
+
+  // ── Item action menu (Take / Sell / Delete) ─────────────────────────────────
+
+  /** The action options for the CURRENTLY-open item menu (reads `this.itemMenu`). Take
+   *  is the blue primary; Delete a muted red. In the chest, Sell (→ queue in the
+   *  mailbox) shows only for items that actually have a sell price. */
+  private currentMenuOptions(): Array<{ action: 'take' | 'sell' | 'delete'; label: string; color: string }> {
+    const m = this.itemMenu;
+    if (!m) return [];
+    const take = { action: 'take' as const, label: 'Take', color: '#4aa3df' };
+    const sell = { action: 'sell' as const, label: 'Sell', color: '#5b3a1e' };
+    const del = { action: 'delete' as const, label: 'Delete', color: '#b5533a' };
+    if (m.kind === 'chest') {
+      const it = this.chestStore[m.index];
+      return it && sellPrice(it.id) > 0 ? [take, sell, del] : [take, del];
+    }
+    return [take, del];
+  }
+
+  /** Open the item action menu for store index `index` at the tapped screen point. */
+  private openItemMenu(kind: 'mailbox' | 'chest', index: number, sx: number, sy: number): void {
+    this.itemMenu = { kind, index };
+    const key = kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
+    this.registry.set(key, {
+      visible: true, rev: ++this.itemMenuRev, x: sx, y: sy,
+      options: this.currentMenuOptions().map((o) => ({ label: o.label, color: o.color })),
+    });
+  }
+
+  private closeItemMenu(): void {
+    if (!this.itemMenu) return;
+    const key = this.itemMenu.kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
+    this.itemMenu = null;
+    this.registry.set(key, { visible: false, rev: ++this.itemMenuRev });
+  }
+
+  /** Which menu action (if any) is under a tap. Reads the bounds the modal published. */
+  private menuOptionAt(kind: 'mailbox' | 'chest', x: number, y: number): 'take' | 'sell' | 'delete' | null {
+    const bounds = this.registry.get(kind === 'chest' ? 'chestMenuBounds' : 'mailboxMenuBounds') as
+      Array<{ x: number; y: number; w: number; h: number; idx: number }> | undefined;
+    if (!bounds) return null;
+    const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    if (!hit) return null;
+    return this.currentMenuOptions()[hit.idx]?.action ?? null;
+  }
+
+  /** Which store index (if any) is under a tap on the item grid. */
+  private itemSlotAt(key: 'mailboxSlots' | 'chestSlots', x: number, y: number): number | null {
+    const slots = this.registry.get(key) as Array<{ x: number; y: number; w: number; h: number; index: number }> | undefined;
+    if (!slots) return null;
+    const hit = slots.find((s) => x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
+    return hit ? hit.index : null;
+  }
+
+  /** Run the chosen action on the menu's target item, then refresh the grid + save.
+   *  Take → into the backpack; Sell → chest item into the mailbox; Delete → discard. */
+  private performItemAction(action: 'take' | 'sell' | 'delete'): void {
+    const menu = this.itemMenu;
+    if (!menu) return;
+    const store = menu.kind === 'chest' ? this.chestStore : this.mailboxStore;
+    const it = store[menu.index];
+    this.closeItemMenu();
+    if (!it) return;
+    if (action === 'take') {
+      const copy = { ...it };
+      this.addToInventory(copy); // decrements copy.count by what fit in the backpack
+      if (copy.count > 0) it.count = copy.count; // backpack full → keep the remainder
+      else store.splice(menu.index, 1);
+      this.publishInventory();
+    } else if (action === 'delete') {
+      store.splice(menu.index, 1);
+    } else if (action === 'sell') {
+      this.mailboxStore.push(it); // chest → mailbox
+      store.splice(menu.index, 1);
+    }
+    this.refreshOpenModal(menu.kind);
+    this.scheduleSave();
+  }
+
+  /** Re-publish the open modal's items (in-place grid rebuild, no re-slide). */
+  private refreshOpenModal(kind: 'mailbox' | 'chest'): void {
+    if (kind === 'mailbox') {
+      this.mailboxHasMail = this.mailboxStore.length > 0;
+      this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, items: this.storeToItems(this.mailboxStore) });
+    } else {
+      this.registry.set('chest', { visible: true, rev: ++this.chestRev, items: this.storeToItems(this.chestStore) });
+    }
+  }
+
+  // ── Order book (bottom-right button → catalog → next-morning mailbox delivery) ──
+
+  /** The orderable catalog — every item with a `buy` price in the prices data table.
+   *  Label + icon come from `itemFromId(id)`; the price from the table. */
+  private orderCatalog(): OrderCatalogEntry[] {
+    return ORDERABLE_IDS.map((id) => {
+      const it = itemFromId(id, 1);
+      return { id, label: this.orderLabel(id, it), iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, price: buyPrice(id) ?? 0 };
+    });
+  }
+
+  /** Nicer catalog label: tree items read "<name> seedling". */
+  private orderLabel(id: string, it: ItemStack): string {
+    const base = it.label ?? id;
+    return id.startsWith('tree-') ? `${base} seedling` : base;
+  }
+
+  private priceOf(id: string): number { return buyPrice(id) ?? 0; }
+  private labelOf(id: string): string { return this.orderLabel(id, itemFromId(id, 1)); }
+  private orderTotal(): number { let t = 0; for (const [id, n] of this.orderDraft) t += this.priceOf(id) * n; return t; }
+
+  private openOrderBook(): void {
+    if (this.orderOpen) return;
+    this.orderOpen = true;
+    if (this.locked) this.input.manager.mouse?.releasePointerLock();
+    this.hideHotbar(true);
+    this.setModalChrome(true);
+    this.publishOrderBook();
+  }
+
+  private closeOrderBook(): void {
+    if (!this.orderOpen) return;
+    this.orderOpen = false;
+    this.hideHotbar(false);
+    this.setModalChrome(false);
+    this.registry.set('orderBook', { visible: false, rev: ++this.orderRev });
+  }
+
+  /** Push the current catalog + draft + balance to OrderBookScene. */
+  private publishOrderBook(): void {
+    const catalog = this.orderCatalog().map(({ id, label, iconKey, iconFrame, price }) => ({ id, label, iconKey, iconFrame, price }));
+    const cat = this.orderCatalog();
+    const draft = [...this.orderDraft].map(([id, count]) => {
+      const e = cat.find((x) => x.id === id);
+      return { id, label: this.labelOf(id), count, price: this.priceOf(id), iconKey: e?.iconKey ?? 'fruit-items', iconFrame: e?.iconFrame ?? 0 };
+    });
+    const total = this.orderTotal();
+    this.registry.set('orderBook', {
+      visible: true, rev: ++this.orderRev, catalog, draft,
+      selectedId: this.orderSelectedId, money: this.money, total, affordable: total <= this.money,
+    });
+  }
+
+  /** Modal routing while the order book is open. There's NO confirm — editing IS the
+   *  order (charged on delivery next morning): a catalog row → +1 (only if you can
+   *  still afford the running total, else it's blocked); a summary row → −1; anything
+   *  else is swallowed (the top-right HUD close button is the closer). */
+  private handleOrderClick(x: number, y: number): boolean {
+    if (!this.orderOpen) return false;
+    const rowId = this.orderRowAt('orderRows', x, y);
+    if (rowId) {
+      this.orderSelectedId = rowId;
+      // Can't order more than you can pay for at delivery.
+      if (this.orderTotal() + this.priceOf(rowId) <= this.money) {
+        this.orderDraft.set(rowId, (this.orderDraft.get(rowId) ?? 0) + 1);
+        if (this.orderDeliverDay < 0) this.orderDeliverDay = this.dayCount + 1; // ships next morning
+      }
+      this.publishOrderBook();
+      return true;
+    }
+    const sumId = this.orderRowAt('orderSummaryRows', x, y);
+    if (sumId) {
+      const n = (this.orderDraft.get(sumId) ?? 0) - 1;
+      if (n <= 0) this.orderDraft.delete(sumId); else this.orderDraft.set(sumId, n);
+      if (this.orderDraft.size === 0) this.orderDeliverDay = -1;
+      this.publishOrderBook();
+      this.scheduleSave();
+      return true;
+    }
+    return true; // modal — swallow everything else
+  }
+
+  private orderRowAt(key: 'orderRows' | 'orderSummaryRows', x: number, y: number): string | null {
+    const rows = this.registry.get(key) as Array<{ x: number; y: number; w: number; h: number; id?: string }> | undefined;
+    if (!rows) return null;
+    const hit = rows.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    return hit?.id ?? null;
+  }
+
+  /** Is (x,y) on the order-book catalog scroll rail? */
+  private orderRailAt(x: number, y: number): boolean {
+    const r = this.registry.get('orderRail') as { x: number; top: number; bottom: number; max: number } | null;
+    return !!r && r.max > 0 && Math.abs(x - r.x) < 48 && y >= r.top - 30 && y <= r.bottom + 30;
+  }
+
+  /** Drag the rail → map the pointer's y to a 0..1 scroll fraction (OrderBookScene
+   *  owns the actual scroll offset + reads this). */
+  private orderDragTo(y: number): void {
+    const r = this.registry.get('orderRail') as { x: number; top: number; bottom: number; max: number } | null;
+    if (!r || r.max <= 0) return;
+    this.registry.set('orderScrollFrac', Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1));
+  }
+
+  /** Day rollover settlement ("next morning"): FIRST sell everything left in the
+   *  mailbox (the shipping bin — sellable items → coins, removed; anything the player
+   *  wanted to keep they'd have Taken out), THEN deliver any pending order into the
+   *  now-emptied bin (charging the buy cost). Called from updateDayClock. */
+  private settleDay(): void {
+    // 1. Sell the mailbox. Sellable items pay out + leave; unsellable ones stay.
+    let earned = 0;
+    const keep: ItemStack[] = [];
+    for (const it of this.mailboxStore) {
+      const sp = sellPrice(it.id);
+      if (sp > 0) earned += sp * it.count;
+      else keep.push(it);
+    }
+    this.mailboxStore = keep;
+    if (earned > 0) this.addMoney(earned);
+    // 2. Deliver a pending order into the emptied bin (arrives this morning).
+    if (this.orderDraft.size > 0 && this.orderDeliverDay >= 0 && this.dayCount >= this.orderDeliverDay) {
+      const total = this.orderTotal();
+      if (total <= this.money) {
+        this.addMoney(-total);
+        for (const [id, count] of this.orderDraft) this.mailboxStore.push(itemFromId(id, count));
+        this.orderDraft.clear();
+        this.orderSelectedId = undefined;
+        this.orderDeliverDay = -1;
+      }
+    }
+    this.mailboxHasMail = this.mailboxStore.length > 0;
+    if (this.mailboxOpen) this.refreshOpenModal('mailbox');
+    if (this.orderOpen) this.publishOrderBook();
+    this.scheduleSave();
+  }
+
+  /** Modal chrome swap: on a mailbox/chest OPEN, slide the top-right Cato
+   *  photo-frame OUT and slide a close button IN in its place; reverse on CLOSE.
+   *  Both live in `UmicatHud` (rendered ABOVE the modals) so the button sits on
+   *  top; the button IS the closer (so the modals no longer draw their own X). */
+  private setModalChrome(open: boolean): void {
+    const portrait = getHudObject(this, 'photo-frame') as unknown as
+      (Phaser.GameObjects.Container & { input: { enabled: boolean } | null }) | undefined;
+    const hud = this.game.scene.getScene('UmicatHud');
+    const bx = this.scale.width - 16 - 32, by = 16 + 32; // top-right, 64px slot (matches photo-frame)
+    if (open) {
+      if (portrait) {
+        this.portraitRestY = portrait.y;
+        if (portrait.input) portrait.input.enabled = false; // don't focus-cat while it slides out
+        this.tweens.add({ targets: portrait, y: portrait.y - 96, alpha: 0, duration: 220, ease: 'Back.easeIn' });
+      }
+      if (hud && !this.modalCloseBtn) {
+        const btn = hud.add.image(bx, by - 96, 'icon-buttons', 'close-light-big')
+          .setScale(2).setAlpha(0).setDepth(1e6)
+          .setInteractive({ useHandCursor: true });
+        // stopPropagation aborts GameScene's scene-level pointer handler (same as
+        // the SDK HUD widgets do), so the tap only closes — nothing behind reacts.
+        btn.on('pointerup', (_p: Phaser.Input.Pointer, _x: number, _y: number, e?: { stopPropagation?: () => void }) => {
+          e?.stopPropagation?.();
+          if (this.mailboxOpen) this.closeMailbox(); else if (this.chestOpen) this.closeChest(); else if (this.orderOpen) this.closeOrderBook();
+        });
+        this.modalCloseBtn = btn;
+        this.tweens.add({ targets: btn, y: by, alpha: 1, duration: 240, ease: 'Back.easeOut' });
+      }
+    } else {
+      const btn = this.modalCloseBtn;
+      this.modalCloseBtn = undefined;
+      if (btn) this.tweens.add({ targets: btn, y: btn.y - 96, alpha: 0, duration: 200, ease: 'Back.easeIn', onComplete: () => btn.destroy() });
+      if (portrait) {
+        this.tweens.add({ targets: portrait, y: this.portraitRestY, alpha: 1, duration: 240, ease: 'Back.easeOut',
+          onComplete: () => { if (portrait.input) portrait.input.enabled = true; } });
+      }
+    }
   }
 
   private updateDoors(): void {
@@ -4686,7 +5248,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 6,
+      v: 8,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -4695,13 +5257,17 @@ export class GameScene extends Phaser.Scene {
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       placed: [...this.placed].map(([key, o]) => ({ key, kind: o.kind, variant: o.variant, orient: o.orient })),
       floors: [...this.floors].map(([key, f]) => ({ key, frame: f.frame })),
-      trees: [...this.trees].map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
-      bushes: [...this.bushes].map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
-      foragables: [...this.foragables].map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
-      bigStones: [...this.bigStones].map(([key, s]) => ({ key, tier: s.tier, ready: s.ready })),
+      trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
+      bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
+      foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
+      bigStones: [...this.bigStones].filter(([, s]) => !s.sceneWired).map(([key, s]) => ({ key, tier: s.tier, ready: s.ready })),
       money: this.money,
       dayTimeMs: Math.round(this.dayTimeMs),
       dayCount: this.dayCount,
+      mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
+      chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
+      order: [...this.orderDraft].map(([id, count]) => ({ id, count })),
+      orderDeliverDay: this.orderDeliverDay,
     };
   }
 
@@ -4742,9 +5308,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v >= 1 && s.v <= 6) this.applySave(s); // v1 pre-house … v5 no money/clock
+      if (s && s.v >= 1 && s.v <= 8) this.applySave(s); // v1 pre-house … v7 no order book
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
+      // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
+      // afford to order. Gated on the debug flag → removed for release. Only tops up.
+      if (CATO_DEBUG_TILL && this.money < 5000) { this.money = 5000; this.publishWeatherHud(); this.scheduleSave(); }
     } catch (e) {
       // Read failed — do NOT arm saving, so we can't clobber a save that exists
       // but momentarily failed to load. (Saving stays off for this session.)
@@ -4775,22 +5344,40 @@ export class GameScene extends Phaser.Scene {
       for (const t of this.placedHoedOnce.values()) t.remove();
       this.placedHoedOnce.clear();
       // Trees: tear down sprites + trunk colliders (+ drop them from the y-sort list).
-      for (const t of this.trees.values()) {
+      // EXCEPT scene-wired (editor-placed) trees — they come from the SCENE data, not
+      // the save (buildSave excludes them), so they must SURVIVE a save-load or they'd
+      // vanish (the "树都不见了" bug).
+      for (const [key, t] of this.trees) {
+        if (t.sceneWired) continue;
         const i = this.ySortSprites.indexOf(t.sprite);
         if (i >= 0) this.ySortSprites.splice(i, 1);
         t.sprite.destroy();
         t.body?.destroy();
         t.timer?.remove();
+        this.trees.delete(key);
       }
-      this.trees.clear();
-      // Bushes: tear down base + berry overlays.
-      for (const b of this.bushes.values()) { b.base.destroy(); for (const berry of b.berries) berry.destroy(); }
-      this.bushes.clear();
-      // Foragables + big-stones: tear down sprites (+ stone colliders).
-      for (const f of this.foragables.values()) f.sprite.destroy();
-      this.foragables.clear();
-      for (const s of this.bigStones.values()) { s.sprite.destroy(); s.body?.destroy(); }
-      this.bigStones.clear();
+      // Bushes: tear down base + berry overlays — EXCEPT scene-wired (editor-placed)
+      // bushes (re-derived from the scene each load, not the save; must survive it).
+      for (const [key, b] of this.bushes) {
+        if (b.sceneWired) continue;
+        b.base.destroy();
+        for (const berry of b.berries) berry.destroy();
+        this.bushes.delete(key);
+      }
+      // Foragables + big-stones: tear down sprites (+ stone colliders) — EXCEPT
+      // scene-wired (editor-placed) ones (re-derived from the scene each load, not the
+      // save; must survive it, like the trees/bushes).
+      for (const [key, f] of this.foragables) {
+        if (f.sceneWired) continue;
+        f.sprite.destroy();
+        this.foragables.delete(key);
+      }
+      for (const [key, s] of this.bigStones) {
+        if (s.sceneWired) continue;
+        s.sprite.destroy();
+        s.body?.destroy();
+        this.bigStones.delete(key);
+      }
       if (this.islandLayer) {
         for (const key of s.tilled ?? []) this.tilledCells.add(key);
         for (const key of this.tilledCells) {
@@ -4825,6 +5412,14 @@ export class GameScene extends Phaser.Scene {
       this.money = s.money ?? 0;
       this.dayTimeMs = s.dayTimeMs ?? 0;
       this.dayCount = s.dayCount ?? 0;
+      // Mailbox + chest contents (v7). Older saves (no field) keep the seeded test
+      // stores — restore ONLY when the save actually carries them.
+      if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
+      if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count));
+      // Order (v8) — today's editable order, ships next morning.
+      this.orderDraft.clear();
+      for (const o of s.order ?? []) this.orderDraft.set(o.id, o.count);
+      this.orderDeliverDay = s.orderDeliverDay ?? -1;
       this.equipSelected();
       this.publishInventory();
       this.publishWeatherHud();
@@ -5007,6 +5602,41 @@ export class GameScene extends Phaser.Scene {
    *  the camera follows him and arcade collision stops him at walls. 8-directional
    *  movement, facing by the dominant axis (the sheet has no diagonal walk). Frozen
    *  while chatting / in the backpack. */
+  // ── TEST control-mode toggle (on-screen button) ─────────────────────────────
+
+  /** Create the on-screen TEST button that flips between "drive Cato" and "pan the
+   *  camera" so you don't have to change the code to switch. It's a plain DOM button
+   *  over the canvas (works on touch without pointer lock; on desktop under pointer
+   *  lock press Esc first). Removed on scene shutdown so a restart won't stack it. */
+  private createControlToggle(): void {
+    if (typeof document === 'undefined' || this.controlToggleBtn) return;
+    const btn = document.createElement('button');
+    Object.assign(btn.style, {
+      position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)',
+      zIndex: '2147483647', padding: '7px 13px', font: '600 13px system-ui, sans-serif',
+      color: '#3f2c18', background: 'rgba(242,226,196,0.95)', border: '2px solid #5b3a1e',
+      borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+      userSelect: 'none', touchAction: 'manipulation',
+    } as Partial<CSSStyleDeclaration>);
+    const onClick = (e: Event) => { e.preventDefault(); e.stopPropagation(); this.setControlMode(!this.playerControl); };
+    btn.addEventListener('click', onClick);
+    (this.game.canvas?.parentElement ?? document.body).appendChild(btn);
+    this.controlToggleBtn = btn;
+    this.setControlMode(this.playerControl); // set the initial label
+    const cleanup = () => { btn.remove(); this.controlToggleBtn = undefined; };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
+  }
+
+  /** Switch control mode + reflect it on the button. Cato mode → camera follows him;
+   *  camera mode → free pan + Cato resumes wandering (stop his residual velocity). */
+  private setControlMode(on: boolean): void {
+    this.playerControl = on;
+    this.cameraFollow = on;
+    if (!on && this.child?.body) (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    if (this.controlToggleBtn) this.controlToggleBtn.textContent = on ? '控制: 猫 (点击切到相机)' : '控制: 相机 (点击切到猫)';
+  }
+
   private updatePlayerMovement(): void {
     if (!this.child?.body) return;
     this.cameraFollow = true; // keep Cato centred while the player drives him
@@ -5210,7 +5840,7 @@ export class GameScene extends Phaser.Scene {
 
     // Movement: WASD / arrows either DRIVE Cato (player control) or pan the camera
     // (AI-companion mode). Player mode keeps the camera following Cato.
-    if (PLAYER_CONTROL) this.updatePlayerMovement();
+    if (this.playerControl) this.updatePlayerMovement();
     else this.updateCameraKeys(delta);
 
     if (!this.child?.body) return;
@@ -5221,7 +5851,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (PLAYER_CONTROL) return; // the player drives Cato → no autonomous wander
+    if (this.playerControl) return; // the player drives Cato → no autonomous wander
     if (!CHILD_WANDER) return; // pinned — skip wander (edge-scroll already ran)
     const body = this.child.body as Phaser.Physics.Arcade.Body;
 

@@ -3,6 +3,7 @@ import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
+import { applyPriceData } from '../data/prices';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -160,7 +161,18 @@ export class BootScene extends Phaser.Scene {
     this.load.image('mail-box', 'uploaded/mail-box.png');
     this.load.image('mail-box-item-bg', 'uploaded/mail-box-item-bg.png');
     this.load.image('envelope-zipper', 'uploaded/envelope-zipper.png');
-    // Icon buttons atlas (region-tagged) — the mailbox modal's close button
+    // Chest UI — click the placed chest to open this big-chest modal (mirror of the
+    // mailbox). `chest-full` = the big open chest frame; `chest-full-zipper` = the
+    // scroll thumb. (Item slot bg + close button reuse the mailbox's.)
+    this.load.image('chest-full', 'uploaded/chest-full-size.png');
+    this.load.image('chest-full-zipper', 'uploaded/chest-full-scroll-zipper.png');
+    // Order book UI — the order button (bottom-right) opens this two-page book: a
+    // catalog of orderable seeds/seedlings on the left, an order summary on the right.
+    this.load.image('order-book', 'uploaded/order-book.png');
+    // Shared UI sheet (region-tagged) — the order book's catalog SCROLL BAR
+    // (`vertical-scroll-bar-background` track + `vertical-scroll-bar-dark` thumb).
+    this.load.atlas('ui-sheet', 'uploaded/all_ui_assets_on_one_sheet.png', 'uploaded/all_ui_assets_on_one_sheet.json');
+    // Icon buttons atlas (region-tagged) — the mailbox + chest modals' close button
     // (`close-light-big`).
     this.load.atlas('icon-buttons', 'uploaded/icon_buttons_spritesheet.png', 'uploaded/icon_buttons_spritesheet.json');
     // Game DATA tables (config as data, not code) — crops: which crops exist + their
@@ -169,6 +181,8 @@ export class BootScene extends Phaser.Scene {
     // Foragables + big-stones data tables (see src/data/foragables.ts).
     this.load.json('data-foragables', 'data/foragables.json');
     this.load.json('data-big-stones', 'data/big-stones.json');
+    // Item buy/sell prices (the economy table). Applied in create(). See src/data/prices.ts.
+    this.load.json('data-prices', 'data/prices.json');
   }
 
   create(): void {
@@ -187,6 +201,29 @@ export class BootScene extends Phaser.Scene {
       this.anims.create({
         key: 'water-pour',
         frames: this.anims.generateFrameNumbers('tools', { frames: [0, 0, 1, 1, 1, 0] }),
+        frameRate: 8,
+        repeat: 0,
+      });
+    }
+    // God-hand HOE swing (till / harvest) + AXE swing (chop) — raise → hold → strike,
+    // one-shot (strike fires on ANIMATION_COMPLETE). REGISTERED IN CODE, not the
+    // manifest: the editor's region-tagging regenerates the `tools` asset animations
+    // as `hoe-swing-right` / `axe-swing-left` (loop:true) on every Build, clobbering
+    // the custom one-shot keys the game plays — so define them here where a Build
+    // can't touch them (the "锄头动画没有了" regression). Frames per tools.png: hoe
+    // = 27–29, axe = 12–14.
+    if (!this.anims.exists('hoe-swing')) {
+      this.anims.create({
+        key: 'hoe-swing',
+        frames: this.anims.generateFrameNumbers('tools', { frames: [28, 29, 29, 29, 28, 27] }),
+        frameRate: 8,
+        repeat: 0,
+      });
+    }
+    if (!this.anims.exists('axe-swing')) {
+      this.anims.create({
+        key: 'axe-swing',
+        frames: this.anims.generateFrameNumbers('tools', { frames: [13, 14, 14, 14, 13, 12] }),
         frameRate: 8,
         repeat: 0,
       });
@@ -214,6 +251,9 @@ export class BootScene extends Phaser.Scene {
     // the build palette can nine-slice it (26×28 @ 11,11, per the Asset Manager tag).
     const btnTex = this.textures.get('square-buttons');
     if (btnTex && !btnTex.has('white-button')) btnTex.add('white-button', 0, 11, 11, 26, 28);
+    // `grey-button` (26×26 @ 59,11, nine-patch L6/R6/T6/B6) — the order book's item
+    // icon background frame.
+    if (btnTex && !btnTex.has('grey-button')) btnTex.add('grey-button', 0, 59, 11, 26, 26);
     // Tree chop animations: each type has 3 shake sequences (rows 1/2/3 = 4/6/12
     // frames) played on successive axe strikes; fruit sheets drop fruit during shake3.
     // The bare-tree fall is a separate 17-frame sheet. Registered once, globally.
@@ -246,6 +286,7 @@ export class BootScene extends Phaser.Scene {
     // Apply the loaded crop data table (falls back to the built-in if absent).
     applyCropData(this.cache.json.get('data-crops'));
     applyForagableData(this.cache.json.get('data-foragables'));
+    applyPriceData(this.cache.json.get('data-prices'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);

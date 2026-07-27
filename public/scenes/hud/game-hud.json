@@ -30,7 +30,8 @@
       "textColor": "#ffffff",
       "backgroundAssetId": "all_ui_assets_on_one_sheet",
       "backgroundRegion": "photo-frame-1-1",
-      "name": "photo-frame"
+      "name": "photo-frame",
+      "role": "photo-frame"
     },
     {
       "id": "e-mqz70k8c-2m6d",

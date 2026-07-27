@@ -102,21 +102,24 @@ export class HotbarScene extends Phaser.Scene {
     }
 
     const n = model.slots.length;
-    // Fit-to-canvas: prefer the crisp integer scale, shrink only if too wide.
+    // Fit-to-canvas: prefer the crisp integer scale, shrink only if too wide. The
+    // row now holds the N tool slots PLUS a backpack cell on the far right (a gap +
+    // one more slot), so budget the width for n+1 cells.
     let s = SLOT_SCALE;
     const maxBarW = this.scale.width * 0.94 - PAD_X * 2;
-    const wantBarW = n * SLOT_W * s + (n - 1) * GAP;
+    const wantBarW = (n + 1) * SLOT_W * s + n * GAP;
     if (wantBarW > maxBarW) {
-      s = Math.max(1, (maxBarW - (n - 1) * GAP) / (n * SLOT_W));
+      s = Math.max(1, (maxBarW - n * GAP) / ((n + 1) * SLOT_W));
     }
     const slotW = SLOT_W * s;
     const slotH = SLOT_H * s;
-    const barW = n * slotW + (n - 1) * GAP;
-    const startX = Math.round((this.scale.width - barW) / 2);
+    const barW = n * slotW + (n - 1) * GAP;         // just the tool slots
+    const rowW = barW + GAP + slotW;                 // + the backpack cell on the right
+    const startX = Math.round((this.scale.width - rowW) / 2);
     const rowY = Math.round(this.scale.height - slotH / 2 - MARGIN_BOTTOM);
 
     // --- Outer panel (frame-medium, 9-slice-stretched behind the whole row) ---
-    const panelW = barW + PAD_X * 2;
+    const panelW = rowW + PAD_X * 2;
     const panelH = slotH + PAD_Y * 2;
     const panel = this.add.nineslice(
       this.scale.width / 2,
@@ -182,10 +185,10 @@ export class HotbarScene extends Phaser.Scene {
       bounds.push({ x: cx - slotW / 2, y: cy - slotH / 2, w: slotW, h: slotH });
     }
 
-    // Backpack button, anchored to the screen's RIGHT edge (level with the bar) —
-    // opens the full grid. Mainly for TOUCH (no E key); also works with the mouse.
-    // A `slot-light` cell + a small 2×2 "pouch" glyph.
-    const bx = Math.round(this.scale.width - PAD_X - slotW / 2);
+    // Backpack button — now the RIGHTMOST cell OF the hotbar row (was floating at the
+    // screen edge). Opens the full grid (touch has no E key; mouse works too). A
+    // `slot-light` cell + a small 2×2 "pouch" glyph.
+    const bx = Math.round(startX + barW + GAP + slotW / 2);
     const backpackBtn = this.add.image(bx, rowY, ATLAS, FRAME_SLOT_SELECTED).setScale(s);
     c.add(backpackBtn);
     const g = this.add.graphics();
@@ -200,16 +203,30 @@ export class HotbarScene extends Phaser.Scene {
     c.add(g);
     const backpack = { x: bx - slotW / 2, y: rowY - slotH / 2, w: slotW, h: slotH };
 
+    // Order button — the `order` frame of the icon-buttons sheet, in the screen's
+    // BOTTOM-RIGHT corner (opens the order book). Separate from the hotbar so it
+    // stays put as a fixed corner affordance.
+    let order: { x: number; y: number; w: number; h: number } | undefined;
+    if (this.textures.exists('icon-buttons')) {
+      const oSize = 56, om = 18;
+      const ox = Math.round(this.scale.width - om - oSize / 2);
+      const oy = Math.round(this.scale.height - om - oSize / 2);
+      const orderBtn = this.add.image(ox, oy, 'icon-buttons', 'order').setDisplaySize(oSize, oSize);
+      c.add(orderBtn);
+      order = { x: ox - oSize / 2, y: oy - oSize / 2, w: oSize, h: oSize };
+    }
+
     // Publish hit-boxes (canvas px) for GameScene's click routing. The `bar` rect
     // is the whole hotbar (used to suppress the hoe tile-cursor over the UI).
     const barTop = Math.min(...bounds.map((b) => b.y)) - PAD_Y;
     this.registry.set('hotbarBounds', {
       slots: bounds,
       backpack,
+      order,
       bar: {
         x: startX - PAD_X,
         y: barTop,
-        w: barW + PAD_X * 2,
+        w: rowW + PAD_X * 2,
         h: this.scale.height - barTop,
       },
     });
