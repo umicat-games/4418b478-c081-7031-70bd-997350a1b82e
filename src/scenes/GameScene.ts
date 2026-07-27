@@ -101,6 +101,9 @@ const WEATHER_BGS = ['background-morning', 'background-noon', 'background-night'
 // DEV: press T to trigger a test 3×3 till near Cato WITHOUT the AI (no sign-in /
 // no credits) — for iterating on the tilling visuals. Set false before release.
 const CATO_DEBUG_TILL = true;
+// TEMP: clear the mailbox on load (empties an existing save's mailbox so buy/sell can
+// be tested from scratch). Flip false once cleared so real deliveries persist.
+const DEBUG_CLEAR_MAILBOX = true;
 
 // Un-till: hoeing EMPTY tilled soil once "loosens" it (furrow-lines mark); a
 // SECOND hoe within this window digs it back up to grass, otherwise it settles
@@ -571,8 +574,10 @@ export class GameScene extends Phaser.Scene {
   // opens an action menu (Take → backpack / Sell → mailbox / Delete). Saved (v7).
   private mailboxStore: ItemStack[] = [];
   private chestStore: ItemStack[] = [];
-  private itemMenu: { kind: 'mailbox' | 'chest'; index: number } | null = null; // open item menu
+  private itemMenu: { kind: 'mailbox' | 'chest'; index: number; x: number; y: number } | null = null; // open item menu
   private itemMenuRev = 0;
+  // The "How Many?" keypad (replaces the menu when you pick Take / Sell).
+  private itemQty: { action: 'take' | 'sell'; kind: 'mailbox' | 'chest'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
   // Order book (bottom-right button): catalog → draft → place order → arrives in the
   // mailbox next morning. `orderDraft` = the current selection (id → qty).
   private orderOpen = false;
@@ -1017,7 +1022,14 @@ export class GameScene extends Phaser.Scene {
         // Y = give coins, U = fast-forward the day clock by one pointer step — to
         // exercise the weather/time/money HUD without waiting / an economy.
         this.input.keyboard?.on('keydown-Y', () => this.addMoney(12345));
-        this.input.keyboard?.on('keydown-U', () => { this.dayTimeMs = (this.dayTimeMs + DAY_LEN_MS / 5) % DAY_LEN_MS; this.publishWeatherHud(); });
+        this.input.keyboard?.on('keydown-U', () => {
+          // Advance the clock one step; on crossing a full day, ROLL OVER (dayCount++
+          // + settleDay) — the old `% DAY_LEN_MS` wrapped without ever crossing the
+          // boundary, so the mailbox never settled.
+          this.dayTimeMs += DAY_LEN_MS / 5;
+          if (this.dayTimeMs >= DAY_LEN_MS) { this.dayTimeMs -= DAY_LEN_MS; this.dayCount += 1; this.settleDay(); }
+          this.publishWeatherHud();
+        });
         // Shift+Delete (or Shift+Backspace — the Mac "delete" key is Backspace) =
         // WIPE this game's save + reload to a fresh EMPTY map. Shift-guarded so it's
         // deliberate; preventDefault stops any browser back-nav on Shift+Backspace.
@@ -3192,6 +3204,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.mailboxOpen) return;
     this.mailboxOpen = false;
     this.closeItemMenu();
+    this.closeQuantityKeypad();
     this.mailbox?.play({ key: 'mailbox-close', repeat: 0 }); // play the close swing on the placed mailbox
     this.hideHotbar(false);
     this.setModalChrome(false);
@@ -3203,9 +3216,11 @@ export class GameScene extends Phaser.Scene {
    *  cancels the menu / is swallowed (the top-right HUD button is the closer). */
   private handleMailboxClick(x: number, y: number): boolean {
     if (!this.mailboxOpen) return false;
+    if (this.itemQty) { const k = this.keypadKeyAt('mailbox', x, y); if (k) this.handleKeypadKey(k); else this.closeQuantityKeypad(); return true; }
     if (this.itemMenu) {
       const opt = this.menuOptionAt('mailbox', x, y);
-      if (opt) this.performItemAction(opt);
+      if (opt === 'take' || opt === 'sell') this.openQuantityKeypad(opt);
+      else if (opt === 'delete') { const t = { kind: this.itemMenu.kind, index: this.itemMenu.index }; this.closeItemMenu(); this.performItemAction('delete', t); }
       else this.closeItemMenu();
       return true;
     }
@@ -3237,11 +3252,9 @@ export class GameScene extends Phaser.Scene {
   /** Pre-stock the mailbox + chest with test contents (real ItemStacks) so the item
    *  actions have something to act on — until a real mail/loot economy exists. */
   private seedTestStores(): void {
-    this.mailboxStore = [
-      makeFruit('apple', 6), makeFruit('pear', 3), makeForage('red-mushroom', 4),
-      makeStone(9), makeFruit('peach', 2), makeForage('wild-flower', 1),
-      makeFruit('strawberry', 5), makeForage('sunflower', 2),
-    ];
+    // The mailbox starts EMPTY — it's the delivery / shipping bin, not a place for
+    // pre-seeded test junk (order deliveries + chest "Sell" fill it).
+    this.mailboxStore = [];
     this.chestStore = [
       makeFruit('apple', 12), makeFruit('pear', 7), makeFruit('peach', 4), makeFruit('strawberry', 9),
       makeFruit('grape', 6), makeFruit('blueberry', 8), makeForage('red-mushroom', 5), makeForage('purple-mushroom', 3),
@@ -3290,6 +3303,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.chestOpen) return;
     this.chestOpen = false;
     this.closeItemMenu();
+    this.closeQuantityKeypad();
     this.chest?.play({ key: 'chest-close-front', repeat: 0 });
     this.hideHotbar(false);
     this.setModalChrome(false);
@@ -3300,9 +3314,11 @@ export class GameScene extends Phaser.Scene {
    *  menu has an extra Sell (→ mailbox) action. */
   private handleChestClick(x: number, y: number): boolean {
     if (!this.chestOpen) return false;
+    if (this.itemQty) { const k = this.keypadKeyAt('chest', x, y); if (k) this.handleKeypadKey(k); else this.closeQuantityKeypad(); return true; }
     if (this.itemMenu) {
       const opt = this.menuOptionAt('chest', x, y);
-      if (opt) this.performItemAction(opt);
+      if (opt === 'take' || opt === 'sell') this.openQuantityKeypad(opt);
+      else if (opt === 'delete') { const t = { kind: this.itemMenu.kind, index: this.itemMenu.index }; this.closeItemMenu(); this.performItemAction('delete', t); }
       else this.closeItemMenu();
       return true;
     }
@@ -3343,7 +3359,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Open the item action menu for store index `index` at the tapped screen point. */
   private openItemMenu(kind: 'mailbox' | 'chest', index: number, sx: number, sy: number): void {
-    this.itemMenu = { kind, index };
+    this.itemMenu = { kind, index, x: sx, y: sy };
     const key = kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
     this.registry.set(key, {
       visible: true, rev: ++this.itemMenuRev, x: sx, y: sy,
@@ -3356,6 +3372,67 @@ export class GameScene extends Phaser.Scene {
     const key = this.itemMenu.kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
     this.itemMenu = null;
     this.registry.set(key, { visible: false, rev: ++this.itemMenuRev });
+  }
+
+  /** Swap the menu for the "How Many?" keypad (Take / Sell → pick a quantity). Starts
+   *  at the full stack, so an OK straight away = take/sell all. */
+  private openQuantityKeypad(action: 'take' | 'sell'): void {
+    const m = this.itemMenu;
+    if (!m) return;
+    const store = m.kind === 'chest' ? this.chestStore : this.mailboxStore;
+    const it = store[m.index];
+    if (!it) { this.closeItemMenu(); return; }
+    this.itemMenu = null;
+    this.itemQty = { action, kind: m.kind, index: m.index, x: m.x, y: m.y, value: it.count, max: it.count, entering: false };
+    this.publishKeypad();
+  }
+
+  private publishKeypad(): void {
+    const q = this.itemQty;
+    if (!q) return;
+    const key = q.kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
+    this.registry.set(key, { visible: true, rev: ++this.itemMenuRev, x: q.x, y: q.y, keypad: { value: q.value, max: q.max } });
+  }
+
+  private closeQuantityKeypad(): void {
+    const q = this.itemQty;
+    if (!q) return;
+    const key = q.kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
+    this.itemQty = null;
+    this.registry.set(key, { visible: false, rev: ++this.itemMenuRev });
+  }
+
+  /** Which keypad key (if any) is under a tap. */
+  private keypadKeyAt(kind: 'mailbox' | 'chest', x: number, y: number): string | null {
+    const bounds = this.registry.get(kind === 'chest' ? 'chestMenuBounds' : 'mailboxMenuBounds') as
+      Array<{ x: number; y: number; w: number; h: number; key?: string }> | undefined;
+    if (!bounds) return null;
+    const hit = bounds.find((b) => b.key != null && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    return hit?.key ?? null;
+  }
+
+  /** Apply a keypad key: digits type the quantity (first tap replaces, then appends),
+   *  `<`/`>` step it, OK confirms the Take/Sell, X cancels. */
+  private handleKeypadKey(k: string): void {
+    const q = this.itemQty;
+    if (!q) return;
+    if (k === 'cancel') { this.closeQuantityKeypad(); return; }
+    if (k === 'ok') {
+      const n = Phaser.Math.Clamp(q.value, 1, q.max);
+      this.performItemAction(q.action, { kind: q.kind, index: q.index }, n);
+      this.closeQuantityKeypad();
+      return;
+    }
+    if (k === 'inc') { q.value = Math.min(q.max, q.value + 1); q.entering = true; }
+    else if (k === 'dec') { q.value = Math.max(1, q.value - 1); q.entering = true; }
+    else {
+      const d = parseInt(k, 10);
+      if (Number.isNaN(d)) return;
+      q.value = q.entering ? Math.min(q.max, q.value * 10 + d) : d;
+      q.entering = true;
+      if (q.value < 1) q.value = 1;
+    }
+    this.publishKeypad();
   }
 
   /** Which menu action (if any) is under a tap. Reads the bounds the modal published. */
@@ -3376,28 +3453,30 @@ export class GameScene extends Phaser.Scene {
     return hit ? hit.index : null;
   }
 
-  /** Run the chosen action on the menu's target item, then refresh the grid + save.
-   *  Take → into the backpack; Sell → chest item into the mailbox; Delete → discard. */
-  private performItemAction(action: 'take' | 'sell' | 'delete'): void {
-    const menu = this.itemMenu;
-    if (!menu) return;
-    const store = menu.kind === 'chest' ? this.chestStore : this.mailboxStore;
-    const it = store[menu.index];
-    this.closeItemMenu();
+  /** Run the chosen action on `target` for quantity `qty` (default the whole stack),
+   *  then refresh the grid + save. Take → backpack; Sell → split into the mailbox
+   *  (queued for sale); Delete → discard. */
+  private performItemAction(action: 'take' | 'sell' | 'delete', target: { kind: 'mailbox' | 'chest'; index: number }, qty?: number): void {
+    const store = target.kind === 'chest' ? this.chestStore : this.mailboxStore;
+    const it = store[target.index];
     if (!it) return;
+    const n = Math.min(qty ?? it.count, it.count);
+    if (n <= 0) return;
     if (action === 'take') {
-      const copy = { ...it };
-      this.addToInventory(copy); // decrements copy.count by what fit in the backpack
-      if (copy.count > 0) it.count = copy.count; // backpack full → keep the remainder
-      else store.splice(menu.index, 1);
+      const leftover = this.addToInventory({ ...it, count: n }); // returns what didn't fit
+      const took = n - leftover; // what actually landed in the backpack
+      it.count -= took;
+      if (it.count <= 0) store.splice(target.index, 1);
       this.publishInventory();
     } else if (action === 'delete') {
-      store.splice(menu.index, 1);
+      it.count -= n;
+      if (it.count <= 0) store.splice(target.index, 1);
     } else if (action === 'sell') {
-      this.mailboxStore.push(it); // chest → mailbox
-      store.splice(menu.index, 1);
+      it.count -= n;
+      if (it.count <= 0) store.splice(target.index, 1);
+      this.mailboxStore.push({ ...it, count: n }); // chest → mailbox, split
     }
-    this.refreshOpenModal(menu.kind);
+    this.refreshOpenModal(target.kind);
     this.scheduleSave();
   }
 
@@ -3886,19 +3965,23 @@ export class GameScene extends Phaser.Scene {
 
   /** Add a stack to the inventory: merge into a same-id stackable cell with room,
    *  else drop into the first empty cell. (Silently discards if totally full.) */
-  private addToInventory(item: ItemStack): void {
+  /** Deposit `item` into the backpack (merge into stacks, then a free slot). Returns
+   *  the LEFTOVER count that didn't fit (0 = all deposited) — callers that split a
+   *  known quantity need this to know how much was actually taken. */
+  private addToInventory(item: ItemStack): number {
     if (item.stackable) {
       for (const cell of this.inventory) {
         if (cell && cell.id === item.id && cell.stackable && cell.count < MAX_STACK) {
           const moved = Math.min(MAX_STACK - cell.count, item.count);
           cell.count += moved;
           item.count -= moved;
-          if (item.count <= 0) return;
+          if (item.count <= 0) return 0;
         }
       }
     }
     const free = this.inventory.findIndex((c) => c === null);
-    if (free >= 0) this.inventory[free] = item;
+    if (free >= 0) { this.inventory[free] = item; return 0; }
+    return item.count; // no room → this many dropped
   }
 
   /** Count down soil wetness; when a cell dries, un-tint it. */
@@ -5314,6 +5397,7 @@ export class GameScene extends Phaser.Scene {
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
       // afford to order. Gated on the debug flag → removed for release. Only tops up.
       if (CATO_DEBUG_TILL && this.money < 5000) { this.money = 5000; this.publishWeatherHud(); this.scheduleSave(); }
+      if (CATO_DEBUG_TILL && DEBUG_CLEAR_MAILBOX) { this.mailboxStore = []; this.mailboxHasMail = false; if (this.mailboxOpen) this.refreshOpenModal('mailbox'); this.scheduleSave(); }
     } catch (e) {
       // Read failed — do NOT arm saving, so we can't clobber a save that exists
       // but momentarily failed to load. (Saving stays off for this session.)

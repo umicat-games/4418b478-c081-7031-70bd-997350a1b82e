@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { dialogFont } from '../i18n';
-import { renderActionMenu, type ActionMenuModel, type MenuBound } from './ItemActionMenu';
+import { renderActionMenu, renderKeypad, type ActionMenuModel, type MenuBound } from './ItemActionMenu';
 
 // The mailbox modal: click the mailbox → the big open mailbox (`mail-box.png`)
 // SLIDES UP from below; its content window shows ONE PAGE of mail (5×3 = 15 items,
@@ -93,7 +93,10 @@ export class MailboxScene extends Phaser.Scene {
     if (!m.visible || !this.shown) return;
     const root = this.add.container(0, 0).setDepth(1000);
     this.menuRoot = root;
-    this.registry.set('mailboxMenuBounds', renderActionMenu(this, root, m));
+    const bounds = m.keypad
+      ? renderKeypad(this, root, { x: m.x, y: m.y, value: m.keypad.value, max: m.keypad.max })
+      : renderActionMenu(this, root, m);
+    this.registry.set('mailboxMenuBounds', bounds);
   }
 
   private open(m: MailboxModel): void {

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { dialogFont } from '../i18n';
 import type { MailItem } from './MailboxScene';
-import { renderActionMenu, type ActionMenuModel, type MenuBound } from './ItemActionMenu';
+import { renderActionMenu, renderKeypad, type ActionMenuModel, type MenuBound } from './ItemActionMenu';
 
 // The chest modal — the mirror of MailboxScene. Click the placed chest → the big
 // open chest (`chest-full-size.png`) SLIDES UP from below; its content window shows
@@ -89,7 +89,10 @@ export class ChestScene extends Phaser.Scene {
     if (!m.visible || !this.shown) return;
     const root = this.add.container(0, 0).setDepth(1000);
     this.menuRoot = root;
-    this.registry.set('chestMenuBounds', renderActionMenu(this, root, m));
+    const bounds = m.keypad
+      ? renderKeypad(this, root, { x: m.x, y: m.y, value: m.keypad.value, max: m.keypad.max })
+      : renderActionMenu(this, root, m);
+    this.registry.set('chestMenuBounds', bounds);
   }
 
   private open(m: ChestModel): void {
