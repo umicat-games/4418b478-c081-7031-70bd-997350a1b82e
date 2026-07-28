@@ -39,6 +39,10 @@ export class BootScene extends Phaser.Scene {
     // UI icon sheet (16×16 grid) — the confirm dialog uses frame 44 (✓ check) and
     // 46 (⊘ cancel), dark-brown variants that read on the cream button.
     this.load.spritesheet('ui-icons', 'uploaded/all_icons.png', { frameWidth: 16, frameHeight: 16 });
+    // Cato's emote system: the grey speech bubble + the 32×32 emoji face sheet
+    // (frame = row*10 + col; regions tagged in the Asset Manager). See src/emote.ts.
+    this.load.image('speech-bubble', 'uploaded/speech-bubble.png');
+    this.load.spritesheet('emoji', 'uploaded/emoji_spritesheet.png', { frameWidth: 32, frameHeight: 32 });
     // Tools spritesheet (16×16) — the hoe swing (`hoe-swing` anim, frames
     // 29→28→27, registered from the manifest) + the hotbar icons. Not a scene
     // entity, so it's loaded here rather than on-demand by the scene loader.

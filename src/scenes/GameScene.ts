@@ -16,6 +16,7 @@ import type { ReceiptLine } from './ReceiptScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice } from '../data/prices';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
+import { EmoteController, type Emotion } from '../emote';
 import {
   FORAGABLES, FORAGABLE_NAMES, BIG_STONES, BIG_STONE_TIERS,
   FORAGE_SPAWN_INTERVAL_MS, FORAGE_MAX_ON_MAP, BIG_STONE_SPAWN_CHANCE,
@@ -505,6 +506,7 @@ interface SaveBlob {
   order?: Array<{ id: string; count: number }>; // v8: today's order (editable; ships next morning)
   orderDeliverDay?: number; // v8: the dayCount the order delivers + is charged
   mail?: MailEntry[]; // v9: the Mail-tab list (sales receipts, …)
+  autonomy?: { harvest: boolean; water: boolean }; // v10: Cato's standing auto-farm prefs
 }
 
 export class GameScene extends Phaser.Scene {
@@ -512,10 +514,25 @@ export class GameScene extends Phaser.Scene {
 
   // Child spirit
   private child?: Phaser.GameObjects.Sprite;
+  private emote?: EmoteController; // Cato's reactive speech-bubble emoji
   private wanderTimer = 0;
   private wanderInterval = 2000;
   private wanderState: 'walk' | 'idle' = 'idle';
   private wanderTarget: { x: number; y: number } | null = null; // the POI he's ambling to
+  // Curiosity: the player harvested something → Cato ambles OVER to look at it
+  // (overrides wander/leash until he arrives or the deadline lapses).
+  private catoCurious: { x: number; y: number; deadline: number } | null = null;
+  // Cato's STANDING autonomous behaviour — he tends the farm on his own (harvest ripe
+  // crops, water dry ones) instead of just wandering. This is NOT a settings toggle:
+  // the guardian changes it by TALKING to Cato ("don't harvest on your own") → the AI
+  // calls `set_behavior` → `setAutonomy`. Default ON (Cato offers to help at the intro,
+  // which is future work; until then he helps by default). Saved (v10).
+  private autonomy = { harvest: true, water: true };
+  // Stuck-escape: no progress while walking (wedged between tree trunks) → sidestep out.
+  private wanderStuckMs = 0;
+  private wanderPrev: { x: number; y: number } | null = null;
+  private wanderEscapeUntil = 0;
+  private wanderEscapeDir: FaceDir = 'down';
   private faceDir: FaceDir = 'down';
 
   // WASD / arrow keys — pan the camera (Cato roams on his own).
@@ -830,6 +847,8 @@ export class GameScene extends Phaser.Scene {
 
     if (childGO) {
       this.child = childGO;
+      // Cato's emote bubble follows his position (world-space, above his head).
+      this.emote = new EmoteController(this, () => (this.child ? { x: this.child.x, y: this.child.y } : undefined));
 
       // Physics body
       this.physics.add.existing(this.child);
@@ -1022,6 +1041,15 @@ export class GameScene extends Phaser.Scene {
                 args: {
                   kind: 'string', // grass, mushroom, flower, or stone (or a specific name); omit to gather ALL
                   count: 'integer', // how many to gather; 0 / omitted = all mature of that kind
+                },
+              },
+              {
+                name: 'set_behavior',
+                description:
+                  'Change your STANDING autonomous behaviour — whether you tend the farm ON YOUR OWN (without being asked each time). Use when the guardian tells you to (or NOT to) do chores automatically. Examples: "don\'t harvest on your own" → harvest:false; "you can water the crops yourself again" → water:true; "stop doing things on your own" / "just relax and keep me company" → harvest:false, water:false; "help me farm automatically" / "take care of the crops for me" → harvest:true, water:true. Only include the field(s) the guardian actually changed; omit the rest. This sets a lasting preference — it is NOT a one-time chore (still use harvest_crops / water_crops for a one-off "go harvest now").',
+                args: {
+                  harvest: 'boolean', // whether to auto-harvest ripe crops on your own (omit = leave as-is)
+                  water: 'boolean', // whether to auto-water dry crops on your own (omit = leave as-is)
                 },
               },
               // NB: emotes are NOT a tool — Haiku returned the tool call WITHOUT any
@@ -1752,7 +1780,17 @@ export class GameScene extends Phaser.Scene {
       this.dayCount += 1; // new day → new weather pick
       this.settleDay(); // sell whatever's in the mailbox, then deliver any pending order
     }
-    if (this.pointerStep() !== this.lastPointerStep || this.bgIndex() !== this.lastBgIndex) {
+    const bg = this.bgIndex();
+    if (this.pointerStep() !== this.lastPointerStep || bg !== this.lastBgIndex) {
+      // Cato reacts to the day turning: nightfall → sleepy, a new morning → cheerful.
+      if (bg !== this.lastBgIndex) {
+        const night = bg === WEATHER_BGS.length - 1;
+        this.emote?.setAmbient(night ? 'sleepy' : 'idle'); // his "just vibing" mood tracks the scene
+        if (this.gameReady && this.lastBgIndex >= 0) {
+          if (night) this.catoReact('sleepy', { duration: 3200 });
+          else if (bg === 0) this.catoReact('wake', { duration: 3200 });
+        }
+      }
       this.publishWeatherHud(); // pointer / background changed → redraw + persist the clock
       this.scheduleSave();
     }
@@ -1797,6 +1835,31 @@ export class GameScene extends Phaser.Scene {
       }
     }
     return { color: 0x0c1636, alpha: 0 };
+  }
+
+  /** Trigger Cato's reactive emote bubble (algorithmic). Skipped while chatting (the
+   *  dialog sits over him). The AI-text path for special moments is future work. */
+  private catoReact(emotion: Emotion, opts?: { duration?: number; force?: boolean }): void {
+    if (this.dialogOpen) return;
+    this.emote?.play(emotion, this.time.now, opts);
+  }
+
+  /** Cato ambles over to a tile to "have a look" (e.g. you harvested there). Skipped
+   *  while he's on a commanded task; skipped if it's so far he'd walk off-screen (then
+   *  he just emotes in place). Cleared on arrival / deadline in `updateWander`. */
+  private catoLookAtTile(cx: number, cy: number): void {
+    if (this.catoTask || !this.child || !this.islandLayer) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return;
+    const wx = w.x + TILE / 2, wy = w.y + TILE / 2;
+    const cam = this.cameras.main;
+    const far = Math.hypot(cam.worldView.centerX - wx, cam.worldView.centerY - wy);
+    if (far > this.wanderLeashRadius() * 1.4) return; // too far → don't run off-screen, just emote
+    this.catoCurious = { x: wx, y: wy, deadline: this.time.now + 4500 };
+    this.catoReturning = false;
+    this.wanderTarget = null;
+    this.wanderState = 'walk';
+    this.wanderTimer = 0;
   }
 
   /** Select hotbar (row-0) slot `i`: equip its tool + highlight it. Re-selecting
@@ -2655,6 +2718,8 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(i * 130, () => this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'fruit-items', FRUIT_FRAME[type] ?? 0));
     }
     this.addToInventory(makeFruit(type, 3));
+    this.catoReact('love'); // Cato loves a fruit harvest
+    this.catoLookAtTile(cx, cy); // ...and comes over to look
     this.publishInventory();
     tree.type = 'plain';
     tree.hasFruit = false;
@@ -2798,6 +2863,8 @@ export class GameScene extends Phaser.Scene {
     if (!bush || bush.stage < 2) return;
     for (const b of bush.berries) this.playPopOut(b.x, b.y, 'fruit-items', FRUIT_FRAME[bush.type]);
     this.addToInventory(makeFruit(bush.type, 3));
+    this.catoReact('love'); // berry harvest
+    this.catoLookAtTile(cx, cy);
     this.publishInventory();
     this.setBushStage(bush, 1); // back to full + no berries; regrows to ripe
     this.scheduleSave();
@@ -2873,6 +2940,8 @@ export class GameScene extends Phaser.Scene {
     if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'forage', `${f.type}-${def.stages}`);
     f.sprite.destroy();
     this.addToInventory(makeForage(f.type, def.yieldCount));
+    this.catoReact('happy'); // gathered a wild foragable
+    this.catoLookAtTile(cx, cy);
     this.publishInventory();
     this.scheduleSave();
   }
@@ -4267,6 +4336,8 @@ export class GameScene extends Phaser.Scene {
     this.crops.delete(key);
     crop.sprite.destroy();
     this.addToInventory(makeCrop(crop.name, 1));
+    this.catoReact('love'); // crop harvest
+    this.catoLookAtTile(cx, cy);
     this.publishInventory();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'farming_plants_items', `crop-${crop.name}`);
@@ -4644,12 +4715,39 @@ export class GameScene extends Phaser.Scene {
       else if (a.name === 'mine_stones') { this.startMineTask(a.args); acted = true; }
       else if (a.name === 'harvest_bushes') { this.startBushTask(a.args); acted = true; }
       else if (a.name === 'forage') { this.startForageTask(a.args); acted = true; }
+      else if (a.name === 'set_behavior') { this.setAutonomy(a.args); } // standing pref, not a walk-off task
     }
     // Let the guardian read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
     if (acted) {
       this.time.delayedCall(1300, () => { if (this.dialogOpen) this.closeDialog(); });
     }
+  }
+
+  /** Apply an AI `set_behavior` call — the guardian told Cato (in chat) whether to tend
+   *  the farm on his own. Only the provided fields change; persists as a standing pref. */
+  private setAutonomy(rawArgs: unknown): void {
+    const a = (rawArgs ?? {}) as { harvest?: boolean; water?: boolean };
+    if (typeof a.harvest === 'boolean') this.autonomy.harvest = a.harvest;
+    if (typeof a.water === 'boolean') this.autonomy.water = a.water;
+    this.scheduleSave();
+  }
+
+  /** Autonomous chores: when Cato is free + it's enabled, quietly go tend the farm
+   *  (harvest ripe crops, else water dry ones) instead of aimless wandering. No camera
+   *  snap (unlike a guardian-commanded task) — he just ambles over on his own. Returns
+   *  true if a chore was started. */
+  private tryAutoChore(): boolean {
+    if (this.catoTask || this.catoCurious || this.dialogOpen || !this.islandLayer || !this.child) return false;
+    if (this.autonomy.harvest) {
+      const cells = this.findHarvestTargets(Infinity);
+      if (cells.length) { this.catoTask = { type: 'harvest', queue: cells, crop: 'crops', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null }; return true; }
+    }
+    if (this.autonomy.water) {
+      const cells = this.findWaterTargets(Infinity);
+      if (cells.length) { this.catoTask = { type: 'water', queue: cells, crop: 'crops', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null }; return true; }
+    }
+    return false;
   }
 
   /** AI mood → teemo portrait animation (the tags on the emote sheet). Note the
@@ -4933,6 +5031,15 @@ export class GameScene extends Phaser.Scene {
   /** Walk Cato toward (tx,ty) along ONE cardinal axis at a time (the dominant
    *  remaining one) — the character sheet has no diagonal walk, so we never move
    *  diagonally; the path is L-shaped. Sets velocity + facing + walk anim. */
+  /** Drive Cato one cardinal direction (velocity + walk anim). Used by the stuck-escape. */
+  private moveDir(dir: FaceDir, speed: number): void {
+    if (!this.child?.body) return;
+    const body = this.child.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(dir === 'left' ? -speed : dir === 'right' ? speed : 0, dir === 'up' ? -speed : dir === 'down' ? speed : 0);
+    this.faceDir = dir;
+    this.child.play(`walk-${dir}`, true);
+  }
+
   private walkCardinalToward(tx: number, ty: number, speed: number): void {
     if (!this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
@@ -4952,6 +5059,12 @@ export class GameScene extends Phaser.Scene {
     else if (Math.abs(dx) > DZ && Math.abs(dx) >= Math.abs(dy)) axis = 'x';
     else if (Math.abs(dy) > DZ) axis = 'y';
     else if (Math.abs(dx) > DZ) axis = 'x';
+    // WALL-SLIDE: if the chosen axis is blocked by a collider, take the OTHER axis so
+    // Cato slides ALONG the obstacle (around a tree trunk) instead of grinding into it.
+    const blockedOnX = (dx < 0 && body.blocked.left) || (dx > 0 && body.blocked.right);
+    const blockedOnY = (dy < 0 && body.blocked.up) || (dy > 0 && body.blocked.down);
+    if (axis === 'x' && blockedOnX && Math.abs(dy) > DZ) axis = 'y';
+    else if (axis === 'y' && blockedOnY && Math.abs(dx) > DZ) axis = 'x';
     if (axis === 'x') {
       body.setVelocity(Math.sign(dx) * speed, 0);
       this.faceDir = dx < 0 ? 'left' : 'right';
@@ -5260,6 +5373,8 @@ export class GameScene extends Phaser.Scene {
     const task = this.catoTask;
     this.catoTask = null;
     this.cameraFollow = false;
+    // Cato's happy he finished the job you asked for (force past the per-strike emotes).
+    if (task) this.catoReact('happy', { duration: 3000, force: true });
     if (task?.type === 'plant') {
       this.cato?.note(`You planted ${task.crop} in the tilled soil; it will grow over time.`);
     } else if (task?.type === 'water') {
@@ -5677,6 +5792,7 @@ export class GameScene extends Phaser.Scene {
     this.gameReady = true;
     this.publishInventory(); // hotbar was suppressed until now
     this.publishWeatherHud(); // reveal the weather HUD now that gameReady is true
+    this.emote?.setAmbient(this.bgIndex() === WEATHER_BGS.length - 1 ? 'sleepy' : 'idle'); // seed his mood (handles load-at-night)
     const c = this.loadingCover;
     this.loadingCover = undefined;
     if (c) {
@@ -5689,7 +5805,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 9,
+      v: 10,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -5710,6 +5826,7 @@ export class GameScene extends Phaser.Scene {
       order: [...this.orderDraft].map(([id, count]) => ({ id, count })),
       orderDeliverDay: this.orderDeliverDay,
       mail: this.mailList.map((m) => ({ ...m })),
+      autonomy: { ...this.autonomy },
     };
   }
 
@@ -5750,7 +5867,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v >= 1 && s.v <= 9) this.applySave(s); // v1 pre-house … v8 no mail list
+      if (s && s.v >= 1 && s.v <= 10) this.applySave(s); // v1 pre-house … v9 no autonomy pref
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
@@ -5864,6 +5981,7 @@ export class GameScene extends Phaser.Scene {
         // Keep the id sequence ahead of any restored ids so new mail can't collide.
         this.mailIdSeq = this.mailList.reduce((mx, m) => Math.max(mx, parseInt(m.id.replace(/\D/g, ''), 10) || 0), 0);
       }
+      if (s.autonomy) this.autonomy = { harvest: !!s.autonomy.harvest, water: !!s.autonomy.water };
       // Order (v8) — today's editable order, ships next morning.
       this.orderDraft.clear();
       for (const o of s.order ?? []) this.orderDraft.set(o.id, o.count);
@@ -6291,6 +6409,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHouseDoor(); // the editor-authored default-house door
     this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
     this.updateNightMask(); // tint the world toward evening / night
+    this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
     // Camera follow runs in POST_UPDATE (updateCameraFollow) so it sees Cato's
@@ -6331,6 +6450,46 @@ export class GameScene extends Phaser.Scene {
     // Cato stops to talk — freeze the stroll while the chat dialog is open.
     if (this.dialogOpen) {
       if (this.wanderState !== 'idle') this.startWanderIdle();
+      this.wanderStuckMs = 0; this.wanderPrev = null;
+      return;
+    }
+
+    // STUCK-ESCAPE: `walkCardinalToward` has no path-finding, so between two tree
+    // trunks (or against a wall) Cato can push into the obstacle forever. If he makes
+    // no progress while walking, SIDESTEP perpendicular for a beat so he clears the
+    // pinch and can go around, then resume normal wander.
+    if (this.time.now < this.wanderEscapeUntil) { this.moveDir(this.wanderEscapeDir, CHILD_SPEED); return; }
+    const prev = this.wanderPrev;
+    this.wanderPrev = { x: this.child.x, y: this.child.y };
+    if (this.wanderState === 'walk' && prev) {
+      const moved = Math.hypot(this.child.x - prev.x, this.child.y - prev.y);
+      this.wanderStuckMs = moved < 0.4 ? this.wanderStuckMs + delta : 0;
+      if (this.wanderStuckMs > 1100) {
+        this.wanderStuckMs = 0;
+        this.catoCurious = null; this.wanderTarget = null; this.catoReturning = false;
+        const horiz = this.faceDir === 'left' || this.faceDir === 'right';
+        this.wanderEscapeDir = horiz ? (body.blocked.up ? 'down' : 'up') : (body.blocked.left ? 'right' : 'left');
+        this.wanderEscapeUntil = this.time.now + 650;
+        this.moveDir(this.wanderEscapeDir, CHILD_SPEED);
+        return;
+      }
+    }
+
+    // Curiosity: the player harvested something → Cato heads over to look, OVERRIDING
+    // the leash/wander. On arrival (or a bump / deadline) he faces it + lingers longer.
+    if (this.catoCurious) {
+      const { x: tx, y: ty } = this.catoCurious;
+      const d = Math.hypot(tx - this.child.x, ty - this.child.y);
+      const bumped = body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down;
+      if (d <= WANDER_ARRIVE || bumped || this.time.now > this.catoCurious.deadline) {
+        this.faceTargetPoint(tx, ty);
+        this.catoCurious = null;
+        this.startWanderIdle();
+        this.wanderTimer = -1800; // linger ~1.8s extra having a look before ambling off
+        return;
+      }
+      this.walkCardinalToward(tx, ty, CHILD_SPEED);
+      this.wanderState = 'walk';
       return;
     }
 
@@ -6368,8 +6527,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Resting: linger, then occasionally amble off to inspect a nearby thing.
+    // Resting: linger, then — if there's farm work + it's enabled — go DO a chore on
+    // his own; otherwise amble off to inspect a nearby thing.
     this.wanderTimer += delta;
-    if (this.wanderTimer >= this.wanderInterval) this.beginNextWanderMove();
+    if (this.wanderTimer >= this.wanderInterval) {
+      if (this.tryAutoChore()) this.wanderTimer = 0; // catoTask now drives him (next frame)
+      else this.beginNextWanderMove();
+    }
   }
 }
