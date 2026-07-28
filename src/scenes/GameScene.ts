@@ -412,6 +412,15 @@ function makeStone(count: number): ItemStack {
   return { id: 'stone', label: 'Stone', iconKey: 'forage', iconFrame: 'small-stone-6', count, stackable: true };
 }
 
+/** Can this item DO something when selected on the hotbar? True for tools, seed
+ *  bags, and placeable materials (the three fields `equipSelected` reads). Harvested
+ *  goods (crops / fruit / forage / stone) have none → inert, so they're kept OFF the
+ *  hotbar (the bag's "To Hotbar" option is hidden for them). This IS the single source
+ *  of truth for usability — no separate data table (it would only drift from these). */
+function isHotbarUsable(item: ItemStack): boolean {
+  return !!(item.toolId || item.plants || item.place);
+}
+
 /** A wild foragable at a cell: `type` + growth `stage` (1-based; frames `<type>-1`..
  *  `<type>-<stages>`, mature = last) + a `timer` counting ms toward the next stage. */
 interface ForagObj {
@@ -608,7 +617,7 @@ export class GameScene extends Phaser.Scene {
   private bagRev = 0;
   private bagDragging = false; // dragging the bag scroll rail
   private bagIndexMap: number[] = []; // bag display index → real inventory index
-  private bagMenu: { index: number; x: number; y: number } | null = null; // item action menu (To Hotbar / Drop)
+  private bagMenu: { index: number; x: number; y: number; actions: Array<'hotbar' | 'store' | 'drop'> } | null = null; // item action menu
   private bagSlotPick: { index: number; x: number; y: number } | null = null; // hotbar slot picker
   private bagMenuRev = 0;
   private bagDragArm: { realIndex: number; x: number; y: number; page: number } | null = null; // pressed an item
@@ -3501,9 +3510,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.bagMenu) {
       const hit = this.bagBoundAt(x, y);
-      if (hit && hit.idx === 0) this.openBagSlotPick(this.bagMenu.index, this.bagMenu.x, this.bagMenu.y); // To Hotbar
-      else if (hit && hit.idx === 1) this.storeBagItem(this.bagIndexMap[this.bagMenu.index]!); // Store → chest
-      else if (hit && hit.idx === 2) this.dropBagItem(this.bagIndexMap[this.bagMenu.index]!); // Drop
+      const action = hit && hit.idx != null ? this.bagMenu.actions[hit.idx] : undefined;
+      if (action === 'hotbar') this.openBagSlotPick(this.bagMenu.index, this.bagMenu.x, this.bagMenu.y);
+      else if (action === 'store') this.storeBagItem(this.bagIndexMap[this.bagMenu.index]!); // Store → chest
+      else if (action === 'drop') this.dropBagItem(this.bagIndexMap[this.bagMenu.index]!); // Drop
       else this.closeBagMenu();
       return true;
     }
@@ -3537,6 +3547,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.bagDrag) { this.publishBagHeld(x, y); return; }
     if (this.bagDragArm && this.bagDragArm.realIndex >= 0 && Math.hypot(x - this.bagDragArm.x, y - this.bagDragArm.y) > 12) {
+      // Only usable items (tools/seeds/placeables) can be dragged to the hotbar; a drag
+      // on a harvested good is ignored (it'll open its menu on release instead).
+      const item = this.inventory[this.bagDragArm.realIndex];
+      if (item && !isHotbarUsable(item)) return;
       this.bagDrag = { realIndex: this.bagDragArm.realIndex };
       this.publishBagHeld(x, y);
     }
@@ -3575,9 +3589,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openBagItemMenu(displayIndex: number, sx: number, sy: number): void {
-    this.bagMenu = { index: displayIndex, x: sx, y: sy };
+    // "To Hotbar" only for items that DO something on the hotbar (tools/seeds/placeables);
+    // harvested goods are inert, so they don't get the option. `bagMenuActions` maps the
+    // rendered option index → its action (the option list is now variable-length).
+    const item = this.inventory[this.bagIndexMap[displayIndex]!];
+    const actions: Array<'hotbar' | 'store' | 'drop'> = [];
+    if (item && isHotbarUsable(item)) actions.push('hotbar');
+    actions.push('store', 'drop');
+    const LABEL = { hotbar: 'To Hotbar', store: 'Store', drop: 'Drop' };
+    this.bagMenu = { index: displayIndex, x: sx, y: sy, actions };
     this.bagSlotPick = null;
-    this.registry.set('bagMenu', { visible: true, rev: ++this.bagMenuRev, x: sx, y: sy, options: [{ label: 'To Hotbar' }, { label: 'Store' }, { label: 'Drop' }] });
+    this.registry.set('bagMenu', { visible: true, rev: ++this.bagMenuRev, x: sx, y: sy, options: actions.map((a) => ({ label: LABEL[a] })) });
   }
 
   /** "To Hotbar" → show the 8 hotbar slots (number + current item icon) to pick one. */
