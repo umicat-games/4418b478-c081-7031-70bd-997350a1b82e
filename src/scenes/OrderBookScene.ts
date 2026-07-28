@@ -125,6 +125,7 @@ export class OrderBookScene extends Phaser.Scene {
     img.setScale(fit);
     c.add(img);
     const bw = img.width * fit, bh = img.height * fit;
+    this.registry.set('orderPanel', { x: W / 2 - bw / 2, y: H / 2 - bh / 2, w: bw, h: bh }); // tap-outside-to-close
     const px = (fx: number) => (fx - 0.5) * bw;
     const py = (fy: number) => (fy - 0.5) * bh;
     const fs = Math.max(12, Math.round(bh * 0.032));
@@ -239,6 +240,7 @@ export class OrderBookScene extends Phaser.Scene {
     this.registry.set('orderRows', []);
     this.registry.set('orderSummaryRows', []);
     this.registry.set('orderRail', null);
+    this.registry.set('orderPanel', null);
     this.lastFrac = -1;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; return; }
     this.shown = false;

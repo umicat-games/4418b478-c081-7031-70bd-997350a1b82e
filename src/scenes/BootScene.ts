@@ -169,6 +169,12 @@ export class BootScene extends Phaser.Scene {
     // Order book UI — the order button (bottom-right) opens this two-page book: a
     // catalog of orderable seeds/seedlings on the left, an order summary on the right.
     this.load.image('order-book', 'uploaded/order-book.png');
+    // Backpack (bag) UI — the hotbar's backpack button opens this bag ABOVE the hotbar
+    // (so items can be dragged/placed onto the hotbar). `bag` = the backpack graphic;
+    // `bag-item-bg` = a slot; `bag-zipper` = the scroll thumb.
+    this.load.image('bag', 'uploaded/bag.png');
+    this.load.image('bag-item-bg', 'uploaded/bag-item-bg.png');
+    this.load.image('bag-zipper', 'uploaded/bag-zipper.png');
     // Shared UI sheet (region-tagged) — the order book's catalog SCROLL BAR
     // (`vertical-scroll-bar-background` track + `vertical-scroll-bar-dark` thumb).
     this.load.atlas('ui-sheet', 'uploaded/all_ui_assets_on_one_sheet.png', 'uploaded/all_ui_assets_on_one_sheet.json');

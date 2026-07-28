@@ -103,8 +103,8 @@ export class HotbarScene extends Phaser.Scene {
 
     const n = model.slots.length;
     // Fit-to-canvas: prefer the crisp integer scale, shrink only if too wide. The
-    // row now holds the N tool slots PLUS a backpack cell on the far right (a gap +
-    // one more slot), so budget the width for n+1 cells.
+    // row holds the N tool slots PLUS a backpack cell on the far right (a gap + one
+    // more slot), so budget the width for n+1 cells.
     let s = SLOT_SCALE;
     const maxBarW = this.scale.width * 0.94 - PAD_X * 2;
     const wantBarW = (n + 1) * SLOT_W * s + n * GAP;
@@ -121,18 +121,7 @@ export class HotbarScene extends Phaser.Scene {
     // --- Outer panel (frame-medium, 9-slice-stretched behind the whole row) ---
     const panelW = rowW + PAD_X * 2;
     const panelH = slotH + PAD_Y * 2;
-    const panel = this.add.nineslice(
-      this.scale.width / 2,
-      rowY,
-      ATLAS,
-      FRAME_PANEL,
-      panelW / PANEL_SCALE,
-      panelH / PANEL_SCALE,
-      10,
-      10,
-      11,
-      11,
-    );
+    const panel = this.add.nineslice(this.scale.width / 2, rowY, ATLAS, FRAME_PANEL, panelW / PANEL_SCALE, panelH / PANEL_SCALE, 10, 10, 11, 11);
     panel.setScale(PANEL_SCALE);
     c.add(panel);
 

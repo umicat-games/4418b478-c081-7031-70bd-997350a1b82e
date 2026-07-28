@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { dialogFont } from '../i18n';
-import { renderActionMenu, renderKeypad, type ActionMenuModel, type MenuBound } from './ItemActionMenu';
+import { renderActionMenu, renderKeypad, applyHover, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
 
 // The mailbox modal: click the mailbox → the big open mailbox (`mail-box.png`)
 // SLIDES UP from below; its content window shows ONE PAGE of mail (5×3 = 15 items,
@@ -16,7 +16,7 @@ const SCROLL_THUMB = 'envelope-zipper';
 const CLOSE_ATLAS = 'icon-buttons';
 const CLOSE_FRAME = 'close-light-big';
 
-const FIT_H = 0.94, FIT_W = 0.6, X_BIAS = 0.19;
+const FIT_H = 0.94, FIT_W = 0.6, X_BIAS = 0; // centred on screen
 const CONTENT = { x: 105, y: 490, w: 845, h: 620 };
 const COLS = 5, ROWS = 3;      // one page = 5×3 = 15 items
 const GAP = 16;
@@ -43,6 +43,10 @@ export class MailboxScene extends Phaser.Scene {
   private restX = 0; private restY = 0; // modal centre (screen px) → slot-bounds mapping
   private menuRev = -1;
   private menuRoot?: Phaser.GameObjects.Container; // the item action menu (Take/Delete/…)
+  // Mouse-hover: tint the bg TEXTURE of the slot / keypad button under the pointer.
+  private slotTargets: HoverTarget[] = [];
+  private menuTargets: HoverTarget[] = [];
+  private hovered: HoverTarget | null = null;
 
   constructor() {
     super({ key: 'MailboxScene' });
@@ -72,6 +76,20 @@ export class MailboxScene extends Phaser.Scene {
     // The item action menu (GameScene sets `mailboxMenu`; we render + publish bounds).
     const menu = this.registry.get('mailboxMenu') as ActionMenuModel | undefined;
     if (menu && menu.rev !== this.menuRev) { this.menuRev = menu.rev; this.renderMenu(menu); }
+    this.updateHover();
+  }
+
+  /** Mouse-hover: tint the bg TEXTURE of the slot / keypad button under the pointer
+   *  (touch has no hover). Popup buttons are the target when open, else item slots. */
+  private updateHover(): void {
+    const p = this.input.activePointer;
+    const targets = this.menuRoot ? this.menuTargets : this.slotTargets;
+    const hit = (!this.shown || p.wasTouch) ? null
+      : (targets.find((t) => p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h) ?? null);
+    if (hit === this.hovered) return;
+    applyHover(this.hovered, false);
+    this.hovered = hit;
+    applyHover(hit, true);
   }
 
   /** Rebuild the item grid IN PLACE (no re-slide) after an action changed the store. */
@@ -89,6 +107,7 @@ export class MailboxScene extends Phaser.Scene {
   private renderMenu(m: ActionMenuModel): void {
     this.menuRoot?.destroy();
     this.menuRoot = undefined;
+    this.menuTargets = []; this.hovered = null;
     this.registry.set('mailboxMenuBounds', [] as MenuBound[]);
     if (!m.visible || !this.shown) return;
     const root = this.add.container(0, 0).setDepth(1000);
@@ -96,6 +115,7 @@ export class MailboxScene extends Phaser.Scene {
     const bounds = m.keypad
       ? renderKeypad(this, root, { x: m.x, y: m.y, value: m.keypad.value, max: m.keypad.max })
       : renderActionMenu(this, root, m);
+    this.menuTargets = bounds.filter((b) => b.bg || b.text).map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, bg: b.bg, text: b.text, base: b.base, hoverColor: b.hoverColor }));
     this.registry.set('mailboxMenuBounds', bounds);
   }
 
@@ -121,9 +141,8 @@ export class MailboxScene extends Phaser.Scene {
     const cx = (nx: number) => (nx - img.width / 2) * fit;
     const cy = (ny: number) => (ny - img.height / 2) * fit;
 
-    // Close is the top-right HUD button that swaps in for the Cato photo-frame
-    // (GameScene.setModalChrome) — the modal no longer draws its own X.
     box.setPosition(restX, restY);
+    this.registry.set('mailboxPanel', { x: restX - (img.width * fit) / 2, y: restY - (img.height * fit) / 2, w: img.width * fit, h: img.height * fit }); // tap-outside-to-close
 
     // Item layer (same local frame as `box`; slides up WITH it as one unit).
     const content = this.add.container(restX, restY);
@@ -165,6 +184,7 @@ export class MailboxScene extends Phaser.Scene {
     const slots = this.slots;
     if (!slots) return;
     slots.removeAll(true);
+    this.slotTargets = []; this.hovered = null; // bg refs are recreated below
     const per = COLS * ROWS;
     const pageItems = this.items.slice(this.page * per, this.page * per + per);
     const slotBounds: Array<{ x: number; y: number; w: number; h: number; index: number }> = [];
@@ -174,7 +194,8 @@ export class MailboxScene extends Phaser.Scene {
       const col = i % COLS, row = Math.floor(i / COLS);
       const sx = this.gx0 + this.cell / 2 + col * (this.cell + this.gap);
       const sy = this.gy0 + this.cell / 2 + row * (this.cell + this.gap);
-      slots.add(this.add.image(sx, sy, ITEM_BG).setDisplaySize(this.cell, this.cell));
+      const bg = this.add.image(sx, sy, ITEM_BG).setDisplaySize(this.cell, this.cell);
+      slots.add(bg);
       const it = pageItems[i];
       if (!it) continue;
       if (this.textures.exists(it.iconKey)) {
@@ -191,7 +212,9 @@ export class MailboxScene extends Phaser.Scene {
       );
       // SCREEN-space hit-box (slots live inside `content` at restX/restY) → GameScene
       // routes a tap on it to the item action menu.
-      slotBounds.push({ x: this.restX + sx - this.cell / 2, y: this.restY + sy - this.cell / 2, w: this.cell, h: this.cell, index: this.page * per + i });
+      const sb = { x: this.restX + sx - this.cell / 2, y: this.restY + sy - this.cell / 2, w: this.cell, h: this.cell };
+      slotBounds.push({ ...sb, index: this.page * per + i });
+      this.slotTargets.push({ ...sb, bg }); // hover tints this bg
     }
     this.registry.set('mailboxSlots', slotBounds);
     if (this.thumb) {
@@ -203,8 +226,10 @@ export class MailboxScene extends Phaser.Scene {
   private close(): void {
     this.registry.set('mailboxRail', null);
     this.registry.set('mailboxSlots', []);
+    this.registry.set('mailboxPanel', null);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
     this.registry.set('mailboxMenuBounds', []);
+    this.slotTargets = []; this.menuTargets = []; this.hovered = null;
     this.thumb = undefined;
     this.slots = undefined;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; return; }
