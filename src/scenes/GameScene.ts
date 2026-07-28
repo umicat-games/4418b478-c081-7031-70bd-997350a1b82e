@@ -85,6 +85,15 @@ const CATO_ARRIVE_DIST = 3;   // px from a cell centre that counts as "arrived"
 const CATO_TILL_STEP_MS = 1000; // pause on each cell = one full attack swing
 const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil + dirt
 const CATO_STUCK_MS = 2200; // no progress toward a target this long → it's unreachable, skip it
+// Cato's STAMINA — a limited energy pool drained by doing tasks, regained by resting.
+// The MAX is a saved per-Cato value (`staminaMax`), NOT this const, so a future upgrade
+// can RAISE the cap; this is just the starting cap. Rates are per-second.
+const STAMINA_MAX_DEFAULT = 100;
+const STAMINA_DRAIN_PER_SEC = 5;    // ~20s of continuous work drains a full bar
+const STAMINA_REGEN_PER_SEC = 3.5;  // ~29s to fully recover from empty
+const STAMINA_LOW_FRAC = 0.3;       // below this WHILE WORKING → a sweat emote
+const STAMINA_RECOVER_FRAC = 0.5;   // once exhausted, must regen to this before working again
+const CHATTER_MS = 5000;            // how long Cato's proactive small-talk chip lingers before it auto-hides
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 // Day/time HUD: one full day loops in this many ms of play; the sun-arc pointer
@@ -507,6 +516,8 @@ interface SaveBlob {
   orderDeliverDay?: number; // v8: the dayCount the order delivers + is charged
   mail?: MailEntry[]; // v9: the Mail-tab list (sales receipts, …)
   autonomy?: { harvest: boolean; water: boolean }; // v10: Cato's standing auto-farm prefs
+  staminaMax?: number; // v11: Cato's energy cap (raisable by future upgrades)
+  stamina?: number; // v11: current energy
 }
 
 export class GameScene extends Phaser.Scene {
@@ -528,6 +539,13 @@ export class GameScene extends Phaser.Scene {
   // calls `set_behavior` → `setAutonomy`. Default ON (Cato offers to help at the intro,
   // which is future work; until then he helps by default). Saved (v10).
   private autonomy = { harvest: true, water: true };
+  // Stamina: drained while working, regained while idle. `staminaMax` is saved + can be
+  // RAISED by a future upgrade. `exhausted` = drained to 0 → he rests in place, can't work
+  // until he regens to STAMINA_RECOVER_FRAC. Saved (v11).
+  private staminaMax = STAMINA_MAX_DEFAULT;
+  private stamina = STAMINA_MAX_DEFAULT;
+  private exhausted = false;
+  private staminaSleepyAt = 0; // throttle the drowsy emote while resting exhausted
   // Stuck-escape: no progress while walking (wedged between tree trunks) → sidestep out.
   private wanderStuckMs = 0;
   private wanderPrev: { x: number; y: number } | null = null;
@@ -721,6 +739,15 @@ export class GameScene extends Phaser.Scene {
   private dialogOpen = false;
   private cato?: Npc;
   private aiBusy = false;
+  // Cato's proactive small-talk chip (top-right, left of the portrait) — see ChatterScene.
+  private chatterRev = 0;
+  private chatterText: string | null = null;   // the live remark (seeds the dialog if tapped)
+  private lastChatter: string | null = null;    // last remark, sent to the AI as context
+  private chatterTimer?: Phaser.Time.TimerEvent; // auto-hide countdown
+  // An autonomous WORK SESSION (a run of chained chores) — Cato announces the START
+  // once when it begins + the DONE once when there's no work left, NOT per task (else
+  // "all done!" is instantly clobbered by the next task's "going to pick the X!").
+  private choreSession: 'harvest' | 'water' | null = null;
   // hud:submit (Enter) / hud:cancel (Esc) from the chat-input-field text-input.
   private onHudSubmit = (_id: string, value: string): void => {
     if (this.dialogOpen) void this.submitDialog(value);
@@ -960,9 +987,10 @@ export class GameScene extends Phaser.Scene {
               'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.' +
               (playerName ? ` Your guardian's name is ${playerName}.` : ''),
             style: "warm, whimsical, 1-3 short sentences; reply in the guardian's language",
-            rules: playerName
-              ? [`Address the player by their name, "${playerName}", not the word "guardian" (an occasional "guardian" is fine, but prefer their name).`]
-              : undefined,
+            rules: [
+              ...(playerName ? [`Address the player by their name, "${playerName}", not the word "guardian" (an occasional "guardian" is fine, but prefer their name).`] : []),
+              'You have LIMITED ENERGY (see observation.cato.energyPct). If observation.cato.exhausted is true you are TOO TIRED to do any chore — warmly tell the guardian you need to rest and get your energy back first, and do NOT call any task action (till/plant/water/harvest/chop/mine/forage). When your energy is low but not empty you can still work, though you may mention you\'re getting a bit tired.',
+            ],
             // The vocabulary of things Cato can DO in the world. The AI picks one
             // when the guardian's request fits; GameScene validates + executes it.
             actions: [
@@ -1048,7 +1076,7 @@ export class GameScene extends Phaser.Scene {
                 description:
                   'Change your STANDING autonomous behaviour — whether you tend the farm ON YOUR OWN (without being asked each time). Use when the guardian tells you to (or NOT to) do chores automatically. Examples: "don\'t harvest on your own" → harvest:false; "you can water the crops yourself again" → water:true; "stop doing things on your own" / "just relax and keep me company" → harvest:false, water:false; "help me farm automatically" / "take care of the crops for me" → harvest:true, water:true. Only include the field(s) the guardian actually changed; omit the rest. This sets a lasting preference — it is NOT a one-time chore (still use harvest_crops / water_crops for a one-off "go harvest now").',
                 args: {
-                  harvest: 'boolean', // whether to auto-harvest ripe crops on your own (omit = leave as-is)
+                  harvest: 'boolean', // auto-GATHER on your own: ripe crops, tree fruit, AND berry bushes (omit = leave as-is)
                   water: 'boolean', // whether to auto-water dry crops on your own (omit = leave as-is)
                 },
               },
@@ -1314,11 +1342,13 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('OrderBookScene')) this.scene.launch('OrderBookScene');
     if (!this.scene.isActive('BagScene')) this.scene.launch('BagScene');
     if (!this.scene.isActive('ReceiptScene')) this.scene.launch('ReceiptScene');
+    if (!this.scene.isActive('ChatterScene')) this.scene.launch('ChatterScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
     this.scene.bringToTop('InventoryScene');
     this.scene.bringToTop('PaletteScene');
+    this.scene.bringToTop('ChatterScene'); // above UmicatHud so the mood emoji shows IN the portrait
     this.scene.bringToTop('CursorScene');
     this.publishBuildPalette();
     this.publishWeatherHud();
@@ -1365,6 +1395,7 @@ export class GameScene extends Phaser.Scene {
       // portrait is handled by the findCatHit GameObject's own pointerdown (the
       // HUD photo-frame icon-button stopPropagation()'s here, aborting this
       // scene-level handler, so the portrait can't be routed through it).
+      if (this.chatterAt(pointer.x, pointer.y)) { this.openChatterDialog(); return; } // proactive chip (screen-space)
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
       if (this.mailboxContains(wp.x, wp.y)) { this.openMailbox(); return; }
@@ -1477,6 +1508,8 @@ export class GameScene extends Phaser.Scene {
    *  (virtual cursor) AND touch taps — so it computes the target tile straight
    *  from (x,y) rather than the hover cursor (which only exists under lock). */
   private actAt(x: number, y: number): void {
+    // Cato's proactive chatter chip (top-right) → open the real dialog seeded with it.
+    if (this.chatterAt(x, y)) { this.openChatterDialog(); return; }
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
     // Modal mail box + chest: consume taps; only the close button closes them.
@@ -1842,6 +1875,76 @@ export class GameScene extends Phaser.Scene {
   private catoReact(emotion: Emotion, opts?: { duration?: number; force?: boolean }): void {
     if (this.dialogOpen) return;
     this.emote?.play(emotion, this.time.now, opts);
+  }
+
+  /** Drain stamina while Cato works, regen while he rests; drive the gauge + the tired
+   *  emotes. Called each frame. */
+  private updateStamina(delta: number): void {
+    if (!this.child) return;
+    const dt = delta / 1000;
+    const now = this.time.now;
+    if (this.catoTask) {
+      const before = this.stamina;
+      this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_PER_SEC * dt);
+      const lowT = this.staminaMax * STAMINA_LOW_FRAC;
+      if (before > lowT && this.stamina <= lowT) this.catoReact('effort', { duration: 2600 }); // getting tired → sweat
+      if (this.stamina <= 0 && !this.exhausted) this.onExhausted();
+      this.emote?.setStamina(this.stamina / this.staminaMax, now);
+    } else {
+      this.stamina = Math.min(this.staminaMax, this.stamina + STAMINA_REGEN_PER_SEC * dt);
+      if (this.exhausted) {
+        this.emote?.setStamina(this.stamina / this.staminaMax, now); // show it filling back up while he rests
+        if (this.stamina >= this.staminaMax * STAMINA_RECOVER_FRAC) this.exhausted = false; // rested enough → back to work
+      }
+    }
+  }
+
+  /** Stamina hit 0 → Cato is too tired to continue: drop the current job and rest in
+   *  place (the wander loop keeps him idle + drowsy until he's recovered). */
+  private onExhausted(): void {
+    this.exhausted = true;
+    this.catoTask = null;
+    this.choreSession = null; // session interrupted → no "all done"; the tired remark speaks instead
+    this.cameraFollow = false;
+    (this.child?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+    this.startWanderIdle();
+    this.catoReact('sleepy', { duration: 3200, force: true });
+    this.catoSay('chatter_tired');
+    this.scheduleSave();
+  }
+
+  /** Cato says a little proactive remark (i18n key) in the top-right chip — NOT the main
+   *  chat. Auto-hides after CHATTER_MS; tapping it opens the real dialog seeded with it. */
+  private catoSay(key: string, cropName?: string): void {
+    if (this.dialogOpen) return; // don't chatter over an open conversation
+    let text = t(key);
+    if (text.includes('{crop}')) text = text.replace('{crop}', t(cropName ? `crop_${cropName}` : 'crop_generic'));
+    this.chatterText = text;
+    this.lastChatter = text; // the AI sees this as Cato's most recent remark
+    this.registry.set('catoChatter', { visible: true, rev: ++this.chatterRev, text });
+    this.chatterTimer?.remove();
+    this.chatterTimer = this.time.delayedCall(CHATTER_MS, () => this.clearChatter());
+  }
+
+  private clearChatter(): void {
+    this.chatterTimer?.remove(); this.chatterTimer = undefined;
+    this.chatterText = null;
+    this.registry.set('catoChatter', { visible: false, rev: ++this.chatterRev });
+  }
+
+  /** Is (x,y) on the chatter chip? (Reads the bounds ChatterScene published.) */
+  private chatterAt(x: number, y: number): boolean {
+    const r = this.registry.get('catoChatterBounds') as { x: number; y: number; w: number; h: number } | null;
+    return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
+  /** Tap on the chatter chip → open the real dialog, seeded with what Cato just said. */
+  private openChatterDialog(): void {
+    const seed = this.chatterText;
+    this.clearChatter();
+    this.closeOpenModal();
+    this.followCato();
+    this.openDialog(seed ?? undefined);
   }
 
   /** Cato ambles over to a tile to "have a look" (e.g. you harvested there). Skipped
@@ -4704,6 +4807,14 @@ export class GameScene extends Phaser.Scene {
   /** Dispatch the actions the AI chose this turn. Unknown actions are ignored
    *  (the AI can only propose from the declared vocabulary anyway). */
   private runCatoActions(actions: Array<{ name: string; args: unknown }>): void {
+    // Out of energy → he can't do chores. Still honour a `set_behavior` pref, but refuse
+    // the physical tasks + say he needs to rest first (safety net; the AI is also told via
+    // the observation + a rule, so it usually says this itself without even calling one).
+    if (this.exhausted && actions.some((a) => a.name !== 'set_behavior')) {
+      for (const a of actions) if (a.name === 'set_behavior') this.setAutonomy(a.args);
+      this.setImmediateDialog('Cato flops down with a tired little sigh — he needs to rest and get some energy back before he can do that.');
+      return;
+    }
     let acted = false;
     for (const a of actions) {
       if (a.name === 'till_plot') { this.startTillTask(a.args); acted = true; }
@@ -4738,14 +4849,43 @@ export class GameScene extends Phaser.Scene {
    *  snap (unlike a guardian-commanded task) — he just ambles over on his own. Returns
    *  true if a chore was started. */
   private tryAutoChore(): boolean {
-    if (this.catoTask || this.catoCurious || this.dialogOpen || !this.islandLayer || !this.child) return false;
+    if (this.exhausted || this.catoTask || this.catoCurious || this.dialogOpen || !this.islandLayer || !this.child) return false;
+    const layer = this.islandLayer;
+    const task = (type: string, queue: Array<{ cx: number; cy: number }>, crop: string) => {
+      this.catoTask = { type, queue, crop, cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null } as typeof this.catoTask;
+    };
+    // Announce EACH task's start ("apples are ripe → going to pick them"), but track
+    // the session so the "all done" fires only ONCE at the end (below) — where nothing
+    // can clobber it. Between chained tasks there's an idle gap, so starts don't overlap.
+    const begin = (kind: 'harvest' | 'water', startKey: string, cropName?: string) => {
+      this.catoSay(startKey, cropName);
+      this.choreSession = kind;
+    };
+    // NEARBY-ONLY: only tend targets roughly IN VIEW (within the leash radius of the
+    // camera centre). Otherwise Cato roams the whole map off-screen after the 20-odd
+    // scenery fruit trees — reads as aimless "oscillating, doing nothing". He stays on
+    // screen doing visible work; pan the camera and he tends whatever you're looking at.
+    const cam = this.cameras.main;
+    const ccx = cam.worldView.centerX, ccy = cam.worldView.centerY;
+    const R = this.wanderLeashRadius() * 1.15;
+    const near = (cells: Array<{ cx: number; cy: number }>) => cells.filter((c) => {
+      const w = layer.tileToWorldXY(c.cx, c.cy);
+      return !!w && Math.hypot(w.x + TILE / 2 - ccx, w.y + TILE / 2 - ccy) <= R;
+    });
     if (this.autonomy.harvest) {
-      const cells = this.findHarvestTargets(Infinity);
-      if (cells.length) { this.catoTask = { type: 'harvest', queue: cells, crop: 'crops', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null }; return true; }
+      // 1. ripe CROPS
+      const crops = near(this.findHarvestTargets(Infinity));
+      if (crops.length) { task('harvest', crops, 'crops'); begin('harvest', 'chatter_harvest_start', this.crops.get(`${crops[0]!.cx},${crops[0]!.cy}`)?.name); return true; }
+      // 2. tree FRUIT (ripe/bearing trees)
+      const fruitCells = near(this.nearestCells([...this.trees].filter(([, tr]) => tr.hasFruit).map(([k]) => k), Infinity));
+      if (fruitCells.length) { task('fruit', fruitCells, 'fruit'); begin('harvest', 'chatter_harvest_start', this.trees.get(`${fruitCells[0]!.cx},${fruitCells[0]!.cy}`)?.type); return true; }
+      // 3. ripe BUSHES (berries)
+      const bushCells = near(this.nearestCells([...this.bushes].filter(([, b]) => b.stage >= 2).map(([k]) => k), Infinity));
+      if (bushCells.length) { task('bush', bushCells, 'berries'); begin('harvest', 'chatter_harvest_start', this.bushes.get(`${bushCells[0]!.cx},${bushCells[0]!.cy}`)?.type); return true; }
     }
     if (this.autonomy.water) {
-      const cells = this.findWaterTargets(Infinity);
-      if (cells.length) { this.catoTask = { type: 'water', queue: cells, crop: 'crops', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null }; return true; }
+      const cells = near(this.findWaterTargets(Infinity));
+      if (cells.length) { task('water', cells, 'crops'); begin('water', 'chatter_water_start', this.crops.get(`${cells[0]!.cx},${cells[0]!.cy}`)?.name); return true; }
     }
     return false;
   }
@@ -5375,6 +5515,8 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = false;
     // Cato's happy he finished the job you asked for (force past the per-strike emotes).
     if (task) this.catoReact('happy', { duration: 3000, force: true });
+    // NB: the "all done" chatter fires when the whole SESSION ends (no work left) —
+    // see the wander resting branch — not per task, so it isn't clobbered by the next.
     if (task?.type === 'plant') {
       this.cato?.note(`You planted ${task.crop} in the tilled soil; it will grow over time.`);
     } else if (task?.type === 'water') {
@@ -5628,9 +5770,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input. */
-  private openDialog(): void {
+  private openDialog(seed?: string): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
+    this.clearChatter(); // any proactive chip is replaced by the real conversation
     this.publishInventory(); // hide the hotbar while chatting
     this.closeWallPalette(); // cancel a pending wall-orientation choice
     // Cato turns to FACE THE PLAYER (front) while chatting: stop + play the
@@ -5645,7 +5788,7 @@ export class GameScene extends Phaser.Scene {
     // game's own pixel cursor via CSS — visually seamless. Restored on close.
     if (this.locked) document.exitPointerLock();
     this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
-    this.setImmediateDialog(this.fallbackSay(false)); // Cato's own greeting
+    this.setImmediateDialog(seed ?? this.fallbackSay(false)); // seeded (from a chatter tap) or a greeting
     for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
         | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
@@ -5751,6 +5894,14 @@ export class GameScene extends Phaser.Scene {
     return {
       island: 'home',
       timeOfDay: ['morning', 'morning', 'midday', 'afternoon', 'evening'][this.pointerStep() - 1],
+      cato: {
+        // Cato's own energy. exhausted → he CAN'T do chores; see the energy rule.
+        energyPct: Math.round((this.stamina / this.staminaMax) * 100),
+        exhausted: this.exhausted,
+        autoFarming: { harvest: this.autonomy.harvest, water: this.autonomy.water },
+        // The last little thing Cato said on his own (the guardian may be replying to it).
+        ...(this.lastChatter ? { lastRemark: this.lastChatter } : {}),
+      },
       backpack, // e.g. [{item:'Corn seeds', count:10}, {item:'Hoe', count:1}]
       farm: {
         plantedByCrop: byType, // {corn:3, carrot:2}
@@ -5805,7 +5956,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 10,
+      v: 11,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -5827,6 +5978,8 @@ export class GameScene extends Phaser.Scene {
       orderDeliverDay: this.orderDeliverDay,
       mail: this.mailList.map((m) => ({ ...m })),
       autonomy: { ...this.autonomy },
+      staminaMax: this.staminaMax,
+      stamina: Math.round(this.stamina),
     };
   }
 
@@ -5867,7 +6020,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v >= 1 && s.v <= 10) this.applySave(s); // v1 pre-house … v9 no autonomy pref
+      if (s && s.v >= 1 && s.v <= 11) this.applySave(s); // v1 pre-house … v10 no stamina
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
@@ -5982,6 +6135,9 @@ export class GameScene extends Phaser.Scene {
         this.mailIdSeq = this.mailList.reduce((mx, m) => Math.max(mx, parseInt(m.id.replace(/\D/g, ''), 10) || 0), 0);
       }
       if (s.autonomy) this.autonomy = { harvest: !!s.autonomy.harvest, water: !!s.autonomy.water };
+      if (typeof s.staminaMax === 'number' && s.staminaMax > 0) this.staminaMax = s.staminaMax;
+      if (typeof s.stamina === 'number') this.stamina = Phaser.Math.Clamp(s.stamina, 0, this.staminaMax);
+      this.exhausted = this.stamina <= 0; // if he was saved drained, he's still resting
       // Order (v8) — today's editable order, ships next morning.
       this.orderDraft.clear();
       for (const o of s.order ?? []) this.orderDraft.set(o.id, o.count);
@@ -6409,6 +6565,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHouseDoor(); // the editor-authored default-house door
     this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
     this.updateNightMask(); // tint the world toward evening / night
+    this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
@@ -6451,6 +6608,17 @@ export class GameScene extends Phaser.Scene {
     if (this.dialogOpen) {
       if (this.wanderState !== 'idle') this.startWanderIdle();
       this.wanderStuckMs = 0; this.wanderPrev = null;
+      return;
+    }
+
+    // EXHAUSTED → rest in place until recovered (no wander, no chores, no leash chase);
+    // a drowsy emote now and then while the stamina gauge slowly refills.
+    if (this.exhausted) {
+      body.setVelocity(0, 0);
+      if (this.wanderState !== 'idle') this.startWanderIdle();
+      this.child.play(`idle-${this.faceDir}`, true);
+      this.wanderStuckMs = 0; this.wanderPrev = null;
+      if (this.time.now >= this.staminaSleepyAt) { this.staminaSleepyAt = this.time.now + 3200; this.catoReact('sleepy', { duration: 2600 }); }
       return;
     }
 
@@ -6532,7 +6700,11 @@ export class GameScene extends Phaser.Scene {
     this.wanderTimer += delta;
     if (this.wanderTimer >= this.wanderInterval) {
       if (this.tryAutoChore()) this.wanderTimer = 0; // catoTask now drives him (next frame)
-      else this.beginNextWanderMove();
+      else {
+        // No more chores → the work session (if any) just ended: say "all done" ONCE.
+        if (this.choreSession) { this.catoSay(this.choreSession === 'water' ? 'chatter_water_done' : 'chatter_harvest_done'); this.choreSession = null; }
+        this.beginNextWanderMove();
+      }
     }
   }
 }

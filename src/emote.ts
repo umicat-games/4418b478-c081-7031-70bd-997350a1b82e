@@ -41,6 +41,16 @@ const EMOJI_BODY_FRAC = 0.62;  // emoji Y = -height*this → centred in the roun
 const EMOJI_SCALE = 30 / 32;   // fit the 32px emoji into the bubble body (within the container)
 const HEAD_OFFSET = 20;        // bubble tail tip this many px above Cato's origin (tuck it near his head)
 const IDLE_MIN_MS = 120000, IDLE_JITTER_MS = 60000; // ambient "vibing" emote every 2–3 min (rare)
+// Stamina gauge (16×16 radial): sits UPPER-LEFT of Cato's head; frame = round(frac*36).
+const STAMINA_KEY = 'stamina';
+const STAMINA_DX = -13, STAMINA_DY = -30; // px from Cato's origin (up + left of his head)
+const STAMINA_SCALE = 1;
+const STAMINA_LINGER_MS = 1800; // keep it up this long after the last update (then it hides)
+// The PERSISTENT top-right "mood" emoji (near the portrait) mirrors the head bubble's
+// emoji, but LINGERS after the bubble fades — so his state feels ongoing even though
+// the bubble can't stay forever. Falls back to `sweet` (frame 21) after this timeout.
+const SWEET_FRAME = 21;
+const MOOD_LINGER_MS = 14000;
 const DEPTH = 600000;          // above the night mask (500000), below the HUD scenes
 
 interface Active { emotion: string; priority: number; until: number; minShow: number; }
@@ -54,6 +64,10 @@ export class EmoteController {
   private lastPlay = 0;         // ms — global anti-strobe cooldown
   private nextIdle = 0;         // ms — when the next ambient idle emote may fire
   private ambient: Emotion = 'idle'; // which emotion the ambient tick uses (scene-driven)
+  private staminaImg?: Phaser.GameObjects.Image; // the stamina gauge over Cato's head
+  private staminaHideAt = 0;
+  private moodFrame = SWEET_FRAME;   // the persistent top-right mood emoji (published to registry)
+  private moodExpireAt = 0;          // after this, the mood falls back to `sweet`
   private rngSeed = 1;
 
   constructor(scene: Phaser.Scene, target: () => { x: number; y: number } | undefined) {
@@ -87,6 +101,9 @@ export class EmoteController {
     this.ensure();
     const frame = this.pick(EMOJI[emotion]!);
     this.emoji!.setFrame(frame);
+    // The top-right mood mirrors this same emoji, and lingers past the bubble.
+    this.moodFrame = frame;
+    this.moodExpireAt = now + MOOD_LINGER_MS;
     const duration = opts?.duration ?? 2600;
     this.active = { emotion, priority: prio, until: now + duration, minShow: now + Math.min(900, duration) };
     this.lastPlay = now;
@@ -103,6 +120,14 @@ export class EmoteController {
     if (this.nextIdle === 0) this.nextIdle = now + IDLE_MIN_MS; // don't fire an idle emote at t=0
     const t = this.target();
     if (this.root && t) this.root.setPosition(Math.round(t.x), Math.round(t.y - HEAD_OFFSET));
+    // Stamina gauge: follow Cato's upper-left; hide once its linger lapses.
+    if (this.staminaImg) {
+      if (t) this.staminaImg.setPosition(Math.round(t.x + STAMINA_DX), Math.round(t.y + STAMINA_DY));
+      if (now > this.staminaHideAt) this.staminaImg.setVisible(false);
+    }
+    // Publish the PERSISTENT mood frame (falls back to `sweet` after the linger) for the
+    // top-right indicator (rendered by ChatterScene, which sits above the HUD portrait).
+    this.scene.registry.set('catoMoodFrame', now > this.moodExpireAt ? SWEET_FRAME : this.moodFrame);
     if (this.active && now >= this.active.until) {
       const root = this.root!;
       this.active = null;
@@ -121,6 +146,18 @@ export class EmoteController {
    *  day (night → sleepy, day → idle/content) so "he's just vibing" fits the scene. */
   setAmbient(emotion: Emotion): void {
     if (EMOJI[emotion]) this.ambient = emotion;
+  }
+
+  /** Show/refresh the stamina gauge for `frac` (0..1). Call it every frame while Cato
+   *  works or recovers; it auto-hides STAMINA_LINGER_MS after the last call ("做完后
+   *  等一会儿就消失"). Positioned each frame in update(). */
+  setStamina(frac: number, now: number): void {
+    if (!this.staminaImg) {
+      this.staminaImg = this.scene.add.image(0, 0, STAMINA_KEY, 0).setDepth(DEPTH).setScale(STAMINA_SCALE).setVisible(false);
+    }
+    const frame = Math.max(0, Math.min(36, Math.round(frac * 36)));
+    this.staminaImg.setFrame(frame).setVisible(true);
+    this.staminaHideAt = now + STAMINA_LINGER_MS;
   }
 
   /** Force-clear (e.g. on a modal / dialog opening over Cato). */

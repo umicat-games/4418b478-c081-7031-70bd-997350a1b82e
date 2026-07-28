@@ -55,6 +55,26 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   demolish_furn_stool: { en: 'Remove this stool?', 'zh-CN': '你想拆除这个凳子吗？' },
   demolish_furn_clock: { en: 'Remove this clock?', 'zh-CN': '你想拆除这个时钟吗？' },
   demolish_furn_rug: { en: 'Remove this rug?', 'zh-CN': '你想拆除这块地毯吗？' },
+  // Cato's proactive small-talk chips (top-right, left of his portrait). Generic (no
+  // crop-name interpolation) to dodge cross-language grammar — same rule as demolish.
+  chatter_harvest_start: { en: 'The {crop} is ripe — going to pick it!', 'zh-CN': '{crop}熟了，我去收一下！' },
+  chatter_water_start: { en: 'The {crop} looks thirsty — I\'ll water it.', 'zh-CN': '{crop}渴了，我去浇点水～' },
+  chatter_harvest_done: { en: 'All picked — it\'s in the backpack now!', 'zh-CN': '收好啦，放进背包里了！' },
+  chatter_water_done: { en: 'Watered! They\'ll grow nice and fast now.', 'zh-CN': '浇完水啦，它们会长得快些～' },
+  chatter_tired: { en: "Phew… I'm getting tired. I need a little rest.", 'zh-CN': '呼…我有点累了，得歇一会儿。' },
+  // Names for the {crop} slot above — crops, tree fruit, and berry bushes.
+  crop_generic: { en: 'crops', 'zh-CN': '作物' },
+  crop_corn: { en: 'corn', 'zh-CN': '玉米' },
+  crop_carrot: { en: 'carrots', 'zh-CN': '胡萝卜' },
+  crop_tomato: { en: 'tomatoes', 'zh-CN': '番茄' },
+  crop_eggplant: { en: 'eggplants', 'zh-CN': '茄子' },
+  crop_pumpkin: { en: 'pumpkins', 'zh-CN': '南瓜' },
+  crop_apple: { en: 'apples', 'zh-CN': '苹果' },
+  crop_pear: { en: 'pears', 'zh-CN': '梨' },
+  crop_peach: { en: 'peaches', 'zh-CN': '桃子' },
+  crop_strawberry: { en: 'strawberries', 'zh-CN': '草莓' },
+  crop_grape: { en: 'grapes', 'zh-CN': '葡萄' },
+  crop_blueberry: { en: 'blueberries', 'zh-CN': '蓝莓' },
 };
 
 /** Translate a key for the active language (English fallback, then the key itself). */

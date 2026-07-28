@@ -43,6 +43,12 @@ export class BootScene extends Phaser.Scene {
     // (frame = row*10 + col; regions tagged in the Asset Manager). See src/emote.ts.
     this.load.image('speech-bubble', 'uploaded/speech-bubble.png');
     this.load.spritesheet('emoji', 'uploaded/emoji_spritesheet.png', { frameWidth: 32, frameHeight: 32 });
+    // Cato's stamina gauge: a 16×16 radial pie (37 frames, empty→full; colour purple→
+    // orange→green). frame = round(fraction*36). Shown over his head while he works.
+    this.load.spritesheet('stamina', 'uploaded/stamina_circle_with_white_outline_sprite_sheet.png', { frameWidth: 16, frameHeight: 16 });
+    // Cato's proactive small-talk box (top-right, left of his portrait) — a 128×48
+    // 9-slice speech box (insets L20/R20/T12/B12). Used via add.nineslice in ChatterScene.
+    this.load.image('chatter-box', 'uploaded/dialog_box_medium.png');
     // Tools spritesheet (16×16) — the hoe swing (`hoe-swing` anim, frames
     // 29→28→27, registered from the manifest) + the hotbar icons. Not a scene
     // entity, so it's loaded here rather than on-demand by the scene loader.
