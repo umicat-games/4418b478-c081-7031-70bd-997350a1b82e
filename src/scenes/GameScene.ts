@@ -89,6 +89,21 @@ const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 // Day/time HUD: one full day loops in this many ms of play; the sun-arc pointer
 // steps through 5 frames (morning ↗ → evening ↘) across it, then wraps.
 const DAY_LEN_MS = 10 * 60 * 1000; // ~10 min per in-game day
+// Day/night MASK: a full-screen colour tint over the WORLD (below the HUD scenes, so
+// UI stays readable) that darkens toward evening + night. Keyframes = [dayFraction t,
+// hexColour, alpha], smoothly lerped; CYCLIC (t=1 must equal t=0 so midnight→dawn
+// doesn't pop). Morning/noon = clear; warm at dusk → deep navy at night → fades back
+// to clear by dawn. Tune these freely (colours/alpha/timing) — press U to fast-forward.
+const NIGHT_KEYS: Array<[number, number, number]> = [
+  [0.00, 0x0c1636, 0.00], // dawn — clear
+  [0.52, 0x0c1636, 0.00], // full day — clear
+  [0.62, 0xe8763c, 0.16], // early evening — warm orange
+  [0.72, 0x8a4e74, 0.30], // dusk — purple
+  [0.82, 0x24306a, 0.44], // nightfall — blue
+  [0.93, 0x0c1636, 0.54], // deep night — navy
+  [1.00, 0x0c1636, 0.00], // dawn breaking — back to clear (wraps to t=0)
+];
+const NIGHT_MASK_DEPTH = 500000; // above every world sprite, below the loading cover (1e7) + HUD scenes
 // TEMP (restore to true): random wild spawning (grass/foragables + big-stones) is
 // OFF while the creator arranges the default layout, so it doesn't clutter the map.
 const SPAWN_WILD = false;
@@ -523,6 +538,7 @@ export class GameScene extends Phaser.Scene {
   // drive Cato + camera follows; false = arrows/drag pan the camera + Cato wanders.
   private playerControl = PLAYER_CONTROL_DEFAULT;
   private controlToggleBtn?: HTMLButtonElement; // the test-only DOM toggle button
+  private timeSkipBtn?: HTMLButtonElement; // the test-only DOM fast-forward-time button
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
 
@@ -655,6 +671,7 @@ export class GameScene extends Phaser.Scene {
   private weatherHudRev = 0; // bumped on any HUD-visible change → WeatherScene re-renders
   private lastPointerStep = -1; // last published pointer frame (1..5); republish only on change
   private lastBgIndex = -1; // last published time-of-day background (0..2)
+  private nightMask?: Phaser.GameObjects.Rectangle; // full-screen day/night colour tint
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -1054,14 +1071,7 @@ export class GameScene extends Phaser.Scene {
         // Y = give coins, U = fast-forward the day clock by one pointer step — to
         // exercise the weather/time/money HUD without waiting / an economy.
         this.input.keyboard?.on('keydown-Y', () => this.addMoney(12345));
-        this.input.keyboard?.on('keydown-U', () => {
-          // Advance the clock one step; on crossing a full day, ROLL OVER (dayCount++
-          // + settleDay) — the old `% DAY_LEN_MS` wrapped without ever crossing the
-          // boundary, so the mailbox never settled.
-          this.dayTimeMs += DAY_LEN_MS / 5;
-          if (this.dayTimeMs >= DAY_LEN_MS) { this.dayTimeMs -= DAY_LEN_MS; this.dayCount += 1; this.settleDay(); }
-          this.publishWeatherHud();
-        });
+        this.input.keyboard?.on('keydown-U', () => this.fastForwardTime());
         // Shift+Delete (or Shift+Backspace — the Mac "delete" key is Backspace) =
         // WIPE this game's save + reload to a fresh EMPTY map. Shift-guarded so it's
         // deliberate; preventDefault stops any browser back-nav on Shift+Backspace.
@@ -1737,6 +1747,47 @@ export class GameScene extends Phaser.Scene {
       this.publishWeatherHud(); // pointer / background changed → redraw + persist the clock
       this.scheduleSave();
     }
+  }
+
+  /** Fast-forward the day clock one step (1/5 day). On crossing a full day, ROLL OVER
+   *  (dayCount++ + settleDay) — the old `% DAY_LEN_MS` wrapped without ever crossing the
+   *  boundary, so the mailbox never settled. Driven by the U key AND the on-screen ⏩ button. */
+  private fastForwardTime(): void {
+    this.dayTimeMs += DAY_LEN_MS / 5;
+    if (this.dayTimeMs >= DAY_LEN_MS) { this.dayTimeMs -= DAY_LEN_MS; this.dayCount += 1; this.settleDay(); }
+    this.publishWeatherHud();
+  }
+
+  /** Drive the full-screen day/night mask from the clock (created lazily). A single
+   *  oversized scrollFactor-0 rect at NIGHT_MASK_DEPTH → covers the world at any
+   *  camera position / canvas size, always UNDER the HUD scenes. Non-interactive, so
+   *  it never eats a click. */
+  private updateNightMask(): void {
+    if (!this.gameReady) return;
+    if (!this.nightMask) {
+      this.nightMask = this.add.rectangle(-4000, -4000, 16000, 16000, 0x0c1636, 0)
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH);
+    }
+    const t = (this.dayTimeMs % DAY_LEN_MS) / DAY_LEN_MS;
+    const { color, alpha } = this.nightTint(t);
+    this.nightMask.setFillStyle(color, alpha);
+  }
+
+  /** Interpolate the NIGHT_KEYS keyframes for day-fraction `t` → {colour, alpha}. */
+  private nightTint(t: number): { color: number; alpha: number } {
+    const keys = NIGHT_KEYS;
+    for (let i = 0; i < keys.length - 1; i++) {
+      const [t0, c0, a0] = keys[i]!;
+      const [t1, c1, a1] = keys[i + 1]!;
+      if (t >= t0 && t <= t1) {
+        const f = t1 === t0 ? 0 : (t - t0) / (t1 - t0);
+        const col = Phaser.Display.Color.Interpolate.ColorWithColor(
+          Phaser.Display.Color.IntegerToColor(c0), Phaser.Display.Color.IntegerToColor(c1), 100, Math.round(f * 100),
+        );
+        return { color: Phaser.Display.Color.GetColor(col.r, col.g, col.b), alpha: Phaser.Math.Linear(a0, a1, f) };
+      }
+    }
+    return { color: 0x0c1636, alpha: 0 };
   }
 
   /** Select hotbar (row-0) slot `i`: equip its tool + highlight it. Re-selecting
@@ -6001,6 +6052,30 @@ export class GameScene extends Phaser.Scene {
     const cleanup = () => { btn.remove(); this.controlToggleBtn = undefined; };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
+    this.createTimeSkipButton();
+  }
+
+  /** On-screen ⏩ button (bottom-left) that fast-forwards the day clock a step per tap
+   *  — the touch equivalent of the U key (tablets have no keyboard). Test-only DOM
+   *  button, removed on scene shutdown. */
+  private createTimeSkipButton(): void {
+    if (typeof document === 'undefined' || this.timeSkipBtn) return;
+    const btn = document.createElement('button');
+    btn.textContent = '⏩ 时间';
+    Object.assign(btn.style, {
+      position: 'fixed', bottom: '14px', left: '14px',
+      zIndex: '2147483647', padding: '9px 15px', font: '600 15px system-ui, sans-serif',
+      color: '#3f2c18', background: 'rgba(242,226,196,0.95)', border: '2px solid #5b3a1e',
+      borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+      userSelect: 'none', touchAction: 'manipulation',
+    } as Partial<CSSStyleDeclaration>);
+    const onClick = (e: Event) => { e.preventDefault(); e.stopPropagation(); this.fastForwardTime(); };
+    btn.addEventListener('click', onClick);
+    (this.game.canvas?.parentElement ?? document.body).appendChild(btn);
+    this.timeSkipBtn = btn;
+    const cleanup = () => { btn.remove(); this.timeSkipBtn = undefined; };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
   }
 
   /** Switch control mode + reflect it on the button. Cato mode → camera follows him;
@@ -6193,6 +6268,7 @@ export class GameScene extends Phaser.Scene {
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.updateHouseDoor(); // the editor-authored default-house door
     this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
+    this.updateNightMask(); // tint the world toward evening / night
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
 
     // Camera follow runs in POST_UPDATE (updateCameraFollow) so it sees Cato's
