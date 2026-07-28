@@ -10,23 +10,31 @@ import { renderActionMenu, renderKeypad, applyHover, type ActionMenuModel, type 
 // envelope-zipper thumb) — GameScene routes BOTH the close + the rail drag (a
 // cross-scene interactive drag on the thumb is unreliable), driving the current
 // page via the `mailboxPage` registry value that this scene renders.
-const MAILBOX = 'mail-box';
+const MAILBOX = 'mailbox-v2';
 const ITEM_BG = 'mail-box-item-bg';
 const SCROLL_THUMB = 'envelope-zipper';
-const CLOSE_ATLAS = 'icon-buttons';
-const CLOSE_FRAME = 'close-light-big';
 
+// Native-px, seeded from mailbox-v2.png (1042×1364). Tabs straddle the content
+// window's TOP-LEFT; the grid + scroll rail fill the window below them.
 const FIT_H = 0.94, FIT_W = 0.6, X_BIAS = 0; // centred on screen
-const CONTENT = { x: 105, y: 490, w: 845, h: 620 };
+const CONTENT = { x: 130, y: 540, w: 770, h: 500 };
 const COLS = 5, ROWS = 3;      // one page = 5×3 = 15 items
 const GAP = 16;
-// x = thumb-CENTRE native x; top/bottom = thumb-CENTRE native y at page 0 / last
-// page. Nudged right + down so the zipper's white tab lines up with the rail's cap.
-const SCROLL = { x: 976, top: 570, bottom: 1032, thumbScale: 1.0 };
-const CLOSE = { insetX: 120, insetY: 210, scale: 2 };
+const SCROLL = { x: 950, top: 580, bottom: 1010, thumbScale: 1.0 };
+// Two tabs at the window top-left: Mail (green) + Items (blue). Selected art is taller
+// (154 vs 122). TOP-aligned: every tab's TOP edge sits on the border line (`topY`), so
+// the shorter unselected art doesn't drop below it — the selected one just extends lower.
+const TAB = { topY: 346, w: 128, selH: 154, unselH: 122, cx: [240, 402] };
+// DPI-aware text resolution: the pixel font's thin strokes soften on high-DPI
+// tablets when the glyph texture doesn't have enough DEVICE pixels (the mail list
+// text at a fractional `fit` size looked fuzzy on iPad). Render at ~3× the screen's
+// devicePixelRatio (capped) so the downscale stays crisp everywhere.
+const TEXT_RES = Math.min(8, Math.max(3, Math.round((typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1) * 3)));
 
 export interface MailItem { id?: string; iconKey: string; iconFrame: number | string; count: number; }
-export interface MailboxModel { visible: boolean; rev: number; items?: MailItem[]; }
+// One row in the Mail tab: a list icon (ui-icons frame) + the sender's name.
+export interface MailListEntry { id: string; sender: string; title: string; iconFrame: number; read: boolean; }
+export interface MailboxModel { visible: boolean; rev: number; items?: MailItem[]; mails?: MailListEntry[]; tab?: number; }
 
 export class MailboxScene extends Phaser.Scene {
   private lastRev = -1;
@@ -47,6 +55,8 @@ export class MailboxScene extends Phaser.Scene {
   private slotTargets: HoverTarget[] = [];
   private menuTargets: HoverTarget[] = [];
   private hovered: HoverTarget | null = null;
+  private tab = 1; // 0 = Mail list, 1 = Items
+  private prevTab = -1; // last-rendered tab → detect a real switch (for the select anim)
 
   constructor() {
     super({ key: 'MailboxScene' });
@@ -65,10 +75,10 @@ export class MailboxScene extends Phaser.Scene {
     const m = this.registry.get('mailbox') as MailboxModel | undefined;
     if (m && m.rev !== this.lastRev) {
       this.lastRev = m.rev;
-      if (m.visible && !this.shown) this.open(m);       // first open → slide up
-      else if (m.visible && this.shown) this.refreshItems(m); // in-place (after an action)
+      if (m.visible && !this.shown) this.build(m, true);       // first open → slide up
+      else if (m.visible && this.shown) this.build(m, false);  // in-place (tab switch / item change)
       else this.close();
-    } else if (this.shown) {
+    } else if (this.shown && this.tab === 1) {
       // Page changes (wheel here, rail-drag from GameScene) arrive via `mailboxPage`.
       const p = (this.registry.get('mailboxPage') as number) ?? 0;
       if (p !== this.page) this.renderPage(p);
@@ -92,17 +102,6 @@ export class MailboxScene extends Phaser.Scene {
     applyHover(hit, true);
   }
 
-  /** Rebuild the item grid IN PLACE (no re-slide) after an action changed the store. */
-  private refreshItems(m: MailboxModel): void {
-    this.items = m.items ?? [];
-    const per = COLS * ROWS;
-    this.pages = Math.max(1, Math.ceil(this.items.length / per));
-    this.page = Phaser.Math.Clamp(this.page, 0, this.pages - 1);
-    this.registry.set('mailboxPage', this.page);
-    this.registry.set('mailboxRail', { x: this.restX + (this.thumb?.x ?? 0), top: this.restY + this.thumbTop, bottom: this.restY + this.thumbBot, pages: this.pages });
-    this.renderPage(this.page);
-  }
-
   /** Render / clear the contextual item action menu. */
   private renderMenu(m: ActionMenuModel): void {
     this.menuRoot?.destroy();
@@ -119,63 +118,158 @@ export class MailboxScene extends Phaser.Scene {
     this.registry.set('mailboxMenuBounds', bounds);
   }
 
-  private open(m: MailboxModel): void {
+  /** Build the whole modal (frame + tabs + the active tab's view). `slide` = first
+   *  open (slide up); false = in-place rebuild (tab switch / item change). */
+  private build(m: MailboxModel, slide: boolean): void {
+    if (this.root) this.tweens.killTweensOf(this.root);
     this.root?.destroy();
-    this.tweens.killAll();
     this.shown = true;
-    this.page = 0;
+    this.tab = m.tab ?? this.tab;
     const W = this.scale.width, H = this.scale.height;
 
     const c = this.add.container(0, 0);
     this.root = c;
 
-    // Mailbox frame + close button — slides UP from below.
-    const box = this.add.container(0, 0);
-    c.add(box);
     const img = this.add.image(0, 0, MAILBOX);
     const fit = Math.min((H * FIT_H) / img.height, (W * FIT_W) / img.width, 1);
     img.setScale(fit);
-    box.add(img);
     const restX = W / 2 + W * X_BIAS, restY = H / 2;
-    this.restX = restX; this.restY = restY; // slots publish screen bounds off this
+    this.restX = restX; this.restY = restY;
+    img.setPosition(restX, restY);
+    c.add(img);
     const cx = (nx: number) => (nx - img.width / 2) * fit;
     const cy = (ny: number) => (ny - img.height / 2) * fit;
+    this.registry.set('mailboxPanel', { x: restX - (img.width * fit) / 2, y: restY - (img.height * fit) / 2, w: img.width * fit, h: img.height * fit });
 
-    box.setPosition(restX, restY);
-    this.registry.set('mailboxPanel', { x: restX - (img.width * fit) / 2, y: restY - (img.height * fit) / 2, w: img.width * fit, h: img.height * fit }); // tap-outside-to-close
+    // Animate the selected tab ONLY on a real switch (not first open / item refresh).
+    const animateSelected = !slide && this.tab !== this.prevTab;
+    this.prevTab = this.tab;
+    this.renderTabs(c, restX, restY, cx, cy, fit, animateSelected);
 
-    // Item layer (same local frame as `box`; slides up WITH it as one unit).
     const content = this.add.container(restX, restY);
     c.add(content);
-    const slots = this.add.container(0, 0);
-    content.add(slots);
-    this.slots = slots;
 
-    this.items = m.items ?? [];
-    const per = COLS * ROWS;
-    this.pages = Math.max(1, Math.ceil(this.items.length / per));
-    this.gap = GAP * fit;
-    this.cell = (CONTENT.w * fit - this.gap * (COLS - 1)) / COLS;
-    const blockH = ROWS * this.cell + (ROWS - 1) * this.gap;
-    this.gx0 = cx(CONTENT.x);
-    this.gy0 = cy(CONTENT.y) + (CONTENT.h * fit - blockH) / 2; // 3-row block, centred
+    if (this.tab === 1) {
+      // ── ITEMS view ──
+      this.registry.set('mailboxMailRows', []);
+      const slots = this.add.container(0, 0);
+      content.add(slots);
+      this.slots = slots;
+      this.items = m.items ?? [];
+      const per = COLS * ROWS;
+      this.pages = Math.max(1, Math.ceil(this.items.length / per));
+      this.page = Phaser.Math.Clamp(this.page, 0, this.pages - 1);
+      this.gap = GAP * fit;
+      this.cell = (CONTENT.w * fit - this.gap * (COLS - 1)) / COLS;
+      const blockH = ROWS * this.cell + (ROWS - 1) * this.gap;
+      this.gx0 = cx(CONTENT.x);
+      this.gy0 = cy(CONTENT.y) + (CONTENT.h * fit - blockH) / 2;
+      this.thumbTop = cy(SCROLL.top);
+      this.thumbBot = cy(SCROLL.bottom);
+      this.thumb = this.add.image(cx(SCROLL.x), this.thumbTop, SCROLL_THUMB).setScale(SCROLL.thumbScale * fit);
+      content.add(this.thumb);
+      this.registry.set('mailboxRail', { x: restX + cx(SCROLL.x), top: restY + this.thumbTop, bottom: restY + this.thumbBot, pages: this.pages });
+      this.renderPage(this.page);
+    } else {
+      // ── MAIL view — a list of mails (icon + sender), newest first ──
+      this.slots = undefined; this.thumb = undefined;
+      this.slotTargets = []; this.hovered = null;
+      this.registry.set('mailboxRail', null);
+      this.registry.set('mailboxSlots', []);
+      const mails = m.mails ?? [];
+      if (!mails.length) {
+        content.add(this.add.text(cx(CONTENT.x + CONTENT.w / 2), cy(CONTENT.y + CONTENT.h / 2), 'No mail yet', {
+          fontFamily: dialogFont(), fontSize: Math.round(44 * fit) + 'px', color: '#8a7a52', resolution: TEXT_RES,
+        }).setOrigin(0.5));
+        this.registry.set('mailboxMailRows', []);
+      } else {
+        content.add(this.renderMailList(mails, restX, restY, cx, cy, fit));
+      }
+    }
 
-    // Scroll thumb (display-only; GameScene drags the rail).
-    this.thumbTop = cy(SCROLL.top);
-    this.thumbBot = cy(SCROLL.bottom);
-    this.thumb = this.add.image(cx(SCROLL.x), this.thumbTop, SCROLL_THUMB).setScale(SCROLL.thumbScale * fit);
-    content.add(this.thumb);
+    if (slide) { c.setY(H * 1.15); this.tweens.add({ targets: c, y: 0, duration: 300, ease: 'Back.easeOut' }); }
+    else c.setY(0);
+  }
 
-    // Publish the rail (SCREEN coords) so GameScene can drag it — reliable for
-    // mouse AND touch (no wheel on touch).
-    this.registry.set('mailboxPage', 0);
-    this.registry.set('mailboxRail', { x: restX + cx(SCROLL.x), top: restY + this.thumbTop, bottom: restY + this.thumbBot, pages: this.pages });
+  /** Two tabs at the window top-left (Mail / Items). Active = the taller art. Publishes
+   *  `mailboxTabs` (screen bounds + tab index) for GameScene to route taps. */
+  private renderTabs(c: Phaser.GameObjects.Container, restX: number, restY: number, cx: (n: number) => number, cy: (n: number) => number, fit: number, animateSelected: boolean): void {
+    // Icons live in `all_icons.png` (loaded as the 16×16 `ui-icons` spritesheet):
+    // white-message = frame 245 (Mail), white-shopping-cart = frame 262 (Items).
+    const defs = [
+      { tab: 0, sel: 'tab-green', unsel: 'tab-green-unselected', icon: 245 }, // Mail
+      { tab: 1, sel: 'tab-blue', unsel: 'tab-blue-unselected', icon: 262 },   // Items
+    ];
+    const bounds: Array<{ x: number; y: number; w: number; h: number; tab: number }> = [];
+    defs.forEach((d, i) => {
+      const selected = this.tab === d.tab;
+      const key = selected ? d.sel : d.unsel;
+      const tx = restX + cx(TAB.cx[i]!);
+      const ty = restY + cy(TAB.topY); // TOP edge on the border line
+      // Tab art + icon share ONE container (origin = its x/y = the top-centre), so the
+      // select anim scales BOTH together — the icon unfolds with the tab, no split.
+      const box = this.add.container(tx, ty);
+      c.add(box);
+      const img = this.add.image(0, 0, key).setOrigin(0.5, 0).setScale(fit);
+      const icon = this.add.image(0, TAB.unselH * 0.5 * fit, 'ui-icons', d.icon).setScale(fit * 4.6);
+      box.add([img, icon]);
+      // Select anim: the whole tab "unfolds" DOWNWARD (top pinned) with a little
+      // overshoot, preceded by a quick upward lift — the "抽一下再向下展开" feel.
+      if (selected && animateSelected) {
+        box.setScale(1, 0.45);
+        box.y = ty - 14 * fit;
+        this.tweens.add({ targets: box, y: ty, scaleY: 1, duration: 300, ease: 'Back.easeOut' });
+      }
+      // Bounds off the FULL size (not the animated scaleY) so the hit-box stays correct.
+      const bw = img.width * fit, bh = img.height * fit;
+      bounds.push({ x: tx - bw / 2, y: ty, w: bw, h: bh, tab: d.tab });
+    });
+    this.registry.set('mailboxTabs', bounds);
+  }
 
-    this.renderPage(0);
-    // Slide the WHOLE modal (frame + items + thumb) up from below as ONE unit —
-    // the mirror of the close slide, so it reads as a single object.
-    c.setY(H * 1.15);
-    this.tweens.add({ targets: c, y: 0, duration: 300, ease: 'Back.easeOut' });
+  /** Render the Mail-tab list (icon + sender + subtitle, unread dot) and publish the
+   *  per-row screen bounds (`mailboxMailRows`) so GameScene routes a tap → its receipt. */
+  private renderMailList(mails: MailListEntry[], restX: number, restY: number, cx: (n: number) => number, cy: (n: number) => number, fit: number): Phaser.GameObjects.Container {
+    const list = this.add.container(0, 0);
+    const rowH = 96;            // native px per row
+    const y0 = CONTENT.y + 20;  // first row top (native)
+    const iconX = CONTENT.x + 46;
+    const textX = CONTENT.x + 96;
+    const bounds: Array<{ x: number; y: number; w: number; h: number; id: string }> = [];
+    mails.forEach((mail, i) => {
+      const rowTopN = y0 + i * rowH;
+      const rowCyN = rowTopN + rowH / 2;
+      // A light cream bar behind each row → text always reads, whatever the panel colour.
+      const barTopN = rowTopN + 6, barBotN = rowTopN + rowH - 6;
+      const barX = cx(CONTENT.x + 6), barY = cy(barTopN);
+      const barW = (CONTENT.w - 12) * fit, barH = (barBotN - barTopN) * fit;
+      const bar = this.add.graphics();
+      bar.fillStyle(mail.read ? 0xe7dcc2 : 0xf3ead1, 1); // unread slightly brighter
+      bar.fillRoundedRect(barX, barY, barW, barH, Math.max(4, 10 * fit));
+      bar.lineStyle(Math.max(1, 2 * fit), 0xd2be95, 1);
+      bar.strokeRoundedRect(barX, barY, barW, barH, Math.max(4, 10 * fit));
+      list.add(bar);
+      // Message icon.
+      const icon = this.add.image(cx(iconX), cy(rowCyN), 'ui-icons', mail.iconFrame).setScale(fit * 3.4);
+      list.add(icon);
+      // Sender (dark, high-contrast) + the mail title as a subtitle.
+      list.add(this.add.text(cx(textX), cy(rowCyN - 16), mail.sender, {
+        fontFamily: dialogFont(), fontSize: Math.round(34 * fit) + 'px', color: mail.read ? '#5b4327' : '#3a2a12', resolution: TEXT_RES,
+      }).setOrigin(0, 0.5));
+      list.add(this.add.text(cx(textX), cy(rowCyN + 20), mail.title, {
+        fontFamily: dialogFont(), fontSize: Math.round(24 * fit) + 'px', color: '#7a6034', resolution: TEXT_RES,
+      }).setOrigin(0, 0.5));
+      // Unread dot on the right.
+      if (!mail.read) {
+        const dot = this.add.graphics();
+        dot.fillStyle(0x4aa3df, 1);
+        dot.fillCircle(cx(CONTENT.x + CONTENT.w - 40), cy(rowCyN), Math.max(4, 10 * fit));
+        list.add(dot);
+      }
+      bounds.push({ x: restX + cx(CONTENT.x), y: restY + cy(rowTopN), w: CONTENT.w * fit, h: rowH * fit, id: mail.id });
+    });
+    this.registry.set('mailboxMailRows', bounds);
+    return list;
   }
 
   /** Rebuild the item slots for page `p` + move the thumb to match. */
@@ -226,6 +320,8 @@ export class MailboxScene extends Phaser.Scene {
   private close(): void {
     this.registry.set('mailboxRail', null);
     this.registry.set('mailboxSlots', []);
+    this.registry.set('mailboxMailRows', []);
+    this.registry.set('mailboxTabs', []);
     this.registry.set('mailboxPanel', null);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
     this.registry.set('mailboxMenuBounds', []);

@@ -10,8 +10,9 @@ import {
   type Npc,
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
-import type { MailItem } from './MailboxScene';
+import type { MailItem, MailListEntry } from './MailboxScene';
 import type { OrderCatalogEntry } from './OrderBookScene';
+import type { ReceiptLine } from './ReceiptScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice } from '../data/prices';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
@@ -146,6 +147,19 @@ interface ItemStack {
   plants?: CropName; // a seed bag: selecting it lets you plant this crop on soil
   place?: PlaceKind; // a building material: selecting it enters placement mode
   variant?: string; // furniture piece id (for place==='furniture')
+}
+
+/** One mail in the mailbox's Mail tab. `iconFrame` = the list icon (ui-icons);
+ *  a sales receipt opens the ReceiptScene from its `lines` + `total`. */
+interface MailEntry {
+  id: string;
+  kind: 'sell-receipt';
+  sender: string;
+  title: string;
+  iconFrame: number;
+  read: boolean;
+  lines: ReceiptLine[];
+  total: number;
 }
 
 // --- House building (Sprout Lands premium "Building parts") ---
@@ -466,6 +480,7 @@ interface SaveBlob {
   chest?: Array<{ id: string; count: number }>; // v7: chest contents
   order?: Array<{ id: string; count: number }>; // v8: today's order (editable; ships next morning)
   orderDeliverDay?: number; // v8: the dayCount the order delivers + is charged
+  mail?: MailEntry[]; // v9: the Mail-tab list (sales receipts, …)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -566,6 +581,7 @@ export class GameScene extends Phaser.Scene {
   private mailboxRev = 0;
   private mailboxHasMail = false; // drives which open anim plays; no mail system yet → empty
   private mailboxDragging = false; // dragging the mail scroll rail
+  private mailboxTab = 1; // 0 = Mail list, 1 = Items (the shipping/received bin)
   private chest?: Phaser.GameObjects.Sprite;
   private chestOpen = false;
   private chestRev = 0;
@@ -586,6 +602,12 @@ export class GameScene extends Phaser.Scene {
   // opens an action menu (Take → backpack / Sell → mailbox / Delete). Saved (v7).
   private mailboxStore: ItemStack[] = [];
   private chestStore: ItemStack[] = [];
+  // The MAIL list (Mail tab). First kind = a sales receipt from "Market Manager",
+  // generated at day-settlement when items in the shipping bin sell. Saved (v8).
+  private mailList: MailEntry[] = [];
+  private mailIdSeq = 0;
+  private openMailId: string | null = null; // which receipt is open (over the mailbox)
+  private receiptRev = 0;
   private itemMenu: { kind: 'mailbox' | 'chest'; index: number; x: number; y: number } | null = null; // open item menu
   private itemMenuRev = 0;
   // The "How Many?" keypad (replaces the menu when you pick Take / Sell).
@@ -1244,6 +1266,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('ChestScene')) this.scene.launch('ChestScene');
     if (!this.scene.isActive('OrderBookScene')) this.scene.launch('OrderBookScene');
     if (!this.scene.isActive('BagScene')) this.scene.launch('BagScene');
+    if (!this.scene.isActive('ReceiptScene')) this.scene.launch('ReceiptScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
@@ -3232,12 +3255,19 @@ export class GameScene extends Phaser.Scene {
     this.mailbox?.play({ key: openAnim, repeat: 0 });
     if (this.locked) this.input.manager.mouse?.releasePointerLock();
     this.hideHotbar(true);
-    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, items: this.storeToItems(this.mailboxStore) });
+    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, tab: this.mailboxTab, items: this.storeToItems(this.mailboxStore), mails: this.mailListModel() });
+  }
+
+  /** Re-publish the mailbox model in place (tab switch / item change) without a re-slide. */
+  private refreshMailbox(): void {
+    if (!this.mailboxOpen) return;
+    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, tab: this.mailboxTab, items: this.storeToItems(this.mailboxStore), mails: this.mailListModel() });
   }
 
   private closeMailbox(): void {
     if (!this.mailboxOpen) return;
     this.mailboxOpen = false;
+    this.closeReceipt();
     this.closeItemMenu();
     this.closeQuantityKeypad();
     this.mailbox?.play({ key: 'mailbox-close', repeat: 0 }); // play the close swing on the placed mailbox
@@ -3250,6 +3280,13 @@ export class GameScene extends Phaser.Scene {
    *  cancels the menu / is swallowed (the top-right HUD button is the closer). */
   private handleMailboxClick(x: number, y: number): boolean {
     if (!this.mailboxOpen) return false;
+    // A receipt (opened from the Mail tab) sits ON TOP — the ✓ or a tap outside it closes.
+    if (this.openMailId !== null) {
+      const cb = this.registry.get('receiptClose') as { x: number; y: number; w: number; h: number } | null;
+      const onOk = !!cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h;
+      if (onOk || !this.overPanel('receiptPanel', x, y)) this.closeReceipt();
+      return true;
+    }
     if (this.itemQty) { const k = this.keypadKeyAt('mailbox', x, y); if (k) this.handleKeypadKey(k); else this.closeQuantityKeypad(); return true; }
     if (this.itemMenu) {
       const opt = this.menuOptionAt('mailbox', x, y);
@@ -3258,10 +3295,27 @@ export class GameScene extends Phaser.Scene {
       else this.closeItemMenu();
       return true;
     }
-    const idx = this.itemSlotAt('mailboxSlots', x, y);
-    if (idx !== null && idx < this.mailboxStore.length) this.openItemMenu('mailbox', idx, x, y);
-    else if (!this.overPanel('mailboxPanel', x, y)) this.closeMailbox(); // tap outside → close
+    // A tab switch takes priority (Mail ↔ Items), rebuilding the modal in place.
+    const tab = this.mailboxTabAt(x, y);
+    if (tab !== null) { if (tab !== this.mailboxTab) { this.mailboxTab = tab; this.refreshMailbox(); } return true; }
+    // Item slots only exist on the Items tab; the Mail tab has clickable mail rows.
+    if (this.mailboxTab === 1) {
+      const idx = this.itemSlotAt('mailboxSlots', x, y);
+      if (idx !== null && idx < this.mailboxStore.length) { this.openItemMenu('mailbox', idx, x, y); return true; }
+    } else {
+      const mid = this.mailRowAt(x, y);
+      if (mid) { this.openReceipt(mid); return true; }
+    }
+    if (!this.overPanel('mailboxPanel', x, y)) this.closeMailbox(); // tap outside → close
     return true; // modal — always consume
+  }
+
+  /** Which mailbox tab (if any) is at (x,y)? Reads the bounds MailboxScene published. */
+  private mailboxTabAt(x: number, y: number): number | null {
+    const tabs = this.registry.get('mailboxTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
+    if (!tabs) return null;
+    const hit = tabs.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
+    return hit ? hit.tab : null;
   }
 
   /** Is (x,y) inside a modal's panel rect (the scene published it)? Tap outside → close. */
@@ -3709,7 +3763,7 @@ export class GameScene extends Phaser.Scene {
   private refreshOpenModal(kind: 'mailbox' | 'chest'): void {
     if (kind === 'mailbox') {
       this.mailboxHasMail = this.mailboxStore.length > 0;
-      this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, items: this.storeToItems(this.mailboxStore) });
+      this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, tab: this.mailboxTab, items: this.storeToItems(this.mailboxStore), mails: this.mailListModel() });
     } else {
       this.registry.set('chest', { visible: true, rev: ++this.chestRev, items: this.storeToItems(this.chestStore) });
     }
@@ -3823,15 +3877,24 @@ export class GameScene extends Phaser.Scene {
    *  now-emptied bin (charging the buy cost). Called from updateDayClock. */
   private settleDay(): void {
     // 1. Sell the mailbox. Sellable items pay out + leave; unsellable ones stay.
+    // Merge sold stacks by id → one receipt line each (icon + count + subtotal).
     let earned = 0;
     const keep: ItemStack[] = [];
+    const soldById = new Map<string, ReceiptLine>();
     for (const it of this.mailboxStore) {
       const sp = sellPrice(it.id);
-      if (sp > 0) earned += sp * it.count;
-      else keep.push(it);
+      if (sp <= 0) { keep.push(it); continue; }
+      earned += sp * it.count;
+      const prev = soldById.get(it.id);
+      if (prev) { prev.count += it.count; prev.subtotal += sp * it.count; }
+      else soldById.set(it.id, { iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, label: it.label ?? it.id, count: it.count, subtotal: sp * it.count });
     }
     this.mailboxStore = keep;
-    if (earned > 0) this.addMoney(earned);
+    if (earned > 0) {
+      this.addMoney(earned);
+      // A sales receipt lands in the Mail tab (newest first).
+      this.addMail({ kind: 'sell-receipt', sender: 'Market Manager', title: 'Sales Receipt', iconFrame: 245, lines: [...soldById.values()], total: earned });
+    }
     // 2. Deliver a pending order into the emptied bin (arrives this morning).
     if (this.orderDraft.size > 0 && this.orderDeliverDay >= 0 && this.dayCount >= this.orderDeliverDay) {
       const total = this.orderTotal();
@@ -3847,6 +3910,39 @@ export class GameScene extends Phaser.Scene {
     if (this.mailboxOpen) this.refreshOpenModal('mailbox');
     if (this.orderOpen) this.publishOrderBook();
     this.scheduleSave();
+  }
+
+  /** Add a new mail (newest first) + refresh the mailbox if it's open on the Mail tab. */
+  private addMail(mail: Omit<MailEntry, 'id' | 'read'>): void {
+    this.mailList.unshift({ ...mail, id: `mail-${++this.mailIdSeq}`, read: false });
+    if (this.mailboxOpen) this.refreshMailbox();
+  }
+
+  /** The Mail-tab list model (icon + sender + read state) for MailboxScene. */
+  private mailListModel(): MailListEntry[] {
+    return this.mailList.map((m) => ({ id: m.id, sender: m.sender, title: m.title, iconFrame: m.iconFrame, read: m.read }));
+  }
+
+  /** Open a mail → its receipt (over the mailbox); mark it read. */
+  private openReceipt(id: string): void {
+    const mail = this.mailList.find((m) => m.id === id);
+    if (!mail) return;
+    this.openMailId = id;
+    if (!mail.read) { mail.read = true; this.refreshMailbox(); this.scheduleSave(); }
+    this.registry.set('receipt', { visible: true, rev: ++this.receiptRev, sender: mail.sender, title: mail.title, lines: mail.lines, total: mail.total });
+  }
+
+  private closeReceipt(): void {
+    if (this.openMailId === null) return;
+    this.openMailId = null;
+    this.registry.set('receipt', { visible: false, rev: ++this.receiptRev });
+  }
+
+  /** Is (x,y) on a Mail-tab row? Reads the bounds MailboxScene published. */
+  private mailRowAt(x: number, y: number): string | null {
+    const rows = this.registry.get('mailboxMailRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
+    const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    return hit ? hit.id : null;
   }
 
   /** Modal chrome swap: on a mailbox/chest OPEN, slide the top-right Cato
@@ -5520,7 +5616,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 8,
+      v: 9,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -5540,6 +5636,7 @@ export class GameScene extends Phaser.Scene {
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
       order: [...this.orderDraft].map(([id, count]) => ({ id, count })),
       orderDeliverDay: this.orderDeliverDay,
+      mail: this.mailList.map((m) => ({ ...m })),
     };
   }
 
@@ -5580,7 +5677,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v >= 1 && s.v <= 8) this.applySave(s); // v1 pre-house … v7 no order book
+      if (s && s.v >= 1 && s.v <= 9) this.applySave(s); // v1 pre-house … v8 no mail list
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
@@ -5689,6 +5786,11 @@ export class GameScene extends Phaser.Scene {
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
       if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count));
+      if (s.mail) {
+        this.mailList = s.mail.map((m) => ({ ...m }));
+        // Keep the id sequence ahead of any restored ids so new mail can't collide.
+        this.mailIdSeq = this.mailList.reduce((mx, m) => Math.max(mx, parseInt(m.id.replace(/\D/g, ''), 10) || 0), 0);
+      }
       // Order (v8) — today's editable order, ships next morning.
       this.orderDraft.clear();
       for (const o of s.order ?? []) this.orderDraft.set(o.id, o.count);

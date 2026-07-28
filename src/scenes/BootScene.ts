@@ -159,8 +159,15 @@ export class BootScene extends Phaser.Scene {
     // `mail-box` = the big open mailbox frame; `mail-box-item-bg` = a mail-slot bg,
     // `envelope-zipper` = a piece of mail (both used when mail items are wired in).
     this.load.image('mail-box', 'uploaded/mail-box.png');
+    this.load.image('mailbox-v2', 'uploaded/mailbox-v2.png'); // v2 mailbox frame (with tabs)
     this.load.image('mail-box-item-bg', 'uploaded/mail-box-item-bg.png');
     this.load.image('envelope-zipper', 'uploaded/envelope-zipper.png');
+    // Mailbox tab buttons (selected = taller, unselected = shorter). Green = Mail tab,
+    // Blue = Items tab.
+    this.load.image('tab-green', 'uploaded/tab-green.png');
+    this.load.image('tab-green-unselected', 'uploaded/tab-green-unselected.png');
+    this.load.image('tab-blue', 'uploaded/tab-blue.png');
+    this.load.image('tab-blue-unselected', 'uploaded/tab-blue-unselected.png');
     // Chest UI — click the placed chest to open this big-chest modal (mirror of the
     // mailbox). `chest-full` = the big open chest frame; `chest-full-zipper` = the
     // scroll thumb. (Item slot bg + close button reuse the mailbox's.)
