@@ -1,5 +1,8 @@
 # Catopia — Technical Session Notes
 
+## Headless SCREENSHOTS now work (2026-07-29) — big deal for visual tuning
+Older notes say "headless WebGL renders black, so nothing visual is verifiable" — that's **no longer true**. Launch Chromium with **`--use-gl=angle --use-angle=swiftshader --ignore-gpu-blocklist`** and the game canvas renders in software GL, so `page.screenshot()` captures the ACTUAL UI (not black). Drive it via the `?umicatScene=main` preview + `window.__game` (temp handle), then `sharp().extract()` a region + upscale to eyeball layout. This found the scroll-bar bug directly. Two caveats: (1) software-GL **alpha blending can differ** — a full-panel "transparency" in one shot was a render artifact, not a real bug (re-shot opaque), so sanity-check translucency across a couple of frames; (2) it's slower. Prefer this over the old sharp-mock workflow for anything already wired up. **CDP touch** (`ctx.newCDPSession` → `Input.dispatchTouchEvent`) drives real touch swipes (synthetic `PointerEvent{pointerType:'touch'}` does NOT set Phaser's `wasTouch`).
+
 ## What game is this?
 **Title**: Catopia
 **Genre**: Nurturing / Social / Simulation / Farming

@@ -21,11 +21,6 @@ const SLOT_FRAME = 'slot-light', SLOT_SLICE = { l: 7, r: 7, t: 8, b: 8 }, SLOT_S
 const ATLAS = 'inventory';
 const PANEL_FRAME = 'frame-medium', PANEL_SLICE = { l: 10, r: 10, t: 11, b: 11 }, PANEL_SCALE = 3;
 const TAB_TEX = 'medium-brown-tab', TAB_UNSEL_TINT = 0x9a8467;
-// Continuous scroll bar (order-book style): `ui-sheet` atlas track + thumb, 9-slice so
-// the caps stay crisp at any height. (Region name `vertial-` is a backend typo — kept.)
-const UI = 'ui-sheet';
-const BAR_BG = 'vertial-scroll-bar-background', BAR_THUMB = 'vertical-scroll-bar-dark';
-const BG_SLICE = { l: 1, r: 2, t: 9, b: 9 }, THUMB_SLICE = { l: 2, r: 3, t: 4, b: 6 };
 const WHEEL_MS = 110; // min ms between wheel-scroll rows (tames trackpad event bursts)
 const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (deep)
 // Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
@@ -163,19 +158,27 @@ export class MenuScene extends Phaser.Scene {
     this.build(this.m, false); // instant re-render (no open/tab animation)
   }
 
-  /** Draw the scroll bar (track + thumb) at `barX` spanning top→bottom, and publish the
-   *  rail rect (`menuRail`) so GameScene can drag it. `null` rail when nothing to scroll. */
+  /** Draw the scroll bar at `barX` spanning top→bottom, and publish the rail rect
+   *  (`menuRail`) so GameScene can drag it. `null` rail when nothing to scroll.
+   *  Custom GRAPHICS (a rounded trough + a solid brown thumb) — the tiny 4px/7px
+   *  `ui-sheet` pixel-art frames scaled up to a faint, unreadable stick. */
   private drawScrollbar(c: Phaser.GameObjects.Container, barX: number, top: number, bottom: number, visibleRows: number, totalRows: number): void {
-    if (totalRows <= visibleRows || !this.textures.exists(UI)) { this.registry.set('menuRail', null); return; }
+    if (totalRows <= visibleRows) { this.registry.set('menuRail', null); return; }
     const H = this.scale.height;
     const trackH = bottom - top;
-    const trackW = Math.max(4, H * 0.008);
-    c.add(this.add.nineslice(barX, (top + bottom) / 2, UI, BAR_BG, trackW, trackH, BG_SLICE.l, BG_SLICE.r, BG_SLICE.t, BG_SLICE.b));
-    const thumbH = Math.max(trackH * 0.15, trackH * (visibleRows / totalRows));
-    const t = this.maxScrollRows ? this.scroll / this.maxScrollRows : 0;
-    const thumbY = top + thumbH / 2 + t * (trackH - thumbH);
-    const thumbW = Math.max(6, H * 0.014);
-    c.add(this.add.nineslice(barX, thumbY, UI, BAR_THUMB, thumbW, thumbH, THUMB_SLICE.l, THUMB_SLICE.r, THUMB_SLICE.t, THUMB_SLICE.b));
+    const w = Math.max(11, H * 0.016);   // bar width (clearly grabbable)
+    const r = w / 2;
+    const left = barX - w / 2;
+    const g = this.add.graphics();
+    // Trough: a subtle recessed track.
+    g.fillStyle(0x3a2a12, 0.20); g.fillRoundedRect(left, top, w, trackH, r);
+    // Thumb: proportional to the visible fraction, positioned by scroll.
+    const thumbH = Math.max(w * 2.4, trackH * (visibleRows / totalRows));
+    const frac = this.maxScrollRows ? this.scroll / this.maxScrollRows : 0;
+    const thumbY = top + frac * (trackH - thumbH);
+    g.fillStyle(0x9a7b4f, 1); g.fillRoundedRect(left, thumbY, w, thumbH, r);           // brown thumb
+    g.fillStyle(0xbf9d63, 1); g.fillRoundedRect(left + 2, thumbY + 2, w - 4, w - 4, r * 0.7); // top highlight cap
+    c.add(g);
     this.registry.set('menuRail', { x: barX, top, bottom, max: this.maxScrollRows });
   }
 
