@@ -679,7 +679,8 @@ export class GameScene extends Phaser.Scene {
   // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
   // mailbox/chest itemMenu but rendered by MenuScene via the `menuAction` registry key).
   private menuItemMenu: { index: number; x: number; y: number } | null = null;
-  private menuItemQty: { action: 'take' | 'sell'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
+  private menuItemQty: { action: 'sell'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
+  private menuSlotPick: { index: number; x: number; y: number } | null = null; // chest → "进 Hotbar" slot picker
   // The MAIL list (Mail tab). First kind = a sales receipt from "Market Manager",
   // generated at day-settlement when items in the shipping bin sell. Saved (v8).
   private mailList: MailEntry[] = [];
@@ -1563,7 +1564,7 @@ export class GameScene extends Phaser.Scene {
     // Build palette (wall facing) → pick that orientation.
     if (this.handlePaletteClick(x, y)) return;
     // Backpack button → open the full grid (mainly for touch — no E key).
-    if (this.overBackpackButton(x, y)) { this.openBag(); return; }
+    if (this.overBackpackButton(x, y)) { this.openMenu(1); return; } // no backpack — button opens the Chest (your storage)
     if (this.overOrderButton(x, y)) { this.openMenu(2); return; } // order button → unified menu, Shop tab
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
@@ -1735,9 +1736,9 @@ export class GameScene extends Phaser.Scene {
    *  You start bare-handed (nothing selected). */
   private setupInventory(): void {
     this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null);
-    // Row 0 (the hotbar) holds ALL the tools + seeds (8 slots) so touch players —
-    // who can't open the backpack as easily — reach everything from the bar.
-    // Harvested crops land in the backpack rows below.
+    // Row 0 (the hotbar, 8 slots) holds the everyday tools + seeds + a wall so you can
+    // start farming/building right away. There's NO backpack — the CHEST is storage, so
+    // everything else (extra materials, harvested goods, purchases) lives there.
     this.inventory[0] = itemFromId('hoe', 1);
     this.inventory[1] = itemFromId('watering-can', 1);
     this.inventory[2] = makeSeed('corn', 10);
@@ -1745,21 +1746,16 @@ export class GameScene extends Phaser.Scene {
     this.inventory[4] = makeSeed('tomato', 10);
     this.inventory[5] = makeSeed('eggplant', 10);
     this.inventory[6] = makeSeed('pumpkin', 10);
-    // No crafting yet, so the backpack comes pre-stocked with building materials.
-    // Wall on the hotbar (was the unused axe) for immediate building; the rest —
-    // floor / door / each furniture piece — in the backpack (drag to the hotbar).
     this.inventory[7] = makePlaceable('wall', 99);
-    let slot = INV_COLS; // backpack starts at row 1
-    this.inventory[slot++] = makePlaceable('floor', 99);
-    this.inventory[slot++] = makePlaceable('window', 99);
-    this.inventory[slot++] = makePlaceable('door', 10);
-    for (const piece of FURNITURE) this.inventory[slot++] = makePlaceable('furniture', 10, piece.id);
-    // Axe (chops trees) + pickaxe (knocks big-stones) + a tree of each kind to plant.
-    this.inventory[slot++] = itemFromId('axe', 1);
-    this.inventory[slot++] = itemFromId('pickaxe', 1);
-    for (const t of TREE_TYPES) this.inventory[slot++] = makePlaceable('tree', 10, t.id);
-    for (const b of BERRY_TYPES) this.inventory[slot++] = makePlaceable('bush', 10, b);
-    this.seedTestStores(); // pre-stock the mailbox + chest with test contents (until a real mail/loot system)
+    // The rest of the starter kit goes into the CHEST (drag it 进 Hotbar to use).
+    this.mailboxStore = [];
+    this.chestStore = [
+      makePlaceable('floor', 99), makePlaceable('window', 99), makePlaceable('door', 10),
+      ...FURNITURE.map((piece) => makePlaceable('furniture', 10, piece.id)),
+      itemFromId('axe', 1), itemFromId('pickaxe', 1),
+      ...TREE_TYPES.map((t) => makePlaceable('tree', 10, t.id)),
+      ...BERRY_TYPES.map((b) => makePlaceable('bush', 10, b)),
+    ];
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -1771,9 +1767,9 @@ export class GameScene extends Phaser.Scene {
     codes.slice(0, INV_COLS).forEach((code, i) => {
       this.input.keyboard?.on(code, () => this.selectHotbarSlot(i));
     });
-    this.input.keyboard?.on('keydown-E', () => this.toggleBag());
-    this.input.keyboard?.on('keydown-I', () => this.toggleBag());
-    this.input.keyboard?.on('keydown-ESC', () => { if (this.bagOpen) this.closeBag(); });
+    // No backpack — E/I open the Chest (your storage) via the unified menu.
+    this.input.keyboard?.on('keydown-E', () => (this.menuOpen ? this.closeMenu() : this.openMenu(1)));
+    this.input.keyboard?.on('keydown-I', () => (this.menuOpen ? this.closeMenu() : this.openMenu(1)));
     // R: rotate the wall facing / cycle the furniture piece while building.
     this.input.keyboard?.on('keydown-R', () => this.rotatePlaceable());
   }
@@ -2630,7 +2626,7 @@ export class GameScene extends Phaser.Scene {
     this.placedHoedOnce.get(key)?.remove();
     this.placedHoedOnce.delete(key);
     const id = o.kind === 'wall' ? 'wall' : o.kind === 'window' ? 'window' : o.kind === 'door' ? 'door-item' : `furn-${o.variant}`;
-    this.addToInventory(itemFromId(id, 1));
+    this.addToHotbarOrChest(itemFromId(id, 1));
     this.publishInventory();
     this.scheduleSave();
   }
@@ -2858,7 +2854,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       this.time.delayedCall(i * 130, () => this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'fruit-items', FRUIT_FRAME[type] ?? 0));
     }
-    this.addToInventory(makeFruit(type, 3));
+    this.addToChest(makeFruit(type, 3));
     this.catoReact('love'); // Cato loves a fruit harvest
     this.catoLookAtTile(cx, cy); // ...and comes over to look
     this.publishInventory();
@@ -3003,7 +2999,7 @@ export class GameScene extends Phaser.Scene {
     const bush = this.bushes.get(`${cx},${cy}`);
     if (!bush || bush.stage < 2) return;
     for (const b of bush.berries) this.playPopOut(b.x, b.y, 'fruit-items', FRUIT_FRAME[bush.type]);
-    this.addToInventory(makeFruit(bush.type, 3));
+    this.addToChest(makeFruit(bush.type, 3));
     this.catoReact('love'); // berry harvest
     this.catoLookAtTile(cx, cy);
     this.publishInventory();
@@ -3080,7 +3076,7 @@ export class GameScene extends Phaser.Scene {
     this.foragables.delete(key);
     if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'forage', `${f.type}-${def.stages}`);
     f.sprite.destroy();
-    this.addToInventory(makeForage(f.type, def.yieldCount));
+    this.addToChest(makeForage(f.type, def.yieldCount));
     this.catoReact('happy'); // gathered a wild foragable
     this.catoLookAtTile(cx, cy);
     this.publishInventory();
@@ -3183,7 +3179,7 @@ export class GameScene extends Phaser.Scene {
       stone.emptyKnocks = 0;
       stone.regen.push(def.regenMs);
       this.playPopOut(sx, topY, 'forage', 'small-stone-6');
-      this.addToInventory(makeStone(1));
+      this.addToChest(makeStone(1));
       this.publishInventory();
       this.scheduleSave();
     } else {
@@ -3202,7 +3198,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < def.breakBonus; i++) {
       this.time.delayedCall(i * 110, () => this.playPopOut(sx, topY, 'forage', 'small-stone-6'));
     }
-    if (def.breakBonus > 0) { this.addToInventory(makeStone(def.breakBonus)); this.publishInventory(); }
+    if (def.breakBonus > 0) { this.addToChest(makeStone(def.breakBonus)); }
     this.removeBigStone(cx, cy);
     this.scheduleSave();
   }
@@ -3382,7 +3378,7 @@ export class GameScene extends Phaser.Scene {
     if (floor) {
       floor.sprite.destroy();
       this.floors.delete(key);
-      this.addToInventory(itemFromId('floor', 1));
+      this.addToHotbarOrChest(itemFromId('floor', 1));
       this.publishInventory();
       this.scheduleSave();
       pop('house-walls', floor.frame);
@@ -3792,11 +3788,24 @@ export class GameScene extends Phaser.Scene {
     return this.chestStore.length < CHEST_SLOTS;
   }
 
-  /** Add an item stack to the chest, merging into an existing same-id stack if present. */
+  /** Add an item stack to the chest, merging into an existing same-id stack if present.
+   *  (Harvested goods land here now — there's no backpack, the chest IS storage.) */
   private addToChest(item: ItemStack): void {
     const existing = this.chestStore.find((s) => s.id === item.id && s.stackable);
     if (existing) existing.count += item.count;
     else this.chestStore.push(item);
+  }
+
+  /** For a REFUNDED hotbar-usable item (demolished wall / dug-up floor / …): top up the
+   *  matching HOTBAR stack if one's equipped, else drop it in the chest. */
+  private addToHotbarOrChest(item: ItemStack): void {
+    if (item.stackable) {
+      for (let i = 0; i < INV_COLS; i++) { // hotbar row only
+        const c = this.inventory[i];
+        if (c && c.id === item.id && c.stackable) { c.count += item.count; this.publishInventory(); return; }
+      }
+    }
+    this.addToChest(item);
   }
 
   /** Flavor description for the right-side detail panel. Keyed by item id in i18n
@@ -3819,12 +3828,20 @@ export class GameScene extends Phaser.Scene {
       if (onOk || !this.overPanel('receiptPanel', x, y)) this.closeReceipt();
       return true;
     }
-    // Quantity keypad (Take / Sell → How Many?).
+    // "Sell how many?" keypad.
     if (this.menuItemQty) { const k = this.menuKeypadKeyAt(x, y); if (k) this.handleMenuKeypadKey(k); else this.closeMenuItemMenu(); return true; }
-    // Item action menu (Take / Sell / Delete).
+    // Hotbar slot picker ("进 Hotbar" → pick a slot).
+    if (this.menuSlotPick) {
+      const key = this.menuKeypadKeyAt(x, y); // slot picker buttons are tagged 'slot<i>'
+      if (key && key.startsWith('slot')) this.placeChestToHotbar(this.menuSlotPick.index, parseInt(key.slice(4), 10));
+      else this.closeMenuItemMenu();
+      return true;
+    }
+    // Item action menu (进 Hotbar / Sell / Delete).
     if (this.menuItemMenu) {
       const opt = this.menuActionOptionAt(x, y);
-      if (opt === 'take' || opt === 'sell') this.openMenuKeypad(opt);
+      if (opt === 'hotbar') this.openMenuSlotPick(this.menuItemMenu.index, this.menuItemMenu.x, this.menuItemMenu.y);
+      else if (opt === 'sell') this.openMenuKeypad('sell');
       else if (opt === 'delete') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuPerformAction('delete', idx); }
       else this.closeMenuItemMenu();
       return true;
@@ -3862,13 +3879,16 @@ export class GameScene extends Phaser.Scene {
   /** The unified menu's only grid store is the Chest (tab 1). */
   private menuKind(): 'mailbox' | 'chest' { return 'chest'; }
 
-  /** Chest item actions: Take / Sell (instant coins, only if it has a sell price) / Delete. */
-  private menuItemOptions(index: number): Array<{ action: 'take' | 'sell' | 'delete'; label: string }> {
-    const take = { action: 'take' as const, label: 'Take' };
-    const sell = { action: 'sell' as const, label: 'Sell' };
-    const del = { action: 'delete' as const, label: 'Delete' };
+  /** Chest item actions: To Hotbar (only for hotbar-usable items — tools/seeds/placeables;
+   *  there's no backpack, so harvested goods just stay in the chest) / Sell (instant coins,
+   *  only if it has a sell price) / Delete. */
+  private menuItemOptions(index: number): Array<{ action: 'hotbar' | 'sell' | 'delete'; label: string }> {
     const it = this.chestStore[index];
-    return it && sellPrice(it.id) > 0 ? [take, sell, del] : [take, del];
+    const opts: Array<{ action: 'hotbar' | 'sell' | 'delete'; label: string }> = [];
+    if (it && isHotbarUsable(it)) opts.push({ action: 'hotbar', label: '进 Hotbar' });
+    if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: 'Sell' });
+    opts.push({ action: 'delete', label: 'Delete' });
+    return opts;
   }
 
   private openMenuItemMenu(index: number, sx: number, sy: number): void {
@@ -3880,13 +3900,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private closeMenuItemMenu(): void {
-    if (!this.menuItemMenu && !this.menuItemQty) return;
-    this.menuItemMenu = null; this.menuItemQty = null;
+    if (!this.menuItemMenu && !this.menuItemQty && !this.menuSlotPick) return;
+    this.menuItemMenu = null; this.menuItemQty = null; this.menuSlotPick = null;
     this.registry.set('menuAction', { visible: false, rev: ++this.menuActionRev });
   }
 
-  /** Swap the action menu for the "How Many?" keypad (Take / Sell → pick a quantity). */
-  private openMenuKeypad(action: 'take' | 'sell'): void {
+  /** Swap the action menu for the "Sell how many?" keypad (Sell → pick a quantity). */
+  private openMenuKeypad(action: 'sell'): void {
     const m = this.menuItemMenu;
     if (!m) return;
     const it = this.menuStore()[m.index];
@@ -3894,6 +3914,35 @@ export class GameScene extends Phaser.Scene {
     this.menuItemMenu = null;
     this.menuItemQty = { action, index: m.index, x: m.x, y: m.y, value: it.count, max: it.count, entering: false };
     this.publishMenuKeypad();
+  }
+
+  /** "进 Hotbar" → show the 8 hotbar slots (number + current icon) to pick a target. */
+  private openMenuSlotPick(index: number, sx: number, sy: number): void {
+    this.menuSlotPick = { index, x: sx, y: sy };
+    this.menuItemMenu = null;
+    const slots = [];
+    for (let i = 0; i < INV_COLS; i++) {
+      const it = this.inventory[i];
+      slots.push({ label: String(i + 1), iconKey: it?.iconKey, iconFrame: it?.iconFrame });
+    }
+    this.registry.set('menuAction', { visible: true, rev: ++this.menuActionRev, x: sx, y: sy, slotpick: { slots } });
+  }
+
+  /** Move a chest item into hotbar slot `hotbarSlot`; the displaced hotbar item (if any)
+   *  goes back into the chest. */
+  private placeChestToHotbar(chestIndex: number, hotbarSlot: number): void {
+    const it = this.chestStore[chestIndex];
+    if (!it || hotbarSlot < 0 || hotbarSlot >= INV_COLS) { this.closeMenuItemMenu(); return; }
+    this.chestStore.splice(chestIndex, 1);
+    const displaced = this.inventory[hotbarSlot];
+    this.inventory[hotbarSlot] = it;
+    if (displaced) this.addToChest(displaced);
+    this.closeMenuItemMenu();
+    this.publishInventory();
+    const len = this.menuStore().length;
+    if (this.menuSelected >= len) this.menuSelected = len - 1;
+    this.publishMenu();
+    this.scheduleSave();
   }
 
   private publishMenuKeypad(): void {
@@ -3921,7 +3970,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Run a Take/Sell/Delete on the active store, then refresh the unified menu (NOT the
    *  hidden mailbox/chest scenes — pass refresh=false to performItemAction). */
-  private menuPerformAction(action: 'take' | 'sell' | 'delete', index: number, qty?: number): void {
+  private menuPerformAction(action: 'sell' | 'delete', index: number, qty?: number): void {
     this.performItemAction(action, { kind: this.menuKind(), index }, qty, false);
     const len = this.menuStore().length;
     if (this.menuSelected >= len) this.menuSelected = len - 1; // stack emptied → clamp selection
@@ -3929,7 +3978,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Which action (if any) is under a tap on the unified menu's action menu. */
-  private menuActionOptionAt(x: number, y: number): 'take' | 'sell' | 'delete' | null {
+  private menuActionOptionAt(x: number, y: number): 'hotbar' | 'sell' | 'delete' | null {
     const bounds = this.registry.get('menuActionBounds') as Array<{ x: number; y: number; w: number; h: number; idx?: number }> | undefined;
     if (!bounds || !this.menuItemMenu) return null;
     const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
@@ -4737,7 +4786,7 @@ export class GameScene extends Phaser.Scene {
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return false;
     this.crops.delete(key);
     crop.sprite.destroy();
-    this.addToInventory(makeCrop(crop.name, 1));
+    this.addToChest(makeCrop(crop.name, 1));
     this.catoReact('love'); // crop harvest
     this.catoLookAtTile(cx, cy);
     this.publishInventory();
@@ -6449,25 +6498,28 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Grant the building materials to anyone who doesn't have them yet — so players
-   *  with a save from before the house feature still get walls/door/furniture (into
-   *  free backpack slots). Idempotent: only adds what's missing. */
+  private hasMaterial(id: string): boolean {
+    return this.inventory.some((c) => c?.id === id) || this.chestStore.some((s) => s.id === id);
+  }
+
+  /** Grant the building materials to anyone who doesn't have them yet. There's no
+   *  backpack, so extras go into the CHEST (drag them 进 Hotbar to build). Idempotent —
+   *  checks the hotbar AND the chest so it only adds what's genuinely missing. */
   private ensureBuildingMaterials(): void {
-    if (!this.inventory.some((c) => c?.id === 'wall')) this.addToInventory(makePlaceable('wall', 99));
-    if (!this.inventory.some((c) => c?.id === 'floor')) this.addToInventory(makePlaceable('floor', 99));
-    if (!this.inventory.some((c) => c?.id === 'window')) this.addToInventory(makePlaceable('window', 99));
-    if (!this.inventory.some((c) => c?.id === 'door-item')) this.addToInventory(makePlaceable('door', 10));
-    // Each furniture piece is its own item now — grant any that are missing.
+    if (!this.hasMaterial('wall')) this.addToChest(makePlaceable('wall', 99));
+    if (!this.hasMaterial('floor')) this.addToChest(makePlaceable('floor', 99));
+    if (!this.hasMaterial('window')) this.addToChest(makePlaceable('window', 99));
+    if (!this.hasMaterial('door-item')) this.addToChest(makePlaceable('door', 10));
     for (const piece of FURNITURE) {
-      if (!this.inventory.some((c) => c?.id === `furn-${piece.id}`)) this.addToInventory(makePlaceable('furniture', 10, piece.id));
+      if (!this.hasMaterial(`furn-${piece.id}`)) this.addToChest(makePlaceable('furniture', 10, piece.id));
     }
-    if (!this.inventory.some((c) => c?.id === 'axe')) this.addToInventory(itemFromId('axe', 1));
-    if (!this.inventory.some((c) => c?.id === 'pickaxe')) this.addToInventory(itemFromId('pickaxe', 1));
+    if (!this.hasMaterial('axe')) this.addToChest(itemFromId('axe', 1));
+    if (!this.hasMaterial('pickaxe')) this.addToChest(itemFromId('pickaxe', 1));
     for (const t of TREE_TYPES) {
-      if (!this.inventory.some((c) => c?.id === `tree-${t.id}`)) this.addToInventory(makePlaceable('tree', 10, t.id));
+      if (!this.hasMaterial(`tree-${t.id}`)) this.addToChest(makePlaceable('tree', 10, t.id));
     }
     for (const b of BERRY_TYPES) {
-      if (!this.inventory.some((c) => c?.id === `bush-${b}`)) this.addToInventory(makePlaceable('bush', 10, b));
+      if (!this.hasMaterial(`bush-${b}`)) this.addToChest(makePlaceable('bush', 10, b));
     }
   }
 

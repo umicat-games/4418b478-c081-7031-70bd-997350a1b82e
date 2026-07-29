@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { dialogFont } from '../i18n';
-import { renderActionMenu, renderKeypad, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
+import { renderActionMenu, renderKeypad, renderSlotPicker, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
 import type { MailListEntry } from './MailboxScene';
 
 // The UNIFIED menu (Zelda-style): ONE screen with icon TABS — Mail / For-sale / Chest /
@@ -478,9 +478,11 @@ export class MenuScene extends Phaser.Scene {
     if (!m.visible || !this.shown) return;
     const root = this.add.container(0, 0).setDepth(1000);
     this.menuRoot = root;
-    const bounds = m.keypad
-      ? renderKeypad(this, root, { x: m.x, y: m.y, value: m.keypad.value, max: m.keypad.max })
-      : renderActionMenu(this, root, m);
+    const bounds = m.slotpick
+      ? renderSlotPicker(this, root, { x: m.x, y: m.y, slots: m.slotpick.slots })
+      : m.keypad
+        ? renderKeypad(this, root, { x: m.x, y: m.y, value: m.keypad.value, max: m.keypad.max })
+        : renderActionMenu(this, root, m);
     this.menuTargets = bounds.filter((b) => b.bg || b.text).map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, bg: b.bg, text: b.text, base: b.base, hoverColor: b.hoverColor }));
     this.registry.set('menuActionBounds', bounds);
   }
