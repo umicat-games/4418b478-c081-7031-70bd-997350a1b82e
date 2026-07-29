@@ -662,6 +662,14 @@ export class GameScene extends Phaser.Scene {
   // opens an action menu (Take → backpack / Sell → mailbox / Delete). Saved (v7).
   private mailboxStore: ItemStack[] = [];
   private chestStore: ItemStack[] = [];
+  // The UNIFIED menu (Zelda-style tabs: 0 mail · 1 for-sale · 2 chest · 3 settings) —
+  // one screen replacing the mailbox/chest/bag modals (MenuScene). Door mailbox opens
+  // it on Mail; door chest on Chest. `menuSelected` = the grid item shown in the right
+  // detail. WIP: phase 1 (layout + tabs + item detail); actions/mail-receipt next.
+  private menuOpen = false;
+  private menuTab = 2;
+  private menuSelected = -1;
+  private menuRev = 0;
   // The MAIL list (Mail tab). First kind = a sales receipt from "Market Manager",
   // generated at day-settlement when items in the shipping bin sell. Saved (v8).
   private mailList: MailEntry[] = [];
@@ -936,7 +944,7 @@ export class GameScene extends Phaser.Scene {
       panGesture.on('pan', (p: { dx: number; dy: number; pointer?: Phaser.Input.Pointer }) => {
         const pointer = p.pointer ?? this.input.activePointer;
         if (!pointer.wasTouch) return; // mouse → edge-scroll, not drag
-        if (this.dialogOpen || this.inventoryOpen || this.bagOpen || this.mailboxOpen || this.chestOpen || this.orderOpen) return; // don't pan behind a modal
+        if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.bagOpen || this.mailboxOpen || this.chestOpen || this.orderOpen) return; // don't pan behind a modal
         this.cameraFollow = false; // manual pan wins over follow-Cato
         // dx/dy are screen pixels → divide by zoom to get world delta
         cam.scrollX -= p.dx / cam.zoom;
@@ -1266,6 +1274,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Close whichever inventory modal is open (chest / mailbox / bag / order). */
   private closeOpenModal(): void {
+    if (this.menuOpen) this.closeMenu();
     if (this.mailboxOpen) this.closeMailbox();
     if (this.chestOpen) this.closeChest();
     if (this.bagOpen) this.closeBag();
@@ -1343,12 +1352,14 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('BagScene')) this.scene.launch('BagScene');
     if (!this.scene.isActive('ReceiptScene')) this.scene.launch('ReceiptScene');
     if (!this.scene.isActive('ChatterScene')) this.scene.launch('ChatterScene');
+    if (!this.scene.isActive('MenuScene')) this.scene.launch('MenuScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
     this.scene.bringToTop('InventoryScene');
     this.scene.bringToTop('PaletteScene');
     this.scene.bringToTop('ChatterScene'); // above UmicatHud so the mood emoji shows IN the portrait
+    this.scene.bringToTop('MenuScene');     // the unified menu sits above the HUD too
     this.scene.bringToTop('CursorScene');
     this.publishBuildPalette();
     this.publishWeatherHud();
@@ -1363,6 +1374,7 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; } // unified menu
       // Mail modal open: dragging the rail flips pages; else only the close button
       // closes it (works for mouse AND touch — both reach this handler).
       if (this.mailboxOpen) {
@@ -1398,8 +1410,8 @@ export class GameScene extends Phaser.Scene {
       if (this.chatterAt(pointer.x, pointer.y)) { this.openChatterDialog(); return; } // proactive chip (screen-space)
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
-      if (this.mailboxContains(wp.x, wp.y)) { this.openMailbox(); return; }
-      if (this.chestContains(wp.x, wp.y)) { this.openChest(); return; }
+      if (this.mailboxContains(wp.x, wp.y)) { this.openMenu(0); return; } // door mailbox → unified menu (Mail)
+      if (this.chestContains(wp.x, wp.y)) { this.openMenu(2); return; }   // door chest → unified menu (Chest)
       this.input.manager.mouse?.requestPointerLock();
     });
 
@@ -1444,6 +1456,7 @@ export class GameScene extends Phaser.Scene {
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; }
       if (this.mailboxOpen) { this.handleMailboxClick(pointer.x, pointer.y); return; }
       if (this.chestOpen) { this.handleChestClick(pointer.x, pointer.y); return; }
       if (this.orderOpen) { this.handleOrderClick(pointer.x, pointer.y); return; }
@@ -1512,6 +1525,7 @@ export class GameScene extends Phaser.Scene {
     if (this.chatterAt(x, y)) { this.openChatterDialog(); return; }
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
+    if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
     // Modal mail box + chest: consume taps; only the close button closes them.
     if (this.handleMailboxClick(x, y)) return;
     if (this.handleChestClick(x, y)) return;
@@ -1562,8 +1576,8 @@ export class GameScene extends Phaser.Scene {
     // The mailbox at the door → open the mail modal (empty hand or any tool, but
     // not while placing). Checked before the tile actions so it wins over tilling
     // the grass under it.
-    if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailbox(); return; }
-    if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChest(); return; }
+    if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMenu(0); return; }
+    if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openMenu(2); return; }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -3633,6 +3647,64 @@ export class GameScene extends Phaser.Scene {
     this.chest?.play({ key: 'chest-close-front', repeat: 0 });
     this.hideHotbar(false);
     this.registry.set('chest', { visible: false, rev: ++this.chestRev });
+  }
+
+  // ── Unified menu (MenuScene) — tabs: mail / for-sale / chest / settings ─────────
+
+  /** Open the unified menu on `tab` (0 mail · 1 for-sale · 2 chest · 3 settings). */
+  private openMenu(tab: number): void {
+    this.menuTab = tab;
+    this.menuSelected = -1;
+    if (!this.menuOpen) {
+      this.menuOpen = true;
+      if (this.locked) this.input.manager.mouse?.releasePointerLock();
+      this.hideHotbar(true);
+    }
+    this.publishMenu(true);
+  }
+
+  private closeMenu(): void {
+    if (!this.menuOpen) return;
+    this.menuOpen = false;
+    this.hideHotbar(false);
+    this.registry.set('menu', { visible: false, rev: ++this.menuRev });
+  }
+
+  /** The item grid backing the active tab (for-sale = mailbox bin, chest = chest). */
+  private menuStore(): ItemStack[] {
+    return this.menuTab === 1 ? this.mailboxStore : this.menuTab === 2 ? this.chestStore : [];
+  }
+
+  private publishMenu(_open = false): void {
+    this.registry.set('menu', {
+      visible: true, rev: ++this.menuRev, tab: this.menuTab,
+      items: this.menuStore().map((it) => ({
+        id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
+        label: it.label ?? it.id, desc: this.itemDesc(it.id),
+      })),
+      mails: this.mailListModel(),
+      selected: this.menuSelected,
+    });
+  }
+
+  /** Item description for the detail panel — TODO: back with an items data table; empty for now. */
+  private itemDesc(_id: string): string { return ''; }
+
+  /** Route a tap while the unified menu is open: tab switch / item select / tap-away close. */
+  private handleMenuClick(x: number, y: number): boolean {
+    if (!this.menuOpen) return false;
+    // Tab switch.
+    const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
+    const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
+    if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab); return true; }
+    // Item slot → select (show right detail). (Actions come next.)
+    if (this.menuTab === 1 || this.menuTab === 2) {
+      const idx = this.itemSlotAt('menuSlots', x, y);
+      if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); return true; }
+    }
+    // Tap outside the panel → close.
+    if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
+    return true;
   }
 
   // ── Backpack (bag) modal — above the hotbar; shows the backpack items ──────────
