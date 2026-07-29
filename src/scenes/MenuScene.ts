@@ -356,7 +356,10 @@ export class MenuScene extends Phaser.Scene {
         const icon = this.add.image(sx + cell / 2, sy + cell / 2, it.iconKey, it.iconFrame);
         icon.setScale((cell * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
       }
-      c.add(this.T(sx + cell * 0.82, sy + cell * 0.78, String(it.count), cell * 0.26, '#ffffff', 1));
+      // Count: white with a dark outline so it reads on the light-tan slot (plain white was too low-contrast).
+      const cnt = this.T(sx + cell * 0.82, sy + cell * 0.8, String(it.count), cell * 0.28, '#ffffff', 1);
+      cnt.setStroke('#2b1d0e', Math.max(3, cell * 0.06));
+      c.add(cnt);
       const sb = { x: sx, y: sy, w: cell, h: cell };
       bounds.push({ ...sb, index: i });
       if (i !== selected) this.slotTargets.push({ ...sb, bg, index: i }); // selected stays tinted; others hover-tint + drive detail
