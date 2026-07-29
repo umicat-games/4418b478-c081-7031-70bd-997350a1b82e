@@ -55,8 +55,10 @@ const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 2, TAB_SETTINGS = 3;
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
 // INSTANT — coins out, item into the chest (if it has room), else a warning. A footer
 // strip shows the coin balance.
-const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.85, footY: 0.895 };
-const STEP = { y: 0.725, btn: 0.052, gap: 0.05, buyY: 0.83, msgY: 0.89 }; // right-side qty stepper + buy button (pushed down so the desc doesn't collide)
+// bottom/footY stay INSIDE the frame — the 9-slice bottom border eats ~0.035H, so the
+// panel's inner content ends ~0.885H; the balance sits above that, the list above it.
+const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.81, footY: 0.85 };
+const STEP = { y: 0.72, btn: 0.052, gap: 0.05, buyY: 0.82, msgY: 0.87 }; // right-side qty stepper + buy button (kept clear of the desc above + the frame border below)
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
 export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; }
