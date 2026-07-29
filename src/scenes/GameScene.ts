@@ -1444,8 +1444,8 @@ export class GameScene extends Phaser.Scene {
     //    camera pan) acts at the touched point via the SAME `actAt(x,y)` as mouse.
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
-      // Unified menu / order book / bag open: a touch on the scroll rail starts a drag-scroll.
-      if (this.menuOpen) { const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null || this.menuShopRowAt(pointer.x, pointer.y) !== null; if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); } return; }
+      // Unified menu: touch scrolls via a SWIPE (handled in MenuScene) — no rail drag here.
+      if (this.menuOpen) return;
       if (this.orderOpen) { if (this.orderRailAt(pointer.x, pointer.y)) { this.orderDragging = true; this.orderDragTo(pointer.y); } return; }
       if (this.bagOpen) { const overItem = this.itemSlotAt('bagSlots', pointer.x, pointer.y) !== null; if (!this.bagMenu && !this.bagSlotPick && !overItem && this.bagRailAt(pointer.x, pointer.y)) { this.bagDragging = true; this.bagDragTo(pointer.y); } else this.bagPointerDown(pointer.x, pointer.y); return; }
       if (!this.inventoryOpen) return;

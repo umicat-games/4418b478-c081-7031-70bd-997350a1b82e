@@ -99,6 +99,9 @@ export class MenuScene extends Phaser.Scene {
   private maxScrollRows = 0;
   private lastFrac: number | null = -1;
   private lastWheelMs = 0;
+  private scrollStepPx = 60;         // px per row (set by the active render — for swipe/wheel feel)
+  private swipeY: number | null = null; // touch swipe anchor (null = not swiping)
+  private swipeAccum = 0;
 
   constructor() { super({ key: 'MenuScene' }); }
 
@@ -114,6 +117,21 @@ export class MenuScene extends Phaser.Scene {
       this.lastWheelMs = now;
       this.setScroll(this.scroll + (dy > 0 ? 1 : -1));
     });
+    // TOUCH swipe-to-scroll (mouse uses the wheel / rail; touch has neither, and dragging
+    // the thin rail is fiddly). A vertical drag anywhere over the list scrolls it: finger
+    // UP → later rows. Suppressed while a sub-popup (action menu / keypad / picker) is open.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (p.wasTouch && this.shown && !this.menuRoot) { this.swipeY = p.y; this.swipeAccum = 0; }
+    });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!p.wasTouch || !p.isDown || !this.shown || this.menuRoot || this.swipeY == null || this.maxScrollRows === 0) return;
+      this.swipeAccum += this.swipeY - p.y; // finger up (y decreases) → positive → scroll toward later rows
+      this.swipeY = p.y;
+      const step = Math.max(24, this.scrollStepPx);
+      while (this.swipeAccum >= step) { this.swipeAccum -= step; this.setScroll(this.scroll + 1); }
+      while (this.swipeAccum <= -step) { this.swipeAccum += step; this.setScroll(this.scroll - 1); }
+    });
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => { if (p.wasTouch) this.swipeY = null; });
   }
 
   update(): void {
@@ -311,6 +329,7 @@ export class MenuScene extends Phaser.Scene {
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W, gap = GRID.gap * W;
     const cols = GRID.cols, rows = GRID.rows;
     const cell = (gw - gap * (cols - 1)) / cols;
+    this.scrollStepPx = cell + gap;
     // Window by ROW: show `rows` rows starting at `scroll`; overflow drives the bar.
     const totalRows = Math.ceil(items.length / cols);
     this.maxScrollRows = Math.max(0, totalRows - rows);
@@ -365,6 +384,7 @@ export class MenuScene extends Phaser.Scene {
     const W = this.scale.width, H = this.scale.height;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
     const rowH = MAIL.rowH * H, step = rowH + MAIL.gapPx;
+    this.scrollStepPx = step;
     const bounds: Array<{ x: number; y: number; w: number; h: number; id: string }> = [];
     if (!mails.length) { c.add(this.T(gx + gw / 2, gy + H * 0.1, '还没有邮件', H * 0.03, SUB)); }
     // Window by ROW: how many rows fit between gy and the viewport bottom.
@@ -403,6 +423,7 @@ export class MenuScene extends Phaser.Scene {
     const selId = m.shopSelected;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
     const rowH = SHOP.rowH * H, step = rowH + SHOP.gapPx;
+    this.scrollStepPx = step;
     const visible = Math.max(1, Math.floor((SHOP.bottom * H - gy) / step));
     this.maxScrollRows = Math.max(0, catalog.length - visible);
     if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
