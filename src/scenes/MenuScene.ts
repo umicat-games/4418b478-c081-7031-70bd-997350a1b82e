@@ -26,6 +26,7 @@ const TAB_TEX = 'medium-brown-tab', TAB_UNSEL_TINT = 0x9a8467;
 const UI = 'ui-sheet';
 const BAR_BG = 'vertial-scroll-bar-background', BAR_THUMB = 'vertical-scroll-bar-dark';
 const BG_SLICE = { l: 1, r: 2, t: 9, b: 9 }, THUMB_SLICE = { l: 2, r: 3, t: 4, b: 6 };
+const WHEEL_MS = 110; // min ms between wheel-scroll rows (tames trackpad event bursts)
 const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (deep)
 // Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
 // corner; the X was landing on it → clicking it opened the chat).
@@ -83,13 +84,21 @@ export class MenuScene extends Phaser.Scene {
   private scroll = 0;
   private maxScrollRows = 0;
   private lastFrac: number | null = -1;
+  private lastWheelMs = 0;
 
   constructor() { super({ key: 'MenuScene' }); }
 
   create(): void {
-    // Mouse-wheel scrolls the active grid / mail list by one row.
+    // Mouse-wheel scrolls the active grid / mail list by ONE row. Trackpads/hi-res
+    // wheels fire a BURST of events per gesture, so a naive 1-row-per-event flew to the
+    // bottom on a tiny flick — THROTTLE to one row per WHEEL_MS (the first tick fires
+    // immediately, the rest of the burst is dropped). Rail drag stays for fast jumps.
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (this.shown) this.setScroll(this.scroll + (dy > 0 ? 1 : -1));
+      if (!this.shown || dy === 0) return;
+      const now = this.time.now;
+      if (now - this.lastWheelMs < WHEEL_MS) return;
+      this.lastWheelMs = now;
+      this.setScroll(this.scroll + (dy > 0 ? 1 : -1));
     });
   }
 
