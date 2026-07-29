@@ -1151,6 +1151,10 @@ export class GameScene extends Phaser.Scene {
         // exercise the weather/time/money HUD without waiting / an economy.
         this.input.keyboard?.on('keydown-Y', () => this.addMoney(12345));
         this.input.keyboard?.on('keydown-U', () => this.fastForwardTime());
+        // L = stuff the CHEST with a pile of varied test items + open the menu on the
+        // Chest tab, so the SCROLL bar has enough to scroll (real saves rarely have 35+
+        // items). Debug only — Take/Delete them, or Restart workspace, to clear.
+        this.input.keyboard?.on('keydown-L', () => this.debugFillChest());
         // Shift+Delete (or Shift+Backspace — the Mac "delete" key is Backspace) =
         // WIPE this game's save + reload to a fresh EMPTY map. Shift-guarded so it's
         // deliberate; preventDefault stops any browser back-nav on Shift+Backspace.
@@ -3420,6 +3424,24 @@ export class GameScene extends Phaser.Scene {
 
   /** DEV: force-spawn one MATURE foragable of each type + a big-stone of each tier
    *  around the camera centre (bypasses the slow passive spawner for testing). */
+  /** DEBUG (L): fill the chest with ~50 varied items so the unified menu's scroll bar
+   *  has something to scroll, then open it on the Chest tab. Take/Delete or Restart to clear. */
+  private debugFillChest(): void {
+    const fruits = ['apple', 'pear', 'peach', 'strawberry', 'grape', 'blueberry'];
+    const crops: CropName[] = ['corn', 'carrot', 'tomato', 'eggplant', 'pumpkin'];
+    const forage: ForagableName[] = ['red-mushroom', 'purple-mushroom', 'wild-flower', 'sunflower', 'grass'];
+    const pile: ItemStack[] = [];
+    for (let r = 0; r < 3; r++) { // 3 rounds → ~48 stacks (2+ pages of the 7×5 grid)
+      fruits.forEach((f, i) => pile.push(makeFruit(f, r * 6 + i + 1)));
+      crops.forEach((cn, i) => pile.push(makeCrop(cn, r * 4 + i + 1)));
+      forage.forEach((fn, i) => pile.push(makeForage(fn, r * 3 + i + 1)));
+      pile.push(makeStone(r * 5 + 3));
+    }
+    this.chestStore = pile;
+    this.openMenu(2);
+    this.scheduleSave();
+  }
+
   private debugSpawnForage(): void {
     if (!this.islandLayer) return;
     const cam = this.cameras.main;
