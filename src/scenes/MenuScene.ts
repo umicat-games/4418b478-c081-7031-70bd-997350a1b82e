@@ -59,6 +59,7 @@ export class MenuScene extends Phaser.Scene {
   private root?: Phaser.GameObjects.Container;
   private panel?: Phaser.GameObjects.Container; // everything except the dim → pops/scales as a unit
   private dim?: Phaser.GameObjects.Rectangle;   // full-screen mask (fades, never scales)
+  private detailBox?: Phaser.GameObjects.Container; // right-side detail (re-drawn live on hover)
   private m?: MenuModel;
   private slotTargets: HoverTarget[] = [];
   private menuTargets: HoverTarget[] = [];
@@ -163,10 +164,15 @@ export class MenuScene extends Phaser.Scene {
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
     const content = this.add.container(0, 0); panel.add(content);
+    this.detailBox = undefined;
     if (m.tab === 3) this.renderSettings(content, lx, lw);
     else if (m.tab === 0) this.renderMailList(content, m.mails ?? []);
     else this.renderGrid(content, m.items ?? [], m.selected);
-    if (m.tab === 1 || m.tab === 2) this.renderDetail(content, (m.items ?? [])[m.selected ?? -1]);
+    if (m.tab === 1 || m.tab === 2) {
+      // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
+      const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
+      this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);
+    }
 
     // Close button (top-right) — the empty-area tap-to-close isn't obvious, so give an X.
     const cs = CLOSE.size * H, cbx = CLOSE.x * W, cby = CLOSE.y * H;
@@ -239,7 +245,7 @@ export class MenuScene extends Phaser.Scene {
       c.add(this.T(sx + cell * 0.82, sy + cell * 0.78, String(it.count), cell * 0.26, '#ffffff', 1));
       const sb = { x: sx, y: sy, w: cell, h: cell };
       bounds.push({ ...sb, index: i });
-      if (i !== selected) this.slotTargets.push({ ...sb, bg }); // selected stays tinted; others hover-tint
+      if (i !== selected) this.slotTargets.push({ ...sb, bg, index: i }); // selected stays tinted; others hover-tint + drive detail
     }
     this.registry.set('menuSlots', bounds);
   }
@@ -314,6 +320,15 @@ export class MenuScene extends Phaser.Scene {
     applyHover(this.hovered, false);
     this.hovered = hit;
     applyHover(hit, true);
+    // Desktop: hovering a grid slot live-updates the right detail (no grid rebuild).
+    if (!this.menuRoot && hit && hit.index != null) this.showDetailFor(hit.index);
+  }
+
+  /** Re-draw JUST the right detail box for the item at store `index` (hover on desktop). */
+  private showDetailFor(index: number): void {
+    if (!this.detailBox || !this.detailBox.active) return;
+    this.detailBox.removeAll(true);
+    this.renderDetail(this.detailBox, (this.m?.items ?? [])[index]);
   }
 
   private close(): void {

@@ -37,6 +37,7 @@ export interface HoverTarget {
   x: number; y: number; w: number; h: number;
   bg?: Phaser.GameObjects.GameObject;
   text?: Phaser.GameObjects.Text; base?: string; hoverColor?: string;
+  index?: number; // grid slot → store index (unified menu hover→detail)
 }
 /** Apply / remove the hover look: tint a bg texture, OR recolour an option's text. */
 export function applyHover(t: HoverTarget | null | undefined, on: boolean): void {

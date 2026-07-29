@@ -670,6 +670,11 @@ export class GameScene extends Phaser.Scene {
   private menuTab = 2;
   private menuSelected = -1;
   private menuRev = 0;
+  private menuActionRev = 0;
+  // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
+  // mailbox/chest itemMenu but rendered by MenuScene via the `menuAction` registry key).
+  private menuItemMenu: { index: number; x: number; y: number } | null = null;
+  private menuItemQty: { action: 'take' | 'sell'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
   // The MAIL list (Mail tab). First kind = a sales receipt from "Market Manager",
   // generated at day-settlement when items in the shipping bin sell. Saved (v8).
   private mailList: MailEntry[] = [];
@@ -3668,6 +3673,8 @@ export class GameScene extends Phaser.Scene {
   private closeMenu(): void {
     if (!this.menuOpen) return;
     this.menuOpen = false;
+    this.closeMenuItemMenu();
+    this.closeReceipt();
     this.hideHotbar(false);
     this.registry.set('menu', { visible: false, rev: ++this.menuRev });
   }
@@ -3692,9 +3699,28 @@ export class GameScene extends Phaser.Scene {
   /** Item description for the detail panel — TODO: back with an items data table; empty for now. */
   private itemDesc(_id: string): string { return ''; }
 
-  /** Route a tap while the unified menu is open: tab switch / item select / tap-away close. */
+  /** Route a tap while the unified menu is open. Priority (topmost first): receipt →
+   *  quantity keypad → item action menu → close button → tabs → item/mail row →
+   *  tap-away close. */
   private handleMenuClick(x: number, y: number): boolean {
     if (!this.menuOpen) return false;
+    // A receipt (opened from the Mail tab) sits ON TOP — the ✓ or a tap outside closes.
+    if (this.openMailId !== null) {
+      const rc = this.registry.get('receiptClose') as { x: number; y: number; w: number; h: number } | null;
+      const onOk = !!rc && x >= rc.x && x <= rc.x + rc.w && y >= rc.y && y <= rc.y + rc.h;
+      if (onOk || !this.overPanel('receiptPanel', x, y)) this.closeReceipt();
+      return true;
+    }
+    // Quantity keypad (Take / Sell → How Many?).
+    if (this.menuItemQty) { const k = this.menuKeypadKeyAt(x, y); if (k) this.handleMenuKeypadKey(k); else this.closeMenuItemMenu(); return true; }
+    // Item action menu (Take / Sell / Delete).
+    if (this.menuItemMenu) {
+      const opt = this.menuActionOptionAt(x, y);
+      if (opt === 'take' || opt === 'sell') this.openMenuKeypad(opt);
+      else if (opt === 'delete') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuPerformAction('delete', idx); }
+      else this.closeMenuItemMenu();
+      return true;
+    }
     // Close button (top-right).
     const cb = this.registry.get('menuCloseBtn') as { x: number; y: number; w: number; h: number } | null;
     if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) { this.closeMenu(); return true; }
@@ -3702,14 +3728,118 @@ export class GameScene extends Phaser.Scene {
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
     if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab); return true; }
-    // Item slot → select (show right detail). (Actions come next.)
+    // For-sale / chest: tap an item → select it (right detail) AND open its action menu.
     if (this.menuTab === 1 || this.menuTab === 2) {
       const idx = this.itemSlotAt('menuSlots', x, y);
-      if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); return true; }
+      if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); this.openMenuItemMenu(idx, x, y); return true; }
+    } else if (this.menuTab === 0) {
+      // Mail: tap a row → open its receipt.
+      const mid = this.menuMailRowAt(x, y);
+      if (mid) { this.openReceipt(mid); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
     return true;
+  }
+
+  // ── Unified-menu item action menu + keypad (mirrors the mailbox/chest flow, but
+  //    rendered by MenuScene via the `menuAction` registry key) ───────────────────
+
+  /** Which store backs the active tab (1 = for-sale / mailbox bin, 2 = chest). */
+  private menuKind(): 'mailbox' | 'chest' { return this.menuTab === 1 ? 'mailbox' : 'chest'; }
+
+  /** Action options for the item at `index`: For-sale (mailbox bin) = Take / Delete;
+   *  Chest = Take / Sell (only if it has a sell price) / Delete. */
+  private menuItemOptions(index: number): Array<{ action: 'take' | 'sell' | 'delete'; label: string }> {
+    const take = { action: 'take' as const, label: 'Take' };
+    const sell = { action: 'sell' as const, label: 'Sell' };
+    const del = { action: 'delete' as const, label: 'Delete' };
+    if (this.menuTab === 2) {
+      const it = this.chestStore[index];
+      return it && sellPrice(it.id) > 0 ? [take, sell, del] : [take, del];
+    }
+    return [take, del]; // for-sale bin
+  }
+
+  private openMenuItemMenu(index: number, sx: number, sy: number): void {
+    this.menuItemMenu = { index, x: sx, y: sy };
+    this.registry.set('menuAction', {
+      visible: true, rev: ++this.menuActionRev, x: sx, y: sy,
+      options: this.menuItemOptions(index).map((o) => ({ label: o.label })),
+    });
+  }
+
+  private closeMenuItemMenu(): void {
+    if (!this.menuItemMenu && !this.menuItemQty) return;
+    this.menuItemMenu = null; this.menuItemQty = null;
+    this.registry.set('menuAction', { visible: false, rev: ++this.menuActionRev });
+  }
+
+  /** Swap the action menu for the "How Many?" keypad (Take / Sell → pick a quantity). */
+  private openMenuKeypad(action: 'take' | 'sell'): void {
+    const m = this.menuItemMenu;
+    if (!m) return;
+    const it = this.menuStore()[m.index];
+    if (!it) { this.closeMenuItemMenu(); return; }
+    this.menuItemMenu = null;
+    this.menuItemQty = { action, index: m.index, x: m.x, y: m.y, value: it.count, max: it.count, entering: false };
+    this.publishMenuKeypad();
+  }
+
+  private publishMenuKeypad(): void {
+    const q = this.menuItemQty;
+    if (!q) return;
+    this.registry.set('menuAction', { visible: true, rev: ++this.menuActionRev, x: q.x, y: q.y, keypad: { value: q.value, max: q.max } });
+  }
+
+  private handleMenuKeypadKey(k: string): void {
+    const q = this.menuItemQty;
+    if (!q) return;
+    if (k === 'cancel') { this.closeMenuItemMenu(); return; }
+    if (k === 'ok') { const n = Phaser.Math.Clamp(q.value, 1, q.max); this.menuPerformAction(q.action, q.index, n); this.closeMenuItemMenu(); return; }
+    if (k === 'inc') { q.value = Math.min(q.max, q.value + 1); q.entering = true; }
+    else if (k === 'dec') { q.value = Math.max(1, q.value - 1); q.entering = true; }
+    else {
+      const d = parseInt(k, 10);
+      if (Number.isNaN(d)) return;
+      q.value = q.entering ? Math.min(q.max, q.value * 10 + d) : d;
+      q.entering = true;
+      if (q.value < 1) q.value = 1;
+    }
+    this.publishMenuKeypad();
+  }
+
+  /** Run a Take/Sell/Delete on the active store, then refresh the unified menu (NOT the
+   *  hidden mailbox/chest scenes — pass refresh=false to performItemAction). */
+  private menuPerformAction(action: 'take' | 'sell' | 'delete', index: number, qty?: number): void {
+    this.performItemAction(action, { kind: this.menuKind(), index }, qty, false);
+    const len = this.menuStore().length;
+    if (this.menuSelected >= len) this.menuSelected = len - 1; // stack emptied → clamp selection
+    this.publishMenu();
+  }
+
+  /** Which action (if any) is under a tap on the unified menu's action menu. */
+  private menuActionOptionAt(x: number, y: number): 'take' | 'sell' | 'delete' | null {
+    const bounds = this.registry.get('menuActionBounds') as Array<{ x: number; y: number; w: number; h: number; idx?: number }> | undefined;
+    if (!bounds || !this.menuItemMenu) return null;
+    const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    if (!hit || hit.idx == null) return null;
+    return this.menuItemOptions(this.menuItemMenu.index)[hit.idx]?.action ?? null;
+  }
+
+  /** Which keypad key (if any) is under a tap on the unified menu's keypad. */
+  private menuKeypadKeyAt(x: number, y: number): string | null {
+    const bounds = this.registry.get('menuActionBounds') as Array<{ x: number; y: number; w: number; h: number; key?: string }> | undefined;
+    if (!bounds) return null;
+    const hit = bounds.find((b) => b.key != null && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    return hit?.key ?? null;
+  }
+
+  /** Is (x,y) on a unified-menu Mail row? Reads the bounds MenuScene published. */
+  private menuMailRowAt(x: number, y: number): string | null {
+    const rows = this.registry.get('menuMailRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
+    const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    return hit ? hit.id : null;
   }
 
   // ── Backpack (bag) modal — above the hotbar; shows the backpack items ──────────
@@ -4047,7 +4177,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Which store index (if any) is under a tap on the item grid. */
-  private itemSlotAt(key: 'mailboxSlots' | 'chestSlots' | 'bagSlots', x: number, y: number): number | null {
+  private itemSlotAt(key: 'mailboxSlots' | 'chestSlots' | 'bagSlots' | 'menuSlots', x: number, y: number): number | null {
     const slots = this.registry.get(key) as Array<{ x: number; y: number; w: number; h: number; index: number }> | undefined;
     if (!slots) return null;
     const hit = slots.find((s) => x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
@@ -4057,7 +4187,7 @@ export class GameScene extends Phaser.Scene {
   /** Run the chosen action on `target` for quantity `qty` (default the whole stack),
    *  then refresh the grid + save. Take → backpack; Sell → split into the mailbox
    *  (queued for sale); Delete → discard. */
-  private performItemAction(action: 'take' | 'sell' | 'delete', target: { kind: 'mailbox' | 'chest'; index: number }, qty?: number): void {
+  private performItemAction(action: 'take' | 'sell' | 'delete', target: { kind: 'mailbox' | 'chest'; index: number }, qty?: number, refresh = true): void {
     const store = target.kind === 'chest' ? this.chestStore : this.mailboxStore;
     const it = store[target.index];
     if (!it) return;
@@ -4077,7 +4207,7 @@ export class GameScene extends Phaser.Scene {
       if (it.count <= 0) store.splice(target.index, 1);
       this.mailboxStore.push({ ...it, count: n }); // chest → mailbox, split
     }
-    this.refreshOpenModal(target.kind);
+    if (refresh) this.refreshOpenModal(target.kind); // unified menu passes false + refreshes itself
     this.scheduleSave();
   }
 
@@ -4250,7 +4380,11 @@ export class GameScene extends Phaser.Scene {
     const mail = this.mailList.find((m) => m.id === id);
     if (!mail) return;
     this.openMailId = id;
-    if (!mail.read) { mail.read = true; this.refreshMailbox(); this.scheduleSave(); }
+    if (!mail.read) { mail.read = true; this.refreshMailbox(); if (this.menuOpen) this.publishMenu(); this.scheduleSave(); }
+    // Render ABOVE whatever modal opened it (the unified MenuScene is brought to top,
+    // so the receipt must jump above it too); keep the cursor topmost.
+    this.scene.bringToTop('ReceiptScene');
+    this.scene.bringToTop('CursorScene');
     this.registry.set('receipt', { visible: true, rev: ++this.receiptRev, sender: mail.sender, title: mail.title, lines: mail.lines, total: mail.total });
   }
 
