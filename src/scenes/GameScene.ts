@@ -156,6 +156,7 @@ type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
 // backpack later = bump INV_ROWS. Stackable items merge up to MAX_STACK per cell.
 const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
+const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const MAX_STACK = 99;
 
 /** One stack of items in a single inventory/hotbar cell. Tools are
@@ -673,6 +674,8 @@ export class GameScene extends Phaser.Scene {
   private menuActionRev = 0;
   private menuDragging = false; // dragging the unified menu's scroll rail
   private menuShopSel?: string; // selected catalog id on the Shop tab (→ right detail + stepper)
+  private menuBuyQty = 1;       // how many to buy (Shop right-side stepper; instant purchase)
+  private shopMsg = '';         // transient Shop warning ("金币不够" / "箱子满了")
   // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
   // mailbox/chest itemMenu but rendered by MenuScene via the `menuAction` registry key).
   private menuItemMenu: { index: number; x: number; y: number } | null = null;
@@ -1428,7 +1431,7 @@ export class GameScene extends Phaser.Scene {
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
       if (this.mailboxContains(wp.x, wp.y)) { this.openMenu(0); return; } // door mailbox → unified menu (Mail)
-      if (this.chestContains(wp.x, wp.y)) { this.openMenu(2); return; }   // door chest → unified menu (Chest)
+      if (this.chestContains(wp.x, wp.y)) { this.openMenu(1); return; }   // door chest → unified menu (Chest)
       this.input.manager.mouse?.requestPointerLock();
     });
 
@@ -1561,7 +1564,7 @@ export class GameScene extends Phaser.Scene {
     if (this.handlePaletteClick(x, y)) return;
     // Backpack button → open the full grid (mainly for touch — no E key).
     if (this.overBackpackButton(x, y)) { this.openBag(); return; }
-    if (this.overOrderButton(x, y)) { this.openMenu(3); return; } // order button → unified menu, Shop tab
+    if (this.overOrderButton(x, y)) { this.openMenu(2); return; } // order button → unified menu, Shop tab
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
@@ -1596,7 +1599,7 @@ export class GameScene extends Phaser.Scene {
     // not while placing). Checked before the tile actions so it wins over tilling
     // the grass under it.
     if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMenu(0); return; }
-    if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openMenu(2); return; }
+    if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openMenu(1); return; }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -3439,7 +3442,7 @@ export class GameScene extends Phaser.Scene {
       pile.push(makeStone(r * 5 + 3));
     }
     this.chestStore = pile;
-    this.openMenu(2);
+    this.openMenu(1);
     this.scheduleSave();
   }
 
@@ -3690,11 +3693,11 @@ export class GameScene extends Phaser.Scene {
 
   // ── Unified menu (MenuScene) — tabs: mail / for-sale / chest / settings ─────────
 
-  /** Open the unified menu on `tab` (0 mail · 1 for-sale · 2 chest · 3 shop · 4 settings). */
+  /** Open the unified menu on `tab` (0 mail · 1 chest · 2 shop · 3 settings). */
   private openMenu(tab: number): void {
     this.menuTab = tab;
     this.menuSelected = -1;
-    if (tab === 3 && !this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; // default the Shop selection
+    if (tab === 2) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // Shop defaults
     if (!this.menuOpen) {
       this.menuOpen = true;
       if (this.locked) this.input.manager.mouse?.releasePointerLock();
@@ -3712,16 +3715,15 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('menu', { visible: false, rev: ++this.menuRev });
   }
 
-  /** The item grid backing the active tab (for-sale = mailbox bin, chest = chest). */
+  /** The item grid backing the active tab — only the Chest (tab 1) is a grid now. */
   private menuStore(): ItemStack[] {
-    return this.menuTab === 1 ? this.mailboxStore : this.menuTab === 2 ? this.chestStore : [];
+    return this.menuTab === 1 ? this.chestStore : [];
   }
 
   private publishMenu(_open = false): void {
     // Shop catalog (only built for the Shop tab — orderCatalog() isn't free).
-    const shop = this.menuTab === 3;
-    const catalog = shop
-      ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: e.label, price: e.price, desc: this.itemDesc(e.id), ordered: this.orderDraft.get(e.id) ?? 0 }))
+    const catalog = this.menuTab === 2
+      ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: e.label, price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
     this.registry.set('menu', {
       visible: true, rev: ++this.menuRev, tab: this.menuTab,
@@ -3731,7 +3733,7 @@ export class GameScene extends Phaser.Scene {
       })),
       mails: this.mailListModel(),
       selected: this.menuSelected,
-      catalog, shopSelected: this.menuShopSel, money: this.money, orderTotal: this.orderTotal(),
+      catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
     });
   }
 
@@ -3749,23 +3751,52 @@ export class GameScene extends Phaser.Scene {
     return hit ? hit.key : null;
   }
 
-  /** +/− the order quantity for the selected catalog item (cart edit; charged on
-   *  next-morning delivery). `inc` is blocked if the running total would exceed coins. */
+  /** Shop stepper / buy: `inc`/`dec` change the buy quantity; `buy` commits an INSTANT
+   *  purchase — coins out, item into the chest (if it has room), else a warning. */
   private menuShopStep(dir: string): void {
     const id = this.menuShopSel;
     if (!id) return;
-    if (dir === 'inc') {
-      if (this.orderTotal() + this.priceOf(id) <= this.money) {
-        this.orderDraft.set(id, (this.orderDraft.get(id) ?? 0) + 1);
-        if (this.orderDeliverDay < 0) this.orderDeliverDay = this.dayCount + 1; // ships next morning
-      }
-    } else {
-      const n = (this.orderDraft.get(id) ?? 0) - 1;
-      if (n <= 0) this.orderDraft.delete(id); else this.orderDraft.set(id, n);
-      if (this.orderDraft.size === 0) this.orderDeliverDay = -1;
-    }
+    if (dir === 'inc') this.menuBuyQty = Math.min(99, this.menuBuyQty + 1);
+    else if (dir === 'dec') this.menuBuyQty = Math.max(1, this.menuBuyQty - 1);
+    else if (dir === 'buy') { this.menuBuy(); return; }
+    this.shopMsg = '';
+    this.publishMenu();
+  }
+
+  /** Instant purchase of `menuBuyQty` of the selected item into the chest. */
+  private menuBuy(): void {
+    const id = this.menuShopSel;
+    if (!id) return;
+    const n = this.menuBuyQty, cost = this.priceOf(id) * n;
+    if (cost > this.money) { this.flashShopMsg('金币不够'); return; }
+    if (!this.chestHasSpaceFor(id)) { this.flashShopMsg('箱子满了'); return; }
+    this.addMoney(-cost);
+    this.addToChest(itemFromId(id, n));
+    this.menuBuyQty = 1;
+    this.shopMsg = '';
     this.publishMenu();
     this.scheduleSave();
+  }
+
+  /** Show a transient Shop warning, then clear it. */
+  private flashShopMsg(msg: string): void {
+    this.shopMsg = msg;
+    this.publishMenu();
+    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && this.menuTab === 2) this.publishMenu(); } });
+  }
+
+  /** Does the chest have room for `id`? A stackable item that already has a stack merges
+   *  (always fits); a new item needs a free slot (chest capped at CHEST_SLOTS). */
+  private chestHasSpaceFor(id: string): boolean {
+    if (this.chestStore.some((s) => s.id === id)) return true;
+    return this.chestStore.length < CHEST_SLOTS;
+  }
+
+  /** Add an item stack to the chest, merging into an existing same-id stack if present. */
+  private addToChest(item: ItemStack): void {
+    const existing = this.chestStore.find((s) => s.id === item.id && s.stackable);
+    if (existing) existing.count += item.count;
+    else this.chestStore.push(item);
   }
 
   /** Flavor description for the right-side detail panel. Keyed by item id in i18n
@@ -3805,20 +3836,20 @@ export class GameScene extends Phaser.Scene {
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
     if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab); return true; }
-    // For-sale / chest: tap an item → select it (right detail) AND open its action menu.
-    if (this.menuTab === 1 || this.menuTab === 2) {
+    // Chest: tap an item → select it (right detail) AND open its action menu.
+    if (this.menuTab === 1) {
       const idx = this.itemSlotAt('menuSlots', x, y);
       if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); this.openMenuItemMenu(idx, x, y); return true; }
     } else if (this.menuTab === 0) {
       // Mail: tap a row → open its receipt.
       const mid = this.menuMailRowAt(x, y);
       if (mid) { this.openReceipt(mid); return true; }
-    } else if (this.menuTab === 3) {
-      // Shop: a stepper +/− edits the order for the selected item; a catalog row selects it.
+    } else if (this.menuTab === 2) {
+      // Shop: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
       const sk = this.menuStepperAt(x, y);
       if (sk) { this.menuShopStep(sk); return true; }
       const rid = this.menuShopRowAt(x, y);
-      if (rid) { this.menuShopSel = rid; this.publishMenu(); return true; }
+      if (rid) { this.menuShopSel = rid; this.shopMsg = ''; this.publishMenu(); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
@@ -3828,20 +3859,16 @@ export class GameScene extends Phaser.Scene {
   // ── Unified-menu item action menu + keypad (mirrors the mailbox/chest flow, but
   //    rendered by MenuScene via the `menuAction` registry key) ───────────────────
 
-  /** Which store backs the active tab (1 = for-sale / mailbox bin, 2 = chest). */
-  private menuKind(): 'mailbox' | 'chest' { return this.menuTab === 1 ? 'mailbox' : 'chest'; }
+  /** The unified menu's only grid store is the Chest (tab 1). */
+  private menuKind(): 'mailbox' | 'chest' { return 'chest'; }
 
-  /** Action options for the item at `index`: For-sale (mailbox bin) = Take / Delete;
-   *  Chest = Take / Sell (only if it has a sell price) / Delete. */
+  /** Chest item actions: Take / Sell (instant coins, only if it has a sell price) / Delete. */
   private menuItemOptions(index: number): Array<{ action: 'take' | 'sell' | 'delete'; label: string }> {
     const take = { action: 'take' as const, label: 'Take' };
     const sell = { action: 'sell' as const, label: 'Sell' };
     const del = { action: 'delete' as const, label: 'Delete' };
-    if (this.menuTab === 2) {
-      const it = this.chestStore[index];
-      return it && sellPrice(it.id) > 0 ? [take, sell, del] : [take, del];
-    }
-    return [take, del]; // for-sale bin
+    const it = this.chestStore[index];
+    return it && sellPrice(it.id) > 0 ? [take, sell, del] : [take, del];
   }
 
   private openMenuItemMenu(index: number, sx: number, sy: number): void {
@@ -4281,8 +4308,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Run the chosen action on `target` for quantity `qty` (default the whole stack),
-   *  then refresh the grid + save. Take → backpack; Sell → split into the mailbox
-   *  (queued for sale); Delete → discard. */
+   *  then refresh the grid + save. Take → backpack; Sell → INSTANT coins; Delete → discard. */
   private performItemAction(action: 'take' | 'sell' | 'delete', target: { kind: 'mailbox' | 'chest'; index: number }, qty?: number, refresh = true): void {
     const store = target.kind === 'chest' ? this.chestStore : this.mailboxStore;
     const it = store[target.index];
@@ -4301,7 +4327,7 @@ export class GameScene extends Phaser.Scene {
     } else if (action === 'sell') {
       it.count -= n;
       if (it.count <= 0) store.splice(target.index, 1);
-      this.mailboxStore.push({ ...it, count: n }); // chest → mailbox, split
+      this.addMoney(sellPrice(it.id) * n); // instant sale → coins now (no shipping bin)
     }
     if (refresh) this.refreshOpenModal(target.kind); // unified menu passes false + refreshes itself
     this.scheduleSave();
@@ -4419,45 +4445,11 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('orderScrollFrac', Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1));
   }
 
-  /** Day rollover settlement ("next morning"): FIRST sell everything left in the
-   *  mailbox (the shipping bin — sellable items → coins, removed; anything the player
-   *  wanted to keep they'd have Taken out), THEN deliver any pending order into the
-   *  now-emptied bin (charging the buy cost). Called from updateDayClock. */
+  /** Day rollover hook. Buying + selling are now INSTANT (into/out of the chest), so
+   *  there's no overnight shipping-bin settlement or order delivery any more — this is a
+   *  no-op kept as the seam for any future daily event (weather, growth, AI, …). */
   private settleDay(): void {
-    // 1. Sell the mailbox. Sellable items pay out + leave; unsellable ones stay.
-    // Merge sold stacks by id → one receipt line each (icon + count + subtotal).
-    let earned = 0;
-    const keep: ItemStack[] = [];
-    const soldById = new Map<string, ReceiptLine>();
-    for (const it of this.mailboxStore) {
-      const sp = sellPrice(it.id);
-      if (sp <= 0) { keep.push(it); continue; }
-      earned += sp * it.count;
-      const prev = soldById.get(it.id);
-      if (prev) { prev.count += it.count; prev.subtotal += sp * it.count; }
-      else soldById.set(it.id, { iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, label: it.label ?? it.id, count: it.count, subtotal: sp * it.count });
-    }
-    this.mailboxStore = keep;
-    if (earned > 0) {
-      this.addMoney(earned);
-      // A sales receipt lands in the Mail tab (newest first).
-      this.addMail({ kind: 'sell-receipt', sender: 'Market Manager', title: 'Sales Receipt', iconFrame: 245, lines: [...soldById.values()], total: earned });
-    }
-    // 2. Deliver a pending order into the emptied bin (arrives this morning).
-    if (this.orderDraft.size > 0 && this.orderDeliverDay >= 0 && this.dayCount >= this.orderDeliverDay) {
-      const total = this.orderTotal();
-      if (total <= this.money) {
-        this.addMoney(-total);
-        for (const [id, count] of this.orderDraft) this.mailboxStore.push(itemFromId(id, count));
-        this.orderDraft.clear();
-        this.orderSelectedId = undefined;
-        this.orderDeliverDay = -1;
-      }
-    }
-    this.mailboxHasMail = this.mailboxStore.length > 0;
-    if (this.mailboxOpen) this.refreshOpenModal('mailbox');
-    if (this.orderOpen) this.publishOrderBook();
-    this.scheduleSave();
+    /* instant economy — nothing to settle at the day boundary */
   }
 
   /** Add a new mail (newest first) + refresh the mailbox if it's open on the Mail tab. */

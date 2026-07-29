@@ -50,31 +50,32 @@ const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0
 // gear). `iconKey` can override the texture if a future tab needs a non-ui-icons image.
 const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string }> = [
   { key: 'mail', frame: 245, title: '邮件' },
-  { key: 'sale', frame: 294, title: '代售' },
   { key: 'chest', frame: 229, title: '箱子' },
   { key: 'shop', frame: 262, title: '商店' },
   { key: 'settings', frame: 164, title: '设置' },
 ];
-const TAB_MAIL = 0, TAB_SALE = 1, TAB_CHEST = 2, TAB_SHOP = 3, TAB_SETTINGS = 4;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 2, TAB_SETTINGS = 3;
 
-// Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price + order-count
-// badge); the RIGHT shows the selected item's detail + a quantity stepper (− N +) that
-// edits the order. A footer strip = coin balance + TOTAL (charged on next-morning delivery).
-const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.83, footY: 0.865, noteY: 0.905 };
-const STEP = { y: 0.70, btn: 0.052, gap: 0.05, subY: 0.80 }; // right-side qty stepper (in the detail column)
+// Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
+// the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
+// INSTANT — coins out, item into the chest (if it has room), else a warning. A footer
+// strip shows the coin balance.
+const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.85, footY: 0.895 };
+const STEP = { y: 0.66, btn: 0.052, gap: 0.05, buyY: 0.79, msgY: 0.86 }; // right-side qty stepper + buy button
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
-export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; ordered: number; }
+export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; }
 export interface MenuModel {
   visible: boolean; rev: number;
-  tab: number;               // 0 mail · 1 for-sale · 2 chest · 3 shop · 4 settings
-  items?: MenuItem[];        // grid (for-sale / chest)
+  tab: number;               // 0 mail · 1 chest · 2 shop · 3 settings
+  items?: MenuItem[];        // grid (chest)
   mails?: MailListEntry[];   // mail list
   selected?: number;         // selected grid index → right detail
   catalog?: MenuCatalogItem[];  // shop tab
-  shopSelected?: string;        // selected catalog id → right detail + stepper
+  shopSelected?: string;        // selected catalog id → right detail + buy
   money?: number;               // coin balance (shop footer)
-  orderTotal?: number;          // running order total (shop footer)
+  buyQty?: number;              // how many to buy (right-side stepper)
+  shopMsg?: string;             // transient warning ("金币不够" / "箱子满了")
 }
 
 export class MenuScene extends Phaser.Scene {
@@ -250,8 +251,8 @@ export class MenuScene extends Phaser.Scene {
     if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx, lw);
     else if (m.tab === TAB_MAIL) this.renderMailList(content, m.mails ?? []);
     else if (m.tab === TAB_SHOP) this.renderShop(content, m);
-    else this.renderGrid(content, m.items ?? [], m.selected);
-    if (m.tab === TAB_SALE || m.tab === TAB_CHEST) {
+    else this.renderGrid(content, m.items ?? [], m.selected); // chest
+    if (m.tab === TAB_CHEST) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);
@@ -393,9 +394,9 @@ export class MenuScene extends Phaser.Scene {
     c.add(this.T(lx + lw / 2, 0.5 * H, '设置（待补充）', H * 0.03, SUB));
   }
 
-  /** SHOP tab: LEFT = scrollable catalog list (icon + name + price + order badge); a
-   *  footer strip = balance + TOTAL; RIGHT = the selected item's detail + a qty stepper
-   *  that edits the order (cart-on-catalog — charged on next-morning delivery). */
+  /** SHOP tab: LEFT = scrollable catalog list (icon + name + buy price); footer = coin
+   *  balance; RIGHT = the selected item's detail + a qty stepper (− N +) + a BUY button.
+   *  Buying is INSTANT (coins out → item into the chest, or a warning). */
   private renderShop(c: Phaser.GameObjects.Container, m: MenuModel): void {
     const W = this.scale.width, H = this.scale.height;
     const catalog = m.catalog ?? [];
@@ -417,57 +418,57 @@ export class MenuScene extends Phaser.Scene {
       }
       c.add(this.T(gx + rowH * 1.2, ry + rowH * 0.5, e.label, H * 0.024, INK, 0));
       c.add(this.T(gx + gw - rowH * 0.35, ry + rowH * 0.5, String(e.price), H * 0.024, '#7a5a34', 1));
-      if (e.ordered > 0) { // order-count badge (top-right of the row)
-        const bd = this.add.graphics(); bd.fillStyle(0x4aa3df, 1); bd.fillCircle(gx + gw - 9, ry + 9, H * 0.014); c.add(bd);
-        c.add(this.T(gx + gw - 9, ry + 9, String(e.ordered), H * 0.019, '#ffffff'));
-      }
       rowBounds.push({ x: gx, y: ry, w: gw, h: rowH, id: e.id });
     });
     this.registry.set('menuShopRows', rowBounds);
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visible * step - SHOP.gapPx, visible, catalog.length);
 
-    // Footer: balance (left) + TOTAL (right, red when unaffordable) + delivery note.
-    const total = m.orderTotal ?? 0, money = m.money ?? 0;
-    c.add(this.T(gx, SHOP.footY * H, `余额 ${money}`, H * 0.026, INK, 0));
-    c.add(this.T(gx + gw, SHOP.footY * H, `合计 ${total}`, H * 0.026, total <= money ? '#3a6a2a' : '#b5533a', 1));
-    c.add(this.T(gx, SHOP.noteY * H, '* 次日早晨送到邮箱', H * 0.018, SUB, 0));
+    // Footer: coin balance.
+    c.add(this.T(gx, SHOP.footY * H, `余额 ${m.money ?? 0}`, H * 0.026, INK, 0));
 
-    // RIGHT: the selected catalog item's detail + quantity stepper.
-    this.renderShopDetail(c, catalog.find((e) => e.id === selId));
+    // RIGHT: the selected item's detail + qty stepper + BUY button.
+    this.renderShopDetail(c, catalog.find((e) => e.id === selId), m.buyQty ?? 1, m.money ?? 0, m.shopMsg ?? '');
   }
 
-  private renderShopDetail(c: Phaser.GameObjects.Container, e?: MenuCatalogItem): void {
+  private renderShopDetail(c: Phaser.GameObjects.Container, e: MenuCatalogItem | undefined, qty: number, money: number, msg: string): void {
     const W = this.scale.width, H = this.scale.height;
     const px = DETAIL.panelX * W, pw = DETAIL.panelW * W;
-    const top = 0.30 * H, ph = 0.62 * H; // tall panel (0.30–0.92) so the stepper fits under the detail
+    const top = 0.30 * H, ph = 0.62 * H; // tall panel (0.30–0.92) so the stepper + buy button fit
     c.add(this.add.nineslice(px + pw / 2, top + ph / 2, ATLAS, PANEL_FRAME, pw / PANEL_SCALE, ph / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
     this.registry.set('menuStepper', []);
-    if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, '选一个要订购的物品', H * 0.024, SUB)); return; }
+    if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, '选一个要买的物品', H * 0.024, SUB)); return; }
     if (this.textures.exists(e.iconKey)) {
       const img = this.add.image(px + pw / 2, 0.42 * H, e.iconKey, e.iconFrame);
       img.setScale((DETAIL.imgMax * W) / Math.max(img.width, img.height)); c.add(img);
     }
-    c.add(this.T(px + pw / 2, 0.555 * H, e.label, H * 0.028, INK));
-    c.add(this.T(px + pw / 2, 0.60 * H, `单价 ${e.price}`, H * 0.023, '#7a5a34'));
-    const desc = this.add.text(px + pw * 0.08, 0.635 * H, e.desc, {
+    c.add(this.T(px + pw / 2, 0.545 * H, e.label, H * 0.028, INK));
+    c.add(this.T(px + pw / 2, 0.59 * H, `单价 ${e.price}`, H * 0.023, '#7a5a34'));
+    const desc = this.add.text(px + pw / 2, 0.62 * H, e.desc, {
       fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: pw * 0.84 },
-    }).setOrigin(0.5, 0); desc.setX(px + pw / 2); c.add(desc);
+    }).setOrigin(0.5, 0); c.add(desc);
     // Quantity stepper: [−]  N  [+]
     const cy = STEP.y * H, btn = STEP.btn * H, dx = STEP.gap * W;
     const cxN = px + pw / 2, cxMinus = cxN - dx, cxPlus = cxN + dx;
-    const stepBounds: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
-    const mkBtn = (cx: number, label: string, key: string) => {
+    const bounds: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
+    const mkBtn = (cx: number, label: string, key: string, w = btn, h = btn) => {
       const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
-      const bg = has ? this.add.nineslice(cx, cy, 'square-buttons', 'grey-button', btn, btn, 6, 6, 6, 6)
-        : this.add.rectangle(cx, cy, btn, btn, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
-      c.add(bg); c.add(this.T(cx, cy - H * 0.004, label, H * 0.036, '#5b4327'));
-      stepBounds.push({ x: cx - btn / 2, y: cy - btn / 2, w: btn, h: btn, key });
+      const bg = has ? this.add.nineslice(cx, cy2(key), 'square-buttons', 'grey-button', w, h, 6, 6, 6, 6)
+        : this.add.rectangle(cx, cy2(key), w, h, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
+      c.add(bg); c.add(this.T(cx, cy2(key) - H * 0.004, label, key === 'buy' ? H * 0.026 : H * 0.036, '#5b4327'));
+      bounds.push({ x: cx - w / 2, y: cy2(key) - h / 2, w, h, key });
     };
+    const buyCy = STEP.buyY * H;
+    const cy2 = (key: string) => (key === 'buy' ? buyCy : cy);
     mkBtn(cxMinus, '−', 'dec');
-    c.add(this.T(cxN, cy, String(e.ordered), H * 0.038, INK));
+    c.add(this.T(cxN, cy, String(qty), H * 0.038, INK));
     mkBtn(cxPlus, '+', 'inc');
-    c.add(this.T(cxN, STEP.subY * H, `小计 ${e.price * e.ordered}`, H * 0.023, SUB));
-    this.registry.set('menuStepper', stepBounds);
+    // BUY button — wide, shows the subtotal; greyed intent when unaffordable (still tappable → warns).
+    const sub = e.price * qty;
+    mkBtn(cxN, `购买 ${sub}`, 'buy', pw * 0.62, btn * 1.05);
+    this.registry.set('menuStepper', bounds);
+    // Transient warning (金币不够 / 箱子满了).
+    if (msg) c.add(this.T(cxN, STEP.msgY * H, msg, H * 0.022, '#b5533a'));
+    else if (sub > money) c.add(this.T(cxN, STEP.msgY * H, '金币不够', H * 0.02, '#b5896a'));
   }
 
   private renderMenu(m: ActionMenuModel): void {
