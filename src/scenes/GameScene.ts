@@ -3696,8 +3696,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Item description for the detail panel — TODO: back with an items data table; empty for now. */
-  private itemDesc(_id: string): string { return ''; }
+  /** Flavor description for the right-side detail panel. Keyed by item id in i18n
+   *  (`desc_<id>`, hyphens→underscores, en+zh); '' when there's no entry. */
+  private itemDesc(id: string): string {
+    const key = 'desc_' + id.replace(/-/g, '_');
+    const s = t(key);
+    return s === key ? '' : s; // t() echoes the key back when it's missing
+  }
 
   /** Route a tap while the unified menu is open. Priority (topmost first): receipt →
    *  quantity keypad → item action menu → close button → tabs → item/mail row →

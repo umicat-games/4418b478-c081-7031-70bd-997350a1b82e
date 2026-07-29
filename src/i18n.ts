@@ -75,6 +75,30 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   crop_strawberry: { en: 'strawberries', 'zh-CN': '草莓' },
   crop_grape: { en: 'grapes', 'zh-CN': '葡萄' },
   crop_blueberry: { en: 'blueberries', 'zh-CN': '蓝莓' },
+  // Item descriptions — shown in the unified menu's right-side detail panel. Keyed by
+  // item id (`desc_<id>`); GameScene.itemDesc falls back to '' when a key is missing.
+  desc_fruit_apple: { en: 'A crisp, sweet apple from the orchard.', 'zh-CN': '从果园里摘的脆甜苹果。' },
+  desc_fruit_pear: { en: 'A juicy pear, ripe and fragrant.', 'zh-CN': '多汁的梨，熟得正香。' },
+  desc_fruit_peach: { en: 'A soft, fuzzy peach bursting with juice.', 'zh-CN': '毛茸茸的水蜜桃，满是汁水。' },
+  desc_fruit_strawberry: { en: 'A plump red strawberry, sweet and tart.', 'zh-CN': '红扑扑的草莓，酸甜可口。' },
+  desc_fruit_grape: { en: 'A cluster of sweet, dewy grapes.', 'zh-CN': '一串挂着露水的甜葡萄。' },
+  desc_fruit_blueberry: { en: 'Tiny blueberries, sweet and full of flavor.', 'zh-CN': '小小的蓝莓，香甜浓郁。' },
+  desc_crop_corn: { en: 'Golden corn, fresh off the stalk.', 'zh-CN': '金黄的玉米，刚从地里掰下来。' },
+  desc_crop_carrot: { en: 'A crunchy carrot pulled from the soil.', 'zh-CN': '从土里拔出的脆嫩胡萝卜。' },
+  desc_crop_tomato: { en: 'A round, ripe tomato — red and juicy.', 'zh-CN': '圆润熟透的番茄，又红又多汁。' },
+  desc_crop_eggplant: { en: 'A glossy purple eggplant.', 'zh-CN': '紫得发亮的茄子。' },
+  desc_crop_pumpkin: { en: 'A big, heavy pumpkin — perfect for autumn.', 'zh-CN': '又大又沉的南瓜，最适合秋天。' },
+  desc_forage_red_mushroom: { en: 'A red wild mushroom foraged from the grass.', 'zh-CN': '在草地里采到的红蘑菇。' },
+  desc_forage_purple_mushroom: { en: 'A rare purple mushroom with an earthy scent.', 'zh-CN': '少见的紫蘑菇，带着泥土的气息。' },
+  desc_forage_wild_flower: { en: 'A pretty wildflower gathered on the island.', 'zh-CN': '在岛上采的漂亮野花。' },
+  desc_forage_sunflower: { en: 'A tall, cheerful sunflower.', 'zh-CN': '高高的向日葵，格外精神。' },
+  desc_forage_grass: { en: 'A handful of soft wild grass.', 'zh-CN': '一把柔软的野草。' },
+  desc_stone: { en: 'A sturdy stone, handy for building.', 'zh-CN': '结实的石头，盖房子用得上。' },
+  desc_corn_seed: { en: 'Plant on tilled soil to grow corn.', 'zh-CN': '种在锄好的地里就能长玉米。' },
+  desc_carrot_seed: { en: 'Plant on tilled soil to grow carrots.', 'zh-CN': '种在锄好的地里长胡萝卜。' },
+  desc_tomato_seed: { en: 'Plant on tilled soil to grow tomatoes.', 'zh-CN': '种在锄好的地里长番茄。' },
+  desc_eggplant_seed: { en: 'Plant on tilled soil to grow eggplants.', 'zh-CN': '种在锄好的地里长茄子。' },
+  desc_pumpkin_seed: { en: 'Plant on tilled soil to grow pumpkins.', 'zh-CN': '种在锄好的地里长南瓜。' },
 };
 
 /** Translate a key for the active language (English fallback, then the key itself). */

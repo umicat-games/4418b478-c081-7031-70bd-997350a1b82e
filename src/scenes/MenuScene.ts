@@ -34,12 +34,14 @@ const TABS = { y: 0.045, x: 0.05, w: 0.062, h: 0.05, gap: 0.012 }; // icon tab c
 const TITLE_Y = 0.215, RULE_Y = 0.255;
 const GRID = { x: 0.06, y: 0.30, w: 0.49, cols: 7, rows: 5, gap: 0.008 };
 const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0.60, panelW: 0.35, panelH: 0.32 };
-// The four tabs: icon (ui-icons frame) + i18n-ish title. (Chest/settings frames picked
-// from all_icons; swap freely.) Mail=white-message, For-sale=white-shopping-cart.
-const TAB_DEFS = [
+// The four tabs: icon + title. Icons come from the `ui-icons` grid (all_icons.png)
+// by default; the chest tab uses a frame of the CHEST sprite instead (there's no chest
+// icon in the ui sheet), so `iconKey` overrides the texture. Mail = message box (245),
+// For-sale = shopping cart (262), Chest = closed-chest frame 0, Settings = gear (0).
+const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string }> = [
   { key: 'mail', frame: 245, title: '邮件' },
   { key: 'sale', frame: 262, title: '代售' },
-  { key: 'chest', frame: 199, title: '箱子' },
+  { key: 'chest', iconKey: 'chest', frame: 0, title: '箱子' },
   { key: 'settings', frame: 0, title: '设置' },
 ];
 
@@ -139,8 +141,12 @@ export class MenuScene extends Phaser.Scene {
       if (!active) chip.setTint(TAB_UNSEL_TINT); else { activeChip = chip; activeCy = cy; activeH = h; }
       panel.add(chip);
       let ic: Phaser.GameObjects.Image | undefined;
-      if (this.textures.exists('ui-icons')) {
-        ic = this.add.image(slotCx(i), cy - OVERLAP / 2, 'ui-icons', TAB_DEFS[i]!.frame).setScale(((tabH - OVERLAP) * 0.7) / 16);
+      const iconTex = TAB_DEFS[i]!.iconKey ?? 'ui-icons';
+      if (this.textures.exists(iconTex)) {
+        // Scale by the frame's real size (ui-icons 16px vs the chest sprite 48px) so
+        // every tab icon lands at the same on-screen height.
+        ic = this.add.image(slotCx(i), cy - OVERLAP / 2, iconTex, TAB_DEFS[i]!.frame);
+        ic.setScale(((tabH - OVERLAP) * 0.7) / Math.max(ic.width, ic.height));
         tabIcons.push(ic);
       }
       if (active) activeIcon = ic;
