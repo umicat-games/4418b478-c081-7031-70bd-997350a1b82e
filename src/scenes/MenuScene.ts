@@ -21,6 +21,10 @@ const SLOT_FRAME = 'slot-light', SLOT_SLICE = { l: 7, r: 7, t: 8, b: 8 }, SLOT_S
 const ATLAS = 'inventory';
 const PANEL_FRAME = 'frame-medium', PANEL_SLICE = { l: 10, r: 10, t: 11, b: 11 }, PANEL_SCALE = 3;
 const TAB_TEX = 'medium-brown-tab', TAB_UNSEL_TINT = 0x9a8467;
+const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (deep)
+// Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
+// corner; the X was landing on it → clicking it opened the chat).
+const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.955, y: 0.17, size: 0.07 };
 
 // Layout in SCREEN fractions (resize-mode canvas). Tuned against screenshots.
 // Left cluster shifted DOWN so the left frame's BOTTOM aligns with the right detail
@@ -53,6 +57,8 @@ export class MenuScene extends Phaser.Scene {
   private shown = false;
   private prevTab = -1; // last-rendered tab → animate only on a real tab switch
   private root?: Phaser.GameObjects.Container;
+  private panel?: Phaser.GameObjects.Container; // everything except the dim → pops/scales as a unit
+  private dim?: Phaser.GameObjects.Rectangle;   // full-screen mask (fades, never scales)
   private m?: MenuModel;
   private slotTargets: HoverTarget[] = [];
   private menuTargets: HoverTarget[] = [];
@@ -80,7 +86,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private build(m: MenuModel, slide: boolean): void {
-    if (this.root) this.tweens.killTweensOf(this.root);
+    if (this.root) { this.tweens.killTweensOf(this.root); if (this.panel) this.tweens.killTweensOf(this.panel); if (this.dim) this.tweens.killTweensOf(this.dim); }
     this.root?.destroy();
     this.shown = true;
     this.m = m;
@@ -91,9 +97,19 @@ export class MenuScene extends Phaser.Scene {
     const c = this.add.container(0, 0);
     this.root = c;
 
-    // Dim backdrop → tap outside closes (GameScene routes via menuPanel = full screen minus… actually the whole thing is the modal).
-    const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.28).setOrigin(0, 0);
+    // Full-screen MASK behind the whole menu — dims the game so the UI reads as a
+    // separate layer. (Tap outside the panels still closes — routed by GameScene.)
+    // It lives on the ROOT (not the panel) so it stays full-screen while the panel
+    // pops/scales on open/close.
+    const dim = this.add.rectangle(0, 0, W, H, 0x000000, DIM_ALPHA).setOrigin(0, 0);
     c.add(dim);
+    this.dim = dim;
+
+    // Everything else (tabs, frame, title, content, detail, close) goes in `panel` so
+    // it can scale-pop as ONE unit on open/close without dragging the dim with it.
+    const panel = this.add.container(0, 0);
+    c.add(panel);
+    this.panel = panel;
 
     // Tabs sit ON the frame's TOP-LEFT edge (bottom overlaps into the frame so the
     // brown tab + brown frame border MERGE into one piece — like the reference). Drawn
@@ -120,7 +136,7 @@ export class MenuScene extends Phaser.Scene {
       const cy = BOTTOM - h / 2; // bottom pinned → taller tab rises upward
       const chip = this.add.image(slotCx(i), cy, ATLAS, TAB_TEX).setScale(w / 100, h / 23);
       if (!active) chip.setTint(TAB_UNSEL_TINT); else { activeChip = chip; activeCy = cy; activeH = h; }
-      c.add(chip);
+      panel.add(chip);
       let ic: Phaser.GameObjects.Image | undefined;
       if (this.textures.exists('ui-icons')) {
         ic = this.add.image(slotCx(i), cy - OVERLAP / 2, 'ui-icons', TAB_DEFS[i]!.frame).setScale(((tabH - OVERLAP) * 0.7) / 16);
@@ -134,23 +150,28 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuTabs', tabBounds);
 
     // Left content panel — `frame-medium` 9-slice ON TOP of the tabs' bottom seam.
-    c.add(this.add.nineslice(lx + lw / 2, ly + lh / 2, ATLAS, PANEL_FRAME, lw / PANEL_SCALE, lh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
-    tabIcons.forEach((ic) => c.add(ic)); // icons back on top of the frame border
+    panel.add(this.add.nineslice(lx + lw / 2, ly + lh / 2, ATLAS, PANEL_FRAME, lw / PANEL_SCALE, lh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
+    tabIcons.forEach((ic) => panel.add(ic)); // icons back on top of the frame border
 
     // Title + rule.
-    c.add(this.T(lx + lw / 2, TITLE_Y * H, TAB_DEFS[m.tab]?.title ?? '', H * 0.03, INK));
+    panel.add(this.T(lx + lw / 2, TITLE_Y * H, TAB_DEFS[m.tab]?.title ?? '', H * 0.03, INK));
     const rule = this.add.graphics();
     rule.lineStyle(2, 0x9a9a9a, 1);
     rule.lineBetween(lx + lw * 0.06, RULE_Y * H, lx + lw * 0.94, RULE_Y * H);
-    c.add(rule);
+    panel.add(rule);
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
-    const content = this.add.container(0, 0); c.add(content);
+    const content = this.add.container(0, 0); panel.add(content);
     if (m.tab === 3) this.renderSettings(content, lx, lw);
     else if (m.tab === 0) this.renderMailList(content, m.mails ?? []);
     else this.renderGrid(content, m.items ?? [], m.selected);
     if (m.tab === 1 || m.tab === 2) this.renderDetail(content, (m.items ?? [])[m.selected ?? -1]);
+
+    // Close button (top-right) — the empty-area tap-to-close isn't obvious, so give an X.
+    const cs = CLOSE.size * H, cbx = CLOSE.x * W, cby = CLOSE.y * H;
+    if (this.textures.exists(CLOSE.atlas)) panel.add(this.add.image(cbx, cby, CLOSE.atlas, CLOSE.frame).setDisplaySize(cs, cs));
+    this.registry.set('menuCloseBtn', { x: cbx - cs / 2, y: cby - cs / 2, w: cs, h: cs });
 
     // The whole menu is the modal; tap anywhere OUTSIDE the left panel + right detail
     // + tabs closes it (GameScene checks menuPanel = the union, simplified to "not on a
@@ -159,7 +180,14 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuPanel', { x: lx, y: TABS.y * H, w: (DETAIL.panelX + DETAIL.panelW) * W - lx, h: lh + (ly - TABS.y * H) });
 
     if (slide) {
-      c.setAlpha(0); this.tweens.add({ targets: c, alpha: 1, duration: 160 });
+      // OPEN: the dim fades in while the panel POPS in — scales up from a slightly
+      // shrunk state with a Back.easeOut overshoot (Zelda-menu spring) around screen
+      // centre. Position is derived from the scale each frame so the pivot stays put.
+      dim.setAlpha(0);
+      this.tweens.add({ targets: dim, alpha: DIM_ALPHA, duration: 200 });
+      this.popPanel(panel, W, H, 0.9, 1, 'Back.easeOut', 260);
+      panel.setAlpha(0);
+      this.tweens.add({ targets: panel, alpha: 1, duration: 200 });
     } else if (tabSwitch) {
       // Content cross-fades + slides up; the newly-active tab POPS up (rises from a
       // slightly shorter state, bottom pinned so it stays merged with the frame).
@@ -176,6 +204,16 @@ export class MenuScene extends Phaser.Scene {
         this.tweens.add({ targets: activeIcon, y: iy, duration: 240, ease: 'Back.easeOut' });
       }
     }
+  }
+
+  /** Tween the panel's scale from→to around the SCREEN CENTRE (a container scales around
+   *  its own (0,0), so we re-derive x/y from the live scale each frame to pin the pivot).
+   *  Used for the open pop (0.9→1 Back.easeOut) and close pop-out (1→0.9 Back.easeIn). */
+  private popPanel(panel: Phaser.GameObjects.Container, W: number, H: number, from: number, to: number, ease: string, duration: number, onComplete?: () => void): void {
+    const cx = W / 2, cy = H / 2;
+    const sync = () => { if (!panel.active) return; panel.x = cx * (1 - panel.scaleX); panel.y = cy * (1 - panel.scaleX); };
+    panel.setScale(from); sync();
+    this.tweens.add({ targets: panel, scaleX: to, scaleY: to, duration, ease, onUpdate: sync, onComplete });
   }
 
   private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number): void {
@@ -280,14 +318,26 @@ export class MenuScene extends Phaser.Scene {
 
   private close(): void {
     this.registry.set('menuTabs', []); this.registry.set('menuSlots', []); this.registry.set('menuMailRows', []);
-    this.registry.set('menuPanel', null); this.registry.set('menuActionBounds', []);
+    this.registry.set('menuPanel', null); this.registry.set('menuActionBounds', []); this.registry.set('menuCloseBtn', null);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
     this.slotTargets = []; this.menuTargets = []; this.hovered = null;
-    if (!this.shown) { this.root?.destroy(); this.root = undefined; return; }
+    if (!this.shown) { this.root?.destroy(); this.root = undefined; this.panel = undefined; this.dim = undefined; return; }
     this.shown = false;
-    const root = this.root; this.root = undefined;
+    const root = this.root, panel = this.panel, dim = this.dim;
+    this.root = undefined; this.panel = undefined; this.dim = undefined;
     if (!root) return;
     this.tweens.killTweensOf(root);
-    this.tweens.add({ targets: root, alpha: 0, duration: 160, onComplete: () => root.destroy() });
+    if (panel) this.tweens.killTweensOf(panel);
+    if (dim) this.tweens.killTweensOf(dim);
+    // CLOSE: reverse of open — the panel pops OUT (scales down + fades) while the dim
+    // fades away; destroy the whole root once the pop-out finishes.
+    const W = this.scale.width, H = this.scale.height;
+    if (dim) this.tweens.add({ targets: dim, alpha: 0, duration: 180 });
+    if (panel) {
+      this.tweens.add({ targets: panel, alpha: 0, duration: 180 });
+      this.popPanel(panel, W, H, 1, 0.9, 'Back.easeIn', 180, () => root.destroy());
+    } else {
+      this.tweens.add({ targets: root, alpha: 0, duration: 160, onComplete: () => root.destroy() });
+    }
   }
 }

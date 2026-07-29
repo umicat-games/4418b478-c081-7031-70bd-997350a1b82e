@@ -1897,7 +1897,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.child) return;
     const dt = delta / 1000;
     const now = this.time.now;
-    if (this.catoTask) {
+    if (this.catoTask && !this.menuOpen) {
+      // catoTask still drives the drain — but while a menu is open Cato is PAUSED
+      // (frozen in the update loop), so he shouldn't lose energy standing still.
       const before = this.stamina;
       this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_PER_SEC * dt);
       const lowT = this.staminaMax * STAMINA_LOW_FRAC;
@@ -3693,6 +3695,9 @@ export class GameScene extends Phaser.Scene {
   /** Route a tap while the unified menu is open: tab switch / item select / tap-away close. */
   private handleMenuClick(x: number, y: number): boolean {
     if (!this.menuOpen) return false;
+    // Close button (top-right).
+    const cb = this.registry.get('menuCloseBtn') as { x: number; y: number; w: number; h: number } | null;
+    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) { this.closeMenu(); return true; }
     // Tab switch.
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
@@ -6665,6 +6670,16 @@ export class GameScene extends Phaser.Scene {
     else this.updateCameraKeys(delta);
 
     if (!this.child?.body) return;
+
+    // The unified menu (mailbox / chest / for-sale / settings) is open → PAUSE Cato:
+    // freeze him in place (idle) so he doesn't wander/work behind the modal. His
+    // catoTask (if any) is PRESERVED — untouched here — so he picks it right back up
+    // when the menu closes. Stamina is gated in updateStamina (no drain while paused).
+    if (this.menuOpen) {
+      (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      this.child.play(`idle-${this.faceDir}`, true);
+      return;
+    }
 
     // A commanded behaviour (e.g. Cato tilling a plot via chat) takes over.
     if (this.catoTask) {
