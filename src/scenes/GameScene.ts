@@ -519,6 +519,7 @@ interface SaveBlob {
   autonomy?: { harvest: boolean; water: boolean }; // v10: Cato's standing auto-farm prefs
   staminaMax?: number; // v11: Cato's energy cap (raisable by future upgrades)
   stamina?: number; // v11: current energy
+  chestSeeded?: boolean; // v12: the one-time starter-seed grant into the chest has run
 }
 
 export class GameScene extends Phaser.Scene {
@@ -663,6 +664,7 @@ export class GameScene extends Phaser.Scene {
   // opens an action menu (Take → backpack / Sell → mailbox / Delete). Saved (v7).
   private mailboxStore: ItemStack[] = [];
   private chestStore: ItemStack[] = [];
+  private chestSeeded = false; // one-time starter-seed grant into the chest (saved v12)
   // The UNIFIED menu (Zelda-style tabs: 0 mail · 1 for-sale · 2 chest · 3 settings) —
   // one screen replacing the mailbox/chest/bag modals (MenuScene). Door mailbox opens
   // it on Mail; door chest on Chest. `menuSelected` = the grid item shown in the right
@@ -1747,15 +1749,18 @@ export class GameScene extends Phaser.Scene {
     this.inventory[5] = makeSeed('eggplant', 10);
     this.inventory[6] = makeSeed('pumpkin', 10);
     this.inventory[7] = makePlaceable('wall', 99);
-    // The rest of the starter kit goes into the CHEST (drag it 进 Hotbar to use).
+    // The rest of the starter kit goes into the CHEST (drag it 进 Hotbar to use):
+    // spare seed stacks, then building materials / tools / plantables.
     this.mailboxStore = [];
     this.chestStore = [
+      ...CROP_NAMES.map((c) => makeSeed(c, 20)),
       makePlaceable('floor', 99), makePlaceable('window', 99), makePlaceable('door', 10),
       ...FURNITURE.map((piece) => makePlaceable('furniture', 10, piece.id)),
       itemFromId('axe', 1), itemFromId('pickaxe', 1),
       ...TREE_TYPES.map((t) => makePlaceable('tree', 10, t.id)),
       ...BERRY_TYPES.map((b) => makePlaceable('bush', 10, b)),
     ];
+    this.chestSeeded = true; // fresh game already has the seeds
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -6304,7 +6309,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 11,
+      v: 12,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -6328,6 +6333,7 @@ export class GameScene extends Phaser.Scene {
       autonomy: { ...this.autonomy },
       staminaMax: this.staminaMax,
       stamina: Math.round(this.stamina),
+      chestSeeded: this.chestSeeded,
     };
   }
 
@@ -6468,7 +6474,6 @@ export class GameScene extends Phaser.Scene {
       this.inventory = cells;
       this.hotbarSelected = s.selected ?? -1;
       if (s.cato && this.child) this.child.setPosition(s.cato.x, s.cato.y);
-      this.ensureBuildingMaterials(); // saves predating the house feature lack these
       // Money + day clock (v6; older saves default to 0 = fresh morning, no coins).
       this.money = s.money ?? 0;
       this.dayTimeMs = s.dayTimeMs ?? 0;
@@ -6477,6 +6482,12 @@ export class GameScene extends Phaser.Scene {
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
       if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count));
+      // Grant missing starter items INTO THE CHEST — AFTER it's restored (else the
+      // restore above would wipe the grants). Building materials are idempotent; the
+      // spare seeds are one-time (chestSeeded flag) so they don't refill after use.
+      this.chestSeeded = s.chestSeeded ?? false;
+      this.ensureBuildingMaterials();
+      this.grantStarterSeedsOnce();
       if (s.mail) {
         this.mailList = s.mail.map((m) => ({ ...m }));
         // Keep the id sequence ahead of any restored ids so new mail can't collide.
@@ -6500,6 +6511,16 @@ export class GameScene extends Phaser.Scene {
 
   private hasMaterial(id: string): boolean {
     return this.inventory.some((c) => c?.id === id) || this.chestStore.some((s) => s.id === id);
+  }
+
+  /** One-time: drop a spare stack of every crop seed into the chest (so there are seeds
+   *  to 进 Hotbar / plant beyond the starting hotbar). Guarded by `chestSeeded` so it
+   *  runs once per save and never refills after the player uses/sells them. */
+  private grantStarterSeedsOnce(): void {
+    if (this.chestSeeded) return;
+    for (const c of CROP_NAMES) if (!this.chestStore.some((s) => s.id === `${c}-seed`)) this.addToChest(makeSeed(c, 20));
+    this.chestSeeded = true;
+    this.scheduleSave();
   }
 
   /** Grant the building materials to anyone who doesn't have them yet. There's no
