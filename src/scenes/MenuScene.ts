@@ -37,7 +37,7 @@ const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.955, y: 0.
 // box's bottom (both at 0.92H). Frame + tabs + title + grid move together.
 const L = { x: 0.03, y: 0.18, w: 0.55, h: 0.74 };         // left content panel (0.18–0.92)
 const TABS = { y: 0.045, x: 0.05, w: 0.062, h: 0.05, gap: 0.012 }; // icon tab chips (top-left)
-const TITLE_Y = 0.215;
+const TITLE_Y = 0.238; // a bit lower — was cramped against the frame top
 // w leaves a strip on the right (grid ends at 0.52) for the scroll bar.
 const GRID = { x: 0.06, y: 0.30, w: 0.46, cols: 7, rows: 5, gap: 0.008 };
 const MAIL = { rowH: 0.09, gapPx: 6, bottom: 0.88 }; // mail-list row metrics + viewport bottom
