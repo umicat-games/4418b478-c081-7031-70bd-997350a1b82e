@@ -21,6 +21,11 @@ const SLOT_FRAME = 'slot-light', SLOT_SLICE = { l: 7, r: 7, t: 8, b: 8 }, SLOT_S
 const ATLAS = 'inventory';
 const PANEL_FRAME = 'frame-medium', PANEL_SLICE = { l: 10, r: 10, t: 11, b: 11 }, PANEL_SCALE = 3;
 const TAB_TEX = 'medium-brown-tab', TAB_UNSEL_TINT = 0x9a8467;
+// Continuous scroll bar (order-book style): `ui-sheet` atlas track + thumb, 9-slice so
+// the caps stay crisp at any height. (Region name `vertial-` is a backend typo — kept.)
+const UI = 'ui-sheet';
+const BAR_BG = 'vertial-scroll-bar-background', BAR_THUMB = 'vertical-scroll-bar-dark';
+const BG_SLICE = { l: 1, r: 2, t: 9, b: 9 }, THUMB_SLICE = { l: 2, r: 3, t: 4, b: 6 };
 const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (deep)
 // Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
 // corner; the X was landing on it → clicking it opened the chat).
@@ -32,7 +37,10 @@ const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.955, y: 0.
 const L = { x: 0.03, y: 0.18, w: 0.55, h: 0.74 };         // left content panel (0.18–0.92)
 const TABS = { y: 0.045, x: 0.05, w: 0.062, h: 0.05, gap: 0.012 }; // icon tab chips (top-left)
 const TITLE_Y = 0.215;
-const GRID = { x: 0.06, y: 0.30, w: 0.49, cols: 7, rows: 5, gap: 0.008 };
+// w leaves a strip on the right (grid ends at 0.52) for the scroll bar.
+const GRID = { x: 0.06, y: 0.30, w: 0.46, cols: 7, rows: 5, gap: 0.008 };
+const MAIL = { rowH: 0.09, gapPx: 6, bottom: 0.88 }; // mail-list row metrics + viewport bottom
+const RAIL_DX = 0.016; // scroll bar x-offset past the grid/list right edge
 const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0.60, panelW: 0.35, panelH: 0.32 };
 // The four tabs: icon + title. Icons are region tags in the `ui-icons` grid
 // (all_icons.png, 16×16, 16 cols → frame = (y/16)*16 + x/16). Mail = white-message
@@ -69,8 +77,21 @@ export class MenuScene extends Phaser.Scene {
   private hovered: HoverTarget | null = null;
   private menuRoot?: Phaser.GameObjects.Container;
   private menuRev = -1;
+  // Continuous scroll (order-book style): `scroll` = the top ROW offset of the grid /
+  // mail list; the bar's thumb reflects scroll/maxScrollRows. Wheel scrolls in-scene;
+  // touch/mouse rail DRAG is routed by GameScene as a 0..1 `menuScrollFrac`.
+  private scroll = 0;
+  private maxScrollRows = 0;
+  private lastFrac: number | null = -1;
 
   constructor() { super({ key: 'MenuScene' }); }
+
+  create(): void {
+    // Mouse-wheel scrolls the active grid / mail list by one row.
+    this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.shown) this.setScroll(this.scroll + (dy > 0 ? 1 : -1));
+    });
+  }
 
   update(): void {
     const m = this.registry.get('menu') as MenuModel | undefined;
@@ -82,7 +103,39 @@ export class MenuScene extends Phaser.Scene {
     }
     const menu = this.registry.get('menuAction') as ActionMenuModel | undefined;
     if (menu && menu.rev !== this.menuRev) { this.menuRev = menu.rev; this.renderMenu(menu); }
+    // Rail drag arrives as a 0..1 fraction from GameScene (touch has no wheel).
+    if (this.shown && this.m) {
+      const frac = this.registry.get('menuScrollFrac') as number | null | undefined;
+      if (frac != null && frac !== this.lastFrac) {
+        this.lastFrac = frac;
+        this.setScroll(Math.round(frac * this.maxScrollRows));
+      }
+    }
     this.updateHover();
+  }
+
+  /** Scroll the active list to row `v` (clamped) + re-render at the new offset. */
+  private setScroll(v: number): void {
+    const clamped = Phaser.Math.Clamp(v, 0, this.maxScrollRows);
+    if (clamped === this.scroll || !this.m) return;
+    this.scroll = clamped;
+    this.build(this.m, false); // instant re-render (no open/tab animation)
+  }
+
+  /** Draw the scroll bar (track + thumb) at `barX` spanning top→bottom, and publish the
+   *  rail rect (`menuRail`) so GameScene can drag it. `null` rail when nothing to scroll. */
+  private drawScrollbar(c: Phaser.GameObjects.Container, barX: number, top: number, bottom: number, visibleRows: number, totalRows: number): void {
+    if (totalRows <= visibleRows || !this.textures.exists(UI)) { this.registry.set('menuRail', null); return; }
+    const H = this.scale.height;
+    const trackH = bottom - top;
+    const trackW = Math.max(4, H * 0.008);
+    c.add(this.add.nineslice(barX, (top + bottom) / 2, UI, BAR_BG, trackW, trackH, BG_SLICE.l, BG_SLICE.r, BG_SLICE.t, BG_SLICE.b));
+    const thumbH = Math.max(trackH * 0.15, trackH * (visibleRows / totalRows));
+    const t = this.maxScrollRows ? this.scroll / this.maxScrollRows : 0;
+    const thumbY = top + thumbH / 2 + t * (trackH - thumbH);
+    const thumbW = Math.max(6, H * 0.014);
+    c.add(this.add.nineslice(barX, thumbY, UI, BAR_THUMB, thumbW, thumbH, THUMB_SLICE.l, THUMB_SLICE.r, THUMB_SLICE.t, THUMB_SLICE.b));
+    this.registry.set('menuRail', { x: barX, top, bottom, max: this.maxScrollRows });
   }
 
   private T(x: number, y: number, s: string, size: number, color: string, origin = 0.5) {
@@ -97,6 +150,10 @@ export class MenuScene extends Phaser.Scene {
     this.slotTargets = []; this.hovered = null;
     const tabSwitch = !slide && m.tab !== this.prevTab; // animate content only on a real tab change
     this.prevTab = m.tab;
+    // Reset the scroll offset when the menu OPENS or the tab CHANGES (a plain re-render
+    // — item select / action / wheel-scroll — keeps the current offset).
+    if (slide || tabSwitch) { this.scroll = 0; this.lastFrac = -1; this.registry.set('menuScrollFrac', null); }
+    this.maxScrollRows = 0; this.registry.set('menuRail', null); // grid/mail override below
     const W = this.scale.width, H = this.scale.height;
     const c = this.add.container(0, 0);
     this.root = c;
@@ -228,11 +285,17 @@ export class MenuScene extends Phaser.Scene {
   private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number): void {
     const W = this.scale.width, H = this.scale.height;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W, gap = GRID.gap * W;
-    const cell = (gw - gap * (GRID.cols - 1)) / GRID.cols;
+    const cols = GRID.cols, rows = GRID.rows;
+    const cell = (gw - gap * (cols - 1)) / cols;
+    // Window by ROW: show `rows` rows starting at `scroll`; overflow drives the bar.
+    const totalRows = Math.ceil(items.length / cols);
+    this.maxScrollRows = Math.max(0, totalRows - rows);
+    if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
+    const startIdx = this.scroll * cols;
     const bounds: Array<{ x: number; y: number; w: number; h: number; index: number }> = [];
-    const per = GRID.cols * GRID.rows;
-    for (let i = 0; i < per; i++) {
-      const col = i % GRID.cols, row = Math.floor(i / GRID.cols);
+    for (let j = 0; j < cols * rows; j++) {
+      const i = startIdx + j;                       // real store index
+      const col = j % cols, row = Math.floor(j / cols);
       const sx = gx + col * (cell + gap), sy = gy + row * (cell + gap);
       const bg = this.add.nineslice(sx + cell / 2, sy + cell / 2, ATLAS, SLOT_FRAME, cell / SLOT_SCALE, cell / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
       c.add(bg);
@@ -251,6 +314,8 @@ export class MenuScene extends Phaser.Scene {
       if (i !== selected) this.slotTargets.push({ ...sb, bg, index: i }); // selected stays tinted; others hover-tint + drive detail
     }
     this.registry.set('menuSlots', bounds);
+    // Scroll bar just right of the grid, spanning the visible rows.
+    this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + rows * (cell + gap) - gap, rows, totalRows);
   }
 
   private renderDetail(c: Phaser.GameObjects.Container, it?: MenuItem): void {
@@ -275,11 +340,15 @@ export class MenuScene extends Phaser.Scene {
   private renderMailList(c: Phaser.GameObjects.Container, mails: MailListEntry[]): void {
     const W = this.scale.width, H = this.scale.height;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
+    const rowH = MAIL.rowH * H, step = rowH + MAIL.gapPx;
     const bounds: Array<{ x: number; y: number; w: number; h: number; id: string }> = [];
     if (!mails.length) { c.add(this.T(gx + gw / 2, gy + H * 0.1, '还没有邮件', H * 0.03, SUB)); }
-    const rowH = H * 0.09;
-    mails.forEach((mail, i) => {
-      const ry = gy + i * (rowH + 6);
+    // Window by ROW: how many rows fit between gy and the viewport bottom.
+    const visible = Math.max(1, Math.floor((MAIL.bottom * H - gy) / step));
+    this.maxScrollRows = Math.max(0, mails.length - visible);
+    if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
+    mails.slice(this.scroll, this.scroll + visible).forEach((mail, k) => {
+      const ry = gy + k * step;
       const bar = this.add.graphics();
       bar.fillStyle(mail.read ? 0xe7dcc2 : 0xf3ead1, 1); bar.fillRoundedRect(gx, ry, gw, rowH, 8);
       bar.lineStyle(2, 0xd2be95, 1); bar.strokeRoundedRect(gx, ry, gw, rowH, 8); c.add(bar);
@@ -293,6 +362,7 @@ export class MenuScene extends Phaser.Scene {
       bounds.push({ x: gx, y: ry, w: gw, h: rowH, id: mail.id });
     });
     this.registry.set('menuMailRows', bounds);
+    this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visible * step - MAIL.gapPx, visible, mails.length);
   }
 
   private renderSettings(c: Phaser.GameObjects.Container, lx: number, lw: number): void {
@@ -337,6 +407,7 @@ export class MenuScene extends Phaser.Scene {
   private close(): void {
     this.registry.set('menuTabs', []); this.registry.set('menuSlots', []); this.registry.set('menuMailRows', []);
     this.registry.set('menuPanel', null); this.registry.set('menuActionBounds', []); this.registry.set('menuCloseBtn', null);
+    this.registry.set('menuRail', null);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
     this.slotTargets = []; this.menuTargets = []; this.hovered = null;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; this.panel = undefined; this.dim = undefined; return; }

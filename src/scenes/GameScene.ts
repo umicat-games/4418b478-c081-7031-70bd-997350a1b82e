@@ -671,6 +671,7 @@ export class GameScene extends Phaser.Scene {
   private menuSelected = -1;
   private menuRev = 0;
   private menuActionRev = 0;
+  private menuDragging = false; // dragging the unified menu's scroll rail
   // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
   // mailbox/chest itemMenu but rendered by MenuScene via the `menuAction` registry key).
   private menuItemMenu: { index: number; x: number; y: number } | null = null;
@@ -1379,7 +1380,13 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
-      if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; } // unified menu
+      if (this.menuOpen) {
+        // Dragging the scroll rail scrolls the list; an item slot wins over the rail's
+        // wide hit zone, and the rail is off while a sub-popup (action/keypad/receipt) is up.
+        const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null;
+        if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); return; }
+        this.handleMenuClick(pointer.x, pointer.y); return;
+      }
       // Mail modal open: dragging the rail flips pages; else only the close button
       // closes it (works for mouse AND touch — both reach this handler).
       if (this.mailboxOpen) {
@@ -1428,7 +1435,8 @@ export class GameScene extends Phaser.Scene {
     //    camera pan) acts at the touched point via the SAME `actAt(x,y)` as mouse.
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
-      // Order book / bag open: a touch on the scroll rail starts a drag-scroll.
+      // Unified menu / order book / bag open: a touch on the scroll rail starts a drag-scroll.
+      if (this.menuOpen) { const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null; if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); } return; }
       if (this.orderOpen) { if (this.orderRailAt(pointer.x, pointer.y)) { this.orderDragging = true; this.orderDragTo(pointer.y); } return; }
       if (this.bagOpen) { const overItem = this.itemSlotAt('bagSlots', pointer.x, pointer.y) !== null; if (!this.bagMenu && !this.bagSlotPick && !overItem && this.bagRailAt(pointer.x, pointer.y)) { this.bagDragging = true; this.bagDragTo(pointer.y); } else this.bagPointerDown(pointer.x, pointer.y); return; }
       if (!this.inventoryOpen) return;
@@ -1439,6 +1447,7 @@ export class GameScene extends Phaser.Scene {
       this.cursorState.y = pointer.y;
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.menuDragging) { this.menuDragTo(pointer.y); return; } // drag the unified menu scroll rail
       if (this.mailboxDragging) { this.mailboxDragTo(pointer.y); return; } // drag the mail rail (mouse + touch)
       if (this.chestDragging) { this.chestDragTo(pointer.y); return; } // drag the chest rail (mouse + touch)
       if (this.orderDragging) { this.orderDragTo(pointer.y); return; } // drag the order catalog rail (mouse + touch)
@@ -1450,7 +1459,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      this.mailboxDragging = false; this.chestDragging = false; this.orderDragging = false; this.bagDragging = false; // end a rail drag
+      this.menuDragging = false; this.mailboxDragging = false; this.chestDragging = false; this.orderDragging = false; this.bagDragging = false; // end a rail drag
       if (this.bagOpen && !pointer.wasTouch) this.bagPointerUp(pointer.x, pointer.y); // mouse: drop an item / click → menu
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
@@ -3845,6 +3854,19 @@ export class GameScene extends Phaser.Scene {
     const rows = this.registry.get('menuMailRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
     const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
     return hit ? hit.id : null;
+  }
+
+  /** Is (x,y) on the unified menu's scroll rail? (Reads the rail MenuScene published.) */
+  private menuRailAt(x: number, y: number): boolean {
+    const r = this.registry.get('menuRail') as { x: number; top: number; bottom: number; max: number } | null;
+    return !!r && r.max > 0 && Math.abs(x - r.x) < 40 && y >= r.top - 30 && y <= r.bottom + 30;
+  }
+
+  /** Drag the rail → 0..1 scroll fraction (MenuScene owns the row offset + reads this). */
+  private menuDragTo(y: number): void {
+    const r = this.registry.get('menuRail') as { x: number; top: number; bottom: number; max: number } | null;
+    if (!r || r.max <= 0) return;
+    this.registry.set('menuScrollFrac', Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1));
   }
 
   // ── Backpack (bag) modal — above the hotbar; shows the backpack items ──────────
