@@ -31,7 +31,7 @@ const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.955, y: 0.
 // box's bottom (both at 0.92H). Frame + tabs + title + grid move together.
 const L = { x: 0.03, y: 0.18, w: 0.55, h: 0.74 };         // left content panel (0.18–0.92)
 const TABS = { y: 0.045, x: 0.05, w: 0.062, h: 0.05, gap: 0.012 }; // icon tab chips (top-left)
-const TITLE_Y = 0.215, RULE_Y = 0.255;
+const TITLE_Y = 0.215;
 const GRID = { x: 0.06, y: 0.30, w: 0.49, cols: 7, rows: 5, gap: 0.008 };
 const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0.60, panelW: 0.35, panelH: 0.32 };
 // The four tabs: icon + title. Icons are region tags in the `ui-icons` grid
@@ -124,7 +124,7 @@ export class MenuScene extends Phaser.Scene {
     // non-uniformly (width fills the slot, height set taller so the icon isn't cramped).
     const N = TAB_DEFS.length, INSET = lw * 0.02;
     const tabW = (lw - INSET * 2) / N;
-    const tabH = H * 0.062;
+    const tabH = H * 0.07; // a touch taller so the icon isn't cramped near the top edge
     const OVERLAP = tabH * 0.22; // the tab's bottom dips a LITTLE into the frame top (merge the border)
     const ACTIVE_OVER = tabW * 0.08; // active tab grows this much on EACH side, over its neighbours
     const ACTIVE_TALLER = 1.14;      // active tab is this much taller (grows UPWARD, bottom stays merged)
@@ -161,12 +161,8 @@ export class MenuScene extends Phaser.Scene {
     panel.add(this.add.nineslice(lx + lw / 2, ly + lh / 2, ATLAS, PANEL_FRAME, lw / PANEL_SCALE, lh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
     tabIcons.forEach((ic) => panel.add(ic)); // icons back on top of the frame border
 
-    // Title + rule.
+    // Title (no underline rule — the user didn't want it).
     panel.add(this.T(lx + lw / 2, TITLE_Y * H, TAB_DEFS[m.tab]?.title ?? '', H * 0.03, INK));
-    const rule = this.add.graphics();
-    rule.lineStyle(2, 0x9a9a9a, 1);
-    rule.lineBetween(lx + lw * 0.06, RULE_Y * H, lx + lw * 0.94, RULE_Y * H);
-    panel.add(rule);
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
