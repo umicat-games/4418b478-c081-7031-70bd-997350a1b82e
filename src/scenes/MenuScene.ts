@@ -34,15 +34,16 @@ const TABS = { y: 0.045, x: 0.05, w: 0.062, h: 0.05, gap: 0.012 }; // icon tab c
 const TITLE_Y = 0.215, RULE_Y = 0.255;
 const GRID = { x: 0.06, y: 0.30, w: 0.49, cols: 7, rows: 5, gap: 0.008 };
 const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0.60, panelW: 0.35, panelH: 0.32 };
-// The four tabs: icon + title. Icons come from the `ui-icons` grid (all_icons.png)
-// by default; the chest tab uses a frame of the CHEST sprite instead (there's no chest
-// icon in the ui sheet), so `iconKey` overrides the texture. Mail = message box (245),
-// For-sale = shopping cart (262), Chest = closed-chest frame 0, Settings = gear (0).
+// The four tabs: icon + title. Icons are region tags in the `ui-icons` grid
+// (all_icons.png, 16×16, 16 cols → frame = (y/16)*16 + x/16). Mail = white-message
+// (245), For-sale = whilte-out [sic, backend typo] (294, arrow-out-of-box), Chest =
+// white-sprout (229), Settings = white-settings (164, gear). `iconKey` can override the
+// texture if a future tab needs a non-ui-icons image.
 const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string }> = [
   { key: 'mail', frame: 245, title: '邮件' },
-  { key: 'sale', frame: 262, title: '代售' },
-  { key: 'chest', iconKey: 'chest', frame: 0, title: '箱子' },
-  { key: 'settings', frame: 0, title: '设置' },
+  { key: 'sale', frame: 294, title: '代售' },
+  { key: 'chest', frame: 229, title: '箱子' },
+  { key: 'settings', frame: 164, title: '设置' },
 ];
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
