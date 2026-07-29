@@ -43,25 +43,38 @@ const GRID = { x: 0.06, y: 0.30, w: 0.46, cols: 7, rows: 5, gap: 0.008 };
 const MAIL = { rowH: 0.09, gapPx: 6, bottom: 0.88 }; // mail-list row metrics + viewport bottom
 const RAIL_DX = 0.016; // scroll bar x-offset past the grid/list right edge
 const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0.60, panelW: 0.35, panelH: 0.32 };
-// The four tabs: icon + title. Icons are region tags in the `ui-icons` grid
+// The five tabs: icon + title. Icons are region tags in the `ui-icons` grid
 // (all_icons.png, 16×16, 16 cols → frame = (y/16)*16 + x/16). Mail = white-message
 // (245), For-sale = whilte-out [sic, backend typo] (294, arrow-out-of-box), Chest =
-// white-sprout (229), Settings = white-settings (164, gear). `iconKey` can override the
-// texture if a future tab needs a non-ui-icons image.
+// white-sprout (229), Shop = white-shopping-cart (262), Settings = white-settings (164,
+// gear). `iconKey` can override the texture if a future tab needs a non-ui-icons image.
 const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string }> = [
   { key: 'mail', frame: 245, title: '邮件' },
   { key: 'sale', frame: 294, title: '代售' },
   { key: 'chest', frame: 229, title: '箱子' },
+  { key: 'shop', frame: 262, title: '商店' },
   { key: 'settings', frame: 164, title: '设置' },
 ];
+const TAB_MAIL = 0, TAB_SALE = 1, TAB_CHEST = 2, TAB_SHOP = 3, TAB_SETTINGS = 4;
+
+// Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price + order-count
+// badge); the RIGHT shows the selected item's detail + a quantity stepper (− N +) that
+// edits the order. A footer strip = coin balance + TOTAL (charged on next-morning delivery).
+const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.83, footY: 0.865, noteY: 0.905 };
+const STEP = { y: 0.70, btn: 0.052, gap: 0.05, subY: 0.80 }; // right-side qty stepper (in the detail column)
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
+export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; ordered: number; }
 export interface MenuModel {
   visible: boolean; rev: number;
-  tab: number;               // 0 mail · 1 for-sale · 2 chest · 3 settings
+  tab: number;               // 0 mail · 1 for-sale · 2 chest · 3 shop · 4 settings
   items?: MenuItem[];        // grid (for-sale / chest)
   mails?: MailListEntry[];   // mail list
   selected?: number;         // selected grid index → right detail
+  catalog?: MenuCatalogItem[];  // shop tab
+  shopSelected?: string;        // selected catalog id → right detail + stepper
+  money?: number;               // coin balance (shop footer)
+  orderTotal?: number;          // running order total (shop footer)
 }
 
 export class MenuScene extends Phaser.Scene {
@@ -234,10 +247,11 @@ export class MenuScene extends Phaser.Scene {
     // of the frame/tabs (which stay put).
     const content = this.add.container(0, 0); panel.add(content);
     this.detailBox = undefined;
-    if (m.tab === 3) this.renderSettings(content, lx, lw);
-    else if (m.tab === 0) this.renderMailList(content, m.mails ?? []);
+    if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx, lw);
+    else if (m.tab === TAB_MAIL) this.renderMailList(content, m.mails ?? []);
+    else if (m.tab === TAB_SHOP) this.renderShop(content, m);
     else this.renderGrid(content, m.items ?? [], m.selected);
-    if (m.tab === 1 || m.tab === 2) {
+    if (m.tab === TAB_SALE || m.tab === TAB_CHEST) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);
@@ -379,6 +393,83 @@ export class MenuScene extends Phaser.Scene {
     c.add(this.T(lx + lw / 2, 0.5 * H, '设置（待补充）', H * 0.03, SUB));
   }
 
+  /** SHOP tab: LEFT = scrollable catalog list (icon + name + price + order badge); a
+   *  footer strip = balance + TOTAL; RIGHT = the selected item's detail + a qty stepper
+   *  that edits the order (cart-on-catalog — charged on next-morning delivery). */
+  private renderShop(c: Phaser.GameObjects.Container, m: MenuModel): void {
+    const W = this.scale.width, H = this.scale.height;
+    const catalog = m.catalog ?? [];
+    const selId = m.shopSelected;
+    const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
+    const rowH = SHOP.rowH * H, step = rowH + SHOP.gapPx;
+    const visible = Math.max(1, Math.floor((SHOP.bottom * H - gy) / step));
+    this.maxScrollRows = Math.max(0, catalog.length - visible);
+    if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
+    const rowBounds: Array<{ x: number; y: number; w: number; h: number; id: string }> = [];
+    catalog.slice(this.scroll, this.scroll + visible).forEach((e, k) => {
+      const ry = gy + k * step, sel = e.id === selId;
+      const bar = this.add.graphics();
+      bar.fillStyle(sel ? 0xf3ead1 : 0xe7dcc2, 1); bar.fillRoundedRect(gx, ry, gw, rowH, 8);
+      bar.lineStyle(sel ? 3 : 2, sel ? 0xb89a5e : 0xd2be95, 1); bar.strokeRoundedRect(gx, ry, gw, rowH, 8); c.add(bar);
+      if (this.textures.exists(e.iconKey)) {
+        const icon = this.add.image(gx + rowH * 0.62, ry + rowH / 2, e.iconKey, e.iconFrame);
+        icon.setScale((rowH * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
+      }
+      c.add(this.T(gx + rowH * 1.2, ry + rowH * 0.5, e.label, H * 0.024, INK, 0));
+      c.add(this.T(gx + gw - rowH * 0.35, ry + rowH * 0.5, String(e.price), H * 0.024, '#7a5a34', 1));
+      if (e.ordered > 0) { // order-count badge (top-right of the row)
+        const bd = this.add.graphics(); bd.fillStyle(0x4aa3df, 1); bd.fillCircle(gx + gw - 9, ry + 9, H * 0.014); c.add(bd);
+        c.add(this.T(gx + gw - 9, ry + 9, String(e.ordered), H * 0.019, '#ffffff'));
+      }
+      rowBounds.push({ x: gx, y: ry, w: gw, h: rowH, id: e.id });
+    });
+    this.registry.set('menuShopRows', rowBounds);
+    this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visible * step - SHOP.gapPx, visible, catalog.length);
+
+    // Footer: balance (left) + TOTAL (right, red when unaffordable) + delivery note.
+    const total = m.orderTotal ?? 0, money = m.money ?? 0;
+    c.add(this.T(gx, SHOP.footY * H, `余额 ${money}`, H * 0.026, INK, 0));
+    c.add(this.T(gx + gw, SHOP.footY * H, `合计 ${total}`, H * 0.026, total <= money ? '#3a6a2a' : '#b5533a', 1));
+    c.add(this.T(gx, SHOP.noteY * H, '* 次日早晨送到邮箱', H * 0.018, SUB, 0));
+
+    // RIGHT: the selected catalog item's detail + quantity stepper.
+    this.renderShopDetail(c, catalog.find((e) => e.id === selId));
+  }
+
+  private renderShopDetail(c: Phaser.GameObjects.Container, e?: MenuCatalogItem): void {
+    const W = this.scale.width, H = this.scale.height;
+    const px = DETAIL.panelX * W, pw = DETAIL.panelW * W;
+    const top = 0.30 * H, ph = 0.62 * H; // tall panel (0.30–0.92) so the stepper fits under the detail
+    c.add(this.add.nineslice(px + pw / 2, top + ph / 2, ATLAS, PANEL_FRAME, pw / PANEL_SCALE, ph / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
+    this.registry.set('menuStepper', []);
+    if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, '选一个要订购的物品', H * 0.024, SUB)); return; }
+    if (this.textures.exists(e.iconKey)) {
+      const img = this.add.image(px + pw / 2, 0.42 * H, e.iconKey, e.iconFrame);
+      img.setScale((DETAIL.imgMax * W) / Math.max(img.width, img.height)); c.add(img);
+    }
+    c.add(this.T(px + pw / 2, 0.555 * H, e.label, H * 0.028, INK));
+    c.add(this.T(px + pw / 2, 0.60 * H, `单价 ${e.price}`, H * 0.023, '#7a5a34'));
+    const desc = this.add.text(px + pw * 0.08, 0.635 * H, e.desc, {
+      fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: pw * 0.84 },
+    }).setOrigin(0.5, 0); desc.setX(px + pw / 2); c.add(desc);
+    // Quantity stepper: [−]  N  [+]
+    const cy = STEP.y * H, btn = STEP.btn * H, dx = STEP.gap * W;
+    const cxN = px + pw / 2, cxMinus = cxN - dx, cxPlus = cxN + dx;
+    const stepBounds: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
+    const mkBtn = (cx: number, label: string, key: string) => {
+      const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
+      const bg = has ? this.add.nineslice(cx, cy, 'square-buttons', 'grey-button', btn, btn, 6, 6, 6, 6)
+        : this.add.rectangle(cx, cy, btn, btn, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
+      c.add(bg); c.add(this.T(cx, cy - H * 0.004, label, H * 0.036, '#5b4327'));
+      stepBounds.push({ x: cx - btn / 2, y: cy - btn / 2, w: btn, h: btn, key });
+    };
+    mkBtn(cxMinus, '−', 'dec');
+    c.add(this.T(cxN, cy, String(e.ordered), H * 0.038, INK));
+    mkBtn(cxPlus, '+', 'inc');
+    c.add(this.T(cxN, STEP.subY * H, `小计 ${e.price * e.ordered}`, H * 0.023, SUB));
+    this.registry.set('menuStepper', stepBounds);
+  }
+
   private renderMenu(m: ActionMenuModel): void {
     this.menuRoot?.destroy(); this.menuRoot = undefined;
     this.menuTargets = []; this.hovered = null;
@@ -416,7 +507,7 @@ export class MenuScene extends Phaser.Scene {
   private close(): void {
     this.registry.set('menuTabs', []); this.registry.set('menuSlots', []); this.registry.set('menuMailRows', []);
     this.registry.set('menuPanel', null); this.registry.set('menuActionBounds', []); this.registry.set('menuCloseBtn', null);
-    this.registry.set('menuRail', null);
+    this.registry.set('menuRail', null); this.registry.set('menuShopRows', []); this.registry.set('menuStepper', []);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
     this.slotTargets = []; this.menuTargets = []; this.hovered = null;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; this.panel = undefined; this.dim = undefined; return; }

@@ -672,6 +672,7 @@ export class GameScene extends Phaser.Scene {
   private menuRev = 0;
   private menuActionRev = 0;
   private menuDragging = false; // dragging the unified menu's scroll rail
+  private menuShopSel?: string; // selected catalog id on the Shop tab (→ right detail + stepper)
   // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
   // mailbox/chest itemMenu but rendered by MenuScene via the `menuAction` registry key).
   private menuItemMenu: { index: number; x: number; y: number } | null = null;
@@ -1385,9 +1386,9 @@ export class GameScene extends Phaser.Scene {
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.menuOpen) {
-        // Dragging the scroll rail scrolls the list; an item slot wins over the rail's
-        // wide hit zone, and the rail is off while a sub-popup (action/keypad/receipt) is up.
-        const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null;
+        // Dragging the scroll rail scrolls the list; an item slot / shop row wins over
+        // the rail's wide hit zone, and the rail is off while a sub-popup is up.
+        const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null || this.menuShopRowAt(pointer.x, pointer.y) !== null;
         if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); return; }
         this.handleMenuClick(pointer.x, pointer.y); return;
       }
@@ -1440,7 +1441,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
       // Unified menu / order book / bag open: a touch on the scroll rail starts a drag-scroll.
-      if (this.menuOpen) { const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null; if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); } return; }
+      if (this.menuOpen) { const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null || this.menuShopRowAt(pointer.x, pointer.y) !== null; if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); } return; }
       if (this.orderOpen) { if (this.orderRailAt(pointer.x, pointer.y)) { this.orderDragging = true; this.orderDragTo(pointer.y); } return; }
       if (this.bagOpen) { const overItem = this.itemSlotAt('bagSlots', pointer.x, pointer.y) !== null; if (!this.bagMenu && !this.bagSlotPick && !overItem && this.bagRailAt(pointer.x, pointer.y)) { this.bagDragging = true; this.bagDragTo(pointer.y); } else this.bagPointerDown(pointer.x, pointer.y); return; }
       if (!this.inventoryOpen) return;
@@ -1560,7 +1561,7 @@ export class GameScene extends Phaser.Scene {
     if (this.handlePaletteClick(x, y)) return;
     // Backpack button → open the full grid (mainly for touch — no E key).
     if (this.overBackpackButton(x, y)) { this.openBag(); return; }
-    if (this.overOrderButton(x, y)) { this.openOrderBook(); return; }
+    if (this.overOrderButton(x, y)) { this.openMenu(3); return; } // order button → unified menu, Shop tab
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
@@ -3689,10 +3690,11 @@ export class GameScene extends Phaser.Scene {
 
   // ── Unified menu (MenuScene) — tabs: mail / for-sale / chest / settings ─────────
 
-  /** Open the unified menu on `tab` (0 mail · 1 for-sale · 2 chest · 3 settings). */
+  /** Open the unified menu on `tab` (0 mail · 1 for-sale · 2 chest · 3 shop · 4 settings). */
   private openMenu(tab: number): void {
     this.menuTab = tab;
     this.menuSelected = -1;
+    if (tab === 3 && !this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; // default the Shop selection
     if (!this.menuOpen) {
       this.menuOpen = true;
       if (this.locked) this.input.manager.mouse?.releasePointerLock();
@@ -3716,6 +3718,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private publishMenu(_open = false): void {
+    // Shop catalog (only built for the Shop tab — orderCatalog() isn't free).
+    const shop = this.menuTab === 3;
+    const catalog = shop
+      ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: e.label, price: e.price, desc: this.itemDesc(e.id), ordered: this.orderDraft.get(e.id) ?? 0 }))
+      : undefined;
     this.registry.set('menu', {
       visible: true, rev: ++this.menuRev, tab: this.menuTab,
       items: this.menuStore().map((it) => ({
@@ -3724,7 +3731,41 @@ export class GameScene extends Phaser.Scene {
       })),
       mails: this.mailListModel(),
       selected: this.menuSelected,
+      catalog, shopSelected: this.menuShopSel, money: this.money, orderTotal: this.orderTotal(),
     });
+  }
+
+  /** Shop catalog row under (x,y) → its id. */
+  private menuShopRowAt(x: number, y: number): string | null {
+    const rows = this.registry.get('menuShopRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
+    const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    return hit ? hit.id : null;
+  }
+
+  /** Shop qty-stepper button under (x,y) → 'inc' | 'dec'. */
+  private menuStepperAt(x: number, y: number): string | null {
+    const b = this.registry.get('menuStepper') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
+    const hit = b?.find((s) => x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
+    return hit ? hit.key : null;
+  }
+
+  /** +/− the order quantity for the selected catalog item (cart edit; charged on
+   *  next-morning delivery). `inc` is blocked if the running total would exceed coins. */
+  private menuShopStep(dir: string): void {
+    const id = this.menuShopSel;
+    if (!id) return;
+    if (dir === 'inc') {
+      if (this.orderTotal() + this.priceOf(id) <= this.money) {
+        this.orderDraft.set(id, (this.orderDraft.get(id) ?? 0) + 1);
+        if (this.orderDeliverDay < 0) this.orderDeliverDay = this.dayCount + 1; // ships next morning
+      }
+    } else {
+      const n = (this.orderDraft.get(id) ?? 0) - 1;
+      if (n <= 0) this.orderDraft.delete(id); else this.orderDraft.set(id, n);
+      if (this.orderDraft.size === 0) this.orderDeliverDay = -1;
+    }
+    this.publishMenu();
+    this.scheduleSave();
   }
 
   /** Flavor description for the right-side detail panel. Keyed by item id in i18n
@@ -3772,6 +3813,12 @@ export class GameScene extends Phaser.Scene {
       // Mail: tap a row → open its receipt.
       const mid = this.menuMailRowAt(x, y);
       if (mid) { this.openReceipt(mid); return true; }
+    } else if (this.menuTab === 3) {
+      // Shop: a stepper +/− edits the order for the selected item; a catalog row selects it.
+      const sk = this.menuStepperAt(x, y);
+      if (sk) { this.menuShopStep(sk); return true; }
+      const rid = this.menuShopRowAt(x, y);
+      if (rid) { this.menuShopSel = rid; this.publishMenu(); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
