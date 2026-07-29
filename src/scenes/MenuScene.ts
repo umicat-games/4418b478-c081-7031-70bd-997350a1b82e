@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { dialogFont } from '../i18n';
+import { dialogFont, t } from '../i18n';
 import { renderActionMenu, renderKeypad, renderSlotPicker, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
 import type { MailListEntry } from './MailboxScene';
 
@@ -264,8 +264,9 @@ export class MenuScene extends Phaser.Scene {
     panel.add(this.add.nineslice(lx + lw / 2, ly + lh / 2, ATLAS, PANEL_FRAME, lw / PANEL_SCALE, lh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
     tabIcons.forEach((ic) => panel.add(ic)); // icons back on top of the frame border
 
-    // Title (no underline rule — the user didn't want it).
-    panel.add(this.T(lx + lw / 2, TITLE_Y * H, TAB_DEFS[m.tab]?.title ?? '', H * 0.03, INK));
+    // Title (no underline rule — the user didn't want it). Localized via i18n `tab_<key>`.
+    const tkey = TAB_DEFS[m.tab]?.key;
+    panel.add(this.T(lx + lw / 2, TITLE_Y * H, tkey ? t('tab_' + tkey) : '', H * 0.03, INK));
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
@@ -394,7 +395,7 @@ export class MenuScene extends Phaser.Scene {
     const rowH = MAIL.rowH * H, step = rowH + MAIL.gapPx;
     this.scrollStepPx = step;
     const bounds: Array<{ x: number; y: number; w: number; h: number; id: string }> = [];
-    if (!mails.length) { c.add(this.T(gx + gw / 2, gy + H * 0.1, '还没有邮件', H * 0.03, SUB)); }
+    if (!mails.length) { c.add(this.T(gx + gw / 2, gy + H * 0.1, t('menu_no_mail'), H * 0.03, SUB)); }
     // Window by ROW: how many rows fit between gy and the viewport bottom.
     const visible = Math.max(1, Math.floor((MAIL.bottom * H - gy) / step));
     this.maxScrollRows = Math.max(0, mails.length - visible);
@@ -419,7 +420,7 @@ export class MenuScene extends Phaser.Scene {
 
   private renderSettings(c: Phaser.GameObjects.Container, lx: number, lw: number): void {
     const H = this.scale.height;
-    c.add(this.T(lx + lw / 2, 0.5 * H, '设置（待补充）', H * 0.03, SUB));
+    c.add(this.T(lx + lw / 2, 0.5 * H, t('menu_settings_todo'), H * 0.03, SUB));
   }
 
   /** SHOP tab: LEFT = scrollable catalog list (icon + name + buy price); footer = coin
@@ -453,7 +454,7 @@ export class MenuScene extends Phaser.Scene {
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visible * step - SHOP.gapPx, visible, catalog.length);
 
     // Footer: coin balance.
-    c.add(this.T(gx, SHOP.footY * H, `余额 ${m.money ?? 0}`, H * 0.026, INK, 0));
+    c.add(this.T(gx, SHOP.footY * H, `${t('shop_balance')} ${m.money ?? 0}`, H * 0.026, INK, 0));
 
     // RIGHT: the selected item's detail + qty stepper + BUY button.
     this.renderShopDetail(c, catalog.find((e) => e.id === selId), m.buyQty ?? 1, m.money ?? 0, m.shopMsg ?? '');
@@ -465,13 +466,13 @@ export class MenuScene extends Phaser.Scene {
     const top = 0.30 * H, ph = 0.62 * H; // tall panel (0.30–0.92) so the stepper + buy button fit
     c.add(this.add.nineslice(px + pw / 2, top + ph / 2, ATLAS, PANEL_FRAME, pw / PANEL_SCALE, ph / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
     this.registry.set('menuStepper', []);
-    if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, '选一个要买的物品', H * 0.024, SUB)); return; }
+    if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, t('shop_pick_item'), H * 0.024, SUB)); return; }
     if (this.textures.exists(e.iconKey)) {
       const img = this.add.image(px + pw / 2, 0.40 * H, e.iconKey, e.iconFrame);
       img.setScale((H * 0.14) / Math.max(img.width, img.height)); c.add(img); // ~0.14H tall, not the huge 0.22W
     }
     c.add(this.T(px + pw / 2, 0.52 * H, e.label, H * 0.028, INK));
-    c.add(this.T(px + pw / 2, 0.565 * H, `单价 ${e.price}`, H * 0.023, '#7a5a34'));
+    c.add(this.T(px + pw / 2, 0.565 * H, `${t('shop_unit_price')} ${e.price}`, H * 0.023, '#7a5a34'));
     const desc = this.add.text(px + pw / 2, 0.60 * H, e.desc, {
       fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: pw * 0.84 },
     }).setOrigin(0.5, 0); c.add(desc);
@@ -493,11 +494,11 @@ export class MenuScene extends Phaser.Scene {
     mkBtn(cxPlus, '+', 'inc');
     // BUY button — wide, shows the subtotal; greyed intent when unaffordable (still tappable → warns).
     const sub = e.price * qty;
-    mkBtn(cxN, `购买 ${sub}`, 'buy', pw * 0.62, btn * 1.05);
+    mkBtn(cxN, `${t('shop_buy')} ${sub}`, 'buy', pw * 0.62, btn * 1.05);
     this.registry.set('menuStepper', bounds);
     // Transient warning (金币不够 / 箱子满了).
     if (msg) c.add(this.T(cxN, STEP.msgY * H, msg, H * 0.022, '#b5533a'));
-    else if (sub > money) c.add(this.T(cxN, STEP.msgY * H, '金币不够', H * 0.02, '#b5896a'));
+    else if (sub > money) c.add(this.T(cxN, STEP.msgY * H, t('shop_no_coins'), H * 0.02, '#b5896a'));
   }
 
   private renderMenu(m: ActionMenuModel): void {

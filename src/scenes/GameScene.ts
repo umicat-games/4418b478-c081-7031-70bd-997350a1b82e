@@ -3724,13 +3724,13 @@ export class GameScene extends Phaser.Scene {
   private publishMenu(_open = false): void {
     // Shop catalog (only built for the Shop tab — orderCatalog() isn't free).
     const catalog = this.menuTab === 2
-      ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: e.label, price: e.price, desc: this.itemDesc(e.id) }))
+      ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
     this.registry.set('menu', {
       visible: true, rev: ++this.menuRev, tab: this.menuTab,
       items: this.menuStore().map((it) => ({
         id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
-        label: it.label ?? it.id, desc: this.itemDesc(it.id),
+        label: this.itemName(it.id), desc: this.itemDesc(it.id),
       })),
       mails: this.mailListModel(),
       selected: this.menuSelected,
@@ -3769,8 +3769,8 @@ export class GameScene extends Phaser.Scene {
     const id = this.menuShopSel;
     if (!id) return;
     const n = this.menuBuyQty, cost = this.priceOf(id) * n;
-    if (cost > this.money) { this.flashShopMsg('金币不够'); return; }
-    if (!this.chestHasSpaceFor(id)) { this.flashShopMsg('箱子满了'); return; }
+    if (cost > this.money) { this.flashShopMsg(t('shop_no_coins')); return; }
+    if (!this.chestHasSpaceFor(id)) { this.flashShopMsg(t('chest_full')); return; }
     this.addMoney(-cost);
     this.addToChest(itemFromId(id, n));
     this.menuBuyQty = 1;
@@ -3819,6 +3819,14 @@ export class GameScene extends Phaser.Scene {
     const key = 'desc_' + id.replace(/-/g, '_');
     const s = t(key);
     return s === key ? '' : s; // t() echoes the key back when it's missing
+  }
+
+  /** Localized display name for an item id (`item_<id>`, hyphens→underscores, en+zh).
+   *  Falls back to the factory's (English) label so an untranslated id still shows. */
+  private itemName(id: string): string {
+    const key = 'item_' + id.replace(/-/g, '_');
+    const s = t(key);
+    return s === key ? (itemFromId(id, 1).label ?? id) : s;
   }
 
   /** Route a tap while the unified menu is open. Priority (topmost first): receipt →
@@ -3890,9 +3898,9 @@ export class GameScene extends Phaser.Scene {
   private menuItemOptions(index: number): Array<{ action: 'hotbar' | 'sell' | 'delete'; label: string }> {
     const it = this.chestStore[index];
     const opts: Array<{ action: 'hotbar' | 'sell' | 'delete'; label: string }> = [];
-    if (it && isHotbarUsable(it)) opts.push({ action: 'hotbar', label: '进 Hotbar' });
-    if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: 'Sell' });
-    opts.push({ action: 'delete', label: 'Delete' });
+    if (it && isHotbarUsable(it)) opts.push({ action: 'hotbar', label: t('action_hotbar') });
+    if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_sell') });
+    opts.push({ action: 'delete', label: t('action_delete') });
     return opts;
   }
 

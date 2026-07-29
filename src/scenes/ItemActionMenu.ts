@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { dialogFont } from './../i18n';
+import { dialogFont, t } from './../i18n';
 
 // A small contextual ACTION MENU that pops up next to a clicked mailbox/chest item
 // (a beige `frame-medium` nine-slice panel + a stack of pixel-font options, the
@@ -137,7 +137,7 @@ export function renderKeypad(
     bounds.push({ x: cx - w / 2, y: cy - h / 2, w, h, key: k, bg }); // bg tinted on hover
   };
 
-  T(left + panelW / 2, top + PAD + TITLE_H / 2, 'How Many?', '#5b4327');
+  T(left + panelW / 2, top + PAD + TITLE_H / 2, t('keypad_how_many'), '#5b4327');
 
   // Display row: `<`  [ value ]  `>`
   const dispY = top + PAD + TITLE_H + DISP_H / 2;
@@ -187,7 +187,7 @@ export function renderSlotPicker(
   } else {
     parent.add(scene.add.rectangle(left + panelW / 2, top + panelH / 2, panelW, panelH, 0xf2e2c4).setStrokeStyle(3, 0x5b3a1e));
   }
-  parent.add(scene.add.text(left + panelW / 2, top + PAD + TITLE_H / 2, 'To Hotbar', { fontFamily: dialogFont(), fontSize: FS + 'px', color: '#5b4327', resolution: 3 }).setOrigin(0.5));
+  parent.add(scene.add.text(left + panelW / 2, top + PAD + TITLE_H / 2, t('action_hotbar'), { fontFamily: dialogFont(), fontSize: FS + 'px', color: '#5b4327', resolution: 3 }).setOrigin(0.5));
 
   const bounds: MenuBound[] = [];
   const gx0 = left + PAD + BW / 2;
