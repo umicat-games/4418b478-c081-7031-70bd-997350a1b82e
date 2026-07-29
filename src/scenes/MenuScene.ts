@@ -56,7 +56,7 @@ const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 2, TAB_SETTINGS = 3;
 // INSTANT — coins out, item into the chest (if it has room), else a warning. A footer
 // strip shows the coin balance.
 const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.85, footY: 0.895 };
-const STEP = { y: 0.66, btn: 0.052, gap: 0.05, buyY: 0.79, msgY: 0.86 }; // right-side qty stepper + buy button
+const STEP = { y: 0.725, btn: 0.052, gap: 0.05, buyY: 0.83, msgY: 0.89 }; // right-side qty stepper + buy button (pushed down so the desc doesn't collide)
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
 export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; }
@@ -462,12 +462,12 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuStepper', []);
     if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, '选一个要买的物品', H * 0.024, SUB)); return; }
     if (this.textures.exists(e.iconKey)) {
-      const img = this.add.image(px + pw / 2, 0.42 * H, e.iconKey, e.iconFrame);
-      img.setScale((DETAIL.imgMax * W) / Math.max(img.width, img.height)); c.add(img);
+      const img = this.add.image(px + pw / 2, 0.40 * H, e.iconKey, e.iconFrame);
+      img.setScale((H * 0.14) / Math.max(img.width, img.height)); c.add(img); // ~0.14H tall, not the huge 0.22W
     }
-    c.add(this.T(px + pw / 2, 0.545 * H, e.label, H * 0.028, INK));
-    c.add(this.T(px + pw / 2, 0.59 * H, `单价 ${e.price}`, H * 0.023, '#7a5a34'));
-    const desc = this.add.text(px + pw / 2, 0.62 * H, e.desc, {
+    c.add(this.T(px + pw / 2, 0.52 * H, e.label, H * 0.028, INK));
+    c.add(this.T(px + pw / 2, 0.565 * H, `单价 ${e.price}`, H * 0.023, '#7a5a34'));
+    const desc = this.add.text(px + pw / 2, 0.60 * H, e.desc, {
       fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: pw * 0.84 },
     }).setOrigin(0.5, 0); c.add(desc);
     // Quantity stepper: [−]  N  [+]
