@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { renderActionMenu, renderKeypad, renderSlotPicker, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
-import type { MailListEntry } from './MailboxScene';
+import type { MailListEntry } from './menu-types';
 
 // The UNIFIED menu (Zelda-style): ONE screen with icon TABS — Mail / For-sale / Chest /
 // Settings — replacing the separate mailbox + chest + bag modals. Left = the tab's

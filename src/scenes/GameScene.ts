@@ -10,8 +10,7 @@ import {
   type Npc,
 } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
-import type { MailItem, MailListEntry } from './MailboxScene';
-import type { OrderCatalogEntry } from './OrderBookScene';
+import type { MailListEntry, OrderCatalogEntry } from './menu-types';
 import type { ReceiptLine } from './ReceiptScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
 import { t, initLang } from '../i18n';
@@ -513,10 +512,10 @@ interface SaveBlob {
   money?: number; // v6: coin balance (HUD)
   dayTimeMs?: number; // v6: position in the in-game day loop (HUD sun-arc pointer)
   dayCount?: number; // v6: whole days elapsed (weather pick)
-  mailbox?: Array<{ id: string; count: number }>; // v7: mailbox contents
+  mailbox?: Array<{ id: string; count: number }>; // v7: mailbox contents (vestigial)
   chest?: Array<{ id: string; count: number }>; // v7: chest contents
-  order?: Array<{ id: string; count: number }>; // v8: today's order (editable; ships next morning)
-  orderDeliverDay?: number; // v8: the dayCount the order delivers + is charged
+  // v8 (`order`/`orderDeliverDay`) is retired — the order book was replaced by the instant
+  // shop; old v8 saves just ignore those keys.
   mail?: MailEntry[]; // v9: the Mail-tab list (sales receipts, …)
   autonomy?: { harvest: boolean; water: boolean }; // v10: Cato's standing auto-farm prefs
   staminaMax?: number; // v11: Cato's energy cap (raisable by future upgrades)
@@ -639,33 +638,13 @@ export class GameScene extends Phaser.Scene {
   private houseDoor?: Phaser.GameObjects.Sprite;
   private houseDoorOpen = false;
   private houseDoorAnimating = false;
-  // The editor-placed mailbox (mailbox_animation_frames). Clicking it plays the
-  // open animation + pops the big-mailbox modal (MailboxScene). Modal-close is
-  // routed like the Cato dialog / confirm.
+  // The editor-placed mailbox / chest sprites (door objects). Clicking one plays its
+  // open animation, THEN opens the unified menu (openMenuViaObject); closing plays close.
   private mailbox?: Phaser.GameObjects.Sprite;
-  private mailboxOpen = false;
-  private mailboxRev = 0;
-  private mailboxHasMail = false; // drives which open anim plays; no mail system yet → empty
-  private mailboxDragging = false; // dragging the mail scroll rail
-  private mailboxTab = 1; // 0 = Mail list, 1 = Items (the shipping/received bin)
+  private mailboxHasMail = false; // drives which mailbox open anim plays (mail vs empty)
   private chest?: Phaser.GameObjects.Sprite;
-  private chestOpen = false;
-  private chestRev = 0;
-  private chestDragging = false; // dragging the chest scroll rail
-  // Backpack (bag) modal — opened by the hotbar backpack button; shows the backpack
-  // items (inventory indices ≥ INV_COLS) compactly, above the hotbar.
-  private bagOpen = false;
-  private bagRev = 0;
-  private bagDragging = false; // dragging the bag scroll rail
-  private bagIndexMap: number[] = []; // bag display index → real inventory index
-  private bagMenu: { index: number; x: number; y: number; actions: Array<'hotbar' | 'store' | 'drop'> } | null = null; // item action menu
-  private bagSlotPick: { index: number; x: number; y: number } | null = null; // hotbar slot picker
-  private bagMenuRev = 0;
-  private bagDragArm: { realIndex: number; x: number; y: number; page: number } | null = null; // pressed an item
-  private bagDrag: { realIndex: number } | null = null; // actively dragging an item toward the hotbar (mouse)
-  private bagScrolling = false; // touch: vertical swipe is flipping pages
-  // Persistent CONTENTS of the mailbox + chest (real ItemStacks). Clicking an item
-  // opens an action menu (Take → backpack / Sell → mailbox / Delete). Saved (v7).
+  // Persistent CONTENTS of the chest (real ItemStacks) — the unified menu Chest tab; the
+  // player's only storage. `mailboxStore` is vestigial (kept for save compat / DEBUG clear).
   private mailboxStore: ItemStack[] = [];
   private chestStore: ItemStack[] = [];
   private chestSeeded = false; // one-time starter-seed grant into the chest (saved v12)
@@ -694,24 +673,12 @@ export class GameScene extends Phaser.Scene {
   private menuItemMenu: { index: number; x: number; y: number } | null = null;
   private menuItemQty: { action: 'sell' | 'give' | 'tochest'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
   private menuSlotPick: { index: number; x: number; y: number } | null = null; // chest → "进 Hotbar" slot picker
-  // The MAIL list (Mail tab). First kind = a sales receipt from "Market Manager",
-  // generated at day-settlement when items in the shipping bin sell. Saved (v8).
+  // The MAIL list (Mail tab of the unified menu). Future: AI-notification / narrative
+  // inbox; a receipt opens the ReceiptScene. Saved (v9).
   private mailList: MailEntry[] = [];
   private mailIdSeq = 0;
-  private openMailId: string | null = null; // which receipt is open (over the mailbox)
+  private openMailId: string | null = null; // which receipt is open (over the menu)
   private receiptRev = 0;
-  private itemMenu: { kind: 'mailbox' | 'chest'; index: number; x: number; y: number } | null = null; // open item menu
-  private itemMenuRev = 0;
-  // The "How Many?" keypad (replaces the menu when you pick Take / Sell).
-  private itemQty: { action: 'take' | 'sell'; kind: 'mailbox' | 'chest'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
-  // Order book (bottom-right button): catalog → draft → place order → arrives in the
-  // mailbox next morning. `orderDraft` = the current selection (id → qty).
-  private orderOpen = false;
-  private orderRev = 0;
-  private orderDraft = new Map<string, number>(); // today's editable order (id → qty)
-  private orderSelectedId?: string;
-  private orderDeliverDay = -1; // dayCount on which the current order delivers (-1 = none)
-  private orderDragging = false; // dragging the catalog scroll rail
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
 
@@ -968,7 +935,7 @@ export class GameScene extends Phaser.Scene {
       panGesture.on('pan', (p: { dx: number; dy: number; pointer?: Phaser.Input.Pointer }) => {
         const pointer = p.pointer ?? this.input.activePointer;
         if (!pointer.wasTouch) return; // mouse → edge-scroll, not drag
-        if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.bagOpen || this.mailboxOpen || this.chestOpen || this.orderOpen) return; // don't pan behind a modal
+        if (this.menuOpen || this.dialogOpen || this.inventoryOpen) return; // don't pan behind a modal
         this.cameraFollow = false; // manual pan wins over follow-Cato
         // dx/dy are screen pixels → divide by zoom to get world delta
         cam.scrollX -= p.dx / cam.zoom;
@@ -1295,18 +1262,14 @@ export class GameScene extends Phaser.Scene {
    *  lerp (update) slides onto the now-frozen Cato; openDialog is guarded so a
    *  re-click while already chatting is a no-op. */
   private focusCato(): void {
-    this.closeOpenModal(); // close any open chest/mailbox/bag/order first → chat replaces it
+    this.closeOpenModal(); // close the unified menu first → chat replaces it
     this.followCato();
     this.openDialog();
   }
 
-  /** Close whichever inventory modal is open (chest / mailbox / bag / order). */
+  /** Close the unified menu if it's open (chat replaces it). */
   private closeOpenModal(): void {
     if (this.menuOpen) this.closeMenu();
-    if (this.mailboxOpen) this.closeMailbox();
-    if (this.chestOpen) this.closeChest();
-    if (this.bagOpen) this.closeBag();
-    if (this.orderOpen) this.closeOrderBook();
   }
 
   // ── "Find cat" button — warm cozy pill, fixed to top-right ───────────
@@ -1371,20 +1334,14 @@ export class GameScene extends Phaser.Scene {
     // Overlays, back-to-front: hotbar → full backpack → cursor (always topmost).
     if (!this.scene.isActive('HotbarScene')) this.scene.launch('HotbarScene');
     if (!this.scene.isActive('WeatherScene')) this.scene.launch('WeatherScene');
-    if (!this.scene.isActive('InventoryScene')) this.scene.launch('InventoryScene');
     if (!this.scene.isActive('PaletteScene')) this.scene.launch('PaletteScene');
     if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
-    if (!this.scene.isActive('MailboxScene')) this.scene.launch('MailboxScene');
-    if (!this.scene.isActive('ChestScene')) this.scene.launch('ChestScene');
-    if (!this.scene.isActive('OrderBookScene')) this.scene.launch('OrderBookScene');
-    if (!this.scene.isActive('BagScene')) this.scene.launch('BagScene');
     if (!this.scene.isActive('ReceiptScene')) this.scene.launch('ReceiptScene');
     if (!this.scene.isActive('ChatterScene')) this.scene.launch('ChatterScene');
     if (!this.scene.isActive('MenuScene')) this.scene.launch('MenuScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
-    this.scene.bringToTop('InventoryScene');
     this.scene.bringToTop('PaletteScene');
     this.scene.bringToTop('ChatterScene'); // above UmicatHud so the mood emoji shows IN the portrait
     this.scene.bringToTop('MenuScene');     // the unified menu sits above the HUD too
@@ -1409,32 +1366,6 @@ export class GameScene extends Phaser.Scene {
         if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); return; }
         this.handleMenuClick(pointer.x, pointer.y); return;
       }
-      // Mail modal open: dragging the rail flips pages; else only the close button
-      // closes it (works for mouse AND touch — both reach this handler).
-      if (this.mailboxOpen) {
-        if (this.mailboxRailAt(pointer.x, pointer.y)) { this.mailboxDragging = true; this.mailboxDragTo(pointer.y); return; }
-        this.handleMailboxClick(pointer.x, pointer.y); return;
-      }
-      if (this.chestOpen) {
-        if (this.chestRailAt(pointer.x, pointer.y)) { this.chestDragging = true; this.chestDragTo(pointer.y); return; }
-        this.handleChestClick(pointer.x, pointer.y); return;
-      }
-      if (this.orderOpen) {
-        if (this.orderRailAt(pointer.x, pointer.y)) { this.orderDragging = true; this.orderDragTo(pointer.y); return; }
-        this.handleOrderClick(pointer.x, pointer.y); return;
-      }
-      if (this.bagOpen) {
-        // An item slot wins over the rail (the rail's wide hit zone overlaps the
-        // rightmost column); the rail is also off while a menu/picker is open (modal).
-        const overItem = this.itemSlotAt('bagSlots', pointer.x, pointer.y) !== null;
-        if (!this.bagMenu && !this.bagSlotPick && !overItem && this.bagRailAt(pointer.x, pointer.y)) { this.bagDragging = true; this.bagDragTo(pointer.y); return; }
-        this.bagPointerDown(pointer.x, pointer.y); return;
-      }
-      // Backpack open: route the click to actAt (pick/drop a cell, or click-outside to
-      // close) whether or not the pointer is locked — NEVER fall through to the world /
-      // Cato sitting BEHIND the panel. (Lock is often dropped after chatting, so an open
-      // backpack is commonly UNLOCKED, where this handler used to reach catContains.)
-      if (this.inventoryOpen) { this.locked ? this.handleLockedClick() : this.actAt(pointer.x, pointer.y); return; }
       if (this.locked) { this.handleLockedClick(); return; }
       // Not locked yet: clicking the cat opens the dialog; anything else captures
       // the pointer (the normal edge-scroll / camera mode). NOTE: Cato's top-right
@@ -1459,43 +1390,19 @@ export class GameScene extends Phaser.Scene {
       if (!pointer.wasTouch) return;
       // Unified menu: touch scrolls via a SWIPE (handled in MenuScene) — no rail drag here.
       if (this.menuOpen) return;
-      if (this.orderOpen) { if (this.orderRailAt(pointer.x, pointer.y)) { this.orderDragging = true; this.orderDragTo(pointer.y); } return; }
-      if (this.bagOpen) { const overItem = this.itemSlotAt('bagSlots', pointer.x, pointer.y) !== null; if (!this.bagMenu && !this.bagSlotPick && !overItem && this.bagRailAt(pointer.x, pointer.y)) { this.bagDragging = true; this.bagDragTo(pointer.y); } else this.bagPointerDown(pointer.x, pointer.y); return; }
-      if (!this.inventoryOpen) return;
-      const c = this.inventoryCellAt(pointer.x, pointer.y);
-      this.invDragFrom = c;
-      if (c !== null && !this.heldStack && this.inventory[c]) this.clickInventoryCell(c); // pick up
-      this.cursorState.x = pointer.x; // the held stack renders at the cursor pos
-      this.cursorState.y = pointer.y;
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.menuDragging) { this.menuDragTo(pointer.y); return; } // drag the unified menu scroll rail
-      if (this.mailboxDragging) { this.mailboxDragTo(pointer.y); return; } // drag the mail rail (mouse + touch)
-      if (this.chestDragging) { this.chestDragTo(pointer.y); return; } // drag the chest rail (mouse + touch)
-      if (this.orderDragging) { this.orderDragTo(pointer.y); return; } // drag the order catalog rail (mouse + touch)
-      if (this.bagDragging) { this.bagDragTo(pointer.y); return; } // drag the bag scroll rail (mouse + touch)
-      if (this.bagOpen) { this.bagPointerMove(pointer.x, pointer.y, pointer.wasTouch); return; } // mouse: drag item; touch: swipe-scroll
-      if (pointer.wasTouch && this.inventoryOpen && this.heldStack) {
-        this.cursorState.x = pointer.x; // held stack follows the finger
-        this.cursorState.y = pointer.y;
-      }
     });
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      this.menuDragging = false; this.mailboxDragging = false; this.chestDragging = false; this.orderDragging = false; this.bagDragging = false; // end a rail drag
-      if (this.bagOpen && !pointer.wasTouch) this.bagPointerUp(pointer.x, pointer.y); // mouse: drop an item / click → menu
+    this.input.on('pointerup', () => {
+      this.menuDragging = false; // end a rail drag
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
-      if (this.inventoryOpen) { this.endInventoryTouch(pointer.x, pointer.y); return; }
-      // Bag: handle BEFORE the drag/tap split — a drag IS the drop, a small move opens the menu.
-      if (this.bagOpen) { this.bagPointerUp(pointer.x, pointer.y); return; }
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; }
-      if (this.mailboxOpen) { this.handleMailboxClick(pointer.x, pointer.y); return; }
-      if (this.chestOpen) { this.handleChestClick(pointer.x, pointer.y); return; }
-      if (this.orderOpen) { this.handleOrderClick(pointer.x, pointer.y); return; }
       this.actAt(pointer.x, pointer.y);
     });
 
@@ -1562,18 +1469,6 @@ export class GameScene extends Phaser.Scene {
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
     if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
-    // Modal mail box + chest: consume taps; only the close button closes them.
-    if (this.handleMailboxClick(x, y)) return;
-    if (this.handleChestClick(x, y)) return;
-    if (this.handleOrderClick(x, y)) return;
-    if (this.handleBagClick(x, y)) return;
-    // Backpack open: tap a cell to pick/drop/merge/swap; tap outside → close.
-    if (this.inventoryOpen) {
-      const c = this.inventoryCellAt(x, y);
-      if (c !== null) this.clickInventoryCell(c);
-      else this.toggleInventory();
-      return;
-    }
     // Build palette (wall facing) → pick that orientation.
     if (this.handlePaletteClick(x, y)) return;
     // Backpack button → open the full grid (mainly for touch — no E key).
@@ -2083,84 +1978,6 @@ export class GameScene extends Phaser.Scene {
     if (cell?.place === 'tree' && cell.variant) this.activeTreeType = cell.variant as TreeType;
     if (cell?.place === 'bush' && cell.variant) this.activeBushType = cell.variant as BerryType;
     this.closeWallPalette(); // cancel any pending wall-orientation choice on tool change
-  }
-
-  /** Open / close the full backpack grid (E / I / Esc). On close, a still-held
-   *  stack is returned to a free cell so nothing is lost. */
-  private toggleInventory(): void {
-    if (this.dialogOpen) return;
-    this.inventoryOpen = !this.inventoryOpen;
-    if (!this.inventoryOpen && this.heldStack) {
-      this.returnHeldToFreeCell();
-    }
-    this.publishInventory();
-    this.publishWeatherHud(); // hide the weather HUD behind the backpack overlay
-    this.closeWallPalette(); // cancel a pending wall-orientation choice
-  }
-
-  /** Put the held stack back into the first empty cell (fallback on close). */
-  private returnHeldToFreeCell(): void {
-    if (!this.heldStack) return;
-    const free = this.inventory.findIndex((c) => c === null);
-    if (free >= 0) this.inventory[free] = this.heldStack;
-    this.heldStack = null;
-    this.equipSelected();
-  }
-
-  /** Pick up / drop / merge / swap the stack in backpack cell `c` (Minecraft
-   *  click-to-pick, click-to-place). */
-  private clickInventoryCell(c: number): void {
-    const target = this.inventory[c];
-    if (!this.heldStack) {
-      // Pick up the whole stack.
-      if (target) { this.heldStack = target; this.inventory[c] = null; }
-    } else if (!target) {
-      // Drop into an empty cell.
-      this.inventory[c] = this.heldStack; this.heldStack = null;
-    } else if (target.id === this.heldStack.id && target.stackable && this.heldStack.stackable) {
-      // Merge same-id stacks (overflow stays in hand).
-      const room = MAX_STACK - target.count;
-      const moved = Math.min(room, this.heldStack.count);
-      target.count += moved;
-      this.heldStack.count -= moved;
-      if (this.heldStack.count <= 0) this.heldStack = null;
-    } else {
-      // Swap held ↔ cell.
-      this.inventory[c] = this.heldStack; this.heldStack = target;
-    }
-    this.equipSelected(); // the selected hotbar cell may have changed tool
-    this.publishInventory();
-  }
-
-  /** End a touch drag in the open backpack: drop the held stack onto the cell
-   *  under the finger (or return it if released off-grid); a plain tap on empty
-   *  space (nothing picked up) closes the backpack. */
-  private endInventoryTouch(x: number, y: number): void {
-    const target = this.inventoryCellAt(x, y);
-    if (this.heldStack) {
-      if (target !== null) {
-        this.clickInventoryCell(target); // drop / merge / swap (+ publishes)
-      } else {
-        this.returnHeldToFreeCell(); // released off the grid → put it back safely
-        this.publishInventory();
-      }
-    } else if (target === null && this.invDragFrom === null) {
-      this.toggleInventory(); // tapped empty space with nothing held → close
-    }
-    this.invDragFrom = null;
-  }
-
-  /** Which backpack cell is under (x,y)? Reads InventoryScene's hit-boxes. */
-  private inventoryCellAt(x: number, y: number): number | null {
-    const b = this.registry.get('inventoryBounds') as
-      | { cells: Array<{ x: number; y: number; w: number; h: number }> }
-      | undefined;
-    if (!b) return null;
-    for (let i = 0; i < b.cells.length; i++) {
-      const s = b.cells[i];
-      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) return i;
-    }
-    return null;
   }
 
   /** Is the virtual cursor over a hotbar slot? Returns the slot index or null. */
@@ -3587,126 +3404,14 @@ export class GameScene extends Phaser.Scene {
     return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
   }
 
-  /** Open the mailbox: play its flag-up open animation + pop the big-mailbox modal
-   *  (MailboxScene). Releases pointer lock so the real cursor shows over the modal
-   *  (the modal is closed by ANY click — handled in the pointer routers). */
-  private openMailbox(): void {
-    if (this.mailboxOpen) return;
-    this.mailboxOpen = true;
-    // Play the open swing ONCE (the asset anims are authored loop:true, so override
-    // repeat) → opens + holds on the last frame. Which one depends on mail state:
-    // has-mail → mailbox-mail-open, empty → mailbox-empty-open.
-    this.mailboxHasMail = this.mailboxStore.length > 0;
-    const openAnim = this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open';
-    this.mailbox?.play({ key: openAnim, repeat: 0 });
-    if (this.locked) this.input.manager.mouse?.releasePointerLock();
-    this.hideHotbar(true);
-    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, tab: this.mailboxTab, items: this.storeToItems(this.mailboxStore), mails: this.mailListModel() });
-  }
-
-  /** Re-publish the mailbox model in place (tab switch / item change) without a re-slide. */
-  private refreshMailbox(): void {
-    if (!this.mailboxOpen) return;
-    this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, tab: this.mailboxTab, items: this.storeToItems(this.mailboxStore), mails: this.mailListModel() });
-  }
-
-  private closeMailbox(): void {
-    if (!this.mailboxOpen) return;
-    this.mailboxOpen = false;
-    this.closeReceipt();
-    this.closeItemMenu();
-    this.closeQuantityKeypad();
-    this.mailbox?.play({ key: 'mailbox-close', repeat: 0 }); // play the close swing on the placed mailbox
-    this.hideHotbar(false);
-    this.registry.set('mailbox', { visible: false, rev: ++this.mailboxRev });
-  }
-
-  /** Modal routing while the mail modal is open: a tap on an OPEN item menu picks
-   *  the action; a tap on an item opens its menu (Take / Delete); anything else
-   *  cancels the menu / is swallowed (the top-right HUD button is the closer). */
-  private handleMailboxClick(x: number, y: number): boolean {
-    if (!this.mailboxOpen) return false;
-    // A receipt (opened from the Mail tab) sits ON TOP — the ✓ or a tap outside it closes.
-    if (this.openMailId !== null) {
-      const cb = this.registry.get('receiptClose') as { x: number; y: number; w: number; h: number } | null;
-      const onOk = !!cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h;
-      if (onOk || !this.overPanel('receiptPanel', x, y)) this.closeReceipt();
-      return true;
-    }
-    if (this.itemQty) { const k = this.keypadKeyAt('mailbox', x, y); if (k) this.handleKeypadKey(k); else this.closeQuantityKeypad(); return true; }
-    if (this.itemMenu) {
-      const opt = this.menuOptionAt('mailbox', x, y);
-      if (opt === 'take' || opt === 'sell') this.openQuantityKeypad(opt);
-      else if (opt === 'delete') { const t = { kind: this.itemMenu.kind, index: this.itemMenu.index }; this.closeItemMenu(); this.performItemAction('delete', t); }
-      else this.closeItemMenu();
-      return true;
-    }
-    // A tab switch takes priority (Mail ↔ Items), rebuilding the modal in place.
-    const tab = this.mailboxTabAt(x, y);
-    if (tab !== null) { if (tab !== this.mailboxTab) { this.mailboxTab = tab; this.refreshMailbox(); } return true; }
-    // Item slots only exist on the Items tab; the Mail tab has clickable mail rows.
-    if (this.mailboxTab === 1) {
-      const idx = this.itemSlotAt('mailboxSlots', x, y);
-      if (idx !== null && idx < this.mailboxStore.length) { this.openItemMenu('mailbox', idx, x, y); return true; }
-    } else {
-      const mid = this.mailRowAt(x, y);
-      if (mid) { this.openReceipt(mid); return true; }
-    }
-    if (!this.overPanel('mailboxPanel', x, y)) this.closeMailbox(); // tap outside → close
-    return true; // modal — always consume
-  }
-
-  /** Which mailbox tab (if any) is at (x,y)? Reads the bounds MailboxScene published. */
-  private mailboxTabAt(x: number, y: number): number | null {
-    const tabs = this.registry.get('mailboxTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
-    if (!tabs) return null;
-    const hit = tabs.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
-    return hit ? hit.tab : null;
-  }
-
   /** Is (x,y) inside a modal's panel rect (the scene published it)? Tap outside → close. */
   private overPanel(key: string, x: number, y: number): boolean {
     const r = this.registry.get(key) as { x: number; y: number; w: number; h: number } | null;
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
 
-  /** Is (x,y) on the mail scroll rail? (Reads the rail bounds MailboxScene published.) */
-  private mailboxRailAt(x: number, y: number): boolean {
-    const r = this.registry.get('mailboxRail') as { x: number; top: number; bottom: number; pages: number } | null;
-    return !!r && r.pages > 1 && Math.abs(x - r.x) < 48 && y >= r.top - 40 && y <= r.bottom + 40;
-  }
-
-  /** Drag the rail → map the pointer's y to the nearest page (sets mailboxPage). */
-  private mailboxDragTo(y: number): void {
-    const r = this.registry.get('mailboxRail') as { x: number; top: number; bottom: number; pages: number } | null;
-    if (!r || r.pages <= 1) return;
-    const t = Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1);
-    this.registry.set('mailboxPage', Math.round(t * (r.pages - 1)));
-  }
-
-  /** Map a store (real ItemStacks) → the modal's display items (icon + count),
-   *  carrying the id so a Take can rebuild a proper backpack stack. */
-  private storeToItems(store: ItemStack[]): MailItem[] {
-    return store.map((it) => ({ id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count }));
-  }
-
-  /** Pre-stock the mailbox + chest with test contents (real ItemStacks) so the item
-   *  actions have something to act on — until a real mail/loot economy exists. */
-  private seedTestStores(): void {
-    // The mailbox starts EMPTY — it's the delivery / shipping bin, not a place for
-    // pre-seeded test junk (order deliveries + chest "Sell" fill it).
-    this.mailboxStore = [];
-    this.chestStore = [
-      makeFruit('apple', 12), makeFruit('pear', 7), makeFruit('peach', 4), makeFruit('strawberry', 9),
-      makeFruit('grape', 6), makeFruit('blueberry', 8), makeForage('red-mushroom', 5), makeForage('purple-mushroom', 3),
-      makeForage('wild-flower', 2), makeForage('sunflower', 1), makeForage('grass', 9), makeStone(15),
-      makeCrop('corn', 4), makeCrop('carrot', 6), makeCrop('tomato', 3), makeCrop('eggplant', 2),
-      makeCrop('pumpkin', 1), makeSeed('corn', 10),
-    ];
-  }
-
-  /** Slide the tool hotbar down off-screen (open) / back up (close), so the mail
-   *  modal owns the screen. Moves the HotbarScene camera viewport. */
+  /** Slide the tool hotbar down off-screen (open) / back up (close), so the unified
+   *  menu owns the screen. Moves the HotbarScene camera viewport. */
   private hideHotbar(hide: boolean): void {
     const hb = this.scene.get('HotbarScene');
     if (!hb) return;
@@ -3728,28 +3433,7 @@ export class GameScene extends Phaser.Scene {
     return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
   }
 
-  /** Open the chest: play its open animation ONCE (asset anims are authored loop:true,
-   *  so override repeat) + pop the big-chest modal (ChestScene). */
-  private openChest(): void {
-    if (this.chestOpen) return;
-    this.chestOpen = true;
-    this.chest?.play({ key: 'chest-open-front', repeat: 0 });
-    if (this.locked) this.input.manager.mouse?.releasePointerLock();
-    this.hideHotbar(true);
-    this.registry.set('chest', { visible: true, rev: ++this.chestRev, items: this.storeToItems(this.chestStore) });
-  }
-
-  private closeChest(): void {
-    if (!this.chestOpen) return;
-    this.chestOpen = false;
-    this.closeItemMenu();
-    this.closeQuantityKeypad();
-    this.chest?.play({ key: 'chest-close-front', repeat: 0 });
-    this.hideHotbar(false);
-    this.registry.set('chest', { visible: false, rev: ++this.chestRev });
-  }
-
-  // ── Unified menu (MenuScene) — tabs: mail / for-sale / chest / settings ─────────
+  // ── Unified menu (MenuScene) — tabs: mail / chest / cato-bag / shop / settings ──
 
   /** Door mailbox clicked → play its open swing, THEN open the menu on Mail; closing the
    *  menu plays its close swing. (mailbox-mail-open vs -empty-open per mail state.) */
@@ -4154,386 +3838,15 @@ export class GameScene extends Phaser.Scene {
     if (!r || r.max <= 0) return;
     this.registry.set('menuScrollFrac', Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1));
   }
-
-  // ── Backpack (bag) modal — above the hotbar; shows the backpack items ──────────
-
-  private toggleBag(): void { if (this.bagOpen) this.closeBag(); else this.openBag(); }
-
-  private openBag(): void {
-    if (this.bagOpen) return;
-    this.bagOpen = true;
-    if (this.locked) this.input.manager.mouse?.releasePointerLock();
-    this.scene.bringToTop('BagScene'); // above the hotbar so the drag ghost shows over it
-    this.publishBag();
-  }
-
-  private closeBag(): void {
-    if (!this.bagOpen) return;
-    this.bagOpen = false;
-    this.closeBagMenu();
-    this.bagDrag = null; this.bagDragArm = null; this.bagScrolling = false; this.registry.set('bagHeld', null);
-    this.registry.set('bag', { visible: false, rev: ++this.bagRev });
-  }
-
-  /** Publish the backpack items (inventory indices ≥ INV_COLS, compact) to BagScene,
-   *  recording the real inventory index of each so actions can map back. */
-  private publishBag(): void {
-    const items: MailItem[] = [];
-    this.bagIndexMap = [];
-    for (let i = INV_COLS; i < this.inventory.length; i++) {
-      const it = this.inventory[i];
-      if (!it) continue;
-      items.push({ id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count });
-      this.bagIndexMap.push(i);
-    }
-    this.registry.set('bag', { visible: true, rev: ++this.bagRev, items });
-  }
-
-  /** Modal routing while the bag is open: a tap on the slot picker → place in that
-   *  hotbar slot; on the item menu → To Hotbar (opens the picker) / Drop; on an item
-   *  → open its menu; else swallow (the top-right HUD button closes the bag). */
-  private handleBagClick(x: number, y: number): boolean {
-    if (!this.bagOpen) return false;
-    if (this.bagSlotPick) {
-      const hit = this.bagBoundAt(x, y);
-      if (hit?.key && hit.key.startsWith('slot')) this.placeToHotbar(this.bagIndexMap[this.bagSlotPick.index]!, parseInt(hit.key.slice(4), 10));
-      else this.closeBagMenu(); // cancel / tap-away
-      return true;
-    }
-    if (this.bagMenu) {
-      const hit = this.bagBoundAt(x, y);
-      const action = hit && hit.idx != null ? this.bagMenu.actions[hit.idx] : undefined;
-      if (action === 'hotbar') this.openBagSlotPick(this.bagMenu.index, this.bagMenu.x, this.bagMenu.y);
-      else if (action === 'store') this.storeBagItem(this.bagIndexMap[this.bagMenu.index]!); // Store → chest
-      else if (action === 'drop') this.dropBagItem(this.bagIndexMap[this.bagMenu.index]!); // Drop
-      else this.closeBagMenu();
-      return true;
-    }
-    return true; // item taps are handled by the press-drag flow (bagPointer*)
-  }
-
-  // Press → (move) drag → drop on a hotbar slot. A small move (no drag) = a click →
-  // open the item menu. Works for mouse (unlocked while the bag is open) + touch.
-  private bagPointerDown(x: number, y: number): void {
-    this.bagDragArm = null; this.bagScrolling = false;
-    if (this.bagMenu || this.bagSlotPick) { this.handleBagClick(x, y); return; } // route menu/picker clicks
-    // Arm ANYWHERE (so a touch swipe over empty space also scrolls); realIndex = -1 when
-    // not on an item (mouse item-drag + tap-menu require a real item).
-    const idx = this.itemSlotAt('bagSlots', x, y);
-    const realIndex = idx !== null && idx < this.bagIndexMap.length ? this.bagIndexMap[idx]! : -1;
-    this.bagDragArm = { realIndex, x, y, page: (this.registry.get('bagPage') as number) ?? 0 };
-  }
-
-  /** Mouse: drag an item toward the hotbar (ghost). Touch: a vertical swipe SCROLLS
-   *  pages (item→hotbar on touch is via the menu — swipe + item-drag can't share the
-   *  same area). ~90 px of swipe = one page. */
-  private bagPointerMove(x: number, y: number, touch: boolean): void {
-    if (touch) {
-      if (!this.bagDragArm) return;
-      if (!this.bagScrolling && Math.hypot(x - this.bagDragArm.x, y - this.bagDragArm.y) > 10) this.bagScrolling = true;
-      if (this.bagScrolling) {
-        const r = this.registry.get('bagRail') as { pages: number } | null;
-        if (r && r.pages > 1) this.registry.set('bagPage', Phaser.Math.Clamp(this.bagDragArm.page + Math.round((this.bagDragArm.y - y) / 90), 0, r.pages - 1));
-      }
-      return;
-    }
-    if (this.bagDrag) { this.publishBagHeld(x, y); return; }
-    if (this.bagDragArm && this.bagDragArm.realIndex >= 0 && Math.hypot(x - this.bagDragArm.x, y - this.bagDragArm.y) > 12) {
-      // Only usable items (tools/seeds/placeables) can be dragged to the hotbar; a drag
-      // on a harvested good is ignored (it'll open its menu on release instead).
-      const item = this.inventory[this.bagDragArm.realIndex];
-      if (item && !isHotbarUsable(item)) return;
-      this.bagDrag = { realIndex: this.bagDragArm.realIndex };
-      this.publishBagHeld(x, y);
-    }
-  }
-
-  private bagPointerUp(x: number, y: number): void {
-    if (this.bagScrolling) { this.bagScrolling = false; this.bagDragArm = null; return; } // was a swipe
-    if (this.bagDrag) {
-      const slot = this.hotbarSlotAt(x, y); // dropped on a hotbar slot?
-      if (slot !== null) this.placeToHotbar(this.bagDrag.realIndex, slot);
-      this.bagDrag = null;
-      this.registry.set('bagHeld', null);
-    } else if (this.bagDragArm) {
-      if (this.bagDragArm.realIndex >= 0) {
-        // a click / tap on an item → open its menu.
-        const idx = this.bagIndexMap.indexOf(this.bagDragArm.realIndex);
-        if (idx >= 0) this.openBagItemMenu(idx, this.bagDragArm.x, this.bagDragArm.y);
-      } else if (!this.overPanel('bagPanel', this.bagDragArm.x, this.bagDragArm.y)) {
-        this.closeBag(); // tap outside the bag → close
-      }
-    }
-    this.bagDragArm = null;
-  }
-
-  /** Publish the dragged item as a ghost following the cursor (BagScene renders it). */
-  private publishBagHeld(x: number, y: number): void {
-    const it = this.bagDrag ? this.inventory[this.bagDrag.realIndex] : null;
-    if (!it) { this.registry.set('bagHeld', null); return; }
-    this.registry.set('bagHeld', { iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count, x, y });
-  }
-
-  private bagBoundAt(x: number, y: number): { idx?: number; key?: string } | null {
-    const bounds = this.registry.get('bagMenuBounds') as Array<{ x: number; y: number; w: number; h: number; idx?: number; key?: string }> | undefined;
-    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    return hit ? { idx: hit.idx, key: hit.key } : null;
-  }
-
-  private openBagItemMenu(displayIndex: number, sx: number, sy: number): void {
-    // "To Hotbar" only for items that DO something on the hotbar (tools/seeds/placeables);
-    // harvested goods are inert, so they don't get the option. `bagMenuActions` maps the
-    // rendered option index → its action (the option list is now variable-length).
-    const item = this.inventory[this.bagIndexMap[displayIndex]!];
-    const actions: Array<'hotbar' | 'store' | 'drop'> = [];
-    if (item && isHotbarUsable(item)) actions.push('hotbar');
-    actions.push('store', 'drop');
-    const LABEL = { hotbar: 'To Hotbar', store: 'Store', drop: 'Drop' };
-    this.bagMenu = { index: displayIndex, x: sx, y: sy, actions };
-    this.bagSlotPick = null;
-    this.registry.set('bagMenu', { visible: true, rev: ++this.bagMenuRev, x: sx, y: sy, options: actions.map((a) => ({ label: LABEL[a] })) });
-  }
-
-  /** "To Hotbar" → show the 8 hotbar slots (number + current item icon) to pick one. */
-  private openBagSlotPick(displayIndex: number, sx: number, sy: number): void {
-    this.bagSlotPick = { index: displayIndex, x: sx, y: sy };
-    this.bagMenu = null;
-    const slots = [];
-    for (let i = 0; i < INV_COLS; i++) {
-      const it = this.inventory[i];
-      slots.push({ label: String(i + 1), iconKey: it?.iconKey, iconFrame: it?.iconFrame });
-    }
-    this.registry.set('bagMenu', { visible: true, rev: ++this.bagMenuRev, x: sx, y: sy, slotpick: { slots } });
-  }
-
-  private closeBagMenu(): void {
-    if (!this.bagMenu && !this.bagSlotPick) return;
-    this.bagMenu = null; this.bagSlotPick = null;
-    this.registry.set('bagMenu', { visible: false, rev: ++this.bagMenuRev });
-  }
-
-  /** Move the bag item (real inventory index) into hotbar slot `hotbarSlot`, swapping
-   *  the slot's current item back into the bag (or emptying it if the slot was empty). */
-  private placeToHotbar(realIndex: number, hotbarSlot: number): void {
-    if (realIndex == null || hotbarSlot < 0 || hotbarSlot >= INV_COLS || !this.inventory[realIndex]) { this.closeBagMenu(); return; }
-    const item = this.inventory[realIndex];
-    this.inventory[realIndex] = this.inventory[hotbarSlot]; // old hotbar item → the bag
-    this.inventory[hotbarSlot] = item;
-    this.closeBagMenu();
-    this.publishInventory();
-    this.publishBag();
-    this.scheduleSave();
-  }
-
-  private dropBagItem(realIndex: number): void {
-    if (realIndex != null) this.inventory[realIndex] = null;
-    this.closeBagMenu();
-    this.publishBag();
-    this.scheduleSave();
-  }
-
-  /** Store → move the whole bag stack into the chest. */
-  private storeBagItem(realIndex: number): void {
-    const it = realIndex != null ? this.inventory[realIndex] : null;
-    if (it) { this.chestStore.push(it); this.inventory[realIndex] = null; }
-    this.closeBagMenu();
-    this.publishBag();
-    this.scheduleSave();
-  }
-
-  private bagRailAt(x: number, y: number): boolean {
-    const r = this.registry.get('bagRail') as { x: number; top: number; bottom: number; pages: number } | null;
-    return !!r && r.pages > 1 && Math.abs(x - r.x) < 48 && y >= r.top - 40 && y <= r.bottom + 40;
-  }
-
-  private bagDragTo(y: number): void {
-    const r = this.registry.get('bagRail') as { x: number; top: number; bottom: number; pages: number } | null;
-    if (!r || r.pages <= 1) return;
-    const t = Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1);
-    this.registry.set('bagPage', Math.round(t * (r.pages - 1)));
-  }
-
-  /** Modal routing while the chest is open: mirror of the mailbox, but the item
-   *  menu has an extra Sell (→ mailbox) action. */
-  private handleChestClick(x: number, y: number): boolean {
-    if (!this.chestOpen) return false;
-    if (this.itemQty) { const k = this.keypadKeyAt('chest', x, y); if (k) this.handleKeypadKey(k); else this.closeQuantityKeypad(); return true; }
-    if (this.itemMenu) {
-      const opt = this.menuOptionAt('chest', x, y);
-      if (opt === 'take' || opt === 'sell') this.openQuantityKeypad(opt);
-      else if (opt === 'delete') { const t = { kind: this.itemMenu.kind, index: this.itemMenu.index }; this.closeItemMenu(); this.performItemAction('delete', t); }
-      else this.closeItemMenu();
-      return true;
-    }
-    const idx = this.itemSlotAt('chestSlots', x, y);
-    if (idx !== null && idx < this.chestStore.length) this.openItemMenu('chest', idx, x, y);
-    else if (!this.overPanel('chestPanel', x, y)) this.closeChest(); // tap outside → close
-    return true; // modal — always consume
-  }
-
-  private chestRailAt(x: number, y: number): boolean {
-    const r = this.registry.get('chestRail') as { x: number; top: number; bottom: number; pages: number } | null;
-    return !!r && r.pages > 1 && Math.abs(x - r.x) < 48 && y >= r.top - 40 && y <= r.bottom + 40;
-  }
-
-  private chestDragTo(y: number): void {
-    const r = this.registry.get('chestRail') as { x: number; top: number; bottom: number; pages: number } | null;
-    if (!r || r.pages <= 1) return;
-    const t = Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1);
-    this.registry.set('chestPage', Math.round(t * (r.pages - 1)));
-  }
-
-  // ── Item action menu (Take / Sell / Delete) ─────────────────────────────────
-
-  /** The action options for the CURRENTLY-open item menu (reads `this.itemMenu`). Take
-   *  is the blue primary; Delete a muted red. In the chest, Sell (→ queue in the
-   *  mailbox) shows only for items that actually have a sell price. */
-  private currentMenuOptions(): Array<{ action: 'take' | 'sell' | 'delete'; label: string; color: string }> {
-    const m = this.itemMenu;
-    if (!m) return [];
-    const take = { action: 'take' as const, label: 'Take', color: '#4aa3df' };
-    const sell = { action: 'sell' as const, label: 'Sell', color: '#5b3a1e' };
-    const del = { action: 'delete' as const, label: 'Delete', color: '#b5533a' };
-    if (m.kind === 'chest') {
-      const it = this.chestStore[m.index];
-      return it && sellPrice(it.id) > 0 ? [take, sell, del] : [take, del];
-    }
-    return [take, del];
-  }
-
-  /** Open the item action menu for store index `index` at the tapped screen point. */
-  private openItemMenu(kind: 'mailbox' | 'chest', index: number, sx: number, sy: number): void {
-    this.itemMenu = { kind, index, x: sx, y: sy };
-    const key = kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
-    this.registry.set(key, {
-      visible: true, rev: ++this.itemMenuRev, x: sx, y: sy,
-      options: this.currentMenuOptions().map((o) => ({ label: o.label, color: o.color })),
-    });
-  }
-
-  private closeItemMenu(): void {
-    if (!this.itemMenu) return;
-    const key = this.itemMenu.kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
-    this.itemMenu = null;
-    this.registry.set(key, { visible: false, rev: ++this.itemMenuRev });
-  }
-
-  /** Swap the menu for the "How Many?" keypad (Take / Sell → pick a quantity). Starts
-   *  at the full stack, so an OK straight away = take/sell all. */
-  private openQuantityKeypad(action: 'take' | 'sell'): void {
-    const m = this.itemMenu;
-    if (!m) return;
-    const store = m.kind === 'chest' ? this.chestStore : this.mailboxStore;
-    const it = store[m.index];
-    if (!it) { this.closeItemMenu(); return; }
-    this.itemMenu = null;
-    this.itemQty = { action, kind: m.kind, index: m.index, x: m.x, y: m.y, value: it.count, max: it.count, entering: false };
-    this.publishKeypad();
-  }
-
-  private publishKeypad(): void {
-    const q = this.itemQty;
-    if (!q) return;
-    const key = q.kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
-    this.registry.set(key, { visible: true, rev: ++this.itemMenuRev, x: q.x, y: q.y, keypad: { value: q.value, max: q.max } });
-  }
-
-  private closeQuantityKeypad(): void {
-    const q = this.itemQty;
-    if (!q) return;
-    const key = q.kind === 'chest' ? 'chestMenu' : 'mailboxMenu';
-    this.itemQty = null;
-    this.registry.set(key, { visible: false, rev: ++this.itemMenuRev });
-  }
-
-  /** Which keypad key (if any) is under a tap. */
-  private keypadKeyAt(kind: 'mailbox' | 'chest', x: number, y: number): string | null {
-    const bounds = this.registry.get(kind === 'chest' ? 'chestMenuBounds' : 'mailboxMenuBounds') as
-      Array<{ x: number; y: number; w: number; h: number; key?: string }> | undefined;
-    if (!bounds) return null;
-    const hit = bounds.find((b) => b.key != null && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    return hit?.key ?? null;
-  }
-
-  /** Apply a keypad key: digits type the quantity (first tap replaces, then appends),
-   *  `<`/`>` step it, OK confirms the Take/Sell, X cancels. */
-  private handleKeypadKey(k: string): void {
-    const q = this.itemQty;
-    if (!q) return;
-    if (k === 'cancel') { this.closeQuantityKeypad(); return; }
-    if (k === 'ok') {
-      const n = Phaser.Math.Clamp(q.value, 1, q.max);
-      this.performItemAction(q.action, { kind: q.kind, index: q.index }, n);
-      this.closeQuantityKeypad();
-      return;
-    }
-    if (k === 'inc') { q.value = Math.min(q.max, q.value + 1); q.entering = true; }
-    else if (k === 'dec') { q.value = Math.max(1, q.value - 1); q.entering = true; }
-    else {
-      const d = parseInt(k, 10);
-      if (Number.isNaN(d)) return;
-      q.value = q.entering ? Math.min(q.max, q.value * 10 + d) : d;
-      q.entering = true;
-      if (q.value < 1) q.value = 1;
-    }
-    this.publishKeypad();
-  }
-
-  /** Which menu action (if any) is under a tap. Reads the bounds the modal published. */
-  private menuOptionAt(kind: 'mailbox' | 'chest', x: number, y: number): 'take' | 'sell' | 'delete' | null {
-    const bounds = this.registry.get(kind === 'chest' ? 'chestMenuBounds' : 'mailboxMenuBounds') as
-      Array<{ x: number; y: number; w: number; h: number; idx: number }> | undefined;
-    if (!bounds) return null;
-    const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    if (!hit) return null;
-    return this.currentMenuOptions()[hit.idx]?.action ?? null;
-  }
-
-  /** Which store index (if any) is under a tap on the item grid. */
-  private itemSlotAt(key: 'mailboxSlots' | 'chestSlots' | 'bagSlots' | 'menuSlots', x: number, y: number): number | null {
+  /** Which store index (if any) is under a tap on the unified menu's item grid. */
+  private itemSlotAt(key: 'menuSlots', x: number, y: number): number | null {
     const slots = this.registry.get(key) as Array<{ x: number; y: number; w: number; h: number; index: number }> | undefined;
     if (!slots) return null;
     const hit = slots.find((s) => x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
     return hit ? hit.index : null;
   }
 
-  /** Run the chosen action on `target` for quantity `qty` (default the whole stack),
-   *  then refresh the grid + save. Take → backpack; Sell → INSTANT coins; Delete → discard. */
-  private performItemAction(action: 'take' | 'sell' | 'delete', target: { kind: 'mailbox' | 'chest'; index: number }, qty?: number, refresh = true): void {
-    const store = target.kind === 'chest' ? this.chestStore : this.mailboxStore;
-    const it = store[target.index];
-    if (!it) return;
-    const n = Math.min(qty ?? it.count, it.count);
-    if (n <= 0) return;
-    if (action === 'take') {
-      const leftover = this.addToInventory({ ...it, count: n }); // returns what didn't fit
-      const took = n - leftover; // what actually landed in the backpack
-      it.count -= took;
-      if (it.count <= 0) store.splice(target.index, 1);
-      this.publishInventory();
-    } else if (action === 'delete') {
-      it.count -= n;
-      if (it.count <= 0) store.splice(target.index, 1);
-    } else if (action === 'sell') {
-      it.count -= n;
-      if (it.count <= 0) store.splice(target.index, 1);
-      this.addMoney(sellPrice(it.id) * n); // instant sale → coins now (no shipping bin)
-    }
-    if (refresh) this.refreshOpenModal(target.kind); // unified menu passes false + refreshes itself
-    this.scheduleSave();
-  }
-
-  /** Re-publish the open modal's items (in-place grid rebuild, no re-slide). */
-  private refreshOpenModal(kind: 'mailbox' | 'chest'): void {
-    if (kind === 'mailbox') {
-      this.mailboxHasMail = this.mailboxStore.length > 0;
-      this.registry.set('mailbox', { visible: true, rev: ++this.mailboxRev, tab: this.mailboxTab, items: this.storeToItems(this.mailboxStore), mails: this.mailListModel() });
-    } else {
-      this.registry.set('chest', { visible: true, rev: ++this.chestRev, items: this.storeToItems(this.chestStore) });
-    }
-  }
-
-  // ── Order book (bottom-right button → catalog → next-morning mailbox delivery) ──
+  // ── Shop catalog (unified menu Shop tab) ─────────────────────────────────────
 
   /** The orderable catalog — every item with a `buy` price in the prices data table.
    *  Label + icon come from `itemFromId(id)`; the price from the table. */
@@ -4551,89 +3864,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private priceOf(id: string): number { return buyPrice(id) ?? 0; }
-  private labelOf(id: string): string { return this.orderLabel(id, itemFromId(id, 1)); }
-  private orderTotal(): number { let t = 0; for (const [id, n] of this.orderDraft) t += this.priceOf(id) * n; return t; }
-
-  private openOrderBook(): void {
-    if (this.orderOpen) return;
-    this.orderOpen = true;
-    if (this.locked) this.input.manager.mouse?.releasePointerLock();
-    this.hideHotbar(true);
-    this.publishOrderBook();
-  }
-
-  private closeOrderBook(): void {
-    if (!this.orderOpen) return;
-    this.orderOpen = false;
-    this.hideHotbar(false);
-    this.registry.set('orderBook', { visible: false, rev: ++this.orderRev });
-  }
-
-  /** Push the current catalog + draft + balance to OrderBookScene. */
-  private publishOrderBook(): void {
-    const catalog = this.orderCatalog().map(({ id, label, iconKey, iconFrame, price }) => ({ id, label, iconKey, iconFrame, price }));
-    const cat = this.orderCatalog();
-    const draft = [...this.orderDraft].map(([id, count]) => {
-      const e = cat.find((x) => x.id === id);
-      return { id, label: this.labelOf(id), count, price: this.priceOf(id), iconKey: e?.iconKey ?? 'fruit-items', iconFrame: e?.iconFrame ?? 0 };
-    });
-    const total = this.orderTotal();
-    this.registry.set('orderBook', {
-      visible: true, rev: ++this.orderRev, catalog, draft,
-      selectedId: this.orderSelectedId, money: this.money, total, affordable: total <= this.money,
-    });
-  }
-
-  /** Modal routing while the order book is open. There's NO confirm — editing IS the
-   *  order (charged on delivery next morning): a catalog row → +1 (only if you can
-   *  still afford the running total, else it's blocked); a summary row → −1; anything
-   *  else is swallowed (the top-right HUD close button is the closer). */
-  private handleOrderClick(x: number, y: number): boolean {
-    if (!this.orderOpen) return false;
-    const rowId = this.orderRowAt('orderRows', x, y);
-    if (rowId) {
-      this.orderSelectedId = rowId;
-      // Can't order more than you can pay for at delivery.
-      if (this.orderTotal() + this.priceOf(rowId) <= this.money) {
-        this.orderDraft.set(rowId, (this.orderDraft.get(rowId) ?? 0) + 1);
-        if (this.orderDeliverDay < 0) this.orderDeliverDay = this.dayCount + 1; // ships next morning
-      }
-      this.publishOrderBook();
-      return true;
-    }
-    const sumId = this.orderRowAt('orderSummaryRows', x, y);
-    if (sumId) {
-      const n = (this.orderDraft.get(sumId) ?? 0) - 1;
-      if (n <= 0) this.orderDraft.delete(sumId); else this.orderDraft.set(sumId, n);
-      if (this.orderDraft.size === 0) this.orderDeliverDay = -1;
-      this.publishOrderBook();
-      this.scheduleSave();
-      return true;
-    }
-    if (!this.overPanel('orderPanel', x, y)) this.closeOrderBook(); // tap outside → close
-    return true; // modal — swallow everything else
-  }
-
-  private orderRowAt(key: 'orderRows' | 'orderSummaryRows', x: number, y: number): string | null {
-    const rows = this.registry.get(key) as Array<{ x: number; y: number; w: number; h: number; id?: string }> | undefined;
-    if (!rows) return null;
-    const hit = rows.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-    return hit?.id ?? null;
-  }
-
-  /** Is (x,y) on the order-book catalog scroll rail? */
-  private orderRailAt(x: number, y: number): boolean {
-    const r = this.registry.get('orderRail') as { x: number; top: number; bottom: number; max: number } | null;
-    return !!r && r.max > 0 && Math.abs(x - r.x) < 48 && y >= r.top - 30 && y <= r.bottom + 30;
-  }
-
-  /** Drag the rail → map the pointer's y to a 0..1 scroll fraction (OrderBookScene
-   *  owns the actual scroll offset + reads this). */
-  private orderDragTo(y: number): void {
-    const r = this.registry.get('orderRail') as { x: number; top: number; bottom: number; max: number } | null;
-    if (!r || r.max <= 0) return;
-    this.registry.set('orderScrollFrac', Phaser.Math.Clamp((y - r.top) / (r.bottom - r.top), 0, 1));
-  }
 
   /** Day rollover hook. Buying + selling are now INSTANT (into/out of the chest), so
    *  there's no overnight shipping-bin settlement or order delivery any more — this is a
@@ -4642,23 +3872,23 @@ export class GameScene extends Phaser.Scene {
     /* instant economy — nothing to settle at the day boundary */
   }
 
-  /** Add a new mail (newest first) + refresh the mailbox if it's open on the Mail tab. */
+  /** Add a new mail (newest first) + refresh the unified menu if it's open on the Mail tab. */
   private addMail(mail: Omit<MailEntry, 'id' | 'read'>): void {
     this.mailList.unshift({ ...mail, id: `mail-${++this.mailIdSeq}`, read: false });
-    if (this.mailboxOpen) this.refreshMailbox();
+    if (this.menuOpen) this.publishMenu();
   }
 
-  /** The Mail-tab list model (icon + sender + read state) for MailboxScene. */
+  /** The Mail-tab list model (icon + sender + read state) for the unified menu. */
   private mailListModel(): MailListEntry[] {
     return this.mailList.map((m) => ({ id: m.id, sender: m.sender, title: m.title, iconFrame: m.iconFrame, read: m.read }));
   }
 
-  /** Open a mail → its receipt (over the mailbox); mark it read. */
+  /** Open a mail → its receipt (over the menu); mark it read. */
   private openReceipt(id: string): void {
     const mail = this.mailList.find((m) => m.id === id);
     if (!mail) return;
     this.openMailId = id;
-    if (!mail.read) { mail.read = true; this.refreshMailbox(); if (this.menuOpen) this.publishMenu(); this.scheduleSave(); }
+    if (!mail.read) { mail.read = true; if (this.menuOpen) this.publishMenu(); this.scheduleSave(); }
     // Render ABOVE whatever modal opened it (the unified MenuScene is brought to top,
     // so the receipt must jump above it too); keep the cursor topmost.
     this.scene.bringToTop('ReceiptScene');
@@ -4672,17 +3902,8 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('receipt', { visible: false, rev: ++this.receiptRev });
   }
 
-  /** Is (x,y) on a Mail-tab row? Reads the bounds MailboxScene published. */
-  private mailRowAt(x: number, y: number): string | null {
-    const rows = this.registry.get('mailboxMailRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
-    const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-    return hit ? hit.id : null;
-  }
-
-  /** Modal chrome swap: on a mailbox/chest OPEN, slide the top-right Cato
-   *  photo-frame OUT and slide a close button IN in its place; reverse on CLOSE.
-   *  Both live in `UmicatHud` (rendered ABOVE the modals) so the button sits on
-   *  top; the button IS the closer (so the modals no longer draw their own X). */
+  /** Per-frame: swing each PLACED door open when Cato is within OPEN_R and shut it
+   *  again beyond CLOSE_R (hysteresis so it never closes on him). */
   private updateDoors(): void {
     if (!this.child) return;
     const OPEN_R = TILE * 1.5;   // Cato this close (world px) → open
@@ -6463,8 +5684,6 @@ export class GameScene extends Phaser.Scene {
       dayCount: this.dayCount,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
-      order: [...this.orderDraft].map(([id, count]) => ({ id, count })),
-      orderDeliverDay: this.orderDeliverDay,
       mail: this.mailList.map((m) => ({ ...m })),
       autonomy: { ...this.autonomy },
       staminaMax: this.staminaMax,
@@ -6517,7 +5736,7 @@ export class GameScene extends Phaser.Scene {
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
       // afford to order. Gated on the debug flag → removed for release. Only tops up.
       if (CATO_DEBUG_TILL && this.money < 5000) { this.money = 5000; this.publishWeatherHud(); this.scheduleSave(); }
-      if (CATO_DEBUG_TILL && DEBUG_CLEAR_MAILBOX) { this.mailboxStore = []; this.mailboxHasMail = false; if (this.mailboxOpen) this.refreshOpenModal('mailbox'); this.scheduleSave(); }
+      if (CATO_DEBUG_TILL && DEBUG_CLEAR_MAILBOX) { this.mailboxStore = []; this.mailboxHasMail = false; this.scheduleSave(); }
     } catch (e) {
       // Read failed — do NOT arm saving, so we can't clobber a save that exists
       // but momentarily failed to load. (Saving stays off for this session.)
@@ -6635,10 +5854,6 @@ export class GameScene extends Phaser.Scene {
       if (typeof s.staminaMax === 'number' && s.staminaMax > 0) this.staminaMax = s.staminaMax;
       if (typeof s.stamina === 'number') this.stamina = Phaser.Math.Clamp(s.stamina, 0, this.staminaMax);
       this.exhausted = this.stamina <= 0; // if he was saved drained, he's still resting
-      // Order (v8) — today's editable order, ships next morning.
-      this.orderDraft.clear();
-      for (const o of s.order ?? []) this.orderDraft.set(o.id, o.count);
-      this.orderDeliverDay = s.orderDeliverDay ?? -1;
       this.equipSelected();
       this.publishInventory();
       this.publishWeatherHud();

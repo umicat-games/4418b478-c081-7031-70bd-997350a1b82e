@@ -5,13 +5,8 @@ import { GameScene } from './scenes/GameScene';
 import { CursorScene } from './scenes/CursorScene';
 import { HotbarScene } from './scenes/HotbarScene';
 import { WeatherScene } from './scenes/WeatherScene';
-import { InventoryScene } from './scenes/InventoryScene';
 import { PaletteScene } from './scenes/PaletteScene';
 import { ConfirmScene } from './scenes/ConfirmScene';
-import { MailboxScene } from './scenes/MailboxScene';
-import { ChestScene } from './scenes/ChestScene';
-import { OrderBookScene } from './scenes/OrderBookScene';
-import { BagScene } from './scenes/BagScene';
 import { ReceiptScene } from './scenes/ReceiptScene';
 import { ChatterScene } from './scenes/ChatterScene';
 import { MenuScene } from './scenes/MenuScene';
@@ -44,7 +39,7 @@ function startGame(): void {
     // HotbarScene (bottom tool hotbar) + CursorScene are registered but not
     // auto-started; GameScene launches them after the HUD exists so they layer
     // above it (cursor stays topmost — see CursorScene.update bringToTop).
-    scenes: [BootScene, BootMenuScene, GameScene, HotbarScene, WeatherScene, InventoryScene, PaletteScene, ConfirmScene, MailboxScene, ChestScene, OrderBookScene, BagScene, ReceiptScene, ChatterScene, MenuScene, CursorScene],
+    scenes: [BootScene, BootMenuScene, GameScene, HotbarScene, WeatherScene, PaletteScene, ConfirmScene, ReceiptScene, ChatterScene, MenuScene, CursorScene],
     renderScripts,
   });
 }
