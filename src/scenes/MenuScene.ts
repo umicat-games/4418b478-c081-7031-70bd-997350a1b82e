@@ -47,7 +47,7 @@ const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0
 const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string }> = [
   { key: 'mail', frame: 245, title: '邮件' },
   { key: 'chest', frame: 229, title: '箱子' },
-  { key: 'catobag', frame: 146, title: '猫包' }, // white-paw (all_icons 146)
+  { key: 'catobag', frame: 310, title: '猫包' }, // white-cat-claw (all_icons region @96,304)
   { key: 'shop', frame: 262, title: '商店' },
   { key: 'settings', frame: 164, title: '设置' },
 ];
