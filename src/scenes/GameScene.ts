@@ -3438,7 +3438,19 @@ export class GameScene extends Phaser.Scene {
     this.pad = reg.all().find(
       (go) => go.getData('entityAssetId') === 'ipad_qkzld',
     ) as Phaser.GameObjects.Sprite | undefined;
-    if (this.pad && this.textures.exists('pad')) this.pad.setTexture('pad', 0);
+    if (!this.pad) return;
+    if (this.textures.exists('pad')) this.pad.setTexture('pad', 0);
+    // The pad sits ON a table, but its editor depth (10) put it UNDER the desk. Sort it
+    // just above the foot line of whatever furniture it overlaps (the table draws at its
+    // own foot Y via applyYSort; +1 keeps the pad on top). Fixed — neither piece moves.
+    let deskFoot = this.footLine(this.pad);
+    for (const go of reg.all()) {
+      if (go.getData('entityAssetId') !== 'basic_furniture') continue;
+      const b = (go as Phaser.GameObjects.Sprite).getBounds();
+      if (this.pad.x >= b.left && this.pad.x <= b.right && this.pad.y >= b.top && this.pad.y <= b.bottom)
+        deskFoot = Math.max(deskFoot, this.footLine(go as Phaser.GameObjects.Sprite));
+    }
+    this.pad.setDepth(Math.round(deskFoot) + 1);
   }
 
   private padContains(wx: number, wy: number): boolean {
