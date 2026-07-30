@@ -484,7 +484,10 @@ export class MenuScene extends Phaser.Scene {
       const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
       const bg = has ? this.add.nineslice(cx, cy2(key), 'square-buttons', 'grey-button', w, h, 6, 6, 6, 6)
         : this.add.rectangle(cx, cy2(key), w, h, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
-      c.add(bg); c.add(this.T(cx, cy2(key) - H * 0.004, label, key === 'buy' ? H * 0.026 : H * 0.036, '#5b4327'));
+      // The pixel-font − / + glyphs render HIGH in the line box (descent space below),
+      // so nudge them DOWN to visually centre; the wide 购买 label centres fine as-is.
+      const labelDy = key === 'buy' ? 0 : H * 0.008;
+      c.add(bg); c.add(this.T(cx, cy2(key) + labelDy, label, key === 'buy' ? H * 0.026 : H * 0.036, '#5b4327'));
       bounds.push({ x: cx - w / 2, y: cy2(key) - h / 2, w, h, key });
     };
     const buyCy = STEP.buyY * H;
