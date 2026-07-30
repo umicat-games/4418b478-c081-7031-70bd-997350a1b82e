@@ -135,6 +135,14 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 16,
     });
 
+    // The desk PAD (iPad) — a 5-frame 16×16 sheet. Frame 0 = resting (screen on,
+    // matches the static ipad_qkzld placed in the scene); 0→4 = the screen wiping to
+    // the shop. Clicking the pad plays `pad-open` then opens the Shop menu.
+    this.load.spritesheet('pad', 'uploaded/ipad-animation.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+
     // ── Trees (48×48 frames). Placed from the backpack; chopped with the AXE. Each
     //    sheet: row0 = idle, then shake animations of 4 / 6 / 12 frames (= shake-1/2/3;
     //    frame = row*12 + col). Fruit sheets (12×5) drop their fruit during shake-3
@@ -267,6 +275,24 @@ export class BootScene extends Phaser.Scene {
         key: 'door-close',
         frames: this.anims.generateFrameNumbers('door', { frames: [0, 1, 2, 3, 4, 5] }),
         frameRate: 14,
+        repeat: 0,
+      });
+    }
+    // Pad open/close: 0→4 turns the screen on + wipes to the shop, holding on frame 4;
+    // `pad-close` reverses back to the resting frame 0.
+    if (!this.anims.exists('pad-open')) {
+      this.anims.create({
+        key: 'pad-open',
+        frames: this.anims.generateFrameNumbers('pad', { frames: [0, 1, 2, 3, 4] }),
+        frameRate: 16,
+        repeat: 0,
+      });
+    }
+    if (!this.anims.exists('pad-close')) {
+      this.anims.create({
+        key: 'pad-close',
+        frames: this.anims.generateFrameNumbers('pad', { frames: [4, 3, 2, 1, 0] }),
+        frameRate: 16,
         repeat: 0,
       });
     }

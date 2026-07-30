@@ -643,6 +643,10 @@ export class GameScene extends Phaser.Scene {
   private mailbox?: Phaser.GameObjects.Sprite;
   private mailboxHasMail = false; // drives which mailbox open anim plays (mail vs empty)
   private chest?: Phaser.GameObjects.Sprite;
+  // The editor-placed desk PAD (iPad). Clicking it plays `pad-open` then opens the Shop
+  // tab — it replaces the old bottom-right shop button. Resting on the animation sheet's
+  // frame 0 (identical to the static ipad_qkzld the creator dropped in the scene).
+  private pad?: Phaser.GameObjects.Sprite;
   // Persistent CONTENTS of the chest (real ItemStacks) — the unified menu Chest tab; the
   // player's only storage. `mailboxStore` is vestigial (kept for save compat / DEBUG clear).
   private mailboxStore: ItemStack[] = [];
@@ -1377,6 +1381,7 @@ export class GameScene extends Phaser.Scene {
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
       if (this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; } // door mailbox → open anim → menu (Mail)
       if (this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }      // door chest → open anim → menu (Chest)
+      if (this.padContains(wp.x, wp.y)) { this.openShopViaPad(); return; }          // desk pad → screen-on anim → menu (Shop)
       this.input.manager.mouse?.requestPointerLock();
     });
 
@@ -1473,7 +1478,6 @@ export class GameScene extends Phaser.Scene {
     if (this.handlePaletteClick(x, y)) return;
     // Backpack button → open the full grid (mainly for touch — no E key).
     if (this.overBackpackButton(x, y)) { this.openMenu(1); return; } // no backpack — button opens the Chest (your storage)
-    if (this.overOrderButton(x, y)) { this.openMenu(3); return; } // order button → unified menu, Shop tab
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
@@ -1509,6 +1513,7 @@ export class GameScene extends Phaser.Scene {
     // the grass under it.
     if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; }
     if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }
+    if (!this.activePlace && this.padContains(wp.x, wp.y)) { this.openShopViaPad(); return; }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -1595,6 +1600,7 @@ export class GameScene extends Phaser.Scene {
     this.wireHouseDoor();
     this.wireMailbox();
     this.wireChest();
+    this.wirePad();
     this.wireSceneTrees();
     this.wireSceneBushes();
     this.wireSceneForageAndStones();
@@ -1999,16 +2005,6 @@ export class GameScene extends Phaser.Scene {
       | { backpack?: { x: number; y: number; w: number; h: number } }
       | undefined;
     const r = b?.backpack;
-    if (!r) return false;
-    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-  }
-
-  /** Is (x,y) over the bottom-right order button? (Reads the bounds HotbarScene published.) */
-  private overOrderButton(x: number, y: number): boolean {
-    const b = this.registry.get('hotbarBounds') as
-      | { order?: { x: number; y: number; w: number; h: number } }
-      | undefined;
-    const r = b?.order;
     if (!r) return false;
     return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
@@ -3433,6 +3429,24 @@ export class GameScene extends Phaser.Scene {
     return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
   }
 
+  /** Find the editor-placed desk pad (static `ipad_qkzld` sprite) and force it onto the
+   *  animation sheet at its resting frame, so `pad-open`/`pad-close` apply (mirrors the
+   *  door). Frame 0 of the sheet matches the static pad, so the resting look is unchanged. */
+  private wirePad(): void {
+    const reg = getEntityRegistry(this);
+    if (!reg) return;
+    this.pad = reg.all().find(
+      (go) => go.getData('entityAssetId') === 'ipad_qkzld',
+    ) as Phaser.GameObjects.Sprite | undefined;
+    if (this.pad && this.textures.exists('pad')) this.pad.setTexture('pad', 0);
+  }
+
+  private padContains(wx: number, wy: number): boolean {
+    if (!this.pad) return false;
+    const b = this.pad.getBounds();
+    return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
+  }
+
   // ── Unified menu (MenuScene) — tabs: mail / chest / cato-bag / shop / settings ──
 
   /** Door mailbox clicked → play its open swing, THEN open the menu on Mail; closing the
@@ -3445,6 +3459,12 @@ export class GameScene extends Phaser.Scene {
   /** Door chest clicked → play its open swing, THEN open the menu on Chest; closing plays close. */
   private openChestViaDoor(): void {
     this.openMenuViaObject(this.chest, 'chest-open-front', 'chest-close-front', 1);
+  }
+
+  /** Desk pad clicked → play its screen-on swing, THEN open the menu on the Shop tab;
+   *  closing the menu plays the screen-off swing. (Replaces the bottom-right shop button.) */
+  private openShopViaPad(): void {
+    this.openMenuViaObject(this.pad, 'pad-open', 'pad-close', 3);
   }
 
   /** Play `sprite`'s open animation, then open the unified menu on `tab`; remember the

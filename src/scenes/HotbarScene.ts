@@ -192,18 +192,8 @@ export class HotbarScene extends Phaser.Scene {
     c.add(g);
     const backpack = { x: bx - slotW / 2, y: rowY - slotH / 2, w: slotW, h: slotH };
 
-    // Order button — the `order` frame of the icon-buttons sheet, in the screen's
-    // BOTTOM-RIGHT corner (opens the order book). Separate from the hotbar so it
-    // stays put as a fixed corner affordance.
-    let order: { x: number; y: number; w: number; h: number } | undefined;
-    if (this.textures.exists('icon-buttons')) {
-      const oSize = 56, om = 18;
-      const ox = Math.round(this.scale.width - om - oSize / 2);
-      const oy = Math.round(this.scale.height - om - oSize / 2);
-      const orderBtn = this.add.image(ox, oy, 'icon-buttons', 'order').setDisplaySize(oSize, oSize);
-      c.add(orderBtn);
-      order = { x: ox - oSize / 2, y: oy - oSize / 2, w: oSize, h: oSize };
-    }
+    // (The bottom-right shop button was removed — the Shop opens from the in-world desk
+    // pad now; see GameScene.openShopViaPad.)
 
     // Publish hit-boxes (canvas px) for GameScene's click routing. The `bar` rect
     // is the whole hotbar (used to suppress the hoe tile-cursor over the UI).
@@ -211,7 +201,6 @@ export class HotbarScene extends Phaser.Scene {
     this.registry.set('hotbarBounds', {
       slots: bounds,
       backpack,
-      order,
       bar: {
         x: startX - PAD_X,
         y: barTop,
