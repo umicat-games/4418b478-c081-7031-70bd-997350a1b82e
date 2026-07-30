@@ -93,6 +93,7 @@ const STAMINA_DRAIN_PER_SEC = 5;    // ~20s of continuous work drains a full bar
 const STAMINA_REGEN_PER_SEC = 3.5;  // ~29s to fully recover from empty
 const STAMINA_LOW_FRAC = 0.3;       // below this WHILE WORKING → a sweat emote
 const STAMINA_RECOVER_FRAC = 0.5;   // once exhausted, must regen to this before working again
+const CATO_EAT_ANNOUNCE_MS = 1900;  // beat between "found a snack" remark and the first bite (sit & rest)
 const CHATTER_MS = 5000;            // how long Cato's proactive small-talk chip lingers before it auto-hides
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
@@ -1956,9 +1957,17 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = false;
     (this.child?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
     this.startWanderIdle();
-    // If he's carrying food, eat some right away to recover; else drowse (the rest branch
-    // keeps eating on a cooldown until he's back above the recover threshold or out of food).
-    if (!this.catoEatFood()) { this.catoReact('sleepy', { duration: 3200, force: true }); this.catoSay('chatter_tired'); }
+    // If he's carrying food, ANNOUNCE first — he notices the snack, sits down to rest, and
+    // only takes the first bite after a beat (CATO_EAT_ANNOUNCE_MS via catoEatAt); the rest
+    // branch keeps eating on a cooldown until he's recovered or out of food. No food → drowse.
+    if (this.catoBagStore.some((it) => isFood(it.id))) {
+      this.catoReact('sleepy', { duration: 2400, force: true });
+      this.catoSay('chatter_found_food');
+      this.catoEatAt = this.time.now + CATO_EAT_ANNOUNCE_MS; // first bite lands after the remark
+    } else {
+      this.catoReact('sleepy', { duration: 3200, force: true });
+      this.catoSay('chatter_tired');
+    }
     this.scheduleSave();
   }
 
