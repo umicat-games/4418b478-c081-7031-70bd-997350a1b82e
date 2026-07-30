@@ -3,7 +3,7 @@ import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
-import { applyPriceData } from '../data/prices';
+import { applyItemData } from '../data/items';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -204,8 +204,8 @@ export class BootScene extends Phaser.Scene {
     // Foragables + big-stones data tables (see src/data/foragables.ts).
     this.load.json('data-foragables', 'data/foragables.json');
     this.load.json('data-big-stones', 'data/big-stones.json');
-    // Item buy/sell prices (the economy table). Applied in create(). See src/data/prices.ts.
-    this.load.json('data-prices', 'data/prices.json');
+    // Item property table (buy/sell/food). Applied in create(). See src/data/items.ts.
+    this.load.json('data-items', 'data/items.json');
   }
 
   create(): void {
@@ -309,7 +309,7 @@ export class BootScene extends Phaser.Scene {
     // Apply the loaded crop data table (falls back to the built-in if absent).
     applyCropData(this.cache.json.get('data-crops'));
     applyForagableData(this.cache.json.get('data-foragables'));
-    applyPriceData(this.cache.json.get('data-prices'));
+    applyItemData(this.cache.json.get('data-items'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);

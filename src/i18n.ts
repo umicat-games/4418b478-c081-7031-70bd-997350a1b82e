@@ -62,6 +62,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   chatter_harvest_done: { en: 'All picked — it\'s in the backpack now!', 'zh-CN': '收好啦，放进背包里了！' },
   chatter_water_done: { en: 'Watered! They\'ll grow nice and fast now.', 'zh-CN': '浇完水啦，它们会长得快些～' },
   chatter_tired: { en: "Phew… I'm getting tired. I need a little rest.", 'zh-CN': '呼…我有点累了，得歇一会儿。' },
+  chatter_ate: { en: 'Munch munch — that hit the spot!', 'zh-CN': '吃点东西，力气回来啦～' },
   // Names for the {crop} slot above — crops, tree fruit, and berry bushes.
   crop_generic: { en: 'crops', 'zh-CN': '作物' },
   crop_corn: { en: 'corn', 'zh-CN': '玉米' },

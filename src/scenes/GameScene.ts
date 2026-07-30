@@ -13,7 +13,7 @@ import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import type { MailItem, MailListEntry } from './MailboxScene';
 import type { OrderCatalogEntry } from './OrderBookScene';
 import type { ReceiptLine } from './ReceiptScene';
-import { ORDERABLE_IDS, buyPrice, sellPrice } from '../data/prices';
+import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
@@ -549,6 +549,7 @@ export class GameScene extends Phaser.Scene {
   private stamina = STAMINA_MAX_DEFAULT;
   private exhausted = false;
   private staminaSleepyAt = 0; // throttle the drowsy emote while resting exhausted
+  private catoEatAt = 0;       // cooldown between auto-eats from Cato's bag while exhausted
   // Stuck-escape: no progress while walking (wedged between tree trunks) → sidestep out.
   private wanderStuckMs = 0;
   private wanderPrev: { x: number; y: number } | null = null;
@@ -1955,9 +1956,29 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = false;
     (this.child?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
     this.startWanderIdle();
-    this.catoReact('sleepy', { duration: 3200, force: true });
-    this.catoSay('chatter_tired');
+    // If he's carrying food, eat some right away to recover; else drowse (the rest branch
+    // keeps eating on a cooldown until he's back above the recover threshold or out of food).
+    if (!this.catoEatFood()) { this.catoReact('sleepy', { duration: 3200, force: true }); this.catoSay('chatter_tired'); }
     this.scheduleSave();
+  }
+
+  /** Cato eats one unit of the first FOOD item in his bag (data-table `food` value),
+   *  restoring stamina; clears `exhausted` once he's recovered enough. Returns false when
+   *  there's nothing edible. */
+  private catoEatFood(): boolean {
+    const idx = this.catoBagStore.findIndex((it) => isFood(it.id));
+    if (idx < 0) return false;
+    const it = this.catoBagStore[idx];
+    this.stamina = Math.min(this.staminaMax, this.stamina + foodValue(it.id));
+    it.count -= 1;
+    if (it.count <= 0) this.catoBagStore.splice(idx, 1);
+    this.emote?.setStamina(this.stamina / this.staminaMax, this.time.now);
+    this.catoReact('happy', { duration: 2200, force: true });
+    this.catoSay('chatter_ate');
+    if (this.stamina >= this.staminaMax * STAMINA_RECOVER_FRAC) this.exhausted = false; // fed enough → back to work
+    if (this.menuOpen && this.menuTab === 2) this.publishMenu(); // refresh the Cato-bag if it's open
+    this.scheduleSave();
+    return true;
   }
 
   /** Cato says a little proactive remark (i18n key) in the top-right chip — NOT the main
@@ -7075,7 +7096,9 @@ export class GameScene extends Phaser.Scene {
       if (this.wanderState !== 'idle') this.startWanderIdle();
       this.child.play(`idle-${this.faceDir}`, true);
       this.wanderStuckMs = 0; this.wanderPrev = null;
-      if (this.time.now >= this.staminaSleepyAt) { this.staminaSleepyAt = this.time.now + 3200; this.catoReact('sleepy', { duration: 2600 }); }
+      // Keep eating food from his bag (on a cooldown) to recover faster; else drowse.
+      if (this.time.now >= this.catoEatAt && this.catoEatFood()) this.catoEatAt = this.time.now + 1500;
+      else if (this.time.now >= this.staminaSleepyAt) { this.staminaSleepyAt = this.time.now + 3200; this.catoReact('sleepy', { duration: 2600 }); }
       return;
     }
 
