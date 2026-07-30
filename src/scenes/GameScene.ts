@@ -3440,17 +3440,8 @@ export class GameScene extends Phaser.Scene {
     ) as Phaser.GameObjects.Sprite | undefined;
     if (!this.pad) return;
     if (this.textures.exists('pad')) this.pad.setTexture('pad', 0);
-    // The pad sits ON a table, but its editor depth (10) put it UNDER the desk. Sort it
-    // just above the foot line of whatever furniture it overlaps (the table draws at its
-    // own foot Y via applyYSort; +1 keeps the pad on top). Fixed — neither piece moves.
-    let deskFoot = this.footLine(this.pad);
-    for (const go of reg.all()) {
-      if (go.getData('entityAssetId') !== 'basic_furniture') continue;
-      const b = (go as Phaser.GameObjects.Sprite).getBounds();
-      if (this.pad.x >= b.left && this.pad.x <= b.right && this.pad.y >= b.top && this.pad.y <= b.bottom)
-        deskFoot = Math.max(deskFoot, this.footLine(go as Phaser.GameObjects.Sprite));
-    }
-    this.pad.setDepth(Math.round(deskFoot) + 1);
+    // Depth is handled per-frame in sortPadOnDesk() (it sits ON the desk → must draw
+    // above the furniture it overlaps, but still under Cato when he's in front).
   }
 
   private padContains(wx: number, wy: number): boolean {
@@ -6055,6 +6046,22 @@ export class GameScene extends Phaser.Scene {
       // Debug: draw the foot line so the flip point is visible on screen.
       if (g) g.lineBetween(s.x - 24, foot, s.x + 24, foot);
     }
+    this.sortPadOnDesk();
+  }
+
+  /** The desk pad sits ON a table, so its own foot line is HIGHER on screen than the
+   *  table's → plain foot-sort hides it under the desk. Keep it one above the deepest
+   *  FURNITURE piece it overlaps (NOT above Cato — so he still occludes it when he walks
+   *  in front). Runs after the main pass so the furniture depths are already set. */
+  private sortPadOnDesk(): void {
+    if (!this.pad?.active) return;
+    const pb = this.pad.getBounds();
+    let d = Math.round(this.footLine(this.pad));
+    for (const s of this.ySortSprites) {
+      if (s === this.pad || !s.active || s.getData('entityAssetId') !== 'basic_furniture') continue;
+      if (Phaser.Geom.Intersects.RectangleToRectangle(pb, s.getBounds())) d = Math.max(d, s.depth);
+    }
+    this.pad.setDepth(d + 1);
   }
 
   // ── Camera keys (WASD / arrow keys pan the camera) ────────────────────
