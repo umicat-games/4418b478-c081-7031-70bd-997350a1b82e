@@ -174,20 +174,6 @@
       "frame": "chair-right"
     },
     {
-      "id": "e-mrzpzppz-j1eu",
-      "kind": "sprite",
-      "transform": {
-        "x": 186,
-        "y": 238,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "chair-front"
-    },
-    {
       "id": "e-mrzpzt3i-ex0y",
       "kind": "sprite",
       "transform": {
@@ -247,8 +233,8 @@
       "id": "e-mrzq3icd-n71l",
       "kind": "sprite",
       "transform": {
-        "x": 150,
-        "y": 218,
+        "x": 184,
+        "y": 217,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -1388,6 +1374,33 @@
         "depth": 10
       },
       "assetId": "chest"
+    },
+    {
+      "id": "e-ms7qoa1r-j925",
+      "kind": "sprite",
+      "transform": {
+        "x": 153,
+        "y": 227,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "table"
+    },
+    {
+      "id": "e-ms7qoik9-4kvh",
+      "kind": "sprite",
+      "transform": {
+        "x": 153,
+        "y": 220,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "ipad_qkzld"
     }
   ]
 }
