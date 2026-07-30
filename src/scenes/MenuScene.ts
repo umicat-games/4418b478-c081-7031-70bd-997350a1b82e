@@ -35,6 +35,7 @@ const TABS = { y: 0.045, x: 0.05, w: 0.062, h: 0.05, gap: 0.012 }; // icon tab c
 const TITLE_Y = 0.238; // a bit lower — was cramped against the frame top
 // w leaves a strip on the right (grid ends at 0.52) for the scroll bar.
 const GRID = { x: 0.06, y: 0.30, w: 0.46, cols: 7, rows: 5, gap: 0.008 };
+const CATOBAG_ROWS = 3; // Cato's bag is small — fewer rows than the chest
 const MAIL = { rowH: 0.09, gapPx: 6, bottom: 0.88 }; // mail-list row metrics + viewport bottom
 const RAIL_DX = 0.016; // scroll bar x-offset past the grid/list right edge
 const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0.60, panelW: 0.35, panelH: 0.32 };
@@ -46,10 +47,11 @@ const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0
 const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string }> = [
   { key: 'mail', frame: 245, title: '邮件' },
   { key: 'chest', frame: 229, title: '箱子' },
+  { key: 'catobag', frame: 146, title: '猫包' }, // white-paw (all_icons 146)
   { key: 'shop', frame: 262, title: '商店' },
   { key: 'settings', frame: 164, title: '设置' },
 ];
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 2, TAB_SETTINGS = 3;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4;
 
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
@@ -64,8 +66,8 @@ export interface MenuItem { id?: string; iconKey: string; iconFrame: number | st
 export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; }
 export interface MenuModel {
   visible: boolean; rev: number;
-  tab: number;               // 0 mail · 1 chest · 2 shop · 3 settings
-  items?: MenuItem[];        // grid (chest)
+  tab: number;               // 0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings
+  items?: MenuItem[];        // grid (chest / cato-bag)
   mails?: MailListEntry[];   // mail list
   selected?: number;         // selected grid index → right detail
   catalog?: MenuCatalogItem[];  // shop tab
@@ -275,8 +277,8 @@ export class MenuScene extends Phaser.Scene {
     if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx, lw);
     else if (m.tab === TAB_MAIL) this.renderMailList(content, m.mails ?? []);
     else if (m.tab === TAB_SHOP) this.renderShop(content, m);
-    else this.renderGrid(content, m.items ?? [], m.selected); // chest
-    if (m.tab === TAB_CHEST) {
+    else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest OR cato-bag
+    if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);
@@ -330,10 +332,10 @@ export class MenuScene extends Phaser.Scene {
     this.tweens.add({ targets: panel, scaleX: to, scaleY: to, duration, ease, onUpdate: sync, onComplete });
   }
 
-  private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number): void {
+  private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number, rows: number = GRID.rows): void {
     const W = this.scale.width, H = this.scale.height;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W, gap = GRID.gap * W;
-    const cols = GRID.cols, rows = GRID.rows;
+    const cols = GRID.cols;
     const cell = (gw - gap * (cols - 1)) / cols;
     this.scrollStepPx = cell + gap;
     // Window by ROW: show `rows` rows starting at `scroll`; overflow drives the bar.
