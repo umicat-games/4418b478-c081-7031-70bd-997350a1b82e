@@ -64,6 +64,8 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   chatter_tired: { en: "Phew… I'm getting tired. I need a little rest.", 'zh-CN': '呼…我有点累了，得歇一会儿。' },
   chatter_found_food: { en: "Oh! There's a snack in my bag — let me sit down and have a bite.", 'zh-CN': '咦，包里还有吃的～我坐下歇会儿，吃点东西。' },
   chatter_ate: { en: 'Munch munch — that hit the spot!', 'zh-CN': '吃点东西，力气回来啦～' },
+  chatter_full: { en: "I'm stuffed — couldn't eat another bite!", 'zh-CN': '我现在饱饱的，吃不下啦～' },
+  chatter_bag_full: { en: "My little bag is full — no more room!", 'zh-CN': '我的小背包装不下更多啦～' },
   // Names for the {crop} slot above — crops, tree fruit, and berry bushes.
   crop_generic: { en: 'crops', 'zh-CN': '作物' },
   crop_corn: { en: 'corn', 'zh-CN': '玉米' },
@@ -108,6 +110,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_catobag: { en: "Cato's bag", 'zh-CN': '猫包' },
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
   action_give_cato: { en: 'Give to Cato', 'zh-CN': '给 Cato' },
+  action_feed: { en: 'Feed now', 'zh-CN': '喂食' },
   action_to_chest: { en: 'To Chest', 'zh-CN': '放回箱子' },
   menu_no_mail: { en: 'No mail yet', 'zh-CN': '还没有邮件' },
   menu_settings_todo: { en: 'Settings (coming soon)', 'zh-CN': '设置（待补充）' },

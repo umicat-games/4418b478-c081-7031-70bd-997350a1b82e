@@ -158,6 +158,7 @@ type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
 const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
+const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
 const MAX_STACK = 99;
 
 /** One stack of items in a single inventory/hotbar cell. Tools are
@@ -1977,7 +1978,16 @@ export class GameScene extends Phaser.Scene {
   private catoEatFood(): boolean {
     const idx = this.catoBagStore.findIndex((it) => isFood(it.id));
     if (idx < 0) return false;
+    this.consumeFood(idx);
+    return true;
+  }
+
+  /** Eat ONE unit of the food stack at `idx` in Cato's bag: restore stamina (clamped),
+   *  decrement, happy emote + "munch" remark, clear `exhausted` once recovered enough, then
+   *  refresh the open Cato-bag + save. Shared by the auto-eat and the manual Feed action. */
+  private consumeFood(idx: number): void {
     const it = this.catoBagStore[idx];
+    if (!it) return;
     this.stamina = Math.min(this.staminaMax, this.stamina + foodValue(it.id));
     it.count -= 1;
     if (it.count <= 0) this.catoBagStore.splice(idx, 1);
@@ -1987,7 +1997,16 @@ export class GameScene extends Phaser.Scene {
     if (this.stamina >= this.staminaMax * STAMINA_RECOVER_FRAC) this.exhausted = false; // fed enough → back to work
     if (this.menuOpen && this.menuTab === 2) this.publishMenu(); // refresh the Cato-bag if it's open
     this.scheduleSave();
-    return true;
+  }
+
+  /** Manual Feed (from the 猫包 tab): player hand-feeds Cato one unit of the picked food NOW
+   *  — works even when he isn't exhausted, to top him up before a long chore run. If he's
+   *  already at full stamina he politely declines (no waste). */
+  private menuFeed(index: number): void {
+    const it = this.catoBagStore[index];
+    if (!it || !isFood(it.id)) return;
+    if (this.stamina >= this.staminaMax) { this.catoSay('chatter_full'); return; }
+    this.consumeFood(index);
   }
 
   /** Cato says a little proactive remark (i18n key) in the top-right chip — NOT the main
@@ -3871,6 +3890,13 @@ export class GameScene extends Phaser.Scene {
     return this.chestStore.length < CHEST_SLOTS;
   }
 
+  /** Does Cato's (small) bag have room for `id`? Merges into an existing stack, else needs
+   *  a free slot (capped at CATO_BAG_SLOTS). */
+  private catoBagHasSpaceFor(id: string): boolean {
+    if (this.catoBagStore.some((s) => s.id === id)) return true;
+    return this.catoBagStore.length < CATO_BAG_SLOTS;
+  }
+
   /** Add an item stack to `store`, merging into an existing same-id stack if present. */
   private addToStore(store: ItemStack[], item: ItemStack): void {
     const existing = store.find((s) => s.id === item.id && s.stackable);
@@ -3933,8 +3959,11 @@ export class GameScene extends Phaser.Scene {
     // Item action menu (进 Hotbar / Sell / 给 Cato / 放回箱子 / Delete).
     if (this.menuItemMenu) {
       const opt = this.menuActionOptionAt(x, y);
+      const it = this.menuStore()[this.menuItemMenu.index];
       if (opt === 'hotbar') this.openMenuSlotPick(this.menuItemMenu.index, this.menuItemMenu.x, this.menuItemMenu.y);
+      else if (opt === 'give' && it && !this.catoBagHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.catoSay('chatter_bag_full'); } // Cato's bag is full → decline
       else if (opt === 'sell' || opt === 'give' || opt === 'tochest') this.openMenuKeypad(opt);
+      else if (opt === 'feed') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuFeed(idx); }
       else if (opt === 'delete') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuPerformAction('delete', idx); }
       else this.closeMenuItemMenu();
       return true;
@@ -3972,10 +4001,11 @@ export class GameScene extends Phaser.Scene {
   /** Item actions for the active grid. CHEST (tab 1): 进 Hotbar (usable items only) / Sell
    *  (if it has a sell price) / 给 Cato (into Cato's bag) / Delete. CATO-BAG (tab 2): 放回箱子
    *  (back to the chest) / Delete. (Future: a "喂 Cato" action when he's tired + it's food.) */
-  private menuItemOptions(index: number): Array<{ action: 'hotbar' | 'sell' | 'give' | 'tochest' | 'delete'; label: string }> {
+  private menuItemOptions(index: number): Array<{ action: 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete'; label: string }> {
     const it = this.menuStore()[index];
-    const opts: Array<{ action: 'hotbar' | 'sell' | 'give' | 'tochest' | 'delete'; label: string }> = [];
+    const opts: Array<{ action: 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete'; label: string }> = [];
     if (this.menuTab === 2) { // Cato-bag
+      if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed him now
       opts.push({ action: 'tochest', label: t('action_to_chest') });
       opts.push({ action: 'delete', label: t('action_delete') });
       return opts;
@@ -4075,7 +4105,10 @@ export class GameScene extends Phaser.Scene {
     const n = Math.min(qty ?? it.count, it.count);
     if (n <= 0) return;
     if (action === 'sell') this.addMoney(sellPrice(it.id) * n);
-    else if (action === 'give') this.addToStore(this.catoBagStore, { ...it, count: n }); // chest → Cato's bag
+    else if (action === 'give') {
+      if (!this.catoBagHasSpaceFor(it.id)) { this.catoSay('chatter_bag_full'); return; } // safety: bag filled since the menu opened
+      this.addToStore(this.catoBagStore, { ...it, count: n }); // chest → Cato's bag
+    }
     else if (action === 'tochest') this.addToStore(this.chestStore, { ...it, count: n }); // Cato's bag → chest
     it.count -= n;
     if (it.count <= 0) src.splice(index, 1);
@@ -4086,7 +4119,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Which action (if any) is under a tap on the unified menu's action menu. */
-  private menuActionOptionAt(x: number, y: number): 'hotbar' | 'sell' | 'give' | 'tochest' | 'delete' | null {
+  private menuActionOptionAt(x: number, y: number): 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete' | null {
     const bounds = this.registry.get('menuActionBounds') as Array<{ x: number; y: number; w: number; h: number; idx?: number }> | undefined;
     if (!bounds || !this.menuItemMenu) return null;
     const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
