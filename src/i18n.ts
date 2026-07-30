@@ -107,7 +107,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_mail: { en: 'Mail', 'zh-CN': '邮件' },
   tab_chest: { en: 'Chest', 'zh-CN': '箱子' },
   tab_shop: { en: 'Shop', 'zh-CN': '商店' },
-  tab_catobag: { en: "Cato's bag", 'zh-CN': '猫包' },
+  tab_catobag: { en: "Cato's bag", 'zh-CN': 'Cato的背包' },
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
   action_give_cato: { en: 'Give to Cato', 'zh-CN': '给 Cato' },
   action_feed: { en: 'Feed now', 'zh-CN': '喂食' },
