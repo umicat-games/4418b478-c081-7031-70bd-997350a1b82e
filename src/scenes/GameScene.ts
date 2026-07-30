@@ -676,6 +676,10 @@ export class GameScene extends Phaser.Scene {
   private menuActionRev = 0;
   private menuDragging = false; // dragging the unified menu's scroll rail
   private menuShopSel?: string; // selected catalog id on the Shop tab (→ right detail + stepper)
+  // When the menu was opened by clicking a physical door object (mailbox / chest), the
+  // object plays its OPEN anim first; closing the menu plays its CLOSE anim.
+  private menuSourceSprite?: Phaser.GameObjects.Sprite;
+  private menuCloseAnim?: string;
   private menuBuyQty = 1;       // how many to buy (Shop right-side stepper; instant purchase)
   private shopMsg = '';         // transient Shop warning ("金币不够" / "箱子满了")
   // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
@@ -1433,8 +1437,8 @@ export class GameScene extends Phaser.Scene {
       if (this.chatterAt(pointer.x, pointer.y)) { this.openChatterDialog(); return; } // proactive chip (screen-space)
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
-      if (this.mailboxContains(wp.x, wp.y)) { this.openMenu(0); return; } // door mailbox → unified menu (Mail)
-      if (this.chestContains(wp.x, wp.y)) { this.openMenu(1); return; }   // door chest → unified menu (Chest)
+      if (this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; } // door mailbox → open anim → menu (Mail)
+      if (this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }      // door chest → open anim → menu (Chest)
       this.input.manager.mouse?.requestPointerLock();
     });
 
@@ -1601,8 +1605,8 @@ export class GameScene extends Phaser.Scene {
     // The mailbox at the door → open the mail modal (empty hand or any tool, but
     // not while placing). Checked before the tile actions so it wins over tilling
     // the grass under it.
-    if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMenu(0); return; }
-    if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openMenu(1); return; }
+    if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; }
+    if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -3694,12 +3698,47 @@ export class GameScene extends Phaser.Scene {
 
   // ── Unified menu (MenuScene) — tabs: mail / for-sale / chest / settings ─────────
 
+  /** Door mailbox clicked → play its open swing, THEN open the menu on Mail; closing the
+   *  menu plays its close swing. (mailbox-mail-open vs -empty-open per mail state.) */
+  private openMailboxViaDoor(): void {
+    this.mailboxHasMail = this.mailList.length > 0;
+    this.openMenuViaObject(this.mailbox, this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open', 'mailbox-close', 0);
+  }
+
+  /** Door chest clicked → play its open swing, THEN open the menu on Chest; closing plays close. */
+  private openChestViaDoor(): void {
+    this.openMenuViaObject(this.chest, 'chest-open-front', 'chest-close-front', 1);
+  }
+
+  /** Play `sprite`'s open animation, then open the unified menu on `tab`; remember the
+   *  close animation to play when the menu closes. Falls back to opening immediately if
+   *  the sprite / anim is missing, and has a safety timer so a missing COMPLETE event
+   *  can't strand the menu closed. */
+  private openMenuViaObject(sprite: Phaser.GameObjects.Sprite | undefined, openAnim: string, closeAnim: string, tab: number): void {
+    if (this.menuOpen || !sprite) { this.openMenu(tab); return; } // already open, or no sprite → just open (no anim)
+    sprite.play({ key: openAnim, repeat: 0 }); // authored loop:true → repeat:0 plays once + holds open
+    let done = false;
+    const go = (): void => {
+      if (done || this.menuOpen) return;
+      done = true;
+      this.openMenu(tab); // this clears the source on a fresh open; set it right after so close plays the swing
+      this.menuSourceSprite = sprite;
+      this.menuCloseAnim = closeAnim;
+    };
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, go); // open the menu when the swing finishes
+    this.time.delayedCall(700, go); // safety: open anyway if COMPLETE never fires
+  }
+
   /** Open the unified menu on `tab` (0 mail · 1 chest · 2 shop · 3 settings). */
   private openMenu(tab: number): void {
     this.menuTab = tab;
     this.menuSelected = -1;
     if (tab === 2) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // Shop defaults
     if (!this.menuOpen) {
+      // Fresh open → no source object by default (E/I / order button / backpack button).
+      // openMenuViaObject sets the source AFTER this so a door-open still animates on close.
+      this.menuSourceSprite = undefined;
+      this.menuCloseAnim = undefined;
       this.menuOpen = true;
       if (this.locked) this.input.manager.mouse?.releasePointerLock();
       this.hideHotbar(true);
@@ -3714,6 +3753,11 @@ export class GameScene extends Phaser.Scene {
     this.closeReceipt();
     this.hideHotbar(false);
     this.registry.set('menu', { visible: false, rev: ++this.menuRev });
+    // If opened by a door object, play its CLOSE swing — a touch after the menu's own
+    // slide-out so it reads as "menu closes, then the box shuts".
+    const sprite = this.menuSourceSprite, closeAnim = this.menuCloseAnim;
+    this.menuSourceSprite = undefined; this.menuCloseAnim = undefined;
+    if (sprite && closeAnim) this.time.delayedCall(180, () => sprite.play({ key: closeAnim, repeat: 0 }));
   }
 
   /** The item grid backing the active tab — only the Chest (tab 1) is a grid now. */
