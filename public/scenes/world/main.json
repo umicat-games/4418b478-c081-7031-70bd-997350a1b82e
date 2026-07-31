@@ -1406,8 +1406,8 @@
       "id": "e-workstation-1",
       "kind": "sprite",
       "transform": {
-        "x": 203,
-        "y": 236,
+        "x": 240,
+        "y": 272,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
