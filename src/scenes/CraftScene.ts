@@ -16,6 +16,7 @@ const BTN = 'square-buttons', BTN_FRAME = 'white-button';
 const ICONS = 'ui-icons', ICON_CLOSE = 46;
 const INK = '#5b3a1e', SUB = '#8a6a44', BAD = '#b5533a';
 const SEL_TINT = 0xffe6a8, DIM_TINT = 0x9a8467;
+const DIM_ALPHA = 0.82; // full-screen mask darkening the game (matches MenuScene)
 const WHEEL_MS = 110;
 
 export interface CraftMat { iconKey: string; iconFrame: string | number; need: number; have: number; ok: boolean }
@@ -71,7 +72,9 @@ export class CraftScene extends Phaser.Scene {
     const m = this.model();
     if (!m || m.rev === this.lastRev) return;
     this.lastRev = m.rev;
-    if (m.visible) this.render(m);
+    // Pop the panel in only on the FIRST open; re-renders (selecting a recipe / crafting)
+    // rebuild in place with no animation.
+    if (m.visible) this.render(m, !this.shown);
     else this.close();
   }
 
@@ -101,8 +104,11 @@ export class CraftScene extends Phaser.Scene {
     const c = this.add.container(0, 0);
     this.root = c;
 
-    const dim = this.add.rectangle(0, 0, W, H, 0x000000, popIn ? 0 : 0.45).setOrigin(0, 0);
-    if (popIn) this.tweens.add({ targets: dim, alpha: 0.45, duration: 140 });
+    // Full-screen MASK darkening the game behind the modal (same as the menu's). NOTE:
+    // the FILL alpha must stay DIM_ALPHA — fade in via the object `alpha` (0→1), not the
+    // fill alpha, or the mask renders fully transparent (the "no mask" bug).
+    const dim = this.add.rectangle(0, 0, W, H, 0x000000, DIM_ALPHA).setOrigin(0, 0);
+    if (popIn) { dim.setAlpha(0); this.tweens.add({ targets: dim, alpha: 1, duration: 160 }); }
     c.add(dim);
 
     const box = this.add.container(cx, cy);
@@ -132,10 +138,12 @@ export class CraftScene extends Phaser.Scene {
       if (idx >= m.recipes.length) break;
       const e = m.recipes[idx];
       const ry = listY + r * (rowH + gap);
+      // Keep the row bg readable — only the SELECTED row is tinted (gold). Un-craftable
+      // is shown by a dimmed ICON + muted name, NOT a dark bg (that hid the text).
       const bg = this.add.nineslice(listX + listW / 2, ry + rowH / 2, ATLAS, ROW_FRAME, listW / SLOT_SCALE, rowH / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
-      if (idx === m.selected) bg.setTint(SEL_TINT); else if (!e.ok) bg.setTint(DIM_TINT);
+      if (idx === m.selected) bg.setTint(SEL_TINT);
       box.add(bg);
-      if (this.textures.exists(e.iconKey)) { const ic = this.add.image(listX + rowH * 0.6, ry + rowH / 2, e.iconKey, e.iconFrame); ic.setScale((rowH * 0.62) / Math.max(ic.width, ic.height)); box.add(ic); }
+      if (this.textures.exists(e.iconKey)) { const ic = this.add.image(listX + rowH * 0.6, ry + rowH / 2, e.iconKey, e.iconFrame); ic.setScale((rowH * 0.62) / Math.max(ic.width, ic.height)); if (!e.ok) ic.setAlpha(0.45); box.add(ic); }
       box.add(this.T(listX + rowH * 1.15, ry + rowH / 2, e.count > 1 ? `${e.name} ×${e.count}` : e.name, ph * 0.032, e.ok ? INK : SUB, 0));
       rowBounds.push({ x: cx + listX, y: cy + ry, w: listW, h: rowH, idx });
     }
