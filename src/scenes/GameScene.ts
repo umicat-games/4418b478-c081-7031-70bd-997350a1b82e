@@ -13,6 +13,7 @@ import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import type { MailListEntry, OrderCatalogEntry } from './menu-types';
 import type { ReceiptLine } from './ReceiptScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
+import { RECIPES, type Recipe } from '../data/recipes';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
@@ -647,6 +648,13 @@ export class GameScene extends Phaser.Scene {
   // tab — it replaces the old bottom-right shop button. Resting on the animation sheet's
   // frame 0 (identical to the static ipad_qkzld the creator dropped in the scene).
   private pad?: Phaser.GameObjects.Sprite;
+  // The editor-placed work station (right side of the house). Clicking it opens the
+  // crafting modal (CraftScene). Recipes come from the data table (src/data/recipes).
+  private craftStation?: Phaser.GameObjects.Sprite;
+  private craftOpen = false;
+  private craftSel = 0;   // selected recipe index
+  private craftMsg = '';  // transient warning / "Crafted!" flash
+  private craftRev = 0;
   // Persistent CONTENTS of the chest (real ItemStacks) — the unified menu Chest tab; the
   // player's only storage. `mailboxStore` is vestigial (kept for save compat / DEBUG clear).
   private mailboxStore: ItemStack[] = [];
@@ -939,7 +947,7 @@ export class GameScene extends Phaser.Scene {
       panGesture.on('pan', (p: { dx: number; dy: number; pointer?: Phaser.Input.Pointer }) => {
         const pointer = p.pointer ?? this.input.activePointer;
         if (!pointer.wasTouch) return; // mouse → edge-scroll, not drag
-        if (this.menuOpen || this.dialogOpen || this.inventoryOpen) return; // don't pan behind a modal
+        if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen) return; // don't pan behind a modal
         this.cameraFollow = false; // manual pan wins over follow-Cato
         // dx/dy are screen pixels → divide by zoom to get world delta
         cam.scrollX -= p.dx / cam.zoom;
@@ -1271,9 +1279,10 @@ export class GameScene extends Phaser.Scene {
     this.openDialog();
   }
 
-  /** Close the unified menu if it's open (chat replaces it). */
+  /** Close the unified menu / crafting modal if open (chat replaces it). */
   private closeOpenModal(): void {
     if (this.menuOpen) this.closeMenu();
+    if (this.craftOpen) this.closeCraft();
   }
 
   // ── "Find cat" button — warm cozy pill, fixed to top-right ───────────
@@ -1343,12 +1352,14 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('ReceiptScene')) this.scene.launch('ReceiptScene');
     if (!this.scene.isActive('ChatterScene')) this.scene.launch('ChatterScene');
     if (!this.scene.isActive('MenuScene')) this.scene.launch('MenuScene');
+    if (!this.scene.isActive('CraftScene')) this.scene.launch('CraftScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
     this.scene.bringToTop('PaletteScene');
     this.scene.bringToTop('ChatterScene'); // above UmicatHud so the mood emoji shows IN the portrait
     this.scene.bringToTop('MenuScene');     // the unified menu sits above the HUD too
+    this.scene.bringToTop('CraftScene');    // the crafting modal sits above the HUD too
     this.scene.bringToTop('CursorScene');
     this.publishBuildPalette();
     this.publishWeatherHud();
@@ -1363,6 +1374,7 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal (unlocked)
       if (this.menuOpen) {
         // Dragging the scroll rail scrolls the list; an item slot / shop row wins over
         // the rail's wide hit zone, and the rail is off while a sub-popup is up.
@@ -1382,6 +1394,7 @@ export class GameScene extends Phaser.Scene {
       if (this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; } // door mailbox → open anim → menu (Mail)
       if (this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }      // door chest → open anim → menu (Chest)
       if (this.padContains(wp.x, wp.y)) { this.openShopViaPad(); return; }          // desk pad → screen-on anim → menu (Shop)
+      if (this.craftStationContains(wp.x, wp.y)) { this.openCraft(); return; }        // work station → crafting modal
       this.input.manager.mouse?.requestPointerLock();
     });
 
@@ -1414,6 +1427,7 @@ export class GameScene extends Phaser.Scene {
     // Esc closes the dialog (also releases pointer lock — browser-enforced).
     this.input.keyboard?.on('keydown-ESC', () => {
       if (this.confirmOpen) { this.closeConfirm(); return; } // Esc = cancel the confirm
+      if (this.craftOpen) { this.closeCraft(); return; }     // Esc = close the crafting modal
       if (this.dialogOpen) this.closeDialog();
     });
     // Enter confirms the modal dialog (✓); Esc above cancels it.
@@ -1473,6 +1487,7 @@ export class GameScene extends Phaser.Scene {
     if (this.chatterAt(x, y)) { this.openChatterDialog(); return; }
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
+    if (this.handleCraftClick(x, y)) return; // the crafting modal (work station)
     if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
     // Build palette (wall facing) → pick that orientation.
     if (this.handlePaletteClick(x, y)) return;
@@ -1514,6 +1529,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; }
     if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }
     if (!this.activePlace && this.padContains(wp.x, wp.y)) { this.openShopViaPad(); return; }
+    if (!this.activePlace && this.craftStationContains(wp.x, wp.y)) { this.openCraft(); return; }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a building material: FLOOR overlaps walls (ground layer); WALL opens
@@ -1601,6 +1617,7 @@ export class GameScene extends Phaser.Scene {
     this.wireMailbox();
     this.wireChest();
     this.wirePad();
+    this.wireCraftStation();
     this.wireSceneTrees();
     this.wireSceneBushes();
     this.wireSceneForageAndStones();
@@ -1832,7 +1849,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.child) return;
     const dt = delta / 1000;
     const now = this.time.now;
-    if (this.catoTask && !this.menuOpen) {
+    if (this.catoTask && !this.menuOpen && !this.craftOpen) {
       // catoTask still drives the drain — but while a menu is open Cato is PAUSED
       // (frozen in the update loop), so he shouldn't lose energy standing still.
       const before = this.stamina;
@@ -3640,6 +3657,131 @@ export class GameScene extends Phaser.Scene {
     const key = 'item_' + id.replace(/-/g, '_');
     const s = t(key);
     return s === key ? (itemFromId(id, 1).label ?? id) : s;
+  }
+
+  // ── Crafting (work station modal) ──────────────────────────────────────────
+  /** Total count of item `id` sitting in the chest (materials are pulled from there). */
+  private chestCountOf(id: string): number {
+    let n = 0;
+    for (const s of this.chestStore) if (s.id === id) n += s.count;
+    return n;
+  }
+
+  /** Can every material of `r` be paid AND does the output have chest room? */
+  private canCraftRecipe(r: Recipe): boolean {
+    if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) return false;
+    return this.chestHasSpaceFor(r.output);
+  }
+
+  /** Find the editor-placed work station; it opens the crafting modal on click. Add it
+   *  to the y-sort so Cato passes in front/behind by foot line (it sits on the floor). */
+  private wireCraftStation(): void {
+    const reg = getEntityRegistry(this);
+    if (!reg) return;
+    this.craftStation = reg.all().find(
+      (go) => go.getData('entityAssetId') === 'work_station',
+    ) as Phaser.GameObjects.Sprite | undefined;
+    if (this.craftStation && !this.ySortSprites.includes(this.craftStation)) this.ySortSprites.push(this.craftStation);
+  }
+
+  private craftStationContains(wx: number, wy: number): boolean {
+    if (!this.craftStation) return false;
+    const b = this.craftStation.getBounds();
+    return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
+  }
+
+  private openCraft(): void {
+    if (this.craftOpen) return;
+    this.craftOpen = true;
+    this.craftSel = 0;
+    this.craftMsg = '';
+    if (this.locked) this.input.manager.mouse?.releasePointerLock();
+    this.publishCraft();
+  }
+
+  private closeCraft(): void {
+    if (!this.craftOpen) return;
+    this.craftOpen = false;
+    this.registry.set('craft', { visible: false, rev: ++this.craftRev });
+  }
+
+  /** Build the crafting model from RECIPES + current chest counts and publish it. */
+  private publishCraft(): void {
+    const recipes = RECIPES.map((r) => ({
+      id: r.id,
+      iconKey: itemFromId(r.output, 1).iconKey ?? 'fruit-items',
+      iconFrame: itemFromId(r.output, 1).iconFrame ?? 0,
+      name: this.itemName(r.output),
+      count: r.count,
+      ok: this.canCraftRecipe(r),
+    }));
+    const sel = RECIPES[this.craftSel];
+    const detail = sel
+      ? {
+          name: sel.count > 1 ? `${this.itemName(sel.output)} ×${sel.count}` : this.itemName(sel.output),
+          desc: this.itemDesc(sel.output),
+          iconKey: itemFromId(sel.output, 1).iconKey ?? 'fruit-items',
+          iconFrame: itemFromId(sel.output, 1).iconFrame ?? 0,
+          outCount: sel.count,
+          materials: sel.materials.map((m) => {
+            const have = this.chestCountOf(m.id);
+            return {
+              iconKey: itemFromId(m.id, 1).iconKey ?? 'fruit-items',
+              iconFrame: itemFromId(m.id, 1).iconFrame ?? 0,
+              need: m.count,
+              have,
+              ok: have >= m.count,
+            };
+          }),
+          canCraft: this.canCraftRecipe(sel),
+        }
+      : undefined;
+    this.registry.set('craft', { visible: true, rev: ++this.craftRev, recipes, selected: this.craftSel, detail, msg: this.craftMsg });
+  }
+
+  /** Craft the selected recipe: deduct materials from the chest, add the output to it. */
+  private doCraft(): void {
+    const r = RECIPES[this.craftSel];
+    if (!r) return;
+    if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) { this.flashCraftMsg(t('craft_need')); return; }
+    if (!this.chestHasSpaceFor(r.output)) { this.flashCraftMsg(t('craft_full')); return; }
+    for (const m of r.materials) this.takeFromChest(m.id, m.count);
+    this.addToChest(itemFromId(r.output, r.count));
+    this.catoReact('happy', { duration: 1400 });
+    this.flashCraftMsg(t('craft_done'));
+    this.scheduleSave();
+  }
+
+  /** Remove `n` of item `id` from the chest (across stacks). */
+  private takeFromChest(id: string, n: number): void {
+    let left = n;
+    for (let i = this.chestStore.length - 1; i >= 0 && left > 0; i--) {
+      const s = this.chestStore[i];
+      if (s.id !== id) continue;
+      const take = Math.min(s.count, left);
+      s.count -= take; left -= take;
+      if (s.count <= 0) this.chestStore.splice(i, 1);
+    }
+  }
+
+  private flashCraftMsg(msg: string): void {
+    this.craftMsg = msg;
+    this.publishCraft();
+    this.time.delayedCall(1400, () => { if (this.craftMsg === msg) { this.craftMsg = ''; if (this.craftOpen) this.publishCraft(); } });
+  }
+
+  /** Route a tap while the crafting modal is open (modal — always consumes). */
+  private handleCraftClick(x: number, y: number): boolean {
+    if (!this.craftOpen) return false;
+    const b = this.registry.get('craftBounds') as { rows: Array<{ x: number; y: number; w: number; h: number; idx: number }>; craft: { x: number; y: number; w: number; h: number }; close: { x: number; y: number; w: number; h: number }; panel: { x: number; y: number; w: number; h: number } } | null;
+    if (!b) return true;
+    const hit = (r: { x: number; y: number; w: number; h: number }) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    if (hit(b.close)) { this.closeCraft(); return true; }
+    const row = b.rows.find((r) => hit(r));
+    if (row) { this.craftSel = row.idx; this.craftMsg = ''; this.publishCraft(); return true; }
+    if (hit(b.craft)) { this.doCraft(); return true; }
+    if (!hit(b.panel)) this.closeCraft(); // tap outside → close
+    return true; // modal — swallow everything else
   }
 
   /** Route a tap while the unified menu is open. Priority (topmost first): receipt →
@@ -6362,7 +6504,7 @@ export class GameScene extends Phaser.Scene {
     // freeze him in place (idle) so he doesn't wander/work behind the modal. His
     // catoTask (if any) is PRESERVED — untouched here — so he picks it right back up
     // when the menu closes. Stamina is gated in updateStamina (no drain while paused).
-    if (this.menuOpen) {
+    if (this.menuOpen || this.craftOpen) {
       (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
       this.child.play(`idle-${this.faceDir}`, true);
       return;

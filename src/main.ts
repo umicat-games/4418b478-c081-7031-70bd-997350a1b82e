@@ -8,6 +8,7 @@ import { WeatherScene } from './scenes/WeatherScene';
 import { PaletteScene } from './scenes/PaletteScene';
 import { ConfirmScene } from './scenes/ConfirmScene';
 import { ReceiptScene } from './scenes/ReceiptScene';
+import { CraftScene } from './scenes/CraftScene';
 import { ChatterScene } from './scenes/ChatterScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from './config';
@@ -39,7 +40,7 @@ function startGame(): void {
     // HotbarScene (bottom tool hotbar) + CursorScene are registered but not
     // auto-started; GameScene launches them after the HUD exists so they layer
     // above it (cursor stays topmost — see CursorScene.update bringToTop).
-    scenes: [BootScene, BootMenuScene, GameScene, HotbarScene, WeatherScene, PaletteScene, ConfirmScene, ReceiptScene, ChatterScene, MenuScene, CursorScene],
+    scenes: [BootScene, BootMenuScene, GameScene, HotbarScene, WeatherScene, PaletteScene, ConfirmScene, ReceiptScene, ChatterScene, MenuScene, CraftScene, CursorScene],
     renderScripts,
   });
 }

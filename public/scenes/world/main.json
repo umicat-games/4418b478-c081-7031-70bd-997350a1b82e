@@ -1401,6 +1401,19 @@
         "depth": 10
       },
       "assetId": "ipad_qkzld"
+    },
+    {
+      "id": "e-workstation-1",
+      "kind": "sprite",
+      "transform": {
+        "x": 203,
+        "y": 236,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "work_station"
     }
   ]
 }

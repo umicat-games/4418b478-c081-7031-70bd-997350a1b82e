@@ -4,6 +4,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
 import { applyItemData } from '../data/items';
+import { applyRecipeData } from '../data/recipes';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -214,6 +215,7 @@ export class BootScene extends Phaser.Scene {
     this.load.json('data-big-stones', 'data/big-stones.json');
     // Item property table (buy/sell/food). Applied in create(). See src/data/items.ts.
     this.load.json('data-items', 'data/items.json');
+    this.load.json('data-recipes', 'data/recipes.json');
   }
 
   create(): void {
@@ -336,6 +338,7 @@ export class BootScene extends Phaser.Scene {
     applyCropData(this.cache.json.get('data-crops'));
     applyForagableData(this.cache.json.get('data-foragables'));
     applyItemData(this.cache.json.get('data-items'));
+    applyRecipeData(this.cache.json.get('data-recipes'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
     const manifest = getManifest(this);

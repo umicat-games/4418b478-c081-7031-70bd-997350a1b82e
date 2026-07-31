@@ -120,6 +120,14 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   shop_buy: { en: 'Buy', 'zh-CN': '购买' },                // rendered "Buy 20" / "购买 20"
   shop_no_coins: { en: 'Not enough coins', 'zh-CN': '金币不够' },
   chest_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
+  // Crafting (work station modal)
+  craft_title: { en: 'CRAFTING', 'zh-CN': '合成' },
+  craft_pick: { en: 'Pick something to craft', 'zh-CN': '选一个要合成的东西' },
+  craft_materials: { en: 'Materials', 'zh-CN': '所需材料' },
+  craft_button: { en: 'Craft', 'zh-CN': '合成' },
+  craft_need: { en: 'Not enough materials', 'zh-CN': '材料不够' },
+  craft_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
+  craft_done: { en: 'Crafted!', 'zh-CN': '合成成功！' },
   action_hotbar: { en: 'To Hotbar', 'zh-CN': '放到快捷栏' },
   action_sell: { en: 'Sell', 'zh-CN': '出售' },
   action_delete: { en: 'Delete', 'zh-CN': '丢弃' },

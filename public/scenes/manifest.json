@@ -2012,6 +2012,13 @@
       "path": "uploaded/ipad_qkzld.png",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/ipad_qkzld.png",
       "kind": "image"
+    },
+    {
+      "id": "work_station",
+      "textureKey": "work_station",
+      "path": "uploaded/work_station.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/work_station.png",
+      "kind": "image"
     }
   ]
 }
