@@ -2019,6 +2019,13 @@
       "path": "uploaded/work_station.png",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/work_station.png",
       "kind": "image"
+    },
+    {
+      "id": "catopia-title",
+      "textureKey": "catopia-title",
+      "path": "uploaded/catopia-title.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/catopia-title.png",
+      "kind": "image"
     }
   ]
 }

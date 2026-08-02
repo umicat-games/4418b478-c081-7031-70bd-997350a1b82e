@@ -15,6 +15,75 @@
   },
   "entities": [
     {
+      "id": "water-bg-1",
+      "kind": "tilemap-ref",
+      "tilemapId": "water",
+      "name": "water",
+      "transform": {
+        "x": 320,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 0
+      }
+    },
+    {
+      "id": "water-bg-2",
+      "kind": "tilemap-ref",
+      "tilemapId": "water",
+      "name": "water",
+      "transform": {
+        "x": 960,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 0
+      }
+    },
+    {
+      "id": "water-bg-3",
+      "kind": "tilemap-ref",
+      "tilemapId": "water",
+      "name": "water",
+      "transform": {
+        "x": 320,
+        "y": 720,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 0
+      }
+    },
+    {
+      "id": "water-bg-4",
+      "kind": "tilemap-ref",
+      "tilemapId": "water",
+      "name": "water",
+      "transform": {
+        "x": 960,
+        "y": 720,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 0
+      }
+    },
+    {
+      "id": "catopia-title",
+      "kind": "sprite",
+      "transform": {
+        "x": 640,
+        "y": 300,
+        "rotation": 0,
+        "scaleX": 0.62,
+        "scaleY": 0.62,
+        "depth": 5
+      },
+      "assetId": "catopia-title"
+    },
+    {
       "id": "play-button",
       "kind": "sprite",
       "role": "play-button",
