@@ -71,6 +71,20 @@
       }
     },
     {
+      "id": "boot-island",
+      "kind": "tilemap-ref",
+      "tilemapId": "boot-screen-island",
+      "name": "island",
+      "transform": {
+        "x": 640,
+        "y": 360,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      }
+    },
+    {
       "id": "catopia-title",
       "kind": "sprite",
       "transform": {
