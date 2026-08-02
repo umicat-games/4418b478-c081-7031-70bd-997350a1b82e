@@ -51,7 +51,7 @@
         "rotation": 0,
         "scaleX": 0.207,
         "scaleY": 0.207,
-        "depth": 5
+        "depth": 100
       },
       "assetId": "catopia-title"
     },
@@ -65,7 +65,7 @@
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
-        "depth": 10
+        "depth": 101
       },
       "assetId": "ui_big_play_button",
       "frame": "play-light-bg"
@@ -263,8 +263,7 @@
         "scaleY": 1,
         "depth": 10
       },
-      "assetId": "chest",
-      "animation": "chest-open-front"
+      "assetId": "chest"
     },
     {
       "id": "e-mscfrc04-6nex",
