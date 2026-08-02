@@ -4,8 +4,8 @@
   "name": "Boot",
   "type": "world",
   "world": {
-    "width": 1280,
-    "height": 720,
+    "width": 427,
+    "height": 240,
     "background": {
       "color": "#1a1a2e"
     }
@@ -15,55 +15,13 @@
   },
   "entities": [
     {
-      "id": "water-bg-1",
+      "id": "water-bg",
       "kind": "tilemap-ref",
       "tilemapId": "water",
       "name": "water",
       "transform": {
-        "x": 320,
-        "y": 240,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 0
-      }
-    },
-    {
-      "id": "water-bg-2",
-      "kind": "tilemap-ref",
-      "tilemapId": "water",
-      "name": "water",
-      "transform": {
-        "x": 960,
-        "y": 240,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 0
-      }
-    },
-    {
-      "id": "water-bg-3",
-      "kind": "tilemap-ref",
-      "tilemapId": "water",
-      "name": "water",
-      "transform": {
-        "x": 320,
-        "y": 720,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 0
-      }
-    },
-    {
-      "id": "water-bg-4",
-      "kind": "tilemap-ref",
-      "tilemapId": "water",
-      "name": "water",
-      "transform": {
-        "x": 960,
-        "y": 720,
+        "x": 213.5,
+        "y": 120,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -76,8 +34,8 @@
       "tilemapId": "boot-screen-island",
       "name": "island",
       "transform": {
-        "x": 640,
-        "y": 360,
+        "x": 213.5,
+        "y": 120,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -88,11 +46,11 @@
       "id": "catopia-title",
       "kind": "sprite",
       "transform": {
-        "x": 640,
-        "y": 300,
+        "x": 213.5,
+        "y": 92,
         "rotation": 0,
-        "scaleX": 0.62,
-        "scaleY": 0.62,
+        "scaleX": 0.207,
+        "scaleY": 0.207,
         "depth": 5
       },
       "assetId": "catopia-title"
@@ -102,11 +60,11 @@
       "kind": "sprite",
       "role": "play-button",
       "transform": {
-        "x": 1110,
-        "y": 640,
+        "x": 367,
+        "y": 214,
         "rotation": 0,
-        "scaleX": 3,
-        "scaleY": 3,
+        "scaleX": 1,
+        "scaleY": 1,
         "depth": 10
       },
       "assetId": "ui_big_play_button",
