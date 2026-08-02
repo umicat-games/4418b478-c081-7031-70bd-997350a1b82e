@@ -34,8 +34,8 @@
       "tilemapId": "boot-screen-island",
       "name": "island",
       "transform": {
-        "x": 251.2,
-        "y": 134.5,
+        "x": 251.77224897329413,
+        "y": 136,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -69,6 +69,496 @@
       },
       "assetId": "ui_big_play_button",
       "frame": "play-light-bg"
+    },
+    {
+      "id": "e-mscflmkg-8rp6",
+      "kind": "sprite",
+      "transform": {
+        "x": 100.2918672997059,
+        "y": 115.98277156082352,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "bed-blue"
+    },
+    {
+      "id": "e-mscfm375-wsur",
+      "kind": "sprite",
+      "transform": {
+        "x": 127.71387551335295,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "drawer"
+    },
+    {
+      "id": "e-mscfme47-j82t",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "rug-small-green"
+    },
+    {
+      "id": "e-mscfmqs8-kl1m",
+      "kind": "sprite",
+      "transform": {
+        "x": 160,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "rug-green"
+    },
+    {
+      "id": "e-mscfmteg-0l7n",
+      "kind": "sprite",
+      "transform": {
+        "x": 160,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "table"
+    },
+    {
+      "id": "e-mscfmvwq-1j33",
+      "kind": "sprite",
+      "transform": {
+        "x": 144,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "chair-right"
+    },
+    {
+      "id": "e-mscfmxq0-xezp",
+      "kind": "sprite",
+      "transform": {
+        "x": 176,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "chair-left"
+    },
+    {
+      "id": "e-mscfn02z-l55z",
+      "kind": "sprite",
+      "transform": {
+        "x": 160,
+        "y": 128,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "chair-front"
+    },
+    {
+      "id": "e-mscfn2nc-dx8m",
+      "kind": "sprite",
+      "transform": {
+        "x": 160,
+        "y": 160,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "small-table"
+    },
+    {
+      "id": "e-mscfna4j-en1k",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "small-table"
+    },
+    {
+      "id": "e-mscfnf5s-4w93",
+      "kind": "sprite",
+      "transform": {
+        "x": 176,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "lamp-1"
+    },
+    {
+      "id": "e-mscfnydy-0wzx",
+      "kind": "sprite",
+      "transform": {
+        "x": 131,
+        "y": 176,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "door_animation_sprites",
+      "animation": "door-open"
+    },
+    {
+      "id": "e-mscfqrdr-ikrw",
+      "kind": "sprite",
+      "transform": {
+        "x": 168,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "empty-bush"
+    },
+    {
+      "id": "e-mscfr6c6-gq4x",
+      "kind": "sprite",
+      "transform": {
+        "x": 151.71387551335295,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "chest",
+      "animation": "chest-open-front"
+    },
+    {
+      "id": "e-mscfrc04-6nex",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 176,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mailbox_animation_frames",
+      "animation": "mailbox-idle"
+    },
+    {
+      "id": "e-mscfrs2k-mhh0",
+      "kind": "sprite",
+      "transform": {
+        "x": 256,
+        "y": 176,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-strawberry"
+    },
+    {
+      "id": "e-mscfrup8-dpiv",
+      "kind": "sprite",
+      "transform": {
+        "x": 240,
+        "y": 160,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-blueberry"
+    },
+    {
+      "id": "e-mscfs73r-szoi",
+      "kind": "sprite",
+      "transform": {
+        "x": 224,
+        "y": 128,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfs80v-r7qi",
+      "kind": "sprite",
+      "transform": {
+        "x": 240,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfsco0-1czc",
+      "kind": "sprite",
+      "transform": {
+        "x": 336,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfse3e-wwlh",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 72,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfsiwb-zifg",
+      "kind": "sprite",
+      "transform": {
+        "x": 384,
+        "y": 136,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfskaa-jof8",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfslrb-btzd",
+      "kind": "sprite",
+      "transform": {
+        "x": 312,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfsrbb-7xpn",
+      "kind": "sprite",
+      "transform": {
+        "x": 64,
+        "y": 48,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscftr1w-pqb1",
+      "kind": "sprite",
+      "transform": {
+        "x": 208,
+        "y": 168,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-4"
+    },
+    {
+      "id": "e-mscfttdh-6vaf",
+      "kind": "sprite",
+      "transform": {
+        "x": 64,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-4"
+    },
+    {
+      "id": "e-mscftxmf-0zki",
+      "kind": "sprite",
+      "transform": {
+        "x": 232,
+        "y": 208,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-3"
+    },
+    {
+      "id": "e-mscftzcq-ywnp",
+      "kind": "sprite",
+      "transform": {
+        "x": 296,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-3"
+    },
+    {
+      "id": "e-mscfu3dl-ypml",
+      "kind": "sprite",
+      "transform": {
+        "x": 184,
+        "y": 208,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-mscfu65d-66ga",
+      "kind": "sprite",
+      "transform": {
+        "x": 72,
+        "y": 168,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-mscfu82e-5c0d",
+      "kind": "sprite",
+      "transform": {
+        "x": 88,
+        "y": 208,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-mscfua0a-p554",
+      "kind": "sprite",
+      "transform": {
+        "x": 384,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-mscfucot-icza",
+      "kind": "sprite",
+      "transform": {
+        "x": 152,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-4"
+    },
+    {
+      "id": "e-mscfugk5-a5h3",
+      "kind": "sprite",
+      "transform": {
+        "x": 336,
+        "y": 88,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-6"
     }
   ]
 }
