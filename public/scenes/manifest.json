@@ -2026,6 +2026,16 @@
       "path": "uploaded/catopia-title.png",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/catopia-title.png",
       "kind": "image"
+    },
+    {
+      "id": "fences",
+      "textureKey": "fences",
+      "path": "uploaded/fences.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/fences.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/fences.json",
+      "atlasFormat": "json",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/fences.json"
     }
   ]
 }

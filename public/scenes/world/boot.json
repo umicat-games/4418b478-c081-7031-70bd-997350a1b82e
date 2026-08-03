@@ -451,8 +451,8 @@
       "id": "e-mscfu82e-5c0d",
       "kind": "sprite",
       "transform": {
-        "x": 88,
-        "y": 220,
+        "x": 84.2918672997059,
+        "y": 215.6914671168537,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -474,6 +474,76 @@
       },
       "assetId": "mushrooms_flowers_stones",
       "frame": "small-stone-6"
+    },
+    {
+      "id": "e-mschmeiy-ad6a",
+      "kind": "sprite",
+      "transform": {
+        "x": 80,
+        "y": 231.6914671168537,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "horizontal-fence-3"
+    },
+    {
+      "id": "e-mschmke3-jvgc",
+      "kind": "sprite",
+      "transform": {
+        "x": 40,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-fence-3"
+    },
+    {
+      "id": "e-mschmo51-80lc",
+      "kind": "sprite",
+      "transform": {
+        "x": 240,
+        "y": 239.6914671168537,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "horizontal-fence-3"
+    },
+    {
+      "id": "e-mschmsks-iajj",
+      "kind": "sprite",
+      "transform": {
+        "x": 368,
+        "y": 176,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-fence-3"
+    },
+    {
+      "id": "e-mschn4xo-yne7",
+      "kind": "sprite",
+      "transform": {
+        "x": 296,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "horizontal-fence-3"
     }
   ]
 }
