@@ -104,16 +104,26 @@ export class SettingsScene extends Phaser.Scene {
    *  zpix label, with hover-grow + press (pressed-down frame + shrink) feedback. Sized
    *  and positioned in `styleButton`/`layout`. */
   private buildButton(iconFrame: number, label: string, onTap: () => void): UiButton {
-    const bg = this.add.image(0, 0, 'ui_big_play_button', 'button-idle');
+    // The BG image is the interactive object (its frame gives a reliable auto hit area
+    // = the whole button). A manual hitArea on the CONTAINER was subtly broken — Phaser
+    // only registered the LEFT half (the right half read as no-hit), so the button was
+    // "hard to click". Icon/text are non-interactive children on top; clicks fall
+    // through them to the bg underneath, so the WHOLE button responds.
+    const bg = this.add.image(0, 0, 'ui_big_play_button', 'button-idle').setInteractive({ useHandCursor: true });
     const icon = this.add.sprite(0, 0, ICON_KEY, iconFrame).setTint(LABEL_TINT);
     const text = this.add.text(0, 0, label, { fontFamily: dialogFont(), color: LABEL_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
     const container = this.add.container(0, 0, [bg, icon, text]).setDepth(10);
     let pressed = false;
     const setFrame = (on: boolean): void => bg.setTexture('ui_big_play_button', on ? 'button-pressed-down' : 'button-idle');
-    container.on('pointerover', () => { if (!pressed) container.setScale(1.05); });
-    container.on('pointerout', () => { pressed = false; setFrame(false); container.setScale(1); });
-    container.on('pointerdown', () => { pressed = true; setFrame(true); container.setScale(0.97); });
-    container.on('pointerup', () => { if (pressed) { pressed = false; setFrame(false); container.setScale(1); onTap(); } });
+    // Press feedback is the pressed-down FRAME only (no press-shrink — scaling would
+    // shrink the hit area and drop edge taps). Hover grows the container (enlarges the
+    // hit area, fine). `pointerupoutside` still counts so a tiny drift off is forgiven.
+    const release = (over: boolean): void => { if (!pressed) return; pressed = false; setFrame(false); container.setScale(1); if (over) onTap(); };
+    bg.on('pointerover', () => { if (!pressed) container.setScale(1.05); });
+    bg.on('pointerout', () => { pressed = false; setFrame(false); container.setScale(1); });
+    bg.on('pointerdown', () => { pressed = true; setFrame(true); });
+    bg.on('pointerup', () => release(true));
+    bg.on('pointerupoutside', () => release(true));
     return { container, bg, icon, text };
   }
 
@@ -138,8 +148,6 @@ export class SettingsScene extends Phaser.Scene {
     const startX = -totalW / 2;
     b.icon.setPosition(startX + iconW / 2, faceY);
     b.text.setPosition(startX + iconW + gap, faceY);
-    b.container.setSize(bw, bh);
-    b.container.setInteractive(new Phaser.Geom.Rectangle(-bw / 2, -bh / 2, bw, bh), Phaser.Geom.Rectangle.Contains, { useHandCursor: true } as Phaser.Types.Input.InputConfiguration);
     return { bw, bh };
   }
 
