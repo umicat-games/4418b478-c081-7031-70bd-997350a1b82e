@@ -20,6 +20,10 @@ export class BootMenuScene extends Phaser.Scene {
   private worldW = 960;
   private worldH = 540;
   private cato?: Phaser.GameObjects.Sprite;
+  /** The authored Play button entity + its base (un-hovered) scale — SettingsScene
+   *  reads these to place the "Settings" button directly BELOW Play, at Play's size. */
+  playButton?: Phaser.GameObjects.Sprite;
+  playBaseScale = 1;
 
   constructor() {
     super({ key: 'BootMenuScene' });
@@ -63,6 +67,8 @@ export class BootMenuScene extends Phaser.Scene {
     if (btn) {
       btn.setInteractive({ useHandCursor: true });
       const base = btn.scaleX; // authored scale (1 at game-scale)
+      this.playButton = btn;
+      this.playBaseScale = base;
       const idleFrame = btn.frame.name; // 'play-light-bg'
       const hasPressed = btn.texture.has('play-light-bg-pressed-down');
       let pressed = false;

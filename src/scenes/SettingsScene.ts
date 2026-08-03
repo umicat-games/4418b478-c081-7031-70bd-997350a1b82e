@@ -1,11 +1,15 @@
 import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { getBgmVolume, setBgmVolume } from '../bgm';
+import type { BootMenuScene } from './BootMenuScene';
 
 /**
  * Title-screen SETTINGS overlay — a native-px scene launched ABOVE BootMenuScene
  * (the boot camera is ~3× zoomed; a separate 1:1 scene keeps the UI crisp and
- * un-scrolled). Owns a gear button (top-right) that opens a modal with the
+ * un-scrolled). Owns a **"Settings" button styled like Play** (the EMPTY
+ * `button-idle` variant of the same `ui_big_play_button` sheet, with a gear icon +
+ * "Settings" text), placed directly BELOW the Play button (aligned by projecting
+ * BootMenuScene's Play entity to screen). Clicking it opens a modal with the
  * `setting_menu` panel + a Music volume slider (the `ui_settings_buttons` tick
  * segments + `<>` knob). The boot screen never pointer-locks, so this handles its
  * own pointer input directly (no GameScene-style cross-scene routing).
@@ -23,13 +27,17 @@ const PANEL_W = 106;
 const PANEL_H = 122;
 const GEAR_ICON_FRAME = 4; // all_icons `setting-icon-no-border` (64,0,16,16) → 16px-grid frame 4
 const SLIDER_N = 10; // number of tick segments
+const PLAY_FRAME_W = 90; // `play-light-bg` native size — the on-screen ref for matching Play
+const PLAY_FRAME_H = 27;
 
 export class SettingsScene extends Phaser.Scene {
   private open = false;
 
-  // gear button
-  private gear!: Phaser.GameObjects.Container;
-  private gearBg!: Phaser.GameObjects.NineSlice;
+  // "Settings" button (styled like Play, below it)
+  private btn!: Phaser.GameObjects.Container;
+  private btnBg!: Phaser.GameObjects.NineSlice;
+  private btnIcon!: Phaser.GameObjects.Sprite;
+  private btnText!: Phaser.GameObjects.Text;
 
   // modal
   private modal!: Phaser.GameObjects.Container;
@@ -50,16 +58,20 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   create(): void {
-    // ── Gear button (top-right) ──────────────────────────────────────────────
-    this.gearBg = this.add.nineslice(0, 0, 'ui_big_play_button', 'button-idle', 44, 44, 18, 18, 8, 10);
-    // The no-border gear is cream (same as the button) → tint it dark-brown so it reads.
-    const gearIcon = this.add.sprite(0, -1, 'ui-icons', GEAR_ICON_FRAME).setScale(1.7).setTint(0x7a5a3a);
-    this.gear = this.add.container(0, 0, [this.gearBg, gearIcon]).setSize(44, 44).setDepth(10);
-    this.gear.setInteractive(new Phaser.Geom.Rectangle(-22, -22, 44, 44), Phaser.Geom.Rectangle.Contains, { useHandCursor: true } as Phaser.Types.Input.InputConfiguration);
-    let gearPressed = false;
-    this.gear.on('pointerdown', () => { gearPressed = true; this.gearBg.setTexture('ui_big_play_button', 'button-pressed-down'); });
-    this.gear.on('pointerup', () => { if (gearPressed) { gearPressed = false; this.gearBg.setTexture('ui_big_play_button', 'button-idle'); this.toggle(); } });
-    this.gear.on('pointerout', () => { gearPressed = false; this.gearBg.setTexture('ui_big_play_button', 'button-idle'); });
+    // ── "Settings" button — styled like Play (empty button-idle) + gear icon + text,
+    //    placed below the Play button (positioned in layout()). ─────────────────
+    this.btnBg = this.add.nineslice(0, 0, 'ui_big_play_button', 'button-idle', 96, 32, 18, 18, 8, 10);
+    // The no-border gear + the label are both dark-brown to match Play's "PLAY" art.
+    this.btnIcon = this.add.sprite(0, 0, 'ui-icons', GEAR_ICON_FRAME).setTint(0x9a6a3f);
+    this.btnText = this.add.text(0, 0, t('tab_settings'), { fontFamily: dialogFont(), color: '#9a6a3f' }).setOrigin(0, 0.5);
+    this.btn = this.add.container(0, 0, [this.btnBg, this.btnIcon, this.btnText]).setDepth(10);
+    let btnPressed = false;
+    const setBtnFrame = (on: boolean): void => this.btnBg.setTexture('ui_big_play_button', on ? 'button-pressed-down' : 'button-idle');
+    // hit area set in layout() (depends on the button's on-screen size)
+    this.btn.on('pointerover', () => { if (!btnPressed) this.btn.setScale(1.05); });
+    this.btn.on('pointerout', () => { btnPressed = false; setBtnFrame(false); this.btn.setScale(1); });
+    this.btn.on('pointerdown', () => { btnPressed = true; setBtnFrame(true); });
+    this.btn.on('pointerup', () => { if (btnPressed) { btnPressed = false; setBtnFrame(false); this.btn.setScale(1); this.toggle(); } });
 
     // ── Modal (dim + panel + slider), hidden until opened ────────────────────
     this.dim = this.add.rectangle(0, 0, 10, 10, 0x14212e, 0.55).setOrigin(0, 0).setInteractive();
@@ -97,8 +109,7 @@ export class SettingsScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // Gear top-right (a comfortable margin in from the corner).
-    this.gear.setPosition(W - 40, 40);
+    this.positionButton(W, H);
 
     // Panel scale to fit the screen, min 2× so it never renders sub-native.
     const ps = Math.max(2, Math.min((W * 0.5) / PANEL_W, (H * 0.62) / PANEL_H));
@@ -130,6 +141,52 @@ export class SettingsScene extends Phaser.Scene {
 
     this.renderVol(getBgmVolume());
   };
+
+  /** Place the "Settings" button directly BELOW the Play button, at Play's on-screen
+   *  size (Play lives in BootMenuScene's ~3× world → project it to screen px). Falls
+   *  back to bottom-centre if the Play entity is missing. */
+  private positionButton(W: number, H: number): void {
+    let cx = W / 2;
+    let bw: number;
+    let bh: number;
+    let topY: number; // top edge of where the settings button should sit
+
+    const boot = this.scene.get('BootMenuScene') as BootMenuScene | undefined;
+    const play = boot?.playButton;
+    if (boot && play && play.active) {
+      const cam = boot.cameras.main;
+      const z = cam.zoom;
+      const wW = (play.frame?.realWidth ?? PLAY_FRAME_W) * boot.playBaseScale;
+      const wH = (play.frame?.realHeight ?? PLAY_FRAME_H) * boot.playBaseScale;
+      cx = (play.x - cam.worldView.x) * z;
+      const playBottomWorld = play.y + wH * (1 - play.originY);
+      topY = (playBottomWorld - cam.worldView.y) * z + wH * 0.34 * z; // Play bottom + a gap
+      bw = wW * z;
+      bh = wH * z;
+    } else {
+      bw = Math.min(W * 0.26, 300);
+      bh = bw * (PLAY_FRAME_H / PLAY_FRAME_W);
+      topY = H * 0.74;
+    }
+
+    const cy = topY + bh / 2;
+    this.btn.setPosition(cx, cy);
+    this.btnBg.setSize(bw, bh);
+
+    // Gear icon + "Settings" text, centred as a group inside the button.
+    const iconH = bh * 0.5;
+    this.btnIcon.setScale(iconH / 16);
+    this.btnText.setFontSize(Math.round(bh * 0.42));
+    const iconW = 16 * this.btnIcon.scaleX;
+    const gap = bh * 0.14;
+    const totalW = iconW + gap + this.btnText.width;
+    const startX = -totalW / 2;
+    this.btnIcon.setPosition(startX + iconW / 2, 0);
+    this.btnText.setPosition(startX + iconW + gap, 0);
+
+    this.btn.setSize(bw, bh);
+    this.btn.setInteractive(new Phaser.Geom.Rectangle(-bw / 2, -bh / 2, bw, bh), Phaser.Geom.Rectangle.Contains, { useHandCursor: true } as Phaser.Types.Input.InputConfiguration);
+  }
 
   private setVolFromX(px: number): void {
     const vol = Phaser.Math.Clamp((px - this.trackLeft) / this.trackW, 0, 1);
