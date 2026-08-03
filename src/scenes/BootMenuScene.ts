@@ -18,6 +18,7 @@ const GO_TO = 'main'; // the scene the Play button launches
 export class BootMenuScene extends Phaser.Scene {
   private worldW = 960;
   private worldH = 540;
+  private cato?: Phaser.GameObjects.Sprite;
 
   constructor() {
     super({ key: 'BootMenuScene' });
@@ -67,20 +68,13 @@ export class BootMenuScene extends Phaser.Scene {
 
     // Cato mascot, bottom-left, sitting on the SCREEN bottom. It's a WORLD sprite at
     // scale 1 — the ~3× boot camera renders it at 3× (game scale, matching the tiles).
-    // Pinned to the camera's VISIBLE bottom-left (not world y=worldH) so it hugs the
-    // screen edge even when fitCamera letterboxes a non-16:9 canvas; re-pinned on resize.
+    // Pinned to the camera's VISIBLE bottom-left each frame (`update`) via cam.worldView
+    // (Phaser zooms around the camera CENTRE, so the visible edge ISN'T worldH/2 ± h/2z —
+    // use worldView, not a hand-rolled formula), so it hugs the screen edge on ANY aspect.
     // Plays `teemo-appear` once on load, then loops random blink/love/think with a pause.
     if (this.textures.exists('teemo')) {
       const cato = this.add.sprite(0, 0, 'teemo', 0).setOrigin(0.5, 1).setDepth(200);
-      const placeCato = (): void => {
-        const cam = this.cameras.main;
-        const left = this.worldW / 2 - this.scale.width / cam.zoom / 2;
-        const bottom = this.worldH / 2 + this.scale.height / cam.zoom / 2;
-        cato.setPosition(left + 22, bottom); // 22 world px in from the left edge
-      };
-      placeCato();
-      this.scale.on(Phaser.Scale.Events.RESIZE, placeCato);
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, placeCato));
+      this.cato = cato;
       const EMOTES = ['teemo-blink', 'teemo-love', 'teemo-think'];
       const playNext = (): void => { cato.play(EMOTES[Math.floor(Math.random() * EMOTES.length)]); };
       cato.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
@@ -88,6 +82,14 @@ export class BootMenuScene extends Phaser.Scene {
       });
       cato.play('teemo-appear');
     }
+  }
+
+  /** Keep the mascot pinned to the camera's visible bottom-left (22 world px in from the
+   *  left, feet on the screen bottom) — recomputed each frame so it survives resizes. */
+  update(): void {
+    if (!this.cato) return;
+    const v = this.cameras.main.worldView;
+    this.cato.setPosition(v.left + 22, v.bottom);
   }
 
   private fitCamera = (): void => {
