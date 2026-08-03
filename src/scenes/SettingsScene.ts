@@ -33,9 +33,11 @@ const PLAY_FRAME_H = 27;
 export class SettingsScene extends Phaser.Scene {
   private open = false;
 
-  // "Settings" button (styled like Play, below it)
+  // "Settings" button (styled like Play, below it). btnBg is a PLAIN IMAGE scaled by
+  // the same factor as Play (not a nine-slice) so its border pixels are the same
+  // chunky size as Play's — a nine-slice keeps corners at 1:1 → a thinner border.
   private btn!: Phaser.GameObjects.Container;
-  private btnBg!: Phaser.GameObjects.NineSlice;
+  private btnBg!: Phaser.GameObjects.Image;
   private btnIcon!: Phaser.GameObjects.Sprite;
   private btnText!: Phaser.GameObjects.Text;
 
@@ -58,9 +60,10 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   create(): void {
-    // ── "Settings" button — styled like Play (empty button-idle) + gear icon + text,
+    // ── "Settings" button — the EMPTY `button-idle` from ui_big_play_button (the
+    //    user-tagged empty twin of Play), a plain scaled image + gear icon + text,
     //    placed below the Play button (positioned in layout()). ─────────────────
-    this.btnBg = this.add.nineslice(0, 0, 'ui_big_play_button', 'button-idle', 96, 32, 18, 18, 8, 10);
+    this.btnBg = this.add.image(0, 0, 'ui_big_play_button', 'button-idle');
     // The no-border gear + the label are both dark-brown to match Play's "PLAY" art.
     this.btnIcon = this.add.sprite(0, 0, 'ui-icons', GEAR_ICON_FRAME).setTint(0x9a6a3f);
     this.btnText = this.add.text(0, 0, t('tab_settings'), { fontFamily: dialogFont(), color: '#9a6a3f' }).setOrigin(0, 0.5);
@@ -147,8 +150,7 @@ export class SettingsScene extends Phaser.Scene {
    *  back to bottom-centre if the Play entity is missing. */
   private positionButton(W: number, H: number): void {
     let cx = W / 2;
-    let bw: number;
-    let bh: number;
+    let s: number; // the on-screen scale to draw the empty button at (== Play's)
     let topY: number; // top edge of where the settings button should sit
 
     const boot = this.scene.get('BootMenuScene') as BootMenuScene | undefined;
@@ -156,33 +158,36 @@ export class SettingsScene extends Phaser.Scene {
     if (boot && play && play.active) {
       const cam = boot.cameras.main;
       const z = cam.zoom;
-      const wW = (play.frame?.realWidth ?? PLAY_FRAME_W) * boot.playBaseScale;
+      // SAME on-screen pixel density as Play → the button borders look identical.
+      s = z * boot.playBaseScale;
       const wH = (play.frame?.realHeight ?? PLAY_FRAME_H) * boot.playBaseScale;
       cx = (play.x - cam.worldView.x) * z;
       const playBottomWorld = play.y + wH * (1 - play.originY);
-      topY = (playBottomWorld - cam.worldView.y) * z + wH * 0.34 * z; // Play bottom + a gap
-      bw = wW * z;
-      bh = wH * z;
+      topY = (playBottomWorld - cam.worldView.y) * z + wH * 0.28 * z; // Play bottom + a gap
     } else {
-      bw = Math.min(W * 0.26, 300);
-      bh = bw * (PLAY_FRAME_H / PLAY_FRAME_W);
+      s = Math.min((W * 0.26) / 96, (H * 0.1) / 32);
       topY = H * 0.74;
     }
 
+    // The empty button drawn exactly like Play: a plain image at Play's scale.
+    this.btnBg.setScale(s);
+    const bw = this.btnBg.displayWidth; // 96 * s
+    const bh = this.btnBg.displayHeight; // 32 * s
     const cy = topY + bh / 2;
     this.btn.setPosition(cx, cy);
-    this.btnBg.setSize(bw, bh);
 
-    // Gear icon + "Settings" text, centred as a group inside the button.
-    const iconH = bh * 0.5;
+    // The button art has a drop shadow along the bottom (~10 of 32 native), so its
+    // FACE centre sits ~5 native px above the image centre — put the icon+text there.
+    const faceY = -(5 / 32) * bh;
+    const iconH = bh * 0.42;
     this.btnIcon.setScale(iconH / 16);
-    this.btnText.setFontSize(Math.round(bh * 0.42));
+    this.btnText.setFontSize(Math.round(bh * 0.34));
     const iconW = 16 * this.btnIcon.scaleX;
-    const gap = bh * 0.14;
+    const gap = bh * 0.1;
     const totalW = iconW + gap + this.btnText.width;
     const startX = -totalW / 2;
-    this.btnIcon.setPosition(startX + iconW / 2, 0);
-    this.btnText.setPosition(startX + iconW + gap, 0);
+    this.btnIcon.setPosition(startX + iconW / 2, faceY);
+    this.btnText.setPosition(startX + iconW + gap, faceY);
 
     this.btn.setSize(bw, bh);
     this.btn.setInteractive(new Phaser.Geom.Rectangle(-bw / 2, -bh / 2, bw, bh), Phaser.Geom.Rectangle.Contains, { useHandCursor: true } as Phaser.Types.Input.InputConfiguration);
