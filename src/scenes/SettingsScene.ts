@@ -176,9 +176,10 @@ export class SettingsScene extends Phaser.Scene {
     const cy = topY + bh / 2;
     this.btn.setPosition(cx, cy);
 
-    // The button art has a drop shadow along the bottom (~10 of 32 native), so its
-    // FACE centre sits ~5 native px above the image centre — put the icon+text there.
-    const faceY = -(5 / 32) * bh;
+    // Centre the icon+text on the button FACE. The `button-idle` art is opaque rows
+    // 2..28 of 32 (a thin bottom shadow), so the face centre is row ~15 — and matching
+    // Play's "PLAY" baked at row ~14/32 lands the label ~2 native px above image centre.
+    const faceY = -(2 / 32) * bh;
     const iconH = bh * 0.42;
     this.btnIcon.setScale(iconH / 16);
     this.btnText.setFontSize(Math.round(bh * 0.34));
