@@ -1,6 +1,7 @@
 import { createUmicatGame } from '@umicat/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { BootMenuScene } from './scenes/BootMenuScene';
+import { SettingsScene } from './scenes/SettingsScene';
 import { GameScene } from './scenes/GameScene';
 import { CursorScene } from './scenes/CursorScene';
 import { HotbarScene } from './scenes/HotbarScene';
@@ -40,7 +41,7 @@ function startGame(): void {
     // HotbarScene (bottom tool hotbar) + CursorScene are registered but not
     // auto-started; GameScene launches them after the HUD exists so they layer
     // above it (cursor stays topmost — see CursorScene.update bringToTop).
-    scenes: [BootScene, BootMenuScene, GameScene, HotbarScene, WeatherScene, PaletteScene, ConfirmScene, ReceiptScene, ChatterScene, MenuScene, CraftScene, CursorScene],
+    scenes: [BootScene, BootMenuScene, SettingsScene, GameScene, HotbarScene, WeatherScene, PaletteScene, ConfirmScene, ReceiptScene, ChatterScene, MenuScene, CraftScene, CursorScene],
     renderScripts,
   });
 }

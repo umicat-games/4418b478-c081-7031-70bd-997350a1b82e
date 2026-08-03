@@ -57,16 +57,21 @@ export class BootMenuScene extends Phaser.Scene {
     }
 
     // Wire the authored Play button entity → start the game, with hover + press feedback.
+    // Press swaps to the authored PRESSED frame (`play-light-bg-pressed-down`) — the
+    // pressed art is darker + un-bevelled; hover keeps a subtle grow highlight.
     const btn = reg?.byRole('play-button')[0] as Phaser.GameObjects.Sprite | undefined;
     if (btn) {
       btn.setInteractive({ useHandCursor: true });
       const base = btn.scaleX; // authored scale (1 at game-scale)
+      const idleFrame = btn.frame.name; // 'play-light-bg'
+      const hasPressed = btn.texture.has('play-light-bg-pressed-down');
       let pressed = false;
       const scaleTo = (s: number, ms = 90): void => { this.tweens.add({ targets: btn, scaleX: base * s, scaleY: base * s, duration: ms, ease: 'Quad.easeOut' }); };
+      const setPressed = (on: boolean): void => { if (hasPressed) btn.setFrame(on ? 'play-light-bg-pressed-down' : idleFrame); };
       btn.on('pointerover', () => { if (!pressed) scaleTo(1.07); });          // hover → grow (highlight)
-      btn.on('pointerout', () => { pressed = false; btn.clearTint(); scaleTo(1); });
-      btn.on('pointerdown', () => { pressed = true; btn.setTint(0xcbb48f); scaleTo(0.9, 60); }); // press → shrink + darken
-      btn.on('pointerup', () => { pressed = false; btn.clearTint(); scaleTo(1); this.startGame(); });
+      btn.on('pointerout', () => { pressed = false; setPressed(false); scaleTo(1); });
+      btn.on('pointerdown', () => { pressed = true; setPressed(true); scaleTo(0.94, 60); }); // press → pressed frame + tiny shrink
+      btn.on('pointerup', () => { pressed = false; setPressed(false); scaleTo(1); this.startGame(); });
     } else {
       // Button missing (e.g. the boot scene was emptied in the editor) — don't
       // trap the player: any click starts the game.
@@ -91,6 +96,11 @@ export class BootMenuScene extends Phaser.Scene {
       });
       cato.play('teemo-appear');
     }
+
+    // Native-px SETTINGS overlay (gear button top-right → volume modal). Above this
+    // scene so its 1:1 camera isn't zoomed by the boot camera; stopped on Play.
+    this.scene.launch('SettingsScene');
+    this.scene.bringToTop('SettingsScene');
   }
 
   /** Keep the mascot pinned to the camera's visible bottom-left (22 world px in from the
@@ -109,6 +119,7 @@ export class BootMenuScene extends Phaser.Scene {
   };
 
   private startGame(): void {
+    this.scene.stop('SettingsScene'); // the gear/modal are title-screen only
     this.scene.start('GameScene', { sceneId: GO_TO });
   }
 }

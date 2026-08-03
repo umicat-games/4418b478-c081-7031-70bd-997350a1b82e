@@ -1,0 +1,23 @@
+{
+  "frames": {
+    "slider-tick-on": {
+      "frame": { "x": 6, "y": 178, "w": 4, "h": 12 },
+      "sourceSize": { "w": 4, "h": 12 }
+    },
+    "slider-tick-off": {
+      "frame": { "x": 22, "y": 178, "w": 4, "h": 12 },
+      "sourceSize": { "w": 4, "h": 12 }
+    },
+    "slider-knob": {
+      "frame": { "x": 1, "y": 213, "w": 14, "h": 21 },
+      "sourceSize": { "w": 14, "h": 21 }
+    }
+  },
+  "meta": {
+    "app": "catopia-hand-authored",
+    "image": "ui_settings_buttons.png",
+    "format": "RGBA8888",
+    "size": { "w": 128, "h": 240 },
+    "scale": "1"
+  }
+}

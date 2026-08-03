@@ -1,24 +1,27 @@
 {
   "frames": {
     "play-light-bg": {
-      "frame": {
-        "x": 3,
-        "y": 34,
-        "w": 90,
-        "h": 27
-      },
-      "sourceSize": {
-        "w": 90,
-        "h": 27
-      }
+      "frame": { "x": 3, "y": 34, "w": 90, "h": 27 },
+      "sourceSize": { "w": 90, "h": 27 }
+    },
+    "play-light-bg-pressed-down": {
+      "frame": { "x": 96, "y": 32, "w": 96, "h": 32 },
+      "sourceSize": { "w": 96, "h": 32 }
+    },
+    "button-idle": {
+      "frame": { "x": 0, "y": 0, "w": 96, "h": 32 },
+      "sourceSize": { "w": 96, "h": 32 },
+      "ninePatch": { "leftWidth": 18, "rightWidth": 18, "topHeight": 8, "bottomHeight": 10 }
+    },
+    "button-pressed-down": {
+      "frame": { "x": 96, "y": 0, "w": 96, "h": 32 },
+      "sourceSize": { "w": 96, "h": 32 },
+      "ninePatch": { "leftWidth": 18, "rightWidth": 18, "topHeight": 10, "bottomHeight": 10 }
     }
   },
   "meta": {
     "image": "ui_big_play_button.png",
-    "size": {
-      "w": 192,
-      "h": 64
-    },
+    "size": { "w": 192, "h": 64 },
     "scale": "1"
   }
 }

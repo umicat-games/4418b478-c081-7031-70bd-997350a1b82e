@@ -1,0 +1,19 @@
+{
+  "frames": {
+    "settings-panel": {
+      "frame": { "x": 11, "y": 12, "w": 106, "h": 122 },
+      "sourceSize": { "w": 106, "h": 122 }
+    },
+    "settings-panel-blank": {
+      "frame": { "x": 139, "y": 12, "w": 106, "h": 122 },
+      "sourceSize": { "w": 106, "h": 122 }
+    }
+  },
+  "meta": {
+    "app": "catopia-hand-authored",
+    "image": "setting_menu.png",
+    "format": "RGBA8888",
+    "size": { "w": 256, "h": 144 },
+    "scale": "1"
+  }
+}

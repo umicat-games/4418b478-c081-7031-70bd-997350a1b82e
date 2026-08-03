@@ -40,6 +40,10 @@ export class BootScene extends Phaser.Scene {
     // UI icon sheet (16×16 grid) — the confirm dialog uses frame 44 (✓ check) and
     // 46 (⊘ cancel), dark-brown variants that read on the cream button.
     this.load.spritesheet('ui-icons', 'uploaded/all_icons.png', { frameWidth: 16, frameHeight: 16 });
+    // Title-screen SETTINGS menu: the rounded panel (SETTINGS baked in) + the volume
+    // slider pieces (a green "filled" tick, a brown "empty" tick, and the <> drag knob).
+    this.load.atlas('settings-menu', 'uploaded/setting_menu.png', 'uploaded/setting_menu.json');
+    this.load.atlas('settings-buttons', 'uploaded/ui_settings_buttons.png', 'uploaded/ui_settings_buttons.json');
     // Cato's emote system: the grey speech bubble + the 32×32 emoji face sheet
     // (frame = row*10 + col; regions tagged in the Asset Manager). See src/emote.ts.
     this.load.image('speech-bubble', 'uploaded/speech-bubble.png');
