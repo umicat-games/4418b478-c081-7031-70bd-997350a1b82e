@@ -60,8 +60,8 @@
       "kind": "sprite",
       "role": "play-button",
       "transform": {
-        "x": 367,
-        "y": 214,
+        "x": 213.5,
+        "y": 185,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,

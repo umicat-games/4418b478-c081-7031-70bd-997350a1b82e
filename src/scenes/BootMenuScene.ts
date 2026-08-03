@@ -38,6 +38,11 @@ export class BootMenuScene extends Phaser.Scene {
 
     const reg = getEntityRegistry(this);
 
+    // Dim MASK between the busy island scene (depth 0–10) and the UI, so the title /
+    // mascot / Play button (all above depth 50) pop instead of fighting the background.
+    // A big world-space rect (the boot camera is zoomed, so oversize it to cover any view).
+    this.add.rectangle(this.worldW / 2, this.worldH / 2, 4000, 4000, 0x14212e, 0.4).setDepth(50);
+
     // Title: gentle up-and-down float (world px; the boot camera is ~3× so ±5 world
     // reads as ±15 on screen). Loops forever with a soft sine ease.
     const title = reg?.all().find((go) => go.getData('entityAssetId') === 'catopia-title') as
