@@ -106,7 +106,7 @@ export class SettingsScene extends Phaser.Scene {
   private buildButton(iconFrame: number, label: string, onTap: () => void): UiButton {
     const bg = this.add.image(0, 0, 'ui_big_play_button', 'button-idle');
     const icon = this.add.sprite(0, 0, ICON_KEY, iconFrame).setTint(LABEL_TINT);
-    const text = this.add.text(0, 0, label, { fontFamily: dialogFont(), color: LABEL_COLOR }).setOrigin(0, 0.5);
+    const text = this.add.text(0, 0, label, { fontFamily: dialogFont(), color: LABEL_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
     const container = this.add.container(0, 0, [bg, icon, text]).setDepth(10);
     let pressed = false;
     const setFrame = (on: boolean): void => bg.setTexture('ui_big_play_button', on ? 'button-pressed-down' : 'button-idle');
@@ -129,6 +129,9 @@ export class SettingsScene extends Phaser.Scene {
     const iconH = bh * 0.42;
     b.icon.setScale(iconH / 16);
     b.text.setFontSize(Math.round(bh * 0.34));
+    // zpix has no real bold weight (faux-bold barely renders), so thicken the glyphs
+    // with a matching-colour stroke sized to the font — a crisp "bold" for pixel text.
+    b.text.setStroke(LABEL_COLOR, Math.max(1, bh * 0.028));
     const iconW = 16 * b.icon.scaleX;
     const gap = bh * 0.1;
     const totalW = iconW + gap + b.text.width;
