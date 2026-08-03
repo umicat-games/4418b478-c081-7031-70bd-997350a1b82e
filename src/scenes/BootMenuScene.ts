@@ -73,7 +73,7 @@ export class BootMenuScene extends Phaser.Scene {
     // use worldView, not a hand-rolled formula), so it hugs the screen edge on ANY aspect.
     // Plays `teemo-appear` once on load, then loops random blink/love/think with a pause.
     if (this.textures.exists('teemo')) {
-      const cato = this.add.sprite(0, 0, 'teemo', 0).setOrigin(0.5, 1).setDepth(200);
+      const cato = this.add.sprite(0, 0, 'teemo', 0).setOrigin(0.5, 1).setScale(2).setDepth(200); // 2× (→ 6× on screen)
       this.cato = cato;
       const EMOTES = ['teemo-blink', 'teemo-love', 'teemo-think'];
       const playNext = (): void => { cato.play(EMOTES[Math.floor(Math.random() * EMOTES.length)]); };
@@ -89,7 +89,7 @@ export class BootMenuScene extends Phaser.Scene {
   update(): void {
     if (!this.cato) return;
     const v = this.cameras.main.worldView;
-    this.cato.setPosition(v.left + 22, v.bottom);
+    this.cato.setPosition(v.left + 80, v.bottom);
   }
 
   private fitCamera = (): void => {
