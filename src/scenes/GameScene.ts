@@ -5631,12 +5631,15 @@ export class GameScene extends Phaser.Scene {
    *  the HUD's anchored position. */
   private setMoreIcon(show: boolean): void {
     const go = getHudObject(this, 'cato-more-icon') as unknown as
-      | { setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
+      | { y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
       | undefined;
     if (!go) return;
     this.moreIconTween?.remove();
     this.moreIconTween = undefined;
     const on = show && this.dialogOpen;
+    // Keep the "more" arrow glued to the box, which is RAISED in a cutscene.
+    if (this.moreIconRestY === undefined) this.moreIconRestY = go.y;
+    go.y = this.moreIconRestY - this.cutsceneLift;
     go.setAlpha?.(1);
     go.setVisible?.(on);
     if (on) {
@@ -5699,6 +5702,11 @@ export class GameScene extends Phaser.Scene {
     // DOM input) — Cato is speaking, the player just taps to continue. KEEP `chat-text`
     // (the text-area that shows Cato's spoken line) + `chat-message` + portrait + name.
     const roles = cutscene ? GameScene.DIALOG_ROLES.filter((r) => !r.startsWith('chat-input')) : GameScene.DIALOG_ROLES;
+    // Cutscene keeps the hotbar visible (for spotlights), so LIFT the box group up to
+    // clear it (both are bottom-anchored → they'd overlap). Lift = the hotbar's occupied
+    // height + a gap (from hotbarBounds.bar), fallback ~96.
+    const bar = this.registry.get('hotbarBounds') as { bar?: { h?: number } } | undefined;
+    this.cutsceneLift = cutscene ? (bar?.bar?.h ?? 90) + 10 : 0;
     for (const role of roles) {
       const go = getHudObject(this, role) as unknown as
         | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
@@ -5706,7 +5714,7 @@ export class GameScene extends Phaser.Scene {
       if (!go) continue;
       // Remember the anchored resting y the first time (the tween moves y).
       if (this.dialogY[role] === undefined) this.dialogY[role] = go.y;
-      const restY = this.dialogY[role];
+      const restY = this.dialogY[role] - this.cutsceneLift; // raised in a cutscene, at rest otherwise
       go.setVisible?.(true);
       go.setAlpha?.(0);
       go.y = restY + 140; // start below → slides up
@@ -5775,6 +5783,8 @@ export class GameScene extends Phaser.Scene {
   private dialogueFlags = new Set<string>();
   private dialogueSeen = new Set<string>();
   private cutscene = false;
+  private cutsceneLift = 0; // px the dialog box is raised in a cutscene (to clear the visible hotbar)
+  private moreIconRestY?: number; // captured anchored y of the "more" arrow (lifted with the box)
 
   /** After the save loads, play the intro ONCE on a brand-new save. */
   private maybePlayIntro(): void {
