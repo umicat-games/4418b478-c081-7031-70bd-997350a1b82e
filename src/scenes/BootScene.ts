@@ -228,6 +228,8 @@ export class BootScene extends Phaser.Scene {
     // Item property table (buy/sell/food). Applied in create(). See src/data/items.ts.
     this.load.json('data-items', 'data/items.json');
     this.load.json('data-recipes', 'data/recipes.json');
+    // Scripted-dialogue graphs (authored, non-AI): the new-game intro cutscene.
+    this.load.json('dialogue-intro', 'dialogue/intro.json');
   }
 
   create(): void {

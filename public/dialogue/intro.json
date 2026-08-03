@@ -1,0 +1,75 @@
+{
+  "id": "intro",
+  "trigger": "new-game",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "type": "line",
+      "speaker": "cato",
+      "emote": "happy",
+      "text": { "en": "Oh — you're here! Hi hi, {name}! I've been waiting for you.", "zh-CN": "哦——你来啦！嗨嗨，{name}！我一直在等你呢。" },
+      "next": "world1"
+    },
+    "world1": {
+      "type": "line",
+      "speaker": "cato",
+      "text": { "en": "Welcome to Catopia — our little island, floating all on its own in a big quiet sea.", "zh-CN": "欢迎来到 Catopia——我们的小岛，独自漂在一片安静的大海上。" },
+      "next": "world2"
+    },
+    "world2": {
+      "type": "line",
+      "speaker": "cato",
+      "emote": "content",
+      "text": { "en": "I'm Cato, the little spirit of this place. I look after the island... and you look after me. Partners!", "zh-CN": "我是 Cato，这座岛的小精灵。我照看着岛……你照看着我。我们是搭档啦！" },
+      "next": "offer"
+    },
+    "offer": {
+      "type": "line",
+      "speaker": "cato",
+      "text": { "en": "Let me show you the tools real quick — it'll only take a moment.", "zh-CN": "我很快带你认识一下工具吧——一小会儿就好。" },
+      "next": "tool_hoe"
+    },
+    "tool_hoe": {
+      "type": "line",
+      "speaker": "cato",
+      "spotlight": "hotbar:hoe",
+      "text": { "en": "This is the hoe. Pick it, then tap the grass to till a patch of soil — that's where seeds go.", "zh-CN": "这是锄头。选中它，点草地就能锄出一块地——种子就种在锄好的地上。" },
+      "next": "tool_water"
+    },
+    "tool_water": {
+      "type": "line",
+      "speaker": "cato",
+      "spotlight": "hotbar:watering-can",
+      "text": { "en": "The watering can keeps the soil wet. Watered crops grow much faster — so give them a drink!", "zh-CN": "水壶用来浇地。浇过水的作物长得快多了——记得给它们喝水哦！" },
+      "next": "tool_seed"
+    },
+    "tool_seed": {
+      "type": "line",
+      "speaker": "cato",
+      "spotlight": "hotbar:seed",
+      "text": { "en": "These are seed bags. Pick one, then tap tilled soil to plant it. When it's ripe, tap to harvest!", "zh-CN": "这些是种子袋。选一个，点锄好的地就能种下。长熟了，点一下就能收获！" },
+      "next": "tool_more"
+    },
+    "tool_more": {
+      "type": "line",
+      "speaker": "cato",
+      "text": { "en": "There's more out in the wild — an axe for trees, a pickaxe for stones — but let's save those for later.", "zh-CN": "野外还有更多——砍树的斧头、敲石头的镐子——不过那些以后再说啦。" },
+      "next": "help"
+    },
+    "help": {
+      "type": "line",
+      "speaker": "cato",
+      "emote": "happy",
+      "text": { "en": "Oh — and if you ever get busy, just tap me and ask! I love lending a paw.", "zh-CN": "对了——你要是忙不过来，点我一下说一声就行！我最爱帮忙啦。" },
+      "next": "wrap"
+    },
+    "wrap": {
+      "type": "line",
+      "speaker": "cato",
+      "emote": "love",
+      "text": { "en": "Okay! Let's make this little island bloom together, {name}.", "zh-CN": "好啦！我们一起让这座小岛热闹起来吧，{name}。" },
+      "next": "end"
+    },
+    "end": { "type": "end" }
+  }
+}

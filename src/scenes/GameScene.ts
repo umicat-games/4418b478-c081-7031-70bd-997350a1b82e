@@ -14,10 +14,11 @@ import type { MailListEntry, OrderCatalogEntry } from './menu-types';
 import type { ReceiptLine } from './ReceiptScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
 import { RECIPES, type Recipe } from '../data/recipes';
-import { t, initLang } from '../i18n';
+import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
+import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import {
   FORAGABLES, FORAGABLE_NAMES, BIG_STONES, BIG_STONE_TIERS,
   FORAGE_SPAWN_INTERVAL_MS, FORAGE_MAX_ON_MAP, BIG_STONE_SPAWN_CHANCE,
@@ -524,6 +525,8 @@ interface SaveBlob {
   stamina?: number; // v11: current energy
   chestSeeded?: boolean; // v12: the one-time starter-seed grant into the chest has run
   catoBag?: Array<{ id: string; count: number }>; // v13: Cato's backpack contents
+  dialogueSeen?: string[]; // v14: scripted dialogues already played (once-only, e.g. the intro)
+  dialogueFlags?: string[]; // v14: dialogue flags set by choices (branch memory)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -1356,6 +1359,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('ChatterScene')) this.scene.launch('ChatterScene');
     if (!this.scene.isActive('MenuScene')) this.scene.launch('MenuScene');
     if (!this.scene.isActive('CraftScene')) this.scene.launch('CraftScene');
+    if (!this.scene.isActive('DialogueScene')) this.scene.launch('DialogueScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
@@ -1363,6 +1367,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('ChatterScene'); // above UmicatHud so the mood emoji shows IN the portrait
     this.scene.bringToTop('MenuScene');     // the unified menu sits above the HUD too
     this.scene.bringToTop('CraftScene');    // the crafting modal sits above the HUD too
+    this.scene.bringToTop('DialogueScene'); // spotlight ring above the hotbar during a cutscene
     this.scene.bringToTop('CursorScene');
     this.publishBuildPalette();
     this.publishWeatherHud();
@@ -1376,7 +1381,7 @@ export class GameScene extends Phaser.Scene {
       // Dialog open: a canvas click (outside the HTML input, which sits on top
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
-      if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal (unlocked)
       if (this.menuOpen) {
         // Dragging the scroll rail scrolls the list; an item slot / shop row wins over
@@ -1422,7 +1427,7 @@ export class GameScene extends Phaser.Scene {
       if (!pointer.wasTouch) return;
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
-      if (this.dialogOpen) { if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; }
       this.actAt(pointer.x, pointer.y);
     });
@@ -1431,7 +1436,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => {
       if (this.confirmOpen) { this.closeConfirm(); return; } // Esc = cancel the confirm
       if (this.craftOpen) { this.closeCraft(); return; }     // Esc = close the crafting modal
-      if (this.dialogOpen) this.closeDialog();
+      if (this.dialogOpen && !this.cutscene) this.closeDialog(); // a cutscene can't be Esc'd out of
     });
     // Enter confirms the modal dialog (✓); Esc above cancels it.
     this.input.keyboard?.on('keydown-ENTER', () => {
@@ -1447,7 +1452,7 @@ export class GameScene extends Phaser.Scene {
       const el = document.activeElement;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
       e.preventDefault?.();
-      this.advanceDialog();
+      if (this.cutscene) this.advanceCutscene(); else this.advanceDialog();
     });
 
     // While locked, accumulate RELATIVE mouse movement into the virtual cursor,
@@ -1725,7 +1730,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('hotbar', {
       slots: this.inventory.slice(0, INV_COLS).map((s) => this.stackView(s)),
       selected: this.hotbarSelected,
-      visible: this.gameReady && !this.dialogOpen && !this.inventoryOpen,
+      visible: this.gameReady && (!this.dialogOpen || this.cutscene) && !this.inventoryOpen, // a cutscene keeps it (for tool spotlights)
       rev,
     });
     this.registry.set('inventory', {
@@ -5670,11 +5675,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input. */
-  private openDialog(seed?: string): void {
+  private openDialog(seed?: string, cutscene = false): void {
     if (this.dialogOpen || !this.child) return;
     this.dialogOpen = true;
+    this.cutscene = cutscene; // scripted cutscene: keeps the hotbar VISIBLE (for spotlights), no input field
     this.clearChatter(); // any proactive chip is replaced by the real conversation
-    this.publishInventory(); // hide the hotbar while chatting
+    this.publishInventory(); // AI chat hides the hotbar; a cutscene keeps it (publishInventory reads this.cutscene)
     this.closeWallPalette(); // cancel a pending wall-orientation choice
     // Cato turns to FACE THE PLAYER (front) while chatting: stop + play the
     // front idle. faceDir='down' so the wander-freeze in update() (which plays
@@ -5689,7 +5695,11 @@ export class GameScene extends Phaser.Scene {
     if (this.locked) document.exitPointerLock();
     this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
     this.setImmediateDialog(seed ?? this.fallbackSay(false)); // seeded (from a chatter tap) or a greeting
-    for (const role of GameScene.DIALOG_ROLES) {
+    // Cutscene: hide only the text-INPUT widgets (`chat-input` panel + `chat-input-field`
+    // DOM input) — Cato is speaking, the player just taps to continue. KEEP `chat-text`
+    // (the text-area that shows Cato's spoken line) + `chat-message` + portrait + name.
+    const roles = cutscene ? GameScene.DIALOG_ROLES.filter((r) => !r.startsWith('chat-input')) : GameScene.DIALOG_ROLES;
+    for (const role of roles) {
       const go = getHudObject(this, role) as unknown as
         | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
         | undefined;
@@ -5727,6 +5737,7 @@ export class GameScene extends Phaser.Scene {
   private closeDialog(): void {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
+    this.cutscene = false;
     this.catoTalkTimer?.remove(); // stop the talk→blink settle timer
     this.stopTyping(); // stop any in-progress typewriter
     this.setMoreIcon(false); // hide the pagination "more" icon
@@ -5752,6 +5763,98 @@ export class GameScene extends Phaser.Scene {
         },
       });
     }
+  }
+
+  // ── Scripted dialogue (authored cutscenes/intro — NON-AI) ─────────────────────
+  //    Plays a `public/dialogue/*.json` node graph (see src/dialogue.ts) through the
+  //    SAME chat box, in CUTSCENE mode (no text input): Cato speaks pre-written,
+  //    i18n lines; a `spotlight` line highlights a hotbar tool via DialogueScene.
+  //    `dialogueSeen` (saved) gates once-only scripts like the new-game intro.
+
+  private dialogueRunner?: DialogueRunner;
+  private dialogueFlags = new Set<string>();
+  private dialogueSeen = new Set<string>();
+  private cutscene = false;
+
+  /** After the save loads, play the intro ONCE on a brand-new save. */
+  private maybePlayIntro(): void {
+    if (this.dialogueSeen.has('intro')) return;
+    if (!this.cache.json.exists('dialogue-intro')) return;
+    // A tiny beat so the world/HUD have settled before Cato greets.
+    this.time.delayedCall(700, () => { if (!this.dialogOpen && !this.menuOpen) this.startDialogue('intro'); });
+  }
+
+  /** Start a scripted dialogue by id (loads its graph from the JSON cache). */
+  private startDialogue(scriptId: string): void {
+    const script = this.cache.json.get('dialogue-' + scriptId) as DialogueScript | undefined;
+    if (!script || this.dialogueRunner) return;
+    this.dialogueSeen.add(scriptId); // once-only: mark seen up front so a reload can't replay
+    this.scheduleSave();
+    const host: DialogueHost = {
+      showLine: (text, opts) => this.dialogueShowLine(text, opts),
+      showChoices: (_prompt, _options, pick) => { pick(0); }, // P1: linear scripts only (no choice UI yet)
+      getFlag: (f) => this.dialogueFlags.has(f),
+      setFlag: (f, v) => { v ? this.dialogueFlags.add(f) : this.dialogueFlags.delete(f); },
+      finish: () => this.endDialogue(),
+    };
+    this.dialogueRunner = new DialogueRunner(script, host, (tx) => this.dialogueSubstitute(trDialogue(tx, getLang())));
+    this.dialogueRunner.start();
+  }
+
+  /** Fill {name} with the signed-in player's name (or a friendly fallback). */
+  private dialogueSubstitute(text: string): string {
+    const name = this.umicat?.user?.name?.trim() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
+    return text.replace(/\{name\}/g, name);
+  }
+
+  /** Host: show a cutscene line (opens the box in cutscene mode on the first line),
+   *  set the spotlight, play the mood, type it out. */
+  private dialogueShowLine(text: string, opts: { emote?: string; spotlight?: string | null }): void {
+    if (!this.dialogOpen) this.openDialog(undefined, true); // cutscene: box + portrait, NO input
+    this.cutscene = true;
+    this.setDialogueSpotlight(opts.spotlight ?? null);
+    if (opts.emote) this.catoReact(opts.emote as never, { force: true }); // bubble emote over Cato's head
+    this.catoTalkFor(text);
+    this.showDialogText(text);
+  }
+
+  /** Player advanced (tap/space) during a cutscene — reveal/next page, else next node,
+   *  else the script's `finish` closes it. Returns true if it consumed the input. */
+  private advanceCutscene(): boolean {
+    if (this.advanceDialog()) return true; // still typing / more pages of this line
+    if (this.dialogueRunner && !this.dialogueRunner.isDone) { this.dialogueRunner.advance(); return true; }
+    return false;
+  }
+
+  /** Host: script ended → close the box + clear the spotlight. */
+  private endDialogue(): void {
+    this.dialogueRunner = undefined;
+    this.cutscene = false;
+    this.setDialogueSpotlight(null);
+    if (this.dialogOpen) this.closeDialog();
+  }
+
+  /** Point DialogueScene at a named UI target ('hotbar:<toolId>' | 'hotbar:seed' | null). */
+  private setDialogueSpotlight(target: string | null): void {
+    const rect = target ? this.spotlightRect(target) : null;
+    this.registry.set('dialogueSpotlight', rect ? { ...rect, rev: (this.registry.get('dialogueSpotlight')?.rev ?? 0) + 1 } : null);
+  }
+
+  /** Resolve a spotlight target to a screen rect (P1: hotbar slots by tool). */
+  private spotlightRect(target: string): { x: number; y: number; w: number; h: number } | null {
+    const bounds = this.registry.get('hotbarBounds') as
+      | { slots?: Array<{ x: number; y: number; w: number; h: number }> }
+      | undefined;
+    const slots = bounds?.slots;
+    if (!slots) return null;
+    if (target.startsWith('hotbar:')) {
+      const want = target.slice(7); // toolId, or 'seed' = any seed bag
+      const idx = this.inventory.findIndex((it, i) => i < INV_COLS && it != null && (
+        want === 'seed' ? !!it.plants : it.toolId === want
+      ));
+      if (idx >= 0 && slots[idx]) return slots[idx];
+    }
+    return null;
   }
 
   /** A compact snapshot of the current game state, sent to Cato as `observation`
@@ -5849,6 +5952,7 @@ export class GameScene extends Phaser.Scene {
     if (c) {
       this.tweens.add({ targets: c, alpha: 0, duration: 250, onComplete: () => c.destroy() });
     }
+    this.maybePlayIntro(); // new-game → Cato's scripted greeting + tool tour (once)
   }
 
   // ── Save data (auto-save + restore) ───────────────────────────────────
@@ -5856,7 +5960,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 13,
+      v: 14,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -5880,6 +5984,8 @@ export class GameScene extends Phaser.Scene {
       stamina: Math.round(this.stamina),
       chestSeeded: this.chestSeeded,
       catoBag: this.catoBagStore.map((it) => ({ id: it.id, count: it.count })),
+      dialogueSeen: [...this.dialogueSeen],
+      dialogueFlags: [...this.dialogueFlags],
     };
   }
 
@@ -6033,6 +6139,8 @@ export class GameScene extends Phaser.Scene {
       // restore above would wipe the grants). Building materials are idempotent; the
       // spare seeds are one-time (chestSeeded flag) so they don't refill after use.
       this.chestSeeded = s.chestSeeded ?? false;
+      this.dialogueSeen = new Set(s.dialogueSeen ?? []);
+      this.dialogueFlags = new Set(s.dialogueFlags ?? []);
       this.ensureBuildingMaterials();
       this.grantStarterSeedsOnce();
       if (s.mail) {
