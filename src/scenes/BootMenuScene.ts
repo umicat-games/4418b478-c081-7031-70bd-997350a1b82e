@@ -64,6 +64,20 @@ export class BootMenuScene extends Phaser.Scene {
       console.warn('[catopia] boot: no play-button entity; click anywhere to start');
       this.input.once('pointerdown', () => this.startGame());
     }
+
+    // Cato mascot, bottom-left, sitting on the screen bottom. It's a WORLD sprite at
+    // scale 1 — the ~3× boot camera renders it at 3× (game scale, matching the tiles).
+    // Plays `teemo-appear` once on load, then loops random blink/love/think with a short
+    // pause between. Bottom-aligned (origin y=1) to the world bottom = the screen bottom.
+    if (this.textures.exists('teemo')) {
+      const cato = this.add.sprite(30, this.worldH, 'teemo', 0).setOrigin(0.5, 1).setDepth(200);
+      const EMOTES = ['teemo-blink', 'teemo-love', 'teemo-think'];
+      const playNext = (): void => { cato.play(EMOTES[Math.floor(Math.random() * EMOTES.length)]); };
+      cato.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        this.time.delayedCall(500 + Math.random() * 900, playNext);
+      });
+      cato.play('teemo-appear');
+    }
   }
 
   private fitCamera = (): void => {

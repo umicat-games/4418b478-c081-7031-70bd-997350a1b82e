@@ -44,6 +44,9 @@ export class BootScene extends Phaser.Scene {
     // (frame = row*10 + col; regions tagged in the Asset Manager). See src/emote.ts.
     this.load.image('speech-bubble', 'uploaded/speech-bubble.png');
     this.load.spritesheet('emoji', 'uploaded/emoji_spritesheet.png', { frameWidth: 32, frameHeight: 32 });
+    // The title-screen Cato mascot (Teemo premium emote pack — 32×32, 13-col grid). The
+    // boot menu plays `teemo-appear` once, then loops random blink/love/think. See below.
+    this.load.spritesheet('teemo', 'uploaded/teemo_premium_emote_animations_sprite_sheet-export.png', { frameWidth: 32, frameHeight: 32 });
     // Cato's stamina gauge: a 16×16 radial pie (37 frames, empty→full; colour purple→
     // orange→green). frame = round(fraction*36). Shown over his head while he works.
     this.load.spritesheet('stamina', 'uploaded/stamina_circle_with_white_outline_sprite_sheet.png', { frameWidth: 16, frameHeight: 16 });
@@ -297,6 +300,20 @@ export class BootScene extends Phaser.Scene {
         frameRate: 16,
         repeat: 0,
       });
+    }
+    // Title-screen Cato mascot emotes (frame ranges segmented from the untagged Teemo
+    // sheet). `appear` plays once on load; the rest are randomly looped by BootMenuScene.
+    const teemoAnims: Array<[string, number, number, number]> = [
+      ['teemo-appear', 0, 20, 16],
+      ['teemo-blink', 65, 68, 8],
+      ['teemo-love', 117, 121, 8],
+      ['teemo-think', 195, 201, 12],
+    ];
+    for (const [key, from, to, fps] of teemoAnims) {
+      if (this.anims.exists(key)) continue;
+      const frames = [];
+      for (let f = from; f <= to; f++) frames.push(f);
+      this.anims.create({ key, frames: this.anims.generateFrameNumbers('teemo', { frames }), frameRate: fps, repeat: 0 });
     }
     // Register the `white-button` region of the square-buttons sheet as a frame so
     // the build palette can nine-slice it (26×28 @ 11,11, per the Asset Manager tag).
