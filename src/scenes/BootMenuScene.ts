@@ -65,12 +65,22 @@ export class BootMenuScene extends Phaser.Scene {
       this.input.once('pointerdown', () => this.startGame());
     }
 
-    // Cato mascot, bottom-left, sitting on the screen bottom. It's a WORLD sprite at
+    // Cato mascot, bottom-left, sitting on the SCREEN bottom. It's a WORLD sprite at
     // scale 1 — the ~3× boot camera renders it at 3× (game scale, matching the tiles).
-    // Plays `teemo-appear` once on load, then loops random blink/love/think with a short
-    // pause between. Bottom-aligned (origin y=1) to the world bottom = the screen bottom.
+    // Pinned to the camera's VISIBLE bottom-left (not world y=worldH) so it hugs the
+    // screen edge even when fitCamera letterboxes a non-16:9 canvas; re-pinned on resize.
+    // Plays `teemo-appear` once on load, then loops random blink/love/think with a pause.
     if (this.textures.exists('teemo')) {
-      const cato = this.add.sprite(30, this.worldH, 'teemo', 0).setOrigin(0.5, 1).setDepth(200);
+      const cato = this.add.sprite(0, 0, 'teemo', 0).setOrigin(0.5, 1).setDepth(200);
+      const placeCato = (): void => {
+        const cam = this.cameras.main;
+        const left = this.worldW / 2 - this.scale.width / cam.zoom / 2;
+        const bottom = this.worldH / 2 + this.scale.height / cam.zoom / 2;
+        cato.setPosition(left + 22, bottom); // 22 world px in from the left edge
+      };
+      placeCato();
+      this.scale.on(Phaser.Scale.Events.RESIZE, placeCato);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, placeCato));
       const EMOTES = ['teemo-blink', 'teemo-love', 'teemo-think'];
       const playNext = (): void => { cato.play(EMOTES[Math.floor(Math.random() * EMOTES.length)]); };
       cato.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
