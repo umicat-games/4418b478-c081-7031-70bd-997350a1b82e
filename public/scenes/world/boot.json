@@ -35,7 +35,7 @@
       "name": "island",
       "transform": {
         "x": 251.77224897329413,
-        "y": 136,
+        "y": 148,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -75,7 +75,7 @@
       "kind": "sprite",
       "transform": {
         "x": 100.2918672997059,
-        "y": 115.98277156082352,
+        "y": 127.98277156082352,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -89,7 +89,7 @@
       "kind": "sprite",
       "transform": {
         "x": 127.71387551335295,
-        "y": 120,
+        "y": 132,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -103,7 +103,7 @@
       "kind": "sprite",
       "transform": {
         "x": 112,
-        "y": 152,
+        "y": 164,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -117,7 +117,7 @@
       "kind": "sprite",
       "transform": {
         "x": 160,
-        "y": 144,
+        "y": 156,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -131,7 +131,7 @@
       "kind": "sprite",
       "transform": {
         "x": 160,
-        "y": 144,
+        "y": 156,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -145,7 +145,7 @@
       "kind": "sprite",
       "transform": {
         "x": 144,
-        "y": 144,
+        "y": 156,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -159,7 +159,7 @@
       "kind": "sprite",
       "transform": {
         "x": 176,
-        "y": 144,
+        "y": 156,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -173,7 +173,7 @@
       "kind": "sprite",
       "transform": {
         "x": 160,
-        "y": 128,
+        "y": 140,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -187,7 +187,7 @@
       "kind": "sprite",
       "transform": {
         "x": 160,
-        "y": 160,
+        "y": 172,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -201,7 +201,7 @@
       "kind": "sprite",
       "transform": {
         "x": 112,
-        "y": 152,
+        "y": 164,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -215,7 +215,7 @@
       "kind": "sprite",
       "transform": {
         "x": 176,
-        "y": 120,
+        "y": 132,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -229,7 +229,7 @@
       "kind": "sprite",
       "transform": {
         "x": 131,
-        "y": 176,
+        "y": 188,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -243,7 +243,7 @@
       "kind": "sprite",
       "transform": {
         "x": 168,
-        "y": 184,
+        "y": 196,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -257,7 +257,7 @@
       "kind": "sprite",
       "transform": {
         "x": 151.71387551335295,
-        "y": 184,
+        "y": 196,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -270,7 +270,7 @@
       "kind": "sprite",
       "transform": {
         "x": 112,
-        "y": 176,
+        "y": 188,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -283,8 +283,8 @@
       "id": "e-mscfrs2k-mhh0",
       "kind": "sprite",
       "transform": {
-        "x": 256,
-        "y": 176,
+        "x": 269.45834169619286,
+        "y": 200.5,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -298,7 +298,7 @@
       "kind": "sprite",
       "transform": {
         "x": 240,
-        "y": 160,
+        "y": 172,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -312,7 +312,7 @@
       "kind": "sprite",
       "transform": {
         "x": 224,
-        "y": 128,
+        "y": 140,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -326,35 +326,7 @@
       "kind": "sprite",
       "transform": {
         "x": 240,
-        "y": 120,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "tree_sprites",
-      "animation": "tree-idle"
-    },
-    {
-      "id": "e-mscfsco0-1czc",
-      "kind": "sprite",
-      "transform": {
-        "x": 336,
-        "y": 40,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "tree_sprites",
-      "animation": "tree-idle"
-    },
-    {
-      "id": "e-mscfse3e-wwlh",
-      "kind": "sprite",
-      "transform": {
-        "x": 360,
-        "y": 72,
+        "y": 132,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -367,8 +339,8 @@
       "id": "e-mscfsiwb-zifg",
       "kind": "sprite",
       "transform": {
-        "x": 384,
-        "y": 136,
+        "x": 355.50199999999995,
+        "y": 140,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -381,8 +353,8 @@
       "id": "e-mscfskaa-jof8",
       "kind": "sprite",
       "transform": {
-        "x": 360,
-        "y": 152,
+        "x": 307.5399333883094,
+        "y": 108,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -395,22 +367,8 @@
       "id": "e-mscfslrb-btzd",
       "kind": "sprite",
       "transform": {
-        "x": 312,
-        "y": 184,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "tree_pear_sprites",
-      "animation": "tree-idle"
-    },
-    {
-      "id": "e-mscfsrbb-7xpn",
-      "kind": "sprite",
-      "transform": {
-        "x": 64,
-        "y": 48,
+        "x": 315.021260380778,
+        "y": 178.8245,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -424,7 +382,7 @@
       "kind": "sprite",
       "transform": {
         "x": 208,
-        "y": 168,
+        "y": 180,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -438,7 +396,7 @@
       "kind": "sprite",
       "transform": {
         "x": 64,
-        "y": 144,
+        "y": 156,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -452,21 +410,7 @@
       "kind": "sprite",
       "transform": {
         "x": 232,
-        "y": 208,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "mushrooms_flowers_stones",
-      "frame": "wild-flower-3"
-    },
-    {
-      "id": "e-mscftzcq-ywnp",
-      "kind": "sprite",
-      "transform": {
-        "x": 296,
-        "y": 40,
+        "y": 220,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -480,7 +424,7 @@
       "kind": "sprite",
       "transform": {
         "x": 184,
-        "y": 208,
+        "y": 220,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -494,7 +438,7 @@
       "kind": "sprite",
       "transform": {
         "x": 72,
-        "y": 168,
+        "y": 180,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -508,7 +452,7 @@
       "kind": "sprite",
       "transform": {
         "x": 88,
-        "y": 208,
+        "y": 220,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -516,41 +460,13 @@
       },
       "assetId": "mushrooms_flowers_stones",
       "frame": "grass-4"
-    },
-    {
-      "id": "e-mscfua0a-p554",
-      "kind": "sprite",
-      "transform": {
-        "x": 384,
-        "y": 96,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "mushrooms_flowers_stones",
-      "frame": "grass-4"
-    },
-    {
-      "id": "e-mscfucot-icza",
-      "kind": "sprite",
-      "transform": {
-        "x": 152,
-        "y": 40,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "mushrooms_flowers_stones",
-      "frame": "small-stone-4"
     },
     {
       "id": "e-mscfugk5-a5h3",
       "kind": "sprite",
       "transform": {
         "x": 336,
-        "y": 88,
+        "y": 100,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
