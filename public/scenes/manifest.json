@@ -2036,6 +2036,16 @@
       "atlasPath": "uploaded/fences.json",
       "atlasFormat": "json",
       "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/fences.json"
+    },
+    {
+      "id": "water_objects",
+      "textureKey": "water_objects",
+      "path": "uploaded/water_objects.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/water_objects.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/water_objects.json",
+      "atlasFormat": "json",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/water_objects.json"
     }
   ]
 }

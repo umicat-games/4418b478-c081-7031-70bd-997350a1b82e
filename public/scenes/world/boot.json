@@ -544,6 +544,370 @@
       },
       "assetId": "fences",
       "frame": "horizontal-fence-3"
+    },
+    {
+      "id": "e-mschy0s9-wb76",
+      "kind": "sprite",
+      "transform": {
+        "x": 144,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy2d8-b5ht",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 248,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy3d3-q3k3",
+      "kind": "sprite",
+      "transform": {
+        "x": 24,
+        "y": 80,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy4jg-0yuc",
+      "kind": "sprite",
+      "transform": {
+        "x": 256,
+        "y": 48,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy5xg-93q2",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 56,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy6vq-sfa2",
+      "kind": "sprite",
+      "transform": {
+        "x": 400,
+        "y": 168,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy8zn-tybj",
+      "kind": "sprite",
+      "transform": {
+        "x": 384,
+        "y": 104,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschy9xo-sn52",
+      "kind": "sprite",
+      "transform": {
+        "x": 416,
+        "y": 248,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyamg-5l2f",
+      "kind": "sprite",
+      "transform": {
+        "x": 360,
+        "y": 272,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschybov-2ru0",
+      "kind": "sprite",
+      "transform": {
+        "x": 320,
+        "y": 288,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschycu2-jzqq",
+      "kind": "sprite",
+      "transform": {
+        "x": 192,
+        "y": 256,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschydqh-w4u1",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyeob-socb",
+      "kind": "sprite",
+      "transform": {
+        "x": 72,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyfm2-bwnb",
+      "kind": "sprite",
+      "transform": {
+        "x": 8,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschygm7-86zi",
+      "kind": "sprite",
+      "transform": {
+        "x": 56,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyi8z-2254",
+      "kind": "sprite",
+      "transform": {
+        "x": 144,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschykcf-yj7m",
+      "kind": "sprite",
+      "transform": {
+        "x": 184,
+        "y": 32,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-4"
+    },
+    {
+      "id": "e-mschymcw-8yeq",
+      "kind": "sprite",
+      "transform": {
+        "x": -8,
+        "y": 200,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-4"
+    },
+    {
+      "id": "e-mschyo4s-4yly",
+      "kind": "sprite",
+      "transform": {
+        "x": 240,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-4"
+    },
+    {
+      "id": "e-mschyrkf-y6iv",
+      "kind": "sprite",
+      "transform": {
+        "x": 416,
+        "y": 136,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschyt1m-nkgp",
+      "kind": "sprite",
+      "transform": {
+        "x": 168,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschyu8h-2xtp",
+      "kind": "sprite",
+      "transform": {
+        "x": -16,
+        "y": 224,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschywkh-ljv8",
+      "kind": "sprite",
+      "transform": {
+        "x": 8,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-3"
+    },
+    {
+      "id": "e-mschyy41-1mfp",
+      "kind": "sprite",
+      "transform": {
+        "x": 128,
+        "y": 32,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-3"
+    },
+    {
+      "id": "e-mschz2cl-fkgy",
+      "kind": "sprite",
+      "transform": {
+        "x": 64,
+        "y": 288,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschz4mi-tg5n",
+      "kind": "sprite",
+      "transform": {
+        "x": 400,
+        "y": 272,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
     }
   ]
 }
