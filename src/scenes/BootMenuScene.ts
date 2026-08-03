@@ -60,30 +60,20 @@ export class BootMenuScene extends Phaser.Scene {
       this.tweens.add({ targets: title, y: title.y - 5, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
-    // Wire the authored Play button entity → start the game, with hover + press feedback.
-    // Press swaps to the authored PRESSED frame (`play-light-bg-pressed-down`) — the
-    // pressed art is darker + un-bevelled; hover keeps a subtle grow highlight.
+    // The authored `play-button` entity is now a POSITION ANCHOR only — SettingsScene
+    // draws the real Play + Settings buttons (unified: empty button-idle + icon + text)
+    // at its projected screen position. Hide the baked "▶ PLAY" sprite so it doesn't
+    // show under them; keep the entity + its scale exposed for SettingsScene to read.
     const btn = reg?.byRole('play-button')[0] as Phaser.GameObjects.Sprite | undefined;
     if (btn) {
-      btn.setInteractive({ useHandCursor: true });
-      const base = btn.scaleX; // authored scale (1 at game-scale)
       this.playButton = btn;
-      this.playBaseScale = base;
-      const idleFrame = btn.frame.name; // 'play-light-bg'
-      const hasPressed = btn.texture.has('play-light-bg-pressed-down');
-      let pressed = false;
-      const scaleTo = (s: number, ms = 90): void => { this.tweens.add({ targets: btn, scaleX: base * s, scaleY: base * s, duration: ms, ease: 'Quad.easeOut' }); };
-      const setPressed = (on: boolean): void => { if (hasPressed) btn.setFrame(on ? 'play-light-bg-pressed-down' : idleFrame); };
-      btn.on('pointerover', () => { if (!pressed) scaleTo(1.07); });          // hover → grow (highlight)
-      btn.on('pointerout', () => { pressed = false; setPressed(false); scaleTo(1); });
-      btn.on('pointerdown', () => { pressed = true; setPressed(true); scaleTo(0.94, 60); }); // press → pressed frame + tiny shrink
-      btn.on('pointerup', () => { pressed = false; setPressed(false); scaleTo(1); this.startGame(); });
+      this.playBaseScale = btn.scaleX; // authored scale (1 at game-scale)
+      btn.setVisible(false);
     } else {
-      // Button missing (e.g. the boot scene was emptied in the editor) — don't
-      // trap the player: any click starts the game.
+      // No anchor (boot scene emptied in the editor) — SettingsScene falls back to a
+      // bottom-centre Play button, so the game is never un-startable.
       // eslint-disable-next-line no-console
-      console.warn('[catopia] boot: no play-button entity; click anywhere to start');
-      this.input.once('pointerdown', () => this.startGame());
+      console.warn('[catopia] boot: no play-button entity; SettingsScene uses a fallback');
     }
 
     // Cato mascot, bottom-left, sitting on the SCREEN bottom. It's a WORLD sprite at
@@ -124,8 +114,9 @@ export class BootMenuScene extends Phaser.Scene {
     cam.centerOn(this.worldW / 2, this.worldH / 2);
   };
 
-  private startGame(): void {
-    this.scene.stop('SettingsScene'); // the gear/modal are title-screen only
+  /** Public: SettingsScene's Play button calls this (it owns the visible buttons now). */
+  startGame(): void {
+    this.scene.stop('SettingsScene'); // the buttons/modal are title-screen only
     this.scene.start('GameScene', { sceneId: GO_TO });
   }
 }
