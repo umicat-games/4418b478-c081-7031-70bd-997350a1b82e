@@ -17,7 +17,7 @@ import { RECIPES, type Recipe } from '../data/recipes';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
-import { crossToBgm } from '../bgm';
+import { crossToBgm, setBgmVolume } from '../bgm';
 import {
   FORAGABLES, FORAGABLE_NAMES, BIG_STONES, BIG_STONE_TIERS,
   FORAGE_SPAWN_INTERVAL_MS, FORAGE_MAX_ON_MAP, BIG_STONE_SPAWN_CHANCE,
@@ -3841,10 +3841,32 @@ export class GameScene extends Phaser.Scene {
       if (sk) { this.menuShopStep(sk); return true; }
       const rid = this.menuShopRowAt(x, y);
       if (rid) { this.menuShopSel = rid; this.shopMsg = ''; this.publishMenu(); return true; }
+    } else if (this.menuTab === 4) {
+      // Settings: tap the volume bar to set the level; tap 返回标题 to go back to the title.
+      const track = this.registry.get('menuSettingsTrack') as { x: number; y: number; w: number; h: number } | null;
+      if (track && x >= track.x && x <= track.x + track.w && y >= track.y && y <= track.y + track.h) {
+        setBgmVolume(this, Phaser.Math.Clamp((x - track.x) / track.w, 0, 1));
+        this.publishMenu(); // re-render the slider fill/knob
+        return true;
+      }
+      const back = this.registry.get('menuSettingsBack') as { x: number; y: number; w: number; h: number } | null;
+      if (back && x >= back.x && x <= back.x + back.w && y >= back.y && y <= back.y + back.h) { this.returnToTitle(); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
     return true;
+  }
+
+  /** Return to the title screen from the in-game SETTINGS tab: flush the save (so Play
+   *  reloads this state), tear down the game's HUD/overlay scenes, and re-enter BootScene
+   *  (which routes to the boot/title screen). */
+  private returnToTitle(): void {
+    this.saveGame(); // fire-and-forget flush — the app stays alive, so it completes
+    this.closeMenu();
+    for (const k of ['HotbarScene', 'WeatherScene', 'PaletteScene', 'ConfirmScene', 'ReceiptScene', 'ChatterScene', 'MenuScene', 'CraftScene', 'CursorScene', 'UmicatHud']) {
+      if (this.scene.get(k)) this.scene.stop(k);
+    }
+    this.scene.start('BootScene');
   }
 
   // ── Unified-menu item action menu + keypad (mirrors the mailbox/chest flow, but

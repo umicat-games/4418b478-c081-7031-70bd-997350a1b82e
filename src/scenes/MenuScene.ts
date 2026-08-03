@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { renderActionMenu, renderKeypad, renderSlotPicker, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
+import { getBgmVolume } from '../bgm';
 import type { MailListEntry } from './menu-types';
 
 // The UNIFIED menu (Zelda-style): ONE screen with icon TABS — Mail / For-sale / Chest /
@@ -420,9 +421,38 @@ export class MenuScene extends Phaser.Scene {
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visible * step - MAIL.gapPx, visible, mails.length);
   }
 
+  /** SETTINGS tab: a Music volume slider (tap the bar to set — mirrors the title
+   *  screen's slider, same `settings-buttons` tick/knob art) + a "Title screen" button
+   *  (empty `button-idle` + text, like the title buttons) that returns to the menu.
+   *  GameScene routes taps via the published `menuSettingsTrack` / `menuSettingsBack`. */
   private renderSettings(c: Phaser.GameObjects.Container, lx: number, lw: number): void {
-    const H = this.scale.height;
-    c.add(this.T(lx + lw / 2, 0.5 * H, t('menu_settings_todo'), H * 0.03, SUB));
+    const W = this.scale.width, H = this.scale.height;
+    const cx = lx + lw / 2; // centre on the LEFT content panel (settings has no right detail)
+
+    // ── Music volume slider ──────────────────────────────────────────────────
+    c.add(this.T(cx, 0.35 * H, t('settings_music'), H * 0.03, INK));
+    const N = 10;
+    const trackW = lw * 0.5, trackLeft = cx - trackW / 2, rowY = 0.45 * H;
+    const pitch = trackW / N;
+    const vol = getBgmVolume();
+    const knobX = trackLeft + vol * trackW;
+    if (this.textures.exists('settings-buttons')) {
+      const tickScale = (pitch * 0.6) / 4; // tick native w=4
+      for (let i = 0; i < N; i++) {
+        const x = trackLeft + (i + 0.5) * pitch;
+        c.add(this.add.image(x, rowY, 'settings-buttons', x <= knobX + 0.5 ? 'slider-tick-on' : 'slider-tick-off').setScale(tickScale));
+      }
+      c.add(this.add.image(knobX, rowY, 'settings-buttons', 'slider-knob').setScale(tickScale * 1.2));
+    }
+    this.registry.set('menuSettingsTrack', { x: trackLeft, y: rowY - pitch, w: trackW, h: pitch * 2 });
+
+    // ── "Title screen" button (styled like the title buttons) ────────────────
+    const bw = lw * 0.42, bh = bw * (32 / 96), by = 0.66 * H;
+    if (this.textures.exists('ui_big_play_button')) {
+      c.add(this.add.image(cx, by, 'ui_big_play_button', 'button-idle').setDisplaySize(bw, bh));
+    }
+    c.add(this.add.text(cx, by - bh * (2 / 32), t('menu_return_title'), { fontFamily: dialogFont(), color: '#9a6a3f', fontStyle: 'bold', fontSize: Math.round(bh * 0.34) + 'px', resolution: RES }).setOrigin(0.5, 0.5));
+    this.registry.set('menuSettingsBack', { x: cx - bw / 2, y: by - bh / 2, w: bw, h: bh });
   }
 
   /** SHOP tab: LEFT = scrollable catalog list (icon + name + buy price); footer = coin

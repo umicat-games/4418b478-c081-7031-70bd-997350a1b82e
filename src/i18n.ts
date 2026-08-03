@@ -111,6 +111,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
   settings_music: { en: 'Music', 'zh-CN': '音乐' },
   start_play: { en: 'PLAY', 'zh-CN': '开始' },
+  menu_return_title: { en: 'Title screen', 'zh-CN': '返回标题' },
   action_give_cato: { en: 'Give to Cato', 'zh-CN': '给 Cato' },
   action_feed: { en: 'Feed now', 'zh-CN': '喂食' },
   action_to_chest: { en: 'To Chest', 'zh-CN': '放回箱子' },
