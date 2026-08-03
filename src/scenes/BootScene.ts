@@ -47,9 +47,11 @@ export class BootScene extends Phaser.Scene {
     // The title-screen Cato mascot (Teemo premium emote pack — 32×32, 13-col grid). The
     // boot menu plays `teemo-appear` once, then loops random blink/love/think. See below.
     this.load.spritesheet('teemo', 'uploaded/teemo_premium_emote_animations_sprite_sheet-export.png', { frameWidth: 32, frameHeight: 32 });
-    // Looping background music (plays across the title + the whole game). MP3 for
-    // universal browser support; started once (below) on the global sound manager.
+    // Looping background music — a SEPARATE track for the title vs the game. MP3 for
+    // universal browser support. `bgm-title` plays on the boot screen (BootMenuScene),
+    // `bgm` in-game (GameScene); crossToBgm swaps them on the title→game switch.
     this.load.audio('bgm', 'uploaded/catopia-background-music-1.mp3');
+    this.load.audio('bgm-title', 'uploaded/catopia-title-screen-background-music.mp3');
     // Cato's stamina gauge: a 16×16 radial pie (37 frames, empty→full; colour purple→
     // orange→green). frame = round(fraction*36). Shown over his head while he works.
     this.load.spritesheet('stamina', 'uploaded/stamina_circle_with_white_outline_sprite_sheet.png', { frameWidth: 16, frameHeight: 16 });
@@ -361,19 +363,8 @@ export class BootScene extends Phaser.Scene {
     applyRecipeData(this.cache.json.get('data-recipes'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
-
-    // Start the looping BGM ONCE on the GLOBAL sound manager (persists across the
-    // title → game scene switch). Browsers block audio until a user gesture, so if the
-    // context is still locked, defer to Phaser's UNLOCKED event (fires on first tap/
-    // click/key anywhere). `this.sound` is `game.sound` (global) → survives this scene
-    // stopping. Guarded so a scene reload can't stack a second track.
-    if (!this.registry.get('bgmStarted') && this.cache.audio.exists('bgm')) {
-      this.registry.set('bgmStarted', true);
-      const mgr = this.sound;
-      const play = (): void => { mgr.add('bgm', { loop: true, volume: 0.4 }).play(); };
-      if (mgr.locked) mgr.once(Phaser.Sound.Events.UNLOCKED, play);
-      else play();
-    }
+    // BGM is started per-scene now (title vs game use different tracks): BootMenuScene
+    // plays `bgm-title`, GameScene plays `bgm` — each via crossToBgm.
 
     const manifest = getManifest(this);
     // Route by initial scene: the `boot` data scene → BootMenuScene (renders the

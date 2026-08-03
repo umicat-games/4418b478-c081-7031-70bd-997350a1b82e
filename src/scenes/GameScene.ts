@@ -17,6 +17,7 @@ import { RECIPES, type Recipe } from '../data/recipes';
 import { t, initLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
+import { crossToBgm } from '../bgm';
 import {
   FORAGABLES, FORAGABLE_NAMES, BIG_STONES, BIG_STONE_TIERS,
   FORAGE_SPAWN_INTERVAL_MS, FORAGE_MAX_ON_MAP, BIG_STONE_SPAWN_CHANCE,
@@ -820,6 +821,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+    // In-game BGM (its own track): stop the title track and loop the game one.
+    crossToBgm(this, 'bgm', ['bgm-title']);
     // Set zoom BEFORE awaiting scene load so the first frame is already correct.
     this.cameras.main.setZoom(this.computeZoom());
     // Kept ON for crisp pixel-art. The trade: the world scroll snaps to whole pixels,
