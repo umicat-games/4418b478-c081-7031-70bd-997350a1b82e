@@ -130,6 +130,11 @@ const WEATHER_BGS = ['background-morning', 'background-noon', 'background-night'
 // DEV: press T to trigger a test 3×3 till near Cato WITHOUT the AI (no sign-in /
 // no credits) — for iterating on the tilling visuals. Set false before release.
 const CATO_DEBUG_TILL = true;
+// DEBUG: always replay the new-game intro on load (ignore the once-only `dialogueSeen`
+// gate) + press X to replay it on demand — for iterating on `public/dialogue/intro.json`
+// in the Dialogue tool (edit → Save rebuilds+reloads the preview → the fresh intro plays
+// automatically instead of being skipped as "already seen"). FLIP FALSE before release.
+const DEBUG_REPLAY_INTRO = true;
 // TEMP: clear the mailbox on load (empties an existing save's mailbox so buy/sell can
 // be tested from scratch). Flip false once cleared so real deliveries persist.
 const DEBUG_CLEAR_MAILBOX = true;
@@ -1133,6 +1138,7 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-N', () => { if (canAct()) this.startMineTask({}); });    // N = mine big stones
         this.input.keyboard?.on('keydown-J', () => { if (canAct()) this.startBushTask({}); });    // J = pick berry bushes
         this.input.keyboard?.on('keydown-K', () => { if (canAct()) this.startForageTask({}); });  // K = gather foragables
+        this.input.keyboard?.on('keydown-X', () => this.debugReplayIntro());                       // X = replay the intro dialogue
         // M = open the dialog with a long multi-page reply to exercise the RPG
         // typewriter + pagination + "more" icon without the AI.
         this.input.keyboard?.on('keydown-M', () => {
@@ -5788,10 +5794,18 @@ export class GameScene extends Phaser.Scene {
 
   /** After the save loads, play the intro ONCE on a brand-new save. */
   private maybePlayIntro(): void {
-    if (this.dialogueSeen.has('intro')) return;
+    if (!DEBUG_REPLAY_INTRO && this.dialogueSeen.has('intro')) return;
     if (!this.cache.json.exists('dialogue-intro')) return;
     // A tiny beat so the world/HUD have settled before Cato greets.
     this.time.delayedCall(700, () => { if (!this.dialogOpen && !this.menuOpen) this.startDialogue('intro'); });
+  }
+
+  /** DEBUG: force-replay the intro now — end any open dialogue, clear its seen flag,
+   *  and restart it (bypasses the once-only gate). Bound to X under CATO_DEBUG_TILL. */
+  private debugReplayIntro(): void {
+    if (this.dialogueRunner) this.endDialogue();
+    this.dialogueSeen.delete('intro');
+    this.startDialogue('intro');
   }
 
   /** Start a scripted dialogue by id (loads its graph from the JSON cache). */

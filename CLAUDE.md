@@ -289,7 +289,8 @@ Sprout Lands premium pack sheets are imported via the **Asset Manager** (region-
 - `public/scenes/manifest.json` — asset + animation table; `public/scenes/world/main.json` — the scene; `public/playbooks/cato.md` — Cato's persona + actions; `docs/design.md` — design.
 
 ## Debug stance (NOT shipping)
-- `CATO_DEBUG_TILL = true` → dev keys **T** (test-till), **P** (test-plant corn), **O** (test-water), **H** (harvest), **M** (open a long multi-page Cato reply to test the dialog typewriter + pagination) trigger behaviours WITHOUT the AI (no sign-in / no credits). **Flip false before release.**
+- `CATO_DEBUG_TILL = true` → dev keys **T** (test-till), **P** (test-plant corn), **O** (test-water), **H** (harvest), **M** (open a long multi-page Cato reply to test the dialog typewriter + pagination), **X** (replay the intro dialogue — `debugReplayIntro`) trigger behaviours WITHOUT the AI (no sign-in / no credits). **Flip false before release.**
+- `DEBUG_REPLAY_INTRO = true` → the new-game intro **plays on EVERY load**, ignoring the once-only `dialogueSeen` gate (`maybePlayIntro`), so editing `public/dialogue/intro.json` in the Dialogue tool → Save (rebuild+reload) → the fresh intro auto-plays instead of being skipped as "already seen". Plus **X** replays it on demand mid-session. **Flip false before release** (else players re-watch the intro every time).
 - `CHILD_WANDER = true` (roaming ON). Tunables: growth `CROP_STAGE_MS_*` / `WET_DURATION_MS`; leash `CATO_LEASH_*`; wet tint `WET_SOIL_TINT`; harvest-pop arc in `playHarvestPop`.
 
 ## Working style
