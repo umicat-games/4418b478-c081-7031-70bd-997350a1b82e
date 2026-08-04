@@ -19,7 +19,10 @@ export interface DialogueLineNode {
   /** Cato mood → portrait/emote (host maps via its emote table). */
   emote?: string;
   text: LangText;
-  /** Highlight a named UI target while this line shows (e.g. 'hotbar:hoe'); cleared on the next line. */
+  /** Free-form, game-interpreted key/values (the generic extension point):
+   *  `{ spotlight: 'hotbar:hoe', sound: 'meow', … }`. Authored in the Dialogue tool. */
+  data?: Record<string, string>;
+  /** @deprecated legacy top-level convenience — read as a fallback for `data.spotlight`. */
   spotlight?: string;
   next?: string;
 }
@@ -27,6 +30,7 @@ export interface DialogueChoiceNode {
   type: 'choice';
   speaker?: string;
   text?: LangText; // optional prompt shown above the options
+  data?: Record<string, string>;
   options: Array<{ text: LangText; next?: string; set?: string }>;
 }
 export interface DialogueSetNode { type: 'set'; flag: string; value?: boolean; next?: string }
@@ -83,7 +87,8 @@ export class DialogueRunner {
     this.current = id;
     switch (n.type) {
       case 'line':
-        this.host.showLine(this.tr(n.text), { speaker: n.speaker, emote: n.emote, spotlight: n.spotlight ?? null });
+        // spotlight now lives in `data.spotlight`; legacy top-level `spotlight` is a fallback.
+        this.host.showLine(this.tr(n.text), { speaker: n.speaker, emote: n.emote, spotlight: (n.data?.spotlight ?? n.spotlight) ?? null });
         return;
       case 'choice':
         this.host.showChoices(
