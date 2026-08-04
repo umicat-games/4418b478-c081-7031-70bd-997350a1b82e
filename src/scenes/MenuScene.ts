@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { renderActionMenu, renderKeypad, renderSlotPicker, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
 import { getBgmVolume } from '../bgm';
+import { DEBUG_FLAGS, DEBUG_PANEL, isDebug } from '../debug';
 import type { MailListEntry } from './menu-types';
 
 // The UNIFIED menu (Zelda-style): ONE screen with icon TABS — Mail / For-sale / Chest /
@@ -453,6 +454,29 @@ export class MenuScene extends Phaser.Scene {
     }
     c.add(this.add.text(cx, by - bh * (2 / 32), t('menu_return_title'), { fontFamily: dialogFont(), color: '#9a6a3f', fontStyle: 'bold', fontSize: Math.round(bh * 0.34) + 'px', resolution: RES }).setOrigin(0.5, 0.5));
     this.registry.set('menuSettingsBack', { x: cx - bw / 2, y: by - bh / 2, w: bw, h: bh });
+
+    // ── Debug toggles (dev-only; DEBUG_PANEL=false hides before release) ──────
+    if (!DEBUG_PANEL) { this.registry.set('menuDebugRows', []); return; }
+    c.add(this.T(cx, 0.75 * H, t('settings_debug'), H * 0.026, INK));
+    c.add(this.T(cx, 0.785 * H, t('settings_debug_note'), H * 0.016, SUB));
+    const rowW = lw * 0.66, rowLeft = cx - rowW / 2, rowH = H * 0.038, gap = H * 0.012;
+    const box = H * 0.026;
+    const rows: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
+    DEBUG_FLAGS.forEach((f, i) => {
+      const ry = 0.81 * H + i * (rowH + gap), on = isDebug(f.key);
+      const g = this.add.graphics();
+      g.fillStyle(0x000000, 0.05); g.fillRoundedRect(rowLeft, ry, rowW, rowH, 6); c.add(g);
+      const label = (f.reloadOnly ? '★ ' : '') + t(f.labelKey);
+      c.add(this.T(rowLeft + box * 0.6, ry + rowH / 2, label, H * 0.02, INK, 0));
+      const bx = rowLeft + rowW - box * 1.1, by2 = ry + (rowH - box) / 2;
+      const cb = this.add.graphics();
+      cb.fillStyle(on ? 0x6bbf59 : 0xd8cbb0, 1); cb.fillRoundedRect(bx, by2, box, box, 4);
+      cb.lineStyle(2, on ? 0x4f9a41 : 0xb8a678, 1); cb.strokeRoundedRect(bx, by2, box, box, 4);
+      if (on) { cb.lineStyle(Math.max(2, box * 0.14), 0xffffff, 1); cb.beginPath(); cb.moveTo(bx + box * 0.24, by2 + box * 0.52); cb.lineTo(bx + box * 0.44, by2 + box * 0.72); cb.lineTo(bx + box * 0.78, by2 + box * 0.28); cb.strokePath(); }
+      c.add(cb);
+      rows.push({ x: rowLeft, y: ry, w: rowW, h: rowH, key: f.key });
+    });
+    this.registry.set('menuDebugRows', rows);
   }
 
   /** SHOP tab: LEFT = scrollable catalog list (icon + name + buy price); footer = coin

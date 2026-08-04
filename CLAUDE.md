@@ -289,8 +289,11 @@ Sprout Lands premium pack sheets are imported via the **Asset Manager** (region-
 - `public/scenes/manifest.json` — asset + animation table; `public/scenes/world/main.json` — the scene; `public/playbooks/cato.md` — Cato's persona + actions; `docs/design.md` — design.
 
 ## Debug stance (NOT shipping)
-- `CATO_DEBUG_TILL = true` → dev keys **T** (test-till), **P** (test-plant corn), **O** (test-water), **H** (harvest), **M** (open a long multi-page Cato reply to test the dialog typewriter + pagination), **X** (replay the intro dialogue — `debugReplayIntro`) trigger behaviours WITHOUT the AI (no sign-in / no credits). **Flip false before release.**
-- `DEBUG_REPLAY_INTRO = true` → the new-game intro **plays on EVERY load**, ignoring the once-only `dialogueSeen` gate (`maybePlayIntro`), so editing `public/dialogue/intro.json` in the Dialogue tool → Save (rebuild+reload) → the fresh intro auto-plays instead of being skipped as "already seen". Plus **X** replays it on demand mid-session. **Flip false before release** (else players re-watch the intro every time).
+- **Debug switches are CENTRALIZED in `src/debug.ts`** (`DEBUG_FLAGS` registry, localStorage-backed `catopia:debug`, `isDebug(key)`/`toggleDebug(key)`) and **toggleable at runtime from Settings → Debug** (the unified-menu 设置 tab; `MenuScene.renderSettings` renders a checkbox per flag, GameScene routes taps via `menuDebugRows`). **Cleanup before release = one place:** set `DEBUG_PANEL = false` (hides the UI section) + default the flags off. Timing: flags marked `reloadOnly` (★ in the UI) are read at scene-create/load so a toggle applies on the NEXT reload; `coinFloor` is read live per-frame. Current flags:
+  - `devTools` (★) — the T/P/O/H/M/**X** dev keys + on-screen TEST buttons (control toggle / time-skip). `const CATO_DEBUG_TILL = isDebug('devTools')` (read once at module load). Keys: **T** test-till, **P** test-plant corn, **O** test-water, **H** harvest, **M** long multi-page Cato reply (dialog typewriter/pagination), **X** replay the intro dialogue (`debugReplayIntro`). No AI (no sign-in / no credits).
+  - `replayIntro` (★) — the new-game intro **plays on EVERY load** (ignores the once-only `dialogueSeen` gate in `maybePlayIntro`) so editing `public/dialogue/intro.json` in the Dialogue tool → Save (rebuild+reload) → the fresh intro auto-plays. Plus **X** replays on demand mid-session.
+  - `coinFloor` — tops `money` up to 5000 when below (live).
+  - `clearMailbox` (★) — empties an existing save's mailbox on load.
 - `CHILD_WANDER = true` (roaming ON). Tunables: growth `CROP_STAGE_MS_*` / `WET_DURATION_MS`; leash `CATO_LEASH_*`; wet tint `WET_SOIL_TINT`; harvest-pop arc in `playHarvestPop`.
 
 ## Working style

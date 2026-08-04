@@ -19,6 +19,7 @@ import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
+import { isDebug, toggleDebug } from '../debug';
 import {
   FORAGABLES, FORAGABLE_NAMES, BIG_STONES, BIG_STONE_TIERS,
   FORAGE_SPAWN_INTERVAL_MS, FORAGE_MAX_ON_MAP, BIG_STONE_SPAWN_CHANCE,
@@ -127,17 +128,12 @@ const WEATHER_BGS = ['background-morning', 'background-noon', 'background-night'
 // Leash: Cato stays near the CAMERA CENTRE (in view) instead of roaming the whole
 // map. The radius ADAPTS to the visible area (`wanderLeashRadius`) so he keeps in
 // frame at any zoom; if he strays past it he heads back until within half of it.
-// DEV: press T to trigger a test 3×3 till near Cato WITHOUT the AI (no sign-in /
-// no credits) — for iterating on the tilling visuals. Set false before release.
-const CATO_DEBUG_TILL = true;
-// DEBUG: always replay the new-game intro on load (ignore the once-only `dialogueSeen`
-// gate) + press X to replay it on demand — for iterating on `public/dialogue/intro.json`
-// in the Dialogue tool (edit → Save rebuilds+reloads the preview → the fresh intro plays
-// automatically instead of being skipped as "already seen"). FLIP FALSE before release.
-const DEBUG_REPLAY_INTRO = true;
-// TEMP: clear the mailbox on load (empties an existing save's mailbox so buy/sell can
-// be tested from scratch). Flip false once cleared so real deliveries persist.
-const DEBUG_CLEAR_MAILBOX = true;
+// Debug switches now live in the central registry `src/debug.ts` (toggleable from
+// Settings → Debug). `devTools` = the T/P/O/H/M/X dev keys + test tools; read once at
+// scene-create so a toggle applies on the next reload. `replayIntro` (intro on load)
+// + `clearMailbox` are read at load; `coinFloor` (5000 floor) is read live per-frame.
+const CATO_DEBUG_TILL = isDebug('devTools');
+const DEBUG_CLEAR_MAILBOX = isDebug('clearMailbox');
 
 // Un-till: hoeing EMPTY tilled soil once "loosens" it (furrow-lines mark); a
 // SECOND hoe within this window digs it back up to grass, otherwise it settles
@@ -3862,6 +3858,10 @@ export class GameScene extends Phaser.Scene {
       }
       const back = this.registry.get('menuSettingsBack') as { x: number; y: number; w: number; h: number } | null;
       if (back && x >= back.x && x <= back.x + back.w && y >= back.y && y <= back.y + back.h) { this.returnToTitle(); return true; }
+      // Debug toggles: flip the flag (persists to localStorage) + re-render the checkbox.
+      const dbg = this.registry.get('menuDebugRows') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
+      const row = dbg?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+      if (row) { toggleDebug(row.key); this.publishMenu(); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
@@ -5794,7 +5794,7 @@ export class GameScene extends Phaser.Scene {
 
   /** After the save loads, play the intro ONCE on a brand-new save. */
   private maybePlayIntro(): void {
-    if (!DEBUG_REPLAY_INTRO && this.dialogueSeen.has('intro')) return;
+    if (!isDebug('replayIntro') && this.dialogueSeen.has('intro')) return;
     if (!this.cache.json.exists('dialogue-intro')) return;
     // A tiny beat so the world/HUD have settled before Cato greets.
     this.time.delayedCall(700, () => { if (!this.dialogOpen && !this.menuOpen) this.startDialogue('intro'); });
@@ -6055,7 +6055,7 @@ export class GameScene extends Phaser.Scene {
       this.saveArmed = true;
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
       // afford to order. Gated on the debug flag → removed for release. Only tops up.
-      if (CATO_DEBUG_TILL && this.money < 5000) { this.money = 5000; this.publishWeatherHud(); this.scheduleSave(); }
+      if (isDebug('coinFloor') && this.money < 5000) { this.money = 5000; this.publishWeatherHud(); this.scheduleSave(); }
       if (CATO_DEBUG_TILL && DEBUG_CLEAR_MAILBOX) { this.mailboxStore = []; this.mailboxHasMail = false; this.scheduleSave(); }
     } catch (e) {
       // Read failed — do NOT arm saving, so we can't clobber a save that exists
