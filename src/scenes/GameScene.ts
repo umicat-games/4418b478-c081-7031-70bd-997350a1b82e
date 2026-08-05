@@ -18,7 +18,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP } from '../sfx';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
 import {
@@ -2726,6 +2726,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const tree = this.trees.get(key);
     if (!tree || tree.busy) return;
+    playSfx(this, SFX_CHOP); // axe thunk (player + Cato) on each real tree strike
     tree.stage = tree.timer ? Math.min(tree.stage + 1, 3) : 1; // advance within the window, else restart
     tree.timer?.remove();
     tree.timer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { tree.stage = 0; tree.timer = undefined; });

@@ -10,6 +10,8 @@ export const SFX_CLICK = 'sfx-switch';
 export const SFX_SCROLL = 'sfx-scroll';
 /** The hoe/shovel dig thunk, played when the player's hoe strikes (loaded as `sfx-hoe`). */
 export const SFX_HOE = 'sfx-hoe';
+/** The axe chop thunk, played on each axe strike against a tree (loaded as `sfx-chop`). */
+export const SFX_CHOP = 'sfx-chop';
 
 function readVolume(): number {
   try {
