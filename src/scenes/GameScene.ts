@@ -6029,12 +6029,28 @@ export class GameScene extends Phaser.Scene {
     this.maybePlayIntro(); // new-game → Cato's scripted greeting + tool tour (once)
   }
 
-  /** New-game opening: put Cato at the house door and frame the house in the centre. */
+  /** New-game opening: put Cato at the doorway OUTSIDE the house (so he doesn't get
+   *  trapped wandering the interior) and frame the house in the centre. */
   private frameNewGameStart(): void {
     const door = this.houseDoor;
-    if (door && this.child) {
-      // Just in front of the doorway (the door faces DOWN/out of the house).
-      this.child.setPosition(door.x, door.y + TILE * 0.6);
+    const layer = this.islandLayer;
+    if (door && this.child && layer) {
+      const dt = layer.worldToTileXY(door.x, door.y);
+      let placed = false;
+      if (dt) {
+        // Step DOWN from the door until we leave the house FOOTPRINT (a cell with no
+        // `wooden_house` tile) onto walkable grass — that's the spot just outside the door.
+        for (let dy = 1; dy <= 5 && !placed; dy++) {
+          const cx = dt.x, cy = dt.y + dy;
+          const ht = this.wallLayer?.getTileAt(cx, cy);
+          const insideHouse = !!ht && ht.index !== -1;
+          if (!insideHouse && this.isWalkableCell(cx, cy)) {
+            const w = layer.tileToWorldXY(cx, cy);
+            if (w) { this.child.setPosition(w.x + TILE / 2, w.y + TILE / 2); placed = true; }
+          }
+        }
+      }
+      if (!placed) this.child.setPosition(door.x, door.y + TILE * 2); // fallback: clearly below
       (this.child.body as Phaser.Physics.Arcade.Body | undefined)?.reset(this.child.x, this.child.y);
     }
     const hc = this.houseCenter();
