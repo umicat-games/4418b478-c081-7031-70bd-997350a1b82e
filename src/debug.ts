@@ -22,7 +22,7 @@ export interface DebugFlagDef {
 
 export const DEBUG_FLAGS: DebugFlagDef[] = [
   { key: 'devTools',     labelKey: 'dbg_dev_tools',     def: true, reloadOnly: true },
-  { key: 'replayIntro',  labelKey: 'dbg_replay_intro',  def: true, reloadOnly: true },
+  { key: 'replayIntro',  labelKey: 'dbg_replay_intro',  def: false, reloadOnly: true },
   { key: 'coinFloor',    labelKey: 'dbg_coin_floor',    def: true },
   { key: 'clearMailbox', labelKey: 'dbg_clear_mailbox', def: true, reloadOnly: true },
 ];
