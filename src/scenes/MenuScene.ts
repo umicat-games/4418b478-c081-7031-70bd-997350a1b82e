@@ -432,26 +432,36 @@ export class MenuScene extends Phaser.Scene {
     const cx = lx + lw / 2; // centre on the LEFT content panel (settings has no right detail)
 
     // ── Volume sliders: Music (BGM) + SFX ────────────────────────────────────
-    this.renderVolumeSlider(c, cx, lw, 0.28 * H, 0.36 * H, t('settings_music'), getBgmVolume(), 'menuSettingsTrack');
-    this.renderVolumeSlider(c, cx, lw, 0.46 * H, 0.54 * H, t('settings_sfx'), getSfxVolume(), 'menuSfxTrack');
+    this.renderVolumeSlider(c, cx, lw, 0.26 * H, 0.335 * H, t('settings_music'), getBgmVolume(), 'menuSettingsTrack');
+    this.renderVolumeSlider(c, cx, lw, 0.43 * H, 0.505 * H, t('settings_sfx'), getSfxVolume(), 'menuSfxTrack');
 
     // ── "Title screen" button (styled like the title buttons) ────────────────
-    const bw = lw * 0.42, bh = bw * (32 / 96), by = 0.64 * H;
+    const bw = lw * 0.42, bh = bw * (32 / 96), by = 0.595 * H;
     if (this.textures.exists('ui_big_play_button')) {
       c.add(this.add.image(cx, by, 'ui_big_play_button', 'button-idle').setDisplaySize(bw, bh));
     }
     c.add(this.add.text(cx, by - bh * (2 / 32), t('menu_return_title'), { fontFamily: dialogFont(), color: '#9a6a3f', fontStyle: 'bold', fontSize: Math.round(bh * 0.34) + 'px', resolution: RES }).setOrigin(0.5, 0.5));
     this.registry.set('menuSettingsBack', { x: cx - bw / 2, y: by - bh / 2, w: bw, h: bh });
 
+    // ── "Clear data & new game" — wipes THIS user's save + returns to title so the
+    //    opening flow replays (red = destructive). ────────────────────────────
+    const cbw = lw * 0.52, cbh = H * 0.048, cby = 0.685 * H;
+    const cg = this.add.graphics();
+    cg.fillStyle(0xc85a54, 1); cg.fillRoundedRect(cx - cbw / 2, cby - cbh / 2, cbw, cbh, 8);
+    cg.lineStyle(2, 0xa2433f, 1); cg.strokeRoundedRect(cx - cbw / 2, cby - cbh / 2, cbw, cbh, 8);
+    c.add(cg);
+    c.add(this.add.text(cx, cby, t('settings_clear_data'), { fontFamily: dialogFont(), color: '#ffffff', fontStyle: 'bold', fontSize: Math.round(H * 0.022) + 'px', resolution: RES }).setOrigin(0.5, 0.5));
+    this.registry.set('menuClearData', { x: cx - cbw / 2, y: cby - cbh / 2, w: cbw, h: cbh });
+
     // ── Debug toggles (dev-only; DEBUG_PANEL=false hides before release) ──────
     if (!DEBUG_PANEL) { this.registry.set('menuDebugRows', []); return; }
-    c.add(this.T(cx, 0.71 * H, t('settings_debug'), H * 0.026, INK));
-    c.add(this.T(cx, 0.742 * H, t('settings_debug_note'), H * 0.016, SUB));
-    const rowW = lw * 0.66, rowLeft = cx - rowW / 2, rowH = H * 0.036, gap = H * 0.011;
-    const box = H * 0.024;
+    c.add(this.T(cx, 0.755 * H, t('settings_debug'), H * 0.024, INK));
+    c.add(this.T(cx, 0.782 * H, t('settings_debug_note'), H * 0.015, SUB));
+    const rowW = lw * 0.66, rowLeft = cx - rowW / 2, rowH = H * 0.033, gap = H * 0.009;
+    const box = H * 0.022;
     const rows: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
     DEBUG_FLAGS.forEach((f, i) => {
-      const ry = 0.765 * H + i * (rowH + gap), on = isDebug(f.key);
+      const ry = 0.803 * H + i * (rowH + gap), on = isDebug(f.key);
       const g = this.add.graphics();
       g.fillStyle(0x000000, 0.05); g.fillRoundedRect(rowLeft, ry, rowW, rowH, 6); c.add(g);
       const label = (f.reloadOnly ? '★ ' : '') + t(f.labelKey);

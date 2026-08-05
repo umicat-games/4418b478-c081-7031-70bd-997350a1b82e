@@ -113,6 +113,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   settings_sfx: { en: 'Sound', 'zh-CN': '音效' },
   start_play: { en: 'PLAY', 'zh-CN': '开始' },
   menu_return_title: { en: 'Title screen', 'zh-CN': '返回标题' },
+  settings_clear_data: { en: 'Clear data & new game', 'zh-CN': '清除数据 · 重新开始' },
   settings_debug: { en: 'Debug', 'zh-CN': '调试' },
   settings_debug_note: { en: '★ = applies after reload', 'zh-CN': '★ = 重新载入后生效' },
   dbg_dev_tools: { en: 'Dev keys & test tools', 'zh-CN': '开发快捷键 / 测试工具' },

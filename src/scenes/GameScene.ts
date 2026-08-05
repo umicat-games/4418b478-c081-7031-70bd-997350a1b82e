@@ -746,6 +746,10 @@ export class GameScene extends Phaser.Scene {
   // load (or a read error) can never let the default state overwrite the real
   // save before it's restored.
   private saveArmed = false;
+  // True when loadGame found NO existing save → this is a brand-new game: run the
+  // opening flow (Cato at the house door, camera framing the house, intro dialogue).
+  // Once the game auto-saves, the next entry loads progress + skips the flow.
+  private isNewGame = false;
   // Hide the world + hotbar until the save is restored, so there's no flash of
   // the empty/default farm before the saved crops+soil pop in.
   private gameReady = false;
@@ -3875,6 +3879,8 @@ export class GameScene extends Phaser.Scene {
       }
       const back = this.registry.get('menuSettingsBack') as { x: number; y: number; w: number; h: number } | null;
       if (back && x >= back.x && x <= back.x + back.w && y >= back.y && y <= back.y + back.h) { this.returnToTitle(); return true; }
+      const clr = this.registry.get('menuClearData') as { x: number; y: number; w: number; h: number } | null;
+      if (clr && x >= clr.x && x <= clr.x + clr.w && y >= clr.y && y <= clr.y + clr.h) { void this.clearDataAndReturnToTitle(); return true; }
       // Debug toggles: flip the flag (persists to localStorage) + re-render the checkbox.
       const dbg = this.registry.get('menuDebugRows') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
       const row = dbg?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
@@ -3888,6 +3894,17 @@ export class GameScene extends Phaser.Scene {
   /** Return to the title screen from the in-game SETTINGS tab: flush the save (so Play
    *  reloads this state), tear down the game's HUD/overlay scenes, and re-enter BootScene
    *  (which routes to the boot/title screen). */
+  /** Settings → wipe THIS user's save, then return to the title so the next Play
+   *  runs the full new-game opening flow (for testing the start experience).
+   *  Disarms + cancels any pending save first so nothing re-writes the delete. */
+  private async clearDataAndReturnToTitle(): Promise<void> {
+    this.saveArmed = false;
+    this.pendingSave?.remove();
+    try { await this.umicat?.saves.delete('state'); }
+    catch (e) { console.warn('[catopia] clear save failed', e); }
+    this.returnToTitle(); // saveGame() inside is a no-op now (saveArmed=false)
+  }
+
   private returnToTitle(): void {
     this.saveGame(); // fire-and-forget flush — the app stays alive, so it completes
     // Dissolve back to the title; tear down the game's overlays only once the screen
@@ -5819,7 +5836,10 @@ export class GameScene extends Phaser.Scene {
 
   /** After the save loads, play the intro ONCE on a brand-new save. */
   private maybePlayIntro(): void {
-    if (!isDebug('replayIntro') && this.dialogueSeen.has('intro')) return;
+    // The opening dialogue is part of the NEW-GAME flow — only a brand-new game
+    // (no save) plays it; a returning save skips straight to gameplay. `replayIntro`
+    // debug flag forces it every load for iterating on the script.
+    if (!isDebug('replayIntro') && !this.isNewGame) return;
     if (!this.cache.json.exists('dialogue-intro')) return;
     // A tiny beat so the world/HUD have settled before Cato greets.
     this.time.delayedCall(700, () => { if (!this.dialogOpen && !this.menuOpen) this.startDialogue('intro'); });
@@ -6001,8 +6021,44 @@ export class GameScene extends Phaser.Scene {
     if (c) {
       this.tweens.add({ targets: c, alpha: 0, duration: 250, onComplete: () => c.destroy() });
     }
+    // Framing: a brand-new game opens on the house (Cato at the door); a returning
+    // save centres the camera on the restored Cato.
+    if (this.isNewGame) this.frameNewGameStart();
+    else if (this.child) this.cameras.main.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
     finishTransition(this); // uncover the title→game wipe now that the world is ready
     this.maybePlayIntro(); // new-game → Cato's scripted greeting + tool tour (once)
+  }
+
+  /** New-game opening: put Cato at the house door and frame the house in the centre. */
+  private frameNewGameStart(): void {
+    const door = this.houseDoor;
+    if (door && this.child) {
+      // Just in front of the doorway (the door faces DOWN/out of the house).
+      this.child.setPosition(door.x, door.y + TILE * 0.6);
+      (this.child.body as Phaser.Physics.Arcade.Body | undefined)?.reset(this.child.x, this.child.y);
+    }
+    const hc = this.houseCenter();
+    if (hc) this.cameras.main.setScroll(hc.x - this.scale.width / 2, hc.y - this.scale.height / 2);
+    this.cameraFollow = false; // hold the framing; the player/tasks re-enable follow later
+  }
+
+  /** World centre of the default house = the bounds centre of the `wooden_house`
+   *  painted tiles; falls back to the door, then null. */
+  private houseCenter(): { x: number; y: number } | null {
+    const layer = this.wallLayer;
+    if (layer) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, found = false;
+      layer.forEachTile((t) => {
+        if (t && t.index !== -1) {
+          found = true;
+          const cx = t.getCenterX(), cy = t.getCenterY();
+          minX = Math.min(minX, cx); minY = Math.min(minY, cy);
+          maxX = Math.max(maxX, cx); maxY = Math.max(maxY, cy);
+        }
+      });
+      if (found) return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    }
+    return this.houseDoor ? { x: this.houseDoor.x, y: this.houseDoor.y } : null;
   }
 
   // ── Save data (auto-save + restore) ───────────────────────────────────
@@ -6076,7 +6132,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.umicat) { console.warn('[catopia][save] load skipped — no umicat'); return; }
     try {
       const s = await this.umicat.saves.get<SaveBlob>('state');
-      if (s && s.v >= 1 && s.v <= 11) this.applySave(s); // v1 pre-house … v10 no stamina
+      // Apply ANY valid save (applySave defaults each field, so newer/older blobs
+      // load cleanly). NO save at all → this is a brand-new game (opening flow).
+      if (s && typeof s.v === 'number' && s.v >= 1) this.applySave(s);
+      else this.isNewGame = true;
       // The store was read (found or empty) → NOW it's safe to overwrite it.
       this.saveArmed = true;
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
