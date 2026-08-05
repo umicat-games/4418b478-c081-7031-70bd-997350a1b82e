@@ -447,6 +447,7 @@ interface ForagObj {
   stage: number;
   timer: number;
   sprite: Phaser.GameObjects.Image;
+  body?: Phaser.GameObjects.Sprite; // solid collider — ONLY small-stones block Cato (rocks); the rest are passable
   sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
 
@@ -2945,7 +2946,16 @@ export class GameScene extends Phaser.Scene {
     this.removeForagable(cx!, cy!);
     const footX = w.x + TILE / 2, footY = w.y + TILE;
     const sprite = this.add.image(footX, footY, 'forage', `${type}-${stage}`).setOrigin(0.5, 1).setDepth(footY);
-    this.foragables.set(key, { type, stage, timer, sprite });
+    // Small-stones are ROCKS — solid, like the big-stones (Cato bumps them + routes
+    // around them). Grass / flowers / mushrooms stay passable (no body). isWalkableCell
+    // reads `type === 'small-stone'` so pathfinding matches the physics.
+    let body: Phaser.GameObjects.Sprite | undefined;
+    if (type === 'small-stone' && this.wallGroup) {
+      const b = this.wallGroup.create(footX, footY - 4, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+      b.setVisible(false).setDisplaySize(12, 8).refreshBody();
+      body = b;
+    }
+    this.foragables.set(key, { type, stage, timer, sprite, body });
   }
 
   /** Grow every foragable toward its max stage; the max stage stops (harvestable). */
@@ -2991,6 +3001,7 @@ export class GameScene extends Phaser.Scene {
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     this.foragables.delete(key);
     if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'forage', `${f.type}-${def.stages}`);
+    f.body?.destroy();
     f.sprite.destroy();
     this.addToChest(makeForage(f.type, def.yieldCount));
     this.catoReact('happy'); // gathered a wild foragable
@@ -3003,6 +3014,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const f = this.foragables.get(key);
     if (!f) return;
+    f.body?.destroy();
     f.sprite.destroy();
     this.foragables.delete(key);
   }
@@ -5400,7 +5412,8 @@ export class GameScene extends Phaser.Scene {
 
   /** True if Cato can stand on / walk through this tile: on the island, no solid
    *  tilemap tile, and nothing solid placed on it (wall / window / CLOSED door, a tree
-   *  trunk, or a big stone). Bushes / crops / foragables are passable. Mirrors exactly
+   *  trunk, a big stone, or a small-stone rock). Bushes / crops / other foragables
+   *  (grass / flowers / mushrooms) are passable. Mirrors exactly
    *  what physically blocks him (the wallGroup colliders + off-island water). */
   private isWalkableCell(cx: number, cy: number): boolean {
     const layer = this.islandLayer;
@@ -5424,6 +5437,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     if (this.houseBlocked.has(key)) return false; // solid furniture (bed/table/…)
     if (this.trees.has(key) || this.bigStones.has(key)) return false;
+    if (this.foragables.get(key)?.type === 'small-stone') return false; // small-stones are solid rocks
     const p = this.placed.get(key);
     if (p && (p.kind === 'wall' || p.kind === 'window' || (p.kind === 'door' && !p.open))) return false;
     return true;
