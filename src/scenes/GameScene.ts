@@ -3708,7 +3708,35 @@ export class GameScene extends Phaser.Scene {
     this.craftStation = reg.all().find(
       (go) => go.getData('entityAssetId') === 'work_station',
     ) as Phaser.GameObjects.Sprite | undefined;
-    if (this.craftStation && !this.ySortSprites.includes(this.craftStation)) this.ySortSprites.push(this.craftStation);
+    if (!this.craftStation) return;
+    if (!this.ySortSprites.includes(this.craftStation)) this.ySortSprites.push(this.craftStation);
+    // Solid, like the house furniture: Cato bumps it and routes around it. The station
+    // is a ~2-tile-tall sprite, so collide only its BOTTOM row (base footprint) — the
+    // upper part is walk-behind (y-sorted), so he can stand behind it, not through it.
+    const layer = this.islandLayer;
+    if (!layer || !this.wallGroup) return;
+    const b = this.craftStation.getBounds();
+    const inset = 2;
+    const bw = Math.max(4, b.width - inset * 2);
+    const bh = Math.min(TILE, Math.max(4, b.height - inset * 2)); // base row only
+    const cxWorld = b.centerX;
+    const cyWorld = b.bottom - inset - bh / 2; // sit the body on the base
+    const body = this.wallGroup.create(cxWorld, cyWorld, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+    body.setVisible(false).setDisplaySize(bw, bh).refreshBody();
+    // Block the base cell(s) for pathfinding (cell whose centre falls in the base box).
+    const t0 = layer.worldToTileXY(b.left + inset, cyWorld - bh / 2);
+    const t1 = layer.worldToTileXY(b.right - inset, b.bottom - inset);
+    if (t0 && t1) {
+      for (let cy = Math.floor(t0.y); cy <= Math.floor(t1.y); cy++) {
+        for (let cx = Math.floor(t0.x); cx <= Math.floor(t1.x); cx++) {
+          const c = layer.tileToWorldXY(cx, cy);
+          if (!c) continue;
+          const ccx = c.x + TILE / 2, ccy = c.y + TILE / 2;
+          if (ccx >= b.left + inset && ccx <= b.right - inset && ccy >= cyWorld - bh / 2 && ccy <= b.bottom - inset)
+            this.houseBlocked.add(`${cx},${cy}`);
+        }
+      }
+    }
   }
 
   private craftStationContains(wx: number, wy: number): boolean {
