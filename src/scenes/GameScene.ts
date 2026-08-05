@@ -19,7 +19,7 @@ import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
 import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP } from '../sfx';
-import { startTransition, finishTransition } from '../transition';
+import { coverAndReload, finishTransition } from '../transition';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
 import {
@@ -3894,29 +3894,28 @@ export class GameScene extends Phaser.Scene {
   /** Return to the title screen from the in-game SETTINGS tab: flush the save (so Play
    *  reloads this state), tear down the game's HUD/overlay scenes, and re-enter BootScene
    *  (which routes to the boot/title screen). */
-  /** Settings → wipe THIS user's save, then return to the title so the next Play
-   *  runs the full new-game opening flow (for testing the start experience).
-   *  Disarms + cancels any pending save first so nothing re-writes the delete. */
-  private async clearDataAndReturnToTitle(): Promise<void> {
+  /** Settings → wipe THIS user's save, then return to the title (a fresh reload) so
+   *  the next Play runs the full new-game opening flow. Disarms + cancels any pending
+   *  save first so nothing re-writes the delete. */
+  private clearDataAndReturnToTitle(): void {
     this.saveArmed = false;
     this.pendingSave?.remove();
-    try { await this.umicat?.saves.delete('state'); }
-    catch (e) { console.warn('[catopia] clear save failed', e); }
-    this.returnToTitle(); // saveGame() inside is a no-op now (saveArmed=false)
+    coverAndReload(this, 'dissolve', async () => {
+      try { await this.umicat?.saves.delete('state'); }
+      catch (e) { console.warn('[catopia] clear save failed', e); }
+      if (typeof window !== 'undefined') window.location.reload();
+    });
   }
 
+  /** Return to the title. Dissolve to white, flush the save, then HARD-RELOAD — a
+   *  reload (not a Phaser scene restart) because GameScene holds heavy state the
+   *  scene manager would NOT reset on a restart (the instance is reused), which hung
+   *  the second entry on "loading" (gameReady stayed true → markReady bailed). */
   private returnToTitle(): void {
-    this.saveGame(); // fire-and-forget flush — the app stays alive, so it completes
-    // Dissolve back to the title; tear down the game's overlays only once the screen
-    // is fully covered (no flash of the HUD vanishing). BootMenuScene uncovers it.
-    startTransition(this, 'BootScene', {}, {
-      effect: 'dissolve',
-      onCovered: () => {
-        this.closeMenu();
-        for (const k of ['HotbarScene', 'WeatherScene', 'PaletteScene', 'ConfirmScene', 'ReceiptScene', 'ChatterScene', 'MenuScene', 'CraftScene', 'CursorScene', 'UmicatHud']) {
-          if (this.scene.get(k)) this.scene.stop(k);
-        }
-      },
+    coverAndReload(this, 'dissolve', async () => {
+      try { if (this.umicat && this.saveArmed && !this.loadingSave) await this.umicat.saves.set('state', this.buildSave()); }
+      catch (e) { console.warn('[catopia] save flush before title failed', e); }
+      if (typeof window !== 'undefined') window.location.reload();
     });
   }
 

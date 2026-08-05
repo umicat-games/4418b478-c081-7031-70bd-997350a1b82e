@@ -32,3 +32,17 @@ export function startTransition(from: Phaser.Scene, toKey: string, data: object 
 export function finishTransition(scene: Phaser.Scene): void {
   (scene.scene.get('TransitionScene') as TransitionScene | undefined)?.done();
 }
+
+/**
+ * Cover the screen with `effect`, then run `onCovered` and STOP (no scene switch,
+ * no reveal). For return-to-title, which HARD-RELOADS the page — a reload (not a
+ * Phaser scene restart) is used because the heavy game scene's instance is reused
+ * across restarts and its state (gameReady, world collections…) wouldn't reset,
+ * hanging the second entry on "loading". `onCovered` may be async (e.g. flush the
+ * save, then `window.location.reload()`).
+ */
+export function coverAndReload(from: Phaser.Scene, effect: TransitionEffect, onCovered: () => void): void {
+  const ts = from.scene.get('TransitionScene') as TransitionScene | undefined;
+  if (!ts || !from.scene.isActive('TransitionScene')) { onCovered(); return; }
+  ts.coverAndHold(effect, onCovered);
+}

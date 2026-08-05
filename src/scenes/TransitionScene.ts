@@ -67,21 +67,42 @@ export class TransitionScene extends Phaser.Scene {
     // so the fade survives the switch). The new scene's crossToBgm swells its track in.
     fadeBgmTo(this, 0, this.ms);
 
-    const covered = (): void => {
+    this.animateCover(() => {
       opts.onCovered?.();
       from.scene.start(toKey, data);
       this.safety = this.time.delayedCall(8000, () => this.done()); // backstop if the scene never calls finish
-    };
+    });
+  }
 
+  /** Cover the screen with `effect`, then run `onCovered` — and STOP (no scene
+   *  switch / no reveal). For a caller that hard-reloads or navigates away
+   *  (return-to-title reloads to guarantee a clean slate). */
+  coverAndHold(effect: TransitionEffect, onCovered: () => void, opts: { color?: number; ms?: number } = {}): void {
+    if (this.busy) return;
+    this.busy = true;
+    this.effect = effect;
+    this.ms = opts.ms ?? DEF_MS;
+    this.focus = undefined;
+    const W = this.scale.width, H = this.scale.height;
+    this.scene.bringToTop();
+    this.curtain.clearMask();
+    this.curtain.setFillStyle(opts.color ?? DEF_COLOR, 1).setSize(W, H).setPosition(0, 0).setAlpha(1).setVisible(true);
+    fadeBgmTo(this, 0, this.ms);
+    this.animateCover(onCovered);
+  }
+
+  /** The `effect`-specific cover tween (curtain already set up). */
+  private animateCover(onComplete: () => void): void {
+    const W = this.scale.width, H = this.scale.height;
     if (this.effect === 'circle') {
       const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
       this.holeG.setPosition(fx, fy);
       this.curtain.setMask(this.mask);
-      this.tweens.add({ targets: this.holeG, scale: { from: this.maxRadius(fx, fy) / HOLE_BASE, to: 0 }, duration: this.ms, ease: 'Sine.easeIn', onComplete: covered });
+      this.tweens.add({ targets: this.holeG, scale: { from: this.maxRadius(fx, fy) / HOLE_BASE, to: 0 }, duration: this.ms, ease: 'Sine.easeIn', onComplete });
     } else if (this.effect === 'slide') {
-      this.tweens.add({ targets: this.curtain, x: { from: -W, to: 0 }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete: covered });
+      this.tweens.add({ targets: this.curtain, x: { from: -W, to: 0 }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete });
     } else {
-      this.tweens.add({ targets: this.curtain, alpha: { from: 0, to: 1 }, duration: this.ms, ease: 'Sine.easeInOut', onComplete: covered });
+      this.tweens.add({ targets: this.curtain, alpha: { from: 0, to: 1 }, duration: this.ms, ease: 'Sine.easeInOut', onComplete });
     }
   }
 
