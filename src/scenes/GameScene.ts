@@ -18,7 +18,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL } from '../sfx';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
 import {
@@ -3860,12 +3860,14 @@ export class GameScene extends Phaser.Scene {
       if (track && x >= track.x && x <= track.x + track.w && y >= track.y && y <= track.y + track.h) {
         setBgmVolume(this, Phaser.Math.Clamp((x - track.x) / track.w, 0, 1));
         this.publishMenu(); // re-render the slider fill/knob
+        playSfx(this, SFX_SCROLL);
         return true;
       }
       const sfxTrack = this.registry.get('menuSfxTrack') as { x: number; y: number; w: number; h: number } | null;
       if (sfxTrack && x >= sfxTrack.x && x <= sfxTrack.x + sfxTrack.w && y >= sfxTrack.y && y <= sfxTrack.y + sfxTrack.h) {
-        setSfxVolume(this, Phaser.Math.Clamp((x - sfxTrack.x) / sfxTrack.w, 0, 1)); // plays a preview blip
+        setSfxVolume(this, Phaser.Math.Clamp((x - sfxTrack.x) / sfxTrack.w, 0, 1));
         this.publishMenu();
+        playSfx(this, SFX_SCROLL); // scrub tick at the new SFX level
         return true;
       }
       const back = this.registry.get('menuSettingsBack') as { x: number; y: number; w: number; h: number } | null;

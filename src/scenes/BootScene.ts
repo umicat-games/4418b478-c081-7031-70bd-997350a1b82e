@@ -56,8 +56,10 @@ export class BootScene extends Phaser.Scene {
     // `bgm` in-game (GameScene); crossToBgm swaps them on the title→game switch.
     this.load.audio('bgm', 'uploaded/catopia-background-music-1.mp3');
     this.load.audio('bgm-title', 'uploaded/catopia-title-screen-background-music.mp3');
-    // UI click / switch SFX (button taps, open bag / mailbox / chest) — see src/sfx.ts.
+    // UI SFX (see src/sfx.ts): `sfx-switch` = button/open click; `sfx-scroll` = the
+    // scrub tick when dragging a settings volume slider.
     this.load.audio('sfx-switch', 'uploaded/switch_006.ogg');
+    this.load.audio('sfx-scroll', 'uploaded/scroll_001.ogg');
     // Cato's stamina gauge: a 16×16 radial pie (37 frames, empty→full; colour purple→
     // orange→green). frame = round(fraction*36). Shown over his head while he works.
     this.load.spritesheet('stamina', 'uploaded/stamina_circle_with_white_outline_sprite_sheet.png', { frameWidth: 16, frameHeight: 16 });

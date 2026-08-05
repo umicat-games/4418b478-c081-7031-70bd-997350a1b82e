@@ -1,8 +1,22 @@
 import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { getBgmVolume, setBgmVolume } from '../bgm';
-import { playSfx } from '../sfx';
+import { playSfx, getSfxVolume, setSfxVolume, SFX_SCROLL } from '../sfx';
 import type { BootMenuScene } from './BootMenuScene';
+
+/** One volume slider in the title modal (Music or SFX). */
+interface Slider {
+  panelY: number;                                   // panel-local y (of 122)
+  get: () => number;                                // current volume
+  set: (scene: Phaser.Scene, v: number) => void;    // setBgmVolume / setSfxVolume
+  labelText: Phaser.GameObjects.Text;
+  ticks: Phaser.GameObjects.Image[];
+  knob: Phaser.GameObjects.Image;
+  hit: Phaser.GameObjects.Rectangle;
+  trackLeft: number;
+  trackW: number;
+  step: number;                                     // last tick-step (for the scrub sound)
+}
 
 /**
  * Title-screen menu overlay — a native-px scene launched ABOVE BootMenuScene (the
@@ -50,15 +64,9 @@ export class SettingsScene extends Phaser.Scene {
   private modal!: Phaser.GameObjects.Container;
   private dim!: Phaser.GameObjects.Rectangle;
   private panel!: Phaser.GameObjects.Image;
-  private label!: Phaser.GameObjects.Text;
-  private ticks: Phaser.GameObjects.Image[] = [];
-  private knob!: Phaser.GameObjects.Image;
-  private sliderHit!: Phaser.GameObjects.Rectangle;
-
-  // slider geometry (screen px), recomputed in layout()
-  private trackLeft = 0;
-  private trackW = 0;
-  private dragging = false;
+  // Two volume sliders (Music + SFX); geometry recomputed in layout().
+  private sliders: Slider[] = [];
+  private dragSlider: Slider | null = null;
 
   constructor() {
     super({ key: 'SettingsScene' });
@@ -74,23 +82,18 @@ export class SettingsScene extends Phaser.Scene {
     this.dim.on('pointerdown', () => this.close()); // tap outside the panel closes
     this.panel = this.add.image(0, 0, 'settings-menu', 'settings-panel').setInteractive(); // swallow taps on the panel
     this.panel.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => ev.stopPropagation());
-    this.label = this.add.text(0, 0, t('settings_music'), { fontFamily: dialogFont(), color: '#ffffff' }).setOrigin(0, 0.5);
 
-    this.ticks = [];
-    for (let i = 0; i < SLIDER_N; i++) {
-      this.ticks.push(this.add.image(0, 0, 'settings-buttons', 'slider-tick-off').setOrigin(0.5, 0.5));
-    }
-    this.knob = this.add.image(0, 0, 'settings-buttons', 'slider-knob').setOrigin(0.5, 0.5);
-    this.sliderHit = this.add.rectangle(0, 0, 10, 10, 0xffffff, 0).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
-    this.sliderHit.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
-      ev.stopPropagation();
-      this.dragging = true;
-      this.setVolFromX(p.x);
-    });
-    this.input.on(Phaser.Input.Events.POINTER_MOVE, (p: Phaser.Input.Pointer) => { if (this.dragging) this.setVolFromX(p.x); });
-    this.input.on(Phaser.Input.Events.POINTER_UP, () => { this.dragging = false; });
+    // Two sliders stacked in the panel (Music above, SFX below).
+    this.sliders = [
+      this.makeSlider('settings_music', 62, getBgmVolume, (sc, v) => setBgmVolume(sc, v)),
+      this.makeSlider('settings_sfx', 98, getSfxVolume, (sc, v) => setSfxVolume(sc, v)),
+    ];
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, (p: Phaser.Input.Pointer) => { if (this.dragSlider) this.setVolFromX(this.dragSlider, p.x); });
+    this.input.on(Phaser.Input.Events.POINTER_UP, () => { this.dragSlider = null; });
 
-    this.modal = this.add.container(0, 0, [this.dim, this.panel, this.label, ...this.ticks, this.knob, this.sliderHit]).setDepth(20).setVisible(false);
+    const parts: Phaser.GameObjects.GameObject[] = [this.dim, this.panel];
+    for (const s of this.sliders) parts.push(s.labelText, ...s.ticks, s.knob, s.hit);
+    this.modal = this.add.container(0, 0, parts).setDepth(20).setVisible(false);
 
     this.input.keyboard?.on('keydown-ESC', () => { if (this.open) this.close(); });
 
@@ -168,26 +171,41 @@ export class SettingsScene extends Phaser.Scene {
     this.dim.setPosition(0, 0).setSize(W, H);
     this.panel.setPosition(W / 2, H / 2).setDisplaySize(panelW, panelH);
 
-    // Music row — panel-local y≈82 of 122 (below the baked SETTINGS title + underline).
-    const rowY = panelTop + 82 * ps;
-    this.label.setPosition(panelLeft + 14 * ps, rowY).setFontSize(Math.round(11 * ps));
-
-    // Slider track: from x≈50 (right of the label, clear of the knob at vol 0) to
-    // x≈96 (panel-local, of 106 — a hair of clearance from the rounded edge).
-    this.trackLeft = panelLeft + 50 * ps;
-    const trackRight = panelLeft + 96 * ps;
-    this.trackW = trackRight - this.trackLeft;
-    const pitch = this.trackW / SLIDER_N;
-    const tickScale = (pitch * 0.62) / 4; // tick native w=4
-    for (let i = 0; i < SLIDER_N; i++) {
-      this.ticks[i].setScale(tickScale).setPosition(this.trackLeft + (i + 0.5) * pitch, rowY);
+    // Each slider row: label at panel-local x≈14, track x≈50→96 (of 106), at its
+    // own panel-local y (below the baked SETTINGS title + underline).
+    for (const s of this.sliders) {
+      const rowY = panelTop + s.panelY * ps;
+      s.labelText.setPosition(panelLeft + 14 * ps, rowY).setFontSize(Math.round(10 * ps));
+      s.trackLeft = panelLeft + 50 * ps;
+      const trackRight = panelLeft + 96 * ps;
+      s.trackW = trackRight - s.trackLeft;
+      const pitch = s.trackW / SLIDER_N;
+      const tickScale = (pitch * 0.62) / 4; // tick native w=4
+      s.ticks.forEach((tk, i) => tk.setScale(tickScale).setPosition(s.trackLeft + (i + 0.5) * pitch, rowY));
+      s.knob.setScale(tickScale * 1.2).setPosition(s.trackLeft, rowY);
+      const hitH = 26 * ps;
+      s.hit.setPosition((s.trackLeft + trackRight) / 2, rowY).setSize(s.trackW + pitch, hitH);
+      s.hit.input && (s.hit.input.hitArea = new Phaser.Geom.Rectangle(0, 0, s.trackW + pitch, hitH));
+      this.renderVol(s);
     }
-    this.knob.setScale(tickScale * 1.2).setPosition(this.trackLeft, rowY);
-    this.sliderHit.setPosition((this.trackLeft + trackRight) / 2, rowY).setSize(this.trackW + pitch, 30 * ps);
-    this.sliderHit.input && (this.sliderHit.input.hitArea = new Phaser.Geom.Rectangle(0, 0, this.trackW + pitch, 30 * ps));
-
-    this.renderVol(getBgmVolume());
   };
+
+  /** Build one slider (label + N ticks + knob + a transparent drag hit-rect). */
+  private makeSlider(labelKey: string, panelY: number, get: () => number, set: (scene: Phaser.Scene, v: number) => void): Slider {
+    const labelText = this.add.text(0, 0, t(labelKey), { fontFamily: dialogFont(), color: '#ffffff' }).setOrigin(0, 0.5);
+    const ticks: Phaser.GameObjects.Image[] = [];
+    for (let i = 0; i < SLIDER_N; i++) ticks.push(this.add.image(0, 0, 'settings-buttons', 'slider-tick-off').setOrigin(0.5, 0.5));
+    const knob = this.add.image(0, 0, 'settings-buttons', 'slider-knob').setOrigin(0.5, 0.5);
+    const hit = this.add.rectangle(0, 0, 10, 10, 0xffffff, 0).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    const s: Slider = { panelY, get, set, labelText, ticks, knob, hit, trackLeft: 0, trackW: 0, step: -1 };
+    hit.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
+      ev.stopPropagation();
+      this.dragSlider = s;
+      s.step = -1;
+      this.setVolFromX(s, p.x);
+    });
+    return s;
+  }
 
   /** Place Play at the authored anchor's projected screen position + Settings just
    *  below, both at the anchor's on-screen scale. Falls back to bottom-centre. */
@@ -221,34 +239,36 @@ export class SettingsScene extends Phaser.Scene {
     boot?.startGame();
   }
 
-  private setVolFromX(px: number): void {
-    const vol = Phaser.Math.Clamp((px - this.trackLeft) / this.trackW, 0, 1);
-    setBgmVolume(this, vol);
-    this.renderVol(vol);
+  private setVolFromX(s: Slider, px: number): void {
+    const vol = Phaser.Math.Clamp((px - s.trackLeft) / s.trackW, 0, 1);
+    s.set(this, vol);       // setBgmVolume / setSfxVolume (updates the live level first)
+    this.renderVol(s);
+    // Scrub tick — play `sfx-scroll` once per tick-step crossed while dragging (so a
+    // full sweep plays ~N blips, a ratchet feel; the SFX slider is heard at its new level).
+    const step = Math.round(vol * SLIDER_N);
+    if (step !== s.step) { s.step = step; playSfx(this, SFX_SCROLL); }
   }
 
-  /** Update the tick fill + knob position for a volume (no side effects). */
-  private renderVol(vol: number): void {
-    const knobX = this.trackLeft + vol * this.trackW;
-    this.knob.setX(knobX);
-    for (let i = 0; i < SLIDER_N; i++) {
-      const on = this.ticks[i].x <= knobX + 0.5;
-      this.ticks[i].setFrame(on ? 'slider-tick-on' : 'slider-tick-off');
-    }
+  /** Update a slider's tick fill + knob position from its current value (no side effects). */
+  private renderVol(s: Slider): void {
+    const vol = s.get();
+    const knobX = s.trackLeft + vol * s.trackW;
+    s.knob.setX(knobX);
+    for (const tk of s.ticks) tk.setFrame(tk.x <= knobX + 0.5 ? 'slider-tick-on' : 'slider-tick-off');
   }
 
   private toggle(): void { this.open ? this.close() : this.openModal(); }
 
   private openModal(): void {
     this.open = true;
-    this.renderVol(getBgmVolume());
+    for (const s of this.sliders) this.renderVol(s);
     this.modal.setVisible(true);
   }
 
   private close(): void {
     if (!this.open) return;
     this.open = false;
-    this.dragging = false;
+    this.dragSlider = null;
     this.modal.setVisible(false);
   }
 }

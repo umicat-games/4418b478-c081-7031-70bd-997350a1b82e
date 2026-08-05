@@ -6,6 +6,8 @@ import Phaser from 'phaser';
 const VOL_KEY = 'catopia:sfxVolume';
 /** The default UI click/switch sound (loaded in BootScene as `sfx-switch`). */
 export const SFX_CLICK = 'sfx-switch';
+/** A short scrub tick for dragging a slider (loaded as `sfx-scroll`). */
+export const SFX_SCROLL = 'sfx-scroll';
 
 function readVolume(): number {
   try {
@@ -31,11 +33,10 @@ export function playSfx(scene: Phaser.Scene, key: string = SFX_CLICK): void {
   mgr.play(key, { volume: sfxVolume });
 }
 
-/** Set the SFX volume live: clamp 0..1, persist, and play a preview blip at the
- *  new level (so the slider is audible — a one-shot bus has no running track to
- *  re-level like the BGM does). */
-export function setSfxVolume(scene: Phaser.Scene, v: number): void {
+/** Set the SFX volume live: clamp 0..1 + persist. Audible feedback is the caller's
+ *  job — the slider plays `SFX_SCROLL` as it moves (at the new level, so the SFX
+ *  slider is heard getting louder/quieter). */
+export function setSfxVolume(_scene: Phaser.Scene, v: number): void {
   sfxVolume = Phaser.Math.Clamp(v, 0, 1);
   try { localStorage.setItem(VOL_KEY, String(sfxVolume)); } catch { /* ignore */ }
-  playSfx(scene); // audible feedback at the chosen level
 }
