@@ -45,7 +45,9 @@ export class BootMenuScene extends Phaser.Scene {
     const reg = getEntityRegistry(this);
 
     // Title-screen BGM (its own track; stops the in-game one if it were playing).
-    crossToBgm(this, 'bgm-title', ['bgm']);
+    // Swell in from silence — paired with the transition wipe (return-to-title ducks
+    // the game track out); also a soft intro on a cold boot.
+    crossToBgm(this, 'bgm-title', ['bgm'], 700);
 
     // Dim MASK between the busy island scene (depth 0–10) and the UI, so the title /
     // mascot / Play button (all above depth 50) pop instead of fighting the background.

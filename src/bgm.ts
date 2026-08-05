@@ -53,16 +53,40 @@ export function setBgmVolume(scene: Phaser.Scene, v: number): void {
  * in-game, so they play different tracks. Volume comes from the persisted
  * `bgmVolume` (the settings slider) so the level survives the switch.
  */
-export function crossToBgm(scene: Phaser.Scene, key: string, stopKeys: string[] = []): void {
+export function crossToBgm(scene: Phaser.Scene, key: string, stopKeys: string[] = [], fadeInMs = 0): void {
   const mgr = scene.sound;
   if (!scene.cache.audio.exists(key)) return;
   const go = (): void => {
     for (const k of stopKeys) for (const s of mgr.getAll(k)) if (s.isPlaying) s.stop();
     let snd = mgr.getAll(key)[0];
     if (!snd) snd = mgr.add(key, { loop: true, volume: bgmVolume });
-    (snd as Phaser.Sound.WebAudioSound).setVolume?.(bgmVolume);
     if (!snd.isPlaying) snd.play();
+    const sw = snd as Phaser.Sound.WebAudioSound;
+    if (fadeInMs > 0) {
+      // Swell in from silence (paired with the scene-transition duck-out) → the new
+      // scene's music rises as the wipe reveals it. Tween on `scene` (persists).
+      scene.tweens.killTweensOf(snd);
+      sw.setVolume?.(0);
+      scene.tweens.add({ targets: snd, volume: bgmVolume, duration: fadeInMs });
+    } else {
+      sw.setVolume?.(bgmVolume);
+    }
   };
   if (mgr.locked) mgr.once(Phaser.Sound.Events.UNLOCKED, go);
   else go();
+}
+
+/**
+ * Fade every currently-playing BGM track to `toVol` over `ms`, using `scene`'s
+ * tweens. Pass a PERSISTENT scene (the TransitionScene) so the fade survives the
+ * scene switch — this is the transition's "duck the outgoing music to silence as
+ * the screen covers" half. No-op if nothing is playing.
+ */
+export function fadeBgmTo(scene: Phaser.Scene, toVol: number, ms: number): void {
+  const mgr = scene.sound;
+  const sounds: Phaser.Sound.BaseSound[] = [];
+  for (const k of BGM_KEYS) for (const s of mgr.getAll(k)) if (s.isPlaying) sounds.push(s);
+  if (!sounds.length) return;
+  scene.tweens.killTweensOf(sounds);
+  scene.tweens.add({ targets: sounds, volume: toVol, duration: ms });
 }

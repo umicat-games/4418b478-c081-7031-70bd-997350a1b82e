@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { fadeBgmTo } from '../bgm';
 
 export type TransitionEffect = 'circle' | 'slide' | 'dissolve';
 
@@ -62,6 +63,9 @@ export class TransitionScene extends Phaser.Scene {
     this.scene.bringToTop();
     this.curtain.clearMask();
     this.curtain.setFillStyle(opts.color ?? DEF_COLOR, 1).setSize(W, H).setPosition(0, 0).setAlpha(1).setVisible(true);
+    // Duck the outgoing music to silence as the screen covers (this scene persists,
+    // so the fade survives the switch). The new scene's crossToBgm swells its track in.
+    fadeBgmTo(this, 0, this.ms);
 
     const covered = (): void => {
       opts.onCovered?.();

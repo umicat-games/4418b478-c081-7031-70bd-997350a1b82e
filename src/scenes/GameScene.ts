@@ -827,8 +827,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
-    // In-game BGM (its own track): stop the title track and loop the game one.
-    crossToBgm(this, 'bgm', ['bgm-title']);
+    // In-game BGM (its own track): stop the title track and swell the game one in
+    // (fade paired with the scene-transition wipe — see TransitionScene / src/bgm.ts).
+    crossToBgm(this, 'bgm', ['bgm-title'], 700);
     // Set zoom BEFORE awaiting scene load so the first frame is already correct.
     this.cameras.main.setZoom(this.computeZoom());
     // Kept ON for crisp pixel-art. The trade: the world scroll snaps to whole pixels,
