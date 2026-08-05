@@ -6036,25 +6036,30 @@ export class GameScene extends Phaser.Scene {
     const layer = this.islandLayer;
     if (door && this.child && layer) {
       const dt = layer.worldToTileXY(door.x, door.y);
-      let placed = false;
+      // Step DOWN from the door tile past the house FOOTPRINT (cells with a
+      // `wooden_house` tile) to the first walkable grass; then one more tile so his
+      // (tall) body clears the wall — he stands clearly OUTSIDE, in front of the door.
+      let out: { cx: number; cy: number } | null = null;
       if (dt) {
-        // Step DOWN from the door until we leave the house FOOTPRINT (a cell with no
-        // `wooden_house` tile) onto walkable grass — that's the spot just outside the door.
-        for (let dy = 1; dy <= 5 && !placed; dy++) {
+        for (let dy = 1; dy <= 6 && !out; dy++) {
           const cx = dt.x, cy = dt.y + dy;
           const ht = this.wallLayer?.getTileAt(cx, cy);
           const insideHouse = !!ht && ht.index !== -1;
-          if (!insideHouse && this.isWalkableCell(cx, cy)) {
-            const w = layer.tileToWorldXY(cx, cy);
-            if (w) { this.child.setPosition(w.x + TILE / 2, w.y + TILE / 2); placed = true; }
-          }
+          if (!insideHouse && this.isWalkableCell(cx, cy)) out = { cx, cy };
         }
       }
-      if (!placed) this.child.setPosition(door.x, door.y + TILE * 2); // fallback: clearly below
+      if (out && this.isWalkableCell(out.cx, out.cy + 1)) out.cy += 1; // one tile clear of the wall
+      const w = out ? layer.tileToWorldXY(out.cx, out.cy) : null;
+      if (w) this.child.setPosition(w.x + TILE / 2, w.y + TILE / 2);
+      else this.child.setPosition(door.x, door.y + TILE * 2.5); // fallback: clearly below
       (this.child.body as Phaser.Physics.Arcade.Body | undefined)?.reset(this.child.x, this.child.y);
     }
+    // Frame the house, but centre VERTICALLY on the doorway (not the house middle) so
+    // the leash — which pulls Cato toward the camera centre — keeps him at the door
+    // OUTSIDE, instead of dragging him into the interior (where he'd get stuck).
     const hc = this.houseCenter();
-    if (hc) this.cameras.main.setScroll(hc.x - this.scale.width / 2, hc.y - this.scale.height / 2);
+    const camY = door ? door.y : (hc ? hc.y : this.child?.y ?? 0);
+    if (hc) this.cameras.main.setScroll(hc.x - this.scale.width / 2, camY - this.scale.height / 2);
     this.cameraFollow = false; // hold the framing; the player/tasks re-enable follow later
   }
 
