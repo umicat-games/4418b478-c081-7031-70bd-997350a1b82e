@@ -18,7 +18,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE } from '../sfx';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
 import {
@@ -4649,6 +4649,7 @@ export class GameScene extends Phaser.Scene {
       struck = true;
       if (this.hoeSwing === hoe) this.hoeSwing = undefined;
       hoe.destroy();
+      playSfx(this, SFX_HOE); // dig thunk as the hoe lands
       onStrike();
     };
     hoe.once(Phaser.Animations.Events.ANIMATION_COMPLETE, strike);

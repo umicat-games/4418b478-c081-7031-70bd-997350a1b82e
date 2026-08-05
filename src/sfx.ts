@@ -8,6 +8,8 @@ const VOL_KEY = 'catopia:sfxVolume';
 export const SFX_CLICK = 'sfx-switch';
 /** A short scrub tick for dragging a slider (loaded as `sfx-scroll`). */
 export const SFX_SCROLL = 'sfx-scroll';
+/** The hoe/shovel dig thunk, played when the player's hoe strikes (loaded as `sfx-hoe`). */
+export const SFX_HOE = 'sfx-hoe';
 
 function readVolume(): number {
   try {
