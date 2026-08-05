@@ -5425,6 +5425,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.islandLayer) return;
       const w = this.islandLayer.tileToWorldXY(cx, cy);
       if (w) this.dirtBurst(w.x + TILE / 2, w.y + TILE / 2);
+      playSfx(this, SFX_HOE); // Cato's hoe thunk (matches the player's)
       this.refreshSoil(cx, cy);
       this.refreshSoil(cx, cy - 1);
       this.refreshSoil(cx + 1, cy);
