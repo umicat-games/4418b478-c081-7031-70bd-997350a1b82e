@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { getBgmVolume, setBgmVolume } from '../bgm';
+import { playSfx } from '../sfx';
 import type { BootMenuScene } from './BootMenuScene';
 
 /**
@@ -118,7 +119,7 @@ export class SettingsScene extends Phaser.Scene {
     // Press feedback is the pressed-down FRAME only (no press-shrink — scaling would
     // shrink the hit area and drop edge taps). Hover grows the container (enlarges the
     // hit area, fine). `pointerupoutside` still counts so a tiny drift off is forgiven.
-    const release = (over: boolean): void => { if (!pressed) return; pressed = false; setFrame(false); container.setScale(1); if (over) onTap(); };
+    const release = (over: boolean): void => { if (!pressed) return; pressed = false; setFrame(false); container.setScale(1); if (over) { playSfx(this); onTap(); } };
     bg.on('pointerover', () => { if (!pressed) container.setScale(1.05); });
     bg.on('pointerout', () => { pressed = false; setFrame(false); container.setScale(1); });
     bg.on('pointerdown', () => { pressed = true; setFrame(true); });

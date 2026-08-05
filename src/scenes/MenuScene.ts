@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { renderActionMenu, renderKeypad, renderSlotPicker, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
 import { getBgmVolume } from '../bgm';
+import { getSfxVolume } from '../sfx';
 import { DEBUG_FLAGS, DEBUG_PANEL, isDebug } from '../debug';
 import type { MailListEntry } from './menu-types';
 
@@ -430,25 +431,12 @@ export class MenuScene extends Phaser.Scene {
     const W = this.scale.width, H = this.scale.height;
     const cx = lx + lw / 2; // centre on the LEFT content panel (settings has no right detail)
 
-    // ── Music volume slider ──────────────────────────────────────────────────
-    c.add(this.T(cx, 0.35 * H, t('settings_music'), H * 0.03, INK));
-    const N = 10;
-    const trackW = lw * 0.5, trackLeft = cx - trackW / 2, rowY = 0.45 * H;
-    const pitch = trackW / N;
-    const vol = getBgmVolume();
-    const knobX = trackLeft + vol * trackW;
-    if (this.textures.exists('settings-buttons')) {
-      const tickScale = (pitch * 0.6) / 4; // tick native w=4
-      for (let i = 0; i < N; i++) {
-        const x = trackLeft + (i + 0.5) * pitch;
-        c.add(this.add.image(x, rowY, 'settings-buttons', x <= knobX + 0.5 ? 'slider-tick-on' : 'slider-tick-off').setScale(tickScale));
-      }
-      c.add(this.add.image(knobX, rowY, 'settings-buttons', 'slider-knob').setScale(tickScale * 1.2));
-    }
-    this.registry.set('menuSettingsTrack', { x: trackLeft, y: rowY - pitch, w: trackW, h: pitch * 2 });
+    // ── Volume sliders: Music (BGM) + SFX ────────────────────────────────────
+    this.renderVolumeSlider(c, cx, lw, 0.28 * H, 0.36 * H, t('settings_music'), getBgmVolume(), 'menuSettingsTrack');
+    this.renderVolumeSlider(c, cx, lw, 0.46 * H, 0.54 * H, t('settings_sfx'), getSfxVolume(), 'menuSfxTrack');
 
     // ── "Title screen" button (styled like the title buttons) ────────────────
-    const bw = lw * 0.42, bh = bw * (32 / 96), by = 0.66 * H;
+    const bw = lw * 0.42, bh = bw * (32 / 96), by = 0.64 * H;
     if (this.textures.exists('ui_big_play_button')) {
       c.add(this.add.image(cx, by, 'ui_big_play_button', 'button-idle').setDisplaySize(bw, bh));
     }
@@ -457,13 +445,13 @@ export class MenuScene extends Phaser.Scene {
 
     // ── Debug toggles (dev-only; DEBUG_PANEL=false hides before release) ──────
     if (!DEBUG_PANEL) { this.registry.set('menuDebugRows', []); return; }
-    c.add(this.T(cx, 0.75 * H, t('settings_debug'), H * 0.026, INK));
-    c.add(this.T(cx, 0.785 * H, t('settings_debug_note'), H * 0.016, SUB));
-    const rowW = lw * 0.66, rowLeft = cx - rowW / 2, rowH = H * 0.038, gap = H * 0.012;
-    const box = H * 0.026;
+    c.add(this.T(cx, 0.71 * H, t('settings_debug'), H * 0.026, INK));
+    c.add(this.T(cx, 0.742 * H, t('settings_debug_note'), H * 0.016, SUB));
+    const rowW = lw * 0.66, rowLeft = cx - rowW / 2, rowH = H * 0.036, gap = H * 0.011;
+    const box = H * 0.024;
     const rows: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
     DEBUG_FLAGS.forEach((f, i) => {
-      const ry = 0.81 * H + i * (rowH + gap), on = isDebug(f.key);
+      const ry = 0.765 * H + i * (rowH + gap), on = isDebug(f.key);
       const g = this.add.graphics();
       g.fillStyle(0x000000, 0.05); g.fillRoundedRect(rowLeft, ry, rowW, rowH, 6); c.add(g);
       const label = (f.reloadOnly ? '★ ' : '') + t(f.labelKey);
@@ -477,6 +465,27 @@ export class MenuScene extends Phaser.Scene {
       rows.push({ x: rowLeft, y: ry, w: rowW, h: rowH, key: f.key });
     });
     this.registry.set('menuDebugRows', rows);
+  }
+
+  /** One labelled tick-and-knob volume slider centred on the left panel. Publishes
+   *  its tap-track rect under `trackKey`; GameScene sets the volume from a tap. */
+  private renderVolumeSlider(
+    c: Phaser.GameObjects.Container, cx: number, lw: number,
+    labelY: number, rowY: number, label: string, vol: number, trackKey: string,
+  ): void {
+    const H = this.scale.height;
+    c.add(this.T(cx, labelY, label, H * 0.028, INK));
+    const N = 10, trackW = lw * 0.5, trackLeft = cx - trackW / 2, pitch = trackW / N;
+    const knobX = trackLeft + vol * trackW;
+    if (this.textures.exists('settings-buttons')) {
+      const tickScale = (pitch * 0.6) / 4; // tick native w=4
+      for (let i = 0; i < N; i++) {
+        const x = trackLeft + (i + 0.5) * pitch;
+        c.add(this.add.image(x, rowY, 'settings-buttons', x <= knobX + 0.5 ? 'slider-tick-on' : 'slider-tick-off').setScale(tickScale));
+      }
+      c.add(this.add.image(knobX, rowY, 'settings-buttons', 'slider-knob').setScale(tickScale * 1.2));
+    }
+    this.registry.set(trackKey, { x: trackLeft, y: rowY - pitch, w: trackW, h: pitch * 2 });
   }
 
   /** SHOP tab: LEFT = scrollable catalog list (icon + name + buy price); footer = coin

@@ -18,6 +18,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
+import { playSfx, setSfxVolume } from '../sfx';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
 import {
@@ -3518,6 +3519,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Open the unified menu on `tab` (0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings). */
   private openMenu(tab: number): void {
+    playSfx(this); // click blip — covers open (bag/mailbox/chest/shop/settings) + tab switch
     this.menuTab = tab;
     this.menuSelected = -1;
     if (tab === 3) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // Shop defaults
@@ -3535,6 +3537,7 @@ export class GameScene extends Phaser.Scene {
 
   private closeMenu(): void {
     if (!this.menuOpen) return;
+    playSfx(this); // close blip
     this.menuOpen = false;
     this.closeMenuItemMenu();
     this.closeReceipt();
@@ -3597,6 +3600,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Instant purchase of `menuBuyQty` of the selected item into the chest. */
   private menuBuy(): void {
+    playSfx(this); // buy-button click
     const id = this.menuShopSel;
     if (!id) return;
     const n = this.menuBuyQty, cost = this.priceOf(id) * n;
@@ -3702,6 +3706,7 @@ export class GameScene extends Phaser.Scene {
 
   private openCraft(): void {
     if (this.craftOpen) return;
+    playSfx(this); // click blip
     this.craftOpen = true;
     this.craftSel = 0;
     this.craftMsg = '';
@@ -3751,6 +3756,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Craft the selected recipe: deduct materials from the chest, add the output to it. */
   private doCraft(): void {
+    playSfx(this); // craft-button click
     const r = RECIPES[this.craftSel];
     if (!r) return;
     if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) { this.flashCraftMsg(t('craft_need')); return; }
@@ -3854,6 +3860,12 @@ export class GameScene extends Phaser.Scene {
       if (track && x >= track.x && x <= track.x + track.w && y >= track.y && y <= track.y + track.h) {
         setBgmVolume(this, Phaser.Math.Clamp((x - track.x) / track.w, 0, 1));
         this.publishMenu(); // re-render the slider fill/knob
+        return true;
+      }
+      const sfxTrack = this.registry.get('menuSfxTrack') as { x: number; y: number; w: number; h: number } | null;
+      if (sfxTrack && x >= sfxTrack.x && x <= sfxTrack.x + sfxTrack.w && y >= sfxTrack.y && y <= sfxTrack.y + sfxTrack.h) {
+        setSfxVolume(this, Phaser.Math.Clamp((x - sfxTrack.x) / sfxTrack.w, 0, 1)); // plays a preview blip
+        this.publishMenu();
         return true;
       }
       const back = this.registry.get('menuSettingsBack') as { x: number; y: number; w: number; h: number } | null;
