@@ -473,6 +473,7 @@ interface BushObj {
   timer: number;
   base: Phaser.GameObjects.Image;
   berries: Phaser.GameObjects.Image[];
+  swayUntil?: number; // this.time.now until which a sway is playing (debounce re-triggers)
   sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
 
@@ -2876,7 +2877,7 @@ export class GameScene extends Phaser.Scene {
     bush.timer = 0;
     bush.base.setFrame(stage === 0 ? 'empty-bush-small' : 'empty-bush');
     // Berries only at stage 2.
-    for (const b of bush.berries) b.destroy();
+    for (const b of bush.berries) { this.tweens.killTweensOf(b); b.destroy(); } // kill sway first (harvest removes berries mid-sway)
     bush.berries = [];
     if (stage >= 2) {
       const fx = bush.base.x, fy = bush.base.y;
@@ -2886,6 +2887,49 @@ export class GameScene extends Phaser.Scene {
       }
     }
   }
+
+  /** Rustle a bush: rock it left-right around its base (origin 0.5,1) and settle — a
+   *  cheap procedural "someone brushed past" instead of a hand-drawn sway animation.
+   *  The berries ride along (each pivots about its own base; fine at this small angle).
+   *  Debounced by `swayUntil` so a pass-through + harvest don't double-fire. */
+  private swayBush(bush: BushObj): void {
+    if (bush.swayUntil && this.time.now < bush.swayUntil) return;
+    const targets = [bush.base, ...bush.berries];
+    if (!targets.length) return;
+    bush.swayUntil = this.time.now + 520; // ~animation length; also the re-trigger cooldown
+    const amp = 8; // degrees
+    // ONE chain PER target (not a single multi-target chain): harvest destroys the
+    // berries mid-sway (setBushStage → killTweensOf), and a shared chain would die WITH
+    // them, freezing the base too. Independent chains keep the base rocking.
+    for (const t of targets) {
+      this.tweens.killTweensOf(t);
+      t.setAngle(0);
+      this.tweens.chain({
+        targets: t,
+        onComplete: () => { if (t.active) t.setAngle(0); },
+        tweens: [
+          { angle: -amp, duration: 70, ease: 'Sine.easeOut' },
+          { angle: amp * 0.7, duration: 110, ease: 'Sine.easeInOut' },
+          { angle: -amp * 0.3, duration: 100, ease: 'Sine.easeInOut' },
+          { angle: 0, duration: 90, ease: 'Sine.easeIn' },
+        ],
+      });
+    }
+  }
+
+  /** Cato brushing through the bushes: when his foot cell CHANGES onto a bush cell,
+   *  rustle it (once per entry — the sway's own debounce guards a lingering stand). */
+  private updateBushBrush(): void {
+    if (!this.child || !this.islandLayer || !this.bushes.size) return;
+    const t = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
+    if (!t) return;
+    const key = `${Math.floor(t.x)},${Math.floor(t.y)}`;
+    if (key === this.catoBushCell) return; // same cell as last frame → don't re-trigger
+    this.catoBushCell = key;
+    const bush = this.bushes.get(key);
+    if (bush) this.swayBush(bush);
+  }
+  private catoBushCell = '';
 
   /** Grow bushes toward the next stage (0→1→2) + regrow (1→2) after a harvest. */
   private updateBushes(delta: number): void {
@@ -2915,6 +2959,7 @@ export class GameScene extends Phaser.Scene {
   private reapBush(cx: number, cy: number): void {
     const bush = this.bushes.get(`${cx},${cy}`);
     if (!bush || bush.stage < 2) return;
+    this.swayBush(bush); // rustle as the berries are picked
     for (const b of bush.berries) this.playPopOut(b.x, b.y, 'fruit-items', FRUIT_FRAME[bush.type]);
     this.addToChest(makeFruit(bush.type, 3));
     this.catoReact('love'); // berry harvest
@@ -2928,6 +2973,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const bush = this.bushes.get(key);
     if (!bush) return;
+    this.tweens.killTweensOf([bush.base, ...bush.berries]); // stop any in-flight sway
     bush.base.destroy();
     for (const b of bush.berries) b.destroy();
     this.bushes.delete(key);
@@ -6854,6 +6900,7 @@ export class GameScene extends Phaser.Scene {
     this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages
     this.updateBushes(delta); // grow berry bushes (+ regrow after harvest)
+    this.updateBushBrush(); // rustle a bush as Cato walks onto its cell
     this.updateForagables(delta); // grow wild foragables toward their max stage
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
     if (SPAWN_WILD) this.trySpawn(delta); // drop new foragables / big-stones onto empty grass (TEMP off while authoring)
