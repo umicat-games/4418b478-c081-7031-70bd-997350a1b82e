@@ -110,7 +110,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_catobag: { en: "Cato's bag", 'zh-CN': 'Cato的背包' },
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
   settings_music: { en: 'Music', 'zh-CN': '音乐' },
-  settings_sfx: { en: 'Sound effects', 'zh-CN': '音效' },
+  settings_sfx: { en: 'Sound', 'zh-CN': '音效' },
   start_play: { en: 'PLAY', 'zh-CN': '开始' },
   menu_return_title: { en: 'Title screen', 'zh-CN': '返回标题' },
   settings_debug: { en: 'Debug', 'zh-CN': '调试' },
