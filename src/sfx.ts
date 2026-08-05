@@ -27,14 +27,27 @@ export function getSfxVolume(): number {
   return sfxVolume;
 }
 
-/** Play a one-shot UI sound effect at the current SFX volume. No-op when muted,
- *  the clip isn't loaded, or the audio context is still locked (pre first gesture
- *  — we don't queue UI blips). Safe to call from any scene. */
+/**
+ * One REUSABLE Sound per key. Re-triggering the SAME effect RESTARTS that one
+ * instance (its previous playback stops immediately) instead of stacking
+ * overlapping copies — the rule for ALL sfx, and essential when a clip outlasts
+ * the gap between triggers (e.g. rapid chops). Different keys still overlap
+ * freely (hoe + chop can play together). `game.sound` is a single global manager
+ * for the game's lifetime, so the pool is safe to hold module-wide.
+ */
+const pool = new Map<string, Phaser.Sound.BaseSound>();
+
+/** Play a one-shot UI/game sound effect at the current SFX volume. No-op when
+ *  muted, the clip isn't loaded, or the audio context is still locked (pre first
+ *  gesture — we don't queue blips). Safe to call from any scene. */
 export function playSfx(scene: Phaser.Scene, key: string = SFX_CLICK): void {
   if (sfxVolume <= 0) return;
   const mgr = scene.sound;
   if (mgr.locked || !scene.cache.audio.exists(key)) return;
-  mgr.play(key, { volume: sfxVolume });
+  let s = pool.get(key);
+  if (!s) { s = mgr.add(key); pool.set(key, s); }
+  if (s.isPlaying) s.stop();               // cut the previous instance of THIS sound
+  s.play({ volume: sfxVolume });
 }
 
 /** Set the SFX volume live: clamp 0..1 + persist. Audible feedback is the caller's
