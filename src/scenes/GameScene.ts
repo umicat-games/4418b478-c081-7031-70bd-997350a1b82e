@@ -5174,7 +5174,14 @@ export class GameScene extends Phaser.Scene {
     const layer = this.islandLayer;
     if (!layer) return false;
     const tile = layer.getTileAt(cx, cy);
-    return !!tile && !this.tilledCells.has(`${cx},${cy}`);
+    if (!tile) return false;
+    const key = `${cx},${cy}`;
+    if (this.tilledCells.has(key)) return false;
+    // Same "can't till here" rule as the player's hoe: NOT the fixed house (walls +
+    // FLOOR), trees, stones, bushes, foragables, or furniture. Cato was tilling the
+    // house floor because he skipped this check.
+    if (this.cellBlocksTill(key)) return false;
+    return true;
   }
 
   /** Find the nearest `size`×`size` block of farmable grass around Cato. Returns
