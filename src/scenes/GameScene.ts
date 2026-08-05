@@ -5347,10 +5347,23 @@ export class GameScene extends Phaser.Scene {
   private isWalkableCell(cx: number, cy: number): boolean {
     const layer = this.islandLayer;
     if (!layer) return false;
-    const tile = layer.getTileAt(cx, cy);
-    if (!tile || tile.collides) return false; // off-island (water) or a solid tilemap tile
+    const grass = layer.getTileAt(cx, cy);
+    const house = this.wallLayer?.getTileAt(cx, cy);
+    const houseTile = house && house.index !== -1 ? house : null;
+    if (houseTile) {
+      // A SOLID wooden_house tile (wall/window) blocks; only the FLOOR is walkable.
+      // The walls collide via SUB-TILE bodies, so the tile's `collides` flag is NOT
+      // set — reading it (the old check) let A* route THROUGH walls, so Cato couldn't
+      // path out of the house. Use the tileset metadata (`solid`) / floor frame instead.
+      const meta = this.wallTile(houseTile.index);
+      const isFloor = meta ? meta.solid === false : houseTile.index === FLOOR_FRAME;
+      if (!isFloor) return false;
+    }
+    // Ground: non-colliding grass OR a house FLOOR (the interior/doorway floor sits on
+    // the wallLayer and may have no grass under it).
+    const onGrass = !!grass && !grass.collides;
+    if (!onGrass && !houseTile) return false; // off-island water and no house floor
     const key = `${cx},${cy}`;
-    if (this.wallLayer?.getTileAt(cx, cy)?.collides) return false; // creator-painted house wall
     if (this.houseBlocked.has(key)) return false; // solid furniture (bed/table/…)
     if (this.trees.has(key) || this.bigStones.has(key)) return false;
     const p = this.placed.get(key);
