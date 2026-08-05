@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { crossToBgm } from '../bgm';
+import { startTransition, finishTransition } from '../transition';
 
 /**
  * Boot / title screen — a DATA scene. Renders the `boot` scene-as-data (its
@@ -97,6 +98,9 @@ export class BootMenuScene extends Phaser.Scene {
     // scene so its 1:1 camera isn't zoomed by the boot camera; stopped on Play.
     this.scene.launch('SettingsScene');
     this.scene.bringToTop('SettingsScene');
+
+    // Title is ready — uncover any return-to-title transition (no-op on a cold boot).
+    finishTransition(this);
   }
 
   /** Keep the mascot pinned to the camera's visible bottom-left (22 world px in from the
@@ -116,7 +120,8 @@ export class BootMenuScene extends Phaser.Scene {
 
   /** Public: SettingsScene's Play button calls this (it owns the visible buttons now). */
   startGame(): void {
-    this.scene.stop('SettingsScene'); // the buttons/modal are title-screen only
-    this.scene.start('GameScene', { sceneId: GO_TO });
+    this.scene.stop('SettingsScene'); // the buttons/modal are title-screen only (hidden under the curtain)
+    // Circle-iris wipe from the title into the game; GameScene.markReady uncovers it.
+    startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'circle' });
   }
 }

@@ -19,6 +19,7 @@ import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
 import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP } from '../sfx';
+import { startTransition, finishTransition } from '../transition';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
 import {
@@ -3888,11 +3889,17 @@ export class GameScene extends Phaser.Scene {
    *  (which routes to the boot/title screen). */
   private returnToTitle(): void {
     this.saveGame(); // fire-and-forget flush — the app stays alive, so it completes
-    this.closeMenu();
-    for (const k of ['HotbarScene', 'WeatherScene', 'PaletteScene', 'ConfirmScene', 'ReceiptScene', 'ChatterScene', 'MenuScene', 'CraftScene', 'CursorScene', 'UmicatHud']) {
-      if (this.scene.get(k)) this.scene.stop(k);
-    }
-    this.scene.start('BootScene');
+    // Dissolve back to the title; tear down the game's overlays only once the screen
+    // is fully covered (no flash of the HUD vanishing). BootMenuScene uncovers it.
+    startTransition(this, 'BootScene', {}, {
+      effect: 'dissolve',
+      onCovered: () => {
+        this.closeMenu();
+        for (const k of ['HotbarScene', 'WeatherScene', 'PaletteScene', 'ConfirmScene', 'ReceiptScene', 'ChatterScene', 'MenuScene', 'CraftScene', 'CursorScene', 'UmicatHud']) {
+          if (this.scene.get(k)) this.scene.stop(k);
+        }
+      },
+    });
   }
 
   // ── Unified-menu item action menu + keypad (mirrors the mailbox/chest flow, but
@@ -5993,6 +6000,7 @@ export class GameScene extends Phaser.Scene {
     if (c) {
       this.tweens.add({ targets: c, alpha: 0, duration: 250, onComplete: () => c.destroy() });
     }
+    finishTransition(this); // uncover the title→game wipe now that the world is ready
     this.maybePlayIntro(); // new-game → Cato's scripted greeting + tool tour (once)
   }
 

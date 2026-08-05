@@ -378,6 +378,11 @@ export class BootScene extends Phaser.Scene {
     // BGM is started per-scene now (title vs game use different tracks): BootMenuScene
     // plays `bgm-title`, GameScene plays `bgm` — each via crossToBgm.
 
+    // The scene-switch transition overlay (circle/slide/dissolve) — launch it once,
+    // globally, so it's above everything and survives scene switches (incl. return-to-title,
+    // which re-enters BootScene → guard against a double launch).
+    if (!this.scene.isActive('TransitionScene')) this.scene.launch('TransitionScene');
+
     const manifest = getManifest(this);
     // Route by initial scene: the `boot` data scene → BootMenuScene (renders the
     // boot screen + wires Play → game); any other scene (incl. a Play-Scene
