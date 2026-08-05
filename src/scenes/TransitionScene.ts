@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 export type TransitionEffect = 'circle' | 'slide' | 'dissolve';
 
 const DEF_MS = 420;
-const DEF_COLOR = 0x14212e; // the game's dark navy (matches the boot dim)
+const DEF_COLOR = 0xffffff; // white curtain (per-call `color` can override)
 const HOLE_BASE = 100;      // unit circle radius, scaled for the iris wipe
 
 interface BeginOpts {
