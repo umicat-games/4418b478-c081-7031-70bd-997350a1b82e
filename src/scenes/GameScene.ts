@@ -90,6 +90,7 @@ const CATO_ARRIVE_DIST = 3;   // px from a cell centre that counts as "arrived"
 const CATO_TILL_STEP_MS = 1000; // pause on each cell = one full attack swing
 const CATO_TILL_STRIKE_MS = 720; // when in the swing the hoe strikes → soil + dirt
 const CATO_STUCK_MS = 2200; // no progress toward a target this long → it's unreachable, skip it
+const CATO_ESCAPE_MS = 3500; // trying to walk out of the house this long (on foot) → warp him out
 // Cato's STAMINA — a limited energy pool drained by doing tasks, regained by resting.
 // The MAX is a saved per-Cato value (`staminaMax`), NOT this const, so a future upgrade
 // can RAISE the cap; this is just the starting cap. Rates are per-second.
@@ -821,6 +822,11 @@ export class GameScene extends Phaser.Scene {
     path: Array<{ x: number; y: number }> | null;
   } | null = null;
   private catoReturning = false; // walking back toward the camera centre (leash)
+  // Escape-to-door: when Cato's task target is unreachable by A* AND he's stuck INSIDE
+  // the house (a furniture-sealed pocket A* can't route out of — he can physically
+  // squeeze into a diagonal gap his 4-connected pathfinder treats as walled), walk him
+  // cardinally toward the doorway until he's outside; then A* re-plans and succeeds.
+  private catoEscapeMs = 0;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -5246,6 +5252,23 @@ export class GameScene extends Phaser.Scene {
     const next = task.queue[0];
     if (!next) { this.finishCatoTask(); return; }
 
+    // GET OUT OF THE HOUSE FIRST. Every task target is OUTSIDE (farm plots / trees /
+    // stones / bushes — the interior is non-farmable floor), so if Cato is inside the
+    // house he's in the wrong place: drive him straight to the doorway instead of
+    // trying to work from in here. Pathfinding can't always route him out — the
+    // interior may be split by furniture into rooms and only one has the door, or the
+    // leash may have wedged him into a furniture cell — so walk him toward the door on
+    // foot, and if he still can't get out after CATO_ESCAPE_MS, warp him just outside
+    // (better an instant reposition than freezing on "梨熟了，我去收" forever).
+    if (this.catoInsideHouse()) {
+      this.catoEscapeMs += delta;
+      if (this.catoEscapeMs > CATO_ESCAPE_MS) { this.catoEscapeMs = 0; this.warpCatoOutsideDoor(); return; }
+      const exit = this.doorExitPoint();
+      if (exit) { this.walkCardinalToward(exit.x, exit.y, CATO_TILL_SPEED); return; }
+    } else {
+      this.catoEscapeMs = 0;
+    }
+
     // Skip a cell that's no longer a valid target for this task type — idempotent
     // / robust to concurrent edits (the player may have acted on it meanwhile).
     if (!this.taskCellValid(task.type, next.cx, next.cy)) { task.queue.shift(); task.stand = null; task.strikes = 0; return; }
@@ -5414,6 +5437,49 @@ export class GameScene extends Phaser.Scene {
       return { stand: { ...toWorld(cand.cx, cand.cy), dir: cand.dir }, path: steps.map((s) => toWorld(s.cx, s.cy)) };
     }
     return null;
+  }
+
+  /** True if Cato is currently standing ON a `wooden_house` tile (inside the house
+   *  footprint — interior floor / doorway). Used to trigger the escape-to-door walk. */
+  private catoInsideHouse(): boolean {
+    const layer = this.islandLayer;
+    if (!layer || !this.child) return false;
+    const cur = layer.worldToTileXY(this.child.x, this.child.y);
+    if (!cur) return false;
+    const ht = this.wallLayer?.getTileAt(Math.floor(cur.x), Math.floor(cur.y));
+    return !!ht && ht.index !== -1;
+  }
+
+  /** World point just OUTSIDE the doorway (a couple tiles below the door) — the target
+   *  Cato walks toward to leave the house. Null if there's no door. */
+  private doorExitPoint(): { x: number; y: number } | null {
+    const door = this.houseDoor;
+    if (!door) return null;
+    return { x: door.x, y: door.y + TILE * 2 };
+  }
+
+  /** Last-resort un-stick: place Cato on the first walkable grass cell below the door
+   *  (OUTSIDE the house footprint). Used when he's boxed into a furniture-sealed room
+   *  with no floor route to the door — better a quick reposition than freezing forever.
+   *  Mirrors frameNewGameStart's door-exit search. */
+  private warpCatoOutsideDoor(): void {
+    const door = this.houseDoor;
+    const layer = this.islandLayer;
+    if (!door || !this.child || !layer) return;
+    const dt = layer.worldToTileXY(door.x, door.y);
+    let out: { cx: number; cy: number } | null = null;
+    if (dt) {
+      for (let dy = 1; dy <= 6 && !out; dy++) {
+        const cx = dt.x, cy = dt.y + dy;
+        const ht = this.wallLayer?.getTileAt(cx, cy);
+        const insideHouse = !!ht && ht.index !== -1;
+        if (!insideHouse && this.isWalkableCell(cx, cy)) out = { cx, cy };
+      }
+    }
+    const w = out ? layer.tileToWorldXY(out.cx, out.cy) : null;
+    if (w) this.child.setPosition(w.x + TILE / 2, w.y + TILE / 2);
+    else this.child.setPosition(door.x, door.y + TILE * 2);
+    (this.child.body as Phaser.Physics.Arcade.Body | undefined)?.reset(this.child.x, this.child.y);
   }
 
   /** 4-connected A* over walkable tiles from (sx,sy) to (gx,gy). Returns the tile steps
