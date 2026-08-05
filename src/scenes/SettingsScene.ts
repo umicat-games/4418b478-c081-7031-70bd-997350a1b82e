@@ -52,6 +52,9 @@ interface UiButton {
   bg: Phaser.GameObjects.Image;
   icon: Phaser.GameObjects.Sprite;
   text: Phaser.GameObjects.Text;
+  pressed: boolean;   // held down right now (icon+text drop with the pressed-face art)
+  faceY: number;      // idle face-centre y (container-local); set in styleButton
+  pressDepth: number; // px the face sinks when pressed — icon+text drop by this so they track the art
 }
 
 export class SettingsScene extends Phaser.Scene {
@@ -117,18 +120,31 @@ export class SettingsScene extends Phaser.Scene {
     const icon = this.add.sprite(0, 0, ICON_KEY, iconFrame).setTint(LABEL_TINT);
     const text = this.add.text(0, 0, label, { fontFamily: dialogFont(), color: LABEL_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
     const container = this.add.container(0, 0, [bg, icon, text]).setDepth(10);
-    let pressed = false;
-    const setFrame = (on: boolean): void => bg.setTexture('ui_big_play_button', on ? 'button-pressed-down' : 'button-idle');
-    // Press feedback is the pressed-down FRAME only (no press-shrink — scaling would
-    // shrink the hit area and drop edge taps). Hover grows the container (enlarges the
-    // hit area, fine). `pointerupoutside` still counts so a tiny drift off is forgiven.
-    const release = (over: boolean): void => { if (!pressed) return; pressed = false; setFrame(false); container.setScale(1); if (over) { playSfx(this); onTap(); } };
-    bg.on('pointerover', () => { if (!pressed) container.setScale(1.05); });
-    bg.on('pointerout', () => { pressed = false; setFrame(false); container.setScale(1); });
-    bg.on('pointerdown', () => { pressed = true; setFrame(true); });
+    const b: UiButton = { container, bg, icon, text, pressed: false, faceY: 0, pressDepth: 0 };
+    // Press feedback = the pressed-down FRAME + drop the icon+text by the SAME amount the
+    // art's face sinks (pressDepth), so the label looks pressed WITH the button instead of
+    // floating on the old face. (No press-shrink — scaling would shrink the hit area and
+    // drop edge taps.) Hover grows the container (enlarges the hit area, fine).
+    const setPressed = (on: boolean): void => {
+      b.pressed = on;
+      bg.setTexture('ui_big_play_button', on ? 'button-pressed-down' : 'button-idle');
+      this.positionContent(b);
+    };
+    const release = (over: boolean): void => { if (!b.pressed) return; setPressed(false); container.setScale(1); if (over) { playSfx(this); onTap(); } };
+    bg.on('pointerover', () => { if (!b.pressed) container.setScale(1.05); });
+    bg.on('pointerout', () => { if (b.pressed) setPressed(false); container.setScale(1); });
+    bg.on('pointerdown', () => setPressed(true));
     bg.on('pointerup', () => release(true));
     bg.on('pointerupoutside', () => release(true));
-    return { container, bg, icon, text };
+    return b;
+  }
+
+  /** Drop the icon+text to the current face line (down by pressDepth while held). X is
+   *  fixed by styleButton; only the vertical face-tracking changes on press. */
+  private positionContent(b: UiButton): void {
+    const dy = b.faceY + (b.pressed ? b.pressDepth : 0);
+    b.icon.setY(dy);
+    b.text.setY(dy);
   }
 
   /** Draw a button at scale `s` (== Play's on-screen density) with its icon+text
@@ -140,6 +156,11 @@ export class SettingsScene extends Phaser.Scene {
     // `button-idle` is opaque rows 2..28 of 32 (a thin bottom shadow) — the face
     // centre is row ~15, so the label sits ~2 native px above the image centre.
     const faceY = -(2 / 32) * bh;
+    // The pressed-down art's face centre sits 2 native px LOWER than idle (idle face
+    // row 14 → pressed row 16; ninePatch topHeight 8→10). Drop icon+text by that so the
+    // label presses WITH the button instead of floating on the idle face.
+    b.faceY = faceY;
+    b.pressDepth = (2 / 32) * bh;
     const iconH = bh * 0.42;
     b.icon.setScale(iconH / 16);
     b.text.setFontSize(Math.round(bh * 0.34));
@@ -150,8 +171,9 @@ export class SettingsScene extends Phaser.Scene {
     const gap = bh * 0.1;
     const totalW = iconW + gap + b.text.width;
     const startX = -totalW / 2;
-    b.icon.setPosition(startX + iconW / 2, faceY);
-    b.text.setPosition(startX + iconW + gap, faceY);
+    const dy = faceY + (b.pressed ? b.pressDepth : 0);
+    b.icon.setPosition(startX + iconW / 2, dy);
+    b.text.setPosition(startX + iconW + gap, dy);
     return { bw, bh };
   }
 
