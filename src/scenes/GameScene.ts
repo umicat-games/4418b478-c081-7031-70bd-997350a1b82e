@@ -6007,10 +6007,12 @@ export class GameScene extends Phaser.Scene {
     // Cutscene keeps the hotbar visible (for spotlights), so LIFT the box group up to
     // clear it (both are bottom-anchored → they'd overlap). Lift = the hotbar's occupied
     // height + a gap (from hotbarBounds.bar), fallback ~96.
-    // ...but the cinematic intro HIDES the hotbar, so there's nothing to clear → no lift
-    // (the box sits at its normal bottom spot, in the lower letterbox area).
+    // ...and the cinematic intro hides the hotbar but adds a bottom LETTERBOX bar, so the
+    // box must clear THAT instead (LetterboxScene BAR_FRAC = 0.11 of the screen height).
     const bar = this.registry.get('hotbarBounds') as { bar?: { h?: number } } | undefined;
-    this.cutsceneLift = cutscene && !this.cinematic ? (bar?.bar?.h ?? 90) + 10 : 0;
+    this.cutsceneLift = this.cinematic
+      ? Math.round(this.scale.height * 0.11) + 16 // sit just above the bottom letterbox bar
+      : cutscene ? (bar?.bar?.h ?? 90) + 10 : 0;
     for (const role of roles) {
       const go = getHudObject(this, role) as unknown as
         | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
