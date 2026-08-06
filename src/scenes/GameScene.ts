@@ -6239,7 +6239,9 @@ export class GameScene extends Phaser.Scene {
     this.cineAnimStop = () => {
       cancelled = true;
       sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE, onComplete);
-      if (this.anims.exists(pair.close)) sprite.play(pair.close); // settle CLOSED as the camera moves on
+      sprite.stop(); // HALT immediately — don't keep animating after the camera has moved on
+      const rest = this.anims.get(pair.open)?.frames?.[0]?.frame?.name; // open anim starts closed
+      if (rest != null) sprite.setFrame(rest); // snap to the resting/closed frame
     };
   }
 
