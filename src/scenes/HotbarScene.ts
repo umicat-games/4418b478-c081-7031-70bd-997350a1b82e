@@ -185,15 +185,18 @@ export class HotbarScene extends Phaser.Scene {
         c.add(badge);
       }
 
-      // A subtle "1".."9" key hint in each slot's top-left corner.
+      // "1".."9" key hint in each slot's top-left corner. Dark-brown ink with a light
+      // outline so it reads on BOTH the light-brown resting cell and the white hover /
+      // selected cells (the old pale-cream #f4e4c1 washed out on the new light bg).
       const label = this.add
         .text(cx - slotW / 2 + 4, cy - slotH / 2 + 3, String(i + 1), {
           fontFamily: 'monospace',
           fontSize: `${Math.round(9 * s)}px`,
-          color: '#f4e4c1',
+          color: '#3a2a1a',
+          stroke: '#f7ecd2',
+          strokeThickness: Math.max(1, Math.round(1.5 * s)),
         })
         .setOrigin(0, 0);
-      label.setAlpha(0.75);
       c.add(label);
 
       bounds.push({ x: cx - slotW / 2, y: cy - slotH / 2, w: slotW, h: slotH });
