@@ -453,8 +453,9 @@ interface ForagObj {
 }
 
 /** Foragable types that rustle (a sway tween) when Cato brushes past / harvests them —
- *  the leafy ground plants. Mushrooms (rigid caps) and small-stones (rocks) don't. */
-const SWAY_FORAGABLES = new Set<string>(['grass']);
+ *  the leafy ground plants + flowers. Mushrooms (rigid caps) and small-stones (rocks)
+ *  don't. Sunflower is tall (16×32) but pivots about its base (origin 0.5,1) just fine. */
+const SWAY_FORAGABLES = new Set<string>(['grass', 'wild-flower', 'sunflower']);
 
 /** A minable big-stone at a cell. `ready` = stones available to knock out right now;
  *  `regen` holds the remaining-ms timers of stones currently regrowing (each pops
