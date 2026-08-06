@@ -12,6 +12,8 @@ export const SFX_SCROLL = 'sfx-scroll';
 export const SFX_HOE = 'sfx-hoe';
 /** The axe chop thunk, played on each axe strike against a tree (loaded as `sfx-chop`). */
 export const SFX_CHOP = 'sfx-chop';
+/** A soft blip when the mouse highlights an item cell (loaded as `sfx-hover`). */
+export const SFX_HOVER = 'sfx-hover';
 
 function readVolume(): number {
   try {

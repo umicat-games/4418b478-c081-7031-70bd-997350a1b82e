@@ -18,7 +18,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER } from '../sfx';
 import { coverAndReload, finishTransition } from '../transition';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
@@ -2063,6 +2063,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (idx === this.hotbarHover) return;
     this.hotbarHover = idx;
+    if (idx >= 0) playSfx(this, SFX_HOVER); // soft blip as the cursor highlights a cell
     const m = this.registry.get('hotbar') as Record<string, unknown> | undefined;
     if (m) this.registry.set('hotbar', { ...m, hovered: idx }); // hover change → re-render (no save)
   }

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { renderActionMenu, renderKeypad, renderSlotPicker, applyHover, HOVER_TINT, type ActionMenuModel, type MenuBound, type HoverTarget } from './ItemActionMenu';
 import { getBgmVolume } from '../bgm';
-import { getSfxVolume } from '../sfx';
+import { getSfxVolume, playSfx, SFX_HOVER } from '../sfx';
 import { DEBUG_FLAGS, DEBUG_PANEL, isDebug } from '../debug';
 import type { MailListEntry } from './menu-types';
 
@@ -618,6 +618,7 @@ export class MenuScene extends Phaser.Scene {
     applyHover(this.hovered, false);
     this.hovered = hit;
     applyHover(hit, true);
+    if (hit) playSfx(this, SFX_HOVER); // soft blip as the cursor highlights an item cell
     // Desktop: hovering a grid slot live-updates the right detail (no grid rebuild).
     if (!this.menuRoot && hit && hit.index != null) this.showDetailFor(hit.index);
   }
