@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
-import { dialogFont } from '../i18n';
-import { getLang } from '../i18n';
-import { startTransition } from '../transition';
+import { dialogFont, getLang } from '../i18n';
+import { startTransition, finishTransition } from '../transition';
 import { crossToBgm } from '../bgm';
 
 /**
@@ -11,23 +10,27 @@ import { crossToBgm } from '../bgm';
  * explore). The player can chat with him; when they AGREE, we transition into the game
  * (which plays the arrival cinematic); if they DECLINE, back to the title.
  *
- * P1 SKELETON: a self-contained typewriter chat (Cato line + an HTML input) inside the
- * laptop's screen, with the ONE fixed opening line + PLACEHOLDER canned replies and a
- * keyword accept/decline. P2 swaps the canned replies for the runtime-AI npc (u.ai.npc)
- * with a recruiting persona + accept_help / decline_help actions.
+ * The chat REUSES the in-game look: the same square-buttons nine-slice boxes the game HUD
+ * uses for Cato's message + the input, the same white zpix text, and the same RPG
+ * typewriter + PAGINATION — click / tap / Space reveals the rest of a line or the next
+ * page, exactly like talking to Cato in the world.
+ *
+ * P1: ONE fixed opening line + PLACEHOLDER canned replies + keyword accept/decline. P2
+ * swaps the canned replies for the runtime-AI npc (u.ai.npc) with a recruiting persona +
+ * accept_help / decline_help actions.
  */
 
-// The cream screen region inside blue-laptop.png, as fractions of the laptop image.
-const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 };
-const LAPTOP_KEY = 'blue-laptop';
-const INK = '#3a2a1a';
-const CATO_INK = '#2f5d7c';
-const TYPE_MS = 32;
+const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen inside blue-laptop.png
+const LAPTOP = 'blue-laptop';
+const BTN = 'square-buttons';
+const MSG_FRAME = 'square-button-26_26-6', MSG_NINE: [number, number, number, number] = [4, 5, 4, 5];
+const INPUT_FRAME = 'square-button-26_26-5', INPUT_NINE: [number, number, number, number] = [5, 5, 5, 7];
+const TEXT_COLOR = '#ffffff', NAME_COLOR = '#f4e4c1';
+const TYPE_MS = 42;
 
-// Placeholder (P1) — replaced by AI in P2.
 const OPENING = {
-  en: "Hi... is this thing on? Oh! Hello! I'm Cato, the little spirit of Catopia. I'm reaching out because... well, I could really use your help looking after our island. I can't do much on my own. Would you come help me?",
-  'zh-CN': '嗨……这个能收到吗？哦！你好呀！我是 Cato，Catopia 小岛的精灵。我冒昧联系你，是因为……我一个人实在照看不过来这座岛，好想有人能来帮帮我。你愿意来 Catopia 和我一起吗？',
+  en: "Hi... is this thing on? Oh! Hello! I'm Cato, the little spirit of Catopia. I'm reaching out because... well, I could really use your help looking after our island. I can't do much on my own, and I so want to explore this world with someone. Would you come help me?",
+  'zh-CN': '嗨……这个能收到吗？哦！你好呀！我是 Cato，Catopia 小岛的精灵。我冒昧联系你，是因为……我一个人实在照看不过来这座岛，而且好想有人能陪我一起去探索这个世界。你愿意来 Catopia 帮帮我吗？',
 };
 const ACCEPT = { en: "Really?! Thank you so much — I'll be waiting for you on the island! 💛", 'zh-CN': '真的吗？！太谢谢你了——我在小岛上等你！💛' };
 const DECLINE = { en: "Oh... that's alright. I'll go ask around, then. Take care!", 'zh-CN': '这样啊……没关系的。那我再去问问别人吧。你也保重！' };
@@ -37,28 +40,43 @@ const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
-  private catoLabel!: Phaser.GameObjects.Text;
-  private catoText!: Phaser.GameObjects.Text;
-  private hint!: Phaser.GameObjects.Text;
+  private msgBox!: Phaser.GameObjects.NineSlice;
+  private msgText!: Phaser.GameObjects.Text;
+  private measure!: Phaser.GameObjects.Text; // hidden — pagination height probe
+  private more!: Phaser.GameObjects.Text;     // ▼ "more" prompt
+  private nameBox!: Phaser.GameObjects.NineSlice;
+  private nameText!: Phaser.GameObjects.Text;
+  private portrait?: Phaser.GameObjects.Image;
+  private inputBox!: Phaser.GameObjects.NineSlice;
   private inputEl?: HTMLInputElement;
-  private full = '';
-  private idx = 0;
+
+  // typewriter + pagination state
+  private pages: string[] = [];
+  private pageIdx = 0;
+  private charIdx = 0;
   private typing = false;
   private typeTimer?: Phaser.Time.TimerEvent;
-  private busy = false; // mid-transition (accept/decline) → ignore input
+  private onLineDone?: () => void;
+  private busy = false;
+
+  private fs = 16; // set in layout()
 
   constructor() { super({ key: 'LaptopScene' }); }
 
   create(): void {
     const W = this.scale.width, H = this.scale.height;
-    crossToBgm(this, 'bgm-title', ['bgm'], 500); // keep the calm title track under the message
+    crossToBgm(this, 'bgm-title', ['bgm'], 500);
+    this.add.rectangle(0, 0, W, H, 0x14212e, 1).setOrigin(0, 0);
+    this.laptop = this.add.image(0, 0, LAPTOP).setOrigin(0.5);
 
-    this.add.rectangle(0, 0, W, H, 0x14212e, 1).setOrigin(0, 0); // dark backdrop → laptop pops
-    this.laptop = this.add.image(0, 0, LAPTOP_KEY).setOrigin(0.5);
-
-    this.catoLabel = this.add.text(0, 0, 'Cato', { fontFamily: dialogFont(), color: CATO_INK, fontStyle: 'bold' }).setOrigin(0, 0.5);
-    this.catoText = this.add.text(0, 0, '', { fontFamily: dialogFont(), color: INK }).setOrigin(0, 0);
-    this.hint = this.add.text(0, 0, '', { fontFamily: dialogFont(), color: '#8a7a5a' }).setOrigin(0.5, 1).setAlpha(0.8);
+    this.msgBox = this.add.nineslice(0, 0, BTN, MSG_FRAME, 10, 10, ...MSG_NINE).setOrigin(0, 0);
+    this.msgText = this.add.text(0, 0, '', { fontFamily: dialogFont(), color: TEXT_COLOR }).setOrigin(0, 0);
+    this.measure = this.add.text(-9999, 0, '', { fontFamily: dialogFont(), color: TEXT_COLOR }).setVisible(false);
+    this.more = this.add.text(0, 0, '▼', { fontFamily: dialogFont(), color: TEXT_COLOR }).setOrigin(1, 1).setVisible(false);
+    if (this.textures.exists('teemo')) this.portrait = this.add.image(0, 0, 'teemo', 0).setOrigin(0.5, 0.5);
+    this.nameBox = this.add.nineslice(0, 0, BTN, MSG_FRAME, 10, 10, ...MSG_NINE).setOrigin(0, 0.5);
+    this.nameText = this.add.text(0, 0, 'Cato', { fontFamily: dialogFont(), color: NAME_COLOR }).setOrigin(0.5, 0.5);
+    this.inputBox = this.add.nineslice(0, 0, BTN, INPUT_FRAME, 10, 10, ...INPUT_NINE).setOrigin(0, 0).setVisible(false);
 
     this.layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
@@ -67,73 +85,135 @@ export class LaptopScene extends Phaser.Scene {
       this.removeInput();
     });
 
-    // Cato's opening line types out; then the input appears for the player to reply.
-    this.showCato(tr(OPENING), () => this.makeInput());
+    // Click / tap / Space advances the RPG text (reveal rest / next page) — only while
+    // Cato is speaking; once his line is fully shown the HTML input takes the keyboard.
+    this.input.on('pointerdown', () => this.advance());
+    this.input.keyboard?.on('keydown-SPACE', () => this.advance());
+
+    finishTransition(this); // uncover the Play→laptop wipe (else the curtain stays up + blocks the next transition)
+    this.showLine(tr(OPENING), () => this.makeInput());
   }
 
-  /** Position the laptop + chat inside its screen region (recomputed on resize). */
+  // ── Layout (laptop + boxes inside its screen) ────────────────────────────
   private layout = (): void => {
     const W = this.scale.width, H = this.scale.height;
-    const tex = this.textures.get(LAPTOP_KEY).getSourceImage();
+    const tex = this.textures.get(LAPTOP).getSourceImage();
     const iw = tex.width, ih = tex.height;
     const s = Math.min((W * 0.94) / iw, (H * 0.94) / ih);
     this.laptop.setScale(s).setPosition(W / 2, H / 2);
-    // Screen rect in world px.
     const lx = W / 2 - (iw * s) / 2, ly = H / 2 - (ih * s) / 2;
     const sx0 = lx + SCREEN.x0 * iw * s, sy0 = ly + SCREEN.y0 * ih * s;
     const sw = (SCREEN.x1 - SCREEN.x0) * iw * s, sh = (SCREEN.y1 - SCREEN.y0) * ih * s;
-    const pad = sw * 0.04;
-    const fs = Math.max(13, Math.round(sh * 0.075));
-    this.catoLabel.setFontSize(fs).setPosition(sx0 + pad, sy0 + pad + fs * 0.5);
-    this.catoText.setFontSize(fs).setPosition(sx0 + pad, sy0 + pad + fs * 1.4).setWordWrapWidth(sw - pad * 2);
-    this.hint.setFontSize(Math.round(fs * 0.8)).setPosition(sx0 + sw / 2, sy0 + sh - pad * 0.4);
-    if (this.inputEl) this.positionInput(sx0, sy0, sw, sh, pad, fs);
+    const pad = Math.round(sw * 0.03);
+    const fs = Math.max(12, Math.round(sh * 0.085)); this.fs = fs;
+
+    const nameH = fs * 1.9, nameW = sw * 0.24;
+    const inputH = fs * 2.4;
+    const msgX = sx0 + pad, msgY = sy0 + pad + nameH * 0.5;
+    const msgW = sw - pad * 2, msgH = sy0 + sh - pad - inputH - pad - msgY;
+    // Cato portrait sits on the message box's top-left, name frame beside it.
+    const portR = nameH * 0.95;
+    if (this.portrait) this.portrait.setDisplaySize(portR, portR).setPosition(msgX + portR * 0.55, msgY);
+    const nameX = msgX + (this.portrait ? portR * 1.15 : 0);
+    this.nameBox.setSize(nameW, nameH).setPosition(nameX, msgY);
+    this.nameText.setFontSize(Math.round(fs * 0.95)).setPosition(nameX + nameW / 2, msgY);
+
+    this.msgBox.setSize(msgW, msgH).setPosition(msgX, msgY);
+    const tpad = fs * 0.9;
+    this.msgText.setFontSize(fs).setPosition(msgX + tpad, msgY + tpad + nameH * 0.4).setWordWrapWidth(msgW - tpad * 2);
+    this.measure.setFontSize(fs).setWordWrapWidth(msgW - tpad * 2);
+    this.more.setFontSize(fs).setPosition(msgX + msgW - tpad, msgY + msgH - tpad * 0.5);
+
+    const inY = sy0 + sh - pad - inputH;
+    this.inputBox.setSize(msgW, inputH).setPosition(msgX, inY);
+    if (this.inputEl) this.positionInput(msgX, inY, msgW, inputH);
   };
 
-  /** Type out a Cato line char-by-char, then call `done`. */
-  private showCato(text: string, done?: () => void): void {
+  /** Height budget for one page of Cato's message (box minus paddings + name overlap). */
+  private msgFitH(): number { return this.msgBox.height - this.fs * 2.6 - this.fs * 0.4; }
+  private fits(s: string): boolean { this.measure.setText(s); return this.measure.height <= this.msgFitH(); }
+
+  private paginate(text: string): string[] {
+    const pages: string[] = []; let rest = text.trim();
+    for (let g = 0; rest && g < 64; g++) {
+      if (this.fits(rest)) { pages.push(rest); break; }
+      let lo = 1, hi = rest.length, best = 1;
+      while (lo <= hi) { const mid = (lo + hi) >> 1; if (this.fits(rest.slice(0, mid))) { best = mid; lo = mid + 1; } else hi = mid - 1; }
+      let cut = best; const sp = rest.lastIndexOf(' ', best); if (sp > best * 0.5) cut = sp;
+      pages.push(rest.slice(0, cut).trim()); rest = rest.slice(cut).trim();
+    }
+    return pages.length ? pages : [''];
+  }
+
+  // ── Typewriter + pagination ──────────────────────────────────────────────
+  private showLine(fullText: string, onDone?: () => void): void {
+    this.removeInput();
     this.typeTimer?.remove();
-    this.full = text; this.idx = 0; this.typing = true;
-    this.catoText.setText('');
+    this.pages = this.paginate(fullText);
+    this.pageIdx = 0; this.onLineDone = onDone;
+    this.typePage();
+  }
+
+  private typePage(): void {
+    this.charIdx = 0; this.typing = true;
+    this.more.setVisible(false);
+    this.msgText.setText('');
+    const page = this.pages[this.pageIdx] ?? '';
+    this.typeTimer?.remove();
     this.typeTimer = this.time.addEvent({
       delay: TYPE_MS, loop: true, callback: () => {
-        if (this.idx >= this.full.length) { this.typing = false; this.typeTimer?.remove(); done?.(); return; }
-        this.idx++; this.catoText.setText(this.full.slice(0, this.idx));
+        if (this.charIdx >= page.length) { this.typing = false; this.typeTimer?.remove(); this.onPageShown(); return; }
+        this.charIdx++; this.msgText.setText(page.slice(0, this.charIdx));
       },
     });
   }
 
-  // ── Player input (HTML overlay over the laptop screen) ───────────────────
+  private onPageShown(): void {
+    if (this.pageIdx < this.pages.length - 1) this.more.setVisible(true); // more pages → ▼ prompt
+    else this.onLineDone?.();                                            // last page → let the player reply
+  }
+
+  /** Click / tap / Space: reveal the rest of the page, else go to the next page. */
+  private advance(): void {
+    if (this.busy) return;
+    if (this.typing) { // finish typing this page instantly
+      this.typeTimer?.remove(); this.typing = false;
+      this.msgText.setText(this.pages[this.pageIdx] ?? '');
+      this.onPageShown();
+      return;
+    }
+    if (this.pageIdx < this.pages.length - 1) { this.pageIdx++; this.typePage(); }
+  }
+
+  // ── Player input (HTML overlay inside the input box) ─────────────────────
   private makeInput(): void {
     if (this.inputEl || this.busy) return;
+    this.inputBox.setVisible(true);
     const el = document.createElement('input');
-    el.type = 'text';
-    el.maxLength = 120;
+    el.type = 'text'; el.maxLength = 120;
     el.placeholder = getLang() === 'zh-CN' ? '回复 Cato…（回车发送）' : 'Reply to Cato… (Enter)';
-    el.style.cssText = 'position:fixed;z-index:30;border:none;outline:none;border-radius:8px;padding:0 12px;background:#fffdf5;color:#3a2a1a;box-shadow:0 2px 0 #cdbf9a inset;font-family:inherit;';
+    el.style.cssText = 'position:fixed;z-index:30;border:none;outline:none;background:transparent;color:#fff8e8;font-family:inherit;';
     (this.game.canvas.parentElement ?? document.body).appendChild(el);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.onSend(el.value.trim()); } });
     this.inputEl = el;
     this.layout();
     setTimeout(() => el.focus(), 50);
-    this.hint.setText(getLang() === 'zh-CN' ? '和 Cato 聊聊，或者直接答应他' : "Chat with Cato — or just say yes");
   }
 
-  private positionInput(sx0: number, sy0: number, sw: number, sh: number, pad: number, fs: number): void {
+  private positionInput(inX: number, inY: number, inW: number, inH: number): void {
     const el = this.inputEl!;
     const rect = this.game.canvas.getBoundingClientRect();
     const scaleX = rect.width / this.scale.width, scaleY = rect.height / this.scale.height;
-    const h = fs * 2.0;
-    el.style.left = `${rect.left + (sx0 + pad) * scaleX}px`;
-    el.style.top = `${rect.top + (sy0 + sh - pad - h) * scaleY}px`;
-    el.style.width = `${(sw - pad * 2) * scaleX}px`;
-    el.style.height = `${h * scaleY}px`;
-    el.style.fontSize = `${Math.round(fs * scaleY)}px`;
+    const pad = this.fs;
+    el.style.left = `${rect.left + (inX + pad) * scaleX}px`;
+    el.style.top = `${rect.top + inY * scaleY}px`;
+    el.style.width = `${(inW - pad * 2) * scaleX}px`;
+    el.style.height = `${inH * scaleY}px`;
+    el.style.fontSize = `${Math.round(this.fs * scaleY)}px`;
   }
 
-  private removeInput(): void { this.inputEl?.remove(); this.inputEl = undefined; }
+  private removeInput(): void { this.inputEl?.remove(); this.inputEl = undefined; this.inputBox?.setVisible(false); }
 
-  /** Player pressed Enter. P1: keyword accept/decline, else a placeholder line. */
   private onSend(text: string): void {
     if (this.busy || this.typing || !text) return;
     if (this.inputEl) this.inputEl.value = '';
@@ -142,22 +222,20 @@ export class LaptopScene extends Phaser.Scene {
     const no = /(不愿意|不想|拒绝|算了|不去|不行|no thanks|no\b|nope|not really|decline)/.test(t);
     if (yes) { this.finish(true); return; }
     if (no) { this.finish(false); return; }
-    this.removeInput();
-    this.showCato(tr(FILLER), () => this.makeInput()); // placeholder — AI replies here in P2
+    this.showLine(tr(FILLER), () => this.makeInput()); // placeholder — AI replies here in P2
   }
 
-  /** Accept → into the game (plays the arrival cinematic). Decline → back to the title. */
   private finish(accepted: boolean): void {
     if (this.busy) return;
-    this.busy = true;
-    this.removeInput();
-    this.hint.setText('');
+    this.busy = true; this.removeInput();
     if (accepted) { try { localStorage.setItem('catopia:laptopDone', '1'); } catch { /* no storage */ } }
-    this.showCato(tr(accepted ? ACCEPT : DECLINE), () => {
-      this.time.delayedCall(1100, () => {
-        if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'dissolve' });
-        else startTransition(this, 'BootMenuScene', {}, { effect: 'dissolve' });
-      });
-    });
+    let gone = false;
+    const go = (): void => {
+      if (gone) return; gone = true;
+      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'dissolve' }); // → the arrival cinematic
+      else startTransition(this, 'BootMenuScene', {}, { effect: 'dissolve' });
+    };
+    this.showLine(tr(accepted ? ACCEPT : DECLINE), () => this.time.delayedCall(1100, go)); // after the closing line reads
+    this.time.delayedCall(8000, go); // safety: never strand the player on the laptop
   }
 }
