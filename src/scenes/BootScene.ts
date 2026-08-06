@@ -63,6 +63,9 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('sfx-hoe', 'uploaded/shovle.mp3'); // dig thunk on the player's hoe strike
     this.load.audio('sfx-chop', 'uploaded/chop-wood-new.mp3'); // short axe thunk on each tree strike
     this.load.audio('sfx-hover', 'uploaded/click_003.ogg'); // soft blip when the mouse highlights an item cell
+    this.load.audio('sfx-confirm', 'uploaded/confirmation_001.ogg'); // laptop "new message" chime
+    this.load.audio('sfx-drop', 'uploaded/drop_002.ogg'); // laptop: player sends a message
+    this.load.audio('sfx-type', 'uploaded/click_002.ogg'); // laptop: per-character typewriter tick
     // Cato's stamina gauge: a 16×16 radial pie (37 frames, empty→full; colour purple→
     // orange→green). frame = round(fraction*36). Shown over his head while he works.
     this.load.spritesheet('stamina', 'uploaded/stamina_circle_with_white_outline_sprite_sheet.png', { frameWidth: 16, frameHeight: 16 });

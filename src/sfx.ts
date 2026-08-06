@@ -14,6 +14,12 @@ export const SFX_HOE = 'sfx-hoe';
 export const SFX_CHOP = 'sfx-chop';
 /** A soft blip when the mouse highlights an item cell (loaded as `sfx-hover`). */
 export const SFX_HOVER = 'sfx-hover';
+/** Laptop cold-open: the "new message" arrival chime (confirmation_001). */
+export const SFX_CONFIRM = 'sfx-confirm';
+/** Laptop cold-open: the player sends a message (drop_002). */
+export const SFX_DROP = 'sfx-drop';
+/** Laptop cold-open: per-character typewriter tick (click_002). */
+export const SFX_TYPE = 'sfx-type';
 
 function readVolume(): number {
   try {

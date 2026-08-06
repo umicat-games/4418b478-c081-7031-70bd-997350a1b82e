@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { dialogFont, getLang } from '../i18n';
 import { startTransition, finishTransition } from '../transition';
 import { crossToBgm } from '../bgm';
+import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
 
 /**
  * COLD-OPEN "message from Cato" scene. After the player clicks Play on a NEW game, a
@@ -122,6 +123,7 @@ export class LaptopScene extends Phaser.Scene {
 
   private popNotifIn(): void {
     if (!this.notif) return;
+    playSfx(this, SFX_CONFIRM); // "new message" arrival chime
     this.tweens.add({ targets: this.notif, scaleX: 1, scaleY: 1, alpha: 1, duration: 360, ease: 'Back.easeOut', onComplete: () => this.startBreathe() });
   }
 
@@ -242,7 +244,10 @@ export class LaptopScene extends Phaser.Scene {
     this.typeTimer = this.time.addEvent({
       delay: TYPE_MS, loop: true, callback: () => {
         if (this.charIdx >= page.length) { this.typing = false; this.typeTimer?.remove(); this.onPageShown(); return; }
-        this.charIdx++; this.msgText.setText(page.slice(0, this.charIdx));
+        this.charIdx++;
+        const ch = page[this.charIdx - 1];
+        if (ch && ch.trim()) playSfx(this, SFX_TYPE); // tick per visible character
+        this.msgText.setText(page.slice(0, this.charIdx));
       },
     });
   }
@@ -288,6 +293,7 @@ export class LaptopScene extends Phaser.Scene {
 
   private onSend(text: string): void {
     if (this.busy || this.typing || !text) return;
+    playSfx(this, SFX_DROP); // whoosh — the player sent a message
     if (this.inputEl) this.inputEl.value = '';
     const t = text.toLowerCase();
     const yes = /(愿意|好的|好呀|好啊|我来|帮|当然|可以|答应|yes|sure|ok|okay|i will|i'?ll help|help you|of course)/.test(t) || t === '好' || t === '来';
