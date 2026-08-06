@@ -42,10 +42,8 @@ interface Msg { who: 'cato' | 'me'; text: string }
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
-  private headerG!: Phaser.GameObjects.Graphics;
   private avatar?: Phaser.GameObjects.Image;
   private nameText!: Phaser.GameObjects.Text;
-  private onlineText!: Phaser.GameObjects.Text;
   private msgLayer!: Phaser.GameObjects.Container; // scrolling bubble log
   private maskG!: Phaser.GameObjects.Graphics;     // clips the log to the message area
   private measure!: Phaser.GameObjects.Text;
@@ -73,10 +71,8 @@ export class LaptopScene extends Phaser.Scene {
     this.add.rectangle(0, 0, W, H, 0x14212e, 1).setOrigin(0, 0);
     this.laptop = this.add.image(0, 0, LAPTOP).setOrigin(0.5);
 
-    this.headerG = this.add.graphics();
     if (this.textures.exists('teemo')) this.avatar = this.add.image(0, 0, 'teemo', 0).setOrigin(0.5);
     this.nameText = this.add.text(0, 0, 'Cato', { fontFamily: dialogFont(), color: NAME_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
-    this.onlineText = this.add.text(0, 0, getLang() === 'zh-CN' ? '· 在线' : '· online', { fontFamily: dialogFont(), color: '#5aa06a' }).setOrigin(0, 0.5);
 
     this.msgLayer = this.add.container(0, 0);
     this.maskG = this.add.graphics().setVisible(false);
@@ -116,15 +112,11 @@ export class LaptopScene extends Phaser.Scene {
     const fs = Math.max(11, Math.round(sh * 0.072));
     const headerH = fs * 2.4, inputH = fs * 2.4, gap = fs * 0.5;
 
-    // Header: avatar + name + online, thin underline.
+    // Header: just the avatar + name, sitting directly on the laptop's cream screen (no
+    // background frame — the screen art already provides one; no online status).
     const av = headerH * 0.72, hy = sy0 + headerH / 2;
-    this.headerG.clear();
-    this.headerG.fillStyle(0xffffff, 0.55).fillRoundedRect(sx0, sy0, sw, headerH, fs * 0.4);
-    this.headerG.lineStyle(1, 0xcdbf9a, 0.8).lineBetween(sx0 + pad, sy0 + headerH, sx0 + sw - pad, sy0 + headerH);
     if (this.avatar) this.avatar.setDisplaySize(av, av).setPosition(sx0 + pad + av / 2, hy);
-    const nameX = sx0 + pad + av + fs * 0.5;
-    this.nameText.setFontSize(Math.round(fs * 1.05)).setPosition(nameX, hy - fs * 0.15);
-    this.onlineText.setFontSize(Math.round(fs * 0.8)).setPosition(nameX, hy + fs * 0.9);
+    this.nameText.setFontSize(Math.round(fs * 1.05)).setPosition(sx0 + pad + av + fs * 0.5, hy);
 
     // Message area (masked, scrolling).
     const ax = sx0 + pad, ay = sy0 + headerH + gap;
