@@ -730,6 +730,7 @@ export class GameScene extends Phaser.Scene {
   // bumped on change so the scenes re-render.
   private inventory: (ItemStack | null)[] = [];
   private hotbarSelected = -1; // selected cell in row 0 (-1 = empty hand)
+  private hotbarHover = -1; // hotbar cell the mouse cursor is over (-1 = none; backpack = INV_COLS)
   private inventoryOpen = false;
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
   private invRev = 0;
@@ -1764,6 +1765,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('hotbar', {
       slots: this.inventory.slice(0, INV_COLS).map((s) => this.stackView(s)),
       selected: this.hotbarSelected,
+      hovered: this.hotbarHover,
       visible: this.gameReady && (!this.dialogOpen || this.cutscene) && !this.inventoryOpen, // a cutscene keeps it (for tool spotlights)
       rev,
     });
@@ -2046,6 +2048,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Is the virtual cursor over a hotbar slot? Returns the slot index or null. */
+  /** Track which hotbar cell the mouse cursor is over → the highlight (white) frame.
+   *  Mouse-only (pointer-locked virtual cursor); touch has no hover. Updates the hotbar
+   *  registry entry directly (no save) when it changes so HotbarScene re-renders. */
+  private updateHotbarHover(): void {
+    let idx = -1;
+    if (this.locked && this.gameReady && (!this.dialogOpen || this.cutscene) && !this.inventoryOpen) {
+      const slot = this.hotbarSlotAt(this.vcursor.x, this.vcursor.y);
+      if (slot !== null) idx = slot;
+      else if (this.overBackpackButton(this.vcursor.x, this.vcursor.y)) idx = INV_COLS; // backpack cell
+    }
+    if (idx === this.hotbarHover) return;
+    this.hotbarHover = idx;
+    const m = this.registry.get('hotbar') as Record<string, unknown> | undefined;
+    if (m) this.registry.set('hotbar', { ...m, hovered: idx }); // hover change → re-render (no save)
+  }
+
   private hotbarSlotAt(x: number, y: number): number | null {
     const b = this.registry.get('hotbarBounds') as
       | { slots: Array<{ x: number; y: number; w: number; h: number }> }
@@ -6963,6 +6981,7 @@ export class GameScene extends Phaser.Scene {
 
     // Snap the hoe's tile-selection cursor to the grass tile under the mouse.
     this.updateTileCursor();
+    this.updateHotbarHover(); // highlight the hotbar cell under the mouse cursor
     // While the build palette is open, tell it which cell the cursor is over (hover).
     this.updatePaletteHover();
 

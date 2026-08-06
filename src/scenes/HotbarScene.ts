@@ -5,10 +5,20 @@ import Phaser from 'phaser';
 // 7/7/8/8). Loaded in BootScene as the `inventory` atlas.
 const ATLAS = 'inventory';
 const FRAME_PANEL = 'frame-medium';
-// Selection is shown by SHADE, not an overlay: unselected cells use the dark
-// slot, the selected cell the light one so it reads as lit-up / active.
-const FRAME_SLOT = 'slot-dark';
-const FRAME_SLOT_SELECTED = 'slot-light';
+// Item-slot cells use the `square-buttons` sheet (per the user's request): a resting
+// cell is `light-brown-button`, HOVER shows `white-button` (highlight), and the
+// SELECTED cell shows `light-brown-button-pressed-down` (looks pushed in). Registered
+// as sub-frames of the `square-buttons` texture in BootScene.
+const BTN_ATLAS = 'square-buttons';
+const BTN_DEFAULT = 'light-brown-button';
+const BTN_HOVER = 'white-button';
+const BTN_SELECTED = 'light-brown-button-pressed-down';
+// Nine-patch insets per frame (from the Asset Manager tags).
+const BTN_NINE: Record<string, [number, number, number, number]> = {
+  'light-brown-button': [6, 6, 7, 7],
+  'white-button': [6, 6, 7, 7],
+  'light-brown-button-pressed-down': [6, 6, 6, 6],
+};
 
 // Slot art native size (px) and how big we draw it. Integer SLOT_SCALE keeps the
 // pixel art crisp; layout() drops below 2 only when the bar wouldn't fit a narrow
@@ -35,6 +45,8 @@ export interface HotbarSlotView {
 export interface HotbarModel {
   slots: (HotbarSlotView | null)[];
   selected: number;
+  /** Slot the mouse cursor is over (highlight), or -1. Only set by mouse (not touch). */
+  hovered?: number;
   visible: boolean;
   /** Bumped by GameScene whenever the model changes so we re-render. */
   rev: number;
@@ -58,6 +70,7 @@ interface SlotBounds {
 export class HotbarScene extends Phaser.Scene {
   private container?: Phaser.GameObjects.Container;
   private lastRev = -1;
+  private lastHover = -1;
   private lastW = -1;
   private lastH = -1;
 
@@ -73,9 +86,12 @@ export class HotbarScene extends Phaser.Scene {
   update(): void {
     const model = this.model();
     if (!model) return;
-    // Re-render when the model changes (select / tool set) or the canvas resizes.
+    // Re-render when the model changes (select / tool set), the HOVER changes (mouse
+    // moved to another cell), or the canvas resizes.
+    const hov = model.hovered ?? -1;
     if (
       model.rev !== this.lastRev ||
+      hov !== this.lastHover ||
       this.scale.width !== this.lastW ||
       this.scale.height !== this.lastH
     ) {
@@ -87,12 +103,21 @@ export class HotbarScene extends Phaser.Scene {
     return this.registry.get('hotbar') as HotbarModel | undefined;
   }
 
+  /** A slot-cell background from the `square-buttons` sheet. Built at NATIVE size then
+   *  scaled by `s` (like the panel) so the nine-patch border stays crisp at the pixel
+   *  scale instead of a thin native-px border on a stretched centre. */
+  private slotBg(cx: number, cy: number, slotW: number, slotH: number, s: number, frame: string): Phaser.GameObjects.NineSlice {
+    const [l, r, t, b] = BTN_NINE[frame] ?? [6, 6, 6, 6];
+    return this.add.nineslice(cx, cy, BTN_ATLAS, frame, slotW / s, slotH / s, l, r, t, b).setScale(s);
+  }
+
   private render(): void {
     const c = this.container;
     const model = this.model();
     if (!c) return;
     c.removeAll(true);
     this.lastRev = model?.rev ?? -1;
+    this.lastHover = model?.hovered ?? -1;
     this.lastW = this.scale.width;
     this.lastH = this.scale.height;
 
@@ -132,10 +157,10 @@ export class HotbarScene extends Phaser.Scene {
       const selected = i === model.selected;
       const cy = rowY;
 
-      const cell = this.add
-        .image(cx, cy, ATLAS, selected ? FRAME_SLOT_SELECTED : FRAME_SLOT)
-        .setScale(s);
-      c.add(cell);
+      const hovered = i === model.hovered;
+      // selected → pressed-down; else hovered → white highlight; else the resting cell.
+      const frame = selected ? BTN_SELECTED : hovered ? BTN_HOVER : BTN_DEFAULT;
+      c.add(this.slotBg(cx, cy, slotW, slotH, s, frame));
 
       const slot = model.slots[i];
       if (slot?.iconKey && this.textures.exists(slot.iconKey)) {
@@ -178,8 +203,8 @@ export class HotbarScene extends Phaser.Scene {
     // screen edge). Opens the full grid (touch has no E key; mouse works too). A
     // `slot-light` cell + a small 2×2 "pouch" glyph.
     const bx = Math.round(startX + barW + GAP + slotW / 2);
-    const backpackBtn = this.add.image(bx, rowY, ATLAS, FRAME_SLOT_SELECTED).setScale(s);
-    c.add(backpackBtn);
+    // Backpack cell: same button art; white highlight when hovered (index n).
+    c.add(this.slotBg(bx, rowY, slotW, slotH, s, model.hovered === n ? BTN_HOVER : BTN_DEFAULT));
     const g = this.add.graphics();
     g.fillStyle(0x3a2a1a, 0.9);
     const d = Math.round(4 * s); // dot size
