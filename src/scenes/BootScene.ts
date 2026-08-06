@@ -345,6 +345,10 @@ export class BootScene extends Phaser.Scene {
     // `white-button`.
     if (btnTex && !btnTex.has('light-brown-button')) btnTex.add('light-brown-button', 0, 11, 59, 26, 28);
     if (btnTex && !btnTex.has('white-button-pressed-down')) btnTex.add('white-button-pressed-down', 0, 59, 11, 26, 26);
+    // Menu close-button pressed frame (icon-buttons sheet, 32×32 @ 32,320, per the Asset
+    // Manager tag) — shown as a brief click flash on the X.
+    const iconTex = this.textures.get('icon-buttons');
+    if (iconTex && !iconTex.has('close-light-big-pressed-down')) iconTex.add('close-light-big-pressed-down', 0, 32, 320, 32, 32);
     // Tree chop animations: each type has 3 shake sequences (rows 1/2/3 = 4/6/12
     // frames) played on successive axe strikes; fruit sheets drop fruit during shake3.
     // The bare-tree fall is a separate 17-frame sheet. Registered once, globally.

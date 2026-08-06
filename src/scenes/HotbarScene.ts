@@ -47,6 +47,8 @@ export interface HotbarModel {
   selected: number;
   /** Slot the mouse cursor is over (highlight), or -1. Only set by mouse (not touch). */
   hovered?: number;
+  /** Transient: the backpack cell is showing its click-press frame. */
+  backpackPressed?: boolean;
   visible: boolean;
   /** Bumped by GameScene whenever the model changes so we re-render. */
   rev: number;
@@ -206,8 +208,10 @@ export class HotbarScene extends Phaser.Scene {
     // screen edge). Opens the full grid (touch has no E key; mouse works too). A
     // `slot-light` cell + a small 2×2 "pouch" glyph.
     const bx = Math.round(startX + barW + GAP + slotW / 2);
-    // Backpack cell: same button art; white highlight when hovered (index n).
-    c.add(this.slotBg(bx, rowY, slotW, slotH, s, model.hovered === n ? BTN_HOVER : BTN_DEFAULT));
+    // Backpack cell: same button art; pressed frame during its click flash, else white
+    // highlight when hovered (index n), else the resting cell.
+    const bpFrame = model.backpackPressed ? BTN_SELECTED : model.hovered === n ? BTN_HOVER : BTN_DEFAULT;
+    c.add(this.slotBg(bx, rowY, slotW, slotH, s, bpFrame));
     const g = this.add.graphics();
     g.fillStyle(0x3a2a1a, 0.9);
     const d = Math.round(4 * s); // dot size

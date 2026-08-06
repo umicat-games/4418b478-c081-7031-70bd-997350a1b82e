@@ -695,6 +695,8 @@ export class GameScene extends Phaser.Scene {
   // object plays its OPEN anim first; closing the menu plays its CLOSE anim.
   private menuSourceSprite?: Phaser.GameObjects.Sprite;
   private menuCloseAnim?: string;
+  private menuCloseFlashRev = 0; // bumps to tell MenuScene to flash the X pressed
+  private menuClosing = false;   // X pressed → flashing → about to close (blocks double-trigger)
   private menuBuyQty = 1;       // how many to buy (Shop right-side stepper; instant purchase)
   private shopMsg = '';         // transient Shop warning ("金币不够" / "箱子满了")
   // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
@@ -1534,8 +1536,8 @@ export class GameScene extends Phaser.Scene {
     if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
     // Build palette (wall facing) → pick that orientation.
     if (this.handlePaletteClick(x, y)) return;
-    // Backpack button → open the full grid (mainly for touch — no E key).
-    if (this.overBackpackButton(x, y)) { this.openMenu(1); return; } // no backpack — button opens the Chest (your storage)
+    // Backpack button → show its click press, THEN open the storage grid (Chest tab).
+    if (this.overBackpackButton(x, y)) { this.pressBackpackThenOpen(); return; }
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
@@ -3647,6 +3649,28 @@ export class GameScene extends Phaser.Scene {
     this.publishMenu(true);
   }
 
+  /** Backpack hotbar cell clicked → flash its pressed frame, THEN open the storage grid
+   *  (so the button reads as physically pressed before the menu appears). */
+  private pressBackpackThenOpen(): void {
+    if (this.menuOpen) return;
+    const m = this.registry.get('hotbar') as Record<string, unknown> | undefined;
+    if (m) this.registry.set('hotbar', { ...m, backpackPressed: true, rev: ++this.invRev });
+    this.time.delayedCall(120, () => {
+      const m2 = this.registry.get('hotbar') as Record<string, unknown> | undefined;
+      if (m2) this.registry.set('hotbar', { ...m2, backpackPressed: false, rev: ++this.invRev });
+      this.openMenu(1); // Chest tab (your storage); plays the click blip
+    });
+  }
+
+  /** Close via the X button: flash its pressed frame (a momentary click, not a latched
+   *  state), then run the normal close a beat later so the flash is seen first. */
+  private closeMenuViaX(): void {
+    if (!this.menuOpen || this.menuClosing) return;
+    this.menuClosing = true;
+    this.registry.set('menuCloseFlash', ++this.menuCloseFlashRev); // MenuScene shows close-light-big-pressed-down
+    this.time.delayedCall(120, () => { this.menuClosing = false; this.closeMenu(); });
+  }
+
   private closeMenu(): void {
     if (!this.menuOpen) return;
     playSfx(this); // close blip
@@ -3975,7 +3999,7 @@ export class GameScene extends Phaser.Scene {
     }
     // Close button (top-right).
     const cb = this.registry.get('menuCloseBtn') as { x: number; y: number; w: number; h: number } | null;
-    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) { this.closeMenu(); return true; }
+    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) { this.closeMenuViaX(); return true; }
     // Tab switch.
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);

@@ -29,6 +29,7 @@ const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (
 // Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
 // corner; the X was landing on it → clicking it opened the chat).
 const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.955, y: 0.17, size: 0.07 };
+const CLOSE_PRESSED = 'close-light-big-pressed-down'; // brief click-flash frame on the X
 
 // Layout in SCREEN fractions (resize-mode canvas). Tuned against screenshots.
 // Left cluster shifted DOWN so the left frame's BOTTOM aligns with the right detail
@@ -87,6 +88,8 @@ export class MenuScene extends Phaser.Scene {
   private root?: Phaser.GameObjects.Container;
   private panel?: Phaser.GameObjects.Container; // everything except the dim → pops/scales as a unit
   private dim?: Phaser.GameObjects.Rectangle;   // full-screen mask (fades, never scales)
+  private closeImg?: Phaser.GameObjects.Image;  // the X button (frame-swapped for the press flash)
+  private closeFlashRev = -1;                   // last `menuCloseFlash` rev handled
   private detailBox?: Phaser.GameObjects.Container; // right-side detail (re-drawn live on hover)
   private m?: MenuModel;
   private slotTargets: HoverTarget[] = [];
@@ -144,6 +147,9 @@ export class MenuScene extends Phaser.Scene {
       else if (m.visible && this.shown) this.build(m, false);
       else this.close();
     }
+    // Close-button press flash (fired by GameScene just before it closes the menu).
+    const flash = this.registry.get('menuCloseFlash') as number | undefined;
+    if (flash !== undefined && flash !== this.closeFlashRev) { this.closeFlashRev = flash; this.flashCloseButton(); }
     const menu = this.registry.get('menuAction') as ActionMenuModel | undefined;
     if (menu && menu.rev !== this.menuRev) { this.menuRev = menu.rev; this.renderMenu(menu); }
     // Rail drag arrives as a 0..1 fraction from GameScene (touch has no wheel).
@@ -289,7 +295,11 @@ export class MenuScene extends Phaser.Scene {
 
     // Close button (top-right) — the empty-area tap-to-close isn't obvious, so give an X.
     const cs = CLOSE.size * H, cbx = CLOSE.x * W, cby = CLOSE.y * H;
-    if (this.textures.exists(CLOSE.atlas)) panel.add(this.add.image(cbx, cby, CLOSE.atlas, CLOSE.frame).setDisplaySize(cs, cs));
+    this.closeImg = undefined;
+    if (this.textures.exists(CLOSE.atlas)) {
+      this.closeImg = this.add.image(cbx, cby, CLOSE.atlas, CLOSE.frame).setDisplaySize(cs, cs);
+      panel.add(this.closeImg);
+    }
     this.registry.set('menuCloseBtn', { x: cbx - cs / 2, y: cby - cs / 2, w: cs, h: cs });
 
     // The whole menu is the modal; tap anywhere OUTSIDE the left panel + right detail
@@ -299,14 +309,14 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuPanel', { x: lx, y: TABS.y * H, w: (DETAIL.panelX + DETAIL.panelW) * W - lx, h: lh + (ly - TABS.y * H) });
 
     if (slide) {
-      // OPEN: the dim fades in while the panel POPS in — scales up from a slightly
-      // shrunk state with a Back.easeOut overshoot (Zelda-menu spring) around screen
-      // centre. Position is derived from the scale each frame so the pivot stays put.
+      // OPEN: the dim fades in while the panel SLIDES UP from below and bounces once — a
+      // Back.easeOut overshoot past its resting spot (cute spring), then settles.
       dim.setAlpha(0);
       this.tweens.add({ targets: dim, alpha: DIM_ALPHA, duration: 200 });
-      this.popPanel(panel, W, H, 0.9, 1, 'Back.easeOut', 260);
       panel.setAlpha(0);
-      this.tweens.add({ targets: panel, alpha: 1, duration: 200 });
+      panel.y = H * 0.14; // start below the resting position
+      this.tweens.add({ targets: panel, alpha: 1, duration: 160 });
+      this.tweens.add({ targets: panel, y: 0, duration: 340, ease: 'Back.easeOut' });
     } else if (tabSwitch) {
       // Content cross-fades + slides up; the newly-active tab POPS up (rises from a
       // slightly shorter state, bottom pinned so it stays merged with the frame).
@@ -325,14 +335,14 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  /** Tween the panel's scale from→to around the SCREEN CENTRE (a container scales around
-   *  its own (0,0), so we re-derive x/y from the live scale each frame to pin the pivot).
-   *  Used for the open pop (0.9→1 Back.easeOut) and close pop-out (1→0.9 Back.easeIn). */
-  private popPanel(panel: Phaser.GameObjects.Container, W: number, H: number, from: number, to: number, ease: string, duration: number, onComplete?: () => void): void {
-    const cx = W / 2, cy = H / 2;
-    const sync = () => { if (!panel.active) return; panel.x = cx * (1 - panel.scaleX); panel.y = cy * (1 - panel.scaleX); };
-    panel.setScale(from); sync();
-    this.tweens.add({ targets: panel, scaleX: to, scaleY: to, duration, ease, onUpdate: sync, onComplete });
+  /** Flash the close button's pressed frame briefly (a click blip on the X — it's a
+   *  momentary press, not a latched state), then revert. Driven by GameScene's
+   *  `menuCloseFlash` signal just before it triggers the close. */
+  private flashCloseButton(): void {
+    const img = this.closeImg;
+    if (!img || !img.active) return;
+    img.setFrame(CLOSE_PRESSED);
+    this.time.delayedCall(110, () => { if (img.active) img.setFrame(CLOSE.frame); });
   }
 
   private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number, rows: number = GRID.rows): void {
@@ -633,14 +643,22 @@ export class MenuScene extends Phaser.Scene {
     this.tweens.killTweensOf(root);
     if (panel) this.tweens.killTweensOf(panel);
     if (dim) this.tweens.killTweensOf(dim);
-    // CLOSE: reverse of open — the panel pops OUT (scales down + fades) while the dim
-    // fades away; destroy the whole root once the pop-out finishes.
-    const W = this.scale.width, H = this.scale.height;
-    if (dim) this.tweens.add({ targets: dim, alpha: 0, duration: 180 });
+    // CLOSE: a little hop UP first (anticipation), then the panel slides DOWN off-screen
+    // and fades — cute "boing, drop away". The dim fades out with the drop.
+    const H = this.scale.height;
     if (panel) {
-      this.tweens.add({ targets: panel, alpha: 0, duration: 180 });
-      this.popPanel(panel, W, H, 1, 0.9, 'Back.easeIn', 180, () => root.destroy());
+      if (dim) this.tweens.add({ targets: dim, alpha: 0, duration: 260, delay: 130 });
+      this.tweens.chain({
+        targets: panel,
+        onComplete: () => root.destroy(),
+        tweens: [
+          { y: -H * 0.035, duration: 130, ease: 'Sine.easeOut' }, // hop up
+          { y: H * 0.18, duration: 240, ease: 'Back.easeIn' },    // slide down off-screen
+        ],
+      });
+      this.tweens.add({ targets: panel, alpha: 0, duration: 200, delay: 150 }); // fade during the drop
     } else {
+      if (dim) this.tweens.add({ targets: dim, alpha: 0, duration: 180 });
       this.tweens.add({ targets: root, alpha: 0, duration: 160, onComplete: () => root.destroy() });
     }
   }
