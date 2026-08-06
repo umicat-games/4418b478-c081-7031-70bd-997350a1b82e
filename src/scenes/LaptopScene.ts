@@ -151,11 +151,12 @@ export class LaptopScene extends Phaser.Scene {
     this.panelG.lineStyle(Math.max(1, fs * 0.08), PANEL_LINE, 1).strokeRoundedRect(px, py, pw, ph, fs * 0.6);
     const tpad = fs * 0.9;
     // Header row inside the box: cato-idle icon + name (fixed when the message updates).
-    const iconS = fs * 2.1, hrY = py + tpad + iconS / 2;
+    // Icon a touch smaller, and the row nudged up toward the box top.
+    const iconS = fs * 1.7, hrY = py + fs * 0.5 + iconS / 2;
     if (this.catoIcon) this.catoIcon.setDisplaySize(iconS, iconS).setPosition(px + tpad + iconS / 2, hrY);
     this.nameText.setFontSize(Math.round(fs * 1.05)).setPosition(px + tpad + iconS + fs * 0.5, hrY);
     // Message text below the header row.
-    const msgY = py + tpad + iconS + fs * 0.5;
+    const msgY = hrY + iconS / 2 + fs * 0.45;
     this.msgText.setFontSize(fs).setPosition(px + tpad, msgY).setWordWrapWidth(pw - tpad * 2);
     this.msgAreaH = py + ph - tpad - msgY;
     this.measure.setFontSize(fs).setWordWrapWidth(pw - tpad * 2);
