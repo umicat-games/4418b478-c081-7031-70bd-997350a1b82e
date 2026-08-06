@@ -26,34 +26,37 @@
     "offer": {
       "type": "line",
       "speaker": "cato",
-      "text": { "en": "Let me show you the tools real quick — it'll only take a moment.", "zh-CN": "我很快带你认识一下工具吧——一小会儿就好。" },
-      "next": "tool_hoe"
+      "text": { "en": "Let me show you a few things around the house — quick tour!", "zh-CN": "我带你认识一下屋子边上的几样东西吧——很快的！" },
+      "next": "tool_mailbox"
     },
-    "tool_hoe": {
+    "tool_mailbox": {
       "type": "line",
       "speaker": "cato",
-      "spotlight": "hotbar:hoe",
-      "text": { "en": "This is the hoe. Pick it, then tap the grass to till a patch of soil — that's where seeds go.", "zh-CN": "这是锄头。选中它，点草地就能锄出一块地——种子就种在锄好的地上。" },
-      "next": "tool_water"
+      "emote": "happy",
+      "data": { "focus": "mailbox" },
+      "text": { "en": "This is your mailbox. When something arrives, tap it to open it up and collect your gifts and letters.", "zh-CN": "这是你的邮箱。有东西寄到时，点一下就能打开，收下礼物和信件。" },
+      "next": "tool_chest"
     },
-    "tool_water": {
+    "tool_chest": {
       "type": "line",
       "speaker": "cato",
-      "spotlight": "hotbar:watering-can",
-      "text": { "en": "The watering can keeps the soil wet. Watered crops grow much faster — so give them a drink!", "zh-CN": "水壶用来浇地。浇过水的作物长得快多了——记得给它们喝水哦！" },
-      "next": "tool_seed"
+      "data": { "focus": "chest" },
+      "text": { "en": "Over here is the storage chest. Tap it to stash things away or grab them back — when your bag is full, this is where the extra goes.", "zh-CN": "这边是储物箱。点开它可以存东西、也可以拿回来——背包装满了，多出来的就放这儿。" },
+      "next": "tool_pad"
     },
-    "tool_seed": {
+    "tool_pad": {
       "type": "line",
       "speaker": "cato",
-      "spotlight": "hotbar:seed",
-      "text": { "en": "These are seed bags. Pick one, then tap tilled soil to plant it. When it's ripe, tap to harvest!", "zh-CN": "这些是种子袋。选一个，点锄好的地就能种下。长熟了，点一下就能收获！" },
-      "next": "tool_more"
+      "data": { "focus": "pad" },
+      "text": { "en": "This tablet is for shopping. Tap it to place orders — seeds, tools, all sorts of goodies.", "zh-CN": "这个平板是用来买东西的。点开它就能下单——种子、工具，各种好东西都有。" },
+      "next": "tool_workstation"
     },
-    "tool_more": {
+    "tool_workstation": {
       "type": "line",
       "speaker": "cato",
-      "text": { "en": "There's more out in the wild — an axe for trees, a pickaxe for stones — but let's save those for later.", "zh-CN": "野外还有更多——砍树的斧头、敲石头的镐子——不过那些以后再说啦。" },
+      "emote": "content",
+      "data": { "focus": "workstation" },
+      "text": { "en": "And this is the work station. Tap it to craft new things out of the materials you gather.", "zh-CN": "这个是工作台。点开它，就能用你收集来的材料合成新东西。" },
       "next": "help"
     },
     "help": {

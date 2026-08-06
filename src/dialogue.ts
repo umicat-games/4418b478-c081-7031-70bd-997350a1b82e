@@ -48,8 +48,10 @@ export interface DialogueScript {
 
 /** The game implements this to render + persist for the runner. */
 export interface DialogueHost {
-  /** Show a spoken line; the host calls `runner.advance()` when the player continues. */
-  showLine(text: string, opts: { speaker?: string; emote?: string; spotlight?: string | null }): void;
+  /** Show a spoken line; the host calls `runner.advance()` when the player continues.
+   *  `focus` names an in-world object the camera should fly to (cinematic tool tour):
+   *  'mailbox' | 'chest' | 'pad' | 'workstation' | 'cato' (null → back to Cato). */
+  showLine(text: string, opts: { speaker?: string; emote?: string; spotlight?: string | null; focus?: string | null }): void;
   /** Show choices; the host calls `pick(i)` with the chosen option index. */
   showChoices(prompt: string | null, options: string[], pick: (i: number) => void): void;
   getFlag(flag: string): boolean;
@@ -88,7 +90,8 @@ export class DialogueRunner {
     switch (n.type) {
       case 'line':
         // spotlight now lives in `data.spotlight`; legacy top-level `spotlight` is a fallback.
-        this.host.showLine(this.tr(n.text), { speaker: n.speaker, emote: n.emote, spotlight: (n.data?.spotlight ?? n.spotlight) ?? null });
+        // `data.focus` names an in-world object the camera flies to (null → back to Cato).
+        this.host.showLine(this.tr(n.text), { speaker: n.speaker, emote: n.emote, spotlight: (n.data?.spotlight ?? n.spotlight) ?? null, focus: n.data?.focus ?? null });
         return;
       case 'choice':
         this.host.showChoices(

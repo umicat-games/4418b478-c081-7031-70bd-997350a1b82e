@@ -1267,11 +1267,30 @@ export class GameScene extends Phaser.Scene {
    *  (portrait double-tap) is the one-shot snapToChild() tween — skip the follow while
    *  it runs so it isn't fought. Bounds clamp this on preRender. */
   private updateCameraFollow(): void {
+    if (this.cinematic) { this.stepCinematicCamera(); return; } // cutscene owns the camera
     if (!this.cameraFollow || !this.child) return;
     if (this.tweens.getTweensOf(this.cameras.main).length) return;
     const cam = this.cameras.main;
     cam.scrollX = this.child.x - this.scale.width / 2;
     cam.scrollY = this.child.y - this.scale.height / 2;
+  }
+
+  /** Per-frame glide of the cinematic camera toward `cineCamTarget` (an exponential lerp,
+   *  like the follow — driven directly each frame, so it survives headless + can't be
+   *  fought by tween/effect quirks). On the exit glide, reveal the game once it arrives. */
+  private stepCinematicCamera(): void {
+    const t = this.cineCamTarget; if (!t) return;
+    const cam = this.cameras.main;
+    const tsx = t.x - this.scale.width / 2, tsy = t.y - this.scale.height / 2;
+    const k = 0.14; // smoothing per frame
+    cam.scrollX += (tsx - cam.scrollX) * k;
+    cam.scrollY += (tsy - cam.scrollY) * k;
+    cam.setZoom(cam.zoom + (t.zoom - cam.zoom) * k);
+    if (this.cineExiting && Math.abs(cam.zoom - t.zoom) < 0.02 && Math.abs(cam.scrollX - tsx) < 1.5 && Math.abs(cam.scrollY - tsy) < 1.5) {
+      cam.setZoom(t.zoom); cam.setScroll(tsx, tsy); // settle exactly
+      this.cineExiting = false;
+      this.finishCinematic();
+    }
   }
 
   private snapToChild(): void {
@@ -6095,6 +6114,8 @@ export class GameScene extends Phaser.Scene {
   private cinematic = false; // cinematic intro: letterbox bars + zoomed camera + hidden hotbar
   private preCineCenter?: { x: number; y: number }; // camera framing to restore when the intro ends
   private preCineZoom = 1;
+  private cineCamTarget?: { x: number; y: number; zoom: number }; // where the cinematic camera glides toward
+  private cineExiting = false; // exit glide in progress → reveal the game on arrival
   private cutsceneLift = 0; // px the dialog box is raised in a cutscene (to clear the visible hotbar)
   private moreIconRestY?: number; // captured anchored y of the "more" arrow (lifted with the box)
 
@@ -6120,46 +6141,81 @@ export class GameScene extends Phaser.Scene {
     if (this.cinematic) return;
     this.cinematic = true;
     const cam = this.cameras.main;
-    // Zoom-OUT target = the CURRENT (gameplay) framing. Derive the centre from scroll+zoom
-    // (valid synchronously; worldView lags a render), so exit returns to the exact view.
+    // Zoom-OUT target = the CURRENT (gameplay) framing. Derive the centre from scroll
+    // (valid synchronously; worldView lags a render). NB: Phaser zooms around the screen
+    // CENTRE, so the centred world point is scroll + size/2 — NOT /zoom (the classic
+    // center-zoom-origin quirk); exit pans back to exactly this scroll at any zoom.
     this.preCineZoom = cam.zoom;
-    this.preCineCenter = { x: cam.scrollX + this.scale.width / (2 * cam.zoom), y: cam.scrollY + this.scale.height / (2 * cam.zoom) };
+    this.preCineCenter = { x: cam.scrollX + this.scale.width / 2, y: cam.scrollY + this.scale.height / 2 };
     this.cameraFollow = false; // manual camera during the cutscene (no leash fight)
+    this.cineExiting = false;
     this.publishInventory();   // hotbar hidden while cinematic (publishInventory reads this.cinematic)
     (this.scene.get('LetterboxScene') as LetterboxScene | undefined)?.show(500);
     this.snapCameraToCato();   // open ALREADY zoomed on Cato
   }
 
-  /** Instantly frame Cato at ~(0.66, 0.42) of the screen (right-of-centre, a bit high),
-   *  zoomed 1.7× over the gameplay zoom. Used to open the cinematic + on a cinematic resize. */
+  /** The cinematic zoom = 1.7× the gameplay zoom (clamped). */
+  private cineZoom(): number { return Math.min(MAX_ZOOM, this.preCineZoom * 1.7); }
+
+  /** A camera target that frames `sprite` at screen ratio (rx,ry) at `zoom` (rx>0.5 =
+   *  right-of-centre, ry<0.5 = higher). Phaser zooms around the screen centre, so the
+   *  screen offset (rx-0.5)*W maps to a world offset (rx-0.5)*W/zoom. */
+  private cineFrame(sprite: { x: number; y: number }, rx: number, ry: number, zoom: number): { x: number; y: number; zoom: number } {
+    const viewW = this.scale.width / zoom, viewH = this.scale.height / zoom;
+    return { x: sprite.x - (rx - 0.5) * viewW, y: sprite.y - (ry - 0.5) * viewH, zoom };
+  }
+
+  /** Instantly frame Cato (right-of-centre, a bit high), zoomed in. Opens the cinematic +
+   *  handles a cinematic resize. Also sets the glide target so the per-frame step holds it. */
   private snapCameraToCato(): void {
     if (!this.child) return;
     const cam = this.cameras.main;
-    const z = Math.min(MAX_ZOOM, this.preCineZoom * 1.7);
-    const viewW = this.scale.width / z, viewH = this.scale.height / z;
-    const cx = this.child.x - (0.66 - 0.5) * viewW;
-    const cy = this.child.y - (0.42 - 0.5) * viewH;
-    cam.setZoom(z);
-    cam.centerOn(cx, cy);
+    const t = this.cineFrame(this.child, 0.66, 0.42, this.cineZoom());
+    this.cineCamTarget = t;
+    cam.setZoom(t.zoom);
+    cam.setScroll(t.x - this.scale.width / 2, t.y - this.scale.height / 2);
   }
 
-  /** End the cinematic intro: retract the bars, ease the camera back to the pre-intro
-   *  framing/zoom, then hand control back to gameplay + reveal the hotbar. */
+  /** Cinematic tool-tour: glide the camera to an in-world object Cato is introducing
+   *  ('mailbox'|'chest'|'pad'|'workstation'), or back to Cato ('cato'/unknown). Same
+   *  zoom — just a glide (the per-frame step lerps to it). No-op outside the cinematic. */
+  private focusCameraOn(target: string | null): void {
+    if (!this.cinematic) return;
+    const cato = target === 'cato' || target == null;
+    const sprite = cato ? this.child : (this.focusTarget(target) ?? this.child);
+    if (!sprite) return;
+    this.cineCamTarget = this.cineFrame(sprite, cato ? 0.66 : 0.6, cato ? 0.42 : 0.44, this.cineZoom());
+  }
+
+  /** Map a `data.focus` name to its in-world sprite. */
+  private focusTarget(name: string | null): Phaser.GameObjects.Sprite | undefined {
+    switch (name) {
+      case 'mailbox': return this.mailbox;
+      case 'chest': return this.chest;
+      case 'pad': case 'tablet': case 'ipad': return this.pad;
+      case 'workstation': case 'work-station': case 'craft': return this.craftStation;
+      default: return undefined;
+    }
+  }
+
+  /** End the cinematic intro: retract the bars, glide the camera back to the pre-intro
+   *  framing/zoom (the per-frame step reveals the game on arrival). */
   private exitCinematic(): void {
     if (!this.cinematic) return;
-    const cam = this.cameras.main;
     (this.scene.get('LetterboxScene') as LetterboxScene | undefined)?.hide(650);
-    const done = (): void => {
-      if (!this.cinematic) return; // guard against double-fire
-      this.cinematic = false;
-      this.publishInventory(); // reveal the hotbar — game officially begins
-    };
-    const c = this.preCineCenter;
-    if (c) cam.pan(c.x, c.y, 800, 'Sine.easeInOut');
-    cam.zoomTo(this.preCineZoom, 800, 'Sine.easeInOut', false, (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
-      if (progress >= 1) done();
-    });
-    this.time.delayedCall(900, done); // safety: reveal even if the zoom callback is missed
+    const c = this.preCineCenter ?? { x: this.child?.x ?? 0, y: this.child?.y ?? 0 };
+    this.cineCamTarget = { x: c.x, y: c.y, zoom: this.preCineZoom };
+    this.cineExiting = true;
+    this.time.delayedCall(1400, () => this.finishCinematic()); // safety if the glide never settles
+  }
+
+  /** The zoom-OUT finished → hand control back to gameplay + reveal the hotbar. */
+  private finishCinematic(): void {
+    if (!this.cinematic) return;
+    this.cinematic = false;
+    this.cineExiting = false;
+    this.cineCamTarget = undefined;
+    this.publishInventory(); // reveal the hotbar — game officially begins
   }
 
   /** DEBUG: force-replay the intro now — end any open dialogue, clear its seen flag,
@@ -6196,10 +6252,11 @@ export class GameScene extends Phaser.Scene {
 
   /** Host: show a cutscene line (opens the box in cutscene mode on the first line),
    *  set the spotlight, play the mood, type it out. */
-  private dialogueShowLine(text: string, opts: { emote?: string; spotlight?: string | null }): void {
+  private dialogueShowLine(text: string, opts: { emote?: string; spotlight?: string | null; focus?: string | null }): void {
     if (!this.dialogOpen) this.openDialog(undefined, true); // cutscene: box + portrait, NO input
     this.cutscene = true;
     this.setDialogueSpotlight(opts.spotlight ?? null);
+    if (this.cinematic) this.focusCameraOn(opts.focus ?? 'cato'); // fly to the tool being introduced (else back to Cato)
     if (opts.emote) this.catoReact(opts.emote as never, { force: true }); // bubble emote over Cato's head
     this.catoTalkFor(text);
     this.showDialogText(text);
