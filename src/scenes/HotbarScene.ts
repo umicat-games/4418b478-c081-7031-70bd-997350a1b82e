@@ -7,17 +7,17 @@ const ATLAS = 'inventory';
 const FRAME_PANEL = 'frame-medium';
 // Item-slot cells use the `square-buttons` sheet (per the user's request): a resting
 // cell is `light-brown-button`, HOVER shows `white-button` (highlight), and the
-// SELECTED cell shows `light-brown-button-pressed-down` (looks pushed in). Registered
+// SELECTED cell shows `white-button-pressed-down` (a clear lit-up highlight). Registered
 // as sub-frames of the `square-buttons` texture in BootScene.
 const BTN_ATLAS = 'square-buttons';
 const BTN_DEFAULT = 'light-brown-button';
 const BTN_HOVER = 'white-button';
-const BTN_SELECTED = 'light-brown-button-pressed-down';
+const BTN_SELECTED = 'white-button-pressed-down'; // clearer highlight than the brown pressed variant
 // Nine-patch insets per frame (from the Asset Manager tags).
 const BTN_NINE: Record<string, [number, number, number, number]> = {
   'light-brown-button': [6, 6, 7, 7],
   'white-button': [6, 6, 7, 7],
-  'light-brown-button-pressed-down': [6, 6, 6, 6],
+  'white-button-pressed-down': [6, 6, 6, 6],
 };
 
 // Slot art native size (px) and how big we draw it. Integer SLOT_SCALE keeps the

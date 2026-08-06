@@ -340,10 +340,11 @@ export class BootScene extends Phaser.Scene {
     // icon background frame.
     if (btnTex && !btnTex.has('grey-button')) btnTex.add('grey-button', 0, 59, 11, 26, 26);
     // Hotbar item-slot backgrounds (per the Asset Manager tags): `light-brown-button`
-    // (26×28 @ 11,59) = a resting cell, `light-brown-button-pressed-down` (26×26 @
-    // 59,59) = a selected cell. Hover reuses `white-button`.
+    // (26×28 @ 11,59) = a resting cell, `white-button-pressed-down` (26×26 @ 59,11) = a
+    // selected cell (a clearer highlight than the brown pressed variant). Hover reuses
+    // `white-button`.
     if (btnTex && !btnTex.has('light-brown-button')) btnTex.add('light-brown-button', 0, 11, 59, 26, 28);
-    if (btnTex && !btnTex.has('light-brown-button-pressed-down')) btnTex.add('light-brown-button-pressed-down', 0, 59, 59, 26, 26);
+    if (btnTex && !btnTex.has('white-button-pressed-down')) btnTex.add('white-button-pressed-down', 0, 59, 11, 26, 26);
     // Tree chop animations: each type has 3 shake sequences (rows 1/2/3 = 4/6/12
     // frames) played on successive axe strikes; fruit sheets drop fruit during shake3.
     // The bare-tree fall is a separate 17-frame sheet. Registered once, globally.
