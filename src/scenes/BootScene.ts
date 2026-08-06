@@ -337,11 +337,6 @@ export class BootScene extends Phaser.Scene {
       for (let f = from; f <= to; f++) frames.push(f);
       this.anims.create({ key, frames: this.anims.generateFrameNumbers('teemo', { frames }), frameRate: fps, repeat: 0 });
     }
-    // Looping "idle-talk" (frames 39-40, per the manifest) — Cato's talking mouth; used
-    // as the animated portrait above the LaptopScene chat.
-    if (!this.anims.exists('teemo-idle-talk')) {
-      this.anims.create({ key: 'teemo-idle-talk', frames: this.anims.generateFrameNumbers('teemo', { start: 39, end: 40 }), frameRate: 6, repeat: -1 });
-    }
     // Register the `white-button` region of the square-buttons sheet as a frame so
     // the build palette can nine-slice it (26×28 @ 11,11, per the Asset Manager tag).
     const btnTex = this.textures.get('square-buttons');

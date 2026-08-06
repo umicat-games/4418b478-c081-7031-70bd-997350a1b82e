@@ -25,6 +25,8 @@ import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
 const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen inside blue-laptop.png
 const LAPTOP = 'blue-laptop';
 const PANEL_FILL = 0xffffff, PANEL_LINE = 0xcdd8e6, PANEL_TEXT = '#26384a';
+const NAME_COLOR = '#1f3a55';
+const CATO_ICON = 20; // emoji_spritesheet `cato-idle` (0,64) → 32px-grid frame 2*10+0
 const SEND_ICON = 49; // all_icons `play-white` (16,48) → 16px-grid frame 3*16+1
 const SEND_TINT = 0x5a8a6a; // send-arrow colour (tint the white icon)
 const MSG_ICON = 245; // all_icons `white-message-with-border` (80,240) → frame 15*16+5
@@ -44,8 +46,10 @@ const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
-  private cato?: Phaser.GameObjects.Sprite; // animated Cato (idle-talk) above the box
   private panelG!: Phaser.GameObjects.Graphics; // the single flat message box
+  private catoIcon?: Phaser.GameObjects.Image;  // cato-idle, top-left INSIDE the box
+  private nameText!: Phaser.GameObjects.Text;   // "Cato", beside the icon
+  private msgAreaH = 10;                         // message-text height budget (box minus the header row)
   private msgText!: Phaser.GameObjects.Text;
   private measure!: Phaser.GameObjects.Text;    // hidden — pagination height probe
   private more!: Phaser.GameObjects.Text;       // ▼ "more" prompt
@@ -80,12 +84,9 @@ export class LaptopScene extends Phaser.Scene {
     this.add.rectangle(0, 0, W, H, 0x14212e, 1).setOrigin(0, 0);
     this.laptop = this.add.image(0, 0, LAPTOP).setOrigin(0.5);
 
-    if (this.textures.exists('teemo')) {
-      this.cato = this.add.sprite(0, 0, 'teemo', 39).setOrigin(0.5, 1);
-      if (this.anims.exists('teemo-idle-talk')) this.cato.play('teemo-idle-talk'); // Cato talking, above the box
-    }
-
     this.panelG = this.add.graphics();
+    if (this.textures.exists('emoji')) this.catoIcon = this.add.image(0, 0, 'emoji', CATO_ICON).setOrigin(0.5); // cato-idle
+    this.nameText = this.add.text(0, 0, 'Cato', { fontFamily: dialogFont(), color: NAME_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
     this.msgText = this.add.text(0, 0, '', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0);
     this.measure = this.add.text(-9999, 0, '', { fontFamily: dialogFont() }).setVisible(false);
     this.more = this.add.text(0, 0, '▼', { fontFamily: dialogFont(), color: '#9bb0c4' }).setOrigin(1, 1).setVisible(false);
@@ -94,8 +95,8 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
     this.sendBtn.on('pointerdown', () => { if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
 
-    // Hide the chat (incl. the Cato portrait) until the "new message" teaser is opened.
-    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn, this.cato]) o?.setVisible(false);
+    // Hide the chat until the "new message" teaser is opened.
+    for (const o of [this.panelG, this.catoIcon, this.nameText, this.msgText, this.pillG, this.sendBtn]) o?.setVisible(false);
     this.notif = this.add.container(0, 0);
     this.notifG = this.add.graphics();
     this.notifIcon = this.add.image(0, 0, 'ui-icons', MSG_ICON).setOrigin(0.5).setTint(NOTIF_TINT);
@@ -139,21 +140,24 @@ export class LaptopScene extends Phaser.Scene {
     const sw = (SCREEN.x1 - SCREEN.x0) * iw * s, sh = (SCREEN.y1 - SCREEN.y0) * ih * s;
     const pad = Math.round(sw * 0.03);
     const fs = Math.max(11, Math.round(sh * 0.078)); this.fs = fs;
-    const headerH = fs * 3.2, inputH = fs * 2.4, gap = fs * 0.4;
-    const boxTop = sy0 + headerH + gap;
+    const inputH = fs * 2.4, gap = fs * 0.5;
 
-    // Animated Cato (idle-talk) sits ABOVE the message box, centred, feet on its top edge.
-    const catoS = (headerH + gap) * 0.98;
-    if (this.cato) this.cato.setDisplaySize(catoS, catoS).setPosition(sx0 + sw / 2, boxTop + fs * 0.2);
-
-    // Single flat message panel.
-    const px = sx0 + pad, py = boxTop;
+    // Single flat message panel — fills the screen (no external header); the Cato icon +
+    // name live INSIDE it, top-left, and the message flows below them.
+    const px = sx0 + pad, py = sy0 + pad;
     const pw = sw - pad * 2, ph = sy0 + sh - inputH - gap - py; this.panelH = ph;
     this.panelG.clear();
     this.panelG.fillStyle(PANEL_FILL, 0.94).fillRoundedRect(px, py, pw, ph, fs * 0.6);
     this.panelG.lineStyle(Math.max(1, fs * 0.08), PANEL_LINE, 1).strokeRoundedRect(px, py, pw, ph, fs * 0.6);
     const tpad = fs * 0.9;
-    this.msgText.setFontSize(fs).setPosition(px + tpad, py + tpad).setWordWrapWidth(pw - tpad * 2);
+    // Header row inside the box: cato-idle icon + name (fixed when the message updates).
+    const iconS = fs * 2.1, hrY = py + tpad + iconS / 2;
+    if (this.catoIcon) this.catoIcon.setDisplaySize(iconS, iconS).setPosition(px + tpad + iconS / 2, hrY);
+    this.nameText.setFontSize(Math.round(fs * 1.05)).setPosition(px + tpad + iconS + fs * 0.5, hrY);
+    // Message text below the header row.
+    const msgY = py + tpad + iconS + fs * 0.5;
+    this.msgText.setFontSize(fs).setPosition(px + tpad, msgY).setWordWrapWidth(pw - tpad * 2);
+    this.msgAreaH = py + ph - tpad - msgY;
     this.measure.setFontSize(fs).setWordWrapWidth(pw - tpad * 2);
     this.more.setFontSize(fs).setPosition(px + pw - tpad, py + ph - tpad * 0.5);
 
@@ -206,12 +210,12 @@ export class LaptopScene extends Phaser.Scene {
 
   /** Show the chat, then (after a beat) Cato's opening line. */
   private revealChat(): void {
-    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn, this.cato]) o?.setVisible(true);
+    for (const o of [this.panelG, this.catoIcon, this.nameText, this.msgText, this.pillG, this.sendBtn]) o?.setVisible(true);
     this.time.delayedCall(450, () => this.showLine(tr(OPENING), () => this.makeInput()));
   }
 
-  /** Height budget for one page in the panel. */
-  private msgFitH(): number { return this.panelH - this.fs * 2.4; }
+  /** Height budget for one page (box minus the icon/name header row). */
+  private msgFitH(): number { return this.msgAreaH; }
   private fits(str: string): boolean { this.measure.setText(str); return this.measure.height <= this.msgFitH(); }
 
   private paginate(text: string): string[] {
