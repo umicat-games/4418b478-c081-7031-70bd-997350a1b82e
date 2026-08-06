@@ -25,6 +25,8 @@ const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen ins
 const LAPTOP = 'blue-laptop';
 const PANEL_FILL = 0xffffff, PANEL_LINE = 0xcdd8e6, PANEL_TEXT = '#26384a';
 const NAME_COLOR = '#3a2a1a';
+const SEND_ICON = 49; // all_icons `play-white` (16,48) → 16px-grid frame 3*16+1
+const SEND_TINT = 0x5a8a6a; // send-arrow colour (tint the white icon)
 const TYPE_MS = 34;
 
 const OPENING = {
@@ -46,7 +48,7 @@ export class LaptopScene extends Phaser.Scene {
   private measure!: Phaser.GameObjects.Text;    // hidden — pagination height probe
   private more!: Phaser.GameObjects.Text;       // ▼ "more" prompt
   private pillG!: Phaser.GameObjects.Graphics;
-  private sendBtn!: Phaser.GameObjects.Text;
+  private sendBtn!: Phaser.GameObjects.Image;
   private inputEl?: HTMLInputElement;
 
   // typewriter + pagination state
@@ -77,7 +79,7 @@ export class LaptopScene extends Phaser.Scene {
     this.more = this.add.text(0, 0, '▼', { fontFamily: dialogFont(), color: '#9bb0c4' }).setOrigin(1, 1).setVisible(false);
 
     this.pillG = this.add.graphics();
-    this.sendBtn = this.add.text(0, 0, '▶', { fontFamily: dialogFont(), color: '#5a8a6a' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
     this.sendBtn.on('pointerdown', () => { if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
 
     this.layout();
@@ -130,7 +132,7 @@ export class LaptopScene extends Phaser.Scene {
     this.pillG.clear();
     this.pillG.fillStyle(PANEL_FILL, 0.94).fillRoundedRect(px, iy, pw, inputH, fs * 0.6);
     this.pillG.lineStyle(Math.max(1, fs * 0.08), PANEL_LINE, 1).strokeRoundedRect(px, iy, pw, inputH, fs * 0.6);
-    this.sendBtn.setFontSize(Math.round(fs * 1.1)).setPosition(sx0 + sw - pad - btnR, iy + inputH / 2);
+    this.sendBtn.setDisplaySize(inputH * 0.5, inputH * 0.5).setPosition(sx0 + sw - pad - btnR, iy + inputH / 2);
     if (this.inputEl) this.positionInput(px, iy, pw - btnR * 2, inputH);
   };
 
