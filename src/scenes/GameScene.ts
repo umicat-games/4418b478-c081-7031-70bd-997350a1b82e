@@ -6185,6 +6185,7 @@ export class GameScene extends Phaser.Scene {
     const sprite = cato ? this.child : (this.focusTarget(target) ?? this.child);
     if (!sprite) return;
     this.cineCamTarget = this.cineFrame(sprite, cato ? 0.66 : 0.6, cato ? 0.42 : 0.44, this.cineZoom());
+    this.cinePlayObjectAnim(cato ? null : target); // loop the tool's animation while it's in focus
   }
 
   /** Map a `data.focus` name to its in-world sprite. */
@@ -6196,6 +6197,50 @@ export class GameScene extends Phaser.Scene {
       case 'workstation': case 'work-station': case 'craft': return this.craftStation;
       default: return undefined;
     }
+  }
+
+  /** The open/close animation pair for a focusable tool (null = no open/close anim). */
+  private objectAnimPair(name: string | null): { open: string; close: string } | null {
+    switch (name) {
+      case 'mailbox': return { open: this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open', close: 'mailbox-close' };
+      case 'chest': return { open: 'chest-open-front', close: 'chest-close-front' };
+      case 'pad': case 'tablet': case 'ipad': return { open: 'pad-open', close: 'pad-close' };
+      default: return null;
+    }
+  }
+
+  private cineAnimStop?: () => void; // tears down the current focused-tool animation loop
+
+  /** While a tool is in focus during the intro, LOOP its open↔close animation so the
+   *  player clearly sees what Cato is talking about. Stops the previous tool's loop first
+   *  (settling it closed). Static tools (work station) get a gentle scale pulse instead. */
+  private cinePlayObjectAnim(name: string | null): void {
+    if (this.cineAnimStop) { this.cineAnimStop(); this.cineAnimStop = undefined; }
+    const sprite = this.focusTarget(name);
+    if (!sprite) return; // Cato / unknown → nothing to animate
+
+    const pair = this.objectAnimPair(name);
+    if (!pair) {
+      // No open/close anim (work station) → a soft scale pulse so it still "reacts".
+      const bx = sprite.scaleX, by = sprite.scaleY;
+      const tw = this.tweens.add({ targets: sprite, scaleX: bx * 1.08, scaleY: by * 1.08, duration: 480, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.cineAnimStop = () => { tw.stop(); sprite.setScale(bx, by); };
+      return;
+    }
+    if (!this.anims.exists(pair.open) || !this.anims.exists(pair.close)) return;
+    let cancelled = false;
+    const onComplete = (a: Phaser.Animations.Animation): void => {
+      if (cancelled) return;
+      if (a.key === pair.open) this.time.delayedCall(550, () => { if (!cancelled) sprite.play(pair.close); }); // hold open, then close
+      else this.time.delayedCall(400, () => { if (!cancelled) sprite.play(pair.open); });                     // pause closed, then reopen
+    };
+    sprite.on(Phaser.Animations.Events.ANIMATION_COMPLETE, onComplete);
+    sprite.play(pair.open);
+    this.cineAnimStop = () => {
+      cancelled = true;
+      sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE, onComplete);
+      if (this.anims.exists(pair.close)) sprite.play(pair.close); // settle CLOSED as the camera moves on
+    };
   }
 
   /** End the cinematic intro: retract the bars, glide the camera back to the pre-intro
@@ -6215,6 +6260,7 @@ export class GameScene extends Phaser.Scene {
     this.cinematic = false;
     this.cineExiting = false;
     this.cineCamTarget = undefined;
+    if (this.cineAnimStop) { this.cineAnimStop(); this.cineAnimStop = undefined; } // settle the last tool closed
     this.publishInventory(); // reveal the hotbar — game officially begins
   }
 
