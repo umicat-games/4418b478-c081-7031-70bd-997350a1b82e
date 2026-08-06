@@ -23,9 +23,12 @@ import { crossToBgm } from '../bgm';
 const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen inside blue-laptop.png
 const LAPTOP = 'blue-laptop';
 const BTN = 'square-buttons';
-const MSG_FRAME = 'square-button-26_26-6', MSG_NINE: [number, number, number, number] = [4, 5, 4, 5];
-const INPUT_FRAME = 'square-button-26_26-5', INPUT_NINE: [number, number, number, number] = [5, 5, 5, 7];
-const TEXT_COLOR = '#ffffff', NAME_COLOR = '#f4e4c1';
+// Dark-brown box (registered in BootScene) so white text reads. (The pale
+// square-button-26_26-* frames aren't registered on this plain-image texture anyway —
+// a nine-slice of a missing frame fell back to the whole sheet = the "white-grey" mess.)
+const MSG_FRAME = 'dialog-brown', MSG_NINE: [number, number, number, number] = [6, 6, 6, 6];
+const INPUT_FRAME = 'dialog-brown', INPUT_NINE: [number, number, number, number] = [6, 6, 6, 6];
+const TEXT_COLOR = '#ffffff', NAME_COLOR = '#f4e4c1', TEXT_STROKE = '#2b1d0e';
 const TYPE_MS = 42;
 
 const OPENING = {
@@ -120,9 +123,10 @@ export class LaptopScene extends Phaser.Scene {
 
     this.msgBox.setSize(msgW, msgH).setPosition(msgX, msgY);
     const tpad = fs * 0.9;
-    this.msgText.setFontSize(fs).setPosition(msgX + tpad, msgY + tpad + nameH * 0.4).setWordWrapWidth(msgW - tpad * 2);
+    this.msgText.setFontSize(fs).setPosition(msgX + tpad, msgY + tpad + nameH * 0.4).setWordWrapWidth(msgW - tpad * 2)
+      .setStroke(TEXT_STROKE, Math.max(2, fs * 0.16)); // dark outline → white text reads on brown
     this.measure.setFontSize(fs).setWordWrapWidth(msgW - tpad * 2);
-    this.more.setFontSize(fs).setPosition(msgX + msgW - tpad, msgY + msgH - tpad * 0.5);
+    this.more.setFontSize(fs).setPosition(msgX + msgW - tpad, msgY + msgH - tpad * 0.5).setStroke(TEXT_STROKE, Math.max(2, fs * 0.16));
 
     const inY = sy0 + sh - pad - inputH;
     this.inputBox.setSize(msgW, inputH).setPosition(msgX, inY);
