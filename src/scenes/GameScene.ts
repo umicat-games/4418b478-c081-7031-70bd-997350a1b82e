@@ -2028,6 +2028,7 @@ export class GameScene extends Phaser.Scene {
   private selectHotbarSlot(i: number): void {
     if (this.dialogOpen || this.inventoryOpen) return;
     if (i < 0 || i >= INV_COLS) return;
+    playSfx(this); // button click blip on select / deselect
     this.hotbarSelected = this.hotbarSelected === i ? -1 : i;
     this.equipSelected();
     this.publishInventory();
