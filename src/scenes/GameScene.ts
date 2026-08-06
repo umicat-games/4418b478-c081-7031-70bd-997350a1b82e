@@ -448,8 +448,13 @@ interface ForagObj {
   timer: number;
   sprite: Phaser.GameObjects.Image;
   body?: Phaser.GameObjects.Sprite; // solid collider — ONLY small-stones block Cato (rocks); the rest are passable
+  swayUntil?: number; // this.time.now until which a rustle sway is playing (debounce)
   sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
+
+/** Foragable types that rustle (a sway tween) when Cato brushes past / harvests them —
+ *  the leafy ground plants. Mushrooms (rigid caps) and small-stones (rocks) don't. */
+const SWAY_FORAGABLES = new Set<string>(['grass']);
 
 /** A minable big-stone at a cell. `ready` = stones available to knock out right now;
  *  `regen` holds the remaining-ms timers of stones currently regrowing (each pops
@@ -2899,19 +2904,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Rustle a bush: rock it left-right around its base (origin 0.5,1) and settle — a
-   *  cheap procedural "someone brushed past" instead of a hand-drawn sway animation.
-   *  The berries ride along (each pivots about its own base; fine at this small angle).
-   *  Debounced by `swayUntil` so a pass-through + harvest don't double-fire. */
-  private swayBush(bush: BushObj): void {
-    if (bush.swayUntil && this.time.now < bush.swayUntil) return;
-    const targets = [bush.base, ...bush.berries];
+  /** Rustle sprite(s): rock them left-right around their base (origin 0.5,1) and settle
+   *  — a cheap procedural "someone brushed past" instead of a hand-drawn sway animation.
+   *  `holder.swayUntil` debounces so a pass-through + harvest don't double-fire. Each
+   *  target gets ITS OWN chain (not a shared multi-target one) so destroying one mid-sway
+   *  (e.g. a bush's berries on harvest) doesn't freeze the others. */
+  private playSway(targets: Phaser.GameObjects.Image[], holder: { swayUntil?: number }, amp = 8): void {
+    if (holder.swayUntil && this.time.now < holder.swayUntil) return;
     if (!targets.length) return;
-    bush.swayUntil = this.time.now + 520; // ~animation length; also the re-trigger cooldown
-    const amp = 8; // degrees
-    // ONE chain PER target (not a single multi-target chain): harvest destroys the
-    // berries mid-sway (setBushStage → killTweensOf), and a shared chain would die WITH
-    // them, freezing the base too. Independent chains keep the base rocking.
+    holder.swayUntil = this.time.now + 520; // ~animation length; also the re-trigger cooldown
     for (const t of targets) {
       this.tweens.killTweensOf(t);
       t.setAngle(0);
@@ -2928,17 +2929,24 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Cato brushing through the bushes: when his foot cell CHANGES onto a bush cell,
-   *  rustle it (once per entry — the sway's own debounce guards a lingering stand). */
+  private swayBush(bush: BushObj): void { this.playSway([bush.base, ...bush.berries], bush); }
+  /** Grass rustles a touch livelier than a bush (thin blades) → a bit more amplitude. */
+  private swayForagable(f: ForagObj): void { this.playSway([f.sprite], f, 11); }
+
+  /** Cato brushing through vegetation: when his foot cell CHANGES onto a bush or a
+   *  swayable foragable (grass), rustle it (once per entry — the sway's own debounce
+   *  guards a lingering stand). */
   private updateBushBrush(): void {
-    if (!this.child || !this.islandLayer || !this.bushes.size) return;
+    if (!this.child || !this.islandLayer || (!this.bushes.size && !this.foragables.size)) return;
     const t = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
     if (!t) return;
     const key = `${Math.floor(t.x)},${Math.floor(t.y)}`;
     if (key === this.catoBushCell) return; // same cell as last frame → don't re-trigger
     this.catoBushCell = key;
     const bush = this.bushes.get(key);
-    if (bush) this.swayBush(bush);
+    if (bush) { this.swayBush(bush); return; }
+    const f = this.foragables.get(key);
+    if (f && SWAY_FORAGABLES.has(f.type)) this.swayForagable(f);
   }
   private catoBushCell = '';
 
@@ -3058,6 +3066,7 @@ export class GameScene extends Phaser.Scene {
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     this.foragables.delete(key);
     if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'forage', `${f.type}-${def.stages}`);
+    this.tweens.killTweensOf(f.sprite); // stop any in-flight rustle before destroy
     f.body?.destroy();
     f.sprite.destroy();
     this.addToChest(makeForage(f.type, def.yieldCount));
@@ -3071,6 +3080,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const f = this.foragables.get(key);
     if (!f) return;
+    this.tweens.killTweensOf(f.sprite); // stop any in-flight rustle before destroy
     f.body?.destroy();
     f.sprite.destroy();
     this.foragables.delete(key);
@@ -6414,6 +6424,8 @@ export class GameScene extends Phaser.Scene {
       // save; must survive it, like the trees/bushes).
       for (const [key, f] of this.foragables) {
         if (f.sceneWired) continue;
+        this.tweens.killTweensOf(f.sprite); // stop any in-flight rustle before destroy
+        f.body?.destroy();
         f.sprite.destroy();
         this.foragables.delete(key);
       }
