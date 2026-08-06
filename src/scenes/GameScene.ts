@@ -12,6 +12,7 @@ import {
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import type { MailListEntry, OrderCatalogEntry } from './menu-types';
 import type { ReceiptLine } from './ReceiptScene';
+import type { LetterboxScene } from './LetterboxScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
 import { RECIPES, type Recipe } from '../data/recipes';
 import { t, initLang, getLang } from '../i18n';
@@ -1387,6 +1388,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('MenuScene')) this.scene.launch('MenuScene');
     if (!this.scene.isActive('CraftScene')) this.scene.launch('CraftScene');
     if (!this.scene.isActive('DialogueScene')) this.scene.launch('DialogueScene');
+    if (!this.scene.isActive('LetterboxScene')) this.scene.launch('LetterboxScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
@@ -1394,6 +1396,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('ChatterScene'); // above UmicatHud so the mood emoji shows IN the portrait
     this.scene.bringToTop('MenuScene');     // the unified menu sits above the HUD too
     this.scene.bringToTop('CraftScene');    // the crafting modal sits above the HUD too
+    this.scene.bringToTop('LetterboxScene'); // cinematic bars ABOVE the world/HUD, BELOW the dialog box
     this.scene.bringToTop('DialogueScene'); // spotlight ring above the hotbar during a cutscene
     this.scene.bringToTop('CursorScene');
     this.publishBuildPalette();
@@ -1768,7 +1771,7 @@ export class GameScene extends Phaser.Scene {
       slots: this.inventory.slice(0, INV_COLS).map((s) => this.stackView(s)),
       selected: this.hotbarSelected,
       hovered: this.hotbarHover,
-      visible: this.gameReady && (!this.dialogOpen || this.cutscene) && !this.inventoryOpen, // a cutscene keeps it (for tool spotlights)
+      visible: this.gameReady && (!this.dialogOpen || this.cutscene) && !this.inventoryOpen && !this.cinematic, // cutscene keeps it (tool spotlights); the cinematic intro HIDES it until the game officially starts
       rev,
     });
     this.registry.set('inventory', {
@@ -6004,8 +6007,10 @@ export class GameScene extends Phaser.Scene {
     // Cutscene keeps the hotbar visible (for spotlights), so LIFT the box group up to
     // clear it (both are bottom-anchored → they'd overlap). Lift = the hotbar's occupied
     // height + a gap (from hotbarBounds.bar), fallback ~96.
+    // ...but the cinematic intro HIDES the hotbar, so there's nothing to clear → no lift
+    // (the box sits at its normal bottom spot, in the lower letterbox area).
     const bar = this.registry.get('hotbarBounds') as { bar?: { h?: number } } | undefined;
-    this.cutsceneLift = cutscene ? (bar?.bar?.h ?? 90) + 10 : 0;
+    this.cutsceneLift = cutscene && !this.cinematic ? (bar?.bar?.h ?? 90) + 10 : 0;
     for (const role of roles) {
       const go = getHudObject(this, role) as unknown as
         | { x: number; y: number; setVisible?: (v: boolean) => void; setAlpha?: (a: number) => void }
@@ -6082,6 +6087,9 @@ export class GameScene extends Phaser.Scene {
   private dialogueFlags = new Set<string>();
   private dialogueSeen = new Set<string>();
   private cutscene = false;
+  private cinematic = false; // cinematic intro: letterbox bars + zoomed camera + hidden hotbar
+  private preCineCenter?: { x: number; y: number }; // camera framing to restore when the intro ends
+  private preCineZoom = 1;
   private cutsceneLift = 0; // px the dialog box is raised in a cutscene (to clear the visible hotbar)
   private moreIconRestY?: number; // captured anchored y of the "more" arrow (lifted with the box)
 
@@ -6093,7 +6101,54 @@ export class GameScene extends Phaser.Scene {
     if (!isDebug('replayIntro') && !this.isNewGame) return;
     if (!this.cache.json.exists('dialogue-intro')) return;
     // A tiny beat so the world/HUD have settled before Cato greets.
-    this.time.delayedCall(700, () => { if (!this.dialogOpen && !this.menuOpen) this.startDialogue('intro'); });
+    this.time.delayedCall(700, () => {
+      if (this.dialogOpen || this.menuOpen) return;
+      this.enterCinematic(); // letterbox in + zoom onto Cato + hide the hotbar
+      this.startDialogue('intro');
+    });
+  }
+
+  /** Begin the cinematic intro: slide the letterbox bars in, hide the hotbar, and zoom
+   *  the camera onto Cato (upper-right of frame). The current framing is remembered so
+   *  {@link exitCinematic} can ease back to it. */
+  private enterCinematic(): void {
+    if (this.cinematic) return;
+    this.cinematic = true;
+    const cam = this.cameras.main;
+    this.preCineCenter = { x: cam.worldView.centerX, y: cam.worldView.centerY };
+    this.preCineZoom = cam.zoom;
+    this.cameraFollow = false; // manual camera during the cutscene (no leash fighting the tween)
+    this.publishInventory();   // hotbar hidden while cinematic (publishInventory reads this.cinematic)
+    (this.scene.get('LetterboxScene') as LetterboxScene | undefined)?.show(500);
+    if (this.child) {
+      const z = Math.min(MAX_ZOOM, this.preCineZoom * 1.7); // punch in on Cato
+      const viewW = this.scale.width / z, viewH = this.scale.height / z;
+      // Frame Cato at ~(0.66, 0.42) of the screen (right-of-centre, a bit high) → centre
+      // the camera on a point offset down-left of him.
+      const cx = this.child.x - (0.66 - 0.5) * viewW;
+      const cy = this.child.y - (0.42 - 0.5) * viewH;
+      cam.pan(cx, cy, 900, 'Sine.easeInOut');
+      cam.zoomTo(z, 900, 'Sine.easeInOut');
+    }
+  }
+
+  /** End the cinematic intro: retract the bars, ease the camera back to the pre-intro
+   *  framing/zoom, then hand control back to gameplay + reveal the hotbar. */
+  private exitCinematic(): void {
+    if (!this.cinematic) return;
+    const cam = this.cameras.main;
+    (this.scene.get('LetterboxScene') as LetterboxScene | undefined)?.hide(650);
+    const done = (): void => {
+      if (!this.cinematic) return; // guard against double-fire
+      this.cinematic = false;
+      this.publishInventory(); // reveal the hotbar — game officially begins
+    };
+    const c = this.preCineCenter;
+    if (c) cam.pan(c.x, c.y, 800, 'Sine.easeInOut');
+    cam.zoomTo(this.preCineZoom, 800, 'Sine.easeInOut', false, (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
+      if (progress >= 1) done();
+    });
+    this.time.delayedCall(900, done); // safety: reveal even if the zoom callback is missed
   }
 
   /** DEBUG: force-replay the intro now — end any open dialogue, clear its seen flag,
@@ -6101,6 +6156,7 @@ export class GameScene extends Phaser.Scene {
   private debugReplayIntro(): void {
     if (this.dialogueRunner) this.endDialogue();
     this.dialogueSeen.delete('intro');
+    this.enterCinematic();
     this.startDialogue('intro');
   }
 
@@ -6152,6 +6208,7 @@ export class GameScene extends Phaser.Scene {
     this.cutscene = false;
     this.setDialogueSpotlight(null);
     if (this.dialogOpen) this.closeDialog();
+    if (this.cinematic) this.exitCinematic(); // intro over → retract bars, zoom back, show hotbar
   }
 
   /** Point DialogueScene at a named UI target ('hotbar:<toolId>' | 'hotbar:seed' | null). */
