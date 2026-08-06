@@ -27,6 +27,9 @@ const PANEL_FILL = 0xffffff, PANEL_LINE = 0xcdd8e6, PANEL_TEXT = '#26384a';
 const NAME_COLOR = '#3a2a1a';
 const SEND_ICON = 49; // all_icons `play-white` (16,48) → 16px-grid frame 3*16+1
 const SEND_TINT = 0x5a8a6a; // send-arrow colour (tint the white icon)
+const MSG_ICON = 245; // all_icons `white-message-with-border` (80,240) → frame 15*16+5
+const NOTIF_TINT = 0x4a90c8; // "new message" bell/icon colour
+const NEW_MSG = { en: 'You have a new message', 'zh-CN': '你有一条新消息' };
 const TYPE_MS = 34;
 
 const OPENING = {
@@ -50,6 +53,14 @@ export class LaptopScene extends Phaser.Scene {
   private pillG!: Phaser.GameObjects.Graphics;
   private sendBtn!: Phaser.GameObjects.Image;
   private inputEl?: HTMLInputElement;
+
+  // "You have a new message" teaser (shown first; click opens the chat)
+  private notif?: Phaser.GameObjects.Container;
+  private notifG!: Phaser.GameObjects.Graphics;
+  private notifIcon!: Phaser.GameObjects.Image;
+  private notifText!: Phaser.GameObjects.Text;
+  private notifying = false;
+  private breatheTween?: Phaser.Tweens.Tween;
 
   // typewriter + pagination state
   private pages: string[] = [];
@@ -82,6 +93,15 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
     this.sendBtn.on('pointerdown', () => { if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
 
+    // Hide the chat until the "new message" teaser is opened.
+    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn]) o.setVisible(false);
+    this.notif = this.add.container(0, 0);
+    this.notifG = this.add.graphics();
+    this.notifIcon = this.add.image(0, 0, 'ui-icons', MSG_ICON).setOrigin(0.5).setTint(NOTIF_TINT);
+    this.notifText = this.add.text(0, 0, tr(NEW_MSG), { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0.5);
+    this.notif.add([this.notifG, this.notifIcon, this.notifText]);
+    this.notifying = true;
+
     this.layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -89,12 +109,12 @@ export class LaptopScene extends Phaser.Scene {
       this.removeInput();
     });
 
-    // Click / tap / Space advances the text (reveal rest / next page) while Cato speaks.
-    this.input.on('pointerdown', () => this.advance());
-    this.input.keyboard?.on('keydown-SPACE', () => this.advance());
+    // While the teaser is up, a click opens it; afterwards a click advances the text.
+    this.input.on('pointerdown', () => (this.notifying ? this.dismissNotification() : this.advance()));
+    this.input.keyboard?.on('keydown-SPACE', () => (this.notifying ? this.dismissNotification() : this.advance()));
 
     finishTransition(this); // uncover the Play→laptop wipe
-    this.showLine(tr(OPENING), () => this.makeInput());
+    this.startBreathe();     // the icon pulses to invite a click
   }
 
   // ── Layout ────────────────────────────────────────────────────────────────
@@ -134,7 +154,50 @@ export class LaptopScene extends Phaser.Scene {
     this.pillG.lineStyle(Math.max(1, fs * 0.08), PANEL_LINE, 1).strokeRoundedRect(px, iy, pw, inputH, fs * 0.6);
     this.sendBtn.setDisplaySize(inputH * 0.5, inputH * 0.5).setPosition(sx0 + sw - pad - btnR, iy + inputH / 2);
     if (this.inputEl) this.positionInput(px, iy, pw - btnR * 2, inputH);
+
+    // "New message" teaser — a centred pill (icon + text), drawn about its own centre.
+    if (this.notif) {
+      const nh = fs * 3, iconS = nh * 0.56, npad = fs * 1.1, gap = fs * 0.7;
+      this.notifText.setFontSize(Math.round(fs * 1.05));
+      const nw = npad + iconS + gap + this.notifText.width + npad;
+      this.notifG.clear();
+      this.notifG.fillStyle(PANEL_FILL, 0.97).fillRoundedRect(-nw / 2, -nh / 2, nw, nh, nh / 2);
+      this.notifG.lineStyle(Math.max(1, fs * 0.09), PANEL_LINE, 1).strokeRoundedRect(-nw / 2, -nh / 2, nw, nh, nh / 2);
+      this.notifIcon.setScale(iconS / 16).setPosition(-nw / 2 + npad + iconS / 2, 0);
+      this.notifText.setPosition(-nw / 2 + npad + iconS + gap, 0);
+      this.notif.setPosition(sx0 + sw / 2, sy0 + sh / 2);
+    }
   };
+
+  // ── "New message" teaser ────────────────────────────────────────────────────
+  /** Gently pulse the message icon so the player knows to click the teaser. */
+  private startBreathe(): void {
+    const base = this.notifIcon.scaleX || 1;
+    this.breatheTween?.remove();
+    this.breatheTween = this.tweens.add({ targets: this.notifIcon, scaleX: base * 1.15, scaleY: base * 1.15, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Click on the teaser → pop it, shrink it away, then open the chat. */
+  private dismissNotification(): void {
+    if (!this.notifying || !this.notif) return;
+    this.notifying = false;
+    this.breatheTween?.remove(); this.breatheTween = undefined;
+    const c = this.notif;
+    this.tweens.chain({
+      targets: c,
+      onComplete: () => { c.destroy(); if (this.notif === c) this.notif = undefined; this.revealChat(); },
+      tweens: [
+        { scaleX: 1.15, scaleY: 1.15, duration: 130, ease: 'Sine.easeOut' },       // pop
+        { scaleX: 0, scaleY: 0, alpha: 0, duration: 200, ease: 'Back.easeIn' },     // shrink away
+      ],
+    });
+  }
+
+  /** Show the chat, then (after a beat) Cato's opening line. */
+  private revealChat(): void {
+    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn]) o.setVisible(true);
+    this.time.delayedCall(450, () => this.showLine(tr(OPENING), () => this.makeInput()));
+  }
 
   /** Height budget for one page in the panel. */
   private msgFitH(): number { return this.panelH - this.fs * 2.4; }
