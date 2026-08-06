@@ -24,7 +24,6 @@ import { crossToBgm } from '../bgm';
 const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen inside blue-laptop.png
 const LAPTOP = 'blue-laptop';
 const PANEL_FILL = 0xffffff, PANEL_LINE = 0xcdd8e6, PANEL_TEXT = '#26384a';
-const PILL_FILL = 0xfffdf6, PILL_LINE = 0xcdbf9a;
 const NAME_COLOR = '#3a2a1a';
 const TYPE_MS = 34;
 
@@ -126,11 +125,11 @@ export class LaptopScene extends Phaser.Scene {
     this.measure.setFontSize(fs).setWordWrapWidth(pw - tpad * 2);
     this.more.setFontSize(fs).setPosition(px + pw - tpad, py + ph - tpad * 0.5);
 
-    // Input pill + send button.
+    // Input box + send button — SAME rounded panel style as Cato's message box.
     const iy = sy0 + sh - inputH, btnR = inputH * 0.44;
     this.pillG.clear();
-    this.pillG.fillStyle(PILL_FILL, 1).fillRoundedRect(px, iy, pw, inputH, inputH / 2);
-    this.pillG.lineStyle(Math.max(1, fs * 0.09), PILL_LINE, 1).strokeRoundedRect(px, iy, pw, inputH, inputH / 2);
+    this.pillG.fillStyle(PANEL_FILL, 0.94).fillRoundedRect(px, iy, pw, inputH, fs * 0.6);
+    this.pillG.lineStyle(Math.max(1, fs * 0.08), PANEL_LINE, 1).strokeRoundedRect(px, iy, pw, inputH, fs * 0.6);
     this.sendBtn.setFontSize(Math.round(fs * 1.1)).setPosition(sx0 + sw - pad - btnR, iy + inputH / 2);
     if (this.inputEl) this.positionInput(px, iy, pw - btnR * 2, inputH);
   };
@@ -191,7 +190,7 @@ export class LaptopScene extends Phaser.Scene {
     const el = document.createElement('input');
     el.type = 'text'; el.maxLength = 120;
     el.placeholder = getLang() === 'zh-CN' ? '输入消息…' : 'Message…';
-    el.style.cssText = 'position:fixed;z-index:30;border:none;outline:none;background:transparent;color:#3a2a1a;font-family:inherit;';
+    el.style.cssText = 'position:fixed;z-index:30;border:none;outline:none;background:transparent;color:#26384a;font-family:zpix, sans-serif;';
     (this.game.canvas.parentElement ?? document.body).appendChild(el);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.onSend(el.value.trim()); } });
     this.inputEl = el;
