@@ -1242,6 +1242,9 @@ export class GameScene extends Phaser.Scene {
   /** Canvas resized (RESIZE mode) — re-pick the integer zoom, keep the same world
    *  point centred, re-clamp to bounds, and re-lay-out the screen-fixed UI. */
   private onResize(): void {
+    // During the cinematic intro the camera is a fixed Cato framing — keep it there
+    // (a normal re-fit would zoom back out to gameplay mid-cutscene).
+    if (this.cinematic) { this.snapCameraToCato(); this.layoutFindCatButton(); return; }
     const cam = this.cameras.main;
     // World point currently at screen centre (from the last render).
     const cx = cam.worldView.centerX;
@@ -6102,36 +6105,42 @@ export class GameScene extends Phaser.Scene {
     // debug flag forces it every load for iterating on the script.
     if (!isDebug('replayIntro') && !this.isNewGame) return;
     if (!this.cache.json.exists('dialogue-intro')) return;
-    // A tiny beat so the world/HUD have settled before Cato greets.
-    this.time.delayedCall(700, () => {
-      if (this.dialogOpen || this.menuOpen) return;
-      this.enterCinematic(); // letterbox in + zoom onto Cato + hide the hotbar
-      this.startDialogue('intro');
-    });
+    // The game OPENS already focused on Cato (no zoom-in) — so enter the cinematic NOW,
+    // synchronously after frameNewGameStart's framing, before the first render. Only a
+    // tiny beat before Cato actually starts talking.
+    this.enterCinematic();
+    this.time.delayedCall(700, () => { if (!this.menuOpen) this.startDialogue('intro'); });
   }
 
-  /** Begin the cinematic intro: slide the letterbox bars in, hide the hotbar, and zoom
-   *  the camera onto Cato (upper-right of frame). The current framing is remembered so
-   *  {@link exitCinematic} can ease back to it. */
+  /** Begin the cinematic intro: remember the gameplay framing (the zoom-OUT target),
+   *  slide the letterbox bars in, hide the hotbar, and SNAP the camera onto Cato. We snap
+   *  (not pan/zoom-in) because the game is meant to OPEN already on Cato — the movie's end
+   *  zoom-OUT is what reveals the real game. */
   private enterCinematic(): void {
     if (this.cinematic) return;
     this.cinematic = true;
     const cam = this.cameras.main;
-    this.preCineCenter = { x: cam.worldView.centerX, y: cam.worldView.centerY };
+    // Zoom-OUT target = the CURRENT (gameplay) framing. Derive the centre from scroll+zoom
+    // (valid synchronously; worldView lags a render), so exit returns to the exact view.
     this.preCineZoom = cam.zoom;
-    this.cameraFollow = false; // manual camera during the cutscene (no leash fighting the tween)
+    this.preCineCenter = { x: cam.scrollX + this.scale.width / (2 * cam.zoom), y: cam.scrollY + this.scale.height / (2 * cam.zoom) };
+    this.cameraFollow = false; // manual camera during the cutscene (no leash fight)
     this.publishInventory();   // hotbar hidden while cinematic (publishInventory reads this.cinematic)
     (this.scene.get('LetterboxScene') as LetterboxScene | undefined)?.show(500);
-    if (this.child) {
-      const z = Math.min(MAX_ZOOM, this.preCineZoom * 1.7); // punch in on Cato
-      const viewW = this.scale.width / z, viewH = this.scale.height / z;
-      // Frame Cato at ~(0.66, 0.42) of the screen (right-of-centre, a bit high) → centre
-      // the camera on a point offset down-left of him.
-      const cx = this.child.x - (0.66 - 0.5) * viewW;
-      const cy = this.child.y - (0.42 - 0.5) * viewH;
-      cam.pan(cx, cy, 900, 'Sine.easeInOut');
-      cam.zoomTo(z, 900, 'Sine.easeInOut');
-    }
+    this.snapCameraToCato();   // open ALREADY zoomed on Cato
+  }
+
+  /** Instantly frame Cato at ~(0.66, 0.42) of the screen (right-of-centre, a bit high),
+   *  zoomed 1.7× over the gameplay zoom. Used to open the cinematic + on a cinematic resize. */
+  private snapCameraToCato(): void {
+    if (!this.child) return;
+    const cam = this.cameras.main;
+    const z = Math.min(MAX_ZOOM, this.preCineZoom * 1.7);
+    const viewW = this.scale.width / z, viewH = this.scale.height / z;
+    const cx = this.child.x - (0.66 - 0.5) * viewW;
+    const cy = this.child.y - (0.42 - 0.5) * viewH;
+    cam.setZoom(z);
+    cam.centerOn(cx, cy);
   }
 
   /** End the cinematic intro: retract the bars, ease the camera back to the pre-intro
