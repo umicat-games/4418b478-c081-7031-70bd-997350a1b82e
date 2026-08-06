@@ -4095,6 +4095,7 @@ export class GameScene extends Phaser.Scene {
   private clearDataAndReturnToTitle(): void {
     this.saveArmed = false;
     this.pendingSave?.remove();
+    try { localStorage.removeItem('catopia:laptopDone'); } catch { /* no storage */ } // replay the laptop cold-open on a fresh start
     coverAndReload(this, 'dissolve', async () => {
       try { await this.umicat?.saves.delete('state'); }
       catch (e) { console.warn('[catopia] clear save failed', e); }
