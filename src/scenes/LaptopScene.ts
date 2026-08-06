@@ -114,7 +114,15 @@ export class LaptopScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-SPACE', () => (this.notifying ? this.dismissNotification() : this.advance()));
 
     finishTransition(this); // uncover the Play→laptop wipe
-    this.startBreathe();     // the icon pulses to invite a click
+    // The "new message" pops IN a beat after the screen appears (like a notification
+    // arriving), then the icon breathes to invite a click.
+    this.notif.setScale(0.5).setAlpha(0);
+    this.time.delayedCall(300, () => this.popNotifIn());
+  }
+
+  private popNotifIn(): void {
+    if (!this.notif) return;
+    this.tweens.add({ targets: this.notif, scaleX: 1, scaleY: 1, alpha: 1, duration: 360, ease: 'Back.easeOut', onComplete: () => this.startBreathe() });
   }
 
   // ── Layout ────────────────────────────────────────────────────────────────
@@ -183,6 +191,7 @@ export class LaptopScene extends Phaser.Scene {
     this.notifying = false;
     this.breatheTween?.remove(); this.breatheTween = undefined;
     const c = this.notif;
+    this.tweens.killTweensOf(c); // in case it's still popping/breathing in
     this.tweens.chain({
       targets: c,
       onComplete: () => { c.destroy(); if (this.notif === c) this.notif = undefined; this.revealChat(); },
