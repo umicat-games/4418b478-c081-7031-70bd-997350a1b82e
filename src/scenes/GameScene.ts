@@ -683,6 +683,7 @@ export class GameScene extends Phaser.Scene {
   private menuRev = 0;
   private menuActionRev = 0;
   private menuDragging = false; // dragging the unified menu's scroll rail
+  private menuSliderDrag: 'bgm' | 'sfx' | null = null; // dragging a Settings-tab volume slider
   private menuShopSel?: string; // selected catalog id on the Shop tab (→ right detail + stepper)
   // When the menu was opened by clicking a physical door object (mailbox / chest), the
   // object plays its OPEN anim first; closing the menu plays its CLOSE anim.
@@ -1401,6 +1402,9 @@ export class GameScene extends Phaser.Scene {
       if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal (unlocked)
       if (this.menuOpen) {
+        // Press on a Settings volume slider → start a DRAG (held pointer scrubs it).
+        const sl = this.menuSliderAt(pointer.x, pointer.y);
+        if (sl) { this.menuSliderDrag = sl; this.menuApplySliderVol(sl, pointer.x); return; }
         // Dragging the scroll rail scrolls the list; an item slot / shop row wins over
         // the rail's wide hit zone, and the rail is off while a sub-popup is up.
         const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null || this.menuShopRowAt(pointer.x, pointer.y) !== null;
@@ -1432,13 +1436,20 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
       // Unified menu: touch scrolls via a SWIPE (handled in MenuScene) — no rail drag here.
-      if (this.menuOpen) return;
+      // A finger on a Settings volume slider starts a drag (pointermove scrubs it).
+      if (this.menuOpen) {
+        const sl = this.menuSliderAt(pointer.x, pointer.y);
+        if (sl) { this.menuSliderDrag = sl; this.menuApplySliderVol(sl, pointer.x); }
+        return;
+      }
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.menuSliderDrag) { this.menuApplySliderVol(this.menuSliderDrag, pointer.x); return; } // scrub a volume slider
       if (this.menuDragging) { this.menuDragTo(pointer.y); return; } // drag the unified menu scroll rail
     });
     this.input.on('pointerup', () => {
       this.menuDragging = false; // end a rail drag
+      this.menuSliderDrag = null; // end a slider drag
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
@@ -3954,21 +3965,9 @@ export class GameScene extends Phaser.Scene {
       const rid = this.menuShopRowAt(x, y);
       if (rid) { this.menuShopSel = rid; this.shopMsg = ''; this.publishMenu(); return true; }
     } else if (this.menuTab === 4) {
-      // Settings: tap the volume bar to set the level; tap 返回标题 to go back to the title.
-      const track = this.registry.get('menuSettingsTrack') as { x: number; y: number; w: number; h: number } | null;
-      if (track && x >= track.x && x <= track.x + track.w && y >= track.y && y <= track.y + track.h) {
-        setBgmVolume(this, Phaser.Math.Clamp((x - track.x) / track.w, 0, 1));
-        this.publishMenu(); // re-render the slider fill/knob
-        playSfx(this, SFX_SCROLL);
-        return true;
-      }
-      const sfxTrack = this.registry.get('menuSfxTrack') as { x: number; y: number; w: number; h: number } | null;
-      if (sfxTrack && x >= sfxTrack.x && x <= sfxTrack.x + sfxTrack.w && y >= sfxTrack.y && y <= sfxTrack.y + sfxTrack.h) {
-        setSfxVolume(this, Phaser.Math.Clamp((x - sfxTrack.x) / sfxTrack.w, 0, 1));
-        this.publishMenu();
-        playSfx(this, SFX_SCROLL); // scrub tick at the new SFX level
-        return true;
-      }
+      // Settings: tap/drag the volume bar to set the level; tap 返回标题 to go back.
+      const slider = this.menuSliderAt(x, y);
+      if (slider) { this.menuApplySliderVol(slider, x); return true; }
       const back = this.registry.get('menuSettingsBack') as { x: number; y: number; w: number; h: number } | null;
       if (back && x >= back.x && x <= back.x + back.w && y >= back.y && y <= back.y + back.h) { this.returnToTitle(); return true; }
       const clr = this.registry.get('menuClearData') as { x: number; y: number; w: number; h: number } | null;
@@ -3981,6 +3980,30 @@ export class GameScene extends Phaser.Scene {
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
     return true;
+  }
+
+  /** Which Settings-tab volume slider (if any) the point is over — its published
+   *  track rect. Used for BOTH a tap and the start of a drag. */
+  private menuSliderAt(x: number, y: number): 'bgm' | 'sfx' | null {
+    const hit = (key: string): boolean => {
+      const r = this.registry.get(key) as { x: number; y: number; w: number; h: number } | null;
+      return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    };
+    if (this.menuTab !== 4) return null;
+    if (hit('menuSettingsTrack')) return 'bgm';
+    if (hit('menuSfxTrack')) return 'sfx';
+    return null;
+  }
+
+  /** Set a Settings-tab volume from the pointer x over its track (tap or drag). */
+  private menuApplySliderVol(which: 'bgm' | 'sfx', x: number): void {
+    const key = which === 'bgm' ? 'menuSettingsTrack' : 'menuSfxTrack';
+    const r = this.registry.get(key) as { x: number; y: number; w: number; h: number } | null;
+    if (!r || !(r.w > 0)) return; // no track / not laid out yet → nothing to scrub
+    const v = Phaser.Math.Clamp((x - r.x) / r.w, 0, 1);
+    if (which === 'bgm') setBgmVolume(this, v); else setSfxVolume(this, v);
+    this.publishMenu();          // re-render the slider fill/knob
+    playSfx(this, SFX_SCROLL);   // scrub tick at the new level
   }
 
   /** Return to the title screen from the in-game SETTINGS tab: flush the save (so Play

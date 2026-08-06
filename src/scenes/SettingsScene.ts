@@ -204,7 +204,7 @@ export class SettingsScene extends Phaser.Scene {
       const pitch = s.trackW / SLIDER_N;
       const tickScale = (pitch * 0.62) / 4; // tick native w=4
       s.ticks.forEach((tk, i) => tk.setScale(tickScale).setPosition(s.trackLeft + (i + 0.5) * pitch, rowY));
-      s.knob.setScale(tickScale * 1.2).setPosition(s.trackLeft, rowY);
+      s.knob.setScale(tickScale * 0.75).setPosition(s.trackLeft, rowY); // 14×21 knob → ~1.3× tick height (was ×1.2 = oversized)
       const hitH = 26 * ps;
       s.hit.setPosition((s.trackLeft + trackRight) / 2, rowY).setSize(s.trackW + pitch, hitH);
       s.hit.input && (s.hit.input.hitArea = new Phaser.Geom.Rectangle(0, 0, s.trackW + pitch, hitH));

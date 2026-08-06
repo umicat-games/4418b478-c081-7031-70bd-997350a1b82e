@@ -493,7 +493,11 @@ export class MenuScene extends Phaser.Scene {
         const x = trackLeft + (i + 0.5) * pitch;
         c.add(this.add.image(x, rowY, 'settings-buttons', x <= knobX + 0.5 ? 'slider-tick-on' : 'slider-tick-off').setScale(tickScale));
       }
-      c.add(this.add.image(knobX, rowY, 'settings-buttons', 'slider-knob').setScale(tickScale * 1.2));
+      // Knob native is 14×21 (much bigger than a 4×12 tick) — scale it DOWN to a modest
+      // grab handle (~1.3× tick height) instead of tickScale×1.2 (which read as ~2× tick
+      // height = an oversized knob).
+      const knobScale = (pitch * 0.6) / 4 * 0.75;
+      c.add(this.add.image(knobX, rowY, 'settings-buttons', 'slider-knob').setScale(knobScale));
     }
     this.registry.set(trackKey, { x: trackLeft, y: rowY - pitch, w: trackW, h: pitch * 2 });
   }
