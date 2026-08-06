@@ -25,7 +25,6 @@ import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
 const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen inside blue-laptop.png
 const LAPTOP = 'blue-laptop';
 const PANEL_FILL = 0xffffff, PANEL_LINE = 0xcdd8e6, PANEL_TEXT = '#26384a';
-const NAME_COLOR = '#3a2a1a';
 const SEND_ICON = 49; // all_icons `play-white` (16,48) → 16px-grid frame 3*16+1
 const SEND_TINT = 0x5a8a6a; // send-arrow colour (tint the white icon)
 const MSG_ICON = 245; // all_icons `white-message-with-border` (80,240) → frame 15*16+5
@@ -45,8 +44,7 @@ const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
-  private avatar?: Phaser.GameObjects.Image;
-  private nameText!: Phaser.GameObjects.Text;
+  private cato?: Phaser.GameObjects.Sprite; // animated Cato (idle-talk) above the box
   private panelG!: Phaser.GameObjects.Graphics; // the single flat message box
   private msgText!: Phaser.GameObjects.Text;
   private measure!: Phaser.GameObjects.Text;    // hidden — pagination height probe
@@ -82,8 +80,10 @@ export class LaptopScene extends Phaser.Scene {
     this.add.rectangle(0, 0, W, H, 0x14212e, 1).setOrigin(0, 0);
     this.laptop = this.add.image(0, 0, LAPTOP).setOrigin(0.5);
 
-    if (this.textures.exists('teemo')) this.avatar = this.add.image(0, 0, 'teemo', 0).setOrigin(0.5);
-    this.nameText = this.add.text(0, 0, 'Cato', { fontFamily: dialogFont(), color: NAME_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
+    if (this.textures.exists('teemo')) {
+      this.cato = this.add.sprite(0, 0, 'teemo', 39).setOrigin(0.5, 1);
+      if (this.anims.exists('teemo-idle-talk')) this.cato.play('teemo-idle-talk'); // Cato talking, above the box
+    }
 
     this.panelG = this.add.graphics();
     this.msgText = this.add.text(0, 0, '', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0);
@@ -94,8 +94,8 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
     this.sendBtn.on('pointerdown', () => { if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
 
-    // Hide the chat until the "new message" teaser is opened.
-    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn]) o.setVisible(false);
+    // Hide the chat (incl. the Cato portrait) until the "new message" teaser is opened.
+    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn, this.cato]) o?.setVisible(false);
     this.notif = this.add.container(0, 0);
     this.notifG = this.add.graphics();
     this.notifIcon = this.add.image(0, 0, 'ui-icons', MSG_ICON).setOrigin(0.5).setTint(NOTIF_TINT);
@@ -139,15 +139,15 @@ export class LaptopScene extends Phaser.Scene {
     const sw = (SCREEN.x1 - SCREEN.x0) * iw * s, sh = (SCREEN.y1 - SCREEN.y0) * ih * s;
     const pad = Math.round(sw * 0.03);
     const fs = Math.max(11, Math.round(sh * 0.078)); this.fs = fs;
-    const headerH = fs * 2.2, inputH = fs * 2.4, gap = fs * 0.5;
+    const headerH = fs * 3.2, inputH = fs * 2.4, gap = fs * 0.4;
+    const boxTop = sy0 + headerH + gap;
 
-    // Header: avatar + name directly on the screen (the screen art frames it).
-    const av = headerH * 0.72, hy = sy0 + headerH / 2;
-    if (this.avatar) this.avatar.setDisplaySize(av, av).setPosition(sx0 + pad + av / 2, hy);
-    this.nameText.setFontSize(Math.round(fs * 1.05)).setPosition(sx0 + pad + av + fs * 0.5, hy);
+    // Animated Cato (idle-talk) sits ABOVE the message box, centred, feet on its top edge.
+    const catoS = (headerH + gap) * 0.98;
+    if (this.cato) this.cato.setDisplaySize(catoS, catoS).setPosition(sx0 + sw / 2, boxTop + fs * 0.2);
 
     // Single flat message panel.
-    const px = sx0 + pad, py = sy0 + headerH + gap;
+    const px = sx0 + pad, py = boxTop;
     const pw = sw - pad * 2, ph = sy0 + sh - inputH - gap - py; this.panelH = ph;
     this.panelG.clear();
     this.panelG.fillStyle(PANEL_FILL, 0.94).fillRoundedRect(px, py, pw, ph, fs * 0.6);
@@ -206,7 +206,7 @@ export class LaptopScene extends Phaser.Scene {
 
   /** Show the chat, then (after a beat) Cato's opening line. */
   private revealChat(): void {
-    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn]) o.setVisible(true);
+    for (const o of [this.panelG, this.msgText, this.pillG, this.sendBtn, this.cato]) o?.setVisible(true);
     this.time.delayedCall(450, () => this.showLine(tr(OPENING), () => this.makeInput()));
   }
 
