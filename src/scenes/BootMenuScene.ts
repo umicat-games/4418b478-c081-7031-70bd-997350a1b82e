@@ -123,7 +123,12 @@ export class BootMenuScene extends Phaser.Scene {
   /** Public: SettingsScene's Play button calls this (it owns the visible buttons now). */
   startGame(): void {
     this.scene.stop('SettingsScene'); // the buttons/modal are title-screen only (hidden under the curtain)
-    // Circle-iris wipe from the title into the game; GameScene.markReady uncovers it.
-    startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'circle' });
+    // NEW game (first time) → the "message from Cato" laptop cold-open first; a returning
+    // player goes straight into the game. (P1 gate: a localStorage flag set once the
+    // laptop is accepted; later this aligns with the real save-based new-game check.)
+    let seen = false;
+    try { seen = localStorage.getItem('catopia:laptopDone') === '1'; } catch { /* no storage */ }
+    if (seen) startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'circle' });
+    else startTransition(this, 'LaptopScene', {}, { effect: 'circle' });
   }
 }

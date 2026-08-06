@@ -198,6 +198,7 @@ export class BootScene extends Phaser.Scene {
     // `envelope-zipper` = a piece of mail (both used when mail items are wired in).
     this.load.image('mail-box', 'uploaded/mail-box.png');
     this.load.image('mailbox-v2', 'uploaded/mailbox-v2.png'); // v2 mailbox frame (with tabs)
+    this.load.image('blue-laptop', 'uploaded/blue-laptop.png'); // cold-open "message from Cato" laptop
     this.load.image('mail-box-item-bg', 'uploaded/mail-box-item-bg.png');
     this.load.image('envelope-zipper', 'uploaded/envelope-zipper.png');
     // Mailbox tab buttons (selected = taller, unselected = shorter). Green = Mail tab,
