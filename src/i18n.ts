@@ -33,6 +33,23 @@ export function getLang(): Lang {
   return lang;
 }
 
+/** The shipped languages, in a stable order (for a language picker). */
+export function supportedLangs(): readonly Lang[] {
+  return SUPPORTED;
+}
+
+/** Human display name of a language, in ITS OWN script (for a language picker). */
+export function langDisplayName(l: Lang): string {
+  return l === 'zh-CN' ? '中文' : 'English';
+}
+
+/** Switch the active language live + persist the pick (localStorage `game:lang`,
+ *  the same key `initLang` prefers). Callers re-render their own visible text. */
+export function setLang(l: Lang): void {
+  lang = l;
+  try { localStorage.setItem('game:lang', l); } catch { /* ignore */ }
+}
+
 /** The font to render UI text in for the active language (pixel-art `zpix` for the
  *  scripts it covers). Centralised so adding a Noto font later is one place. */
 export function dialogFont(): string {
@@ -111,6 +128,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
   settings_music: { en: 'Music', 'zh-CN': '音乐' },
   settings_sfx: { en: 'Sound', 'zh-CN': '音效' },
+  settings_language: { en: 'Language', 'zh-CN': '语言' },
   start_play: { en: 'PLAY', 'zh-CN': '开始' },
   menu_return_title: { en: 'Title screen', 'zh-CN': '返回标题' },
   settings_clear_data: { en: 'Clear data & new game', 'zh-CN': '清除数据 · 重新开始' },

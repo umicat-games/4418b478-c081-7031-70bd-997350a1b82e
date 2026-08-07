@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { dialogFont, t } from '../i18n';
+import { dialogFont, t, getLang, setLang, supportedLangs, langDisplayName, type Lang } from '../i18n';
 import { getBgmVolume, setBgmVolume } from '../bgm';
 import { playSfx, getSfxVolume, setSfxVolume, SFX_SCROLL } from '../sfx';
 import type { BootMenuScene } from './BootMenuScene';
@@ -7,6 +7,7 @@ import type { BootMenuScene } from './BootMenuScene';
 /** One volume slider in the title modal (Music or SFX). */
 interface Slider {
   panelY: number;                                   // panel-local y (of 122)
+  labelKey: string;                                 // i18n key (re-fetched on a language switch)
   get: () => number;                                // current volume
   set: (scene: Phaser.Scene, v: number) => void;    // setBgmVolume / setSfxVolume
   labelText: Phaser.GameObjects.Text;
@@ -43,9 +44,15 @@ const PANEL_H = 122;
 const ICON_KEY = 'ui-icons';
 const GEAR_ICON_FRAME = 4; // all_icons `setting-icon-no-border` (64,0,16,16) → 16px-grid frame 4
 const PLAY_ICON_FRAME = 57; // all_icons `play-brown` triangle (144,48) → 16px-grid frame 3*16+9
+const LANG_ARROW_FRAME = 217; // all_icons `play-brown-with-border` (144,208) → 16px-grid frame 13*16+9
 const LABEL_COLOR = '#9a6a3f'; // dark-brown, reads on the cream button (matches Play's art)
 const LABEL_TINT = 0x9a6a3f;
+const ROW_TEXT_COLOR = '#ffffff'; // slider/row labels — white on the panel's inset
 const SLIDER_N = 10; // number of tick segments
+// Three stacked rows in the panel (below the baked SETTINGS title), panel-local Y of 122.
+const LANG_ROW_Y = 50;
+const MUSIC_ROW_Y = 78;
+const SFX_ROW_Y = 106;
 
 interface UiButton {
   container: Phaser.GameObjects.Container;
@@ -71,6 +78,12 @@ export class SettingsScene extends Phaser.Scene {
   private sliders: Slider[] = [];
   private dragSlider: Slider | null = null;
 
+  // Language selector row: "Language"  ◄ [中文/English] ►
+  private langLabelText!: Phaser.GameObjects.Text;
+  private langValueText!: Phaser.GameObjects.Text;
+  private langLeft!: Phaser.GameObjects.Image;   // ◄ = the arrow icon flipped
+  private langRight!: Phaser.GameObjects.Image;  // ►
+
   constructor() {
     super({ key: 'SettingsScene' });
   }
@@ -86,15 +99,16 @@ export class SettingsScene extends Phaser.Scene {
     this.panel = this.add.image(0, 0, 'settings-menu', 'settings-panel').setInteractive(); // swallow taps on the panel
     this.panel.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => ev.stopPropagation());
 
-    // Two sliders stacked in the panel (Music above, SFX below).
+    // Language row (top), then two sliders stacked below (Music above, SFX below).
+    this.buildLangRow();
     this.sliders = [
-      this.makeSlider('settings_music', 62, getBgmVolume, (sc, v) => setBgmVolume(sc, v)),
-      this.makeSlider('settings_sfx', 98, getSfxVolume, (sc, v) => setSfxVolume(sc, v)),
+      this.makeSlider('settings_music', MUSIC_ROW_Y, getBgmVolume, (sc, v) => setBgmVolume(sc, v)),
+      this.makeSlider('settings_sfx', SFX_ROW_Y, getSfxVolume, (sc, v) => setSfxVolume(sc, v)),
     ];
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (p: Phaser.Input.Pointer) => { if (this.dragSlider) this.setVolFromX(this.dragSlider, p.x); });
     this.input.on(Phaser.Input.Events.POINTER_UP, () => { this.dragSlider = null; });
 
-    const parts: Phaser.GameObjects.GameObject[] = [this.dim, this.panel];
+    const parts: Phaser.GameObjects.GameObject[] = [this.dim, this.panel, this.langLabelText, this.langLeft, this.langRight, this.langValueText];
     for (const s of this.sliders) parts.push(s.labelText, ...s.ticks, s.knob, s.hit);
     this.modal = this.add.container(0, 0, parts).setDepth(20).setVisible(false);
 
@@ -210,6 +224,22 @@ export class SettingsScene extends Phaser.Scene {
       s.hit.input && (s.hit.input.hitArea = new Phaser.Geom.Rectangle(0, 0, s.trackW + pitch, hitH));
       this.renderVol(s);
     }
+
+    // Language row — label on the left, a ◄ value ► stepper on the right. The panel is
+    // only 106 native wide and "Language" is a long word, so the row uses a smaller font
+    // and the arrows HUG the value text (gap from its measured width) so nothing overlaps
+    // whatever the language name's length.
+    const lrY = panelTop + LANG_ROW_Y * ps;
+    this.langLabelText.setPosition(panelLeft + 11 * ps, lrY).setFontSize(Math.round(7 * ps));
+    // Stepper anchored to the panel's RIGHT edge and grown leftward, so the wide English
+    // value never pushes its left arrow back into the (long) "Language" label.
+    const arrowScale = (8 * ps) / 16;
+    const aHalf = (16 * arrowScale) / 2;
+    const gap = 3 * ps;
+    const rightX = panelLeft + 98 * ps; // ► near the panel's right edge
+    this.langRight.setScale(arrowScale).setPosition(rightX, lrY);
+    this.langValueText.setFontSize(Math.round(7 * ps)).setOrigin(1, 0.5).setPosition(rightX - aHalf - gap, lrY);
+    this.langLeft.setScale(arrowScale).setPosition(this.langValueText.x - this.langValueText.displayWidth - gap - aHalf, lrY);
   };
 
   /** Build one slider (label + N ticks + knob + a transparent drag hit-rect). */
@@ -219,7 +249,7 @@ export class SettingsScene extends Phaser.Scene {
     for (let i = 0; i < SLIDER_N; i++) ticks.push(this.add.image(0, 0, 'settings-buttons', 'slider-tick-off').setOrigin(0.5, 0.5));
     const knob = this.add.image(0, 0, 'settings-buttons', 'slider-knob').setOrigin(0.5, 0.5);
     const hit = this.add.rectangle(0, 0, 10, 10, 0xffffff, 0).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
-    const s: Slider = { panelY, get, set, labelText, ticks, knob, hit, trackLeft: 0, trackW: 0, step: -1 };
+    const s: Slider = { panelY, labelKey, get, set, labelText, ticks, knob, hit, trackLeft: 0, trackW: 0, step: -1 };
     hit.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
       ev.stopPropagation();
       this.dragSlider = s;
@@ -227,6 +257,40 @@ export class SettingsScene extends Phaser.Scene {
       this.setVolFromX(s, p.x);
     });
     return s;
+  }
+
+  /** Build the language row: a "Language" label + a ◄ value ► stepper. The arrows are
+   *  the `play-brown-with-border` icon (► as-is, ◄ = flipped); tapping either cycles
+   *  through the shipped languages, switching live + persisting. */
+  private buildLangRow(): void {
+    this.langLabelText = this.add.text(0, 0, t('settings_language'), { fontFamily: dialogFont(), color: ROW_TEXT_COLOR }).setOrigin(0, 0.5);
+    this.langValueText = this.add.text(0, 0, langDisplayName(getLang()), { fontFamily: dialogFont(), color: ROW_TEXT_COLOR }).setOrigin(0.5, 0.5);
+    this.langLeft = this.add.image(0, 0, ICON_KEY, LANG_ARROW_FRAME).setOrigin(0.5, 0.5).setFlipX(true).setInteractive({ useHandCursor: true });
+    this.langRight = this.add.image(0, 0, ICON_KEY, LANG_ARROW_FRAME).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    const stop = (ev: Phaser.Types.Input.EventData): void => ev.stopPropagation(); // don't close the modal
+    this.langLeft.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => { stop(ev); this.cycleLang(-1); });
+    this.langRight.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => { stop(ev); this.cycleLang(1); });
+  }
+
+  /** Step the language by `dir` (wraps), switch live + persist, refresh all visible text. */
+  private cycleLang(dir: number): void {
+    const langs = supportedLangs();
+    const cur = langs.indexOf(getLang());
+    const next = langs[(cur + dir + langs.length) % langs.length] as Lang;
+    if (next === getLang()) return;
+    setLang(next);
+    playSfx(this);
+    this.refreshTexts();
+  }
+
+  /** Re-fetch every visible label in the (new) language + reflow (widths changed). */
+  private refreshTexts(): void {
+    this.playBtn.text.setText(t('start_play'));
+    this.setBtn.text.setText(t('tab_settings'));
+    this.langLabelText.setText(t('settings_language'));
+    this.langValueText.setText(langDisplayName(getLang()));
+    for (const s of this.sliders) s.labelText.setText(t(s.labelKey));
+    this.layout();
   }
 
   /** Place Play at the authored anchor's projected screen position + Settings just
@@ -284,6 +348,7 @@ export class SettingsScene extends Phaser.Scene {
   private openModal(): void {
     this.open = true;
     for (const s of this.sliders) this.renderVol(s);
+    this.langValueText.setText(langDisplayName(getLang())); // reflect any external change
     this.modal.setVisible(true);
   }
 
