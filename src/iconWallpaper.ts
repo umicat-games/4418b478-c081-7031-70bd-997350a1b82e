@@ -17,7 +17,7 @@ const P = 4; // diagonal repeat period (in cells) — the drift wraps every P*sp
  *  wrap PERIOD (px) for {@link driftIconLayer}. Uses the `ui-icons` texture. */
 export function buildIconPattern(scene: Phaser.Scene, layer: Phaser.GameObjects.Container, W: number, H: number): number {
   layer.removeAll(true);
-  const spacing = Math.max(52, Math.round(Math.min(W, H) * 0.11));
+  const spacing = Math.max(26, Math.round(Math.min(W, H) * 0.055)); // halved → smaller icons, denser pattern
   const iconS = spacing * 0.46;
   const cols = Math.ceil(W / spacing), rows = Math.ceil(H / spacing);
   for (let r = -P; r <= rows + P; r++) {
