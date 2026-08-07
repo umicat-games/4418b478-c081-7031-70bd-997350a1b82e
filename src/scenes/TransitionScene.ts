@@ -169,6 +169,7 @@ export class TransitionScene extends Phaser.Scene {
    *  `onRevealed` (optional) fires once the reveal fully completes. */
   done(onRevealed?: () => void): void {
     if (!this.busy) return;
+    this.scene.bringToTop(); // the incoming scene may have launched HUD/UI scenes above us
     this.safety?.remove(); this.safety = undefined;
     const W = this.scale.width, H = this.scale.height;
     const finish = (): void => { this.busy = false; this.curtain.setVisible(false).clearMask(); onRevealed?.(); };

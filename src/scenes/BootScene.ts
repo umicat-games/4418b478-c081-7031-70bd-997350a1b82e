@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
 import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
+import { startTransition } from '../transition';
 import { t } from '../i18n';
 import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
@@ -19,12 +20,19 @@ import { applyRecipeData } from '../data/recipes';
  * The scene loader queues them via `this.load.*` on demand based on
  * which assetIds the active scene's entities reference.
  */
+/** Keep the cozy loading screen up at least this long before wiping into the first scene,
+ *  so a fast / cached boot doesn't just blink past. */
+const MIN_LOADER_MS = 1300;
+
 export class BootScene extends Phaser.Scene {
+  private loaderStart = 0; // performance.now() when the loading screen went up
+
   constructor() {
     super({ key: 'BootScene' });
   }
 
   preload(): void {
+    this.loaderStart = performance.now();
     preloadManifest(this);
     // Load the icon sheet FIRST so the cozy loading screen (cream + drifting icons +
     // animated "Loading") can render itself while the rest of the assets load.
@@ -411,8 +419,12 @@ export class BootScene extends Phaser.Scene {
     // boot screen + wires Play → game); any other scene (incl. a Play-Scene
     // `?umicatScene=` override, which skips the boot screen) → GameScene.
     const sid = manifest.initialScene;
-    if (sid === 'boot') this.scene.start('BootMenuScene', { sceneId: sid });
-    else this.scene.start('GameScene', { sceneId: sid });
+    const next = sid === 'boot' ? 'BootMenuScene' : 'GameScene';
+    // Hold the loading screen a MINIMUM beat (so a fast/cached boot doesn't blink), THEN
+    // PAW-wipe into the first scene instead of a hard cut. The loader stays visible until
+    // the paw covers it; the target scene calls finishTransition when its world is ready.
+    const wait = Math.max(0, MIN_LOADER_MS - (performance.now() - this.loaderStart));
+    this.time.delayedCall(wait, () => startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800 }));
   }
 }
 
@@ -487,8 +499,8 @@ function drawCozyLoader(scene: Phaser.Scene): void {
     label.setAlpha(0.55 + 0.45 * (0.5 + 0.5 * Math.sin((acc / 720) * Math.PI))); // gentle breathe
   };
   scene.game.events.on(Phaser.Core.Events.POST_STEP, onStep);
-  scene.load.once('complete', () => {
-    scene.game.events.off(Phaser.Core.Events.POST_STEP, onStep);
-    rect.destroy(); layer.destroy(true); label.destroy();
-  });
+  // Keep the loader up (past load 'complete') until the paw wipe covers it and BootScene
+  // stops — its objects auto-destroy on shutdown; here we just detach the game-level step
+  // listener (it lives on `game.events`, which survives the scene, so it MUST be removed).
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.game.events.off(Phaser.Core.Events.POST_STEP, onStep));
 }
