@@ -4100,7 +4100,7 @@ export class GameScene extends Phaser.Scene {
       try { await this.umicat?.saves.delete('state'); }
       catch (e) { console.warn('[catopia] clear save failed', e); }
       if (typeof window !== 'undefined') window.location.reload();
-    });
+    }, 800); // the paw close is the last thing shown before the hard reload
   }
 
   /** Return to the title. Dissolve to white, flush the save, then HARD-RELOAD — a
@@ -4112,7 +4112,7 @@ export class GameScene extends Phaser.Scene {
       try { if (this.umicat && this.saveArmed && !this.loadingSave) await this.umicat.saves.set('state', this.buildSave()); }
       catch (e) { console.warn('[catopia] save flush before title failed', e); }
       if (typeof window !== 'undefined') window.location.reload();
-    });
+    }, 800);
   }
 
   // ── Unified-menu item action menu + keypad (mirrors the mailbox/chest flow, but

@@ -41,8 +41,8 @@ export function finishTransition(scene: Phaser.Scene): void {
  * hanging the second entry on "loading". `onCovered` may be async (e.g. flush the
  * save, then `window.location.reload()`).
  */
-export function coverAndReload(from: Phaser.Scene, effect: TransitionEffect, onCovered: () => void): void {
+export function coverAndReload(from: Phaser.Scene, effect: TransitionEffect, onCovered: () => void, ms?: number): void {
   const ts = from.scene.get('TransitionScene') as TransitionScene | undefined;
   if (!ts || !from.scene.isActive('TransitionScene')) { onCovered(); return; }
-  ts.coverAndHold(effect, onCovered);
+  ts.coverAndHold(effect, onCovered, { ms });
 }

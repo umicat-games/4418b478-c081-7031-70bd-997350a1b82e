@@ -129,7 +129,9 @@ export class TransitionScene extends Phaser.Scene {
       const { g, mask, unit } = this.iris();
       g.setPosition(fx, fy).setRotation(0);
       this.curtain.setMask(mask);
-      this.tweens.add({ targets: g, scale: { from: this.maxRadius(fx, fy) / unit, to: 0 }, duration: this.ms, ease: 'Sine.easeIn', onComplete });
+      // easeOut on the shrink: rush the huge (off-screen) part, LINGER at the small/medium
+      // sizes where the paw shape actually reads (Sine.easeIn did the opposite → a blink).
+      this.tweens.add({ targets: g, scale: { from: this.maxRadius(fx, fy) / unit, to: 0 }, duration: this.ms, ease: 'Sine.easeOut', onComplete });
     } else if (this.effect === 'slide') {
       this.tweens.add({ targets: this.curtain, x: { from: -W, to: 0 }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete });
     } else {
@@ -149,7 +151,9 @@ export class TransitionScene extends Phaser.Scene {
       const { g, mask, unit } = this.iris();
       g.setPosition(fx, fy).setRotation(0);
       this.curtain.setMask(mask);
-      this.tweens.add({ targets: g, scale: { from: 0, to: this.maxRadius(fx, fy) / unit }, duration: this.ms, ease: 'Sine.easeOut', onComplete: finish });
+      // easeIn on the bloom: LINGER at the small readable paw as it opens, then flood the
+      // rest fast (mirror of the cover's easeOut).
+      this.tweens.add({ targets: g, scale: { from: 0, to: this.maxRadius(fx, fy) / unit }, duration: this.ms, ease: 'Sine.easeIn', onComplete: finish });
     } else if (this.effect === 'slide') {
       this.tweens.add({ targets: this.curtain, x: { from: 0, to: W }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete: finish });
     } else {
