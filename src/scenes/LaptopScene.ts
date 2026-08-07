@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { dialogFont, getLang } from '../i18n';
+import { Umicat, type Npc } from '@umicat/phaser-sdk';
+import { dialogFont, getLang, initLang } from '../i18n';
 import { startTransition, finishTransition } from '../transition';
 import { crossToBgm } from '../bgm';
 import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
@@ -17,9 +18,11 @@ import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
  * sits below. Styled flat/soft (not the game's wooden box) so it reads as software on the
  * cream laptop screen (which already frames it).
  *
- * P1: ONE fixed opening line + PLACEHOLDER canned replies + keyword accept/decline. P2
- * swaps the canned replies for the runtime-AI npc (u.ai.npc) with a recruiting persona +
- * accept_help / decline_help actions.
+ * The opening line is ONE fixed (i18n) message; every reply after that is the runtime-AI
+ * npc (`u.ai.npc`) — a recruiting-Cato persona that answers questions about Catopia and
+ * decides, via the `accept_help` / `decline_help` actions, when the player has actually
+ * agreed or declined. If the SDK can't init (offline / raw standalone preview with no AI)
+ * we fall back to a simple keyword accept/decline so the cold-open is never a dead end.
  */
 
 const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen inside blue-laptop.png
@@ -44,6 +47,11 @@ const OPENING = {
 const ACCEPT = { en: "Really?! Thank you so much — I'll be waiting for you on the island! 💛", 'zh-CN': '真的吗？！太谢谢你了——我在小岛上等你！💛' };
 const DECLINE = { en: "Oh... that's alright. I'll go ask around, then. Take care!", 'zh-CN': '这样啊……没关系的。那我再去问问别人吧。你也保重！' };
 const FILLER = { en: "I'm only a little spirit, so I don't know much yet — but I'd love to find out together in Catopia! So... will you come?", 'zh-CN': '我只是个小精灵，懂的还不多——不过好想和你一起在 Catopia 里探索呀！所以……你会来吗？' };
+
+// In-fiction fallbacks when the AI can't answer (anonymous / out of credits / hiccup).
+const SIGNIN_MSG = { en: "Oh — it looks like we haven't quite met yet! Could you sign in first? Then we can really talk. 🐾", 'zh-CN': '哦——好像我们还没正式认识呢！你能先登录一下吗？这样我们才能好好聊聊。🐾' };
+const NOCREDITS_MSG = { en: "I think I'm out of little sparks to chat with for now… but I really do hope you'll come. Will you?", 'zh-CN': '我聊天的小火花好像用完了……不过我真的很希望你能来。你愿意吗？' };
+const UNAVAILABLE_MSG = { en: 'Hmm, my words got a little tangled just now — could you say that again?', 'zh-CN': '嗯……我刚刚有点语无伦次，你能再说一遍吗？' };
 
 const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN' ? m['zh-CN'] : m.en);
 
@@ -80,6 +88,11 @@ export class LaptopScene extends Phaser.Scene {
   private onLineDone?: () => void;
   private busy = false;
 
+  // Runtime AI — the recruiting-Cato npc that drives every reply after the opening line.
+  private recruiter?: Npc;
+  private aiThinking = false;      // a say() is in flight (input hidden, taps ignored)
+  private thinkTimer?: Phaser.Time.TimerEvent; // animated "…" while waiting
+
   private panelH = 10; private fs = 16; // set in layout()
 
   constructor() { super({ key: 'LaptopScene' }); }
@@ -115,6 +128,7 @@ export class LaptopScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
+      this.thinkTimer?.remove();
       this.removeInput();
     });
 
@@ -127,6 +141,42 @@ export class LaptopScene extends Phaser.Scene {
     // arriving), then the icon breathes to invite a click.
     this.notif.setScale(0.5).setAlpha(0);
     this.time.delayedCall(300, () => this.popNotifIn());
+
+    this.initRecruiter(); // spin up the AI while the teaser + opening line play out
+  }
+
+  /** Build the recruiting-Cato npc (fire-and-forget). Ready well before the player
+   *  finishes reading the opening line and types a reply; if init fails we simply fall
+   *  back to the keyword accept/decline in `onSend`. */
+  private initRecruiter(): void {
+    void Umicat.init({})
+      .then((u) => {
+        initLang(u?.locale); // match the platform-provided player language
+        const name = u?.user?.name?.trim();
+        this.notifText.setText(tr(NEW_MSG)); // in case locale changed after first draw
+        if (this.inputEl) this.inputEl.placeholder = getLang() === 'zh-CN' ? '输入消息…' : 'Message…';
+        this.recruiter = u?.ai.npc({
+          role:
+            'You are Cato, a small, curious, gentle island spirit (a little cat) reaching out from Catopia — a cozy island that needs a caretaker. You are messaging a stranger (the player) through a laptop chat app because you want to RECRUIT them: to come to Catopia and be your GUARDIAN — help look after the island and explore the world together. You are earnest, warm, a touch shy, and hopeful.' +
+            (name ? ` The person you are messaging is called ${name}.` : ''),
+          style: "warm, whimsical, gentle; 1-3 short sentences, like casual chat messages; reply in the player's language",
+          rules: [
+            ...(name ? [`Address the player by their name, "${name}", when it feels natural.`] : []),
+            'Your ONE goal is to gently convince the player to come help look after Catopia. Keep steering the conversation warmly back to that invitation.',
+            'Answer honestly about Catopia when asked: it is a cozy farming / nurturing island — together you plant and harvest crops, grow fruit trees and berry bushes, forage mushrooms and flowers, mine stones, and care for the island. You are Cato, its little spirit, and you cannot manage it all on your own.',
+            "If asked about something you are not sure Catopia has yet but that is RELATED (some feature or activity), do NOT over-promise — say you are only a little spirit so you do not know everything yet, but you would love to find out together on the island.",
+            'If asked about something clearly UNRELATED to Catopia or to the invitation (real-world facts, coding, math, etc.), gently say you do not really understand — you are just a small island spirit — and bring it back to the invitation.',
+            'When the player clearly AGREES to come / help (yes, sure, ok, I will help, I am in, etc.), call the accept_help action AND say a happy thank-you.',
+            'When the player clearly REFUSES / declines (no, not interested, maybe later, I cannot), call the decline_help action AND say a gentle, understanding goodbye.',
+            'Only call accept_help or decline_help once the player has actually made that choice. While they are just asking questions or thinking it over, keep chatting and do NOT call either action.',
+          ],
+          actions: [
+            { name: 'accept_help', description: 'The player has agreed to come to Catopia and help look after the island. Call this the moment they clearly say yes / agree / accept the invitation.' },
+            { name: 'decline_help', description: 'The player has declined the invitation (not now / not interested / cannot). Call this when they clearly refuse.' },
+          ],
+        });
+      })
+      .catch(() => { /* no SDK / offline → onSend keyword fallback */ });
   }
 
   private popNotifIn(): void {
@@ -272,6 +322,7 @@ export class LaptopScene extends Phaser.Scene {
   // ── Typewriter + pagination ──────────────────────────────────────────────
   private showLine(fullText: string, onDone?: () => void): void {
     this.removeInput();
+    this.thinkTimer?.remove();
     this.typeTimer?.remove();
     this.pages = this.paginate(fullText);
     this.pageIdx = 0; this.onLineDone = onDone;
@@ -301,7 +352,7 @@ export class LaptopScene extends Phaser.Scene {
   }
 
   private advance(): void {
-    if (this.busy) return;
+    if (this.busy || this.aiThinking) return;
     if (this.typing) { this.typeTimer?.remove(); this.typing = false; this.msgText.setText(this.pages[this.pageIdx] ?? ''); this.onPageShown(); return; }
     if (this.pageIdx < this.pages.length - 1) { this.pageIdx++; this.typePage(); }
   }
@@ -335,15 +386,63 @@ export class LaptopScene extends Phaser.Scene {
   private removeInput(): void { this.inputEl?.remove(); this.inputEl = undefined; }
 
   private onSend(text: string): void {
-    if (this.busy || this.typing || !text) return;
+    if (this.busy || this.typing || this.aiThinking || !text) return;
     playSfx(this, SFX_DROP); // whoosh — the player sent a message
     if (this.inputEl) this.inputEl.value = '';
+    if (this.recruiter) this.askRecruiter(text); // AI drives the reply + accept/decline
+    else this.offlineReply(text);                // no SDK → keyword fallback
+  }
+
+  /** Ask the recruiting-Cato npc. It answers in-character and, when the player has
+   *  clearly agreed / declined, calls accept_help / decline_help → finish(). */
+  private async askRecruiter(text: string): Promise<void> {
+    this.aiThinking = true;
+    this.showThinking();
+    let r;
+    try {
+      r = await this.recruiter!.say(text, { observation: {} });
+    } catch {
+      this.aiThinking = false;
+      this.showLine(tr(UNAVAILABLE_MSG), () => this.makeInput());
+      return;
+    }
+    this.aiThinking = false;
+    if (this.busy) return; // finished/left mid-flight
+    if (!r.ok) { this.onAiUnavailable(r.reason); return; }
+    const did = (r.do ?? []).map((d) => d.name);
+    const say = (r.say ?? '').trim();
+    if (did.includes('accept_help')) { say ? this.showLine(say, () => this.finish(true)) : this.finish(true); return; }
+    if (did.includes('decline_help')) { say ? this.showLine(say, () => this.finish(false)) : this.finish(false); return; }
+    this.showLine(say || tr(FILLER), () => this.makeInput());
+  }
+
+  /** The AI couldn't reply — tell the player in-fiction and keep the chat open. */
+  private onAiUnavailable(reason: string): void {
+    const msg = reason === 'SIGN_IN_REQUIRED' ? SIGNIN_MSG : reason === 'INSUFFICIENT_CREDITS' ? NOCREDITS_MSG : UNAVAILABLE_MSG;
+    this.showLine(tr(msg), () => this.makeInput());
+  }
+
+  /** Show an animated "…" in the message box while a say() is in flight. */
+  private showThinking(): void {
+    this.removeInput();
+    this.typeTimer?.remove(); this.typing = false;
+    this.thinkTimer?.remove();
+    this.more.setVisible(false);
+    this.pages = ['']; this.pageIdx = 0;
+    let n = 0;
+    const tick = (): void => { n = (n % 3) + 1; this.msgText.setText('.'.repeat(n)); };
+    tick();
+    this.thinkTimer = this.time.addEvent({ delay: 420, loop: true, callback: tick });
+  }
+
+  /** Keyword accept/decline — only when the AI isn't available (offline / raw preview). */
+  private offlineReply(text: string): void {
     const t = text.toLowerCase();
     const yes = /(愿意|好的|好呀|好啊|我来|帮|当然|可以|答应|yes|sure|ok|okay|i will|i'?ll help|help you|of course)/.test(t) || t === '好' || t === '来';
     const no = /(不愿意|不想|拒绝|算了|不去|不行|no thanks|no\b|nope|not really|decline)/.test(t);
     if (yes) { this.finish(true); return; }
     if (no) { this.finish(false); return; }
-    this.showLine(tr(FILLER), () => this.makeInput()); // placeholder — AI replies here in P2
+    this.showLine(tr(FILLER), () => this.makeInput());
   }
 
   private finish(accepted: boolean): void {
