@@ -98,6 +98,20 @@ export class LaptopScene extends Phaser.Scene {
   constructor() { super({ key: 'LaptopScene' }); }
 
   create(): void {
+    // Phaser REUSES the scene instance across restarts (title → laptop → decline →
+    // title → Play → laptop again). Reset every per-run field, or a declined run leaves
+    // busy=true and the reopened chat can't be advanced (stuck on page 1). Also start a
+    // FRESH conversation (drop the old recruiter + its history — initRecruiter rebuilds it).
+    this.busy = false;
+    this.aiThinking = false;
+    this.typing = false;
+    this.notifying = false; // set true once the teaser is built below
+    this.pages = []; this.pageIdx = 0; this.charIdx = 0;
+    this.onLineDone = undefined;
+    this.recruiter = undefined;
+    this.bgW = 0; this.bgH = 0; // force the (recreated, empty) wallpaper layer to rebuild
+    this.removeInput();
+
     const W = this.scale.width, H = this.scale.height;
     crossToBgm(this, 'bgm-title', ['bgm'], 500);
     this.bgRect = this.add.rectangle(0, 0, W, H, BG_FILL, 1).setOrigin(0, 0);
