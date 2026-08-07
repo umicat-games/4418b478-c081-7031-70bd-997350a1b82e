@@ -207,6 +207,28 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   item_furn_stool: { en: 'Stool', 'zh-CN': '凳子' },
   item_furn_clock: { en: 'Clock', 'zh-CN': '时钟' },
   item_furn_rug: { en: 'Rug', 'zh-CN': '地毯' },
+
+  // ── Empty-hand HOVER inspect names (shown in the floating label over a hovered
+  //    world object). Object-appropriate ("Peach tree", not "Peach"/"seedling").
+  hover_cato: { en: 'Cato', 'zh-CN': 'Cato' },
+  hover_tree_apple: { en: 'Apple tree', 'zh-CN': '苹果树' },
+  hover_tree_pear: { en: 'Pear tree', 'zh-CN': '梨树' },
+  hover_tree_peach: { en: 'Peach tree', 'zh-CN': '桃树' },
+  hover_tree_plain: { en: 'Tree', 'zh-CN': '树' },
+  hover_bush_strawberry: { en: 'Strawberry bush', 'zh-CN': '草莓丛' },
+  hover_bush_grape: { en: 'Grape vine', 'zh-CN': '葡萄藤' },
+  hover_bush_blueberry: { en: 'Blueberry bush', 'zh-CN': '蓝莓丛' },
+  hover_forage_grass: { en: 'Wild grass', 'zh-CN': '野草' },
+  hover_forage_sunflower: { en: 'Sunflower', 'zh-CN': '向日葵' },
+  hover_forage_wild_flower: { en: 'Wildflower', 'zh-CN': '野花' },
+  hover_forage_red_mushroom: { en: 'Red mushroom', 'zh-CN': '红蘑菇' },
+  hover_forage_purple_mushroom: { en: 'Purple mushroom', 'zh-CN': '紫蘑菇' },
+  hover_forage_small_stone: { en: 'Pebble', 'zh-CN': '小石子' },
+  hover_stone: { en: 'Big rock', 'zh-CN': '大石头' },
+  hover_mailbox: { en: 'Mailbox', 'zh-CN': '邮箱' },
+  hover_chest: { en: 'Chest', 'zh-CN': '箱子' },
+  hover_shop: { en: 'Shop', 'zh-CN': '商店' },
+  hover_workstation: { en: 'Workbench', 'zh-CN': '工作台' },
 };
 
 /** Translate a key for the active language (English fallback, then the key itself). */

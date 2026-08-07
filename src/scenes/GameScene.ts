@@ -13,6 +13,7 @@ import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import type { MailListEntry, OrderCatalogEntry } from './menu-types';
 import type { ReceiptLine } from './ReceiptScene';
 import type { LetterboxScene } from './LetterboxScene';
+import type { HoverModel } from './HoverScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
 import { RECIPES, type Recipe } from '../data/recipes';
 import { t, initLang, getLang } from '../i18n';
@@ -619,6 +620,8 @@ export class GameScene extends Phaser.Scene {
   private timeSkipBtn?: HTMLButtonElement; // the test-only DOM fast-forward-time button
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
+  // Empty-hand inspect overlay (HoverScene) — a white ring hugging the hovered object + its name.
+  private hoverModel: HoverModel = { visible: false, onObject: false, x: 0, y: 0, w: 0, h: 0, name: '', nameX: 0, nameY: 0 };
 
   // ── Farming (hoe → till grass) ──────────────────────────────────────────
   // Minecraft-style: pick the hoe (key 2; 1 = empty hand), a bracket cursor
@@ -1421,6 +1424,7 @@ export class GameScene extends Phaser.Scene {
     // launch that overlay on top — AFTER loadWorldScene, so it sits above the
     // HUD scene the SDK created during the world load.
     this.registry.set('cursor', this.cursorState);
+    this.registry.set('hover', this.hoverModel);
     // Overlays, back-to-front: hotbar → full backpack → cursor (always topmost).
     if (!this.scene.isActive('HotbarScene')) this.scene.launch('HotbarScene');
     if (!this.scene.isActive('WeatherScene')) this.scene.launch('WeatherScene');
@@ -1432,6 +1436,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('CraftScene')) this.scene.launch('CraftScene');
     if (!this.scene.isActive('DialogueScene')) this.scene.launch('DialogueScene');
     if (!this.scene.isActive('LetterboxScene')) this.scene.launch('LetterboxScene');
+    if (!this.scene.isActive('HoverScene')) this.scene.launch('HoverScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
     this.scene.bringToTop('WeatherScene');
@@ -1441,7 +1446,8 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('CraftScene');    // the crafting modal sits above the HUD too
     this.scene.bringToTop('LetterboxScene'); // cinematic bars ABOVE the world/HUD, BELOW the dialog box
     this.scene.bringToTop('DialogueScene'); // spotlight ring above the hotbar during a cutscene
-    this.scene.bringToTop('CursorScene');
+    this.scene.bringToTop('HoverScene');    // empty-hand inspect ring/name above the HUD…
+    this.scene.bringToTop('CursorScene');   // …but the pixel cursor stays topmost
     this.publishBuildPalette();
     this.publishWeatherHud();
 
@@ -2317,6 +2323,85 @@ export class GameScene extends Phaser.Scene {
       icon.setAlpha(0.4);
       this.hoverCell = null;
     }
+  }
+
+  /** Empty-hand "inspect" hover (HoverScene): with NO tool held and the mouse over the world,
+   *  show a white ring hugging the object it's over + the object's NAME above it; over empty
+   *  ground, a small ring at the cursor. Mouse-only. While active + pointer-locked it REPLACES
+   *  the pixel cursor (the ring is the pointer). Runs after updateTileCursor each frame. */
+  private updateHoverInspect(): void {
+    const emptyHand = this.activeTool === 'hand' && !this.activeSeed && !this.activePlace;
+    const blocked = !this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen
+      || this.inventoryOpen || this.confirmOpen || this.buildPaletteCell !== null || this.hoeSwing || this.waterCan;
+    if (!emptyHand || blocked) { this.setHover(false); return; }
+
+    // Source point: the frozen virtual cursor under pointer-lock, else the real OS pointer.
+    const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
+    const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
+    if (this.overHotbarAt(sx, sy)) { this.setHover(false); return; } // let the hotbar own its band
+
+    const cam = this.cameras.main;
+    const wp = cam.getWorldPoint(sx, sy);
+    const target = this.hoverTargetAt(wp.x, wp.y);
+
+    if (target) {
+      const b = target.sprite.getBounds();
+      const pad = 4;
+      this.hoverModel = {
+        visible: true, onObject: true,
+        x: (b.centerX - cam.worldView.x) * cam.zoom,
+        y: (b.centerY - cam.worldView.y) * cam.zoom,
+        w: b.width * cam.zoom + pad * 2,
+        h: b.height * cam.zoom + pad * 2,
+        name: target.name,
+        nameX: (b.centerX - cam.worldView.x) * cam.zoom,
+        nameY: (b.y - cam.worldView.y) * cam.zoom - 4, // pill just above the object's top
+      };
+      this.registry.set('hover', this.hoverModel);
+      if (this.locked) this.cursorState.visible = false; // the inspect ring is the cursor now
+      return;
+    }
+    // Empty ground: a small ring at the cursor — only when LOCKED (it stands in for the pixel
+    // cursor). Unlocked, the OS arrow already shows, so don't stack a dot beneath it.
+    if (this.locked) {
+      this.hoverModel = { visible: true, onObject: false, x: sx, y: sy, w: 0, h: 0, name: '', nameX: 0, nameY: 0 };
+      this.registry.set('hover', this.hoverModel);
+      this.cursorState.visible = false;
+    } else {
+      this.setHover(false);
+    }
+  }
+
+  private setHover(visible: boolean): void {
+    if (!visible && !this.hoverModel.visible) return; // already hidden — don't thrash the registry
+    this.hoverModel = { ...this.hoverModel, visible };
+    this.registry.set('hover', this.hoverModel);
+  }
+
+  /** The topmost nameable object under a world point, for the inspect hover (name + the sprite
+   *  whose bounds the ring hugs). Priority: Cato → interactables → trees/stones/forage (tall,
+   *  by sprite bounds) → cell props (bushes/crops). */
+  private hoverTargetAt(wx: number, wy: number): { name: string; sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image } | null {
+    if (this.child && this.catContains(wx, wy)) return { name: t('hover_cato'), sprite: this.child };
+    if (this.mailbox && this.mailboxContains(wx, wy)) return { name: t('hover_mailbox'), sprite: this.mailbox };
+    if (this.chest && this.chestContains(wx, wy)) return { name: t('hover_chest'), sprite: this.chest };
+    if (this.pad && this.padContains(wx, wy)) return { name: t('hover_shop'), sprite: this.pad };
+    if (this.craftStation && this.craftStationContains(wx, wy)) return { name: t('hover_workstation'), sprite: this.craftStation };
+    const tk = this.treeAtPoint(wx, wy);
+    if (tk) { const o = this.trees.get(tk); if (o) return { name: t(`hover_tree_${o.type}`), sprite: o.sprite }; }
+    const sk = this.stoneAtPoint(wx, wy);
+    if (sk) { const o = this.bigStones.get(sk); if (o) return { name: t('hover_stone'), sprite: o.sprite }; }
+    const fk = this.foragAtPoint(wx, wy);
+    if (fk) { const o = this.foragables.get(fk); if (o) return { name: t(`hover_forage_${o.type.replace(/-/g, '_')}`), sprite: o.sprite }; }
+    const tile = this.islandLayer?.getTileAtWorldXY(wx, wy);
+    if (tile) {
+      const key = `${tile.x},${tile.y}`;
+      const bush = this.bushes.get(key);
+      if (bush) return { name: t(`hover_bush_${bush.type}`), sprite: bush.base };
+      const crop = this.crops.get(key);
+      if (crop) return { name: t(`item_crop_${crop.name}`), sprite: crop.sprite };
+    }
+    return null;
   }
 
   // ── House building: placement cursor + rotate ─────────────────────────
@@ -7222,6 +7307,7 @@ export class GameScene extends Phaser.Scene {
 
     // Snap the hoe's tile-selection cursor to the grass tile under the mouse.
     this.updateTileCursor();
+    this.updateHoverInspect(); // empty hand → white ring + name over the hovered object
     this.updateHotbarHover(); // highlight the hotbar cell under the mouse cursor
     // While the build palette is open, tell it which cell the cursor is over (hover).
     this.updatePaletteHover();
