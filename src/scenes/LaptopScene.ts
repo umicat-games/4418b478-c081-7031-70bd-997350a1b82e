@@ -136,7 +136,7 @@ export class LaptopScene extends Phaser.Scene {
     this.notifIcon = this.add.image(0, 0, 'ui-icons', MSG_ICON).setOrigin(0.5).setTint(NOTIF_TINT);
     this.notifText = this.add.text(0, 0, tr(NEW_MSG), { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0.5);
     this.notif.add([this.notifG, this.notifIcon, this.notifText]);
-    this.notifying = true;
+    this.notif.setScale(0.5).setAlpha(0); // hidden until the laptop has animated in
 
     this.layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
@@ -150,13 +150,26 @@ export class LaptopScene extends Phaser.Scene {
     this.input.on('pointerdown', () => (this.notifying ? this.dismissNotification() : this.advance()));
     this.input.keyboard?.on('keydown-SPACE', () => (this.notifying ? this.dismissNotification() : this.advance()));
 
-    finishTransition(this); // uncover the Play→laptop wipe
-    // The "new message" pops IN a beat after the screen appears (like a notification
-    // arriving), then the icon breathes to invite a click.
-    this.notif.setScale(0.5).setAlpha(0);
-    this.time.delayedCall(300, () => this.popNotifIn());
-
+    this.laptop.setVisible(false); // the wipe reveals the empty desk; the laptop rises in next
     this.initRecruiter(); // spin up the AI while the teaser + opening line play out
+    // Sequence: the paw wipe finishes revealing the (empty) desk → the laptop ANIMATES
+    // onto it → then the "new message" teaser pops in. (Fallback: no transition → the
+    // callback runs immediately, so the laptop still animates in.)
+    finishTransition(this, () => this.enterLaptop());
+  }
+
+  /** After the wipe reveals the desk, the laptop rises + pops onto it; once it settles,
+   *  the "new message" teaser arrives. */
+  private enterLaptop(): void {
+    const rx = this.laptop.x, ry = this.laptop.y, rs = this.laptop.scaleX;
+    const drop = this.scale.height * 0.14;
+    this.laptop.setVisible(true).setAlpha(0).setScale(rs * 0.78).setPosition(rx, ry + drop);
+    this.tweens.add({
+      targets: this.laptop,
+      y: ry, scaleX: rs, scaleY: rs, alpha: 1,
+      duration: 520, ease: 'Back.easeOut',
+      onComplete: () => this.time.delayedCall(280, () => this.popNotifIn()),
+    });
   }
 
   /** Build the recruiting-Cato npc (fire-and-forget). Ready well before the player
@@ -197,6 +210,7 @@ export class LaptopScene extends Phaser.Scene {
 
   private popNotifIn(): void {
     if (!this.notif) return;
+    this.notifying = true; // teaser is now on screen → a click dismisses it (opens the chat)
     playSfx(this, SFX_CONFIRM); // "new message" arrival chime
     this.tweens.add({ targets: this.notif, scaleX: 1, scaleY: 1, alpha: 1, duration: 360, ease: 'Back.easeOut', onComplete: () => this.startBreathe() });
   }
@@ -470,8 +484,8 @@ export class LaptopScene extends Phaser.Scene {
     let gone = false;
     const go = (): void => {
       if (gone) return; gone = true;
-      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'paw', ms: 900 });
-      else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 900 });
+      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'paw', ms: 1050 });
+      else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 1050 });
     };
     this.showLine(tr(accepted ? ACCEPT : DECLINE), () => this.time.delayedCall(1100, go));
     this.time.delayedCall(8000, go); // safety: never strand the player

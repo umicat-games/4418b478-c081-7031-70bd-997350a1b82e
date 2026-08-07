@@ -28,9 +28,15 @@ export function startTransition(from: Phaser.Scene, toKey: string, data: object 
   ts.begin(from, toKey, data, opts);
 }
 
-/** The incoming scene is ready — uncover. No-op if no transition is in progress. */
-export function finishTransition(scene: Phaser.Scene): void {
-  (scene.scene.get('TransitionScene') as TransitionScene | undefined)?.done();
+/**
+ * The incoming scene is ready — uncover. `onRevealed` (optional) runs once the reveal
+ * animation fully completes — or immediately if there's no transition in progress (a
+ * plain scene.start fallback), so a caller can chain an entrance animation reliably.
+ */
+export function finishTransition(scene: Phaser.Scene, onRevealed?: () => void): void {
+  const ts = scene.scene.get('TransitionScene') as TransitionScene | undefined;
+  if (ts?.isBusy()) ts.done(onRevealed);
+  else onRevealed?.();
 }
 
 /**

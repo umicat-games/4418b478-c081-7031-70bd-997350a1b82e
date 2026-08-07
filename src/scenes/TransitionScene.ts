@@ -143,10 +143,10 @@ export class TransitionScene extends Phaser.Scene {
       targets: g,
       onComplete: onDone,
       tweens: cover
-        ? [ { scale: readS, duration: t * 0.28, ease: 'Sine.easeOut' },  // snap the huge, off-screen part in (no dead time at full size)
-            { scale: 0,     duration: t * 0.72, ease: 'Sine.easeInOut' } ] // then slowly close the visible paw
-        : [ { scale: readS, duration: t * 0.72, ease: 'Sine.easeInOut' }, // slowly open the visible paw
-            { scale: bigS,  duration: t * 0.28, ease: 'Sine.easeIn' } ],   // then flood the rest out fast
+        ? [ { scale: readS, duration: t * 0.24, ease: 'Sine.easeOut' },  // snap the huge, off-screen part in (no dead time at full size)
+            { scale: 0,     duration: t * 0.76, ease: 'Sine.easeInOut' } ] // then slowly close the visible paw (the lingering beat)
+        : [ { scale: readS, duration: t * 0.76, ease: 'Sine.easeInOut' }, // slowly open the visible paw
+            { scale: bigS,  duration: t * 0.24, ease: 'Sine.easeIn' } ],   // then flood the rest out fast
     });
   }
 
@@ -162,12 +162,16 @@ export class TransitionScene extends Phaser.Scene {
     }
   }
 
-  /** The incoming scene is ready — uncover (reverse the effect), idempotent. */
-  done(): void {
+  /** True while a transition is covering/covered (before the reveal completes). */
+  isBusy(): boolean { return this.busy; }
+
+  /** The incoming scene is ready — uncover (reverse the effect), idempotent.
+   *  `onRevealed` (optional) fires once the reveal fully completes. */
+  done(onRevealed?: () => void): void {
     if (!this.busy) return;
     this.safety?.remove(); this.safety = undefined;
     const W = this.scale.width, H = this.scale.height;
-    const finish = (): void => { this.busy = false; this.curtain.setVisible(false).clearMask(); };
+    const finish = (): void => { this.busy = false; this.curtain.setVisible(false).clearMask(); onRevealed?.(); };
 
     if (this.effect === 'circle' || this.effect === 'paw') {
       this.irisScale(false, finish);
