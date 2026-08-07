@@ -122,8 +122,8 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   /** One title button: the EMPTY `button-idle` bg (plain scaled image) + an icon + a
-   *  zpix label, with hover-grow + press (pressed-down frame + shrink) feedback. Sized
-   *  and positioned in `styleButton`/`layout`. */
+   *  zpix label. Feedback is the pressed-down FRAME only — NO hover-grow (the user found
+   *  the scale-up unattractive). Sized and positioned in `styleButton`/`layout`. */
   private buildButton(iconFrame: number, label: string, onTap: () => void): UiButton {
     // The BG image is the interactive object (its frame gives a reliable auto hit area
     // = the whole button). A manual hitArea on the CONTAINER was subtly broken — Phaser
@@ -138,15 +138,14 @@ export class SettingsScene extends Phaser.Scene {
     // Press feedback = the pressed-down FRAME + drop the icon+text by the SAME amount the
     // art's face sinks (pressDepth), so the label looks pressed WITH the button instead of
     // floating on the old face. (No press-shrink — scaling would shrink the hit area and
-    // drop edge taps.) Hover grows the container (enlarges the hit area, fine).
+    // drop edge taps. No hover-grow either — the user found the scale-up unattractive.)
     const setPressed = (on: boolean): void => {
       b.pressed = on;
       bg.setTexture('ui_big_play_button', on ? 'button-pressed-down' : 'button-idle');
       this.positionContent(b);
     };
-    const release = (over: boolean): void => { if (!b.pressed) return; setPressed(false); container.setScale(1); if (over) { playSfx(this); onTap(); } };
-    bg.on('pointerover', () => { if (!b.pressed) container.setScale(1.05); });
-    bg.on('pointerout', () => { if (b.pressed) setPressed(false); container.setScale(1); });
+    const release = (over: boolean): void => { if (!b.pressed) return; setPressed(false); if (over) { playSfx(this); onTap(); } };
+    bg.on('pointerout', () => { if (b.pressed) setPressed(false); });
     bg.on('pointerdown', () => setPressed(true));
     bg.on('pointerup', () => release(true));
     bg.on('pointerupoutside', () => release(true));
