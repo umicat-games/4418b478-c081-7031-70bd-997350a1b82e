@@ -8,8 +8,8 @@ import Phaser from 'phaser';
  */
 export const WP_FILL = 0xaed499;          // soft light-green backdrop
 export const WP_ICONS = [64, 65, 66, 2];  // all_icons white: heart / sprout-up / sprout-down / star
-export const WP_TINT = 0xd0c8b4;          // subtle grey tint on the icons
-export const WP_ALPHA = 0.5;
+export const WP_TINT = 0xffffff;          // soft white icons — read as gentle floating motifs on the green
+export const WP_ALPHA = 0.42;
 
 const P = 4; // diagonal repeat period (in cells) — the drift wraps every P*spacing px
 
