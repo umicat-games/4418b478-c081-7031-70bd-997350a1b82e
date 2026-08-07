@@ -6460,15 +6460,13 @@ export class GameScene extends Phaser.Scene {
 
   // ── Loading gate (hide content until the save is restored) ────────────
 
-  /** Cover the whole viewport with the LOADING screen (cream icon wallpaper + animated
-   *  "Loading" text, above everything) so the empty/default world isn't shown before the
-   *  save is applied. Then UNCOVER the paw wipe onto it — so the transition reveals this
-   *  cozy loading screen (not a frozen white curtain) while the world + save load; the
-   *  overlay itself fades to the game in `markReady`. */
+  /** Cover the whole viewport (backstop behind the paw wipe) so the empty/default world is
+   *  never shown before the save is applied. NB: the paw HOLDS closed (showing "Loading")
+   *  until the world is ready — markReady() uncovers it — so this overlay stays behind the
+   *  paw and is only seen in the rare no-transition path. */
   private showLoadingCover(): void {
     if (this.loadingOverlay) return;
     this.loadingOverlay = new LoadingOverlay(this);
-    finishTransition(this); // bloom the paw open onto the loading screen (no-op if no transition)
   }
 
   /** Reveal the game once the save is restored (or a fallback fires): fade the
@@ -6485,8 +6483,9 @@ export class GameScene extends Phaser.Scene {
     // save centres the camera on the restored Cato.
     if (this.isNewGame) this.frameNewGameStart();
     else if (this.child) this.cameras.main.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
-    // NB: the paw wipe was already uncovered onto the loading screen in showLoadingCover;
-    // here we just fade the loading screen out to reveal the ready world.
+    // World + save are ready and the camera is framed → NOW uncover: the paw (which held
+    // closed showing "Loading") reveals the ready game directly (no reveal-time overlay).
+    finishTransition(this);
     this.maybePlayIntro(); // new-game → Cato's scripted greeting + tool tour (once)
   }
 

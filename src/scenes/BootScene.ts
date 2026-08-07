@@ -424,9 +424,10 @@ export class BootScene extends Phaser.Scene {
     const wait = Math.max(0, MIN_LOADER_MS - performance.now());
     this.time.delayedCall(wait, () => {
       document.getElementById('boot')?.remove(); // hand off from the CSS loader to the paw wipe
-      // CREAM paw curtain (not the default white) so it blends with the cream loader — the
-      // title blooms out of a cream paw with no white flash in between.
-      startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800, color: 0xaed499 });
+      // CREAM/green paw curtain (not the default white) so it blends with the loader. When
+      // going straight to the GAME, HOLD the closed paw (showing "Loading") until the world
+      // is ready, so the game only reveals once it's loaded (no reveal-time overlay flash).
+      startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800, color: 0xaed499, loading: next === 'GameScene' });
     });
   }
 }

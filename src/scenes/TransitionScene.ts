@@ -1,11 +1,16 @@
 import Phaser from 'phaser';
 import { fadeBgmTo } from '../bgm';
+import { t } from '../i18n';
 
 export type TransitionEffect = 'circle' | 'slide' | 'dissolve' | 'paw';
 
 const DEF_MS = 420;
 const DEF_COLOR = 0xffffff; // white curtain (per-call `color` can override)
 const HOLE_BASE = 100;      // unit circle radius, scaled for the iris wipe
+// When `loading` is set, the cover HOLDS closed (showing "Loading") until the incoming scene
+// is ready — and at least this long, so a fast load doesn't flash the text then vanish.
+const MIN_COVER_MS = 850;
+const LOADING_TEXT_COLOR = '#46662b'; // dark green — reads on the cream/green cover
 // Paw-print iris (Catopia's signature wipe): the mask hole is a paw (pad + 4 toe beans)
 // drawn at unit size around the pad centre, then scaled like the circle. PAW_CORE = the
 // guaranteed-solid radius around the origin — a bit under the pad's short axis so scaling
@@ -30,6 +35,7 @@ interface BeginOpts {
   ms?: number;
   focus?: { x: number; y: number }; // circle-iris centre (default screen centre)
   onCovered?: () => void;           // run at full cover, BEFORE the scene switch
+  loading?: boolean;                // HOLD closed (with "Loading") until the scene is ready + MIN_COVER_MS
 }
 
 /**
@@ -50,6 +56,13 @@ export class TransitionScene extends Phaser.Scene {
   private ms = DEF_MS;
   private focus?: { x: number; y: number };
   private safety?: Phaser.Time.TimerEvent;
+  // "Loading while covered" state
+  private loading = false;
+  private coverAt = 0;               // performance.now() when the cover finished closing
+  private revealScheduled = false;
+  private loadingText?: Phaser.GameObjects.Text;
+  private dotTimer?: Phaser.Time.TimerEvent;
+  private dots = 0;
 
   constructor() { super({ key: 'TransitionScene' }); }
 
@@ -64,6 +77,9 @@ export class TransitionScene extends Phaser.Scene {
     drawPaw(this.pawG);
     this.pawMask = this.pawG.createGeometryMask();
     this.pawMask.invertAlpha = true;
+    // "Loading" text shown over the fully-closed cover (above the curtain).
+    this.loadingText = this.add.text(W / 2, H / 2, t('loading'), { fontFamily: 'zpix, sans-serif', color: LOADING_TEXT_COLOR })
+      .setOrigin(0.5).setDepth(11).setVisible(false);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
   }
@@ -82,6 +98,8 @@ export class TransitionScene extends Phaser.Scene {
     this.effect = opts.effect ?? 'dissolve';
     this.ms = opts.ms ?? DEF_MS;
     this.focus = opts.focus;
+    this.loading = opts.loading ?? false;
+    this.revealScheduled = false;
     const W = this.scale.width, H = this.scale.height;
     this.scene.bringToTop();
     this.curtain.clearMask();
@@ -91,10 +109,30 @@ export class TransitionScene extends Phaser.Scene {
     fadeBgmTo(this, 0, this.ms);
 
     this.animateCover(() => {
+      this.coverAt = performance.now();
+      if (this.loading) this.showLoadingText(); // fully covered → show "Loading" (holds until ready)
       opts.onCovered?.();
       from.scene.start(toKey, data);
       this.safety = this.time.delayedCall(8000, () => this.done()); // backstop if the scene never calls finish
     });
+  }
+
+  /** Fade in the "Loading" label at the cover centre + cycle its dots. */
+  private showLoadingText(): void {
+    const lt = this.loadingText; if (!lt) return;
+    const W = this.scale.width, H = this.scale.height;
+    const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
+    const base = t('loading'); this.dots = 0;
+    lt.setText(base).setPosition(fx, fy).setFontSize(Math.max(20, Math.round(Math.min(W, H) * 0.05)))
+      .setVisible(true).setAlpha(0);
+    this.tweens.add({ targets: lt, alpha: 1, duration: 240, ease: 'Sine.easeOut' });
+    this.dotTimer?.remove();
+    this.dotTimer = this.time.addEvent({ delay: 340, loop: true, callback: () => { this.dots = (this.dots + 1) % 4; lt.setText(base + '.'.repeat(this.dots)); } });
+  }
+
+  private hideLoadingText(): void {
+    this.dotTimer?.remove(); this.dotTimer = undefined;
+    this.loadingText?.setVisible(false);
   }
 
   /** Cover the screen with `effect`, then run `onCovered` — and STOP (no scene
@@ -168,11 +206,20 @@ export class TransitionScene extends Phaser.Scene {
   /** The incoming scene is ready — uncover (reverse the effect), idempotent.
    *  `onRevealed` (optional) fires once the reveal fully completes. */
   done(onRevealed?: () => void): void {
-    if (!this.busy) return;
+    if (!this.busy || this.revealScheduled) return;
+    this.revealScheduled = true;
+    // When `loading`, hold the closed cover until it's shown at least MIN_COVER_MS (so the
+    // "Loading" text never flashes), THEN uncover. Otherwise uncover right away.
+    const wait = this.loading ? Math.max(0, MIN_COVER_MS - (performance.now() - this.coverAt)) : 0;
+    this.time.delayedCall(wait, () => this.doReveal(onRevealed));
+  }
+
+  private doReveal(onRevealed?: () => void): void {
+    this.hideLoadingText();
     this.scene.bringToTop(); // the incoming scene may have launched HUD/UI scenes above us
     this.safety?.remove(); this.safety = undefined;
     const W = this.scale.width, H = this.scale.height;
-    const finish = (): void => { this.busy = false; this.curtain.setVisible(false).clearMask(); onRevealed?.(); };
+    const finish = (): void => { this.busy = false; this.revealScheduled = false; this.loading = false; this.curtain.setVisible(false).clearMask(); onRevealed?.(); };
 
     if (this.effect === 'circle' || this.effect === 'paw') {
       this.irisScale(false, finish);
