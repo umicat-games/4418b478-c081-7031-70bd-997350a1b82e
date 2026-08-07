@@ -27,6 +27,9 @@ const LAPTOP = 'blue-laptop';
 const PANEL_FILL = 0xffffff, PANEL_LINE = 0xcdd8e6, PANEL_TEXT = '#26384a';
 const NAME_COLOR = '#1f3a55';
 const CATO_ICON = 20; // emoji_spritesheet `cato-idle` (0,64) → 32px-grid frame 2*10+0
+const BG_FILL = 0xf6f0e2; // cream wallpaper behind the laptop
+const BG_ICONS = [64, 65, 66, 2]; // all_icons white: heart / sprout-up / sprout-down / star
+const BG_TINT = 0xd0c8b4, BG_ALPHA = 0.5; // subtle grey drifting pattern
 const SEND_ICON = 49; // all_icons `play-white` (16,48) → 16px-grid frame 3*16+1
 const SEND_TINT = 0x5a8a6a; // send-arrow colour (tint the white icon)
 const MSG_ICON = 245; // all_icons `white-message-with-border` (80,240) → frame 15*16+5
@@ -46,6 +49,9 @@ const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
+  private bgRect!: Phaser.GameObjects.Rectangle;      // cream wallpaper
+  private bgLayer!: Phaser.GameObjects.Container;     // drifting icon pattern behind the laptop
+  private bgPeriod = 100; private bgW = 0; private bgH = 0;
   private panelG!: Phaser.GameObjects.Graphics; // the single flat message box
   private catoIcon?: Phaser.GameObjects.Image;  // cato-idle, top-left INSIDE the box
   private nameText!: Phaser.GameObjects.Text;   // "Cato", beside the icon
@@ -81,7 +87,8 @@ export class LaptopScene extends Phaser.Scene {
   create(): void {
     const W = this.scale.width, H = this.scale.height;
     crossToBgm(this, 'bgm-title', ['bgm'], 500);
-    this.add.rectangle(0, 0, W, H, 0x14212e, 1).setOrigin(0, 0);
+    this.bgRect = this.add.rectangle(0, 0, W, H, BG_FILL, 1).setOrigin(0, 0);
+    this.bgLayer = this.add.container(0, 0); // drifting icon wallpaper (behind the laptop)
     this.laptop = this.add.image(0, 0, LAPTOP).setOrigin(0.5);
 
     this.panelG = this.add.graphics();
@@ -128,11 +135,42 @@ export class LaptopScene extends Phaser.Scene {
     this.tweens.add({ targets: this.notif, scaleX: 1, scaleY: 1, alpha: 1, duration: 360, ease: 'Back.easeOut', onComplete: () => this.startBreathe() });
   }
 
+  /** Fill the wallpaper layer with a tiled grey icon pattern (heart/sprout/star), one
+   *  per grid cell chosen by (col+row)%4 — a diagonal repeat with a 4-tile period so the
+   *  drift can wrap SEAMLESSLY. Rebuilt only when the canvas size changes. */
+  private buildPattern(W: number, H: number): void {
+    this.bgLayer.removeAll(true);
+    const spacing = Math.max(52, Math.round(Math.min(W, H) * 0.11));
+    const iconS = spacing * 0.46, P = 4;
+    this.bgPeriod = P * spacing;
+    const cols = Math.ceil(W / spacing), rows = Math.ceil(H / spacing);
+    for (let r = -P; r <= rows + P; r++) {
+      for (let c = -P; c <= cols + P; c++) {
+        const frame = BG_ICONS[(((c + r) % 4) + 4) % 4];
+        const ic = this.add.image(c * spacing, r * spacing, 'ui-icons', frame).setTint(BG_TINT).setAlpha(BG_ALPHA);
+        ic.setDisplaySize(iconS, iconS);
+        this.bgLayer.add(ic);
+      }
+    }
+    this.bgLayer.setPosition(0, 0);
+  }
+
+  /** Drift the wallpaper diagonally up-right, wrapping by one pattern period (seamless). */
+  update(_time: number, delta: number): void {
+    if (!this.bgLayer) return;
+    this.bgLayer.x += (10 * delta) / 1000;  // rightward
+    this.bgLayer.y -= (14 * delta) / 1000;  // upward
+    if (this.bgLayer.x >= this.bgPeriod) this.bgLayer.x -= this.bgPeriod;
+    if (this.bgLayer.y <= -this.bgPeriod) this.bgLayer.y += this.bgPeriod;
+  }
+
   // ── Layout ────────────────────────────────────────────────────────────────
   private layout = (): void => {
     const W = this.scale.width, H = this.scale.height;
     const tex = this.textures.get(LAPTOP).getSourceImage();
     const iw = tex.width, ih = tex.height;
+    this.bgRect.setSize(W, H);
+    if (W !== this.bgW || H !== this.bgH) { this.bgW = W; this.bgH = H; this.buildPattern(W, H); } // rebuild only on a real resize
     const s = Math.min((W * 0.94) / iw, (H * 0.94) / ih);
     this.laptop.setScale(s).setPosition(W / 2, H / 2);
     const lx = W / 2 - (iw * s) / 2, ly = H / 2 - (ih * s) / 2;
