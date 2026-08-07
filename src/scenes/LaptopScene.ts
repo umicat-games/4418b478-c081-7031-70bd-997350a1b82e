@@ -492,8 +492,9 @@ export class LaptopScene extends Phaser.Scene {
     let gone = false;
     const go = (): void => {
       if (gone) return; gone = true;
-      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'paw', ms: 1050, color: WP_FILL, loading: true });
-      else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 1050, color: WP_FILL });
+      // Cream paw curtain (DEF_COLOR default) so the paw reads against the green scenes on both sides.
+      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'paw', ms: 1050, loading: true });
+      else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 1050 });
     };
     this.time.delayedCall(1400, go); // read Cato's sign-off, then go
     this.time.delayedCall(8000, go); // safety: never strand the player

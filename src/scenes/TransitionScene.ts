@@ -5,12 +5,12 @@ import { t } from '../i18n';
 export type TransitionEffect = 'circle' | 'slide' | 'dissolve' | 'paw';
 
 const DEF_MS = 420;
-const DEF_COLOR = 0xffffff; // white curtain (per-call `color` can override)
+const DEF_COLOR = 0xf6f0e2; // cream curtain — CONTRASTS the green scene wallpapers so the paw reads (per-call `color` can override)
 const HOLE_BASE = 100;      // unit circle radius, scaled for the iris wipe
 // When `loading` is set, the cover HOLDS closed (showing "Loading") until the incoming scene
 // is ready — and at least this long, so a fast load doesn't flash the text then vanish.
 const MIN_COVER_MS = 850;
-const LOADING_TEXT_COLOR = '#46662b'; // dark green — reads on the cream/green cover
+const LOADING_TEXT_COLOR = '#7c5a38'; // warm brown — reads on the cream curtain
 // Paw-print iris (Catopia's signature wipe): the mask hole is a paw (pad + 4 toe beans)
 // drawn at unit size around the pad centre, then scaled like the circle. PAW_CORE = the
 // guaranteed-solid radius around the origin — a bit under the pad's short axis so scaling

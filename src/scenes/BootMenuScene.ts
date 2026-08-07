@@ -202,7 +202,9 @@ export class BootMenuScene extends Phaser.Scene {
     // laptop is accepted; later this aligns with the real save-based new-game check.)
     let seen = false;
     try { seen = localStorage.getItem('catopia:laptopDone') === '1'; } catch { /* no storage */ }
-    if (seen) startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'paw', ms: 1050, color: WP_FILL, loading: true });
-    else startTransition(this, 'LaptopScene', {}, { effect: 'paw', ms: 1050, color: WP_FILL });
+    // Cream paw curtain (DEF_COLOR default) — the title AND the laptop scene are both green, so a
+    // green curtain was invisible; cream contrasts both so the paw actually reads on this switch.
+    if (seen) startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'paw', ms: 1050, loading: true });
+    else startTransition(this, 'LaptopScene', {}, { effect: 'paw', ms: 1050 });
   }
 }
