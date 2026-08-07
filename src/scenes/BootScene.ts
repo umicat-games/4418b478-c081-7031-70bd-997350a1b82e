@@ -52,9 +52,11 @@ export class BootScene extends Phaser.Scene {
     // boot menu plays `teemo-appear` once, then loops random blink/love/think. See below.
     this.load.spritesheet('teemo', 'uploaded/teemo_premium_emote_animations_sprite_sheet-export.png', { frameWidth: 32, frameHeight: 32 });
     // Looping background music — a SEPARATE track for the title vs the game. MP3 for
-    // universal browser support. `bgm-title` plays on the boot screen (BootMenuScene),
-    // `bgm` in-game (GameScene); crossToBgm swaps them on the title→game switch.
-    this.load.audio('bgm', 'uploaded/catopia-background-music-1.mp3');
+    // universal browser support. `bgm-title` plays on the boot screen (BootMenuScene).
+    // The in-game `bgm` (4.1MB — over HALF the boot payload) is DEFERRED to `GameScene`'s
+    // own preload, so the title screen appears fast and we don't pay for it until the
+    // player actually enters the game. crossToBgm swaps them on the title→game switch,
+    // and is safe if `bgm` isn't loaded yet (it early-returns; the stop-key no-ops).
     this.load.audio('bgm-title', 'uploaded/catopia-title-screen-background-music.mp3');
     // UI SFX (see src/sfx.ts): `sfx-switch` = button/open click; `sfx-scroll` = the
     // scrub tick when dragging a settings volume slider.

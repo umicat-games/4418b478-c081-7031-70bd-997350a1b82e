@@ -849,6 +849,16 @@ export class GameScene extends Phaser.Scene {
     this.sceneId = data.sceneId;
   }
 
+  /** Deferred game-only load: the 4.1MB in-game BGM (NOT loaded at boot so the title
+   *  appears fast — see BootScene). Phaser runs preload() → create(), so it's in the
+   *  cache before create()'s crossToBgm. Loads behind the scene-transition cover; guarded
+   *  so a scene-instance reuse (title→game→title→game) doesn't re-queue it. */
+  preload(): void {
+    if (!this.cache.audio.exists('bgm')) {
+      this.load.audio('bgm', 'uploaded/catopia-background-music-1.mp3');
+    }
+  }
+
   async create(): Promise<void> {
     // In-game BGM (its own track): stop the title track and swell the game one in
     // (fade paired with the scene-transition wipe — see TransitionScene / src/bgm.ts).
