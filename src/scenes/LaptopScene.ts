@@ -63,6 +63,7 @@ const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
+  private laptopShadow!: Phaser.GameObjects.Image; // drop shadow behind the laptop
   private bgRect!: Phaser.GameObjects.Rectangle;      // cream wallpaper
   private bgLayer!: Phaser.GameObjects.Container;     // drifting icon pattern behind the laptop
   private bgPeriod = 100; private bgW = 0; private bgH = 0;
@@ -123,6 +124,9 @@ export class LaptopScene extends Phaser.Scene {
     crossToBgm(this, 'bgm-title', ['bgm'], 500);
     this.bgRect = this.add.rectangle(0, 0, W, H, WP_FILL, 1).setOrigin(0, 0);
     this.bgLayer = this.add.container(0, 0); // drifting icon wallpaper (behind the laptop)
+    // Soft DROP SHADOW: a dark, down-right-offset copy of the laptop behind it, so it lifts
+    // off the green wallpaper. Tracks the laptop's position/scale/alpha in update().
+    this.laptopShadow = this.add.image(0, 0, LAPTOP).setOrigin(0.5).setTint(0x203020).setVisible(false);
     this.laptop = this.add.image(0, 0, LAPTOP).setOrigin(0.5);
 
     this.panelG = this.add.graphics();
@@ -233,6 +237,14 @@ export class LaptopScene extends Phaser.Scene {
   /** Drift the wallpaper diagonally up-right, wrapping by one pattern period (seamless). */
   update(_time: number, delta: number): void {
     if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod);
+    // Drop shadow tracks the laptop (position/scale/alpha) with a down-right offset, so it
+    // rises + fades in with the entrance and sits behind the laptop at rest.
+    if (this.laptop && this.laptopShadow) {
+      const off = this.laptop.displayWidth * 0.012;
+      this.laptopShadow.setVisible(this.laptop.visible).setScale(this.laptop.scaleX)
+        .setPosition(this.laptop.x + off, this.laptop.y + off * 1.5)
+        .setAlpha(this.laptop.alpha * 0.24);
+    }
   }
 
   // ── Layout ────────────────────────────────────────────────────────────────
