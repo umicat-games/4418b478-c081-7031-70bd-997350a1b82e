@@ -13,13 +13,21 @@ export const WP_ALPHA = 0.42;
 
 const P = 4; // diagonal repeat period (in cells) — the drift wraps every P*spacing px
 
-/** (Re)fill `layer` with the tiled icon pattern sized for a W×H viewport. Returns the
- *  wrap PERIOD (px) for {@link driftIconLayer}. Uses the `ui-icons` texture. */
-export function buildIconPattern(scene: Phaser.Scene, layer: Phaser.GameObjects.Container, W: number, H: number): number {
+/**
+ * (Re)fill `layer` with the tiled icon pattern for a W×H ON-SCREEN viewport. Returns the
+ * wrap PERIOD (local px) for {@link driftIconLayer}. Uses the `ui-icons` texture.
+ *
+ * `renderScale` = the camera zoom the layer will be rendered at (default 1). The icon size +
+ * spacing are computed in SCREEN space (so the min-size floor is correct) then built at
+ * 1/renderScale in LOCAL space — the zoom magnifies them back, so a wallpaper in a 3×-zoomed
+ * scene renders at the SAME on-screen size as one in a 1:1 scene.
+ */
+export function buildIconPattern(scene: Phaser.Scene, layer: Phaser.GameObjects.Container, W: number, H: number, renderScale = 1): number {
   layer.removeAll(true);
-  const spacing = Math.max(26, Math.round(Math.min(W, H) * 0.055)); // halved → smaller icons, denser pattern
+  const screenSpacing = Math.max(26, Math.round(Math.min(W, H) * 0.055)); // on-screen spacing (with min floor)
+  const spacing = screenSpacing / renderScale; // local spacing (zoom magnifies it back)
   const iconS = spacing * 0.46;
-  const cols = Math.ceil(W / spacing), rows = Math.ceil(H / spacing);
+  const cols = Math.ceil(W / screenSpacing), rows = Math.ceil(H / screenSpacing); // same count as at 1:1
   for (let r = -P; r <= rows + P; r++) {
     for (let c = -P; c <= cols + P; c++) {
       const frame = WP_ICONS[(((c + r) % 4) + 4) % 4];

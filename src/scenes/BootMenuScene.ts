@@ -139,7 +139,7 @@ export class BootMenuScene extends Phaser.Scene {
   /** Keep the mascot pinned to the camera's visible bottom-left (22 world px in from the
    *  left, feet on the screen bottom) — recomputed each frame so it survives resizes. */
   update(_time: number, delta: number): void {
-    if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod); // drift the wallpaper
+    if (this.bgLayer) driftIconLayer(this.bgLayer, delta / (this.cameras.main.zoom || 1), this.bgPeriod); // drift (÷zoom → same on-screen speed as the laptop)
     if (this.title && this.titleShadow) {
       // Shadow STAYS on the ground (fixed y = resting logo + gap); as the logo floats up the
       // gap widens and the shadow shrinks + fades a touch → it looks like it's lifting in space.
@@ -154,12 +154,17 @@ export class BootMenuScene extends Phaser.Scene {
     }
   }
 
-  /** (Re)size the cream wallpaper to the canvas; rebuild the icon pattern on a real resize. */
+  /** (Re)size the wallpaper to the canvas; rebuild the icon pattern on a real resize.
+   *  The boot camera is ~3× zoomed, and camera zoom DOES scale scrollFactor(0) objects — so
+   *  we build the pattern for the ZOOM-DIVIDED canvas (fewer, smaller icons in local space)
+   *  which the zoom then magnifies back to the SAME on-screen size as the laptop's 1:1
+   *  wallpaper (so the two backgrounds match). */
   private layoutWallpaper(): void {
     if (!this.bgRect || !this.bgLayer) return;
     const W = this.scale.width, H = this.scale.height;
+    const z = this.cameras.main.zoom || 1;
     this.bgRect.setSize(W, H);
-    if (W !== this.bgW || H !== this.bgH) { this.bgW = W; this.bgH = H; this.bgPeriod = buildIconPattern(this, this.bgLayer, W, H); }
+    if (W !== this.bgW || H !== this.bgH) { this.bgW = W; this.bgH = H; this.bgPeriod = buildIconPattern(this, this.bgLayer, W, H, z); }
   }
 
   private fitCamera = (): void => {
