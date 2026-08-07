@@ -48,8 +48,10 @@ const opening = (name: string): string => {
     ? `你好${n ? '，' + n : '呀'}！最近过得好吗？我叫 Cato，住在 Catopia 的一座小岛上。我在想呀——你愿不愿意来这儿和我一起生活？我们可以一起种地、把这座小岛变得越来越好，甚至一起揭开 Catopia 所有的秘密。在你决定要不要来之前，关于 Catopia 的任何问题，只要我知道，我都很乐意回答你哦！`
     : `Hi${n ? ' ' + n : ' there'}! How are you? My name is Cato, and I live on a little island here in Catopia. I was wondering — would you like to come and live here with me? We could farm together, make this island even lovelier, and maybe even uncover all the mysteries of Catopia. And before you decide, I'd be happy to answer anything you'd like to know about it!`;
 };
+// Sign-off fallbacks — used only when the AI is offline or returns the accept/decline
+// action with no words of its own (normally Cato writes his own closing line).
 const ACCEPT = { en: "Really?! Thank you so much — I'll be waiting for you on the island! 💛", 'zh-CN': '真的吗？！太谢谢你了——我在小岛上等你！💛' };
-const DECLINE = { en: "Oh... that's alright. I'll go ask around, then. Take care!", 'zh-CN': '这样啊……没关系的。那我再去问问别人吧。你也保重！' };
+const DECLINE = { en: "Oh... that's alright, I understand. If you ever change your mind, just message me — I'll be right here. Take care! 🐾", 'zh-CN': '这样啊……没关系的，我明白。要是你哪天改变主意了，随时来找我就好——我一直都在。你也保重呀！🐾' };
 const FILLER = { en: "I haven't seen everything out there yet either — but I'd love to find out together in Catopia! So... will you come?", 'zh-CN': '外面的世界我也还没都见过呢——不过好想和你一起在 Catopia 里探索呀！所以……你会来吗？' };
 
 // In-fiction fallbacks when the AI can't answer (anonymous / out of credits / hiccup).
@@ -201,8 +203,8 @@ export class LaptopScene extends Phaser.Scene {
             "If asked about something you are not sure Catopia has yet but that is RELATED (some feature or activity), do NOT over-promise — say you have not seen everything out there yet and are still figuring the island out, but you would love to find out together — then ask again if they will come.",
             'If asked about something clearly UNRELATED to Catopia or to the invitation (real-world facts, coding, math, etc.), gently say you do not really know about that — you are just a cat living on a quiet little island — and bring it right back to the invitation.',
             'Stay patient, kind, and hopeful, never pushy or annoyed, even if the player keeps dodging. Vary how you phrase the invitation so it does not feel like a broken record.',
-            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action AND say a happy thank-you.',
-            'When the player clearly REFUSES / declines (no, not interested, maybe later, I cannot), call the decline_help action AND say a gentle, understanding goodbye.',
+            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action AND write your OWN happy sign-off: thank them warmly and say you will be waiting for them on the island / see you there. This is your LAST message and it is complete on its own — do NOT ask another question, and do NOT expect a further reply.',
+            'When the player clearly REFUSES / declines (no, not interested, maybe later, I cannot), call the decline_help action AND write your OWN gentle sign-off: say that is okay and you understand, that it is a little sad but you get it, and that if they ever change their mind they can reach out / message you anytime. This is your LAST message and it is complete on its own — do NOT ask another question.',
             'Only call accept_help or decline_help once the player has actually made that choice. Random / off-topic / joking messages are NOT a yes or a no — while they are just messing around, asking questions, or thinking it over, keep chatting and do NOT call either action.',
           ],
           actions: [
@@ -449,8 +451,10 @@ export class LaptopScene extends Phaser.Scene {
     if (!r.ok) { this.onAiUnavailable(r.reason); return; }
     const did = (r.do ?? []).map((d) => d.name);
     const say = (r.say ?? '').trim();
-    if (did.includes('accept_help')) { say ? this.showLine(say, () => this.finish(true)) : this.finish(true); return; }
-    if (did.includes('decline_help')) { say ? this.showLine(say, () => this.finish(false)) : this.finish(false); return; }
+    // Cato's OWN say IS the sign-off (the persona is told how to close). Fall back to a
+    // fixed line only if the AI somehow returned the action with no words.
+    if (did.includes('accept_help')) { this.showLine(say || tr(ACCEPT), () => this.finish(true)); return; }
+    if (did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
     this.showLine(say || tr(FILLER), () => this.makeInput());
   }
 
@@ -478,11 +482,14 @@ export class LaptopScene extends Phaser.Scene {
     const t = text.toLowerCase();
     const yes = /(愿意|好的|好呀|好啊|我来|帮|当然|可以|答应|yes|sure|ok|okay|i will|i'?ll help|help you|of course)/.test(t) || t === '好' || t === '来';
     const no = /(不愿意|不想|拒绝|算了|不去|不行|no thanks|no\b|nope|not really|decline)/.test(t);
-    if (yes) { this.finish(true); return; }
-    if (no) { this.finish(false); return; }
+    if (yes) { this.showLine(tr(ACCEPT), () => this.finish(true)); return; } // offline → the fixed sign-off
+    if (no) { this.showLine(tr(DECLINE), () => this.finish(false)); return; }
     this.showLine(tr(FILLER), () => this.makeInput());
   }
 
+  /** Wrap up + leave. Cato's OWN reply (accept/decline) is already the closing line — this
+   *  just gives a beat to read it, then runs the transition. NO extra hardcoded line here,
+   *  or it would double up with what Cato just said. */
   private finish(accepted: boolean): void {
     if (this.busy) return;
     this.busy = true; this.removeInput();
@@ -493,7 +500,7 @@ export class LaptopScene extends Phaser.Scene {
       if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'paw', ms: 1050 });
       else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 1050 });
     };
-    this.showLine(tr(accepted ? ACCEPT : DECLINE), () => this.time.delayedCall(1100, go));
+    this.time.delayedCall(1400, go); // read Cato's sign-off, then go
     this.time.delayedCall(8000, go); // safety: never strand the player
   }
 }
