@@ -23,6 +23,11 @@ function startGame(): void {
   createUmicatGame({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
+    // Cream canvas backdrop (matches the loading screen wallpaper). The SDK default is a
+    // dark navy (#1a1a2e) that flashed through wherever nothing was drawn yet — before the
+    // boot loader painted, and in the gap while BootMenuScene async-loads its world — so
+    // the boot sequence read as dark→cream→dark→title. Cream makes every gap seamless.
+    backgroundColor: '#f6f0e2',
     // RESIZE: the canvas fills the screen edge-to-edge (no letterbox) — Catopia's
     // world is bigger than the camera and you pan around it, so there's no fixed
     // viewport; the camera just shows whatever fits, and the HUD is anchor-based.
