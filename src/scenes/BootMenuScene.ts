@@ -27,7 +27,9 @@ export class BootMenuScene extends Phaser.Scene {
   private bgLayer?: Phaser.GameObjects.Container;
   private bgPeriod = 100; private bgW = 0; private bgH = 0;
   private title?: Phaser.GameObjects.Sprite;        // the CATOPIA logo
-  private titleShadow?: Phaser.GameObjects.Image;   // its drop shadow (follows the float)
+  private titleShadow?: Phaser.GameObjects.Image;   // its drop shadow (stays on the "ground")
+  private titleBaseY = 0;                            // the logo's resting (lowest) y — the shadow's anchor
+  private titleBaseScale = 1;
   /** The authored Play button entity + its base (un-hovered) scale — SettingsScene
    *  reads these to place the "Settings" button directly BELOW Play, at Play's size. */
   playButton?: Phaser.GameObjects.Sprite;
@@ -80,8 +82,11 @@ export class BootMenuScene extends Phaser.Scene {
       | undefined;
     if (title) {
       this.title = title;
-      // Soft DROP SHADOW: a deep-green, offset copy just under the logo — same hue as the
-      // green backdrop but darker, so the title lifts off the page. Tracks the float in update().
+      this.titleBaseY = title.y;          // resting (lowest) position — the shadow anchors here
+      this.titleBaseScale = title.scaleX;
+      // Soft DROP SHADOW pinned to the "ground": a deep-green copy under the logo. It stays
+      // put while the logo floats, so the GAP (+ a slight shrink/fade) grows as it rises —
+      // a real "hovering in space" feel, not a flat attached text-shadow. Driven in update().
       this.titleShadow = this.add.image(title.x, title.y, title.texture.key, title.frame.name)
         .setOrigin(title.originX, title.originY)
         .setScale(title.scaleX, title.scaleY)
@@ -135,7 +140,14 @@ export class BootMenuScene extends Phaser.Scene {
    *  left, feet on the screen bottom) — recomputed each frame so it survives resizes. */
   update(_time: number, delta: number): void {
     if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod); // drift the wallpaper
-    if (this.title && this.titleShadow) this.titleShadow.setPosition(this.title.x + 2.5, this.title.y + 3.5); // follow the float
+    if (this.title && this.titleShadow) {
+      // Shadow STAYS on the ground (fixed y = resting logo + gap); as the logo floats up the
+      // gap widens and the shadow shrinks + fades a touch → it looks like it's lifting in space.
+      const lift = Phaser.Math.Clamp((this.titleBaseY - this.title.y) / 5, 0, 1); // 0 (rest) .. 1 (peak)
+      this.titleShadow.setPosition(this.title.x + 2.5, this.titleBaseY + 4);
+      this.titleShadow.setScale(this.titleBaseScale * (1 - 0.05 * lift));
+      this.titleShadow.setAlpha(0.32 - 0.12 * lift);
+    }
     if (this.cato) {
       const v = this.cameras.main.worldView;
       this.cato.setPosition(v.left + 80, v.bottom);
