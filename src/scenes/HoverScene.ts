@@ -11,26 +11,38 @@ export interface HoverModel {
 }
 
 const HOVER_KEY = 'hover';
-const RING = 0xffffff;      // the white inspect frame / dot
+const RING = 0xffffff;      // the empty-ground cursor dot
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
+// The `white-corner-bracket` region in the `ui-sheet` atlas (all_ui_assets_on_one_sheet),
+// tagged as a nine-slice in the Asset Manager — 32×32 frame, 14px corners (thin stretchy edges).
+const BRACKET_ATLAS = 'ui-sheet';
+const BRACKET_FRAME = 'white-corner-bracket';
+const BRACKET_SLICE = 14;
+const BRACKET_MIN = BRACKET_SLICE * 2; // don't shrink below the two corners (would distort)
 
 /**
- * Empty-hand "inspect" overlay: a white rounded frame that hugs whatever world object the
- * mouse is over, with the object's NAME on a little pill above it — and a small white ring
- * at the cursor when hovering empty ground. Screen-space (like CursorScene) so the text stays
- * crisp and the same size at any camera zoom; GameScene computes the projected screen geometry
- * + name and publishes it to the `hover` registry key. Mouse-only (touch has no hover).
+ * Empty-hand "inspect" overlay: a white corner-bracket that hugs whatever world object the
+ * mouse is over, with the object's NAME on a little pill above it — and a small white ring at
+ * the cursor when hovering empty ground. Screen-space (like CursorScene) so the text + bracket
+ * corners stay crisp and the same size at any camera zoom; GameScene computes the projected
+ * screen geometry + name and publishes it to the `hover` registry key. Mouse-only.
  */
 export class HoverScene extends Phaser.Scene {
-  private frame?: Phaser.GameObjects.Graphics;   // the ring / dot
-  private pill?: Phaser.GameObjects.Graphics;    // the name-label background
+  private bracket?: Phaser.GameObjects.NineSlice; // the corner frame around a hovered object
+  private dot?: Phaser.GameObjects.Graphics;      // the empty-ground cursor ring
+  private pill?: Phaser.GameObjects.Graphics;     // the name-label background
   private label?: Phaser.GameObjects.Text;
 
   constructor() { super({ key: 'HoverScene' }); }
 
   create(): void {
-    this.frame = this.add.graphics();
+    if (this.textures.exists(BRACKET_ATLAS) && this.textures.get(BRACKET_ATLAS).has(BRACKET_FRAME)) {
+      this.bracket = this.add
+        .nineslice(0, 0, BRACKET_ATLAS, BRACKET_FRAME, 32, 32, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
+        .setVisible(false);
+    }
+    this.dot = this.add.graphics();
     this.pill = this.add.graphics();
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
     this.label = this.add.text(0, 0, '', {
@@ -41,23 +53,23 @@ export class HoverScene extends Phaser.Scene {
 
   update(): void {
     const m = this.registry.get(HOVER_KEY) as HoverModel | undefined;
-    const frame = this.frame, pill = this.pill, label = this.label;
-    if (!frame || !pill || !label) return;
-    frame.clear(); pill.clear();
-    if (!m || !m.visible) { label.setVisible(false); return; }
+    const dot = this.dot, pill = this.pill, label = this.label;
+    if (!dot || !pill || !label) return;
+    dot.clear(); pill.clear();
+    if (!m || !m.visible) { this.bracket?.setVisible(false); label.setVisible(false); return; }
 
     if (!m.onObject) {
       // Empty ground → a small white ring at the cursor (the empty-hand pointer).
+      this.bracket?.setVisible(false);
       label.setVisible(false);
-      frame.lineStyle(2, RING, 0.9).strokeCircle(m.x, m.y, 5);
-      frame.fillStyle(RING, 0.9).fillCircle(m.x, m.y, 1.2);
+      dot.lineStyle(2, RING, 0.9).strokeCircle(m.x, m.y, 5);
+      dot.fillStyle(RING, 0.9).fillCircle(m.x, m.y, 1.2);
       return;
     }
 
-    // Over an object → a rounded frame hugging it + the name pill above.
-    const x = m.x - m.w / 2, y = m.y - m.h / 2;
-    const r = Math.min(10, m.w / 2, m.h / 2);
-    frame.lineStyle(2.5, RING, 0.95).strokeRoundedRect(x, y, m.w, m.h, r);
+    // Over an object → the corner-bracket 9-slice hugging it + the name pill above.
+    const w = Math.max(BRACKET_MIN, m.w), h = Math.max(BRACKET_MIN, m.h);
+    if (this.bracket) this.bracket.setVisible(true).setPosition(m.x, m.y).setSize(w, h);
 
     label.setText(m.name).setVisible(true).setPosition(m.nameX, m.nameY);
     const pad = 6, bw = label.width + pad * 2, bh = label.height + pad;
