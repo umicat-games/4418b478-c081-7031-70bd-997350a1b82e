@@ -121,17 +121,40 @@ export class TransitionScene extends Phaser.Scene {
       : { g: this.holeG, mask: this.mask, unit: HOLE_BASE };
   }
 
+  /**
+   * TWO-PHASE iris scale so the shape is clearly VISIBLE (a plain easeOut just dwells on
+   * a tiny dot near 0). The paw/circle spends most of the time at the readable size and
+   * only a short burst on the huge, off-screen part:
+   *  - cover  : big → readable (fast) → 0 (slow, watch it close)
+   *  - reveal : 0 → readable (slow, watch it open) → big (fast flood)
+   * `readS` = the scale at which the whole paw sits nicely on screen.
+   */
+  private irisScale(cover: boolean, onDone: () => void): void {
+    const W = this.scale.width, H = this.scale.height;
+    const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
+    const { g, mask, unit } = this.iris();
+    g.setPosition(fx, fy).setRotation(0);
+    this.curtain.setMask(mask);
+    const bigS = this.maxRadius(fx, fy) / unit;
+    const readS = Math.min(3, bigS * 0.6);
+    const t = this.ms;
+    g.setScale(cover ? bigS : 0);
+    this.tweens.chain({
+      targets: g,
+      onComplete: onDone,
+      tweens: cover
+        ? [ { scale: readS, duration: t * 0.28, ease: 'Sine.easeOut' },  // snap the huge, off-screen part in (no dead time at full size)
+            { scale: 0,     duration: t * 0.72, ease: 'Sine.easeInOut' } ] // then slowly close the visible paw
+        : [ { scale: readS, duration: t * 0.72, ease: 'Sine.easeInOut' }, // slowly open the visible paw
+            { scale: bigS,  duration: t * 0.28, ease: 'Sine.easeIn' } ],   // then flood the rest out fast
+    });
+  }
+
   /** The `effect`-specific cover tween (curtain already set up). */
   private animateCover(onComplete: () => void): void {
     const W = this.scale.width, H = this.scale.height;
     if (this.effect === 'circle' || this.effect === 'paw') {
-      const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
-      const { g, mask, unit } = this.iris();
-      g.setPosition(fx, fy).setRotation(0);
-      this.curtain.setMask(mask);
-      // easeOut on the shrink: rush the huge (off-screen) part, LINGER at the small/medium
-      // sizes where the paw shape actually reads (Sine.easeIn did the opposite → a blink).
-      this.tweens.add({ targets: g, scale: { from: this.maxRadius(fx, fy) / unit, to: 0 }, duration: this.ms, ease: 'Sine.easeOut', onComplete });
+      this.irisScale(true, onComplete);
     } else if (this.effect === 'slide') {
       this.tweens.add({ targets: this.curtain, x: { from: -W, to: 0 }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete });
     } else {
@@ -147,13 +170,7 @@ export class TransitionScene extends Phaser.Scene {
     const finish = (): void => { this.busy = false; this.curtain.setVisible(false).clearMask(); };
 
     if (this.effect === 'circle' || this.effect === 'paw') {
-      const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
-      const { g, mask, unit } = this.iris();
-      g.setPosition(fx, fy).setRotation(0);
-      this.curtain.setMask(mask);
-      // easeIn on the bloom: LINGER at the small readable paw as it opens, then flood the
-      // rest fast (mirror of the cover's easeOut).
-      this.tweens.add({ targets: g, scale: { from: 0, to: this.maxRadius(fx, fy) / unit }, duration: this.ms, ease: 'Sine.easeIn', onComplete: finish });
+      this.irisScale(false, finish);
     } else if (this.effect === 'slide') {
       this.tweens.add({ targets: this.curtain, x: { from: 0, to: W }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete: finish });
     } else {
