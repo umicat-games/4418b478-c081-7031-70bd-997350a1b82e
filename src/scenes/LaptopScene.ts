@@ -40,9 +40,13 @@ const NOTIF_TINT = 0x4a90c8; // "new message" bell/icon colour
 const NEW_MSG = { en: 'You have a new message', 'zh-CN': '你有一条新消息' };
 const TYPE_MS = 34;
 
-const OPENING = {
-  en: "Hi... is this thing on? Oh! Hello! I'm Cato — I live on a little island in Catopia. I'm reaching out because... well, it gets kind of quiet here on my own, and I'd love a friend to come live in Catopia with me. We could build up the island together, and go explore this whole world side by side. Would you come join me?",
-  'zh-CN': '嗨……这个能收到吗？哦！你好呀！我是 Cato，住在 Catopia 的一座小岛上。我冒昧联系你，是因为……一个人待在这儿有点冷清，我好希望能有个朋友来 Catopia 和我一起生活。我们可以一起把这座小岛打造起来，一起去探索这整个世界。你愿意来加入我吗？',
+/** Cato's fixed opening line. Greets the player BY NAME when the host provides one
+ *  (`{name}`), else a neutral greeting. */
+const opening = (name: string): string => {
+  const n = name.trim();
+  return getLang() === 'zh-CN'
+    ? `你好${n ? '，' + n : '呀'}！最近过得好吗？我叫 Cato，住在 Catopia 的一座小岛上。我在想呀——你愿不愿意来这儿和我一起生活？我们可以一起种地、把这座小岛变得越来越好，甚至一起揭开 Catopia 所有的秘密。在你决定要不要来之前，关于 Catopia 的任何问题，只要我知道，我都很乐意回答你哦！`
+    : `Hi${n ? ' ' + n : ' there'}! How are you? My name is Cato, and I live on a little island here in Catopia. I was wondering — would you like to come and live here with me? We could farm together, make this island even lovelier, and maybe even uncover all the mysteries of Catopia. And before you decide, I'd be happy to answer anything you'd like to know about it!`;
 };
 const ACCEPT = { en: "Really?! Thank you so much — I'll be waiting for you on the island! 💛", 'zh-CN': '真的吗？！太谢谢你了——我在小岛上等你！💛' };
 const DECLINE = { en: "Oh... that's alright. I'll go ask around, then. Take care!", 'zh-CN': '这样啊……没关系的。那我再去问问别人吧。你也保重！' };
@@ -90,6 +94,7 @@ export class LaptopScene extends Phaser.Scene {
 
   // Runtime AI — the recruiting-Cato npc that drives every reply after the opening line.
   private recruiter?: Npc;
+  private playerName = ''; // host-provided display name, for a personalised greeting
   private aiThinking = false;      // a say() is in flight (input hidden, taps ignored)
   private thinkTimer?: Phaser.Time.TimerEvent; // animated "…" while waiting
 
@@ -180,6 +185,7 @@ export class LaptopScene extends Phaser.Scene {
       .then((u) => {
         initLang(u?.locale); // match the platform-provided player language
         const name = u?.user?.name?.trim();
+        this.playerName = name ?? ''; // greet the player by name in the opening line
         this.notifText.setText(tr(NEW_MSG)); // in case locale changed after first draw
         if (this.inputEl) this.inputEl.placeholder = getLang() === 'zh-CN' ? '输入消息…' : 'Message…';
         this.recruiter = u?.ai.npc({
@@ -332,7 +338,7 @@ export class LaptopScene extends Phaser.Scene {
   /** Show the chat, then (after a beat) Cato's opening line. */
   private revealChat(): void {
     for (const o of [this.panelG, this.catoIcon, this.nameText, this.msgText, this.pillG, this.sendBtn]) o?.setVisible(true);
-    this.time.delayedCall(450, () => this.showLine(tr(OPENING), () => this.makeInput()));
+    this.time.delayedCall(450, () => this.showLine(opening(this.playerName), () => this.makeInput()));
   }
 
   /** Height budget for one page (box minus the icon/name header row). */
