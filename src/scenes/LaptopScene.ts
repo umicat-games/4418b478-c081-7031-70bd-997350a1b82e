@@ -96,7 +96,7 @@ export class LaptopScene extends Phaser.Scene {
     this.nameText = this.add.text(0, 0, 'Cato', { fontFamily: dialogFont(), color: NAME_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
     this.msgText = this.add.text(0, 0, '', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0);
     this.measure = this.add.text(-9999, 0, '', { fontFamily: dialogFont() }).setVisible(false);
-    this.more = this.add.text(0, 0, '▼', { fontFamily: dialogFont(), color: '#9bb0c4' }).setOrigin(1, 1).setVisible(false);
+    this.more = this.add.text(0, 0, '▼', { fontFamily: dialogFont(), color: '#9bb0c4' }).setOrigin(0.5, 1).setVisible(false);
 
     this.pillG = this.add.graphics();
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
@@ -198,7 +198,7 @@ export class LaptopScene extends Phaser.Scene {
     this.msgText.setFontSize(fs).setPosition(px + tpad, msgY).setWordWrapWidth(pw - tpad * 2);
     this.msgAreaH = py + ph - tpad - msgY;
     this.measure.setFontSize(fs).setWordWrapWidth(pw - tpad * 2);
-    this.more.setFontSize(fs).setPosition(px + pw - tpad, py + ph - tpad * 0.5);
+    this.more.setFontSize(fs).setPosition(px + pw / 2, py + ph - tpad * 0.5);
 
     // Input box + send button — SAME rounded panel style as Cato's message box.
     const iy = sy0 + sh - inputH, btnR = inputH * 0.44;
