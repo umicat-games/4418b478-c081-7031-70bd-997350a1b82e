@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { crossToBgm } from '../bgm';
 import { startTransition, finishTransition } from '../transition';
+import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
 
 /**
  * Boot / title screen — a DATA scene. Renders the `boot` scene-as-data (its
@@ -21,6 +22,10 @@ export class BootMenuScene extends Phaser.Scene {
   private worldW = 960;
   private worldH = 540;
   private cato?: Phaser.GameObjects.Sprite;
+  // Cream drifting-icon wallpaper (replaces the busy island/water backdrop).
+  private bgRect?: Phaser.GameObjects.Rectangle;
+  private bgLayer?: Phaser.GameObjects.Container;
+  private bgPeriod = 100; private bgW = 0; private bgH = 0;
   /** The authored Play button entity + its base (un-hovered) scale — SettingsScene
    *  reads these to place the "Settings" button directly BELOW Play, at Play's size. */
   playButton?: Phaser.GameObjects.Sprite;
@@ -49,10 +54,22 @@ export class BootMenuScene extends Phaser.Scene {
     // the game track out); also a soft intro on a cold boot.
     crossToBgm(this, 'bgm-title', ['bgm'], 700);
 
-    // Dim MASK between the busy island scene (depth 0–10) and the UI, so the title /
-    // mascot / Play button (all above depth 50) pop instead of fighting the background.
-    // A big world-space rect (the boot camera is zoomed, so oversize it to cover any view).
-    this.add.rectangle(this.worldW / 2, this.worldH / 2, 4000, 4000, 0x14212e, 0.4).setDepth(50);
+    // Backdrop: HIDE the busy island/water tilemaps and use the calm cream drifting-icon
+    // wallpaper instead (shared with the loading screen + laptop) — cleaner, cozier title.
+    // Screen-fixed (scrollFactor 0) so it fills the canvas regardless of the zoomed boot
+    // camera, at a very low depth so the title / buttons / mascot sit on top. (The old dim
+    // mask — needed to make the UI pop over the busy island — is gone; cream needs none.)
+    this.children.list
+      .filter((o): o is Phaser.Tilemaps.TilemapLayer => o instanceof Phaser.Tilemaps.TilemapLayer)
+      .forEach((l) => l.setVisible(false));
+    // The island's DECORATIONS (trees / furniture / plants / fences / stones) are entities,
+    // not tilemap tiles — hide every boot entity except the title logo.
+    reg?.all().forEach((go) => {
+      if (go.getData('entityAssetId') !== 'catopia-title') (go as Phaser.GameObjects.Sprite).setVisible(false);
+    });
+    this.bgRect = this.add.rectangle(0, 0, this.scale.width, this.scale.height, WP_FILL, 1).setOrigin(0, 0).setScrollFactor(0).setDepth(-100);
+    this.bgLayer = this.add.container(0, 0).setScrollFactor(0).setDepth(-99);
+    this.layoutWallpaper();
 
     // Title: gentle up-and-down float (world px; the boot camera is ~3× so ±5 world
     // reads as ±15 on screen). Loops forever with a soft sine ease.
@@ -107,10 +124,20 @@ export class BootMenuScene extends Phaser.Scene {
 
   /** Keep the mascot pinned to the camera's visible bottom-left (22 world px in from the
    *  left, feet on the screen bottom) — recomputed each frame so it survives resizes. */
-  update(): void {
-    if (!this.cato) return;
-    const v = this.cameras.main.worldView;
-    this.cato.setPosition(v.left + 80, v.bottom);
+  update(_time: number, delta: number): void {
+    if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod); // drift the wallpaper
+    if (this.cato) {
+      const v = this.cameras.main.worldView;
+      this.cato.setPosition(v.left + 80, v.bottom);
+    }
+  }
+
+  /** (Re)size the cream wallpaper to the canvas; rebuild the icon pattern on a real resize. */
+  private layoutWallpaper(): void {
+    if (!this.bgRect || !this.bgLayer) return;
+    const W = this.scale.width, H = this.scale.height;
+    this.bgRect.setSize(W, H);
+    if (W !== this.bgW || H !== this.bgH) { this.bgW = W; this.bgH = H; this.bgPeriod = buildIconPattern(this, this.bgLayer, W, H); }
   }
 
   private fitCamera = (): void => {
@@ -118,6 +145,7 @@ export class BootMenuScene extends Phaser.Scene {
     const zoom = Math.min(this.scale.width / this.worldW, this.scale.height / this.worldH);
     cam.setZoom(zoom);
     cam.centerOn(this.worldW / 2, this.worldH / 2);
+    this.layoutWallpaper(); // reflow the screen-fixed wallpaper on resize
   };
 
   /** Public: SettingsScene's Play button calls this (it owns the visible buttons now). */
