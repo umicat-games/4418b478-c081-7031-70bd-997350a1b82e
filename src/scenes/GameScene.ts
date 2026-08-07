@@ -6162,16 +6162,17 @@ export class GameScene extends Phaser.Scene {
   private moreIconRestY?: number; // captured anchored y of the "more" arrow (lifted with the box)
 
   /** After the save loads, play the intro ONCE on a brand-new save. */
-  private maybePlayIntro(): void {
-    // The opening dialogue is part of the NEW-GAME flow — only a brand-new game
-    // (no save) plays it; a returning save skips straight to gameplay. `replayIntro`
-    // debug flag forces it every load for iterating on the script.
-    if (!isDebug('replayIntro') && !this.isNewGame) return;
-    if (!this.cache.json.exists('dialogue-intro')) return;
-    // The game OPENS already focused on Cato (no zoom-in) — so enter the cinematic NOW,
-    // synchronously after frameNewGameStart's framing, before the first render. Only a
-    // tiny beat before Cato actually starts talking.
-    this.enterCinematic();
+  /** Whether the new-game scripted intro should play: only a brand-new game (no save) — or the
+   *  `replayIntro` debug flag, which forces it every load for iterating on the script. */
+  private shouldPlayIntro(): boolean {
+    if (!isDebug('replayIntro') && !this.isNewGame) return false;
+    return this.cache.json.exists('dialogue-intro');
+  }
+
+  /** Start Cato's scripted intro AFTER the scene-in transition has FULLY revealed (called from
+   *  markReady's finishTransition onRevealed). A small extra beat so the dialogue box settles in
+   *  gently rather than snapping up the instant the paw finishes opening. */
+  private playIntroDialogue(): void {
     this.time.delayedCall(700, () => { if (!this.menuOpen) this.startDialogue('intro'); });
   }
 
@@ -6483,10 +6484,14 @@ export class GameScene extends Phaser.Scene {
     // save centres the camera on the restored Cato.
     if (this.isNewGame) this.frameNewGameStart();
     else if (this.child) this.cameras.main.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
+    // New-game intro: snap into the cinematic framing NOW (camera on Cato + letterbox) so the
+    // paw opens onto the already-composed shot — but HOLD Cato's dialogue box until the paw has
+    // FULLY opened (finishTransition's onRevealed), so the box doesn't rush in mid-transition.
+    const playIntro = this.shouldPlayIntro();
+    if (playIntro) this.enterCinematic();
     // World + save are ready and the camera is framed → NOW uncover: the paw (which held
     // closed showing "Loading") reveals the ready game directly (no reveal-time overlay).
-    finishTransition(this);
-    this.maybePlayIntro(); // new-game → Cato's scripted greeting + tool tour (once)
+    finishTransition(this, () => { if (playIntro) this.playIntroDialogue(); });
   }
 
   /** New-game opening: put Cato at the doorway OUTSIDE the house (so he doesn't get
