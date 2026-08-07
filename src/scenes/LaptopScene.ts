@@ -470,8 +470,8 @@ export class LaptopScene extends Phaser.Scene {
     let gone = false;
     const go = (): void => {
       if (gone) return; gone = true;
-      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'dissolve' });
-      else startTransition(this, 'BootMenuScene', {}, { effect: 'dissolve' });
+      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'paw', ms: 560 });
+      else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 560 });
     };
     this.showLine(tr(accepted ? ACCEPT : DECLINE), () => this.time.delayedCall(1100, go));
     this.time.delayedCall(8000, go); // safety: never strand the player

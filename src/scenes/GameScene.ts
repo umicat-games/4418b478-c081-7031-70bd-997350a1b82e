@@ -4096,7 +4096,7 @@ export class GameScene extends Phaser.Scene {
     this.saveArmed = false;
     this.pendingSave?.remove();
     try { localStorage.removeItem('catopia:laptopDone'); } catch { /* no storage */ } // replay the laptop cold-open on a fresh start
-    coverAndReload(this, 'dissolve', async () => {
+    coverAndReload(this, 'paw', async () => {
       try { await this.umicat?.saves.delete('state'); }
       catch (e) { console.warn('[catopia] clear save failed', e); }
       if (typeof window !== 'undefined') window.location.reload();
@@ -4108,7 +4108,7 @@ export class GameScene extends Phaser.Scene {
    *  scene manager would NOT reset on a restart (the instance is reused), which hung
    *  the second entry on "loading" (gameReady stayed true → markReady bailed). */
   private returnToTitle(): void {
-    coverAndReload(this, 'dissolve', async () => {
+    coverAndReload(this, 'paw', async () => {
       try { if (this.umicat && this.saveArmed && !this.loadingSave) await this.umicat.saves.set('state', this.buildSave()); }
       catch (e) { console.warn('[catopia] save flush before title failed', e); }
       if (typeof window !== 'undefined') window.location.reload();

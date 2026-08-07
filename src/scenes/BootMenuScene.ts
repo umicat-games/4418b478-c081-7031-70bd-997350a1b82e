@@ -128,7 +128,7 @@ export class BootMenuScene extends Phaser.Scene {
     // laptop is accepted; later this aligns with the real save-based new-game check.)
     let seen = false;
     try { seen = localStorage.getItem('catopia:laptopDone') === '1'; } catch { /* no storage */ }
-    if (seen) startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'circle' });
-    else startTransition(this, 'LaptopScene', {}, { effect: 'circle' });
+    if (seen) startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'paw', ms: 560 });
+    else startTransition(this, 'LaptopScene', {}, { effect: 'paw', ms: 560 });
   }
 }

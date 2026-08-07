@@ -1,11 +1,28 @@
 import Phaser from 'phaser';
 import { fadeBgmTo } from '../bgm';
 
-export type TransitionEffect = 'circle' | 'slide' | 'dissolve';
+export type TransitionEffect = 'circle' | 'slide' | 'dissolve' | 'paw';
 
 const DEF_MS = 420;
 const DEF_COLOR = 0xffffff; // white curtain (per-call `color` can override)
 const HOLE_BASE = 100;      // unit circle radius, scaled for the iris wipe
+// Paw-print iris (Catopia's signature wipe): the mask hole is a paw (pad + 4 toe beans)
+// drawn at unit size around the pad centre, then scaled like the circle. PAW_CORE = the
+// guaranteed-solid radius around the origin — a bit under the pad's short axis so scaling
+// to `maxRadius / PAW_CORE` guarantees the pad covers the screen corners (toes/gaps land
+// off-screen at full cover). Kept conservative so no curtain sliver shows fully-open.
+const PAW_CORE = 40;
+
+/** Draw a paw (pad + 4 toe beans) into `g` at unit size, origin ≈ the pad centre. */
+function drawPaw(g: Phaser.GameObjects.Graphics): void {
+  g.clear();
+  g.fillStyle(0xffffff, 1);
+  g.fillEllipse(0, 10, 122, 106);   // main pad (rx61 ry53), just below the origin
+  g.fillEllipse(-31, -60, 48, 56);  // inner toe beans
+  g.fillEllipse(31, -60, 48, 56);
+  g.fillEllipse(-70, -16, 44, 52);  // outer toe beans
+  g.fillEllipse(70, -16, 44, 52);
+}
 
 interface BeginOpts {
   effect?: TransitionEffect;
@@ -24,8 +41,10 @@ interface BeginOpts {
  */
 export class TransitionScene extends Phaser.Scene {
   private curtain!: Phaser.GameObjects.Rectangle;
-  private holeG!: Phaser.GameObjects.Graphics; // iris mask stencil (not on the display list)
+  private holeG!: Phaser.GameObjects.Graphics; // circle iris mask stencil (not on the display list)
   private mask!: Phaser.Display.Masks.GeometryMask;
+  private pawG!: Phaser.GameObjects.Graphics;   // paw iris mask stencil
+  private pawMask!: Phaser.Display.Masks.GeometryMask;
   private busy = false;
   private effect: TransitionEffect = 'dissolve';
   private ms = DEF_MS;
@@ -41,6 +60,10 @@ export class TransitionScene extends Phaser.Scene {
     this.holeG.fillStyle(0xffffff, 1).fillCircle(0, 0, HOLE_BASE);
     this.mask = this.holeG.createGeometryMask();
     this.mask.invertAlpha = true; // curtain shows OUTSIDE the hole (so a shrinking hole covers)
+    this.pawG = this.make.graphics({});
+    drawPaw(this.pawG);
+    this.pawMask = this.pawG.createGeometryMask();
+    this.pawMask.invertAlpha = true;
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
   }
@@ -91,14 +114,22 @@ export class TransitionScene extends Phaser.Scene {
     this.animateCover(onCovered);
   }
 
+  /** The stencil + mask + unit-radius for the active iris effect (circle or paw). */
+  private iris(): { g: Phaser.GameObjects.Graphics; mask: Phaser.Display.Masks.GeometryMask; unit: number } {
+    return this.effect === 'paw'
+      ? { g: this.pawG, mask: this.pawMask, unit: PAW_CORE }
+      : { g: this.holeG, mask: this.mask, unit: HOLE_BASE };
+  }
+
   /** The `effect`-specific cover tween (curtain already set up). */
   private animateCover(onComplete: () => void): void {
     const W = this.scale.width, H = this.scale.height;
-    if (this.effect === 'circle') {
+    if (this.effect === 'circle' || this.effect === 'paw') {
       const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
-      this.holeG.setPosition(fx, fy);
-      this.curtain.setMask(this.mask);
-      this.tweens.add({ targets: this.holeG, scale: { from: this.maxRadius(fx, fy) / HOLE_BASE, to: 0 }, duration: this.ms, ease: 'Sine.easeIn', onComplete });
+      const { g, mask, unit } = this.iris();
+      g.setPosition(fx, fy).setRotation(0);
+      this.curtain.setMask(mask);
+      this.tweens.add({ targets: g, scale: { from: this.maxRadius(fx, fy) / unit, to: 0 }, duration: this.ms, ease: 'Sine.easeIn', onComplete });
     } else if (this.effect === 'slide') {
       this.tweens.add({ targets: this.curtain, x: { from: -W, to: 0 }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete });
     } else {
@@ -113,11 +144,12 @@ export class TransitionScene extends Phaser.Scene {
     const W = this.scale.width, H = this.scale.height;
     const finish = (): void => { this.busy = false; this.curtain.setVisible(false).clearMask(); };
 
-    if (this.effect === 'circle') {
+    if (this.effect === 'circle' || this.effect === 'paw') {
       const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
-      this.holeG.setPosition(fx, fy);
-      this.curtain.setMask(this.mask);
-      this.tweens.add({ targets: this.holeG, scale: { from: 0, to: this.maxRadius(fx, fy) / HOLE_BASE }, duration: this.ms, ease: 'Sine.easeOut', onComplete: finish });
+      const { g, mask, unit } = this.iris();
+      g.setPosition(fx, fy).setRotation(0);
+      this.curtain.setMask(mask);
+      this.tweens.add({ targets: g, scale: { from: 0, to: this.maxRadius(fx, fy) / unit }, duration: this.ms, ease: 'Sine.easeOut', onComplete: finish });
     } else if (this.effect === 'slide') {
       this.tweens.add({ targets: this.curtain, x: { from: 0, to: W }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete: finish });
     } else {
