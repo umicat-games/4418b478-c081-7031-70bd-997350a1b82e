@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Umicat Game</title>
+    <!-- Warm the browser cache for the loading-screen icon sheet IN PARALLEL with the JS
+         bundle + fonts, so the drifting-icon wallpaper appears together with the loader
+         (not a beat later, once BootScene's own load of it finishes). -->
+    <link rel="preload" as="image" href="uploaded/all_icons.png" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="uploaded/zpix.woff2" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: #f6f0e2; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
