@@ -129,6 +129,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   settings_music: { en: 'Music', 'zh-CN': '音乐' },
   settings_sfx: { en: 'Sound', 'zh-CN': '音效' },
   settings_language: { en: 'Language', 'zh-CN': '语言' },
+  loading: { en: 'Loading', 'zh-CN': '加载中' },
   start_play: { en: 'PLAY', 'zh-CN': '开始' },
   menu_return_title: { en: 'Title screen', 'zh-CN': '返回标题' },
   settings_clear_data: { en: 'Clear data & new game', 'zh-CN': '清除数据 · 重新开始' },

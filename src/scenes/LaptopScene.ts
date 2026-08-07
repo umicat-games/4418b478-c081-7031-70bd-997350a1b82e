@@ -4,6 +4,7 @@ import { dialogFont, getLang, initLang } from '../i18n';
 import { startTransition, finishTransition } from '../transition';
 import { crossToBgm } from '../bgm';
 import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
+import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
 
 /**
  * COLD-OPEN "message from Cato" scene. After the player clicks Play on a NEW game, a
@@ -30,9 +31,8 @@ const LAPTOP = 'blue-laptop';
 const PANEL_FILL = 0xffffff, PANEL_LINE = 0xcdd8e6, PANEL_TEXT = '#26384a';
 const NAME_COLOR = '#1f3a55';
 const CATO_ICON = 20; // emoji_spritesheet `cato-idle` (0,64) → 32px-grid frame 2*10+0
-const BG_FILL = 0xf6f0e2; // cream wallpaper behind the laptop
-const BG_ICONS = [64, 65, 66, 2]; // all_icons white: heart / sprout-up / sprout-down / star
-const BG_TINT = 0xd0c8b4, BG_ALPHA = 0.5; // subtle grey drifting pattern
+// The cream + drifting-icon wallpaper is the shared `iconWallpaper` (also the game's
+// loading screen) — see WP_FILL / buildIconPattern / driftIconLayer.
 const SEND_ICON = 49; // all_icons `play-white` (16,48) → 16px-grid frame 3*16+1
 const SEND_TINT = 0x5a8a6a; // send-arrow colour (tint the white icon)
 const MSG_ICON = 245; // all_icons `white-message-with-border` (80,240) → frame 15*16+5
@@ -121,7 +121,7 @@ export class LaptopScene extends Phaser.Scene {
 
     const W = this.scale.width, H = this.scale.height;
     crossToBgm(this, 'bgm-title', ['bgm'], 500);
-    this.bgRect = this.add.rectangle(0, 0, W, H, BG_FILL, 1).setOrigin(0, 0);
+    this.bgRect = this.add.rectangle(0, 0, W, H, WP_FILL, 1).setOrigin(0, 0);
     this.bgLayer = this.add.container(0, 0); // drifting icon wallpaper (behind the laptop)
     this.laptop = this.add.image(0, 0, LAPTOP).setOrigin(0.5);
 
@@ -227,29 +227,12 @@ export class LaptopScene extends Phaser.Scene {
    *  per grid cell chosen by (col+row)%4 — a diagonal repeat with a 4-tile period so the
    *  drift can wrap SEAMLESSLY. Rebuilt only when the canvas size changes. */
   private buildPattern(W: number, H: number): void {
-    this.bgLayer.removeAll(true);
-    const spacing = Math.max(52, Math.round(Math.min(W, H) * 0.11));
-    const iconS = spacing * 0.46, P = 4;
-    this.bgPeriod = P * spacing;
-    const cols = Math.ceil(W / spacing), rows = Math.ceil(H / spacing);
-    for (let r = -P; r <= rows + P; r++) {
-      for (let c = -P; c <= cols + P; c++) {
-        const frame = BG_ICONS[(((c + r) % 4) + 4) % 4];
-        const ic = this.add.image(c * spacing, r * spacing, 'ui-icons', frame).setTint(BG_TINT).setAlpha(BG_ALPHA);
-        ic.setDisplaySize(iconS, iconS);
-        this.bgLayer.add(ic);
-      }
-    }
-    this.bgLayer.setPosition(0, 0);
+    this.bgPeriod = buildIconPattern(this, this.bgLayer, W, H);
   }
 
   /** Drift the wallpaper diagonally up-right, wrapping by one pattern period (seamless). */
   update(_time: number, delta: number): void {
-    if (!this.bgLayer) return;
-    this.bgLayer.x += (10 * delta) / 1000;  // rightward
-    this.bgLayer.y -= (14 * delta) / 1000;  // upward
-    if (this.bgLayer.x >= this.bgPeriod) this.bgLayer.x -= this.bgPeriod;
-    if (this.bgLayer.y <= -this.bgPeriod) this.bgLayer.y += this.bgPeriod;
+    if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod);
   }
 
   // ── Layout ────────────────────────────────────────────────────────────────

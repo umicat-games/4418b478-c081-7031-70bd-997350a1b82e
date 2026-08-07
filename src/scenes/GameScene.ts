@@ -21,6 +21,7 @@ import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
 import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER } from '../sfx';
 import { coverAndReload, finishTransition } from '../transition';
+import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
 import { isDebug, toggleDebug } from '../debug';
 import {
@@ -767,7 +768,7 @@ export class GameScene extends Phaser.Scene {
   // Hide the world + hotbar until the save is restored, so there's no flash of
   // the empty/default farm before the saved crops+soil pop in.
   private gameReady = false;
-  private loadingCover?: Phaser.GameObjects.Container;
+  private loadingOverlay?: LoadingOverlay;
 
   // Click-to-talk dialog: the chat-message / chat-input / chat-text HUD widgets
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
@@ -6429,18 +6430,15 @@ export class GameScene extends Phaser.Scene {
 
   // ── Loading gate (hide content until the save is restored) ────────────
 
-  /** Cover the whole viewport with an opaque "Loading…" panel (above everything)
-   *  so the empty/default world isn't shown before the save is applied. */
+  /** Cover the whole viewport with the LOADING screen (cream icon wallpaper + animated
+   *  "Loading" text, above everything) so the empty/default world isn't shown before the
+   *  save is applied. Then UNCOVER the paw wipe onto it — so the transition reveals this
+   *  cozy loading screen (not a frozen white curtain) while the world + save load; the
+   *  overlay itself fades to the game in `markReady`. */
   private showLoadingCover(): void {
-    if (this.loadingCover) return;
-    const w = this.scale.width;
-    const h = this.scale.height;
-    // Oversized so it covers any canvas size during the brief load (no reflow).
-    const rect = this.add.rectangle(-2000, -2000, 8000, 8000, 0x2e2a24, 1).setOrigin(0, 0);
-    const txt = this.add
-      .text(w / 2, h / 2, 'Loading…', { fontFamily: 'zpix, sans-serif', fontSize: '28px', color: '#f4e4c1' })
-      .setOrigin(0.5);
-    this.loadingCover = this.add.container(0, 0, [rect, txt]).setScrollFactor(0).setDepth(1e7);
+    if (this.loadingOverlay) return;
+    this.loadingOverlay = new LoadingOverlay(this);
+    finishTransition(this); // bloom the paw open onto the loading screen (no-op if no transition)
   }
 
   /** Reveal the game once the save is restored (or a fallback fires): fade the
@@ -6451,16 +6449,14 @@ export class GameScene extends Phaser.Scene {
     this.publishInventory(); // hotbar was suppressed until now
     this.publishWeatherHud(); // reveal the weather HUD now that gameReady is true
     this.emote?.setAmbient(this.bgIndex() === WEATHER_BGS.length - 1 ? 'sleepy' : 'idle'); // seed his mood (handles load-at-night)
-    const c = this.loadingCover;
-    this.loadingCover = undefined;
-    if (c) {
-      this.tweens.add({ targets: c, alpha: 0, duration: 250, onComplete: () => c.destroy() });
-    }
+    this.loadingOverlay?.fadeOut();
+    this.loadingOverlay = undefined;
     // Framing: a brand-new game opens on the house (Cato at the door); a returning
     // save centres the camera on the restored Cato.
     if (this.isNewGame) this.frameNewGameStart();
     else if (this.child) this.cameras.main.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
-    finishTransition(this); // uncover the title→game wipe now that the world is ready
+    // NB: the paw wipe was already uncovered onto the loading screen in showLoadingCover;
+    // here we just fade the loading screen out to reveal the ready world.
     this.maybePlayIntro(); // new-game → Cato's scripted greeting + tool tour (once)
   }
 
@@ -7160,6 +7156,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.loadingOverlay?.update(delta); // drift the loading-screen wallpaper while it's up
     this.updateEdgeScroll(delta);
     this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages
