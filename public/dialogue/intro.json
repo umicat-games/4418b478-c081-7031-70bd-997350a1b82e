@@ -36,7 +36,7 @@
       "type": "line",
       "speaker": "cato",
       "data": { "focus": "chest" },
-      "text": { "en": "Over here is the storage chest. Tap it to stash things away or grab them back — when your bag is full, this is where the extra goes.", "zh-CN": "这边是储物箱。点开它可以存东西、也可以拿回来——背包装满了，多出来的就放这儿。" },
+      "text": { "en": "Over here is the storage chest — it's where all your things are kept. Tap it to stash things away or take them back out. You can also open it from the button on the far right of your toolbar, down at the bottom of the screen.", "zh-CN": "这边是储物箱——你的东西都存放在这里。点开它就能把东西收进去、或者再拿出来。你也可以点屏幕最下方那排工具栏最右边的按钮打开它。" },
       "next": "tool_pad"
     },
     "tool_pad": {
@@ -59,6 +59,13 @@
       "speaker": "cato",
       "emote": "happy",
       "text": { "en": "When the crops are ripe, I'll head out and harvest them for you all on my own.", "zh-CN": "农作物熟了的时候，我会自己跑去帮你把它们收回来。" },
+      "next": "catobag"
+    },
+    "catobag": {
+      "type": "line",
+      "speaker": "cato",
+      "emote": "happy",
+      "text": { "en": "All that work does tire me out, though, so now and then I'll stop to rest. I've got my own little backpack, too — give me some food (or anything, really!), and when I'm worn out I'll munch on it to get my energy back much faster.", "zh-CN": "不过干活久了我也会累的，所以有时候我会停下来歇一歇。我还有个自己的小背包哦——你可以给我一些食物（其实什么都行！），我累坏了的时候就会吃点东西，精力恢复得快多啦。" },
       "next": "askme"
     },
     "askme": {
