@@ -1,8 +1,6 @@
 import Phaser from 'phaser';
 import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
-import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
 import { startTransition } from '../transition';
-import { t } from '../i18n';
 import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
 import { applyItemData } from '../data/items';
@@ -25,19 +23,19 @@ import { applyRecipeData } from '../data/recipes';
 const MIN_LOADER_MS = 1300;
 
 export class BootScene extends Phaser.Scene {
-  private loaderStart = 0; // performance.now() when the loading screen went up
-
   constructor() {
     super({ key: 'BootScene' });
   }
 
   preload(): void {
-    this.loaderStart = performance.now();
+    // The boot LOADING screen is a pure CSS overlay (#boot in index.html) — it paints on
+    // the first frame with NO dependency on any asset (font/icon), so there's no flash of
+    // cream-then-icons while the bundle + assets load. This scene just loads; `#boot` is
+    // removed when we wipe into the first scene (see create()).
     preloadManifest(this);
-    // Load the icon sheet FIRST so the cozy loading screen (cream + drifting icons +
-    // animated "Loading") can render itself while the rest of the assets load.
+    // The icon sheet (16×16 grid) — used by the confirm dialog / build palette / HUD and
+    // the in-game loading overlay (NOT the boot loader anymore, but still preloaded early).
     this.load.spritesheet('ui-icons', 'uploaded/all_icons.png', { frameWidth: 16, frameHeight: 16 });
-    drawCozyLoader(this);
     // Custom pointer-lock cursor — key must match CURSOR_KEY in GameScene.
     this.load.image('cursor', 'uploaded/triangle_mouse_icon_1.png');
     // Tile-selection bracket cursor (24×24, frames a 16px cell) — the "you can
@@ -420,11 +418,16 @@ export class BootScene extends Phaser.Scene {
     // `?umicatScene=` override, which skips the boot screen) → GameScene.
     const sid = manifest.initialScene;
     const next = sid === 'boot' ? 'BootMenuScene' : 'GameScene';
-    // Hold the loading screen a MINIMUM beat (so a fast/cached boot doesn't blink), THEN
-    // PAW-wipe into the first scene instead of a hard cut. The loader stays visible until
-    // the paw covers it; the target scene calls finishTransition when its world is ready.
-    const wait = Math.max(0, MIN_LOADER_MS - (performance.now() - this.loaderStart));
-    this.time.delayedCall(wait, () => startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800 }));
+    // Keep the CSS loader up a MINIMUM beat from page-load (so a fast/cached boot doesn't
+    // blink), THEN remove it + PAW-wipe into the first scene. performance.now() here ≈ time
+    // since navigation, and #boot has been showing that whole time.
+    const wait = Math.max(0, MIN_LOADER_MS - performance.now());
+    this.time.delayedCall(wait, () => {
+      document.getElementById('boot')?.remove(); // hand off from the CSS loader to the paw wipe
+      // CREAM paw curtain (not the default white) so it blends with the cream loader — the
+      // title blooms out of a cream paw with no white flash in between.
+      startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800, color: 0xf6f0e2 });
+    });
   }
 }
 
@@ -467,40 +470,3 @@ function buildSoilGrassSheet(scene: Phaser.Scene): void {
   tex.refresh();
 }
 
-/**
- * The initial-boot LOADING screen: the cozy cream + drifting-icon wallpaper (shared with
- * the laptop cold-open and the in-game loading overlay) + an animated "Loading" text.
- *
- * The catch: during Phaser's LOADING phase the scene's update()/tweens/timers do NOT run,
- * and the icon sheet is still being fetched. So we (1) build the icon pattern lazily the
- * moment `ui-icons` appears in the texture cache mid-load, and (2) drive the drift + text
- * animation off the GAME's per-frame POST_STEP event (which fires every frame regardless
- * of scene status), tearing it down on load 'complete'.
- */
-function drawCozyLoader(scene: Phaser.Scene): void {
-  scene.cameras.main?.setBackgroundColor(WP_FILL);
-  const W = scene.scale.width, H = scene.scale.height;
-  const rect = scene.add.rectangle(-2000, -2000, 8000, 8000, WP_FILL, 1).setOrigin(0, 0).setDepth(1e6);
-  const layer = scene.add.container(0, 0).setDepth(1e6 + 1); // drifting icons (filled once ui-icons loads)
-  const base = t('loading');
-  const label = scene.add
-    .text(W / 2, H / 2, base, { fontFamily: 'zpix, sans-serif', color: '#7c5a38' })
-    .setOrigin(0.5).setDepth(1e6 + 2).setFontSize(Math.max(20, Math.round(Math.min(W, H) * 0.05)));
-
-  let period = 100, acc = 0, shownDots = -1;
-  const onStep = (_t: number, delta: number): void => {
-    if (layer.length === 0 && scene.textures.exists('ui-icons')) {
-      period = buildIconPattern(scene, layer, scene.scale.width, scene.scale.height);
-    }
-    driftIconLayer(layer, delta, period);
-    acc += delta;
-    const dots = Math.floor(acc / 340) % 4;
-    if (dots !== shownDots) { shownDots = dots; label.setText(base + '.'.repeat(dots)); }
-    label.setAlpha(0.55 + 0.45 * (0.5 + 0.5 * Math.sin((acc / 720) * Math.PI))); // gentle breathe
-  };
-  scene.game.events.on(Phaser.Core.Events.POST_STEP, onStep);
-  // Keep the loader up (past load 'complete') until the paw wipe covers it and BootScene
-  // stops — its objects auto-destroy on shutdown; here we just detach the game-level step
-  // listener (it lives on `game.events`, which survives the scene, so it MUST be removed).
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.game.events.off(Phaser.Core.Events.POST_STEP, onStep));
-}

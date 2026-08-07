@@ -12,9 +12,17 @@
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: #f6f0e2; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+      /* Pure CSS boot loader — renders on the FIRST paint (no JS/font/image dependency),
+         so the whole app-load is a steady cream screen with a cozy animated bar instead of
+         a blank/flashing wait. The game removes #boot once it's ready to wipe into the title. */
+      #boot { position: fixed; inset: 0; background: #f6f0e2; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+      #boot .bar { position: relative; width: 220px; height: 12px; background: #e7ddc6; border-radius: 8px; overflow: hidden; }
+      #boot .bar > i { position: absolute; top: 0; height: 100%; width: 36%; background: #a9895c; border-radius: 8px; animation: umi-load 1.1s ease-in-out infinite; }
+      @keyframes umi-load { 0% { left: -40%; } 100% { left: 104%; } }
     </style>
   </head>
   <body>
+    <div id="boot"><div class="bar"><i></i></div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
