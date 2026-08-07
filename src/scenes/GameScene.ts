@@ -545,7 +545,7 @@ interface SaveBlob {
 export class GameScene extends Phaser.Scene {
   private sceneId!: string;
 
-  // Child spirit
+  // Cato (your friend on the island)
   private child?: Phaser.GameObjects.Sprite;
   private emote?: EmoteController; // Cato's reactive speech-bubble emoji
   private wanderTimer = 0;
@@ -557,7 +557,7 @@ export class GameScene extends Phaser.Scene {
   private catoCurious: { x: number; y: number; deadline: number } | null = null;
   // Cato's STANDING autonomous behaviour — he tends the farm on his own (harvest ripe
   // crops, water dry ones) instead of just wandering. This is NOT a settings toggle:
-  // the guardian changes it by TALKING to Cato ("don't harvest on your own") → the AI
+  // the friend changes it by TALKING to Cato ("don't harvest on your own") → the AI
   // calls `set_behavior` → `setAutonomy`. Default ON (Cato offers to help at the intro,
   // which is future work; until then he helps by default). Saved (v10).
   private autonomy = { harvest: true, water: true };
@@ -806,7 +806,7 @@ export class GameScene extends Phaser.Scene {
   private moreIconTween?: Phaser.Tweens.Tween; // the "more" icon bob
 
   // ── Cato behaviours (runtime-AI `do` actions) ───────────────────────────
-  // When the guardian asks Cato (in chat) to prepare a plot, the AI returns a
+  // When the friend asks Cato (in chat) to prepare a plot, the AI returns a
   // `till_plot` action; we find an open grass patch near Cato, queue its cells,
   // and Cato walks over + hoes each one (reusing the farming tillCell mechanic).
   // A single active task at a time; it overrides the autonomous wander.
@@ -1013,7 +1013,7 @@ export class GameScene extends Phaser.Scene {
       // ── Pointer lock + custom cursor (click to capture, Esc to release) ──
       this.setupPointerLock();
 
-      // ── Runtime AI: Cato, the island spirit you guard ──
+      // ── Runtime AI: Cato, your friend on the island ──
       // umicat.ai + the `cato` playbook (public/playbooks/cato.md). Fire-and-
       // forget — the npc is ready well before the player opens the dialog +
       // types. Inline role/style is a fallback if the playbook can't be loaded.
@@ -1022,35 +1022,35 @@ export class GameScene extends Phaser.Scene {
           this.umicat = u;
           initLang(u?.locale); // default game UI text to the player's language
           // The host gives us the signed-in player's display name — let Cato call
-          // them by it (instead of the generic "guardian"). Absent when anonymous /
-          // standalone → fall back to the guardian wording from the playbook.
+          // them by it (instead of the generic "friend"). Absent when anonymous /
+          // standalone → fall back to the friend wording from the playbook.
           const playerName = u?.user?.name?.trim();
           this.cato = u?.ai.npc({
             playbook: 'cato',
             role:
-              'Cato — a small curious island spirit in Catopia; the player is your GUARDIAN (like a Pokémon and its trainer), never a parent.' +
-              (playerName ? ` Your guardian's name is ${playerName}.` : ''),
-            style: "warm, whimsical, 1-3 short sentences; reply in the guardian's language",
+              'Cato — a small, curious cat who lives on an island in Catopia. The player is your FRIEND and your equal: you live on the island together, farming, exploring, and building it up side by side. They are NOT your owner, trainer, keeper, or parent, and you are not their pet or servant.' +
+              (playerName ? ` Your friend's name is ${playerName}.` : ''),
+            style: "warm, whimsical, 1-3 short sentences; reply in the player's language",
             rules: [
-              ...(playerName ? [`Address the player by their name, "${playerName}", not the word "guardian" (an occasional "guardian" is fine, but prefer their name).`] : []),
-              'You have LIMITED ENERGY (see observation.cato.energyPct). If observation.cato.exhausted is true you are TOO TIRED to do any chore — warmly tell the guardian you need to rest and get your energy back first, and do NOT call any task action (till/plant/water/harvest/chop/mine/forage). When your energy is low but not empty you can still work, though you may mention you\'re getting a bit tired.',
+              ...(playerName ? [`Address the player by their name, "${playerName}", when it feels natural — they are your friend.`] : []),
+              'You have LIMITED ENERGY (see observation.cato.energyPct). If observation.cato.exhausted is true you are TOO TIRED to do any chore — warmly tell your friend you need to rest and get your energy back first, and do NOT call any task action (till/plant/water/harvest/chop/mine/forage). When your energy is low but not empty you can still work, though you may mention you\'re getting a bit tired.',
             ],
             // The vocabulary of things Cato can DO in the world. The AI picks one
-            // when the guardian's request fits; GameScene validates + executes it.
+            // when the friend's request fits; GameScene validates + executes it.
             actions: [
               {
                 name: 'till_plot',
                 description:
-                  'Walk to a nearby open patch of grass and hoe it into tilled soil so the guardian can plant crops. Use whenever the guardian asks you to clear / prepare / till ground, or make a plot / field / garden / patch for planting something (e.g. corn).',
+                  'Walk to a nearby open patch of grass and hoe it into tilled soil so the friend can plant crops. Use whenever the friend asks you to clear / prepare / till ground, or make a plot / field / garden / patch for planting something (e.g. corn).',
                 args: {
-                  crop: 'string', // what the guardian wants to plant (flavour, e.g. "corn")
+                  crop: 'string', // what the friend wants to plant (flavour, e.g. "corn")
                   size: 'integer', // side of the square plot in tiles (2-4); default 3
                 },
               },
               {
                 name: 'plant_crop',
                 description:
-                  'Walk to nearby tilled soil and sow seeds there. Use when the guardian asks you to plant / sow / seed a specific crop (corn, carrot, tomato, eggplant, or pumpkin). Requires tilled soil to already exist — if there is none, till first (or say so). Fills the open soil with the crop.',
+                  'Walk to nearby tilled soil and sow seeds there. Use when the friend asks you to plant / sow / seed a specific crop (corn, carrot, tomato, eggplant, or pumpkin). Requires tilled soil to already exist — if there is none, till first (or say so). Fills the open soil with the crop.',
                 args: {
                   crop: 'string', // one of: corn, carrot, tomato, eggplant, pumpkin
                   count: 'integer', // how many to plant; 0 / omitted = fill all open soil
@@ -1059,7 +1059,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'water_crops',
                 description:
-                  'Walk to the planted crops and water them with the watering can so they grow fast (un-watered crops grow very slowly). Use when the guardian asks you to water / hydrate the crops or plants. Waters crops that still need it.',
+                  'Walk to the planted crops and water them with the watering can so they grow fast (un-watered crops grow very slowly). Use when the friend asks you to water / hydrate the crops or plants. Waters crops that still need it.',
                 args: {
                   count: 'integer', // how many to water; 0 / omitted = water all that need it
                 },
@@ -1067,7 +1067,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'harvest_crops',
                 description:
-                  'Walk to the crops that are fully grown (ripe) and harvest them — the produce goes into the guardian\'s backpack. Use when the guardian asks you to harvest / pick / collect / gather the ripe crops. Only fully-grown crops are harvested.',
+                  'Walk to the crops that are fully grown (ripe) and harvest them — the produce goes into the friend\'s backpack. Use when the friend asks you to harvest / pick / collect / gather the ripe crops. Only fully-grown crops are harvested.',
                 args: {
                   count: 'integer', // how many to harvest; 0 / omitted = all ripe crops
                 },
@@ -1075,7 +1075,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'chop_trees',
                 description:
-                  'Walk to the nearby trees and chop them down for wood. Use when the guardian asks you to chop / cut down / fell / clear the trees (or get wood / lumber / logs). A fruit tree drops its fruit on the way down, then falls as a plain tree. Use harvest_fruit instead if they only want the fruit and the trees left standing.',
+                  'Walk to the nearby trees and chop them down for wood. Use when the friend asks you to chop / cut down / fell / clear the trees (or get wood / lumber / logs). A fruit tree drops its fruit on the way down, then falls as a plain tree. Use harvest_fruit instead if they only want the fruit and the trees left standing.',
                 args: {
                   count: 'integer', // how many trees to fell; 0 / omitted = all nearby trees
                 },
@@ -1083,7 +1083,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'harvest_fruit',
                 description:
-                  'Walk to the trees that are bearing fruit and shake the fruit loose into the backpack, leaving the trees standing. Use when the guardian asks you to harvest / pick / gather the fruit from the trees. Only trees that currently have fruit are picked. If they name a SPECIFIC fruit, pass it as `fruit` so you pick only that kind (else you pick every fruit).',
+                  'Walk to the trees that are bearing fruit and shake the fruit loose into the backpack, leaving the trees standing. Use when the friend asks you to harvest / pick / gather the fruit from the trees. Only trees that currently have fruit are picked. If they name a SPECIFIC fruit, pass it as `fruit` so you pick only that kind (else you pick every fruit).',
                 args: {
                   fruit: 'string', // apple, pear, or peach; omit to pick ALL fruit trees
                   count: 'integer', // how many fruit trees to pick; 0 / omitted = all with fruit
@@ -1092,7 +1092,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'mine_stones',
                 description:
-                  'Walk to the big rocks / boulders and mine them for stone — each knock chips off a stone, and once mined out the rock breaks apart for a bonus. Use when the guardian asks you to mine / dig / break / knock the rocks or big stones, or get stone / ore.',
+                  'Walk to the big rocks / boulders and mine them for stone — each knock chips off a stone, and once mined out the rock breaks apart for a bonus. Use when the friend asks you to mine / dig / break / knock the rocks or big stones, or get stone / ore.',
                 args: {
                   count: 'integer', // how many big stones to mine; 0 / omitted = all nearby
                 },
@@ -1100,7 +1100,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'harvest_bushes',
                 description:
-                  'Walk to the berry bushes that are ripe and pick their berries into the backpack (the bush regrows afterwards). Use when the guardian asks you to pick / harvest / collect the berries or bushes. Only ripe bushes are picked. If they name a SPECIFIC berry, pass it as `berry` so you pick only that kind — otherwise you pick EVERY ripe bush (e.g. "pick the strawberries" must set berry:"strawberry", or you\'d grab the blueberries too).',
+                  'Walk to the berry bushes that are ripe and pick their berries into the backpack (the bush regrows afterwards). Use when the friend asks you to pick / harvest / collect the berries or bushes. Only ripe bushes are picked. If they name a SPECIFIC berry, pass it as `berry` so you pick only that kind — otherwise you pick EVERY ripe bush (e.g. "pick the strawberries" must set berry:"strawberry", or you\'d grab the blueberries too).',
                 args: {
                   berry: 'string', // strawberry, grape, or blueberry; omit to pick ALL ripe bushes
                   count: 'integer', // how many bushes to pick; 0 / omitted = all ripe bushes
@@ -1109,7 +1109,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'forage',
                 description:
-                  'Walk around and gather the wild growth scattered on the grass once it is fully grown — mushrooms, wild flowers, tall grass, small stones, etc. Use when the guardian asks you to forage / gather / collect / pick up / clear the wild things. If they name a SPECIFIC kind, pass it as `kind` so you gather ONLY that — otherwise you gather EVERYTHING (e.g. "clear the weeds" must set kind:"grass", or you\'d also take the mushrooms and flowers). Use "grass" for weeds/grass, "mushroom" for either mushroom, "flower" for the flowers, "stone" for loose small stones.',
+                  'Walk around and gather the wild growth scattered on the grass once it is fully grown — mushrooms, wild flowers, tall grass, small stones, etc. Use when the friend asks you to forage / gather / collect / pick up / clear the wild things. If they name a SPECIFIC kind, pass it as `kind` so you gather ONLY that — otherwise you gather EVERYTHING (e.g. "clear the weeds" must set kind:"grass", or you\'d also take the mushrooms and flowers). Use "grass" for weeds/grass, "mushroom" for either mushroom, "flower" for the flowers, "stone" for loose small stones.',
                 args: {
                   kind: 'string', // grass, mushroom, flower, or stone (or a specific name); omit to gather ALL
                   count: 'integer', // how many to gather; 0 / omitted = all mature of that kind
@@ -1118,7 +1118,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'set_behavior',
                 description:
-                  'Change your STANDING autonomous behaviour — whether you tend the farm ON YOUR OWN (without being asked each time). Use when the guardian tells you to (or NOT to) do chores automatically. Examples: "don\'t harvest on your own" → harvest:false; "you can water the crops yourself again" → water:true; "stop doing things on your own" / "just relax and keep me company" → harvest:false, water:false; "help me farm automatically" / "take care of the crops for me" → harvest:true, water:true. Only include the field(s) the guardian actually changed; omit the rest. This sets a lasting preference — it is NOT a one-time chore (still use harvest_crops / water_crops for a one-off "go harvest now").',
+                  'Change your STANDING autonomous behaviour — whether you tend the farm ON YOUR OWN (without being asked each time). Use when the friend tells you to (or NOT to) do chores automatically. Examples: "don\'t harvest on your own" → harvest:false; "you can water the crops yourself again" → water:true; "stop doing things on your own" / "just relax and keep me company" → harvest:false, water:false; "help me farm automatically" / "take care of the crops for me" → harvest:true, water:true. Only include the field(s) the friend actually changed; omit the rest. This sets a lasting preference — it is NOT a one-time chore (still use harvest_crops / water_crops for a one-off "go harvest now").',
                 args: {
                   harvest: 'boolean', // auto-GATHER on your own: ripe crops, tree fruit, AND berry bushes (omit = leave as-is)
                   water: 'boolean', // whether to auto-water dry crops on your own (omit = leave as-is)
@@ -1166,9 +1166,9 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-M', () => {
           if (!this.dialogOpen) this.openDialog();
           this.time.delayedCall(60, () => this.showDialogText(
-            "Oh! You're back — I missed you, guardian! I was just sitting by the water, " +
+            "Oh! You're back — I missed you! I was just sitting by the water, " +
             "watching the light dance on the waves, and I got to wondering about all the " +
-            "little islands out past the mist. Do you think there are other spirits like me " +
+            "little islands out past the mist. Do you think there are other little ones like me " +
             "over there? Maybe one day we could build a tiny boat and sail out together to " +
             "meet them. I'd bring snacks. And I'd hold your hand the whole way, I promise!"));
         });
@@ -4975,14 +4975,14 @@ export class GameScene extends Phaser.Scene {
       else if (a.name === 'forage') { this.startForageTask(a.args); acted = true; }
       else if (a.name === 'set_behavior') { this.setAutonomy(a.args); } // standing pref, not a walk-off task
     }
-    // Let the guardian read Cato's reply, then close the chat so he walks off to
+    // Let the friend read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
     if (acted) {
       this.time.delayedCall(1300, () => { if (this.dialogOpen) this.closeDialog(); });
     }
   }
 
-  /** Apply an AI `set_behavior` call — the guardian told Cato (in chat) whether to tend
+  /** Apply an AI `set_behavior` call — the friend told Cato (in chat) whether to tend
    *  the farm on his own. Only the provided fields change; persists as a standing pref. */
   private setAutonomy(rawArgs: unknown): void {
     const a = (rawArgs ?? {}) as { harvest?: boolean; water?: boolean };
@@ -4993,7 +4993,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Autonomous chores: when Cato is free + it's enabled, quietly go tend the farm
    *  (harvest ripe crops, else water dry ones) instead of aimless wandering. No camera
-   *  snap (unlike a guardian-commanded task) — he just ambles over on his own. Returns
+   *  snap (unlike a friend-commanded task) — he just ambles over on his own. Returns
    *  true if a chore was started. */
   private tryAutoChore(): boolean {
     if (this.exhausted || this.catoTask || this.catoCurious || this.dialogOpen || !this.islandLayer || !this.child) return false;
@@ -5061,7 +5061,7 @@ export class GameScene extends Phaser.Scene {
       this.setImmediateDialog("Cato pads around, but there's no clear ground nearby to dig.");
       return;
     }
-    // A single active task; camera follows Cato so the guardian watches him work.
+    // A single active task; camera follows Cato so the friend watches him work.
     this.catoTask = { type: 'till', queue: cells, crop, cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
     this.cameraFollow = true;
   }
@@ -5125,7 +5125,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Begin the "harvest crops" behaviour: reap `count` (0 = all) nearest RIPE
-   *  crops (produce → the guardian's backpack). */
+   *  crops (produce → the friend's backpack). */
   private startHarvestTask(rawArgs: unknown): void {
     if (!this.islandLayer || !this.child) return;
     const args = (rawArgs ?? {}) as { count?: number };
@@ -5298,7 +5298,7 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = true;
   }
 
-  /** Does a foragable of `type` fall under the guardian's requested `kind`? Matches the
+  /** Does a foragable of `type` fall under the friend's requested `kind`? Matches the
    *  kind keyword (singular-ised) against the type's id + label — "mushroom(s)" → red &
    *  purple mushroom, "flower(s)" → wild-flower & sunflower, "grass"/"weed(s)" → grass,
    *  "stone(s)"/"rock(s)" → small-stone — plus a few synonyms. */
@@ -5427,7 +5427,7 @@ export class GameScene extends Phaser.Scene {
     if (!task || !layer || !this.child?.body) return;
     const body = this.child.body as Phaser.Physics.Arcade.Body;
 
-    // NB: Cato keeps working even while the chat box is still up (the guardian
+    // NB: Cato keeps working even while the chat box is still up (the friend
     // just gave the order) — the dialog auto-closes shortly after (runCatoActions).
 
     // Pause on the cell being tilled so Cato's attack (hoe) animation plays out.
@@ -5723,7 +5723,7 @@ export class GameScene extends Phaser.Scene {
     this.tilledCells.add(key); // reserve so it won't be re-queued mid-swing
     // Fire slightly into the swing so dirt + soil appear as the hoe strikes. A
     // delayedCall (not the anim's COMPLETE) so it still lands if the swing gets
-    // interrupted (e.g. the guardian opens the chat mid-till).
+    // interrupted (e.g. the friend opens the chat mid-till).
     this.time.delayedCall(CATO_TILL_STRIKE_MS, () => {
       if (!this.islandLayer) return;
       const w = this.islandLayer.tileToWorldXY(cx, cy);
@@ -5752,19 +5752,19 @@ export class GameScene extends Phaser.Scene {
     } else if (task?.type === 'water') {
       this.cato?.note('You watered the crops; they will grow faster now.');
     } else if (task?.type === 'harvest') {
-      this.cato?.note("You harvested the ripe crops; the produce is in the guardian's backpack now.");
+      this.cato?.note("You harvested the ripe crops; the produce is in the friend's backpack now.");
     } else if (task?.type === 'chop') {
-      this.cato?.note("You chopped down the trees; the wood (and any fruit) is in the guardian's backpack now.");
+      this.cato?.note("You chopped down the trees; the wood (and any fruit) is in the friend's backpack now.");
     } else if (task?.type === 'fruit') {
-      this.cato?.note("You picked the fruit from the trees and left them standing; it's in the guardian's backpack now.");
+      this.cato?.note("You picked the fruit from the trees and left them standing; it's in the friend's backpack now.");
     } else if (task?.type === 'mine') {
-      this.cato?.note("You mined the big stones; the stone is in the guardian's backpack now.");
+      this.cato?.note("You mined the big stones; the stone is in the friend's backpack now.");
     } else if (task?.type === 'bush') {
-      this.cato?.note("You picked the ripe berry bushes; the berries are in the guardian's backpack now.");
+      this.cato?.note("You picked the ripe berry bushes; the berries are in the friend's backpack now.");
     } else if (task?.type === 'forage') {
-      this.cato?.note("You gathered the wild mushrooms, flowers and other growth; it's in the guardian's backpack now.");
+      this.cato?.note("You gathered the wild mushrooms, flowers and other growth; it's in the friend's backpack now.");
     } else {
-      this.cato?.note(`You finished tilling a plot of soil, ready for the guardian to plant ${task?.crop ?? 'crops'}.`);
+      this.cato?.note(`You finished tilling a plot of soil, ready for the friend to plant ${task?.crop ?? 'crops'}.`);
     }
     if (CHILD_WANDER) this.startWanderIdle();
   }
@@ -6396,7 +6396,7 @@ export class GameScene extends Phaser.Scene {
         energyPct: Math.round((this.stamina / this.staminaMax) * 100),
         exhausted: this.exhausted,
         autoFarming: { harvest: this.autonomy.harvest, water: this.autonomy.water },
-        // The last little thing Cato said on his own (the guardian may be replying to it).
+        // The last little thing Cato said on his own (the friend may be replying to it).
         ...(this.lastChatter ? { lastRemark: this.lastChatter } : {}),
       },
       backpack, // e.g. [{item:'Corn seeds', count:10}, {item:'Hoe', count:1}]

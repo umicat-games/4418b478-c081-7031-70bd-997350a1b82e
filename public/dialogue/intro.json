@@ -20,7 +20,7 @@
       "type": "line",
       "speaker": "cato",
       "emote": "content",
-      "text": { "en": "I'm Cato, the little spirit of this place. I look after the island... and you look after me. Partners!", "zh-CN": "我是 Cato，这座岛的小精灵。我照看着岛……你照看着我。我们是搭档啦！" },
+      "text": { "en": "I'm Cato — I live right here on the island. Now that you're here, we get to look after this place side by side. Friends!", "zh-CN": "我是 Cato——就住在这座岛上。你来了以后，我们就能并肩一起照看这座小岛啦。是朋友喔！" },
       "next": "offer"
     },
     "offer": {
