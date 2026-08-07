@@ -25,6 +25,7 @@ export class BootMenuScene extends Phaser.Scene {
   // Cream drifting-icon wallpaper (replaces the busy island/water backdrop).
   private bgRect?: Phaser.GameObjects.Rectangle;
   private bgLayer?: Phaser.GameObjects.Container;
+  private bgCam?: Phaser.Cameras.Scene2D.Camera; // dedicated 1:1 camera for the wallpaper
   private bgPeriod = 100; private bgW = 0; private bgH = 0;
   private title?: Phaser.GameObjects.Sprite;        // the CATOPIA logo
   private titleShadow?: Phaser.GameObjects.Image;   // its drop shadow (stays on the "ground")
@@ -71,8 +72,18 @@ export class BootMenuScene extends Phaser.Scene {
     reg?.all().forEach((go) => {
       if (go.getData('entityAssetId') !== 'catopia-title') (go as Phaser.GameObjects.Sprite).setVisible(false);
     });
-    this.bgRect = this.add.rectangle(0, 0, this.scale.width, this.scale.height, WP_FILL, 1).setOrigin(0, 0).setScrollFactor(0).setDepth(-100);
-    this.bgLayer = this.add.container(0, 0).setScrollFactor(0).setDepth(-99);
+    // The wallpaper renders on its OWN 1:1 camera (bgCam), so the boot camera's ~3× zoom
+    // and odd screen aspects can't scale / mis-place it — it fills the screen exactly like
+    // the laptop's 1:1 wallpaper (a scrollFactor(0) object in the zoomed camera only covered
+    // the top-left on non-16:9 tablets). bgCam is put FIRST so it renders BEHIND the world.
+    this.bgRect = this.add.rectangle(0, 0, this.scale.width, this.scale.height, WP_FILL, 1).setOrigin(0, 0).setDepth(-100);
+    this.bgLayer = this.add.container(0, 0).setDepth(-99);
+    this.bgCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+    const cams = this.cameras.cameras;
+    cams.splice(cams.indexOf(this.bgCam), 1); cams.unshift(this.bgCam); // render behind the world camera
+    // The world camera got an opaque backdrop colour from the boot scene data — make it
+    // TRANSPARENT so the wallpaper camera behind it shows through.
+    this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
     this.layoutWallpaper();
 
     // Title: gentle up-and-down float (world px; the boot camera is ~3× so ±5 world
@@ -132,6 +143,13 @@ export class BootMenuScene extends Phaser.Scene {
     this.scene.launch('SettingsScene');
     this.scene.bringToTop('SettingsScene');
 
+    // Split the cameras (now that all objects exist): the world camera skips the wallpaper,
+    // the wallpaper camera skips everything else. So each renders only its half.
+    if (this.bgCam && this.bgRect && this.bgLayer) {
+      this.cameras.main.ignore([this.bgRect, this.bgLayer]);
+      this.bgCam.ignore(this.children.list.filter((o) => o !== this.bgRect && o !== this.bgLayer));
+    }
+
     // Title is ready — uncover any return-to-title transition (no-op on a cold boot).
     finishTransition(this);
   }
@@ -139,7 +157,7 @@ export class BootMenuScene extends Phaser.Scene {
   /** Keep the mascot pinned to the camera's visible bottom-left (22 world px in from the
    *  left, feet on the screen bottom) — recomputed each frame so it survives resizes. */
   update(_time: number, delta: number): void {
-    if (this.bgLayer) driftIconLayer(this.bgLayer, delta / (this.cameras.main.zoom || 1), this.bgPeriod); // drift (÷zoom → same on-screen speed as the laptop)
+    if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod); // wallpaper is on the 1:1 bgCam, so drift at native speed (matches the laptop)
     if (this.title && this.titleShadow) {
       // Shadow STAYS on the ground (fixed y = resting logo + gap); as the logo floats up the
       // gap widens and the shadow shrinks + fades a touch → it looks like it's lifting in space.
@@ -162,9 +180,10 @@ export class BootMenuScene extends Phaser.Scene {
   private layoutWallpaper(): void {
     if (!this.bgRect || !this.bgLayer) return;
     const W = this.scale.width, H = this.scale.height;
-    const z = this.cameras.main.zoom || 1;
     this.bgRect.setSize(W, H);
-    if (W !== this.bgW || H !== this.bgH) { this.bgW = W; this.bgH = H; this.bgPeriod = buildIconPattern(this, this.bgLayer, W, H, z); }
+    this.bgCam?.setSize(W, H);
+    // bgCam is 1:1 (renderScale 1), so this is identical to the laptop's wallpaper.
+    if (W !== this.bgW || H !== this.bgH) { this.bgW = W; this.bgH = H; this.bgPeriod = buildIconPattern(this, this.bgLayer, W, H); }
   }
 
   private fitCamera = (): void => {
