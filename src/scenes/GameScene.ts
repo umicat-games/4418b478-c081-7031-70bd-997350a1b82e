@@ -278,6 +278,16 @@ const FRUIT_FRAME: Record<string, number> = {
   apple: 0, pear: 2, peach: 3, strawberry: 4, grape: 5, blueberry: 6,
 };
 
+// Where the 3 harvested fruits sit on the ground, in world px offset from the tree FOOT
+// (`w.x+TILE/2`, `w.y+TILE`). Measured from the tree shake sheet's LAST frame (48px frame,
+// foot at pixel 24,48, scale 1): 1 left + 2 right of the trunk — so the collected fruit
+// lands exactly where the sheet dropped it. Same layout across apple/pear/peach.
+const FRUIT_DROP_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
+  { dx: -20, dy: -13 }, // far left
+  { dx: 19, dy: -17 },  // right, higher
+  { dx: 16, dy: -9 },   // right, lower
+];
+
 // --- Berry bushes (planted from the backpack, grow, harvested by hand/hoe) ---
 // A bush grows empty-bush-small (stage 0) → empty-bush (1) → empty-bush + 3 berries
 // (stage 2, ripe). Harvest drops 3 berries + reverts to stage 1; it regrows to 2.
@@ -2844,15 +2854,14 @@ export class GameScene extends Phaser.Scene {
     if (!tree || !this.islandLayer) return;
     const type = tree.type;
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
-    // The tree's own shake/harvest sheet already shows the fruit dropping to the GROUND, so
-    // the collected fruit shouldn't arc UP out of the trunk centre (that read as a second,
-    // wrong drop). Instead show the 3 fruits spread on the ground at the base — where they
-    // fell — then float up + fade (collected). Tune GROUND_Y / spread if the fall spot moves.
-    const gx = w.x + TILE / 2, gy = w.y + TILE * 0.95; // ground at the tree base
-    const spread = [-TILE * 0.5, 0, TILE * 0.5];
-    for (let i = 0; i < 3; i++) {
-      const dx = spread[i], dy = Phaser.Math.Between(-2, 3);
-      this.time.delayedCall(i * 120, () => this.playFruitCollect(gx + dx, gy + dy, 'fruit-items', FRUIT_FRAME[type] ?? 0));
+    // The tree's own shake sheet drops the 3 fruits to FIXED, uneven spots (measured from
+    // its last frame: 1 left + 2 right of the trunk). Show the collected fruits at those
+    // exact spots — where they fell — so it reads as picking up what fell, not a fresh pop.
+    // Offsets are from the tree FOOT (frame 24,48 @ scale 1) — see FRUIT_DROP_OFFSETS.
+    const footX = w.x + TILE / 2, footY = w.y + TILE;
+    for (let i = 0; i < FRUIT_DROP_OFFSETS.length; i++) {
+      const d = FRUIT_DROP_OFFSETS[i];
+      this.time.delayedCall(i * 70, () => this.playFruitCollect(footX + d.dx, footY + d.dy, 'fruit-items', FRUIT_FRAME[type] ?? 0));
     }
     this.addToChest(makeFruit(type, 3));
     this.catoReact('love'); // Cato loves a fruit harvest
