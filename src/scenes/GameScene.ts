@@ -2345,17 +2345,20 @@ export class GameScene extends Phaser.Scene {
     const target = this.hoverTargetAt(wp.x, wp.y);
 
     if (target) {
-      const b = target.sprite.getBounds();
-      const pad = 4;
+      // TIGHT box = the sprite's opaque-pixel bbox (not the padded frame), so the bracket hugs
+      // the actual art regardless of how much transparent margin the asset has.
+      const b = this.spriteWorldSolidRect(target.sprite);
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      const pad = 5;
       this.hoverModel = {
         visible: true, onObject: true,
-        x: (b.centerX - cam.worldView.x) * cam.zoom,
-        y: (b.centerY - cam.worldView.y) * cam.zoom,
-        w: b.width * cam.zoom + pad * 2,
-        h: b.height * cam.zoom + pad * 2,
+        x: (cx - cam.worldView.x) * cam.zoom,
+        y: (cy - cam.worldView.y) * cam.zoom,
+        w: b.w * cam.zoom + pad * 2,
+        h: b.h * cam.zoom + pad * 2,
         name: target.name,
-        nameX: (b.centerX - cam.worldView.x) * cam.zoom,
-        nameY: (b.y - cam.worldView.y) * cam.zoom - 4, // pill just above the object's top
+        nameX: (cx - cam.worldView.x) * cam.zoom,
+        nameY: (b.y - cam.worldView.y) * cam.zoom - 3, // pill just above the art's top
       };
       this.registry.set('hover', this.hoverModel);
       if (this.locked) this.cursorState.visible = false; // the inspect ring is the cursor now
@@ -4606,7 +4609,7 @@ export class GameScene extends Phaser.Scene {
    *  computed once by reading its pixels (CDN uploads are CORS-clean, so no taint;
    *  same read as buildSoilGrassSheet). Used to size wall/door colliders to the art. */
   private solidRectCache = new Map<string, { x: number; y: number; w: number; h: number }>();
-  private frameSolidRect(key: string, frame: number): { x: number; y: number; w: number; h: number } {
+  private frameSolidRect(key: string, frame: number | string): { x: number; y: number; w: number; h: number } {
     const ck = `${key}:${frame}`;
     const hit = this.solidRectCache.get(ck);
     if (hit) return hit;
@@ -4631,6 +4634,22 @@ export class GameScene extends Phaser.Scene {
       this.solidRectCache.set(ck, full); // pixel read failed → fall back to the full tile
       return full;
     }
+  }
+
+  /** A sprite's TIGHT world bounding box — the opaque-pixel bbox of its current frame mapped to
+   *  world coords (via getBounds for the full frame + origin/scale, then inset to the solid
+   *  region; flip-aware). Used by the hover frame so the bracket hugs the ART, not the frame's
+   *  transparent padding (a 48×48 sprite whose cat/tree fills a small patch). Cached per frame. */
+  private spriteWorldSolidRect(s: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image): { x: number; y: number; w: number; h: number } {
+    const f = s.frame;
+    const b = s.getBounds(); // full-frame world rect (handles origin/scale/rotation)
+    const fw = f.cutWidth, fh = f.cutHeight;
+    if (!fw || !fh) return { x: b.x, y: b.y, w: b.width, h: b.height };
+    const local = this.frameSolidRect(s.texture.key, f.name);
+    const kx = b.width / fw, ky = b.height / fh; // world px per frame px
+    const lx = s.flipX ? fw - local.x - local.w : local.x; // mirror the solid x under flipX
+    const ly = s.flipY ? fh - local.y - local.h : local.y;
+    return { x: b.x + lx * kx, y: b.y + ly * ky, w: local.w * kx, h: local.h * ky };
   }
 
   // ── Crops: plant → grow → harvest ─────────────────────────────────────
