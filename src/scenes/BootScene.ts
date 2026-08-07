@@ -426,7 +426,7 @@ export class BootScene extends Phaser.Scene {
       document.getElementById('boot')?.remove(); // hand off from the CSS loader to the paw wipe
       // CREAM paw curtain (not the default white) so it blends with the cream loader — the
       // title blooms out of a cream paw with no white flash in between.
-      startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800, color: 0xf6f0e2 });
+      startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800, color: 0xaed499 });
     });
   }
 }

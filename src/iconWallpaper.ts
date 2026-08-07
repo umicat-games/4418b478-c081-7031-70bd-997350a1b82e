@@ -6,7 +6,7 @@ import Phaser from 'phaser';
  * and the game's loading screen (LoadingOverlay) look identical. Pure helpers over a
  * caller-owned `Container` layer, so the caller controls depth / scrollFactor / fading.
  */
-export const WP_FILL = 0xf6f0e2;          // cream backdrop
+export const WP_FILL = 0xaed499;          // soft light-green backdrop
 export const WP_ICONS = [64, 65, 66, 2];  // all_icons white: heart / sprout-up / sprout-down / star
 export const WP_TINT = 0xd0c8b4;          // subtle grey tint on the icons
 export const WP_ALPHA = 0.5;
