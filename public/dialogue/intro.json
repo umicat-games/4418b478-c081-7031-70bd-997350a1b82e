@@ -6,27 +6,22 @@
     "greet": {
       "type": "line",
       "speaker": "cato",
+      "emote": "love",
+      "text": { "en": "You're here! I'm so happy you decided to come and live with me, {name}.", "zh-CN": "你来啦！你愿意来和我一起生活，我真的好开心，{name}。" },
+      "next": "life"
+    },
+    "life": {
+      "type": "line",
+      "speaker": "cato",
       "emote": "happy",
-      "text": { "en": "Oh — you're here! Hi hi, {name}! I've been waiting for you.", "zh-CN": "哦——你来啦！嗨嗨，{name}！我一直在等你呢。" },
-      "next": "world1"
+      "text": { "en": "Here on our little island, we can grow crops and gather all sorts of things — and make this place lovelier together.", "zh-CN": "在我们这座小岛上，我们可以一起种地、采集各种东西，把这里变得越来越好。" },
+      "next": "tools_lead"
     },
-    "world1": {
+    "tools_lead": {
       "type": "line",
       "speaker": "cato",
-      "text": { "en": "Welcome to Catopia — our little island, floating all on its own in a big quiet sea.", "zh-CN": "欢迎来到 Catopia——我们的小岛，独自漂在一片安静的大海上。" },
-      "next": "world2"
-    },
-    "world2": {
-      "type": "line",
-      "speaker": "cato",
-      "emote": "content",
-      "text": { "en": "I'm Cato — I live right here on the island. Now that you're here, we get to look after this place side by side. Friends!", "zh-CN": "我是 Cato——就住在这座岛上。你来了以后，我们就能并肩一起照看这座小岛啦。是朋友喔！" },
-      "next": "offer"
-    },
-    "offer": {
-      "type": "line",
-      "speaker": "cato",
-      "text": { "en": "Let me show you a few things around the house — quick tour!", "zh-CN": "我带你认识一下屋子边上的几样东西吧——很快的！" },
+      "emote": "happy",
+      "text": { "en": "Let me show you around — here are the things we've got to work with!", "zh-CN": "来，我带你认识一下——这些是我们现在能用上的东西！" },
       "next": "tool_mailbox"
     },
     "tool_mailbox": {
@@ -48,7 +43,7 @@
       "type": "line",
       "speaker": "cato",
       "data": { "focus": "pad" },
-      "text": { "en": "This tablet is for shopping. Tap it to place orders — seeds, tools, all sorts of goodies.", "zh-CN": "这个平板是用来买东西的。点开它就能下单——种子、工具，各种好东西都有。" },
+      "text": { "en": "This little tablet is for shopping. Tap it to buy seeds, tools, and all sorts of goodies.", "zh-CN": "这个小平板是用来买东西的。点开它就能买种子、工具，各种好东西。" },
       "next": "tool_workstation"
     },
     "tool_workstation": {
@@ -57,20 +52,33 @@
       "emote": "content",
       "data": { "focus": "workstation" },
       "text": { "en": "And this is the work station. Tap it to craft new things out of the materials you gather.", "zh-CN": "这个是工作台。点开它，就能用你收集来的材料合成新东西。" },
-      "next": "help"
+      "next": "harvest"
     },
-    "help": {
+    "harvest": {
       "type": "line",
       "speaker": "cato",
       "emote": "happy",
-      "text": { "en": "Oh — and if you ever get busy, just tap me and ask! I love lending a paw.", "zh-CN": "对了——你要是忙不过来，点我一下说一声就行！我最爱帮忙啦。" },
+      "text": { "en": "When the crops are ripe, I'll head out and harvest them for you all on my own.", "zh-CN": "农作物熟了的时候，我会自己跑去帮你把它们收回来。" },
+      "next": "askme"
+    },
+    "askme": {
+      "type": "line",
+      "speaker": "cato",
+      "text": { "en": "And if there's ever anything else you'd like me to do, just tap my portrait up in the top-right corner and tell me!", "zh-CN": "要是你还有别的想让我做的，随时点右上角我的头像跟我说就行！" },
+      "next": "chat"
+    },
+    "chat": {
+      "type": "line",
+      "speaker": "cato",
+      "emote": "love",
+      "text": { "en": "Even when there's nothing to do, I'd love to just chat — you're my friend now, and I want to get to know you. Anything about Catopia, we can wonder about together.", "zh-CN": "就算没什么要忙的，我也很想找你聊聊天——你现在是我的朋友啦，我想多了解了解你。关于 Catopia 的任何事，我们都可以一起琢磨。" },
       "next": "wrap"
     },
     "wrap": {
       "type": "line",
       "speaker": "cato",
       "emote": "love",
-      "text": { "en": "Okay! Let's make this little island bloom together, {name}.", "zh-CN": "好啦！我们一起让这座小岛热闹起来吧，{name}。" },
+      "text": { "en": "I really hope you'll love life here in Catopia, {name}!", "zh-CN": "真心希望你会喜欢在 Catopia 的生活，{name}！" },
       "next": "end"
     },
     "end": { "type": "end" }
