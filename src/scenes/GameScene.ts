@@ -283,9 +283,9 @@ const FRUIT_FRAME: Record<string, number> = {
 // foot at pixel 24,48, scale 1): 1 left + 2 right of the trunk — so the collected fruit
 // lands exactly where the sheet dropped it. Same layout across apple/pear/peach.
 const FRUIT_DROP_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
-  { dx: -20, dy: -13 }, // far left
-  { dx: 19, dy: -17 },  // right, higher
-  { dx: 16, dy: -9 },   // right, lower
+  { dx: 20, dy: -13 },  // far right
+  { dx: -19, dy: -17 }, // left, higher
+  { dx: -16, dy: -9 },  // left, lower
 ];
 
 // --- Berry bushes (planted from the backpack, grow, harvested by hand/hoe) ---
