@@ -26,6 +26,8 @@ export class BootMenuScene extends Phaser.Scene {
   private bgRect?: Phaser.GameObjects.Rectangle;
   private bgLayer?: Phaser.GameObjects.Container;
   private bgPeriod = 100; private bgW = 0; private bgH = 0;
+  private title?: Phaser.GameObjects.Sprite;        // the CATOPIA logo
+  private titleShadow?: Phaser.GameObjects.Image;   // its drop shadow (follows the float)
   /** The authored Play button entity + its base (un-hovered) scale — SettingsScene
    *  reads these to place the "Settings" button directly BELOW Play, at Play's size. */
   playButton?: Phaser.GameObjects.Sprite;
@@ -77,6 +79,13 @@ export class BootMenuScene extends Phaser.Scene {
       | Phaser.GameObjects.Sprite
       | undefined;
     if (title) {
+      this.title = title;
+      // Soft DROP SHADOW: a deep-green, offset copy just under the logo — same hue as the
+      // green backdrop but darker, so the title lifts off the page. Tracks the float in update().
+      this.titleShadow = this.add.image(title.x, title.y, title.texture.key, title.frame.name)
+        .setOrigin(title.originX, title.originY)
+        .setScale(title.scaleX, title.scaleY)
+        .setTint(0x2f5626).setAlpha(0.32).setDepth(title.depth - 0.5);
       this.tweens.add({ targets: title, y: title.y - 5, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
@@ -126,6 +135,7 @@ export class BootMenuScene extends Phaser.Scene {
    *  left, feet on the screen bottom) — recomputed each frame so it survives resizes. */
   update(_time: number, delta: number): void {
     if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod); // drift the wallpaper
+    if (this.title && this.titleShadow) this.titleShadow.setPosition(this.title.x + 2.5, this.title.y + 3.5); // follow the float
     if (this.cato) {
       const v = this.cameras.main.worldView;
       this.cato.setPosition(v.left + 80, v.bottom);
