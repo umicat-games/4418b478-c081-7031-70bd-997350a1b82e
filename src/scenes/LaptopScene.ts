@@ -247,9 +247,11 @@ export class LaptopScene extends Phaser.Scene {
     this.nameText.setFontSize(Math.round(fs * 1.05)).setPosition(px + tpad + iconS + fs * 0.5, hrY);
     // Message text below the header row.
     const msgY = hrY + iconS / 2 + fs * 0.45;
-    this.msgText.setFontSize(fs).setPosition(px + tpad, msgY).setWordWrapWidth(pw - tpad * 2);
+    // advanced wrap (2nd arg) breaks BETWEEN characters — CJK has no spaces, so plain
+    // whitespace wrap let long Chinese runs overflow the panel.
+    this.msgText.setFontSize(fs).setPosition(px + tpad, msgY).setWordWrapWidth(pw - tpad * 2, true);
     this.msgAreaH = py + ph - tpad - msgY;
-    this.measure.setFontSize(fs).setWordWrapWidth(pw - tpad * 2);
+    this.measure.setFontSize(fs).setWordWrapWidth(pw - tpad * 2, true); // must match msgText for pagination height
     this.more.setFontSize(fs).setPosition(px + pw / 2, py + ph - tpad * 0.5);
 
     // Input box + send button — SAME rounded panel style as Cato's message box.
