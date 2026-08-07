@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { preloadManifest, getManifest } from '@umicat/phaser-sdk';
-import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
+import { t } from '../i18n';
 import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
 import { applyItemData } from '../data/items';
@@ -24,8 +25,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    drawLoadingBar(this);
     preloadManifest(this);
+    // Load the icon sheet FIRST so the cozy loading screen (cream + drifting icons +
+    // animated "Loading") can render itself while the rest of the assets load.
+    this.load.spritesheet('ui-icons', 'uploaded/all_icons.png', { frameWidth: 16, frameHeight: 16 });
+    drawCozyLoader(this);
     // Custom pointer-lock cursor — key must match CURSOR_KEY in GameScene.
     this.load.image('cursor', 'uploaded/triangle_mouse_icon_1.png');
     // Tile-selection bracket cursor (24×24, frames a 16px cell) — the "you can
@@ -37,9 +41,8 @@ export class BootScene extends Phaser.Scene {
     // Used as the pixel background frame behind the build-palette orientation cells
     // (registered as a frame in create() so a nine-slice can reference it).
     this.load.image('square-buttons', 'uploaded/square_buttons_26x26.png');
-    // UI icon sheet (16×16 grid) — the confirm dialog uses frame 44 (✓ check) and
-    // 46 (⊘ cancel), dark-brown variants that read on the cream button.
-    this.load.spritesheet('ui-icons', 'uploaded/all_icons.png', { frameWidth: 16, frameHeight: 16 });
+    // (ui-icons — the 16×16 grid used by the confirm dialog / build palette / HUD — is
+    //  loaded FIRST, above, so the cozy loading screen can use it.)
     // Title-screen SETTINGS menu: the rounded panel (SETTINGS baked in) + the volume
     // slider pieces (a green "filled" tick, a brown "empty" tick, and the <> drag knob).
     this.load.atlas('settings-menu', 'uploaded/setting_menu.png', 'uploaded/setting_menu.json');
@@ -452,33 +455,40 @@ function buildSoilGrassSheet(scene: Phaser.Scene): void {
   tex.refresh();
 }
 
-function drawLoadingBar(scene: Phaser.Scene): void {
-  const cx = GAME_WIDTH / 2;
-  const cy = GAME_HEIGHT / 2;
-  const barW = Math.min(480, GAME_WIDTH * 0.6);
-  const barH = 24;
-
+/**
+ * The initial-boot LOADING screen: the cozy cream + drifting-icon wallpaper (shared with
+ * the laptop cold-open and the in-game loading overlay) + an animated "Loading" text.
+ *
+ * The catch: during Phaser's LOADING phase the scene's update()/tweens/timers do NOT run,
+ * and the icon sheet is still being fetched. So we (1) build the icon pattern lazily the
+ * moment `ui-icons` appears in the texture cache mid-load, and (2) drive the drift + text
+ * animation off the GAME's per-frame POST_STEP event (which fires every frame regardless
+ * of scene status), tearing it down on load 'complete'.
+ */
+function drawCozyLoader(scene: Phaser.Scene): void {
+  scene.cameras.main?.setBackgroundColor(WP_FILL);
+  const W = scene.scale.width, H = scene.scale.height;
+  const rect = scene.add.rectangle(-2000, -2000, 8000, 8000, WP_FILL, 1).setOrigin(0, 0).setDepth(1e6);
+  const layer = scene.add.container(0, 0).setDepth(1e6 + 1); // drifting icons (filled once ui-icons loads)
+  const base = t('loading');
   const label = scene.add
-    .text(cx, cy - 40, 'Loading...', {
-      fontFamily: 'sans-serif',
-      fontSize: '20px',
-      color: '#ffffff',
-    })
-    .setOrigin(0.5);
+    .text(W / 2, H / 2, base, { fontFamily: 'zpix, sans-serif', color: '#7c5a38' })
+    .setOrigin(0.5).setDepth(1e6 + 2).setFontSize(Math.max(20, Math.round(Math.min(W, H) * 0.05)));
 
-  const track = scene.add
-    .rectangle(cx, cy, barW, barH, 0x222222)
-    .setStrokeStyle(2, 0xffffff);
-  const fill = scene.add
-    .rectangle(cx - barW / 2 + 2, cy, 0, barH - 4, 0xffffff)
-    .setOrigin(0, 0.5);
-
-  scene.load.on('progress', (value: number) => {
-    fill.width = (barW - 4) * value;
-  });
-  scene.load.on('complete', () => {
-    label.destroy();
-    track.destroy();
-    fill.destroy();
+  let period = 100, acc = 0, shownDots = -1;
+  const onStep = (_t: number, delta: number): void => {
+    if (layer.length === 0 && scene.textures.exists('ui-icons')) {
+      period = buildIconPattern(scene, layer, scene.scale.width, scene.scale.height);
+    }
+    driftIconLayer(layer, delta, period);
+    acc += delta;
+    const dots = Math.floor(acc / 340) % 4;
+    if (dots !== shownDots) { shownDots = dots; label.setText(base + '.'.repeat(dots)); }
+    label.setAlpha(0.55 + 0.45 * (0.5 + 0.5 * Math.sin((acc / 720) * Math.PI))); // gentle breathe
+  };
+  scene.game.events.on(Phaser.Core.Events.POST_STEP, onStep);
+  scene.load.once('complete', () => {
+    scene.game.events.off(Phaser.Core.Events.POST_STEP, onStep);
+    rect.destroy(); layer.destroy(true); label.destroy();
   });
 }
