@@ -2844,8 +2844,15 @@ export class GameScene extends Phaser.Scene {
     if (!tree || !this.islandLayer) return;
     const type = tree.type;
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    // The tree's own shake/harvest sheet already shows the fruit dropping to the GROUND, so
+    // the collected fruit shouldn't arc UP out of the trunk centre (that read as a second,
+    // wrong drop). Instead show the 3 fruits spread on the ground at the base — where they
+    // fell — then float up + fade (collected). Tune GROUND_Y / spread if the fall spot moves.
+    const gx = w.x + TILE / 2, gy = w.y + TILE * 0.95; // ground at the tree base
+    const spread = [-TILE * 0.5, 0, TILE * 0.5];
     for (let i = 0; i < 3; i++) {
-      this.time.delayedCall(i * 130, () => this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'fruit-items', FRUIT_FRAME[type] ?? 0));
+      const dx = spread[i], dy = Phaser.Math.Between(-2, 3);
+      this.time.delayedCall(i * 120, () => this.playFruitCollect(gx + dx, gy + dy, 'fruit-items', FRUIT_FRAME[type] ?? 0));
     }
     this.addToChest(makeFruit(type, 3));
     this.catoReact('love'); // Cato loves a fruit harvest
@@ -4608,6 +4615,20 @@ export class GameScene extends Phaser.Scene {
    *  bounces once, wobbles its size for cuteness, then vanishes. Pure flair —
    *  the item is already banked in the inventory. Shared by crop harvest + house
    *  tile removal. */
+  /** Fruit-harvest flourish: a fruit appears ON THE GROUND at (x,y) with a little landing
+   *  pop, holds a beat, then floats up + fades (collected). Used for tree fruit, whose sheet
+   *  already animates the fall — so this reads as picking up what fell, not a fresh pop. */
+  private playFruitCollect(x: number, y: number, texture: string, frame: string | number): void {
+    const item = this.add.image(x, y, texture, frame).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
+    this.tweens.add({
+      targets: item, scale: 1, duration: 160, ease: 'Back.easeOut',
+      onComplete: () => this.tweens.add({
+        targets: item, y: y - 14, alpha: 0, duration: 300, delay: 220, ease: 'Quad.easeIn',
+        onComplete: () => item.destroy(),
+      }),
+    });
+  }
+
   private playPopOut(centerX: number, centerY: number, texture: string, frame: string | number): void {
     const item = this.add
       .image(centerX, centerY, texture, frame)
