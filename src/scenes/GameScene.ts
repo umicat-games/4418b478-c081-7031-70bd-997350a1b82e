@@ -1448,8 +1448,9 @@ export class GameScene extends Phaser.Scene {
     // HUD scene the SDK created during the world load.
     this.registry.set('cursor', this.cursorState);
     this.registry.set('hover', this.hoverModel);
-    // Overlays, back-to-front: hotbar → full backpack → cursor (always topmost).
-    if (!this.scene.isActive('HotbarScene')) this.scene.launch('HotbarScene');
+    // Overlays, back-to-front. NB: the HOTBAR is gone — tools/seeds/materials live in the backpack
+    // (opened by the bottom-right sprout button + used via the wheel / backpack "Use").
+    if (!this.scene.isActive('BackpackButtonScene')) this.scene.launch('BackpackButtonScene');
     if (!this.scene.isActive('WeatherScene')) this.scene.launch('WeatherScene');
     if (!this.scene.isActive('PaletteScene')) this.scene.launch('PaletteScene');
     if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
@@ -1462,7 +1463,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('ToolHudScene')) this.scene.launch('ToolHudScene');
     if (!this.scene.isActive('HoverScene')) this.scene.launch('HoverScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
-    this.scene.bringToTop('HotbarScene');
+    this.scene.bringToTop('BackpackButtonScene');
     this.scene.bringToTop('WeatherScene');
     this.scene.bringToTop('PaletteScene');
     this.scene.bringToTop('ChatterScene'); // above UmicatHud so the mood emoji shows IN the portrait
@@ -1476,6 +1477,7 @@ export class GameScene extends Phaser.Scene {
     this.publishBuildPalette();
     this.publishWeatherHud();
     this.publishToolHud();
+    this.publishBackpackBtn();
 
     // MOUSE: click the canvas → capture the mouse. If already locked, the click
     // is a game/HUD action routed through the virtual cursor (the OS pointer is
@@ -1800,23 +1802,20 @@ export class GameScene extends Phaser.Scene {
    *  select the matching hotbar (row-0) slot; E / I toggle the full backpack.
    *  You start bare-handed (nothing selected). */
   private setupInventory(): void {
-    this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null);
-    // Row 0 (the hotbar, 8 slots) holds the everyday tools + seeds + a wall so you can
-    // start farming/building right away. There's NO backpack — the CHEST is storage, so
-    // everything else (extra materials, harvested goods, purchases) lives there.
-    this.inventory[0] = itemFromId('hoe', 1);
-    this.inventory[1] = itemFromId('watering-can', 1);
-    this.inventory[7] = makePlaceable('wall', 99);
-    // Seeds live in the BACKPACK now (you Use them from there) — the portable store.
-    this.backpackStore = CROP_NAMES.map((c) => makeSeed(c, 10));
-    // The rest of the starter kit goes into the CHEST (drag it 进 Hotbar to use):
-    // spare seed stacks, then building materials / tools / plantables.
+    this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null); // vestigial (no hotbar) — save compat
+    // The BACKPACK is the portable store you carry + Use things from: everyday tools, seeds, a wall.
+    this.backpackStore = [
+      itemFromId('hoe', 1), itemFromId('watering-can', 1), itemFromId('axe', 1), itemFromId('pickaxe', 1),
+      ...CROP_NAMES.map((c) => makeSeed(c, 10)),
+      makePlaceable('wall', 99),
+    ];
+    // The bulk starter kit lives in the CHEST (storage) — Take what you need into the backpack:
+    // spare seed stacks, building materials, plantables.
     this.mailboxStore = [];
     this.chestStore = [
       ...CROP_NAMES.map((c) => makeSeed(c, 20)),
       makePlaceable('floor', 99), makePlaceable('window', 99), makePlaceable('door', 10),
       ...FURNITURE.map((piece) => makePlaceable('furniture', 10, piece.id)),
-      itemFromId('axe', 1), itemFromId('pickaxe', 1),
       ...TREE_TYPES.map((t) => makePlaceable('tree', 10, t.id)),
       ...BERRY_TYPES.map((b) => makePlaceable('bush', 10, b)),
     ];
@@ -1825,14 +1824,8 @@ export class GameScene extends Phaser.Scene {
     this.hotbarSelected = -1;
     this.publishInventory();
 
-    const codes = [
-      'keydown-ONE', 'keydown-TWO', 'keydown-THREE', 'keydown-FOUR',
-      'keydown-FIVE', 'keydown-SIX', 'keydown-SEVEN', 'keydown-EIGHT', 'keydown-NINE',
-    ];
-    codes.slice(0, INV_COLS).forEach((code, i) => {
-      this.input.keyboard?.on(code, () => this.selectHotbarSlot(i));
-    });
-    // No backpack — E/I open the Chest (your storage) via the unified menu.
+    // No hotbar / number keys anymore. The bottom-right sprout button opens the BACKPACK (things you
+    // carry + Use); E/I open the CHEST (storage).
     this.input.keyboard?.on('keydown-E', () => (this.menuOpen ? this.closeMenu() : this.openMenu(1)));
     this.input.keyboard?.on('keydown-I', () => (this.menuOpen ? this.closeMenu() : this.openMenu(1)));
     // R: rotate the wall facing / cycle the furniture piece while building.
@@ -2212,12 +2205,16 @@ export class GameScene extends Phaser.Scene {
 
   /** Is (x,y) over the backpack button (right of the hotbar)? */
   private overBackpackButton(x: number, y: number): boolean {
-    const b = this.registry.get('hotbarBounds') as
-      | { backpack?: { x: number; y: number; w: number; h: number } }
-      | undefined;
-    const r = b?.backpack;
+    const r = this.registry.get('backpackBtnBounds') as { x: number; y: number; w: number; h: number } | undefined;
     if (!r) return false;
     return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
+  private backpackBtnPressed = false;
+  /** Publish the bottom-right backpack (sprout) button's visibility + pressed state. */
+  private publishBackpackBtn(): void {
+    const hidden = !this.gameReady || this.cutscene || (this.dialogOpen && !this.cutscene) || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen;
+    this.registry.set('backpackBtn', { visible: !hidden, pressed: this.backpackBtnPressed });
   }
 
   /** Is (x,y) over the hotbar area (panel + slots)? */
@@ -2505,9 +2502,7 @@ export class GameScene extends Phaser.Scene {
   /** Where the player owns a tool: a hotbar slot (row 0) → select it; else a backpack / chest /
    *  Cato-bag stack → hold it as an external item. null = not owned anywhere. */
   private findOwnedTool(toolId: ToolId): { hotbar: number } | { store: ItemStack[]; item: ItemStack } | null {
-    for (let i = 0; i < INV_COLS; i++) { const it = this.inventory[i]; if (it?.toolId === toolId) return { hotbar: i }; }
-    for (let i = INV_COLS; i < this.inventory.length; i++) { const it = this.inventory[i]; if (it?.toolId === toolId) return { store: this.inventory, item: it }; }
-    for (const store of [this.chestStore, this.catoBagStore]) {
+    for (const store of [this.backpackStore, this.chestStore, this.catoBagStore]) {
       const it = store.find((s) => s.toolId === toolId);
       if (it) return { store, item: it };
     }
@@ -4102,16 +4097,14 @@ export class GameScene extends Phaser.Scene {
     this.publishMenu(true);
   }
 
-  /** Backpack hotbar cell clicked → flash its pressed frame, THEN open the storage grid
-   *  (so the button reads as physically pressed before the menu appears). */
+  /** Bottom-right sprout button tapped → flash its pressed frame, THEN open the backpack (so the
+   *  button reads as physically pressed before the modal appears). Chest = door / E-I. */
   private pressBackpackThenOpen(): void {
     if (this.menuOpen) return;
-    const m = this.registry.get('hotbar') as Record<string, unknown> | undefined;
-    if (m) this.registry.set('hotbar', { ...m, backpackPressed: true, rev: ++this.invRev });
+    this.backpackBtnPressed = true; this.publishBackpackBtn();
     this.time.delayedCall(120, () => {
-      const m2 = this.registry.get('hotbar') as Record<string, unknown> | undefined;
-      if (m2) this.registry.set('hotbar', { ...m2, backpackPressed: false, rev: ++this.invRev });
-      this.openBackpack(); // the sprout button opens the BACKPACK (chest = door / E-I)
+      this.backpackBtnPressed = false; this.publishBackpackBtn();
+      this.openBackpack();
     });
   }
 
@@ -7731,6 +7724,7 @@ export class GameScene extends Phaser.Scene {
       else { this.updateToolPaletteHover(); this.publishToolPalette(); }
     }
     this.publishToolHud(); // keep the current-tool indicator + its visibility in sync each frame
+    this.publishBackpackBtn(); // keep the sprout button's visibility in sync
     this.updateHotbarHover(); // highlight the hotbar cell under the mouse cursor
     // While the build palette is open, tell it which cell the cursor is over (hover).
     this.updatePaletteHover();
