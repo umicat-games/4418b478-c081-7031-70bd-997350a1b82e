@@ -759,6 +759,7 @@ export class GameScene extends Phaser.Scene {
   // hover bracket). `applicable` = the owned tools that act on this spot.
   private toolPaletteOpen: { bbox: { wl: number; wt: number; wr: number; wb: number }; applicable: Set<ToolId> } | null = null;
   private toolPaletteHover = -2; // wheel circle under the cursor: -2 none, -1 close, ≥0 WHEEL_TOOLS idx
+  private toolHudExpanded = false; // the tool-HUD fly-out row (tap the HUD slot to open/close)
   private hotbarHover = -1; // hotbar cell the mouse cursor is over (-1 = none; backpack = INV_COLS)
   private inventoryOpen = false;
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
@@ -1448,6 +1449,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('CraftScene')) this.scene.launch('CraftScene');
     if (!this.scene.isActive('DialogueScene')) this.scene.launch('DialogueScene');
     if (!this.scene.isActive('LetterboxScene')) this.scene.launch('LetterboxScene');
+    if (!this.scene.isActive('ToolHudScene')) this.scene.launch('ToolHudScene');
     if (!this.scene.isActive('HoverScene')) this.scene.launch('HoverScene');
     if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
     this.scene.bringToTop('HotbarScene');
@@ -1458,10 +1460,12 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('CraftScene');    // the crafting modal sits above the HUD too
     this.scene.bringToTop('LetterboxScene'); // cinematic bars ABOVE the world/HUD, BELOW the dialog box
     this.scene.bringToTop('DialogueScene'); // spotlight ring above the hotbar during a cutscene
+    this.scene.bringToTop('ToolHudScene');  // current-tool indicator + fly-out switcher
     this.scene.bringToTop('HoverScene');    // empty-hand inspect ring/name above the HUD…
     this.scene.bringToTop('CursorScene');   // …but the pixel cursor stays topmost
     this.publishBuildPalette();
     this.publishWeatherHud();
+    this.publishToolHud();
 
     // MOUSE: click the canvas → capture the mouse. If already locked, the click
     // is a game/HUD action routed through the virtual cursor (the OS pointer is
@@ -1598,6 +1602,8 @@ export class GameScene extends Phaser.Scene {
     if (this.handleConfirmClick(x, y)) return;
     if (this.handleCraftClick(x, y)) return; // the crafting modal (work station)
     if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
+    // Tool HUD (current-tool slot + fly-out switcher) — works even while holding a tool.
+    if (this.handleToolHudClick(x, y)) return;
     // Contextual tool palette open → a button equips that tool, a miss dismisses it.
     if (this.handleToolPaletteClick(x, y)) return;
     // Build palette (wall facing) → pick that orientation.
@@ -1824,6 +1830,22 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-I', () => (this.menuOpen ? this.closeMenu() : this.openMenu(1)));
     // R: rotate the wall facing / cycle the furniture piece while building.
     this.input.keyboard?.on('keydown-R', () => this.rotatePlaceable());
+    // TAB: open the tool wheel at the cursor — works EVEN while holding a tool, so it's the desktop
+    // way to switch/cancel (pick the mouse circle) without conflicting with click-to-use. Capture
+    // it so the browser doesn't move focus. A second Tab closes it.
+    this.input.keyboard?.addCapture('TAB');
+    this.input.keyboard?.on('keydown-TAB', () => this.toggleToolWheelAtCursor());
+  }
+
+  /** Tab / tool-HUD entry point: open the tool wheel at the cursor (forced — even with no applicable
+   *  tool here, so you can always cancel), or close it if already open. */
+  private toggleToolWheelAtCursor(): void {
+    if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen) return;
+    if (this.toolPaletteOpen) { this.closeToolPalette(); return; }
+    const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
+    const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
+    const wp = this.cameras.main.getWorldPoint(sx, sy);
+    this.openToolWheelAt(wp.x, wp.y, true);
   }
 
   /** Map a stack → the compact view the scenes render (icon + count). */
@@ -1853,6 +1875,7 @@ export class GameScene extends Phaser.Scene {
       held: this.stackView(this.heldStack),
       rev,
     });
+    this.publishToolHud(); // the current-tool indicator tracks the held item
     this.scheduleSave(); // inventory / selection changed → persist
   }
 
@@ -2104,6 +2127,7 @@ export class GameScene extends Phaser.Scene {
     if (this.dialogOpen || this.inventoryOpen) return;
     if (i < 0 || i >= INV_COLS) return;
     playSfx(this); // button click blip on select / deselect
+    this.closeToolPalette(); // picking from the hotbar closes any open tool wheel
     this.heldExternal = null; // picking a hotbar slot cancels any external (chest/palette) held item
     this.hotbarSelected = this.hotbarSelected === i ? -1 : i;
     this.equipSelected();
@@ -2504,18 +2528,20 @@ export class GameScene extends Phaser.Scene {
         const key = `${tile.x},${tile.y}`;
         if (this.tilledCells.has(key)) { applicable.add('hoe'); applicable.add('watering-can'); } // un-till / harvest, and water
         else if (!this.cellBlocksTill(key) && !this.isDefaultHouseCell(key)) { applicable.add('hoe'); } // bare grass → till
-        if (applicable.size) { const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; }
+        const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; // any walkable tile anchors a wheel (Tab can open it to cancel)
       }
     }
     if (!bbox) return null;
     const owned = new Set([...applicable].filter((tid) => this.findOwnedTool(tid) !== null));
-    return owned.size ? { bbox, applicable: owned } : null;
+    return { bbox, applicable: owned }; // applicable may be empty (Tab still opens it so you can cancel)
   }
 
-  /** Open the radial tool wheel at a tapped spot. */
-  private openToolWheelAt(wx: number, wy: number): boolean {
+  /** Open the radial tool wheel at a tapped spot. `force` (Tab / the tool-HUD button) opens it even
+   *  with no applicable tool here — so you can switch/cancel anytime, even holding a tool; a plain
+   *  empty-hand CLICK only opens when at least one tool applies (else it falls through). */
+  private openToolWheelAt(wx: number, wy: number, force = false): boolean {
     const w = this.toolWheelAt(wx, wy);
-    if (!w) return false;
+    if (!w || (!force && w.applicable.size === 0)) return false;
     this.toolPaletteOpen = w;
     this.toolPaletteHover = -2;
     playSfx(this);
@@ -2548,20 +2574,21 @@ export class GameScene extends Phaser.Scene {
     };
     const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
     const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
-    // Close (mouse) sits at the TOP, just above the object. The UP slot (pickaxe) shares that top
-    // region: when pickaxe applies here, draw it at the top edge and lift close above it; otherwise
-    // close takes the top spot and the empty up-circle is dropped (no redundant stack).
-    const upActive = pal.applicable.has('pickaxe');
-    const closeY = upActive ? pos.up!.y - D - GAP : pos.up!.y;
+    // Close (mouse) = CANCEL, at the very TOP above the up (pickaxe) circle — like the reference's
+    // hand-at-12-o'clock. All 4 tools are always shown around the object; the ones that don't apply
+    // here are DISABLED (greyed, not tappable) rather than blank, so the wheel looks the same
+    // everywhere (only the enabled set changes).
+    const closeY = pos.up!.y - D - GAP;
     buttons.push({ x: cx, y: closeY, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
     bounds.push({ x: cx, y: closeY, r: D / 2, idx: -1 });
     GameScene.WHEEL_TOOLS.forEach((wt, i) => {
       const p = pos[wt.dir]!;
-      const active = pal.applicable.has(wt.toolId);
-      if (wt.dir === 'up' && !active) return; // skip the empty up circle — close lives there
+      const owned = this.findOwnedTool(wt.toolId) !== null;
+      const active = owned && pal.applicable.has(wt.toolId);
       const ic = this.toolIcon(wt.toolId);
-      buttons.push({ x: p.x, y: p.y, size: D, iconKey: active ? ic.key : '', iconFrame: ic.frame, kind: active ? 'tool' : 'empty', hovered: active && this.toolPaletteHover === i });
-      if (active) bounds.push({ x: p.x, y: p.y, r: D / 2, idx: i }); // only applicable circles are tappable
+      const kind = !owned ? 'empty' : active ? 'tool' : 'disabled';
+      buttons.push({ x: p.x, y: p.y, size: D, iconKey: owned ? ic.key : '', iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
+      if (active) bounds.push({ x: p.x, y: p.y, r: D / 2, idx: i }); // only ENABLED circles are tappable
     });
     this.registry.set('toolPalette', { visible: true, buttons });
     this.registry.set('toolPaletteBounds', bounds);
@@ -2579,7 +2606,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Route a click while the wheel is open: an applicable tool circle → equip it (from wherever
-   *  owned) + keep using it; the centre mouse circle / empty circle / a miss → dismiss. */
+   *  owned) + keep using it; the top mouse circle → CANCEL (empty hand); a miss → dismiss. */
   private handleToolPaletteClick(x: number, y: number): boolean {
     const pal = this.toolPaletteOpen;
     if (!pal) return false;
@@ -2589,8 +2616,66 @@ export class GameScene extends Phaser.Scene {
       const loc = this.findOwnedTool(GameScene.WHEEL_TOOLS[hit.idx]!.toolId)!;
       if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
       else this.holdExternal(loc.store, loc.item);
+    } else if (hit && hit.idx === -1) {
+      this.clearHeld(); // the mouse circle = cancel → drop the held tool, empty hand
     }
-    this.closeToolPalette(); // tool → equipped; close / miss → just dismiss
+    this.closeToolPalette(); // tool → equipped; mouse → cancelled; miss → dismiss
+    return true;
+  }
+
+  // ── Tool HUD (current-tool indicator under the weather + tap-to-fly-out switcher) ──────
+  private static HUD_X = 16;  private static HUD_Y = 100; private static HUD_SLOT = 42; private static HUD_GAP = 6;
+
+  /** The row items for the fly-out: a mouse (cancel) + every OWNED tool, left→right. */
+  private toolHudItems(): Array<{ key: string; frame: string | number; toolId: ToolId | null }> {
+    const items: Array<{ key: string; frame: string | number; toolId: ToolId | null }> = [{ key: 'cursor', frame: 0, toolId: null }];
+    for (const wt of GameScene.WHEEL_TOOLS) {
+      if (this.findOwnedTool(wt.toolId)) { const ic = this.toolIcon(wt.toolId); items.push({ key: ic.key, frame: ic.frame, toolId: wt.toolId }); }
+    }
+    return items;
+  }
+
+  /** Publish the tool-HUD model + tap hit-boxes (called on load + whenever the held item changes). */
+  private publishToolHud(): void {
+    const S = GameScene.HUD_SLOT, G = GameScene.HUD_GAP, HX = GameScene.HUD_X, HY = GameScene.HUD_Y;
+    const held = this.heldCell();
+    const cur = held?.toolId ? this.toolIcon(held.toolId) : { key: 'cursor', frame: 0 };
+    const items = this.toolHudItems();
+    const rendered = items.map((it, i) => ({ x: HX + S / 2 + (i + 1) * (S + G), y: HY + S / 2, key: it.key, frame: it.frame, selected: it.toolId === (held?.toolId ?? null) }));
+    const hidden = !this.gameReady || this.cutscene || (this.dialogOpen && !this.cutscene) || this.menuOpen || this.craftOpen || this.inventoryOpen;
+    if (hidden && this.toolHudExpanded) { this.toolHudExpanded = false; } // collapse the fly-out when hidden
+    this.registry.set('toolHud', {
+      visible: !hidden,
+      slot: S, hx: HX + S / 2, hy: HY + S / 2,
+      currentKey: cur.key, currentFrame: cur.frame,
+      expanded: this.toolHudExpanded, items: rendered,
+    });
+    const bounds: Array<{ x: number; y: number; w: number; h: number; action: string; idx: number }> = [{ x: HX, y: HY, w: S, h: S, action: 'toggle', idx: -1 }];
+    if (this.toolHudExpanded) items.forEach((_it, i) => bounds.push({ x: HX + (i + 1) * (S + G), y: HY, w: S, h: S, action: 'pick', idx: i }));
+    this.registry.set('toolHudBounds', bounds);
+  }
+
+  private toggleToolHud(): void {
+    this.toolHudExpanded = !this.toolHudExpanded;
+    playSfx(this);
+    this.publishToolHud();
+  }
+
+  /** Route a click on the tool-HUD: the slot toggles the fly-out; a row item equips that tool (or
+   *  the mouse = cancel) + collapses. Returns true if it consumed the click. */
+  private handleToolHudClick(x: number, y: number): boolean {
+    const bounds = this.registry.get('toolHudBounds') as Array<{ x: number; y: number; w: number; h: number; action: string; idx: number }> | undefined;
+    if (!bounds) return false;
+    const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    if (!hit) { if (this.toolHudExpanded) { this.toolHudExpanded = false; this.publishToolHud(); return true; } return false; }
+    if (hit.action === 'toggle') { this.toggleToolHud(); return true; }
+    // pick: equip the row item (or cancel), collapse.
+    const it = this.toolHudItems()[hit.idx];
+    if (it?.toolId) { const loc = this.findOwnedTool(it.toolId); if (loc) { if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); } else this.holdExternal(loc.store, loc.item); } }
+    else this.clearHeld(); // the mouse item = empty hand
+    this.toolHudExpanded = false;
+    this.publishToolHud();
+    playSfx(this);
     return true;
   }
 
@@ -7528,10 +7613,12 @@ export class GameScene extends Phaser.Scene {
     if (this.toolPaletteOpen) {
       // Close the tool palette if the context changed (a modal opened, or something got equipped);
       // else keep its buttons tracking the camera.
-      if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen
-        || this.activeTool !== 'hand' || this.activeSeed || this.activePlace) this.closeToolPalette();
+      // NB: don't auto-close just because a tool is held — Tab / the tool-HUD button open the wheel
+      // WHILE holding a tool (to switch or cancel). It closes on a modal, or explicit pick/dismiss.
+      if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen) this.closeToolPalette();
       else { this.updateToolPaletteHover(); this.publishToolPalette(); }
     }
+    this.publishToolHud(); // keep the current-tool indicator + its visibility in sync each frame
     this.updateHotbarHover(); // highlight the hotbar cell under the mouse cursor
     // While the build palette is open, tell it which cell the cursor is over (hover).
     this.updatePaletteHover();

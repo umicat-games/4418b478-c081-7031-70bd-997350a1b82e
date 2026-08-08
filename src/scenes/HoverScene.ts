@@ -92,12 +92,14 @@ export class HoverScene extends Phaser.Scene {
     this.paletteBtns.forEach((p, i) => {
       const b = btns[i];
       if (!b) { p.bg.setVisible(false); p.icon.setVisible(false); return; }
-      // Empty slot (a tool that doesn't apply here) → a faded circle, no icon.
-      const empty = b.kind === 'empty';
+      // empty  = a slot with no owned tool → faded circle, no icon.
+      // disabled = an owned tool that doesn't apply here → circle + greyed icon, not tappable.
+      const empty = b.kind === 'empty', disabled = b.kind === 'disabled';
       p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size, b.size)
-        .setAlpha(empty ? 0.5 : 1).setTexture(b.hovered ? CIRCLE_BG_SEL : CIRCLE_BG); // hover → the blue-ring bg
+        .setAlpha(empty ? 0.5 : disabled ? 0.85 : 1).setTexture(b.hovered ? CIRCLE_BG_SEL : CIRCLE_BG); // hover → blue-ring bg
       if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
-      p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame).clearTint();
+      p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame);
+      if (disabled) p.icon.setTint(0x555555).setAlpha(0.45); else p.icon.clearTint().setAlpha(1); // grey out inapplicable tools
       const fill = b.kind === 'close' ? 0.56 : 0.72; // bigger tool icons than before
       p.icon.setScale((b.size * fill) / Math.max(p.icon.width, p.icon.height || 1));
       this.children.bringToTop(p.icon);
