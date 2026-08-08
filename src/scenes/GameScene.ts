@@ -752,11 +752,13 @@ export class GameScene extends Phaser.Scene {
   // it (not the hotbar slot) is the active item; the hotbar shows nothing selected. `store` is a
   // live ref to the source array so consuming a seed can splice it when the stack empties.
   private heldExternal: { store: ItemStack[]; item: ItemStack; label: string } | null = null;
-  // Contextual tool WHEEL: empty-hand tap on a tool-usable spot → a radial of the applicable
-  // owned tools around it (fixed cardinal per tool) + a mouse (close) circle at the centre; tap
-  // a tool to equip it from wherever the player owns it. `anchor` = world centre + half-size.
-  private toolPaletteOpen: { anchor: { wx: number; wy: number; halfW: number; halfH: number }; entries: Array<{ toolId: ToolId; loc: { hotbar: number } | { store: ItemStack[]; item: ItemStack } }> } | null = null;
-  private toolPaletteHover = -2; // wheel circle under the cursor: -2 none, -1 close, ≥0 tool idx
+  // Contextual tool WHEEL: empty-hand tap on a tool-usable spot → the 4 tools laid out at fixed
+  // cardinal positions AROUND the object (hugging its pixel bbox edges) + a mouse (close) circle
+  // at the centre. A position shows its tool icon only where that tool APPLIES here + is owned;
+  // otherwise an empty circle. `bbox` = the object's tight world bbox (opaque-pixel, like the
+  // hover bracket). `applicable` = the owned tools that act on this spot.
+  private toolPaletteOpen: { bbox: { wl: number; wt: number; wr: number; wb: number }; applicable: Set<ToolId> } | null = null;
+  private toolPaletteHover = -2; // wheel circle under the cursor: -2 none, -1 close, ≥0 WHEEL_TOOLS idx
   private hotbarHover = -1; // hotbar cell the mouse cursor is over (-1 = none; backpack = INV_COLS)
   private inventoryOpen = false;
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
@@ -2481,34 +2483,40 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
-  /** Compute the tool wheel for a tapped spot: which tools APPLY there (owned only) + the anchor
-   *  (world centre + half-size) to arrange the ring around. null = no tool works here. */
-  private toolWheelAt(wx: number, wy: number): { anchor: { wx: number; wy: number; halfW: number; halfH: number }; tools: ToolId[] } | null {
-    let anchor: { wx: number; wy: number; halfW: number; halfH: number } | null = null;
-    const tools: ToolId[] = [];
+  /** The 4 tools at their FIXED wheel positions (always drawn; icon only where applicable+owned). */
+  private static WHEEL_TOOLS: Array<{ toolId: ToolId; dir: 'up' | 'down' | 'left' | 'right' }> = [
+    { toolId: 'pickaxe', dir: 'up' }, { toolId: 'axe', dir: 'right' }, { toolId: 'hoe', dir: 'down' }, { toolId: 'watering-can', dir: 'left' },
+  ];
+
+  /** Compute the tool wheel for a tapped spot: the object's tight world bbox to hug + which tools
+   *  APPLY there (owned only). null = no tool works here (don't pop the wheel). */
+  private toolWheelAt(wx: number, wy: number): { bbox: { wl: number; wt: number; wr: number; wb: number }; applicable: Set<ToolId> } | null {
+    let bbox: { wl: number; wt: number; wr: number; wb: number } | null = null;
+    const applicable = new Set<ToolId>();
+    const boxOf = (r: { x: number; y: number; w: number; h: number }) => ({ wl: r.x, wt: r.y, wr: r.x + r.w, wb: r.y + r.h });
     const tk = this.treeAtPoint(wx, wy);
     const sk = this.stoneAtPoint(wx, wy);
-    if (tk) { const o = this.trees.get(tk); if (o) { tools.push('axe'); const r = this.spriteWorldSolidRect(o.sprite); anchor = { wx: r.x + r.w / 2, wy: r.y + r.h / 2, halfW: r.w / 2, halfH: r.h / 2 }; } }
-    else if (sk) { const o = this.bigStones.get(sk); if (o) { tools.push('pickaxe'); const r = this.spriteWorldSolidRect(o.sprite); anchor = { wx: r.x + r.w / 2, wy: r.y + r.h / 2, halfW: r.w / 2, halfH: r.h / 2 }; } }
+    if (tk) { const o = this.trees.get(tk); if (o) { applicable.add('axe'); bbox = boxOf(this.spriteWorldSolidRect(o.sprite)); } }
+    else if (sk) { const o = this.bigStones.get(sk); if (o) { applicable.add('pickaxe'); bbox = boxOf(this.spriteWorldSolidRect(o.sprite)); } }
     else {
       const tile = this.islandLayer?.getTileAtWorldXY(wx, wy);
       if (tile && !tile.collides) {
         const key = `${tile.x},${tile.y}`;
-        if (this.tilledCells.has(key)) { tools.push('hoe', 'watering-can'); } // un-till / harvest, and water
-        else if (!this.cellBlocksTill(key) && !this.treeAtPoint(wx, wy) && !this.stoneAtPoint(wx, wy) && !this.isDefaultHouseCell(key)) { tools.push('hoe'); } // bare grass → till
-        if (tools.length) { const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; anchor = { wx: w.x + TILE / 2, wy: w.y + TILE / 2, halfW: TILE / 2, halfH: TILE / 2 }; }
+        if (this.tilledCells.has(key)) { applicable.add('hoe'); applicable.add('watering-can'); } // un-till / harvest, and water
+        else if (!this.cellBlocksTill(key) && !this.isDefaultHouseCell(key)) { applicable.add('hoe'); } // bare grass → till
+        if (applicable.size) { const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; }
       }
     }
-    if (!anchor) return null;
-    const owned = tools.filter((tid) => this.findOwnedTool(tid) !== null);
-    return owned.length ? { anchor, tools: owned } : null;
+    if (!bbox) return null;
+    const owned = new Set([...applicable].filter((tid) => this.findOwnedTool(tid) !== null));
+    return owned.size ? { bbox, applicable: owned } : null;
   }
 
-  /** Open the radial tool wheel at a tapped spot (owned applicable tools + a close button). */
+  /** Open the radial tool wheel at a tapped spot. */
   private openToolWheelAt(wx: number, wy: number): boolean {
     const w = this.toolWheelAt(wx, wy);
     if (!w) return false;
-    this.toolPaletteOpen = { anchor: w.anchor, entries: w.tools.map((tid) => ({ toolId: tid, loc: this.findOwnedTool(tid)! })) };
+    this.toolPaletteOpen = w;
     this.toolPaletteHover = -2;
     playSfx(this);
     this.publishToolPalette();
@@ -2523,31 +2531,32 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('toolPaletteBounds', []);
   }
 
-  /** Fixed cardinal direction (screen) for each tool → consistent positions in the ring. */
-  private static WHEEL_DIR: Partial<Record<ToolId, { dx: number; dy: number }>> = {
-    'watering-can': { dx: -1, dy: 0 }, axe: { dx: 1, dy: 0 }, pickaxe: { dx: 0, dy: -1 }, hoe: { dx: 0, dy: 1 },
-  };
-
-  /** Project the wheel to screen (ring around the anchor) each frame so it tracks the camera. */
+  /** Project the wheel to screen each frame: 4 tool circles hugging the object's pixel-bbox EDGES
+   *  (up/down/left/right) + a centre close circle; only applicable+owned tools get an icon. */
   private publishToolPalette(): void {
     const pal = this.toolPaletteOpen;
     if (!pal) return;
-    const cam = this.cameras.main;
-    const D = 40; // circle diameter (screen px)
-    const cx = (pal.anchor.wx - cam.worldView.x) * cam.zoom;
-    const cy = (pal.anchor.wy - cam.worldView.y) * cam.zoom;
-    const R = Math.max(pal.anchor.halfW * cam.zoom, pal.anchor.halfH * cam.zoom, 30) + D / 2 + 6; // ring radius
+    const cam = this.cameras.main, z = cam.zoom;
+    const D = 46; // circle diameter (screen px) — a touch bigger than before
+    const GAP = 5;
+    const sl = (pal.bbox.wl - cam.worldView.x) * z, sr = (pal.bbox.wr - cam.worldView.x) * z;
+    const st = (pal.bbox.wt - cam.worldView.y) * z, sb = (pal.bbox.wb - cam.worldView.y) * z;
+    const cx = (sl + sr) / 2, cy = (st + sb) / 2;
+    const pos: Record<string, { x: number; y: number }> = {
+      up: { x: cx, y: st - D / 2 - GAP }, down: { x: cx, y: sb + D / 2 + GAP },
+      left: { x: sl - D / 2 - GAP, y: cy }, right: { x: sr + D / 2 + GAP, y: cy },
+    };
     const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
     const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
     // Centre = the mouse (close) button.
     buttons.push({ x: cx, y: cy, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
     bounds.push({ x: cx, y: cy, r: D / 2, idx: -1 });
-    pal.entries.forEach((e, i) => {
-      const dir = GameScene.WHEEL_DIR[e.toolId] ?? { dx: 0, dy: 1 };
-      const x = cx + dir.dx * R, y = cy + dir.dy * R;
-      const ic = this.toolIcon(e.toolId);
-      buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind: 'tool', hovered: this.toolPaletteHover === i });
-      bounds.push({ x, y, r: D / 2, idx: i });
+    GameScene.WHEEL_TOOLS.forEach((wt, i) => {
+      const p = pos[wt.dir]!;
+      const active = pal.applicable.has(wt.toolId);
+      const ic = this.toolIcon(wt.toolId);
+      buttons.push({ x: p.x, y: p.y, size: D, iconKey: active ? ic.key : '', iconFrame: ic.frame, kind: active ? 'tool' : 'empty', hovered: active && this.toolPaletteHover === i });
+      if (active) bounds.push({ x: p.x, y: p.y, r: D / 2, idx: i }); // only applicable circles are tappable
     });
     this.registry.set('toolPalette', { visible: true, buttons });
     this.registry.set('toolPaletteBounds', bounds);
@@ -2564,15 +2573,15 @@ export class GameScene extends Phaser.Scene {
     if (hov !== this.toolPaletteHover) { this.toolPaletteHover = hov; this.publishToolPalette(); }
   }
 
-  /** Route a click while the wheel is open: a tool circle → equip it (from wherever owned) + keep
-   *  using it; the centre mouse circle (or a miss) → dismiss. Returns true if it ate the click. */
+  /** Route a click while the wheel is open: an applicable tool circle → equip it (from wherever
+   *  owned) + keep using it; the centre mouse circle / empty circle / a miss → dismiss. */
   private handleToolPaletteClick(x: number, y: number): boolean {
     const pal = this.toolPaletteOpen;
     if (!pal) return false;
     const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; r: number; idx: number }> | undefined;
     const hit = bounds?.find((b) => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
     if (hit && hit.idx >= 0) {
-      const loc = pal.entries[hit.idx]!.loc;
+      const loc = this.findOwnedTool(GameScene.WHEEL_TOOLS[hit.idx]!.toolId)!;
       if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
       else this.holdExternal(loc.store, loc.item);
     }

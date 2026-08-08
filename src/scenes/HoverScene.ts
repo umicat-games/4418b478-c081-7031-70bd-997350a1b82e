@@ -92,11 +92,14 @@ export class HoverScene extends Phaser.Scene {
     this.paletteBtns.forEach((p, i) => {
       const b = btns[i];
       if (!b) { p.bg.setVisible(false); p.icon.setVisible(false); return; }
+      // Empty slot (a tool that doesn't apply here) → a faded circle, no icon.
+      const empty = b.kind === 'empty';
       p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size, b.size)
-        .setTint(b.hovered ? HOVER_TINT : 0xffffff);
+        .setAlpha(empty ? 0.5 : 1).setTint(b.hovered ? HOVER_TINT : 0xffffff);
+      if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame).clearTint();
-      const s = (b.size * (b.kind === 'close' ? 0.5 : 0.56)) / Math.max(p.icon.width, p.icon.height || 1); // fit icon
-      p.icon.setScale(s);
+      const fill = b.kind === 'close' ? 0.56 : 0.72; // bigger tool icons than before
+      p.icon.setScale((b.size * fill) / Math.max(p.icon.width, p.icon.height || 1));
       this.children.bringToTop(p.icon);
     });
   }
