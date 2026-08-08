@@ -1632,11 +1632,11 @@ export class GameScene extends Phaser.Scene {
       const sk = this.stoneAtPoint(wp.x, wp.y);
       if (sk) { const [sx, sy] = sk.split(',').map(Number); this.knockStone(sx!, sy!); return; }
     }
-    // EMPTY HAND on any tool-usable spot (tree→axe, stone→pickaxe, grass→hoe, tilled soil→hoe/
-    // watering-can) → pop the radial tool wheel; tap a tool to grab+equip it (from the hotbar /
-    // backpack / chest). Directly harvestable things (ripe bush / mature crop / foragable) skip
-    // the wheel and act on click (handled by the branches below).
-    if (this.activeTool === 'hand' && !this.activeSeed && !this.activePlace && !this.isDirectHarvestAt(wp.x, wp.y, tile)) {
+    // EMPTY HAND on any tool-usable spot → pop the radial tool wheel; tap a tool to grab+equip it
+    // (from the hotbar / backpack / chest). UNIFIED: tree→axe, stone→pickaxe, grass/bush/berries/
+    // crop/foragable→hoe, tilled→hoe/watering-can — no more empty-hand direct harvest; you pick the
+    // tool from the wheel, then use it. (Once a tool IS held, the branches below act directly.)
+    if (this.activeTool === 'hand' && !this.activeSeed && !this.activePlace) {
       if (this.openToolWheelAt(wp.x, wp.y)) return;
     }
     // Empty hand / hoe harvests a MATURE wild foragable (sprite bounds — tall sunflower).
@@ -2507,21 +2507,6 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  /** Is the spot directly harvestable with an EMPTY HAND (ripe bush / mature crop / mature
-   *  foragable)? Those act on click and DON'T pop the wheel. */
-  private isDirectHarvestAt(wx: number, wy: number, tile: Phaser.Tilemaps.Tile | null | undefined): boolean {
-    const fk = this.foragAtPoint(wx, wy);
-    if (fk) { const f = this.foragables.get(fk); if (f && f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) return true; }
-    if (tile) {
-      const key = `${tile.x},${tile.y}`;
-      const crop = this.crops.get(key);
-      if (crop && crop.stage >= CROPS[crop.name].stages - 1) return true;
-      const bush = this.bushes.get(key);
-      if (bush && bush.stage >= 2) return true;
-    }
-    return false;
-  }
-
   /** The wheel's fixed RING slots (unit screen vectors from the object centre, clockwise from 2
    *  o'clock). Cancel (mouse) sits at the top (0,-1), handled separately. A slot with a null tool
    *  (the 6-o'clock reserved spot) or an unowned tool just shows the empty circle base. Fixed
@@ -2542,15 +2527,23 @@ export class GameScene extends Phaser.Scene {
     const boxOf = (r: { x: number; y: number; w: number; h: number }) => ({ wl: r.x, wt: r.y, wr: r.x + r.w, wb: r.y + r.h });
     const tk = this.treeAtPoint(wx, wy);
     const sk = this.stoneAtPoint(wx, wy);
+    const fk = this.foragAtPoint(wx, wy);
+    // Sprite-bounds objects first (they sit above their tile). The HOE is the harvest tool for
+    // foragables / bushes / crops — so clicking grass/berries/etc pops the wheel with the hoe,
+    // unified with trees→axe / stones→pickaxe (no more empty-hand direct harvest).
     if (tk) { const o = this.trees.get(tk); if (o) { applicable.add('axe'); bbox = boxOf(this.spriteWorldSolidRect(o.sprite)); } }
     else if (sk) { const o = this.bigStones.get(sk); if (o) { applicable.add('pickaxe'); bbox = boxOf(this.spriteWorldSolidRect(o.sprite)); } }
+    else if (fk) { const f = this.foragables.get(fk); if (f) { if (f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(f.sprite)); } }
     else {
       const tile = this.islandLayer?.getTileAtWorldXY(wx, wy);
       if (tile && !tile.collides) {
         const key = `${tile.x},${tile.y}`;
-        if (this.tilledCells.has(key)) { applicable.add('hoe'); applicable.add('watering-can'); } // un-till / harvest, and water
-        else if (!this.cellBlocksTill(key) && !this.isDefaultHouseCell(key)) { applicable.add('hoe'); } // bare grass → till
-        const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; // any walkable tile anchors a wheel (Tab can open it to cancel)
+        const bush = this.bushes.get(key);
+        const crop = this.crops.get(key);
+        if (bush) { if (bush.stage >= 2) applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(bush.base)); } // ripe bush → pick with the hoe
+        else if (crop) { if (crop.stage >= CROPS[crop.name].stages - 1) applicable.add('hoe'); else applicable.add('watering-can'); bbox = boxOf(this.spriteWorldSolidRect(crop.sprite)); } // mature → harvest, growing → water
+        else if (this.tilledCells.has(key)) { applicable.add('hoe'); applicable.add('watering-can'); const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; } // un-till, and water
+        else { if (!this.cellBlocksTill(key) && !this.isDefaultHouseCell(key)) applicable.add('hoe'); const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; } // bare grass → till (any walkable tile anchors a wheel so Tab can cancel)
       }
     }
     if (!bbox) return null;
