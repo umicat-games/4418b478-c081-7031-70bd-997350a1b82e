@@ -4189,7 +4189,7 @@ export class GameScene extends Phaser.Scene {
       ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
     this.registry.set('menu', {
-      visible: true, rev: ++this.menuRev, tab: this.menuTab, noTabs: this.menuTab === TAB_BACKPACK || this.menuTab === 1 || this.menuTab === 3, // backpack + chest + shop are standalone (no tab bar)
+      visible: true, rev: ++this.menuRev, tab: this.menuTab, noTabs: this.menuTab === TAB_BACKPACK || this.menuTab === 0 || this.menuTab === 1 || this.menuTab === 3, // backpack + mail + chest + shop standalone (no tab bar); only settings/Cato-bag keep the tab bar
       items: this.menuStore().map((it) => ({
         id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
         label: this.itemName(it.id), desc: this.itemDesc(it.id),
