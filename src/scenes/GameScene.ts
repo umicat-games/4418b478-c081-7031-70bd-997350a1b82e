@@ -3259,7 +3259,7 @@ export class GameScene extends Phaser.Scene {
       const d = FRUIT_DROP_OFFSETS[i];
       this.time.delayedCall(i * 70, () => this.playFruitCollect(footX + d.dx, footY + d.dy, 'fruit-items', FRUIT_FRAME[type] ?? 0));
     }
-    this.addToChest(makeFruit(type, 3));
+    this.collect(makeFruit(type, 3));
     this.catoReact('love'); // Cato loves a fruit harvest
     this.catoLookAtTile(cx, cy); // ...and comes over to look
     this.publishInventory();
@@ -3451,7 +3451,7 @@ export class GameScene extends Phaser.Scene {
     if (!bush || bush.stage < 2) return;
     this.swayBush(bush); // rustle as the berries are picked
     for (const b of bush.berries) this.playPopOut(b.x, b.y, 'fruit-items', FRUIT_FRAME[bush.type]);
-    this.addToChest(makeFruit(bush.type, 3));
+    this.collect(makeFruit(bush.type, 3));
     this.catoReact('love'); // berry harvest
     this.catoLookAtTile(cx, cy);
     this.publishInventory();
@@ -3540,7 +3540,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.killTweensOf(f.sprite); // stop any in-flight rustle before destroy
     f.body?.destroy();
     f.sprite.destroy();
-    this.addToChest(makeForage(f.type, def.yieldCount));
+    this.collect(makeForage(f.type, def.yieldCount));
     this.catoReact('happy'); // gathered a wild foragable
     this.catoLookAtTile(cx, cy);
     this.publishInventory();
@@ -3645,7 +3645,7 @@ export class GameScene extends Phaser.Scene {
       stone.emptyKnocks = 0;
       stone.regen.push(def.regenMs);
       this.playPopOut(sx, topY, 'forage', 'small-stone-6');
-      this.addToChest(makeStone(1));
+      this.collect(makeStone(1));
       this.publishInventory();
       this.scheduleSave();
     } else {
@@ -3664,7 +3664,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < def.breakBonus; i++) {
       this.time.delayedCall(i * 110, () => this.playPopOut(sx, topY, 'forage', 'small-stone-6'));
     }
-    if (def.breakBonus > 0) { this.addToChest(makeStone(def.breakBonus)); }
+    if (def.breakBonus > 0) { this.collect(makeStone(def.breakBonus)); }
     this.removeBigStone(cx, cy);
     this.scheduleSave();
   }
@@ -4197,9 +4197,9 @@ export class GameScene extends Phaser.Scene {
     if (!id) return;
     const n = this.menuBuyQty, cost = this.priceOf(id) * n;
     if (cost > this.money) { this.flashShopMsg(t('shop_no_coins')); return; }
-    if (!this.chestHasSpaceFor(id)) { this.flashShopMsg(t('chest_full')); return; }
+    if (!this.backpackHasSpaceFor(id)) { this.flashShopMsg(t('bag_full')); return; } // bought items → backpack
     this.addMoney(-cost);
-    this.addToChest(itemFromId(id, n));
+    this.addToBackpack(itemFromId(id, n));
     this.menuBuyQty = 1;
     this.shopMsg = '';
     this.publishMenu();
@@ -4240,6 +4240,27 @@ export class GameScene extends Phaser.Scene {
     this.addToStore(this.backpackStore, item);
     return true;
   }
+
+  /** COLLECT a harvested / gathered item → the backpack (the portable store). If the backpack is
+   *  full it overflows to the chest so nothing is lost, and flashes "背包满了" (the player should
+   *  make room). Returns whether it fit in the BACKPACK. Refreshes an open backpack view. */
+  private collect(item: ItemStack): boolean {
+    const fit = this.addToBackpack(item);
+    if (!fit) { this.addToChest(item); this.notifyBagFull(); }
+    if (this.menuOpen && (this.menuTab === TAB_BACKPACK || this.menuTab === 1)) this.publishMenu();
+    this.scheduleSave();
+    return fit;
+  }
+
+  /** Transient "背包满了" notice (throttled) — Cato says it in his voice; the player sees a flash. */
+  private notifyBagFull(): void {
+    const now = this.time.now;
+    if (now - this.bagFullMsgAt < 4000) return; // don't spam
+    this.bagFullMsgAt = now;
+    this.catoSay('chatter_pack_full');
+  }
+  private bagFullMsgAt = 0;
+  private bagFullNotified = false; // Cato said "pack full" for this fill (cleared when it has room)
 
   /** Add an item stack to `store`, merging into an existing same-id stack if present. */
   private addToStore(store: ItemStack[], item: ItemStack): void {
@@ -5070,7 +5091,7 @@ export class GameScene extends Phaser.Scene {
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return false;
     this.crops.delete(key);
     crop.sprite.destroy();
-    this.addToChest(makeCrop(crop.name, 1));
+    this.collect(makeCrop(crop.name, 1));
     this.catoReact('love'); // crop harvest
     this.catoLookAtTile(cx, cy);
     this.publishInventory();
@@ -5519,7 +5540,12 @@ export class GameScene extends Phaser.Scene {
       const w = layer.tileToWorldXY(c.cx, c.cy);
       return !!w && Math.hypot(w.x + TILE / 2 - ccx, w.y + TILE / 2 - ccy) <= R;
     });
-    if (this.autonomy.harvest) {
+    // Backpack full → Cato STOPS auto-harvesting (nowhere to put what he'd gather); he says so
+    // ONCE (until it has room again) so you know why he paused. Watering yields no items → still ok.
+    const bagFull = this.backpackStore.length >= BACKPACK_SLOTS;
+    if (!bagFull) this.bagFullNotified = false;
+    else if (this.autonomy.harvest && !this.bagFullNotified) { this.bagFullNotified = true; this.catoSay('chatter_pack_full'); }
+    if (this.autonomy.harvest && !bagFull) {
       // 1. ripe CROPS
       const crops = near(this.findHarvestTargets(Infinity));
       if (crops.length) { task('harvest', crops, 'crops'); begin('harvest', 'chatter_harvest_start', this.crops.get(`${crops[0]!.cx},${crops[0]!.cy}`)?.name); return true; }
