@@ -160,8 +160,10 @@ const GRASS_ISLAND_NAME = 'island';
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
 type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
-// Actions on an item in the chest / Cato-bag menu. `use` = hold it straight from the store.
-type MenuItemAction = 'use' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
+// Actions on an item in the backpack / chest / Cato-bag menu. `use` = hold it; `store` = backpack→
+// chest; `take` = chest→backpack.
+type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
+const TAB_BACKPACK = 5; // the standalone backpack view (no tab bar) — distinct from the 0-4 menu tabs
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -170,6 +172,7 @@ const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
+const BACKPACK_SLOTS = 24; // the player's carried backpack (distinct stacks) — full → can't harvest/buy
 const MAX_STACK = 99;
 
 /** One stack of items in a single inventory/hotbar cell. Tools are
@@ -552,6 +555,7 @@ interface SaveBlob {
   stamina?: number; // v11: current energy
   chestSeeded?: boolean; // v12: the one-time starter-seed grant into the chest has run
   catoBag?: Array<{ id: string; count: number }>; // v13: Cato's backpack contents
+  backpack?: Array<{ id: string; count: number }>; // v15: the player's portable backpack
   dialogueSeen?: string[]; // v14: scripted dialogues already played (once-only, e.g. the intro)
   dialogueFlags?: string[]; // v14: dialogue flags set by choices (branch memory)
 }
@@ -696,6 +700,10 @@ export class GameScene extends Phaser.Scene {
   // Cato's own small backpack (v13) — the player gives Cato items here (future: food he
   // eats to recover stamina). Its own menu tab; items flow chest ↔ cato-bag.
   private catoBagStore: ItemStack[] = [];
+  // The player's BACKPACK (what they carry): the portable store you Use items from + harvest
+  // into. Separate from the chest (fixed storage) — opening the backpack can't reach the chest.
+  // A dynamic store like chestStore, rendered in a NO-TAB MenuScene view via the sprout button.
+  private backpackStore: ItemStack[] = [];
   // The UNIFIED menu (Zelda-style tabs: 0 mail · 1 for-sale · 2 chest · 3 settings) —
   // one screen replacing the mailbox/chest/bag modals (MenuScene). Door mailbox opens
   // it on Mail; door chest on Chest. `menuSelected` = the grid item shown in the right
@@ -719,7 +727,7 @@ export class GameScene extends Phaser.Scene {
   // The unified menu's item ACTION menu + quantity keypad (its own state, mirrors the
   // mailbox/chest itemMenu but rendered by MenuScene via the `menuAction` registry key).
   private menuItemMenu: { index: number; x: number; y: number } | null = null;
-  private menuItemQty: { action: 'sell' | 'give' | 'tochest'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
+  private menuItemQty: { action: 'sell' | 'give' | 'tochest' | 'store' | 'take'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
   private menuSlotPick: { index: number; x: number; y: number } | null = null; // chest → "进 Hotbar" slot picker
   // The MAIL list (Mail tab of the unified menu). Future: AI-notification / narrative
   // inbox; a receipt opens the ReceiptScene. Saved (v9).
@@ -1798,12 +1806,9 @@ export class GameScene extends Phaser.Scene {
     // everything else (extra materials, harvested goods, purchases) lives there.
     this.inventory[0] = itemFromId('hoe', 1);
     this.inventory[1] = itemFromId('watering-can', 1);
-    this.inventory[2] = makeSeed('corn', 10);
-    this.inventory[3] = makeSeed('carrot', 10);
-    this.inventory[4] = makeSeed('tomato', 10);
-    this.inventory[5] = makeSeed('eggplant', 10);
-    this.inventory[6] = makeSeed('pumpkin', 10);
     this.inventory[7] = makePlaceable('wall', 99);
+    // Seeds live in the BACKPACK now (you Use them from there) — the portable store.
+    this.backpackStore = CROP_NAMES.map((c) => makeSeed(c, 10));
     // The rest of the starter kit goes into the CHEST (drag it 进 Hotbar to use):
     // spare seed stacks, then building materials / tools / plantables.
     this.mailboxStore = [];
@@ -4102,7 +4107,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(120, () => {
       const m2 = this.registry.get('hotbar') as Record<string, unknown> | undefined;
       if (m2) this.registry.set('hotbar', { ...m2, backpackPressed: false, rev: ++this.invRev });
-      this.openMenu(1); // Chest tab (your storage); plays the click blip
+      this.openBackpack(); // the sprout button opens the BACKPACK (chest = door / E-I)
     });
   }
 
@@ -4132,7 +4137,14 @@ export class GameScene extends Phaser.Scene {
 
   /** The item grid backing the active tab — only the Chest (tab 1) is a grid now. */
   private menuStore(): ItemStack[] {
-    return this.menuTab === 1 ? this.chestStore : this.menuTab === 2 ? this.catoBagStore : [];
+    return this.menuTab === TAB_BACKPACK ? this.backpackStore : this.menuTab === 1 ? this.chestStore : this.menuTab === 2 ? this.catoBagStore : [];
+  }
+
+  /** Open the BACKPACK — a standalone MenuScene view (left grid / right detail) with NO tab bar,
+   *  so it can't reach the chest (portable ≠ storage). Sprout-up button / a future key. */
+  private openBackpack(): void {
+    if (this.menuOpen) { this.closeMenu(); return; }
+    this.openMenu(TAB_BACKPACK);
   }
 
   private publishMenu(_open = false): void {
@@ -4141,7 +4153,7 @@ export class GameScene extends Phaser.Scene {
       ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
     this.registry.set('menu', {
-      visible: true, rev: ++this.menuRev, tab: this.menuTab,
+      visible: true, rev: ++this.menuRev, tab: this.menuTab, noTabs: this.menuTab === TAB_BACKPACK,
       items: this.menuStore().map((it) => ({
         id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
         label: this.itemName(it.id), desc: this.itemDesc(it.id),
@@ -4213,6 +4225,20 @@ export class GameScene extends Phaser.Scene {
   private catoBagHasSpaceFor(id: string): boolean {
     if (this.catoBagStore.some((s) => s.id === id)) return true;
     return this.catoBagStore.length < CATO_BAG_SLOTS;
+  }
+
+  /** Does the player's backpack have room for `id`? Merges into an existing stack, else a free
+   *  slot (capped at BACKPACK_SLOTS). */
+  private backpackHasSpaceFor(id: string): boolean {
+    if (this.backpackStore.some((s) => s.id === id)) return true;
+    return this.backpackStore.length < BACKPACK_SLOTS;
+  }
+
+  /** Add to the player's backpack (merges same-id). Returns false if it can't fit (full). */
+  private addToBackpack(item: ItemStack): boolean {
+    if (!this.backpackHasSpaceFor(item.id)) return false;
+    this.addToStore(this.backpackStore, item);
+    return true;
   }
 
   /** Add an item stack to `store`, merging into an existing same-id stack if present. */
@@ -4434,9 +4460,10 @@ export class GameScene extends Phaser.Scene {
       const opt = this.menuActionOptionAt(x, y);
       const it = this.menuStore()[this.menuItemMenu.index];
       if (opt === 'use') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuUse(idx); }
-      else if (opt === 'hotbar') this.openMenuSlotPick(this.menuItemMenu.index, this.menuItemMenu.x, this.menuItemMenu.y);
+      else if (opt === 'store' && it && !this.chestHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('bag_chest_full')); } // chest full → decline
+      else if (opt === 'take' && it && !this.backpackHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('bag_full')); } // backpack full → decline
       else if (opt === 'give' && it && !this.catoBagHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.catoSay('chatter_bag_full'); } // Cato's bag is full → decline
-      else if (opt === 'sell' || opt === 'give' || opt === 'tochest') this.openMenuKeypad(opt);
+      else if (opt === 'sell' || opt === 'give' || opt === 'tochest' || opt === 'store' || opt === 'take') this.openMenuKeypad(opt);
       else if (opt === 'feed') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuFeed(idx); }
       else if (opt === 'delete') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuPerformAction('delete', idx); }
       else this.closeMenuItemMenu();
@@ -4543,17 +4570,21 @@ export class GameScene extends Phaser.Scene {
   private menuItemOptions(index: number): Array<{ action: MenuItemAction; label: string }> {
     const it = this.menuStore()[index];
     const opts: Array<{ action: MenuItemAction; label: string }> = [];
-    // USE = hold this item straight from the store as the active tool / seed / material — no need
-    // to move it to the hotbar first (the way you'll select things once the hotbar is gone).
+    // USE = hold this item straight from the store as the active tool / seed / material.
     if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t('action_use') });
+    if (this.menuTab === TAB_BACKPACK) { // Backpack: use / store→chest / delete
+      opts.push({ action: 'store', label: t('action_store') });
+      opts.push({ action: 'delete', label: t('action_delete') });
+      return opts;
+    }
     if (this.menuTab === 2) { // Cato-bag
       if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed him now
       opts.push({ action: 'tochest', label: t('action_to_chest') });
       opts.push({ action: 'delete', label: t('action_delete') });
       return opts;
     }
-    // Chest
-    if (it && isHotbarUsable(it)) opts.push({ action: 'hotbar', label: t('action_hotbar') });
+    // Chest (pure storage): Take → backpack, Sell, Give, Delete.
+    opts.push({ action: 'take', label: t('action_take') });
     if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_sell') });
     opts.push({ action: 'give', label: t('action_give_cato') });
     opts.push({ action: 'delete', label: t('action_delete') });
@@ -4575,7 +4606,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Swap the action menu for the "how many?" keypad (Sell / 给 Cato / 放回箱子 → pick a quantity). */
-  private openMenuKeypad(action: 'sell' | 'give' | 'tochest'): void {
+  private openMenuKeypad(action: 'sell' | 'give' | 'tochest' | 'store' | 'take'): void {
     const m = this.menuItemMenu;
     if (!m) return;
     const it = this.menuStore()[m.index];
@@ -4640,7 +4671,7 @@ export class GameScene extends Phaser.Scene {
   /** Run an action on the ACTIVE grid store (chest or Cato-bag) for `qty`, then refresh
    *  the menu + save. Sell → instant coins; give → into Cato's bag; tochest → into the
    *  chest; delete → discard. (进 Hotbar is a separate slot-picker path, not here.) */
-  private menuPerformAction(action: 'sell' | 'give' | 'tochest' | 'delete', index: number, qty?: number): void {
+  private menuPerformAction(action: 'sell' | 'give' | 'tochest' | 'store' | 'take' | 'delete', index: number, qty?: number): void {
     const src = this.menuStore();
     const it = src[index];
     if (!it) return;
@@ -4652,6 +4683,14 @@ export class GameScene extends Phaser.Scene {
       this.addToStore(this.catoBagStore, { ...it, count: n }); // chest → Cato's bag
     }
     else if (action === 'tochest') this.addToStore(this.chestStore, { ...it, count: n }); // Cato's bag → chest
+    else if (action === 'store') { // backpack → chest
+      if (!this.chestHasSpaceFor(it.id)) { this.flashShopMsg(t('bag_chest_full')); return; }
+      this.addToStore(this.chestStore, { ...it, count: n });
+    }
+    else if (action === 'take') { // chest → backpack
+      if (!this.backpackHasSpaceFor(it.id)) { this.flashShopMsg(t('bag_full')); return; }
+      this.addToStore(this.backpackStore, { ...it, count: n });
+    }
     it.count -= n;
     if (it.count <= 0) src.splice(index, 1);
     const len = this.menuStore().length;
@@ -7002,6 +7041,7 @@ export class GameScene extends Phaser.Scene {
       stamina: Math.round(this.stamina),
       chestSeeded: this.chestSeeded,
       catoBag: this.catoBagStore.map((it) => ({ id: it.id, count: it.count })),
+      backpack: this.backpackStore.map((it) => ({ id: it.id, count: it.count })),
       dialogueSeen: [...this.dialogueSeen],
       dialogueFlags: [...this.dialogueFlags],
     };
@@ -7158,6 +7198,7 @@ export class GameScene extends Phaser.Scene {
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
       if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count));
       if (s.catoBag) this.catoBagStore = s.catoBag.map((it) => itemFromId(it.id, it.count));
+      if (s.backpack) this.backpackStore = s.backpack.map((it) => itemFromId(it.id, it.count));
       // Grant missing starter items INTO THE CHEST — AFTER it's restored (else the
       // restore above would wipe the grants). Building materials are idempotent; the
       // spare seeds are one-time (chestSeeded flag) so they don't refill after use.

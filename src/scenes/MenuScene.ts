@@ -55,7 +55,7 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'shop', frame: 262, title: '商店' },
   { key: 'settings', frame: 164, title: '设置' },
 ];
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_BACKPACK = 5;
 
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
@@ -70,7 +70,8 @@ export interface MenuItem { id?: string; iconKey: string; iconFrame: number | st
 export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; }
 export interface MenuModel {
   visible: boolean; rev: number;
-  tab: number;               // 0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings
+  noTabs?: boolean;          // standalone backpack view → hide the tab bar
+  tab: number;               // 0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings · 5 backpack
   items?: MenuItem[];        // grid (chest / cato-bag)
   mails?: MailListEntry[];   // mail list
   selected?: number;         // selected grid index → right detail
@@ -266,9 +267,11 @@ export class MenuScene extends Phaser.Scene {
       }
       if (active) activeIcon = ic;
     };
-    TAB_DEFS.forEach((_, i) => { if (i !== m.tab) drawTab(i); }); // inactive first
-    if (m.tab >= 0 && m.tab < N) drawTab(m.tab);                  // active LAST → on top
-    TAB_DEFS.forEach((_, i) => tabBounds.push({ x: slotCx(i) - tabW / 2, y: BOTTOM - tabH, w: tabW, h: tabH, tab: i })); // hit = base slots
+    if (!m.noTabs) { // the standalone backpack view has NO tab bar
+      TAB_DEFS.forEach((_, i) => { if (i !== m.tab) drawTab(i); }); // inactive first
+      if (m.tab >= 0 && m.tab < N) drawTab(m.tab);                  // active LAST → on top
+      TAB_DEFS.forEach((_, i) => tabBounds.push({ x: slotCx(i) - tabW / 2, y: BOTTOM - tabH, w: tabW, h: tabH, tab: i })); // hit = base slots
+    }
     this.registry.set('menuTabs', tabBounds);
 
     // Left content panel — `frame-medium` 9-slice ON TOP of the tabs' bottom seam.
@@ -277,7 +280,8 @@ export class MenuScene extends Phaser.Scene {
 
     // Title (no underline rule — the user didn't want it). Localized via i18n `tab_<key>`.
     const tkey = TAB_DEFS[m.tab]?.key;
-    panel.add(this.T(lx + lw / 2, TITLE_Y * H, tkey ? t('tab_' + tkey) : '', H * 0.03, INK));
+    const title = tkey ? t('tab_' + tkey) : m.tab === TAB_BACKPACK ? t('tab_backpack') : '';
+    panel.add(this.T(lx + lw / 2, TITLE_Y * H, title, H * 0.03, INK));
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
@@ -286,8 +290,8 @@ export class MenuScene extends Phaser.Scene {
     if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx, lw);
     else if (m.tab === TAB_MAIL) this.renderMailList(content, m.mails ?? []);
     else if (m.tab === TAB_SHOP) this.renderShop(content, m);
-    else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest OR cato-bag
-    if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG) {
+    else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack
+    if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);

@@ -212,16 +212,13 @@ export class HotbarScene extends Phaser.Scene {
     // highlight when hovered (index n), else the resting cell.
     const bpFrame = model.backpackPressed ? BTN_SELECTED : model.hovered === n ? BTN_HOVER : BTN_DEFAULT;
     c.add(this.slotBg(bx, rowY, slotW, slotH, s, bpFrame));
-    const g = this.add.graphics();
-    g.fillStyle(0x3a2a1a, 0.9);
-    const d = Math.round(4 * s); // dot size
-    const gap = Math.round(3 * s);
-    for (let r = 0; r < 2; r++) {
-      for (let col = 0; col < 2; col++) {
-        g.fillRect(bx - d - gap / 2 + col * (d + gap), rowY - d - gap / 2 + r * (d + gap), d, d);
-      }
+    // Backpack glyph = the sprout-up icon (pressed → sprout-up-pressed-down), per the design.
+    const spr = model.backpackPressed ? 'sprout-up-pressed-down' : 'sprout-up';
+    if (this.textures.get('icon-buttons').has(spr)) {
+      const ic = this.add.image(bx, rowY, 'icon-buttons', spr);
+      ic.setScale((slotW * 0.66) / Math.max(ic.width, ic.height));
+      c.add(ic);
     }
-    c.add(g);
     const backpack = { x: bx - slotW / 2, y: rowY - slotH / 2, w: slotW, h: slotH };
 
     // (The bottom-right shop button was removed — the Shop opens from the in-world desk

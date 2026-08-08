@@ -123,6 +123,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   // ── Unified-menu UI chrome (tabs, shop, action menu) ──────────────────────────
   tab_mail: { en: 'Mail', 'zh-CN': '邮件' },
   tab_chest: { en: 'Chest', 'zh-CN': '箱子' },
+  tab_backpack: { en: 'Backpack', 'zh-CN': '背包' },
   tab_shop: { en: 'Shop', 'zh-CN': '商店' },
   tab_catobag: { en: "Cato's bag", 'zh-CN': 'Cato的背包' },
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
@@ -159,6 +160,10 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   craft_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
   craft_done: { en: 'Crafted!', 'zh-CN': '合成成功！' },
   action_use: { en: 'Use', 'zh-CN': '使用' },
+  action_store: { en: 'Store', 'zh-CN': '存入箱子' },
+  action_take: { en: 'Take', 'zh-CN': '取出' },
+  bag_full: { en: 'Backpack full', 'zh-CN': '背包满了' },
+  bag_chest_full: { en: 'Chest full', 'zh-CN': '箱子满了' },
   action_hotbar: { en: 'To Hotbar', 'zh-CN': '放到快捷栏' },
   action_sell: { en: 'Sell', 'zh-CN': '出售' },
   action_delete: { en: 'Delete', 'zh-CN': '丢弃' },
