@@ -40,7 +40,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('cursor', 'uploaded/triangle_mouse_icon_1.png');
     // Radial tool-wheel circle backgrounds (24×24) — one per tool button in the
     // contextual wheel that pops around a tapped object/tile.
-    this.load.image('tool-circle-bg', 'uploaded/tool-circle-bg.png');
+    this.load.image('tool-circle-bg', 'uploaded/tool-circle-bg-16-16.png');
     this.load.image('tool-circle-bg-selected', 'uploaded/tool-circle-bg-selected.png');
     // Tile-selection bracket cursor (24×24, frames a 16px cell) — the "you can
     // till here" highlight that snaps to the hovered grass tile when the hoe is
