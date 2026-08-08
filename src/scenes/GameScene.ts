@@ -4476,8 +4476,8 @@ export class GameScene extends Phaser.Scene {
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
     if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab); return true; }
-    // Chest / Cato-bag: tap an item → select it (right detail) AND open its action menu.
-    if (this.menuTab === 1 || this.menuTab === 2) {
+    // Backpack / Chest / Cato-bag: tap an item → select it (right detail) AND open its action menu.
+    if (this.menuTab === TAB_BACKPACK || this.menuTab === 1 || this.menuTab === 2) {
       const idx = this.itemSlotAt('menuSlots', x, y);
       if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); this.openMenuItemMenu(idx, x, y); return true; }
     } else if (this.menuTab === 0) {
