@@ -2325,10 +2325,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Empty-hand "inspect" hover (HoverScene): with NO tool held and the mouse over the world,
-   *  show a white ring hugging the object it's over + the object's NAME above it; over empty
-   *  ground, a small ring at the cursor. Mouse-only. While active + pointer-locked it REPLACES
-   *  the pixel cursor (the ring is the pointer). Runs after updateTileCursor each frame. */
+  /** Empty-hand "inspect" hover (HoverScene): with NO tool held and the mouse over an object,
+   *  show a corner-bracket hugging it + the object's NAME above it. It ADDS to the normal
+   *  triangle mouse cursor (never hides it); over empty ground there's no bracket, just the
+   *  usual cursor. Mouse-only. Runs after updateTileCursor each frame. */
   private updateHoverInspect(): void {
     const emptyHand = this.activeTool === 'hand' && !this.activeSeed && !this.activePlace;
     const blocked = !this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen
@@ -2361,18 +2361,9 @@ export class GameScene extends Phaser.Scene {
         nameY: (b.y - cam.worldView.y) * cam.zoom - 3, // pill just above the art's top
       };
       this.registry.set('hover', this.hoverModel);
-      if (this.locked) this.cursorState.visible = false; // the inspect ring is the cursor now
-      return;
+      return; // the triangle mouse cursor stays visible — the bracket just ADDS a highlight
     }
-    // Empty ground: a small ring at the cursor — only when LOCKED (it stands in for the pixel
-    // cursor). Unlocked, the OS arrow already shows, so don't stack a dot beneath it.
-    if (this.locked) {
-      this.hoverModel = { visible: true, onObject: false, x: sx, y: sy, w: 0, h: 0, name: '', nameX: 0, nameY: 0 };
-      this.registry.set('hover', this.hoverModel);
-      this.cursorState.visible = false;
-    } else {
-      this.setHover(false);
-    }
+    this.setHover(false); // empty ground → no bracket; the normal triangle cursor is unchanged
   }
 
   private setHover(visible: boolean): void {

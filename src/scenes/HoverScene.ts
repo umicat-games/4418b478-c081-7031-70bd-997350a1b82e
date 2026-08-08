@@ -11,7 +11,6 @@ export interface HoverModel {
 }
 
 const HOVER_KEY = 'hover';
-const RING = 0xffffff;      // the empty-ground cursor dot
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
 // The `white-corner-bracket` region in the `ui-sheet` atlas (all_ui_assets_on_one_sheet),
@@ -23,14 +22,13 @@ const BRACKET_MIN = BRACKET_SLICE * 2; // don't shrink below the two corners (wo
 
 /**
  * Empty-hand "inspect" overlay: a white corner-bracket that hugs whatever world object the
- * mouse is over, with the object's NAME on a little pill above it — and a small white ring at
- * the cursor when hovering empty ground. Screen-space (like CursorScene) so the text + bracket
- * corners stay crisp and the same size at any camera zoom; GameScene computes the projected
- * screen geometry + name and publishes it to the `hover` registry key. Mouse-only.
+ * mouse is over, with the object's NAME on a little pill above it. It ADDS to the normal
+ * triangle mouse cursor (CursorScene) — it never replaces or hides it. Screen-space (like
+ * CursorScene) so the text + bracket corners stay crisp and the same size at any camera zoom;
+ * GameScene computes the projected screen geometry + name and publishes it to `hover`. Mouse-only.
  */
 export class HoverScene extends Phaser.Scene {
   private bracket?: Phaser.GameObjects.NineSlice; // the corner frame around a hovered object
-  private dot?: Phaser.GameObjects.Graphics;      // the empty-ground cursor ring
   private pill?: Phaser.GameObjects.Graphics;     // the name-label background
   private label?: Phaser.GameObjects.Text;
 
@@ -42,7 +40,6 @@ export class HoverScene extends Phaser.Scene {
         .nineslice(0, 0, BRACKET_ATLAS, BRACKET_FRAME, 32, 32, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
         .setVisible(false);
     }
-    this.dot = this.add.graphics();
     this.pill = this.add.graphics();
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
     this.label = this.add.text(0, 0, '', {
@@ -53,19 +50,10 @@ export class HoverScene extends Phaser.Scene {
 
   update(): void {
     const m = this.registry.get(HOVER_KEY) as HoverModel | undefined;
-    const dot = this.dot, pill = this.pill, label = this.label;
-    if (!dot || !pill || !label) return;
-    dot.clear(); pill.clear();
-    if (!m || !m.visible) { this.bracket?.setVisible(false); label.setVisible(false); return; }
-
-    if (!m.onObject) {
-      // Empty ground → a small white ring at the cursor (the empty-hand pointer).
-      this.bracket?.setVisible(false);
-      label.setVisible(false);
-      dot.lineStyle(2, RING, 0.9).strokeCircle(m.x, m.y, 5);
-      dot.fillStyle(RING, 0.9).fillCircle(m.x, m.y, 1.2);
-      return;
-    }
+    const pill = this.pill, label = this.label;
+    if (!pill || !label) return;
+    pill.clear();
+    if (!m || !m.visible || !m.onObject) { this.bracket?.setVisible(false); label.setVisible(false); return; }
 
     // Over an object → the corner-bracket 9-slice hugging it + the name pill above.
     const w = Math.max(BRACKET_MIN, m.w), h = Math.max(BRACKET_MIN, m.h);
