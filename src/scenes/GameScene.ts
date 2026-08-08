@@ -1442,6 +1442,23 @@ export class GameScene extends Phaser.Scene {
 
   // ── Pointer lock + custom cursor ──────────────────────────────────────
 
+  /** Set the canvas CSS cursor to the game's pixel triangle at the SAME 2× size CursorScene draws
+   *  it (a CSS `url()` cursor uses the PNG's native 16px → too small; upscale nearest to 32px via a
+   *  data URL so the unlocked cursor matches the in-game one). Hotspot at 0,0. */
+  private setGameCursorCss(): void {
+    const canvas = this.game.canvas;
+    try {
+      const src = this.textures.get('cursor')?.getSourceImage() as CanvasImageSource | undefined;
+      if (!src) throw 0;
+      const S = 2, w = 16 * S, h = 16 * S;
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d'); if (!ctx) throw 0;
+      ctx.imageSmoothingEnabled = false; // nearest → crisp pixels
+      ctx.drawImage(src, 0, 0, 16, 16, 0, 0, w, h);
+      canvas.style.cursor = `url(${cv.toDataURL()}) 0 0, default`;
+    } catch { canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default"; }
+  }
+
   private setupPointerLock(): void {
     // Publish cursor state for CursorScene (renders it above the HUD), then
     // launch that overlay on top — AFTER loadWorldScene, so it sits above the
@@ -1481,7 +1498,7 @@ export class GameScene extends Phaser.Scene {
     // Use the game's own pixel cursor as the canvas cursor GLOBALLY, so whenever pointer lock is
     // released (a menu / the backpack / a dialog is open) the OS cursor is the game triangle — not
     // the host arrow. Under lock the OS cursor is hidden and CursorScene draws it instead.
-    this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
+    this.setGameCursorCss();
 
     // MOUSE: click the canvas → capture the mouse. If already locked, the click
     // is a game/HUD action routed through the virtual cursor (the OS pointer is
@@ -6573,7 +6590,7 @@ export class GameScene extends Phaser.Scene {
     // avoid the jarring jump to the host arrow, swap the canvas cursor to the
     // game's own pixel cursor via CSS — visually seamless. Restored on close.
     if (this.locked) document.exitPointerLock();
-    this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
+    this.setGameCursorCss(); // the 2×-sized game cursor (set globally too, but ensure it's applied)
     this.setImmediateDialog(seed ?? this.fallbackSay(false)); // seeded (from a chatter tap) or a greeting
     // Cutscene: hide only the text-INPUT widgets (`chat-input` panel + `chat-input-field`
     // DOM input) — Cato is speaking, the player just taps to continue. KEEP `chat-text`
