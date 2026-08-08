@@ -7258,6 +7258,13 @@ export class GameScene extends Phaser.Scene {
       if (s.catoBag) for (const it of s.catoBag) this.addToStore(this.backpackStore, itemFromId(it.id, it.count));
       this.catoBagStore = [];
       if (s.backpack) this.backpackStore = s.backpack.map((it) => itemFromId(it.id, it.count));
+      // Ensure the everyday tools live in the backpack. Recovers mid-rework saves where the
+      // hoe/watering-can/axe/pickaxe ended up on the old hotbar / vestigial `inventory` (never
+      // persisted in SaveBlob) → `findOwnedTool` returned null → the tool wheel wouldn't open on
+      // grass/stone/berries. Idempotent (skips a tool already present).
+      for (const t of ['hoe', 'watering-can', 'axe', 'pickaxe'] as ToolId[]) {
+        if (!this.backpackStore.some((s2) => s2.toolId === t)) this.addToStore(this.backpackStore, itemFromId(t, 1));
+      }
       // Grant missing starter items INTO THE CHEST — AFTER it's restored (else the
       // restore above would wipe the grants). Building materials are idempotent; the
       // spare seeds are one-time (chestSeeded flag) so they don't refill after use.
