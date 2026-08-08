@@ -160,6 +160,8 @@ const GRASS_ISLAND_NAME = 'island';
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
 type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
+// Actions on an item in the chest / Cato-bag menu. `use` = hold it straight from the store.
+type MenuItemAction = 'use' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -4431,7 +4433,8 @@ export class GameScene extends Phaser.Scene {
     if (this.menuItemMenu) {
       const opt = this.menuActionOptionAt(x, y);
       const it = this.menuStore()[this.menuItemMenu.index];
-      if (opt === 'hotbar') this.openMenuSlotPick(this.menuItemMenu.index, this.menuItemMenu.x, this.menuItemMenu.y);
+      if (opt === 'use') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuUse(idx); }
+      else if (opt === 'hotbar') this.openMenuSlotPick(this.menuItemMenu.index, this.menuItemMenu.x, this.menuItemMenu.y);
       else if (opt === 'give' && it && !this.catoBagHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.catoSay('chatter_bag_full'); } // Cato's bag is full → decline
       else if (opt === 'sell' || opt === 'give' || opt === 'tochest') this.openMenuKeypad(opt);
       else if (opt === 'feed') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuFeed(idx); }
@@ -4537,9 +4540,12 @@ export class GameScene extends Phaser.Scene {
   /** Item actions for the active grid. CHEST (tab 1): 进 Hotbar (usable items only) / Sell
    *  (if it has a sell price) / 给 Cato (into Cato's bag) / Delete. CATO-BAG (tab 2): 放回箱子
    *  (back to the chest) / Delete. (Future: a "喂 Cato" action when he's tired + it's food.) */
-  private menuItemOptions(index: number): Array<{ action: 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete'; label: string }> {
+  private menuItemOptions(index: number): Array<{ action: MenuItemAction; label: string }> {
     const it = this.menuStore()[index];
-    const opts: Array<{ action: 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete'; label: string }> = [];
+    const opts: Array<{ action: MenuItemAction; label: string }> = [];
+    // USE = hold this item straight from the store as the active tool / seed / material — no need
+    // to move it to the hotbar first (the way you'll select things once the hotbar is gone).
+    if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t('action_use') });
     if (this.menuTab === 2) { // Cato-bag
       if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed him now
       opts.push({ action: 'tochest', label: t('action_to_chest') });
@@ -4654,8 +4660,20 @@ export class GameScene extends Phaser.Scene {
     this.scheduleSave();
   }
 
+  /** USE: hold the item straight from the chest / Cato-bag as the active tool / seed / material
+   *  (via heldExternal — a seed decrements that stack when planted) + close the menu so you can
+   *  use it right away. No moving it to the hotbar first. */
+  private menuUse(index: number): void {
+    const store = this.menuStore();
+    const it = store[index];
+    if (!it || !isHotbarUsable(it)) return;
+    this.holdExternal(store, it);
+    this.closeMenu();
+    playSfx(this);
+  }
+
   /** Which action (if any) is under a tap on the unified menu's action menu. */
-  private menuActionOptionAt(x: number, y: number): 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete' | null {
+  private menuActionOptionAt(x: number, y: number): MenuItemAction | null {
     const bounds = this.registry.get('menuActionBounds') as Array<{ x: number; y: number; w: number; h: number; idx?: number }> | undefined;
     if (!bounds || !this.menuItemMenu) return null;
     const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);

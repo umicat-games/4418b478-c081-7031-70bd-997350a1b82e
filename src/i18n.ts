@@ -158,6 +158,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   craft_need: { en: 'Not enough materials', 'zh-CN': '材料不够' },
   craft_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
   craft_done: { en: 'Crafted!', 'zh-CN': '合成成功！' },
+  action_use: { en: 'Use', 'zh-CN': '使用' },
   action_hotbar: { en: 'To Hotbar', 'zh-CN': '放到快捷栏' },
   action_sell: { en: 'Sell', 'zh-CN': '出售' },
   action_delete: { en: 'Delete', 'zh-CN': '丢弃' },
