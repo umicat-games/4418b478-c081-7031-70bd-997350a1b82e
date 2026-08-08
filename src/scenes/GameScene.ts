@@ -2044,7 +2044,7 @@ export class GameScene extends Phaser.Scene {
     // If he's carrying food, ANNOUNCE first — he notices the snack, sits down to rest, and
     // only takes the first bite after a beat (CATO_EAT_ANNOUNCE_MS via catoEatAt); the rest
     // branch keeps eating on a cooldown until he's recovered or out of food. No food → drowse.
-    if (this.catoBagStore.some((it) => isFood(it.id))) {
+    if (this.backpackStore.some((it) => isFood(it.id))) {
       this.catoReact('sleepy', { duration: 2400, force: true });
       this.catoSay('chatter_found_food');
       this.catoEatAt = this.time.now + CATO_EAT_ANNOUNCE_MS; // first bite lands after the remark
@@ -2055,38 +2055,38 @@ export class GameScene extends Phaser.Scene {
     this.scheduleSave();
   }
 
-  /** Cato eats one unit of the first FOOD item in his bag (data-table `food` value),
+  /** Cato eats one unit of the first FOOD item in the SHARED backpack (data-table `food` value),
    *  restoring stamina; clears `exhausted` once he's recovered enough. Returns false when
    *  there's nothing edible. */
   private catoEatFood(): boolean {
-    const idx = this.catoBagStore.findIndex((it) => isFood(it.id));
+    const idx = this.backpackStore.findIndex((it) => isFood(it.id));
     if (idx < 0) return false;
     this.consumeFood(idx);
     return true;
   }
 
-  /** Eat ONE unit of the food stack at `idx` in Cato's bag: restore stamina (clamped),
+  /** Eat ONE unit of the food stack at `idx` in the shared backpack: restore stamina (clamped),
    *  decrement, happy emote + "munch" remark, clear `exhausted` once recovered enough, then
-   *  refresh the open Cato-bag + save. Shared by the auto-eat and the manual Feed action. */
+   *  refresh the open backpack + save. Shared by the auto-eat and the manual Feed action. */
   private consumeFood(idx: number): void {
-    const it = this.catoBagStore[idx];
+    const it = this.backpackStore[idx];
     if (!it) return;
     this.stamina = Math.min(this.staminaMax, this.stamina + foodValue(it.id));
     it.count -= 1;
-    if (it.count <= 0) this.catoBagStore.splice(idx, 1);
+    if (it.count <= 0) this.backpackStore.splice(idx, 1);
     this.emote?.setStamina(this.stamina / this.staminaMax, this.time.now);
     this.catoReact('happy', { duration: 2200, force: true });
     this.catoSay('chatter_ate');
     if (this.stamina >= this.staminaMax * STAMINA_RECOVER_FRAC) this.exhausted = false; // fed enough → back to work
-    if (this.menuOpen && this.menuTab === 2) this.publishMenu(); // refresh the Cato-bag if it's open
+    if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu(); // refresh the backpack if it's open
     this.scheduleSave();
   }
 
-  /** Manual Feed (from the 猫包 tab): player hand-feeds Cato one unit of the picked food NOW
+  /** Manual Feed (from the backpack, food items): hand-feed Cato one unit of the picked food NOW
    *  — works even when he isn't exhausted, to top him up before a long chore run. If he's
    *  already at full stamina he politely declines (no waste). */
   private menuFeed(index: number): void {
-    const it = this.catoBagStore[index];
+    const it = this.backpackStore[index];
     if (!it || !isFood(it.id)) return;
     if (this.stamina >= this.staminaMax) { this.catoSay('chatter_full'); return; }
     this.consumeFood(index);
@@ -4189,7 +4189,7 @@ export class GameScene extends Phaser.Scene {
       ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
     this.registry.set('menu', {
-      visible: true, rev: ++this.menuRev, tab: this.menuTab, noTabs: this.menuTab === TAB_BACKPACK || this.menuTab === 0 || this.menuTab === 1 || this.menuTab === 3, // backpack + mail + chest + shop standalone (no tab bar); only settings/Cato-bag keep the tab bar
+      visible: true, rev: ++this.menuRev, tab: this.menuTab, noTabs: true, // ALL menu views are standalone now (no tab bar) — Cato shares the backpack, so there's no Cato-bag tab
       items: this.menuStore().map((it) => ({
         id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
         label: this.itemName(it.id), desc: this.itemDesc(it.id),
@@ -4629,21 +4629,15 @@ export class GameScene extends Phaser.Scene {
     const opts: Array<{ action: MenuItemAction; label: string }> = [];
     // USE = hold this item straight from the store as the active tool / seed / material.
     if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t('action_use') });
-    if (this.menuTab === TAB_BACKPACK) { // Backpack: use / store→chest / delete
+    if (this.menuTab === TAB_BACKPACK) { // Backpack (shared w/ Cato): use / feed / store→chest / delete
+      if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed Cato from the shared bag
       opts.push({ action: 'store', label: t('action_store') });
       opts.push({ action: 'delete', label: t('action_delete') });
       return opts;
     }
-    if (this.menuTab === 2) { // Cato-bag
-      if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed him now
-      opts.push({ action: 'tochest', label: t('action_to_chest') });
-      opts.push({ action: 'delete', label: t('action_delete') });
-      return opts;
-    }
-    // Chest (pure storage): Take → backpack, Sell, Give, Delete.
+    // Chest (pure storage): Take → backpack, Sell, Delete. (No 'give' — Cato shares the backpack now.)
     opts.push({ action: 'take', label: t('action_take') });
     if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_sell') });
-    opts.push({ action: 'give', label: t('action_give_cato') });
     opts.push({ action: 'delete', label: t('action_delete') });
     return opts;
   }
@@ -7260,7 +7254,9 @@ export class GameScene extends Phaser.Scene {
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
       if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count));
-      if (s.catoBag) this.catoBagStore = s.catoBag.map((it) => itemFromId(it.id, it.count));
+      // Cato shares the player's backpack now — fold any old Cato-bag items into it, then drop it.
+      if (s.catoBag) for (const it of s.catoBag) this.addToStore(this.backpackStore, itemFromId(it.id, it.count));
+      this.catoBagStore = [];
       if (s.backpack) this.backpackStore = s.backpack.map((it) => itemFromId(it.id, it.count));
       // Grant missing starter items INTO THE CHEST — AFTER it's restored (else the
       // restore above would wipe the grants). Building materials are idempotent; the
