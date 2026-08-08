@@ -18,8 +18,8 @@ export interface ToolPaletteModel {
 
 const HOVER_KEY = 'hover';
 const PALETTE_KEY = 'toolPalette';
-const CIRCLE_BG = 'tool-circle-bg';       // the round tool-button background (24×24)
-const HOVER_TINT = 0x9ec6ff;              // pale blue — the hovered circle (until the -selected bg lands)
+const CIRCLE_BG = 'tool-circle-bg';            // the round tool-button background (16×16, scaled)
+const CIRCLE_BG_SEL = 'tool-circle-bg-selected'; // the hovered/selected circle (blue ring)
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
 // The `white-corner-bracket` region in the `ui-sheet` atlas (all_ui_assets_on_one_sheet),
@@ -95,7 +95,7 @@ export class HoverScene extends Phaser.Scene {
       // Empty slot (a tool that doesn't apply here) → a faded circle, no icon.
       const empty = b.kind === 'empty';
       p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size, b.size)
-        .setAlpha(empty ? 0.5 : 1).setTint(b.hovered ? HOVER_TINT : 0xffffff);
+        .setAlpha(empty ? 0.5 : 1).setTexture(b.hovered ? CIRCLE_BG_SEL : CIRCLE_BG); // hover → the blue-ring bg
       if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame).clearTint();
       const fill = b.kind === 'close' ? 0.56 : 0.72; // bigger tool icons than before
