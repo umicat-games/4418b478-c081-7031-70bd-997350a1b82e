@@ -1478,6 +1478,10 @@ export class GameScene extends Phaser.Scene {
     this.publishWeatherHud();
     this.publishToolHud();
     this.publishBackpackBtn();
+    // Use the game's own pixel cursor as the canvas cursor GLOBALLY, so whenever pointer lock is
+    // released (a menu / the backpack / a dialog is open) the OS cursor is the game triangle — not
+    // the host arrow. Under lock the OS cursor is hidden and CursorScene draws it instead.
+    this.game.canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default";
 
     // MOUSE: click the canvas → capture the mouse. If already locked, the click
     // is a game/HUD action routed through the virtual cursor (the OS pointer is
@@ -6627,9 +6631,8 @@ export class GameScene extends Phaser.Scene {
     this.stopTyping(); // stop any in-progress typewriter
     this.setMoreIcon(false); // hide the pagination "more" icon
     this.publishInventory(); // restore the hotbar after chatting
-    // Drop the CSS game-cursor; clicking the canvas re-captures the pointer and
-    // the CursorScene's custom cursor takes over again.
-    this.game.canvas.style.cursor = '';
+    // Keep the game's pixel cursor as the canvas cursor (set globally in setupPointerLock) — don't
+    // revert to the host arrow. Clicking the canvas re-captures the pointer and CursorScene takes over.
     for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
         | { y: number; setVisible?: (v: boolean) => void }
