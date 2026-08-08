@@ -3249,6 +3249,7 @@ export class GameScene extends Phaser.Scene {
     const tree = this.trees.get(key);
     if (!tree || !this.islandLayer) return;
     const type = tree.type;
+    if (!this.backpackHasSpaceFor(`fruit-${type}`)) { this.notifyBagFull(); return; } // full → leave the fruit on the tree
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
     // The tree's own shake sheet drops the 3 fruits to FIXED, uneven spots (measured from
     // its last frame: 1 left + 2 right of the trunk). Show the collected fruits at those
@@ -3449,6 +3450,7 @@ export class GameScene extends Phaser.Scene {
   private reapBush(cx: number, cy: number): void {
     const bush = this.bushes.get(`${cx},${cy}`);
     if (!bush || bush.stage < 2) return;
+    if (!this.backpackHasSpaceFor(`fruit-${bush.type}`)) { this.notifyBagFull(); return; } // backpack full → leave the berries
     this.swayBush(bush); // rustle as the berries are picked
     for (const b of bush.berries) this.playPopOut(b.x, b.y, 'fruit-items', FRUIT_FRAME[bush.type]);
     this.collect(makeFruit(bush.type, 3));
@@ -3534,6 +3536,7 @@ export class GameScene extends Phaser.Scene {
     const f = this.foragables.get(key);
     const def = f && FORAGABLES[f.type];
     if (!f || !def || f.stage < def.stages) return;
+    if (!this.backpackHasSpaceFor(makeForage(f.type, 1).id)) { this.notifyBagFull(); return; } // full → leave it
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     this.foragables.delete(key);
     if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'forage', `${f.type}-${def.stages}`);
@@ -3635,6 +3638,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const stone = this.bigStones.get(key);
     if (!stone) return;
+    if (!this.backpackHasSpaceFor('stone')) { this.notifyBagFull(); return; } // full → can't mine (stone stays)
     const def = BIG_STONES[stone.tier] ?? BIG_STONES[1]!;
     const sx = stone.sprite.x, topY = stone.sprite.y - stone.sprite.displayHeight * 0.55;
     this.whiteBurst(sx, topY);
@@ -4241,15 +4245,15 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** COLLECT a harvested / gathered item → the backpack (the portable store). If the backpack is
-   *  full it overflows to the chest so nothing is lost, and flashes "背包满了" (the player should
-   *  make room). Returns whether it fit in the BACKPACK. Refreshes an open backpack view. */
+  /** COLLECT a harvested / gathered item → the backpack. Animal-Crossing style: if the backpack is
+   *  full the item is NOT collected (it stays where it is — you must make room; nothing auto-goes to
+   *  the chest, since you'll leave home with only the backpack) and Cato says so. Harvest fns guard
+   *  with backpackHasSpaceFor BEFORE acting, so this rarely returns false. Refreshes an open bag. */
   private collect(item: ItemStack): boolean {
-    const fit = this.addToBackpack(item);
-    if (!fit) { this.addToChest(item); this.notifyBagFull(); }
-    if (this.menuOpen && (this.menuTab === TAB_BACKPACK || this.menuTab === 1)) this.publishMenu();
+    if (!this.addToBackpack(item)) { this.notifyBagFull(); return false; }
+    if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu();
     this.scheduleSave();
-    return fit;
+    return true;
   }
 
   /** Transient "背包满了" notice (throttled) — Cato says it in his voice; the player sees a flash. */
@@ -5074,6 +5078,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const crop = this.crops.get(key);
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return;
+    if (!this.backpackHasSpaceFor(`crop-${crop.name}`)) { this.notifyBagFull(); return; } // full → don't swing
     this.hideTileCursor();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     if (!w) { this.reapCrop(cx, cy); return; }
@@ -5089,6 +5094,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const crop = this.crops.get(key);
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return false;
+    if (!this.backpackHasSpaceFor(`crop-${crop.name}`)) { this.notifyBagFull(); return false; } // full → leave it ripe
     this.crops.delete(key);
     crop.sprite.destroy();
     this.collect(makeCrop(crop.name, 1));
