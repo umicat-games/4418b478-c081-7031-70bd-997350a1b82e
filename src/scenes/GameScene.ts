@@ -2277,6 +2277,9 @@ export class GameScene extends Phaser.Scene {
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
     };
+    // While the tool wheel is open, hide the held-tool bracket/icon (+ its build ghost) — the
+    // wheel is the focus, so the tool shouldn't keep following the cursor. Keep the plain cursor.
+    if (this.toolPaletteOpen) { this.hidePlacePreview(); showMouse(); return; }
     // PLACEMENT MODE: a building material is held → show the tile bracket (圆角框,
     // like the tools) snapped to the target cell + a ghost of the object inside it
     // (bright/clear when it fits, dimmed/red when it can't go there).
