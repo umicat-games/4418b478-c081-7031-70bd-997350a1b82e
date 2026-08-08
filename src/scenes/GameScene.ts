@@ -2624,6 +2624,9 @@ export class GameScene extends Phaser.Scene {
       const loc = this.findOwnedTool(GameScene.WHEEL_RING[hit.idx]!.toolId!)!;
       if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
       else this.holdExternal(loc.store, loc.item);
+      // Snap the cursor back onto the ITEM the wheel opened on, so the newly-picked tool is ready
+      // to use right there (else it'd sit off at the tool circle's ring position). Mouse-locked only.
+      if (this.locked) this.snapCursorToWorld((pal.bbox.wl + pal.bbox.wr) / 2, (pal.bbox.wt + pal.bbox.wb) / 2);
     } else if (hit && hit.idx === -1) {
       this.clearHeld(); // the mouse circle = cancel → drop the held tool, empty hand
     }
@@ -2913,6 +2916,13 @@ export class GameScene extends Phaser.Scene {
     if (!w) return;
     this.vcursor.x = Phaser.Math.Clamp((w.x + TILE / 2 - cam.worldView.x) * cam.zoom, 0, cam.width);
     this.vcursor.y = Phaser.Math.Clamp((w.y + TILE / 2 - cam.worldView.y) * cam.zoom, 0, cam.height);
+  }
+
+  /** Move the virtual cursor to a WORLD point (screen-projected + clamped). Mouse-locked only. */
+  private snapCursorToWorld(wx: number, wy: number): void {
+    const cam = this.cameras.main;
+    this.vcursor.x = Phaser.Math.Clamp((wx - cam.worldView.x) * cam.zoom, 0, cam.width);
+    this.vcursor.y = Phaser.Math.Clamp((wy - cam.worldView.y) * cam.zoom, 0, cam.height);
   }
 
   /** Place the held building material at a cell (assumes canPlaceAt is true).
