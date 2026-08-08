@@ -2507,9 +2507,16 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
-  /** The 4 tools at their FIXED wheel positions (always drawn; icon only where applicable+owned). */
-  private static WHEEL_TOOLS: Array<{ toolId: ToolId; dir: 'up' | 'down' | 'left' | 'right' }> = [
-    { toolId: 'pickaxe', dir: 'up' }, { toolId: 'axe', dir: 'right' }, { toolId: 'hoe', dir: 'down' }, { toolId: 'watering-can', dir: 'left' },
+  /** The wheel's fixed RING slots (unit screen vectors from the object centre, clockwise from 2
+   *  o'clock). Cancel (mouse) sits at the top (0,-1), handled separately. A slot with a null tool
+   *  (the 6-o'clock reserved spot) or an unowned tool just shows the empty circle base. Fixed
+   *  positions = muscle memory. Mirrors the reference: pickaxe↗ axe↘ (reserved)↓ hoe↙ can↖. */
+  private static WHEEL_RING: Array<{ toolId: ToolId | null; ux: number; uy: number }> = [
+    { toolId: 'pickaxe', ux: 0.866, uy: -0.5 },       // 2 o'clock
+    { toolId: 'axe', ux: 0.866, uy: 0.5 },            // 4 o'clock
+    { toolId: null, ux: 0, uy: 1 },                   // 6 o'clock — reserved (empty)
+    { toolId: 'hoe', ux: -0.866, uy: 0.5 },           // 8 o'clock
+    { toolId: 'watering-can', ux: -0.866, uy: -0.5 }, // 10 o'clock
   ];
 
   /** Compute the tool wheel for a tapped spot: the object's tight world bbox to hug + which tools
@@ -2563,32 +2570,25 @@ export class GameScene extends Phaser.Scene {
     const pal = this.toolPaletteOpen;
     if (!pal) return;
     const cam = this.cameras.main, z = cam.zoom;
-    const D = 46; // circle diameter (screen px) — a touch bigger than before
-    const GAP = 5;
+    const D = 48; // circle diameter (screen px) — INTEGER 3× of the 16px art → crisp pixels
+    const GAP = 6;
     const sl = (pal.bbox.wl - cam.worldView.x) * z, sr = (pal.bbox.wr - cam.worldView.x) * z;
     const st = (pal.bbox.wt - cam.worldView.y) * z, sb = (pal.bbox.wb - cam.worldView.y) * z;
     const cx = (sl + sr) / 2, cy = (st + sb) / 2;
-    const pos: Record<string, { x: number; y: number }> = {
-      up: { x: cx, y: st - D / 2 - GAP }, down: { x: cx, y: sb + D / 2 + GAP },
-      left: { x: sl - D / 2 - GAP, y: cy }, right: { x: sr + D / 2 + GAP, y: cy },
-    };
+    const R = Math.max((sr - sl) / 2, (sb - st) / 2, 18) + D / 2 + GAP; // ring radius (clears the art)
     const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
     const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
-    // Close (mouse) = CANCEL, at the very TOP above the up (pickaxe) circle — like the reference's
-    // hand-at-12-o'clock. All 4 tools are always shown around the object; the ones that don't apply
-    // here are DISABLED (greyed, not tappable) rather than blank, so the wheel looks the same
-    // everywhere (only the enabled set changes).
-    const closeY = pos.up!.y - D - GAP;
-    buttons.push({ x: cx, y: closeY, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
-    bounds.push({ x: cx, y: closeY, r: D / 2, idx: -1 });
-    GameScene.WHEEL_TOOLS.forEach((wt, i) => {
-      const p = pos[wt.dir]!;
-      const owned = this.findOwnedTool(wt.toolId) !== null;
-      const active = owned && pal.applicable.has(wt.toolId);
-      const ic = this.toolIcon(wt.toolId);
-      const kind = !owned ? 'empty' : active ? 'tool' : 'disabled';
-      buttons.push({ x: p.x, y: p.y, size: D, iconKey: owned ? ic.key : '', iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
-      if (active) bounds.push({ x: p.x, y: p.y, r: D / 2, idx: i }); // only ENABLED circles are tappable
+    // Cancel (mouse) at the TOP of the ring (12 o'clock); the tools sit around it, evenly spaced.
+    buttons.push({ x: cx, y: cy - R, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
+    bounds.push({ x: cx, y: cy - R, r: D / 2, idx: -1 });
+    GameScene.WHEEL_RING.forEach((slot, i) => {
+      const x = cx + slot.ux * R, y = cy + slot.uy * R;
+      const owned = slot.toolId !== null && this.findOwnedTool(slot.toolId) !== null;
+      const active = owned && pal.applicable.has(slot.toolId!);
+      const kind = !owned ? 'empty' : active ? 'tool' : 'disabled'; // empty = reserved/unowned → just the circle base
+      const ic = owned ? this.toolIcon(slot.toolId!) : { key: '', frame: 0 };
+      buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
+      if (active) bounds.push({ x, y, r: D / 2, idx: i }); // only ENABLED circles are tappable
     });
     this.registry.set('toolPalette', { visible: true, buttons });
     this.registry.set('toolPaletteBounds', bounds);
@@ -2613,7 +2613,7 @@ export class GameScene extends Phaser.Scene {
     const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; r: number; idx: number }> | undefined;
     const hit = bounds?.find((b) => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
     if (hit && hit.idx >= 0) {
-      const loc = this.findOwnedTool(GameScene.WHEEL_TOOLS[hit.idx]!.toolId)!;
+      const loc = this.findOwnedTool(GameScene.WHEEL_RING[hit.idx]!.toolId!)!;
       if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
       else this.holdExternal(loc.store, loc.item);
     } else if (hit && hit.idx === -1) {
@@ -2629,8 +2629,8 @@ export class GameScene extends Phaser.Scene {
   /** The row items for the fly-out: a mouse (cancel) + every OWNED tool, left→right. */
   private toolHudItems(): Array<{ key: string; frame: string | number; toolId: ToolId | null }> {
     const items: Array<{ key: string; frame: string | number; toolId: ToolId | null }> = [{ key: 'cursor', frame: 0, toolId: null }];
-    for (const wt of GameScene.WHEEL_TOOLS) {
-      if (this.findOwnedTool(wt.toolId)) { const ic = this.toolIcon(wt.toolId); items.push({ key: ic.key, frame: ic.frame, toolId: wt.toolId }); }
+    for (const slot of GameScene.WHEEL_RING) {
+      if (slot.toolId && this.findOwnedTool(slot.toolId)) { const ic = this.toolIcon(slot.toolId); items.push({ key: ic.key, frame: ic.frame, toolId: slot.toolId }); }
     }
     return items;
   }
