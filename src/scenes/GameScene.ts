@@ -752,10 +752,11 @@ export class GameScene extends Phaser.Scene {
   // it (not the hotbar slot) is the active item; the hotbar shows nothing selected. `store` is a
   // live ref to the source array so consuming a seed can splice it when the stack empties.
   private heldExternal: { store: ItemStack[]; item: ItemStack; label: string } | null = null;
-  // Contextual tool palette: tap an object that needs a tool you're not holding (tree→axe,
-  // stone→pickaxe) → a small row of tool buttons below it; tap one to equip it from wherever
-  // the player owns it. `anchor` = the object sprite the palette hangs under.
-  private toolPaletteOpen: { anchor: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image; entries: Array<{ toolId: ToolId; loc: { hotbar: number } | { store: ItemStack[]; item: ItemStack } }> } | null = null;
+  // Contextual tool WHEEL: empty-hand tap on a tool-usable spot → a radial of the applicable
+  // owned tools around it (fixed cardinal per tool) + a mouse (close) circle at the centre; tap
+  // a tool to equip it from wherever the player owns it. `anchor` = world centre + half-size.
+  private toolPaletteOpen: { anchor: { wx: number; wy: number; halfW: number; halfH: number }; entries: Array<{ toolId: ToolId; loc: { hotbar: number } | { store: ItemStack[]; item: ItemStack } }> } | null = null;
+  private toolPaletteHover = -2; // wheel circle under the cursor: -2 none, -1 close, ≥0 tool idx
   private hotbarHover = -1; // hotbar cell the mouse cursor is over (-1 = none; backpack = INV_COLS)
   private inventoryOpen = false;
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
@@ -1623,13 +1624,12 @@ export class GameScene extends Phaser.Scene {
       const sk = this.stoneAtPoint(wp.x, wp.y);
       if (sk) { const [sx, sy] = sk.split(',').map(Number); this.knockStone(sx!, sy!); return; }
     }
-    // EMPTY HAND on an object that needs a tool you're not holding (tree→axe, stone→pickaxe) →
-    // pop a contextual tool palette below it (grab+equip the right tool in one tap, pulled from
-    // the hotbar / backpack / chest). Empty-hand-doable things (ripe bush / mature crop /
-    // foragable) fall through to their direct-harvest branches below.
-    if (this.activeTool === 'hand' && !this.activeSeed && !this.activePlace) {
-      const tp = this.toolForObjectAt(wp.x, wp.y);
-      if (tp) { this.openToolPalette(tp.sprite, tp.toolId); return; }
+    // EMPTY HAND on any tool-usable spot (tree→axe, stone→pickaxe, grass→hoe, tilled soil→hoe/
+    // watering-can) → pop the radial tool wheel; tap a tool to grab+equip it (from the hotbar /
+    // backpack / chest). Directly harvestable things (ripe bush / mature crop / foragable) skip
+    // the wheel and act on click (handled by the branches below).
+    if (this.activeTool === 'hand' && !this.activeSeed && !this.activePlace && !this.isDirectHarvestAt(wp.x, wp.y, tile)) {
+      if (this.openToolWheelAt(wp.x, wp.y)) return;
     }
     // Empty hand / hoe harvests a MATURE wild foragable (sprite bounds — tall sunflower).
     if (!this.activeSeed && !this.activePlace && this.activeTool !== 'watering-can' && this.activeTool !== 'axe' && this.activeTool !== 'pickaxe') {
@@ -2401,7 +2401,7 @@ export class GameScene extends Phaser.Scene {
         y: (cy - cam.worldView.y) * cam.zoom,
         w: b.w * cam.zoom + pad * 2,
         h: b.h * cam.zoom + pad * 2,
-        name: target.name,
+        name: this.toolPaletteOpen ? '' : target.name, // hide the name while the tool wheel is open
         nameX: (cx - cam.worldView.x) * cam.zoom,
         nameY: (b.y - cam.worldView.y) * cam.zoom - 3, // pill just above the art's top
       };
@@ -2443,17 +2443,10 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  // ── Contextual tool palette (tap an object that needs a tool → grab the tool) ──────
-
-  /** The tool that acts on a hovered object kind (empty-hand-doable things return null → they
-   *  just act on click). Only "needs a tool" objects get the palette. */
-  private toolForObjectAt(wx: number, wy: number): { toolId: ToolId; sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image } | null {
-    const tk = this.treeAtPoint(wx, wy);
-    if (tk) { const o = this.trees.get(tk); if (o) return { toolId: 'axe', sprite: o.sprite }; }
-    const sk = this.stoneAtPoint(wx, wy);
-    if (sk) { const o = this.bigStones.get(sk); if (o) return { toolId: 'pickaxe', sprite: o.sprite }; }
-    return null;
-  }
+  // ── Contextual tool WHEEL (tap a tool-usable spot → a radial of tools around it) ──────
+  //  Fixed cardinal position per tool so the same tool always sits in the same place (muscle
+  //  memory); only the tools APPLICABLE to the tapped spot + OWNED by the player are shown, plus
+  //  a mouse (close) circle at the centre.
 
   /** The tool's inventory-icon texture/frame (same art the hotbar + tool cursor use). */
   private toolIcon(toolId: ToolId): { key: string; frame: string | number } {
@@ -2473,62 +2466,117 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  /** Open the contextual tool palette BELOW `sprite`, offering `toolId` if the player owns it
-   *  (from the hotbar, backpack, chest, or Cato-bag). No-op if they don't own it (greyed
-   *  "you need X" teaching is a future step). */
-  private openToolPalette(sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, toolId: ToolId): void {
-    const loc = this.findOwnedTool(toolId);
-    if (!loc) return; // don't own the tool → nothing to offer (teaching UI deferred)
-    this.toolPaletteOpen = { anchor: sprite, entries: [{ toolId, loc }] };
+  /** Is the spot directly harvestable with an EMPTY HAND (ripe bush / mature crop / mature
+   *  foragable)? Those act on click and DON'T pop the wheel. */
+  private isDirectHarvestAt(wx: number, wy: number, tile: Phaser.Tilemaps.Tile | null | undefined): boolean {
+    const fk = this.foragAtPoint(wx, wy);
+    if (fk) { const f = this.foragables.get(fk); if (f && f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) return true; }
+    if (tile) {
+      const key = `${tile.x},${tile.y}`;
+      const crop = this.crops.get(key);
+      if (crop && crop.stage >= CROPS[crop.name].stages - 1) return true;
+      const bush = this.bushes.get(key);
+      if (bush && bush.stage >= 2) return true;
+    }
+    return false;
+  }
+
+  /** Compute the tool wheel for a tapped spot: which tools APPLY there (owned only) + the anchor
+   *  (world centre + half-size) to arrange the ring around. null = no tool works here. */
+  private toolWheelAt(wx: number, wy: number): { anchor: { wx: number; wy: number; halfW: number; halfH: number }; tools: ToolId[] } | null {
+    let anchor: { wx: number; wy: number; halfW: number; halfH: number } | null = null;
+    const tools: ToolId[] = [];
+    const tk = this.treeAtPoint(wx, wy);
+    const sk = this.stoneAtPoint(wx, wy);
+    if (tk) { const o = this.trees.get(tk); if (o) { tools.push('axe'); const r = this.spriteWorldSolidRect(o.sprite); anchor = { wx: r.x + r.w / 2, wy: r.y + r.h / 2, halfW: r.w / 2, halfH: r.h / 2 }; } }
+    else if (sk) { const o = this.bigStones.get(sk); if (o) { tools.push('pickaxe'); const r = this.spriteWorldSolidRect(o.sprite); anchor = { wx: r.x + r.w / 2, wy: r.y + r.h / 2, halfW: r.w / 2, halfH: r.h / 2 }; } }
+    else {
+      const tile = this.islandLayer?.getTileAtWorldXY(wx, wy);
+      if (tile && !tile.collides) {
+        const key = `${tile.x},${tile.y}`;
+        if (this.tilledCells.has(key)) { tools.push('hoe', 'watering-can'); } // un-till / harvest, and water
+        else if (!this.cellBlocksTill(key) && !this.treeAtPoint(wx, wy) && !this.stoneAtPoint(wx, wy) && !this.isDefaultHouseCell(key)) { tools.push('hoe'); } // bare grass → till
+        if (tools.length) { const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; anchor = { wx: w.x + TILE / 2, wy: w.y + TILE / 2, halfW: TILE / 2, halfH: TILE / 2 }; }
+      }
+    }
+    if (!anchor) return null;
+    const owned = tools.filter((tid) => this.findOwnedTool(tid) !== null);
+    return owned.length ? { anchor, tools: owned } : null;
+  }
+
+  /** Open the radial tool wheel at a tapped spot (owned applicable tools + a close button). */
+  private openToolWheelAt(wx: number, wy: number): boolean {
+    const w = this.toolWheelAt(wx, wy);
+    if (!w) return false;
+    this.toolPaletteOpen = { anchor: w.anchor, entries: w.tools.map((tid) => ({ toolId: tid, loc: this.findOwnedTool(tid)! })) };
+    this.toolPaletteHover = -2;
     playSfx(this);
     this.publishToolPalette();
+    return true;
   }
 
   private closeToolPalette(): void {
     if (!this.toolPaletteOpen) return;
     this.toolPaletteOpen = null;
+    this.toolPaletteHover = -2;
     this.registry.set('toolPalette', { visible: false, buttons: [] });
     this.registry.set('toolPaletteBounds', []);
   }
 
-  /** Project the open palette's buttons to screen (below the anchor's tight art) each frame so
-   *  they track the camera; publish the render model + tap hit-boxes. */
+  /** Fixed cardinal direction (screen) for each tool → consistent positions in the ring. */
+  private static WHEEL_DIR: Partial<Record<ToolId, { dx: number; dy: number }>> = {
+    'watering-can': { dx: -1, dy: 0 }, axe: { dx: 1, dy: 0 }, pickaxe: { dx: 0, dy: -1 }, hoe: { dx: 0, dy: 1 },
+  };
+
+  /** Project the wheel to screen (ring around the anchor) each frame so it tracks the camera. */
   private publishToolPalette(): void {
     const pal = this.toolPaletteOpen;
     if (!pal) return;
     const cam = this.cameras.main;
-    const b = this.spriteWorldSolidRect(pal.anchor);
-    const size = Math.round(30 * cam.zoom / 3); // ~hotbar slot on-screen; scale gently with zoom
-    const gap = Math.round(6 * cam.zoom / 3);
-    const n = pal.entries.length;
-    const totalW = n * size + (n - 1) * gap;
-    const cx = (b.x + b.w / 2 - cam.worldView.x) * cam.zoom;
-    const topY = (b.y + b.h - cam.worldView.y) * cam.zoom + Math.round(8 * cam.zoom / 3); // below the art
-    const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number }> = [];
-    const bounds: Array<{ x: number; y: number; w: number; h: number; idx: number }> = [];
+    const D = 40; // circle diameter (screen px)
+    const cx = (pal.anchor.wx - cam.worldView.x) * cam.zoom;
+    const cy = (pal.anchor.wy - cam.worldView.y) * cam.zoom;
+    const R = Math.max(pal.anchor.halfW * cam.zoom, pal.anchor.halfH * cam.zoom, 30) + D / 2 + 6; // ring radius
+    const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
+    const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
+    // Centre = the mouse (close) button.
+    buttons.push({ x: cx, y: cy, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
+    bounds.push({ x: cx, y: cy, r: D / 2, idx: -1 });
     pal.entries.forEach((e, i) => {
-      const x = cx - totalW / 2 + i * (size + gap) + size / 2;
+      const dir = GameScene.WHEEL_DIR[e.toolId] ?? { dx: 0, dy: 1 };
+      const x = cx + dir.dx * R, y = cy + dir.dy * R;
       const ic = this.toolIcon(e.toolId);
-      buttons.push({ x, y: topY + size / 2, size, iconKey: ic.key, iconFrame: ic.frame });
-      bounds.push({ x: x - size / 2, y: topY, w: size, h: size, idx: i });
+      buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind: 'tool', hovered: this.toolPaletteHover === i });
+      bounds.push({ x, y, r: D / 2, idx: i });
     });
     this.registry.set('toolPalette', { visible: true, buttons });
     this.registry.set('toolPaletteBounds', bounds);
   }
 
-  /** Route a click while the tool palette is open: on a button → equip that tool (from wherever
-   *  it lives) + keep using it; a miss just dismisses. Returns true if it consumed the click. */
+  /** Which wheel circle is the cursor over (idx, -1=close, -2=none) → tint highlight. */
+  private updateToolPaletteHover(): void {
+    if (!this.toolPaletteOpen) return;
+    const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
+    const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
+    const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; r: number; idx: number }> | undefined;
+    let hov = -2;
+    for (const b of bounds ?? []) { if ((sx - b.x) ** 2 + (sy - b.y) ** 2 <= b.r * b.r) { hov = b.idx; break; } }
+    if (hov !== this.toolPaletteHover) { this.toolPaletteHover = hov; this.publishToolPalette(); }
+  }
+
+  /** Route a click while the wheel is open: a tool circle → equip it (from wherever owned) + keep
+   *  using it; the centre mouse circle (or a miss) → dismiss. Returns true if it ate the click. */
   private handleToolPaletteClick(x: number, y: number): boolean {
     const pal = this.toolPaletteOpen;
     if (!pal) return false;
-    const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; w: number; h: number; idx: number }> | undefined;
-    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    if (hit) {
+    const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; r: number; idx: number }> | undefined;
+    const hit = bounds?.find((b) => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
+    if (hit && hit.idx >= 0) {
       const loc = pal.entries[hit.idx]!.loc;
       if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
       else this.holdExternal(loc.store, loc.item);
     }
-    this.closeToolPalette(); // hit → equipped; miss → just dismiss
+    this.closeToolPalette(); // tool → equipped; close / miss → just dismiss
     return true;
   }
 
@@ -7468,7 +7516,7 @@ export class GameScene extends Phaser.Scene {
       // else keep its buttons tracking the camera.
       if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen
         || this.activeTool !== 'hand' || this.activeSeed || this.activePlace) this.closeToolPalette();
-      else this.publishToolPalette();
+      else { this.updateToolPaletteHover(); this.publishToolPalette(); }
     }
     this.updateHotbarHover(); // highlight the hotbar cell under the mouse cursor
     // While the build palette is open, tell it which cell the cursor is over (hover).
