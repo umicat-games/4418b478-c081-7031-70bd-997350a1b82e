@@ -2548,12 +2548,17 @@ export class GameScene extends Phaser.Scene {
     };
     const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
     const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
-    // Centre = the mouse (close) button.
-    buttons.push({ x: cx, y: cy, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
-    bounds.push({ x: cx, y: cy, r: D / 2, idx: -1 });
+    // Close (mouse) sits at the TOP, just above the object. The UP slot (pickaxe) shares that top
+    // region: when pickaxe applies here, draw it at the top edge and lift close above it; otherwise
+    // close takes the top spot and the empty up-circle is dropped (no redundant stack).
+    const upActive = pal.applicable.has('pickaxe');
+    const closeY = upActive ? pos.up!.y - D - GAP : pos.up!.y;
+    buttons.push({ x: cx, y: closeY, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
+    bounds.push({ x: cx, y: closeY, r: D / 2, idx: -1 });
     GameScene.WHEEL_TOOLS.forEach((wt, i) => {
       const p = pos[wt.dir]!;
       const active = pal.applicable.has(wt.toolId);
+      if (wt.dir === 'up' && !active) return; // skip the empty up circle — close lives there
       const ic = this.toolIcon(wt.toolId);
       buttons.push({ x: p.x, y: p.y, size: D, iconKey: active ? ic.key : '', iconFrame: ic.frame, kind: active ? 'tool' : 'empty', hovered: active && this.toolPaletteHover === i });
       if (active) bounds.push({ x: p.x, y: p.y, r: D / 2, idx: i }); // only applicable circles are tappable
