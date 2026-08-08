@@ -2401,6 +2401,18 @@ export class GameScene extends Phaser.Scene {
    *  triangle mouse cursor (never hides it); over empty ground there's no bracket, just the
    *  usual cursor. Mouse-only. Runs after updateTileCursor each frame. */
   private updateHoverInspect(): void {
+    // While the tool wheel is open, FREEZE the focus on the spot the wheel opened on (its bbox) —
+    // don't let mouse movement over the wheel circles re-target it. No name (the wheel is the focus).
+    if (this.toolPaletteOpen) {
+      const cam = this.cameras.main, z = cam.zoom, bb = this.toolPaletteOpen.bbox, pad = 5;
+      this.hoverModel = {
+        visible: true, onObject: true,
+        x: ((bb.wl + bb.wr) / 2 - cam.worldView.x) * z, y: ((bb.wt + bb.wb) / 2 - cam.worldView.y) * z,
+        w: (bb.wr - bb.wl) * z + pad * 2, h: (bb.wb - bb.wt) * z + pad * 2, name: '', nameX: 0, nameY: 0,
+      };
+      this.registry.set('hover', this.hoverModel);
+      return;
+    }
     const emptyHand = this.activeTool === 'hand' && !this.activeSeed && !this.activePlace;
     const blocked = !this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen
       || this.inventoryOpen || this.confirmOpen || this.buildPaletteCell !== null || this.hoeSwing || this.waterCan;
@@ -3172,7 +3184,7 @@ export class GameScene extends Phaser.Scene {
     let best: string | null = null;
     let bestFoot = -Infinity;
     for (const [key, t] of this.trees) {
-      if (t.sprite.active && t.sprite.getBounds().contains(x, y) && t.sprite.y > bestFoot) {
+      if (t.sprite.active && this.spritePixelHit(t.sprite, x, y) && t.sprite.y > bestFoot) {
         best = key;
         bestFoot = t.sprite.y;
       }
@@ -3489,7 +3501,7 @@ export class GameScene extends Phaser.Scene {
   private foragAtPoint(x: number, y: number): string | null {
     let best: string | null = null, bestFoot = -Infinity;
     for (const [key, f] of this.foragables) {
-      if (f.sprite.active && f.sprite.getBounds().contains(x, y) && f.sprite.y > bestFoot) { best = key; bestFoot = f.sprite.y; }
+      if (f.sprite.active && this.spritePixelHit(f.sprite, x, y) && f.sprite.y > bestFoot) { best = key; bestFoot = f.sprite.y; }
     }
     return best;
   }
@@ -3557,7 +3569,7 @@ export class GameScene extends Phaser.Scene {
   private stoneAtPoint(x: number, y: number): string | null {
     let best: string | null = null, bestFoot = -Infinity;
     for (const [key, s] of this.bigStones) {
-      if (s.sprite.active && s.sprite.getBounds().contains(x, y) && s.sprite.y > bestFoot) { best = key; bestFoot = s.sprite.y; }
+      if (s.sprite.active && this.spritePixelHit(s.sprite, x, y) && s.sprite.y > bestFoot) { best = key; bestFoot = s.sprite.y; }
     }
     return best;
   }
@@ -6203,19 +6215,25 @@ export class GameScene extends Phaser.Scene {
    *  frame, not just the 48×48 frame box (Cato fills only a small patch of it, so
    *  getBounds alone triggered the chat from far away over the transparent padding). */
   private catContains(worldX: number, worldY: number): boolean {
-    const c = this.child;
-    if (!c) return false;
-    if (!c.getBounds().contains(worldX, worldY)) return false; // cheap reject on the frame box
-    // Map the world point to a texel of the current frame (honour origin / scale / flip).
-    const frame = c.frame;
+    return this.child ? this.spritePixelHit(this.child, worldX, worldY) : false;
+  }
+
+  /** PER-PIXEL hit test: is the world point over an OPAQUE pixel of this sprite's current frame
+   *  (honouring origin / scale / flip)? Cheap frame-box reject first. Used by the tree / stone /
+   *  foragable / Cato pickers so a far click on the sprite's TRANSPARENT padding — or on a
+   *  neighbour whose padded frame overlaps — doesn't count as a hit (the "focus is a region, not
+   *  the art" bug). Falls back to the frame box only if the texture can't be read. */
+  private spritePixelHit(s: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, worldX: number, worldY: number): boolean {
+    if (!s.getBounds().contains(worldX, worldY)) return false; // cheap reject on the frame box
+    const frame = s.frame;
     const fw = frame.width, fh = frame.height;
-    let fx = (worldX - c.x) / c.scaleX + c.originX * fw;
-    let fy = (worldY - c.y) / c.scaleY + c.originY * fh;
-    if (c.flipX) fx = fw - fx;
-    if (c.flipY) fy = fh - fy;
-    const alpha = this.textures.getPixelAlpha(Math.floor(fx), Math.floor(fy), c.texture.key, frame.name);
-    if (alpha == null) return c.getBounds().contains(worldX, worldY); // texture unreadable → fall back to the box
-    return alpha > 16; // opaque enough to count as "on the cat"
+    let fx = (worldX - s.x) / s.scaleX + s.originX * fw;
+    let fy = (worldY - s.y) / s.scaleY + s.originY * fh;
+    if (s.flipX) fx = fw - fx;
+    if (s.flipY) fy = fh - fy;
+    const alpha = this.textures.getPixelAlpha(Math.floor(fx), Math.floor(fy), s.texture.key, frame.name);
+    if (alpha == null) return true; // texture unreadable → the frame-box hit (already passed) stands
+    return alpha > 16; // opaque enough to count as "on the art"
   }
 
   /** The chat widgets, by role, that slide up together (the `chat-input-field`
