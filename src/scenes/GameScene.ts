@@ -4670,6 +4670,9 @@ export class GameScene extends Phaser.Scene {
     this.holdExternal(store, it);
     this.closeMenu();
     playSfx(this);
+    // openMenu released pointer lock; re-capture it (desktop) so the very next click USES the item
+    // (plants / places) instead of just re-locking. Touch never locks — taps route directly.
+    if (!this.input.activePointer.wasTouch) this.input.manager.mouse?.requestPointerLock();
   }
 
   /** Which action (if any) is under a tap on the unified menu's action menu. */
@@ -4999,16 +5002,10 @@ export class GameScene extends Phaser.Scene {
   /** Player plants with the selected seed bag: plant + consume one seed (empties
    *  the slot when the bag runs out). */
   private playerPlant(cx: number, cy: number): void {
-    const sel = this.hotbarSelected;
-    const bag = sel >= 0 ? this.inventory[sel] : null;
+    const bag = this.heldCell(); // the held seed — hotbar slot OR an external chest/Cato-bag stack
     if (!bag?.plants) return;
     if (!this.plantCropAt(cx, cy, bag.plants)) return;
-    bag.count -= 1;
-    if (bag.count <= 0) {
-      this.inventory[sel] = null;
-      this.equipSelected(); // bag empty → back to empty hand
-    }
-    this.publishInventory();
+    this.consumeHeldMaterial(); // decrement the held stack (handles hotbar null-out AND external splice)
   }
 
   /** PLAYER harvest of a MATURE crop → god-hand hoe swing, then (at the strike)
