@@ -1620,8 +1620,9 @@ export class GameScene extends Phaser.Scene {
     if (this.handleToolPaletteClick(x, y)) return;
     // Build palette (wall facing) → pick that orientation.
     if (this.handlePaletteClick(x, y)) return;
-    // Backpack button → show its click press, THEN open the storage grid (Chest tab).
+    // Bottom-right corner buttons: sprout → backpack, gear → Settings.
     if (this.overBackpackButton(x, y)) { this.pressBackpackThenOpen(); return; }
+    if (this.overSettingsButton(x, y)) { this.pressSettingsThenOpen(); return; }
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
@@ -2210,11 +2211,27 @@ export class GameScene extends Phaser.Scene {
     return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
 
-  private backpackBtnPressed = false;
-  /** Publish the bottom-right backpack (sprout) button's visibility + pressed state. */
+  private bagBtnPressed = false;
+  private settingsBtnPressed = false;
+  /** Publish the bottom-right corner buttons (backpack sprout + settings gear) visibility + press. */
   private publishBackpackBtn(): void {
     const hidden = !this.gameReady || this.cutscene || (this.dialogOpen && !this.cutscene) || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen;
-    this.registry.set('backpackBtn', { visible: !hidden, pressed: this.backpackBtnPressed });
+    this.registry.set('backpackBtn', { visible: !hidden, bagPressed: this.bagBtnPressed, settingsPressed: this.settingsBtnPressed });
+  }
+
+  private overSettingsButton(x: number, y: number): boolean {
+    const r = this.registry.get('settingsBtnBounds') as { x: number; y: number; w: number; h: number } | undefined;
+    return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
+  /** Settings gear tapped → flash pressed, THEN open the Settings menu tab. */
+  private pressSettingsThenOpen(): void {
+    if (this.menuOpen) return;
+    this.settingsBtnPressed = true; this.publishBackpackBtn();
+    this.time.delayedCall(120, () => {
+      this.settingsBtnPressed = false; this.publishBackpackBtn();
+      this.openMenu(4); // TAB_SETTINGS
+    });
   }
 
   /** Is (x,y) over the hotbar area (panel + slots)? */
@@ -4101,9 +4118,9 @@ export class GameScene extends Phaser.Scene {
    *  button reads as physically pressed before the modal appears). Chest = door / E-I. */
   private pressBackpackThenOpen(): void {
     if (this.menuOpen) return;
-    this.backpackBtnPressed = true; this.publishBackpackBtn();
+    this.bagBtnPressed = true; this.publishBackpackBtn();
     this.time.delayedCall(120, () => {
-      this.backpackBtnPressed = false; this.publishBackpackBtn();
+      this.bagBtnPressed = false; this.publishBackpackBtn();
       this.openBackpack();
     });
   }
