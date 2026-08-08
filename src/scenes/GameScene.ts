@@ -1673,8 +1673,9 @@ export class GameScene extends Phaser.Scene {
     if (this.activeTool === 'hand' && !this.activeSeed && !this.activePlace) {
       if (this.openToolWheelAt(wp.x, wp.y)) return;
     }
-    // Empty hand / hoe harvests a MATURE wild foragable (sprite bounds — tall sunflower).
-    if (!this.activeSeed && !this.activePlace && this.activeTool !== 'watering-can' && this.activeTool !== 'axe' && this.activeTool !== 'pickaxe') {
+    // The HOE harvests a MATURE wild foragable (sprite bounds — tall sunflower). Empty hand does
+    // NOT — it pops the wheel above (pick the hoe first); harvesting is a tool action, uniformly.
+    if (this.activeTool === 'hoe') {
       const fk = this.foragAtPoint(wp.x, wp.y);
       if (fk) {
         const f = this.foragables.get(fk)!;
@@ -1708,12 +1709,12 @@ export class GameScene extends Phaser.Scene {
         this.hoePlacedTile(tile.x, tile.y); return;
       }
       const crop = this.crops.get(key);
-      const canHarvest = !this.activeSeed && this.activeTool !== 'watering-can';
+      // Harvest a mature crop / ripe bush with the HOE (empty hand pops the wheel instead —
+      // uniform "pick the tool, then use it"). Not the seed / watering-can.
+      const canHarvest = this.activeTool === 'hoe';
       if (canHarvest && crop && crop.stage >= CROPS[crop.name].stages - 1) {
         this.harvestCrop(tile.x, tile.y); return;
       }
-      // A RIPE berry bush (stage 2) → pick it (3 berries pop + bank; the bush stays
-      // and regrows). Hand or hoe, not the seed / watering can.
       const bush = this.bushes.get(key);
       if (canHarvest && bush && bush.stage >= 2) { this.harvestBush(tile.x, tile.y); return; }
       if (this.activeTool === 'hoe' && !this.tilledCells.has(key) && !this.cellBlocksTill(key)
