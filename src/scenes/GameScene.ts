@@ -746,7 +746,16 @@ export class GameScene extends Phaser.Scene {
   // picks up / drops / merges stacks (heldStack follows the cursor). `*Rev` is
   // bumped on change so the scenes re-render.
   private inventory: (ItemStack | null)[] = [];
-  private hotbarSelected = -1; // selected cell in row 0 (-1 = empty hand)
+  private hotbarSelected = -1; // selected cell in row 0 (-1 = empty hand OR an external held item)
+  // The "held" item can also come from OUTSIDE the hotbar — a tool/seed selected straight from
+  // the chest / Cato-bag ("使用"), or a tool grabbed from the contextual object palette. When set,
+  // it (not the hotbar slot) is the active item; the hotbar shows nothing selected. `store` is a
+  // live ref to the source array so consuming a seed can splice it when the stack empties.
+  private heldExternal: { store: ItemStack[]; item: ItemStack; label: string } | null = null;
+  // Contextual tool palette: tap an object that needs a tool you're not holding (tree→axe,
+  // stone→pickaxe) → a small row of tool buttons below it; tap one to equip it from wherever
+  // the player owns it. `anchor` = the object sprite the palette hangs under.
+  private toolPaletteOpen: { anchor: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image; entries: Array<{ toolId: ToolId; loc: { hotbar: number } | { store: ItemStack[]; item: ItemStack } }> } | null = null;
   private hotbarHover = -1; // hotbar cell the mouse cursor is over (-1 = none; backpack = INV_COLS)
   private inventoryOpen = false;
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
@@ -1586,6 +1595,8 @@ export class GameScene extends Phaser.Scene {
     if (this.handleConfirmClick(x, y)) return;
     if (this.handleCraftClick(x, y)) return; // the crafting modal (work station)
     if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
+    // Contextual tool palette open → a button equips that tool, a miss dismisses it.
+    if (this.handleToolPaletteClick(x, y)) return;
     // Build palette (wall facing) → pick that orientation.
     if (this.handlePaletteClick(x, y)) return;
     // Backpack button → show its click press, THEN open the storage grid (Chest tab).
@@ -1611,6 +1622,14 @@ export class GameScene extends Phaser.Scene {
     if (this.activeTool === 'pickaxe' && !this.activePlace) {
       const sk = this.stoneAtPoint(wp.x, wp.y);
       if (sk) { const [sx, sy] = sk.split(',').map(Number); this.knockStone(sx!, sy!); return; }
+    }
+    // EMPTY HAND on an object that needs a tool you're not holding (tree→axe, stone→pickaxe) →
+    // pop a contextual tool palette below it (grab+equip the right tool in one tap, pulled from
+    // the hotbar / backpack / chest). Empty-hand-doable things (ripe bush / mature crop /
+    // foragable) fall through to their direct-harvest branches below.
+    if (this.activeTool === 'hand' && !this.activeSeed && !this.activePlace) {
+      const tp = this.toolForObjectAt(wp.x, wp.y);
+      if (tp) { this.openToolPalette(tp.sprite, tp.toolId); return; }
     }
     // Empty hand / hoe harvests a MATURE wild foragable (sprite bounds — tall sunflower).
     if (!this.activeSeed && !this.activePlace && this.activeTool !== 'watering-can' && this.activeTool !== 'axe' && this.activeTool !== 'pickaxe') {
@@ -2083,7 +2102,33 @@ export class GameScene extends Phaser.Scene {
     if (this.dialogOpen || this.inventoryOpen) return;
     if (i < 0 || i >= INV_COLS) return;
     playSfx(this); // button click blip on select / deselect
+    this.heldExternal = null; // picking a hotbar slot cancels any external (chest/palette) held item
     this.hotbarSelected = this.hotbarSelected === i ? -1 : i;
+    this.equipSelected();
+    this.publishInventory();
+  }
+
+  /** The currently HELD item stack, whatever its source: an external (chest/palette) item wins,
+   *  else the selected hotbar cell (null = empty hand). The single read every equip/consume uses. */
+  private heldCell(): ItemStack | null {
+    if (this.heldExternal) return this.heldExternal.item;
+    return this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+  }
+
+  /** Hold an item that lives OUTSIDE the hotbar (a chest/Cato-bag stack, or a palette tool):
+   *  it becomes the active tool/seed/material, the hotbar shows nothing selected. */
+  private holdExternal(store: ItemStack[], item: ItemStack): void {
+    this.heldExternal = { store, item, label: item.label ?? item.id };
+    this.hotbarSelected = -1;
+    this.equipSelected();
+    this.publishInventory();
+  }
+
+  /** Drop whatever is held → empty hand (Esc / palette cancel / a held external stack emptied). */
+  private clearHeld(): void {
+    if (!this.heldExternal && this.hotbarSelected < 0) return;
+    this.heldExternal = null;
+    this.hotbarSelected = -1;
     this.equipSelected();
     this.publishInventory();
   }
@@ -2092,7 +2137,7 @@ export class GameScene extends Phaser.Scene {
    *  empty hand). Called after selection changes AND after the inventory is
    *  rearranged (a cell's tool may have moved). */
   private equipSelected(): void {
-    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    const cell = this.heldCell();
     this.setTool(cell?.toolId ?? 'hand');
     this.activeSeed = cell?.plants; // seed bag selected → planting mode
     this.activePlace = cell?.place; // building material → placement mode
@@ -2398,6 +2443,95 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
+  // ── Contextual tool palette (tap an object that needs a tool → grab the tool) ──────
+
+  /** The tool that acts on a hovered object kind (empty-hand-doable things return null → they
+   *  just act on click). Only "needs a tool" objects get the palette. */
+  private toolForObjectAt(wx: number, wy: number): { toolId: ToolId; sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image } | null {
+    const tk = this.treeAtPoint(wx, wy);
+    if (tk) { const o = this.trees.get(tk); if (o) return { toolId: 'axe', sprite: o.sprite }; }
+    const sk = this.stoneAtPoint(wx, wy);
+    if (sk) { const o = this.bigStones.get(sk); if (o) return { toolId: 'pickaxe', sprite: o.sprite }; }
+    return null;
+  }
+
+  /** The tool's inventory-icon texture/frame (same art the hotbar + tool cursor use). */
+  private toolIcon(toolId: ToolId): { key: string; frame: string | number } {
+    if (toolId === 'pickaxe') return { key: 'pickaxe', frame: 0 };
+    return { key: 'tools_and_meterials', frame: toolId }; // 'hoe' / 'watering-can' / 'axe'
+  }
+
+  /** Where the player owns a tool: a hotbar slot (row 0) → select it; else a backpack / chest /
+   *  Cato-bag stack → hold it as an external item. null = not owned anywhere. */
+  private findOwnedTool(toolId: ToolId): { hotbar: number } | { store: ItemStack[]; item: ItemStack } | null {
+    for (let i = 0; i < INV_COLS; i++) { const it = this.inventory[i]; if (it?.toolId === toolId) return { hotbar: i }; }
+    for (let i = INV_COLS; i < this.inventory.length; i++) { const it = this.inventory[i]; if (it?.toolId === toolId) return { store: this.inventory, item: it }; }
+    for (const store of [this.chestStore, this.catoBagStore]) {
+      const it = store.find((s) => s.toolId === toolId);
+      if (it) return { store, item: it };
+    }
+    return null;
+  }
+
+  /** Open the contextual tool palette BELOW `sprite`, offering `toolId` if the player owns it
+   *  (from the hotbar, backpack, chest, or Cato-bag). No-op if they don't own it (greyed
+   *  "you need X" teaching is a future step). */
+  private openToolPalette(sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, toolId: ToolId): void {
+    const loc = this.findOwnedTool(toolId);
+    if (!loc) return; // don't own the tool → nothing to offer (teaching UI deferred)
+    this.toolPaletteOpen = { anchor: sprite, entries: [{ toolId, loc }] };
+    playSfx(this);
+    this.publishToolPalette();
+  }
+
+  private closeToolPalette(): void {
+    if (!this.toolPaletteOpen) return;
+    this.toolPaletteOpen = null;
+    this.registry.set('toolPalette', { visible: false, buttons: [] });
+    this.registry.set('toolPaletteBounds', []);
+  }
+
+  /** Project the open palette's buttons to screen (below the anchor's tight art) each frame so
+   *  they track the camera; publish the render model + tap hit-boxes. */
+  private publishToolPalette(): void {
+    const pal = this.toolPaletteOpen;
+    if (!pal) return;
+    const cam = this.cameras.main;
+    const b = this.spriteWorldSolidRect(pal.anchor);
+    const size = Math.round(30 * cam.zoom / 3); // ~hotbar slot on-screen; scale gently with zoom
+    const gap = Math.round(6 * cam.zoom / 3);
+    const n = pal.entries.length;
+    const totalW = n * size + (n - 1) * gap;
+    const cx = (b.x + b.w / 2 - cam.worldView.x) * cam.zoom;
+    const topY = (b.y + b.h - cam.worldView.y) * cam.zoom + Math.round(8 * cam.zoom / 3); // below the art
+    const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number }> = [];
+    const bounds: Array<{ x: number; y: number; w: number; h: number; idx: number }> = [];
+    pal.entries.forEach((e, i) => {
+      const x = cx - totalW / 2 + i * (size + gap) + size / 2;
+      const ic = this.toolIcon(e.toolId);
+      buttons.push({ x, y: topY + size / 2, size, iconKey: ic.key, iconFrame: ic.frame });
+      bounds.push({ x: x - size / 2, y: topY, w: size, h: size, idx: i });
+    });
+    this.registry.set('toolPalette', { visible: true, buttons });
+    this.registry.set('toolPaletteBounds', bounds);
+  }
+
+  /** Route a click while the tool palette is open: on a button → equip that tool (from wherever
+   *  it lives) + keep using it; a miss just dismisses. Returns true if it consumed the click. */
+  private handleToolPaletteClick(x: number, y: number): boolean {
+    const pal = this.toolPaletteOpen;
+    if (!pal) return false;
+    const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; w: number; h: number; idx: number }> | undefined;
+    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    if (hit) {
+      const loc = pal.entries[hit.idx]!.loc;
+      if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
+      else this.holdExternal(loc.store, loc.item);
+    }
+    this.closeToolPalette(); // hit → equipped; miss → just dismiss
+    return true;
+  }
+
   // ── House building: placement cursor + rotate ─────────────────────────
 
   private ensurePlacePreview(): Phaser.GameObjects.Sprite {
@@ -2492,7 +2626,7 @@ export class GameScene extends Phaser.Scene {
   /** Set the wall facing (last-used / default) + reflect it on the held item icon. */
   private setWallOrient(orient: WallOrient): void {
     this.wallOrient = orient;
-    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    const cell = this.heldCell();
     if (cell?.place === 'wall') { cell.iconFrame = WALL_FRAME[orient]; this.publishInventory(); }
   }
 
@@ -2631,7 +2765,7 @@ export class GameScene extends Phaser.Scene {
    *  held stack, re-autotiles neighbour walls, and saves. */
   private placeObject(cx: number, cy: number): void {
     if (!this.islandLayer || !this.activePlace) return;
-    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    const cell = this.heldCell();
     if (!cell || cell.count <= 0) return;
     const kind = this.activePlace;
     const key = `${cx},${cy}`;
@@ -2660,7 +2794,7 @@ export class GameScene extends Phaser.Scene {
    *  the floor tucks under the wall seamlessly (no grass gap). */
   private placeFloor(cx: number, cy: number): void {
     if (!this.islandLayer) return;
-    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    const cell = this.heldCell();
     if (!cell || cell.count <= 0) return;
     const key = `${cx},${cy}`;
     // OVERWRITE: a floor dropped on a mis-placed component (wall/window/door/furniture)
@@ -2688,10 +2822,21 @@ export class GameScene extends Phaser.Scene {
   /** Consume one of the held building material; drop out of placement mode if the
    *  stack empties. */
   private consumeHeldMaterial(): void {
-    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    const ext = this.heldExternal;
+    const cell = this.heldCell();
     if (!cell) return;
     cell.count -= 1;
-    if (cell.count <= 0 && this.hotbarSelected >= 0) this.inventory[this.hotbarSelected] = null;
+    if (cell.count <= 0) {
+      if (ext) {
+        // A chest / Cato-bag seed selected via "使用" emptied → drop it from that store + hand.
+        const i = ext.store.indexOf(ext.item);
+        if (i >= 0) ext.store.splice(i, 1);
+        this.heldExternal = null;
+        if (this.menuOpen) this.publishMenu(); // reflect the emptied stack in the open modal
+      } else if (this.hotbarSelected >= 0) {
+        this.inventory[this.hotbarSelected] = null;
+      }
+    }
     this.equipSelected();
     this.publishInventory();
   }
@@ -2730,7 +2875,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Place a full-grown tree at a cell (from the held tree item) + consume one. */
   private placeTree(cx: number, cy: number, type: TreeType): void {
-    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    const cell = this.heldCell();
     if (!cell || cell.count <= 0) return;
     this.restoreTree(`${cx},${cy}`, type, TREE_BY_ID.get(type)?.fruit ?? false);
     this.consumeHeldMaterial();
@@ -3018,7 +3163,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Plant a berry bush at a cell (stage 0) from the held bush item + consume one. */
   private plantBush(cx: number, cy: number, type: BerryType): void {
-    const cell = this.hotbarSelected >= 0 ? this.inventory[this.hotbarSelected] : null;
+    const cell = this.heldCell();
     if (!cell || cell.count <= 0) return;
     this.restoreBush(`${cx},${cy}`, type, 0);
     this.consumeHeldMaterial();
@@ -7318,6 +7463,13 @@ export class GameScene extends Phaser.Scene {
     // Snap the hoe's tile-selection cursor to the grass tile under the mouse.
     this.updateTileCursor();
     this.updateHoverInspect(); // empty hand → white ring + name over the hovered object
+    if (this.toolPaletteOpen) {
+      // Close the tool palette if the context changed (a modal opened, or something got equipped);
+      // else keep its buttons tracking the camera.
+      if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen
+        || this.activeTool !== 'hand' || this.activeSeed || this.activePlace) this.closeToolPalette();
+      else this.publishToolPalette();
+    }
     this.updateHotbarHover(); // highlight the hotbar cell under the mouse cursor
     // While the build palette is open, tell it which cell the cursor is over (hover).
     this.updatePaletteHover();
