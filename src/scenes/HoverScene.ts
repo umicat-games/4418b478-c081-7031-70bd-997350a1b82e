@@ -33,6 +33,9 @@ const BRACKET_ATLAS = 'ui-sheet';
 const BRACKET_FRAME = 'white-corner-bracket';
 const BRACKET_SLICE = 14;              // native nine-patch corner in the 32×32 frame
 const BRACKET_MIN = BRACKET_SLICE * 2; // nine-slice min (2 corners), local/pre-scale units
+// Corner-size knob: the ~8px visible mark renders at ~(8×CORNER_SCALE)×zoom. 1 → 8×zoom (= the tool
+// cursor's corner size); 0.5 → 4×zoom (half). Tweak this to resize the hover corners.
+const CORNER_SCALE = 0.5;
 
 /**
  * Empty-hand "inspect" overlay: a white corner-bracket that hugs whatever world object the
@@ -73,12 +76,13 @@ export class HoverScene extends Phaser.Scene {
     if (!m || !m.visible || !m.onObject) { this.bracket?.setVisible(false); label.setVisible(false); return; }
 
     // The corner-bracket 9-slice hugging the object/tile + the name pill above. The nine-slice is
-    // SCALED by the camera zoom so its 8px corner marks render at 8×zoom — matching the world-space
-    // tool cursor exactly; `setSize` is therefore in PRE-scale (local) units, so divide the screen
-    // size by z.
+    // SCALED by the camera zoom (× CORNER_SCALE) so its ~8px corner mark renders at ~(8×CORNER_SCALE)
+    // ×zoom on screen. CORNER_SCALE=0.5 → ~4×zoom corners; `setScale` is the one knob for corner
+    // size. `setSize` is in PRE-scale (local) units, so divide the screen size by the scale.
     const z = m.z && m.z > 0 ? m.z : 1;
-    const w = Math.max(BRACKET_MIN * z, m.w), h = Math.max(BRACKET_MIN * z, m.h);
-    if (this.bracket) this.bracket.setVisible(true).setScale(z).setPosition(m.x, m.y).setSize(w / z, h / z);
+    const s = z * CORNER_SCALE;
+    const w = Math.max(BRACKET_MIN * s, m.w), h = Math.max(BRACKET_MIN * s, m.h);
+    if (this.bracket) this.bracket.setVisible(true).setScale(s).setPosition(m.x, m.y).setSize(w / s, h / s);
 
     if (!m.name) { label.setVisible(false); return; } // name blanked (e.g. while the wheel is open)
     label.setText(m.name).setVisible(true).setPosition(m.nameX, m.nameY);
