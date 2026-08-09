@@ -2587,6 +2587,7 @@ export class GameScene extends Phaser.Scene {
   private static WHEEL_D = 54;          // circle diameter (screen px) — a touch bigger than the old 48
   private static WHEEL_OPEN_MS = 220;   // spring-out from centre (Back.easeOut) on open; the select-close plays this REVERSED
   private static WHEEL_OVERSHOOT = 3.0; // Back.easeOut overshoot — higher = more pronounced bounce
+  private static WHEEL_HOLD_MS = 150;   // (on tool-select) pause after the select SFX, before the reverse disappear anim
   private static WHEEL_RING: Array<{ toolId: ToolId | null; ux: number; uy: number }> = [
     { toolId: 'pickaxe', ux: 0.866, uy: -0.5 },       // 2 o'clock
     { toolId: 'axe', ux: 0.866, uy: 0.5 },            // 4 o'clock
@@ -2677,10 +2678,13 @@ export class GameScene extends Phaser.Scene {
     let f = 1, s = 1;
     const now = this.time.now;
     if (this.wheelClose) {
+      // Tool-select exit: (SFX already played on the pick) → a brief HOLD at rest → then the open
+      // spring in REVERSE (retract inward + shrink away).
+      const HOLD = GameScene.WHEEL_HOLD_MS;
       const e = now - this.wheelClose.at;
-      if (e >= GameScene.WHEEL_OPEN_MS) { this.closeToolPalette(); return; } // exit finished → clear + stop
-      const be = spring(1 - e / GameScene.WHEEL_OPEN_MS); // reverse of the open curve: 1 → 0
-      f = be; s = be;
+      if (e >= HOLD + GameScene.WHEEL_OPEN_MS) { this.closeToolPalette(); return; } // exit finished → clear + stop
+      if (e < HOLD) { f = 1; s = 1; } // pause
+      else { const be = spring(1 - (e - HOLD) / GameScene.WHEEL_OPEN_MS); f = be; s = be; } // reverse of the open curve: 1 → 0
     } else {
       const e = now - this.wheelOpenAt;
       if (e < GameScene.WHEEL_OPEN_MS) { const be = spring(e / GameScene.WHEEL_OPEN_MS); f = be; s = be; } // spring out from centre
@@ -2740,7 +2744,8 @@ export class GameScene extends Phaser.Scene {
       // Snap the cursor back onto the ITEM the wheel opened on, so the newly-picked tool is ready
       // to use right there (else it'd sit off at the tool circle's ring position). Mouse-locked only.
       if (this.locked) this.snapCursorToWorld((pal.bbox.wl + pal.bbox.wr) / 2, (pal.bbox.wt + pal.bbox.wb) / 2);
-      this.beginCloseWheel(hit.idx); // tool picked → play the open anim in reverse (retract + shrink)
+      playSfx(this); // selection blip — then a hold + the reverse disappear anim (see publishToolPalette)
+      this.beginCloseWheel(hit.idx);
     } else if (hit && hit.idx === -1) {
       this.clearHeld(); // the mouse circle = cancel → drop the held tool, empty hand
       this.closeToolPalette(); // no tool picked → no exit animation, just vanish
