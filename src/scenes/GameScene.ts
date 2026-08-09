@@ -613,10 +613,12 @@ export class GameScene extends Phaser.Scene {
   private edgePointer = { x: 0, y: 0, inside: false, isMouse: false };
   private overUi = false;
 
-  // Pointer lock (web-game standard: click to capture, Esc to release). While
-  // locked we drive a VIRTUAL cursor from relative mouse deltas, clamped to the
-  // canvas so it can't leave; edge-scroll + HUD clicks read it, not the OS
-  // pointer (which is frozen under lock). `cursorSprite` is our drawn cursor.
+  // NO pointer lock (removed — it caused re-lock-after-modal / ghost-click friction). `locked` now
+  // just means "DESKTOP MOUSE is the active input" (true after a mouse event, false after a touch) —
+  // it still gates the drawn triangle cursor + the hover/tile-cursor logic. The OS cursor is hidden
+  // via CSS (`cursor:none`) and CursorScene draws the triangle at `vcursor`, which tracks the REAL
+  // pointer position (absolute — no more relative-delta virtual cursor). Clicks route through `actAt`
+  // at the real pointer, exactly like touch taps.
   private locked = false;
   private vcursor = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
   private findCatBounds = new Phaser.Geom.Rectangle();
@@ -1047,16 +1049,10 @@ export class GameScene extends Phaser.Scene {
         // Camera bounds (set by loadWorldScene) auto-clamp on preRender
       });
 
-      // ── Edge-scroll (DESKTOP / mouse) ──────────────────────────────────
-      // Track the mouse over the canvas; updateEdgeScroll() does the scrolling
-      // per-frame so holding the cursor at an edge keeps moving (RTS feel).
-      this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-        this.edgePointer.x = pointer.x;
-        this.edgePointer.y = pointer.y;
-        this.edgePointer.inside = true;
-        this.edgePointer.isMouse = !pointer.wasTouch;
-      });
-      this.input.on('gameout',  () => { this.edgePointer.inside = false; });
+      // When the mouse LEAVES the canvas (possible now that we don't lock it), drop desktop-cursor
+      // mode so the drawn triangle hides + the OS arrow shows over the surrounding page; a mouse move
+      // back in re-enters it. (edge-scroll is gone; edgePointer is vestigial.)
+      this.input.on('gameout',  () => { this.edgePointer.inside = false; this.locked = false; });
       this.input.on('gameover', () => { this.edgePointer.inside = true; });
 
       // ── Double-tap / double-click on empty space → find cat ────────────
@@ -1457,18 +1453,12 @@ export class GameScene extends Phaser.Scene {
   /** Set the canvas CSS cursor to the game's pixel triangle at the SAME 2× size CursorScene draws
    *  it (a CSS `url()` cursor uses the PNG's native 16px → too small; upscale nearest to 32px via a
    *  data URL so the unlocked cursor matches the in-game one). Hotspot at 0,0. */
+  /** HIDE the OS cursor over the game canvas — `CursorScene` draws the pixel triangle at the real
+   *  pointer position instead (so we control its exact art/size). (Previously this SET the OS cursor
+   *  to the triangle for the pointer-lock-released state; now there's no lock and the drawn cursor is
+   *  the single source, so we just hide the OS one.) */
   private setGameCursorCss(): void {
-    const canvas = this.game.canvas;
-    try {
-      const src = this.textures.get('cursor')?.getSourceImage() as CanvasImageSource | undefined;
-      if (!src) throw 0;
-      const S = 2, w = 16 * S, h = 16 * S;
-      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-      const ctx = cv.getContext('2d'); if (!ctx) throw 0;
-      ctx.imageSmoothingEnabled = false; // nearest → crisp pixels
-      ctx.drawImage(src, 0, 0, 16, 16, 0, 0, w, h);
-      canvas.style.cursor = `url(${cv.toDataURL()}) 0 0, default`;
-    } catch { canvas.style.cursor = "url('uploaded/triangle_mouse_icon_1.png') 0 0, default"; }
+    this.game.canvas.style.cursor = 'none';
   }
 
   private setupPointerLock(): void {
@@ -1522,18 +1512,18 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.wasTouch) return;
+      this.locked = true; // a mouse event → desktop cursor mode
+      this.vcursor.x = pointer.x; this.vcursor.y = pointer.y;
       // Swallow GHOST mouse events: after a touchend, browsers synthesise a mouse down/up/click at the
-      // same spot — on a touch device that would hit the unlocked wheel-pick path and dismiss the
-      // wheel a long-press just opened. A pure-desktop session never sets touchLastAt, so this no-ops.
+      // same spot — on a touch device that would hit the world-click path. A pure-desktop session
+      // never sets touchLastAt, so this no-ops.
       if (this.time.now - this.touchLastAt < 600) return;
       // RIGHT-CLICK = open (or close) the contextual tool wheel — the desktop use/switch split:
-      // LEFT-click only points + uses the held tool, RIGHT-click summons the wheel. Works under
-      // pointer lock (via the virtual cursor) or unlocked (the OS pointer position).
+      // LEFT-click only points + uses the held tool, RIGHT-click summons the wheel.
       if (pointer.rightButtonDown()) {
         if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.confirmOpen || this.inventoryOpen) return;
         if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // right-click again → animated dismiss
-        const rx = this.locked ? this.vcursor.x : pointer.x, ry = this.locked ? this.vcursor.y : pointer.y;
-        const rwp = this.cameras.main.getWorldPoint(rx, ry);
+        const rwp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         this.openToolWheelAt(rwp.x, rwp.y, true);
         return;
       }
@@ -1541,7 +1531,7 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
-      if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal (unlocked)
+      if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal
       if (this.menuOpen) {
         // Press on a Settings volume slider → start a DRAG (held pointer scrubs it).
         const sl = this.menuSliderAt(pointer.x, pointer.y);
@@ -1552,22 +1542,10 @@ export class GameScene extends Phaser.Scene {
         if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); return; }
         this.handleMenuClick(pointer.x, pointer.y); return;
       }
-      if (this.locked) { this.handleLockedClick(); return; }
-      // Wheel open but pointer NOT locked (e.g. just after a dialog) → a left-click picks from it.
-      if (this.toolPaletteOpen) { this.actAt(pointer.x, pointer.y); return; }
-      // Not locked yet: clicking the cat opens the dialog; anything else captures
-      // the pointer (the normal edge-scroll / camera mode). NOTE: Cato's top-right
-      // portrait is handled by the findCatHit GameObject's own pointerdown (the
-      // HUD photo-frame icon-button stopPropagation()'s here, aborting this
-      // scene-level handler, so the portrait can't be routed through it).
-      if (this.chatterAt(pointer.x, pointer.y)) { this.openChatterDialog(); return; } // proactive chip (screen-space)
-      const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      if (this.catContains(wp.x, wp.y)) { this.openDialog(); return; }
-      if (this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; } // door mailbox → open anim → menu (Mail)
-      if (this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }      // door chest → open anim → menu (Chest)
-      if (this.padContains(wp.x, wp.y)) { this.openShopViaPad(); return; }          // desk pad → screen-on anim → menu (Shop)
-      if (this.craftStationContains(wp.x, wp.y)) { this.openCraft(); return; }        // work station → crafting modal
-      this.input.manager.mouse?.requestPointerLock();
+      // Everything else (world tiles, cat, mailbox/chest/pad/craft objects, HUD buttons, the tool
+      // wheel) → the SAME router as touch, at the real pointer. (Cato's top-right portrait is caught
+      // by the HUD scene's own icon-button first and never reaches here.)
+      this.actAt(pointer.x, pointer.y);
     });
 
     // TOUCH: no pointer lock / virtual cursor. Two gestures:
@@ -1578,6 +1556,7 @@ export class GameScene extends Phaser.Scene {
     //    camera pan) acts at the touched point via the SAME `actAt(x,y)` as mouse.
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
+      this.locked = false; // touch → no desktop cursor
       this.touchLastAt = this.time.now;
       // Unified menu: touch scrolls via a SWIPE (handled in MenuScene) — no rail drag here.
       // A finger on a Settings volume slider starts a drag (pointermove scrubs it).
@@ -1615,6 +1594,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
+      this.locked = false;
       this.touchLastAt = this.time.now;
       this.touchPressTimer?.remove(); this.touchPressTimer = undefined;
       if (this.touchLongFired) { this.touchLongFired = false; return; } // long-press opened the wheel — the release doesn't act
@@ -1648,37 +1628,21 @@ export class GameScene extends Phaser.Scene {
       if (this.cutscene) this.advanceCutscene(); else this.advanceDialog();
     });
 
-    // While locked, accumulate RELATIVE mouse movement into the virtual cursor,
-    // clamped to the canvas so it can never leave.
+    // The virtual cursor simply TRACKS the real mouse position (no pointer lock → the OS pointer is
+    // free, so its absolute position is valid). CursorScene draws the triangle here; the OS cursor is
+    // hidden via CSS. A mouse move also (re)enters desktop-cursor mode.
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.locked) return;
-      const cam = this.cameras.main;
-      this.vcursor.x = Phaser.Math.Clamp(this.vcursor.x + pointer.movementX, 0, cam.width);
-      this.vcursor.y = Phaser.Math.Clamp(this.vcursor.y + pointer.movementY, 0, cam.height);
+      if (pointer.wasTouch) return;
+      this.locked = true;
+      this.vcursor.x = pointer.x;
+      this.vcursor.y = pointer.y;
     });
 
-    // Lock state via the native event (most reliable; browser Esc unlocks).
-    const onLockChange = () => {
-      this.locked = document.pointerLockElement === this.game.canvas;
-      this.cursorState.visible = this.locked;
-      if (this.locked) {
-        // Start the virtual cursor where the OS cursor was.
-        this.vcursor.x = Phaser.Math.Clamp(this.input.activePointer.x, 0, this.cameras.main.width);
-        this.vcursor.y = Phaser.Math.Clamp(this.input.activePointer.y, 0, this.cameras.main.height);
-      }
-    };
-    document.addEventListener('pointerlockchange', onLockChange);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      document.removeEventListener('pointerlockchange', onLockChange);
       this.game.canvas.removeEventListener('contextmenu', onCtx);
       this.game.events.off('hud:submit', this.onHudSubmit);
       this.game.events.off('hud:cancel', this.onHudCancel);
     });
-  }
-
-  /** Route a click while pointer-locked (mouse) via the virtual cursor. */
-  private handleLockedClick(): void {
-    this.actAt(this.vcursor.x, this.vcursor.y);
   }
 
   /** Route an action at canvas-px (x,y). Shared by the pointer-locked mouse
@@ -2393,7 +2357,7 @@ export class GameScene extends Phaser.Scene {
       icon.setVisible(false); // the ghost IS the icon here
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
-      if (this.buildPaletteCell || !this.locked || this.dialogOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar() || this.pointerOverBuildPalette() || this.hoeSwing || this.waterCan) {
+      if (this.buildPaletteCell || !this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar() || this.pointerOverBuildPalette() || this.hoeSwing || this.waterCan) {
         cursor.setVisible(false);
         this.hidePlacePreview();
       } else {
@@ -2417,8 +2381,8 @@ export class GameScene extends Phaser.Scene {
     const chopping = this.activeTool === 'axe';
     const mining = this.activeTool === 'pickaxe';
     const holdingTool = tilling || planting || watering || chopping || mining;
-    // No tool held / not locked / over UI / dialog / backpack → real mouse.
-    if (!holdingTool || !this.locked || this.dialogOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar()) {
+    // No tool held / not locked / over UI / dialog / menu / backpack → real mouse (no tile bracket).
+    if (!holdingTool || !this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
@@ -4248,7 +4212,6 @@ export class GameScene extends Phaser.Scene {
       this.menuSourceSprite = undefined;
       this.menuCloseAnim = undefined;
       this.menuOpen = true;
-      if (this.locked) this.input.manager.mouse?.releasePointerLock();
       this.hideHotbar(true);
     }
     this.publishMenu(true);
@@ -4520,7 +4483,6 @@ export class GameScene extends Phaser.Scene {
     this.craftOpen = true;
     this.craftSel = 0;
     this.craftMsg = '';
-    if (this.locked) this.input.manager.mouse?.releasePointerLock();
     this.publishCraft();
   }
 
@@ -4879,9 +4841,6 @@ export class GameScene extends Phaser.Scene {
     this.holdExternal(store, it);
     this.closeMenu();
     playSfx(this);
-    // openMenu released pointer lock; re-capture it (desktop) so the very next click USES the item
-    // (plants / places) instead of just re-locking. Touch never locks — taps route directly.
-    if (!this.input.activePointer.wasTouch) this.input.manager.mouse?.requestPointerLock();
   }
 
   /** Which action (if any) is under a tap on the unified menu's action menu. */
@@ -6699,12 +6658,9 @@ export class GameScene extends Phaser.Scene {
     this.faceDir = 'down';
     (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.child.play('idle-down', true);
-    // Release pointer lock so the DOM <input> reliably takes keyboard focus (and
-    // a dialog WANTS a free cursor to click the field / scroll the message). To
-    // avoid the jarring jump to the host arrow, swap the canvas cursor to the
-    // game's own pixel cursor via CSS — visually seamless. Restored on close.
-    if (this.locked) document.exitPointerLock();
-    this.setGameCursorCss(); // the 2×-sized game cursor (set globally too, but ensure it's applied)
+    // (No pointer lock anymore — the DOM <input> takes focus fine; the OS cursor stays hidden and
+    // CursorScene draws the triangle.)
+    this.setGameCursorCss(); // ensure the OS cursor stays hidden (idempotent)
     this.setImmediateDialog(seed ?? this.fallbackSay(false)); // seeded (from a chatter tap) or a greeting
     // Cutscene: hide only the text-INPUT widgets (`chat-input` panel + `chat-input-field`
     // DOM input) — Cato is speaking, the player just taps to continue. KEEP `chat-text`
@@ -7819,27 +7775,10 @@ export class GameScene extends Phaser.Scene {
    * used to keep pushing the camera even with the mouse off-screen. Click to
    * capture first; touch pans by drag (and never locks), so it's unaffected.
    */
-  private updateEdgeScroll(delta: number): void {
-    if (this.dialogOpen || this.inventoryOpen) return; // typing / backpack — don't pan
-    if (this.cameraFollow) return; // camera is locked onto Cato — no manual pan
-    if (!this.locked) return;
-    const cam = this.cameras.main;
-    const px = this.vcursor.x;
-    const py = this.vcursor.y;
-    // Don't scroll while the cursor is over the Find-cat button.
-    if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, px, py)) return;
-    let dx = 0;
-    let dy = 0;
-    if (px < EDGE_MARGIN) dx = -1;
-    else if (px > cam.width - EDGE_MARGIN) dx = 1;
-    if (py < EDGE_MARGIN) dy = -1;
-    else if (py > cam.height - EDGE_MARGIN) dy = 1;
-    if (dx === 0 && dy === 0) return;
-    const step = (EDGE_SPEED * delta) / 1000 / cam.zoom; // screen px/s → world
-    cam.scrollX += dx * step;
-    cam.scrollY += dy * step;
-    // Camera bounds (set by loadWorldScene) auto-clamp on preRender.
-  }
+  // Mouse edge-scroll was REMOVED with pointer lock (the cursor is free now, so pushing it to the
+  // edge would just leave the canvas). Pan the camera with WASD / arrows (+ touch drag). Kept as a
+  // no-op so the call site + EDGE_* consts don't need surgery.
+  private updateEdgeScroll(_delta: number): void { /* disabled — WASD / drag pan instead */ }
 
   update(_time: number, delta: number): void {
     this.loadingOverlay?.update(delta); // drift the loading-screen wallpaper while it's up
