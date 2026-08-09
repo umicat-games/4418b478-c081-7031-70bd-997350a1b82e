@@ -3,11 +3,12 @@ import Phaser from 'phaser';
 /** Model published by GameScene to the `hover` registry key each frame. Screen-space px. */
 export interface HoverModel {
   visible: boolean;
-  onObject: boolean;   // true = hugging a nameable object (framed + named); false = a small cursor dot
-  x: number; y: number;  // frame centre (onObject) OR cursor point (dot)
-  w: number; h: number;  // frame size (onObject only)
-  name: string;          // object name (onObject only)
-  nameX: number; nameY: number; // label anchor — object top-centre (onObject only)
+  onObject: boolean;   // true = draw the corner-bracket frame (object OR empty tile)
+  x: number; y: number;  // frame centre (screen px)
+  w: number; h: number;  // frame size (screen px, already × zoom)
+  z: number;             // camera zoom — the bracket corners render at 8×z so they MATCH the world-space tool cursor
+  name: string;          // object name ('' = no label, e.g. empty grass / while the wheel is open)
+  nameX: number; nameY: number; // label anchor — object top-centre (name only)
 }
 
 /** Contextual tool-wheel model, published by GameScene to the `toolPalette` registry key. */
@@ -22,12 +23,15 @@ const CIRCLE_BG = 'tool-circle-bg';            // the round tool-button backgrou
 const CIRCLE_BG_SEL = 'tool-circle-bg-selected'; // the hovered/selected circle (blue ring)
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
-// The `white-corner-bracket` region in the `ui-sheet` atlas (all_ui_assets_on_one_sheet),
-// tagged as a nine-slice in the Asset Manager — 32×32 frame, 14px corners (thin stretchy edges).
-const BRACKET_ATLAS = 'ui-sheet';
-const BRACKET_FRAME = 'white-corner-bracket';
-const BRACKET_SLICE = 14;
-const BRACKET_MIN = BRACKET_SLICE * 2; // don't shrink below the two corners (would distort)
+// The hover bracket uses the SAME art as the tool tile-cursor (`tile_select_cursor.png`, 24×24 —
+// four L-shaped corner marks with ~8px arms). Drawn as a nine-slice (8px corners, stretchy
+// transparent edges) so the four corners hug ANY-size object bbox, and SCALED by the camera zoom
+// so the corner marks render at exactly `8×zoom` — identical to the world-space tool cursor. This
+// makes the empty-hand "inspect" frame and the "holding a tool" frame look the same (the user
+// asked for consistent corner size).
+const BRACKET_TEX = 'tile-select';
+const BRACKET_SLICE = 8;            // corner size in the 24×24 texture (fits each L-mark)
+const BRACKET_MIN = BRACKET_SLICE * 2; // don't shrink below the two corners (local units, pre-scale)
 
 /**
  * Empty-hand "inspect" overlay: a white corner-bracket that hugs whatever world object the
@@ -45,9 +49,10 @@ export class HoverScene extends Phaser.Scene {
   constructor() { super({ key: 'HoverScene' }); }
 
   create(): void {
-    if (this.textures.exists(BRACKET_ATLAS) && this.textures.get(BRACKET_ATLAS).has(BRACKET_FRAME)) {
+    if (this.textures.exists(BRACKET_TEX)) {
       this.bracket = this.add
-        .nineslice(0, 0, BRACKET_ATLAS, BRACKET_FRAME, 32, 32, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
+        .nineslice(0, 0, BRACKET_TEX, undefined, 24, 24, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
+        .setOrigin(0.5, 0.5)
         .setVisible(false);
     }
     this.pill = this.add.graphics();
@@ -66,9 +71,13 @@ export class HoverScene extends Phaser.Scene {
     pill.clear();
     if (!m || !m.visible || !m.onObject) { this.bracket?.setVisible(false); label.setVisible(false); return; }
 
-    // Over an object → the corner-bracket 9-slice hugging it + the name pill above.
-    const w = Math.max(BRACKET_MIN, m.w), h = Math.max(BRACKET_MIN, m.h);
-    if (this.bracket) this.bracket.setVisible(true).setPosition(m.x, m.y).setSize(w, h);
+    // The corner-bracket 9-slice hugging the object/tile + the name pill above. The nine-slice is
+    // SCALED by the camera zoom so its 8px corner marks render at 8×zoom — matching the world-space
+    // tool cursor exactly; `setSize` is therefore in PRE-scale (local) units, so divide the screen
+    // size by z.
+    const z = m.z && m.z > 0 ? m.z : 1;
+    const w = Math.max(BRACKET_MIN * z, m.w), h = Math.max(BRACKET_MIN * z, m.h);
+    if (this.bracket) this.bracket.setVisible(true).setScale(z).setPosition(m.x, m.y).setSize(w / z, h / z);
 
     if (!m.name) { label.setVisible(false); return; } // name blanked (e.g. while the wheel is open)
     label.setText(m.name).setVisible(true).setPosition(m.nameX, m.nameY);

@@ -627,7 +627,7 @@ export class GameScene extends Phaser.Scene {
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
   // Empty-hand inspect overlay (HoverScene) — a white ring hugging the hovered object + its name.
-  private hoverModel: HoverModel = { visible: false, onObject: false, x: 0, y: 0, w: 0, h: 0, name: '', nameX: 0, nameY: 0 };
+  private hoverModel: HoverModel = { visible: false, onObject: false, x: 0, y: 0, w: 0, h: 0, z: 1, name: '', nameX: 0, nameY: 0 };
 
   // ── Farming (hoe → till grass) ──────────────────────────────────────────
   // Minecraft-style: pick the hoe (key 2; 1 = empty hand), a bracket cursor
@@ -2452,7 +2452,7 @@ export class GameScene extends Phaser.Scene {
     if (this.toolPaletteOpen) {
       const cam = this.cameras.main, z = cam.zoom, bb = this.toolPaletteOpen.bbox, pad = 5;
       this.hoverModel = {
-        visible: true, onObject: true,
+        visible: true, onObject: true, z,
         x: ((bb.wl + bb.wr) / 2 - cam.worldView.x) * z, y: ((bb.wt + bb.wb) / 2 - cam.worldView.y) * z,
         w: (bb.wr - bb.wl) * z + pad * 2, h: (bb.wb - bb.wt) * z + pad * 2, name: '', nameX: 0, nameY: 0,
       };
@@ -2480,7 +2480,7 @@ export class GameScene extends Phaser.Scene {
       const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
       const pad = 5;
       this.hoverModel = {
-        visible: true, onObject: true,
+        visible: true, onObject: true, z: cam.zoom,
         x: (cx - cam.worldView.x) * cam.zoom,
         y: (cy - cam.worldView.y) * cam.zoom,
         w: b.w * cam.zoom + pad * 2,
@@ -2492,7 +2492,26 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('hover', this.hoverModel);
       return; // the triangle mouse cursor stays visible — the bracket just ADDS a highlight
     }
-    this.setHover(false); // empty ground → no bracket; the normal triangle cursor is unchanged
+
+    // Empty ground: over a grass/island TILE (not water / off-map) → still show the corner bracket,
+    // framing that tile exactly like the tool cursor does (same art, size, and 4px margin). No name.
+    // This keeps a highlight visible at all times, even empty-handed on grass.
+    const tile = this.islandLayer?.getTileAtWorldXY(wp.x, wp.y);
+    if (tile) {
+      const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y);
+      if (w) {
+        const cxw = w.x + TILE / 2, cyw = w.y + TILE / 2, z = cam.zoom;
+        this.hoverModel = {
+          visible: true, onObject: true, z,
+          x: (cxw - cam.worldView.x) * z, y: (cyw - cam.worldView.y) * z,
+          w: 24 * z, h: 24 * z, // the tile-select cursor is 24 world px (16px tile + 4px margin each side)
+          name: '', nameX: 0, nameY: 0,
+        };
+        this.registry.set('hover', this.hoverModel);
+        return;
+      }
+    }
+    this.setHover(false); // over water / off the island → no bracket; just the normal triangle cursor
   }
 
   private setHover(visible: boolean): void {
