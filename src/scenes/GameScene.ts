@@ -164,6 +164,11 @@ type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
 // chest; `take` = chest→backpack.
 type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
 const TAB_BACKPACK = 5; // the standalone backpack view (no tab bar) — distinct from the 0-4 menu tabs
+const TAB_SETTINGS = 4;
+// The paw (bottom-right) opens a TABBED "menu" — the tabs it shows (TAB_DEFS indices). Settings for
+// now; append calendar / achievements (new TAB_DEFS entries) here later. Chest / mail / shop stay
+// SEPARATE (their own in-world objects open them standalone), so they're NOT in this set.
+const MENU_SYSTEM_TABS = [TAB_SETTINGS];
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -710,6 +715,7 @@ export class GameScene extends Phaser.Scene {
   // detail. WIP: phase 1 (layout + tabs + item detail); actions/mail-receipt next.
   private menuOpen = false;
   private menuTab = 2;
+  private menuTabSet: number[] | null = null; // non-null = the menu shows a TAB BAR of these tab indices (the paw menu); null = standalone (object/backpack opens)
   private menuSelected = -1;
   private menuRev = 0;
   private menuActionRev = 0;
@@ -2309,7 +2315,7 @@ export class GameScene extends Phaser.Scene {
     this.settingsBtnPressed = true; this.publishBackpackBtn();
     this.time.delayedCall(120, () => {
       this.settingsBtnPressed = false; this.publishBackpackBtn();
-      this.openMenu(4); // TAB_SETTINGS
+      this.openMenu(TAB_SETTINGS, MENU_SYSTEM_TABS); // paw → the tabbed menu, landing on Settings
     });
   }
 
@@ -4230,9 +4236,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Open the unified menu on `tab` (0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings). */
-  private openMenu(tab: number): void {
+  private openMenu(tab: number, tabSet: number[] | null = null): void {
     playSfx(this); // click blip — covers open (bag/mailbox/chest/shop/settings) + tab switch
     this.menuTab = tab;
+    this.menuTabSet = tabSet; // null = standalone (no tab bar); a list = the tabbed paw menu
     this.menuSelected = -1;
     if (tab === 3) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // Shop defaults
     if (!this.menuOpen) {
@@ -4300,7 +4307,8 @@ export class GameScene extends Phaser.Scene {
       ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
     this.registry.set('menu', {
-      visible: true, rev: ++this.menuRev, tab: this.menuTab, noTabs: true, // ALL menu views are standalone now (no tab bar) — Cato shares the backpack, so there's no Cato-bag tab
+      visible: true, rev: ++this.menuRev, tab: this.menuTab,
+      noTabs: this.menuTabSet === null, tabSet: this.menuTabSet ?? undefined, // paw menu shows a tab bar of `tabSet`; object/backpack opens are standalone
       items: this.menuStore().map((it) => ({
         id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
         label: this.itemName(it.id), desc: this.itemDesc(it.id),
@@ -4643,7 +4651,7 @@ export class GameScene extends Phaser.Scene {
     // Tab switch.
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
-    if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab); return true; }
+    if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet); return true; } // keep the tab bar on a switch
     // Backpack / Chest / Cato-bag: tap an item → select it (right detail) AND open its action menu.
     if (this.menuTab === TAB_BACKPACK || this.menuTab === 1 || this.menuTab === 2) {
       const idx = this.itemSlotAt('menuSlots', x, y);

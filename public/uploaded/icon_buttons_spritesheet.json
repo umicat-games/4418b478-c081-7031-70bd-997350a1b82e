@@ -1,1 +1,120 @@
-{"frames":{"close-light-big":{"frame":{"x":0,"y":320,"w":32,"h":32},"sourceSize":{"w":32,"h":32}},"order":{"frame":{"x":64,"y":320,"w":32,"h":32},"sourceSize":{"w":32,"h":32}},"close-light-big-pressed-down":{"frame":{"x":32,"y":320,"w":32,"h":32},"sourceSize":{"w":32,"h":32}},"sprout-up":{"frame":{"x":0,"y":384,"w":32,"h":32},"sourceSize":{"w":32,"h":32}},"sprout-up-pressed-down":{"frame":{"x":32,"y":384,"w":32,"h":32},"sourceSize":{"w":32,"h":32}},"settings":{"frame":{"x":0,"y":128,"w":32,"h":32},"sourceSize":{"w":32,"h":32}},"settings-pressed-down":{"frame":{"x":32,"y":128,"w":32,"h":32},"sourceSize":{"w":32,"h":32}}},"meta":{"image":"icon_buttons_spritesheet.png","size":{"w":192,"h":480},"scale":"1"}}
+{
+  "frames": {
+    "close-light-big": {
+      "frame": {
+        "x": 0,
+        "y": 320,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "order": {
+      "frame": {
+        "x": 64,
+        "y": 320,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "close-light-big-pressed-down": {
+      "frame": {
+        "x": 32,
+        "y": 320,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "sprout-up": {
+      "frame": {
+        "x": 0,
+        "y": 384,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "sprout-up-pressed-down": {
+      "frame": {
+        "x": 32,
+        "y": 384,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "settings": {
+      "frame": {
+        "x": 0,
+        "y": 128,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "settings-pressed-down": {
+      "frame": {
+        "x": 32,
+        "y": 128,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "paw": {
+      "frame": {
+        "x": 128,
+        "y": 352,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    },
+    "paw-pressed": {
+      "frame": {
+        "x": 160,
+        "y": 352,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      }
+    }
+  },
+  "meta": {
+    "image": "icon_buttons_spritesheet.png",
+    "size": {
+      "w": 192,
+      "h": 480
+    },
+    "scale": "1"
+  }
+}

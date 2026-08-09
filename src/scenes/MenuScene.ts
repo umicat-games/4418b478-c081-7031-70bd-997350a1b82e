@@ -71,6 +71,7 @@ export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: numbe
 export interface MenuModel {
   visible: boolean; rev: number;
   noTabs?: boolean;          // standalone backpack view → hide the tab bar
+  tabSet?: number[];         // the paw menu: which TAB_DEFS indices to show in the bar (subset); absent = all
   tab: number;               // 0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings · 5 backpack
   items?: MenuItem[];        // grid (chest / cato-bag)
   mails?: MailListEntry[];   // mail list
@@ -237,40 +238,45 @@ export class MenuScene extends Phaser.Scene {
     // Tabs TOUCH (no gap) + the ACTIVE tab is a bit wider + drawn ON TOP so it covers its
     // neighbours' edges (browser/Zelda tab look). `medium-brown-tab` (100×23) is stretched
     // non-uniformly (width fills the slot, height set taller so the icon isn't cramped).
-    const N = TAB_DEFS.length, INSET = lw * 0.02;
-    const tabW = (lw - INSET * 2) / N;
+    // Which tabs to show in the bar: the paw menu passes a SUBSET (`tabSet`); default = all.
+    const tabsToShow = (m.tabSet && m.tabSet.length ? m.tabSet : TAB_DEFS.map((_, i) => i)).filter((i) => i >= 0 && i < TAB_DEFS.length);
+    const N = tabsToShow.length, INSET = lw * 0.02;
+    // Cap each tab's width (so a 1–2 tab menu doesn't get absurdly wide tabs) and CENTRE the group.
+    const tabW = Math.min((lw - INSET * 2) / N, (lw - INSET * 2) / 4);
+    const startX = lx + (lw - N * tabW) / 2;
     const tabH = H * 0.07; // a touch taller so the icon isn't cramped near the top edge
     const OVERLAP = tabH * 0.22; // the tab's bottom dips a LITTLE into the frame top (merge the border)
     const ACTIVE_OVER = tabW * 0.08; // active tab grows this much on EACH side, over its neighbours
     const ACTIVE_TALLER = 1.14;      // active tab is this much taller (grows UPWARD, bottom stays merged)
     const BOTTOM = ly + OVERLAP;     // every tab's bottom edge (merged into the frame)
-    const slotCx = (i: number) => lx + INSET + i * tabW + tabW / 2;
+    const slotCx = (pos: number) => startX + pos * tabW + tabW / 2; // pos = index WITHIN tabsToShow
     const tabBounds: Array<{ x: number; y: number; w: number; h: number; tab: number }> = [];
     const tabIcons: Phaser.GameObjects.Image[] = [];
     let activeChip: Phaser.GameObjects.Image | undefined, activeIcon: Phaser.GameObjects.Image | undefined, activeCy = 0, activeH = tabH;
-    const drawTab = (i: number) => {
-      const active = i === m.tab;
+    const drawTab = (tabIdx: number, pos: number) => {
+      const active = tabIdx === m.tab;
       const w = active ? tabW + ACTIVE_OVER * 2 : tabW;
       const h = active ? tabH * ACTIVE_TALLER : tabH;
       const cy = BOTTOM - h / 2; // bottom pinned → taller tab rises upward
-      const chip = this.add.image(slotCx(i), cy, ATLAS, TAB_TEX).setScale(w / 100, h / 23);
+      const chip = this.add.image(slotCx(pos), cy, ATLAS, TAB_TEX).setScale(w / 100, h / 23);
       if (!active) chip.setTint(TAB_UNSEL_TINT); else { activeChip = chip; activeCy = cy; activeH = h; }
       panel.add(chip);
       let ic: Phaser.GameObjects.Image | undefined;
-      const iconTex = TAB_DEFS[i]!.iconKey ?? 'ui-icons';
+      const iconTex = TAB_DEFS[tabIdx]!.iconKey ?? 'ui-icons';
       if (this.textures.exists(iconTex)) {
         // Scale by the frame's real size (ui-icons 16px vs the chest sprite 48px) so
         // every tab icon lands at the same on-screen height.
-        ic = this.add.image(slotCx(i), cy - OVERLAP / 2, iconTex, TAB_DEFS[i]!.frame);
+        ic = this.add.image(slotCx(pos), cy - OVERLAP / 2, iconTex, TAB_DEFS[tabIdx]!.frame);
         ic.setScale(((tabH - OVERLAP) * 0.7) / Math.max(ic.width, ic.height));
         tabIcons.push(ic);
       }
       if (active) activeIcon = ic;
     };
     if (!m.noTabs) { // the standalone backpack view has NO tab bar
-      TAB_DEFS.forEach((_, i) => { if (i !== m.tab) drawTab(i); }); // inactive first
-      if (m.tab >= 0 && m.tab < N) drawTab(m.tab);                  // active LAST → on top
-      TAB_DEFS.forEach((_, i) => tabBounds.push({ x: slotCx(i) - tabW / 2, y: BOTTOM - tabH, w: tabW, h: tabH, tab: i })); // hit = base slots
+      tabsToShow.forEach((ti, pos) => { if (ti !== m.tab) drawTab(ti, pos); }); // inactive first
+      const activePos = tabsToShow.indexOf(m.tab);
+      if (activePos >= 0) drawTab(m.tab, activePos);                              // active LAST → on top
+      tabsToShow.forEach((ti, pos) => tabBounds.push({ x: slotCx(pos) - tabW / 2, y: BOTTOM - tabH, w: tabW, h: tabH, tab: ti })); // hit = base slots
     }
     this.registry.set('menuTabs', tabBounds);
 

@@ -14,10 +14,10 @@ const GAP = 10;       // gap between the two buttons
 const MARGIN = 16;    // gap from the canvas bottom-right corner
 
 /**
- * The bottom-right corner HUD buttons: BACKPACK (`sprout-up`) on the left + SETTINGS (`settings`)
- * on the right (each shows its `-pressed-down` frame while pressed). Native-px overlay like
- * CursorScene so it's unzoomed. GameScene owns the model + tap routing (this scene publishes each
- * button's hit rect); tapping the sprout opens the backpack, the gear opens Settings.
+ * The bottom-right corner HUD buttons: BACKPACK (`sprout-up`) on the left + MENU (`paw`) on the
+ * right (each shows its pressed frame while pressed). Native-px overlay like CursorScene so it's
+ * unzoomed. GameScene owns the model + tap routing (this scene publishes each button's hit rect);
+ * tapping the sprout opens the backpack, the paw opens the tabbed menu (Settings + future tabs).
  */
 export class BackpackButtonScene extends Phaser.Scene {
   private bag?: Phaser.GameObjects.Image;
@@ -27,7 +27,7 @@ export class BackpackButtonScene extends Phaser.Scene {
 
   create(): void {
     this.bag = this.add.image(0, 0, ATLAS, 'sprout-up').setVisible(false);
-    this.settings = this.add.image(0, 0, ATLAS, 'settings').setVisible(false);
+    this.settings = this.add.image(0, 0, ATLAS, 'paw').setVisible(false);
     this.layout();
     this.scale.on('resize', () => this.layout());
     this.scene.bringToTop();
@@ -38,7 +38,7 @@ export class BackpackButtonScene extends Phaser.Scene {
     if (!this.bag || !this.settings) return;
     if (!m || !m.visible) { this.bag.setVisible(false); this.settings.setVisible(false); return; }
     this.bag.setVisible(true).setFrame(m.bagPressed ? 'sprout-up-pressed-down' : 'sprout-up');
-    this.settings.setVisible(true).setFrame(m.settingsPressed ? 'settings-pressed-down' : 'settings');
+    this.settings.setVisible(true).setFrame(m.settingsPressed ? 'paw-pressed' : 'paw');
   }
 
   /** Place both buttons at the bottom-right (settings in the corner, backpack to its left) +
