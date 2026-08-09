@@ -244,8 +244,9 @@ export class MenuScene extends Phaser.Scene {
     // Which tabs to show in the bar: the paw menu passes a SUBSET (`tabSet`); default = all.
     const tabsToShow = (m.tabSet && m.tabSet.length ? m.tabSet : TAB_DEFS.map((_, i) => i)).filter((i) => i >= 0 && i < TAB_DEFS.length);
     const N = tabsToShow.length, INSET = lw * 0.02;
-    // Cap each tab's width (so a 1–2 tab menu doesn't get absurdly wide tabs) and CENTRE the group.
-    const tabW = Math.min((lw - INSET * 2) / N, (lw - INSET * 2) / 4);
+    // Tabs FILL the bar width (no blank on the sides) for 2+ tabs; a lone tab is capped at half
+    // width so it isn't absurdly wide. Centre the group either way.
+    const tabW = Math.min((lw - INSET * 2) / N, (lw - INSET * 2) / 2);
     const startX = lx + (lw - N * tabW) / 2;
     const tabH = H * 0.07; // a touch taller so the icon isn't cramped near the top edge
     const OVERLAP = tabH * 0.22; // the tab's bottom dips a LITTLE into the frame top (merge the border)
