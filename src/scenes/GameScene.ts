@@ -2745,16 +2745,20 @@ export class GameScene extends Phaser.Scene {
 
     const cam = this.cameras.main, z = cam.zoom;
     const D = GameScene.WHEEL_D * s; // animated circle diameter
-    const GAP = 6;
+    const GAP = 10; // clearance BEYOND the focus bracket to the circle edge
     const sl = (pal.bbox.wl - cam.worldView.x) * z, sr = (pal.bbox.wr - cam.worldView.x) * z;
     const st = (pal.bbox.wt - cam.worldView.y) * z, sb = (pal.bbox.wb - cam.worldView.y) * z;
     const cx = (sl + sr) / 2, cy = (st + sb) / 2;
-    const R = (Math.max((sr - sl) / 2, (sb - st) / 2, 18) + GameScene.WHEEL_D / 2 + GAP) * f; // ring radius (animated)
+    // The circles clear the FOCUS BRACKET, not just the raw bbox — the bracket now extends
+    // HOVER_PAD_WORLD (world px) past the art, so small objects were leaving the ring cramped INSIDE
+    // it. `reach` = object half-extent (18px screen floor) + that bracket pad; then + gap + radius.
+    const reach = Math.max((sr - sl) / 2, (sb - st) / 2, 18) + GameScene.HOVER_PAD_WORLD * z;
+    const RB = reach + GameScene.WHEEL_D / 2 + GAP; // resting ring radius (hit-boxes)
+    const R = RB * f; // animated ring radius
     const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
     const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
-    // Hit-boxes use the RESTING geometry (WHEEL_D / full R) so a fast tap mid-anim still lands; the
-    // rendered buttons use the animated D / R. Bounds are ignored anyway once `wheelClose` is set.
-    const RB = Math.max((sr - sl) / 2, (sb - st) / 2, 18) + GameScene.WHEEL_D / 2 + GAP;
+    // Hit-boxes use the RESTING geometry (full RB / WHEEL_D) so a fast tap mid-anim still lands; the
+    // rendered buttons use the animated R / D. Bounds are ignored anyway once `wheelClose` is set.
     // Cancel (mouse) at the TOP of the ring (12 o'clock); the tools sit around it, evenly spaced.
     buttons.push({ x: cx, y: cy - R, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
     bounds.push({ x: cx, y: cy - RB, r: GameScene.WHEEL_D / 2, idx: -1 });
