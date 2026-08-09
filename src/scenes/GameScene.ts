@@ -769,6 +769,8 @@ export class GameScene extends Phaser.Scene {
   // hover bracket). `applicable` = the owned tools that act on this spot.
   private toolPaletteOpen: { bbox: { wl: number; wt: number; wr: number; wb: number }; applicable: Set<ToolId> } | null = null;
   private toolPaletteHover = -2; // wheel circle under the cursor: -2 none, -1 close, ≥0 WHEEL_TOOLS idx
+  private wheelOpenAt = 0;        // time the wheel opened (drives the spring-out appear anim)
+  private wheelClose: { at: number; chosen: number } | null = null; // closing anim: chosen ≥0 tool / -1 cancel / -2 miss
   private toolHudExpanded = false; // the tool-HUD fly-out row (tap the HUD slot to open/close)
   private hotbarHover = -1; // hotbar cell the mouse cursor is over (-1 = none; backpack = INV_COLS)
   private inventoryOpen = false;
@@ -1874,7 +1876,7 @@ export class GameScene extends Phaser.Scene {
    *  tool here, so you can always cancel), or close it if already open. */
   private toggleToolWheelAtCursor(): void {
     if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen) return;
-    if (this.toolPaletteOpen) { this.closeToolPalette(); return; }
+    if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // Tab again → animated dismiss
     const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
     const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
     const wp = this.cameras.main.getWorldPoint(sx, sy);
@@ -2581,6 +2583,13 @@ export class GameScene extends Phaser.Scene {
    *  o'clock). Cancel (mouse) sits at the top (0,-1), handled separately. A slot with a null tool
    *  (the 6-o'clock reserved spot) or an unowned tool just shows the empty circle base. Fixed
    *  positions = muscle memory. Mirrors the reference: pickaxe↗ axe↘ (reserved)↓ hoe↙ can↖. */
+  // Wheel sizing + appear/disappear animation timings.
+  private static WHEEL_D = 54;          // circle diameter (screen px) — a touch bigger than the old 48
+  private static WHEEL_OPEN_MS = 200;   // spring-out from centre (Back.easeOut) on open
+  private static WHEEL_HOLD_MS = 90;    // (on tool-select) brief pause before the pop
+  private static WHEEL_POP_MS = 120;    // (on tool-select) pop outward + grow
+  private static WHEEL_SHRINK_MS = 160; // shrink to nothing
+  private static WHEEL_POP_AMT = 0.18;  // pop overshoot (fraction of radius/size)
   private static WHEEL_RING: Array<{ toolId: ToolId | null; ux: number; uy: number }> = [
     { toolId: 'pickaxe', ux: 0.866, uy: -0.5 },       // 2 o'clock
     { toolId: 'axe', ux: 0.866, uy: 0.5 },            // 4 o'clock
@@ -2629,17 +2638,29 @@ export class GameScene extends Phaser.Scene {
     if (!w || (!force && w.applicable.size === 0)) return false;
     this.toolPaletteOpen = w;
     this.toolPaletteHover = -2;
+    this.wheelOpenAt = this.time.now; // start the spring-out
+    this.wheelClose = null;
     playSfx(this);
     this.publishToolPalette();
     return true;
   }
 
+  /** Instant close (forced dismissals — a modal opened, hotbar pick, etc.). For user-initiated
+   *  select/cancel use `beginCloseWheel` so it plays the pop-and-shrink exit. */
   private closeToolPalette(): void {
     if (!this.toolPaletteOpen) return;
     this.toolPaletteOpen = null;
     this.toolPaletteHover = -2;
+    this.wheelClose = null;
     this.registry.set('toolPalette', { visible: false, buttons: [] });
     this.registry.set('toolPaletteBounds', []);
+  }
+
+  /** Start the animated exit: a tool-select (chosen ≥0) pauses → pops outward → shrinks; a
+   *  cancel/miss (chosen <0) just quick-shrinks. `publishToolPalette` runs the tween + finalizes. */
+  private beginCloseWheel(chosen: number): void {
+    if (!this.toolPaletteOpen || this.wheelClose) return;
+    this.wheelClose = { at: this.time.now, chosen };
   }
 
   /** Project the wheel to screen each frame: 4 tool circles hugging the object's pixel-bbox EDGES
@@ -2647,18 +2668,43 @@ export class GameScene extends Phaser.Scene {
   private publishToolPalette(): void {
     const pal = this.toolPaletteOpen;
     if (!pal) return;
+
+    // --- Appear / disappear tween (uniform across the wheel). `f` = radial position factor (0 = at
+    //     the centre, 1 = at rest, >1 = popped outward); `s` = circle size factor. Icons follow
+    //     because HoverScene scales each icon by the button `size` and draws it at the button pos. ---
+    let f = 1, s = 1;
+    const now = this.time.now;
+    if (this.wheelClose) {
+      const sel = this.wheelClose.chosen >= 0; // a tool was picked → full pause+pop+shrink; else quick shrink
+      const HOLD = sel ? GameScene.WHEEL_HOLD_MS : 0;
+      const POP = sel ? GameScene.WHEEL_POP_MS : 0;
+      const SHR = sel ? GameScene.WHEEL_SHRINK_MS : 120;
+      const e = now - this.wheelClose.at;
+      if (e >= HOLD + POP + SHR) { this.closeToolPalette(); return; } // exit finished → clear + stop
+      const amt = GameScene.WHEEL_POP_AMT;
+      if (e < HOLD) { f = 1; s = 1; }                                                   // pause
+      else if (e < HOLD + POP) { const q = Phaser.Math.Easing.Cubic.Out((e - HOLD) / POP); f = 1 + amt * q; s = 1 + amt * q; } // pop outward + grow
+      else { const q = Phaser.Math.Easing.Cubic.In((e - HOLD - POP) / SHR); const base = sel ? 1 + amt : 1; f = base; s = base * (1 - q); } // shrink away
+    } else {
+      const e = now - this.wheelOpenAt;
+      if (e < GameScene.WHEEL_OPEN_MS) { const be = Phaser.Math.Easing.Back.Out(e / GameScene.WHEEL_OPEN_MS); f = be; s = be; } // spring out from centre
+    }
+
     const cam = this.cameras.main, z = cam.zoom;
-    const D = 48; // circle diameter (screen px) — INTEGER 3× of the 16px art → crisp pixels
+    const D = GameScene.WHEEL_D * s; // animated circle diameter
     const GAP = 6;
     const sl = (pal.bbox.wl - cam.worldView.x) * z, sr = (pal.bbox.wr - cam.worldView.x) * z;
     const st = (pal.bbox.wt - cam.worldView.y) * z, sb = (pal.bbox.wb - cam.worldView.y) * z;
     const cx = (sl + sr) / 2, cy = (st + sb) / 2;
-    const R = Math.max((sr - sl) / 2, (sb - st) / 2, 18) + D / 2 + GAP; // ring radius (clears the art)
+    const R = (Math.max((sr - sl) / 2, (sb - st) / 2, 18) + GameScene.WHEEL_D / 2 + GAP) * f; // ring radius (animated)
     const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
     const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
+    // Hit-boxes use the RESTING geometry (WHEEL_D / full R) so a fast tap mid-anim still lands; the
+    // rendered buttons use the animated D / R. Bounds are ignored anyway once `wheelClose` is set.
+    const RB = Math.max((sr - sl) / 2, (sb - st) / 2, 18) + GameScene.WHEEL_D / 2 + GAP;
     // Cancel (mouse) at the TOP of the ring (12 o'clock); the tools sit around it, evenly spaced.
     buttons.push({ x: cx, y: cy - R, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
-    bounds.push({ x: cx, y: cy - R, r: D / 2, idx: -1 });
+    bounds.push({ x: cx, y: cy - RB, r: GameScene.WHEEL_D / 2, idx: -1 });
     GameScene.WHEEL_RING.forEach((slot, i) => {
       const x = cx + slot.ux * R, y = cy + slot.uy * R;
       const owned = slot.toolId !== null && this.findOwnedTool(slot.toolId) !== null;
@@ -2666,7 +2712,7 @@ export class GameScene extends Phaser.Scene {
       const kind = !owned ? 'empty' : active ? 'tool' : 'disabled'; // empty = reserved/unowned → just the circle base
       const ic = owned ? this.toolIcon(slot.toolId!) : { key: '', frame: 0 };
       buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
-      if (active) bounds.push({ x, y, r: D / 2, idx: i }); // only ENABLED circles are tappable
+      if (active) bounds.push({ x: cx + slot.ux * RB, y: cy + slot.uy * RB, r: GameScene.WHEEL_D / 2, idx: i }); // only ENABLED circles are tappable
     });
     this.registry.set('toolPalette', { visible: true, buttons });
     this.registry.set('toolPaletteBounds', bounds);
@@ -2688,6 +2734,7 @@ export class GameScene extends Phaser.Scene {
   private handleToolPaletteClick(x: number, y: number): boolean {
     const pal = this.toolPaletteOpen;
     if (!pal) return false;
+    if (this.wheelClose) return true; // already playing its exit — swallow further clicks
     const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; r: number; idx: number }> | undefined;
     const hit = bounds?.find((b) => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
     if (hit && hit.idx >= 0) {
@@ -2697,10 +2744,13 @@ export class GameScene extends Phaser.Scene {
       // Snap the cursor back onto the ITEM the wheel opened on, so the newly-picked tool is ready
       // to use right there (else it'd sit off at the tool circle's ring position). Mouse-locked only.
       if (this.locked) this.snapCursorToWorld((pal.bbox.wl + pal.bbox.wr) / 2, (pal.bbox.wt + pal.bbox.wb) / 2);
+      this.beginCloseWheel(hit.idx); // tool picked → pause, pop out, shrink away
     } else if (hit && hit.idx === -1) {
       this.clearHeld(); // the mouse circle = cancel → drop the held tool, empty hand
+      this.beginCloseWheel(-1); // quick shrink
+    } else {
+      this.beginCloseWheel(-2); // miss → dismiss (quick shrink)
     }
-    this.closeToolPalette(); // tool → equipped; mouse → cancelled; miss → dismiss
     return true;
   }
 
@@ -7791,7 +7841,7 @@ export class GameScene extends Phaser.Scene {
       // NB: don't auto-close just because a tool is held — Tab / the tool-HUD button open the wheel
       // WHILE holding a tool (to switch or cancel). It closes on a modal, or explicit pick/dismiss.
       if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen) this.closeToolPalette();
-      else { this.updateToolPaletteHover(); this.publishToolPalette(); }
+      else { if (!this.wheelClose) this.updateToolPaletteHover(); this.publishToolPalette(); } // freeze hover while the exit plays
     }
     this.publishToolHud(); // keep the current-tool indicator + its visibility in sync each frame
     this.publishBackpackBtn(); // keep the sprout button's visibility in sync
