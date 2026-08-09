@@ -34,8 +34,8 @@ const BRACKET_FRAME = 'white-corner-bracket';
 const BRACKET_SLICE = 14;              // native nine-patch corner in the 32×32 frame
 const BRACKET_MIN = BRACKET_SLICE * 2; // nine-slice min (2 corners), local/pre-scale units
 // Corner-size knob: the ~8px visible mark renders at ~(8×CORNER_SCALE)×zoom. 1 → 8×zoom (= the tool
-// cursor's corner size); 0.5 → 4×zoom (half). Tweak this to resize the hover corners.
-const CORNER_SCALE = 0.5;
+// cursor's corner size); 0.625 → 5×zoom; 0.5 → 4×zoom. Tweak this to resize the hover corners.
+const CORNER_SCALE = 0.625;
 
 /**
  * Empty-hand "inspect" overlay: a white corner-bracket that hugs whatever world object the
