@@ -2507,7 +2507,7 @@ export class GameScene extends Phaser.Scene {
     // While the tool wheel is open, FREEZE the focus on the spot the wheel opened on (its bbox) —
     // don't let mouse movement over the wheel circles re-target it. No name (the wheel is the focus).
     if (this.toolPaletteOpen) {
-      const cam = this.cameras.main, z = cam.zoom, bb = this.toolPaletteOpen.bbox, pad = 5;
+      const cam = this.cameras.main, z = cam.zoom, bb = this.toolPaletteOpen.bbox, pad = GameScene.HOVER_PAD_WORLD * z;
       this.hoverModel = {
         visible: true, onObject: true, z,
         x: ((bb.wl + bb.wr) / 2 - cam.worldView.x) * z, y: ((bb.wt + bb.wb) / 2 - cam.worldView.y) * z,
@@ -2535,7 +2535,7 @@ export class GameScene extends Phaser.Scene {
       // the actual art regardless of how much transparent margin the asset has.
       const b = this.spriteWorldSolidRect(target.sprite);
       const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
-      const pad = 5;
+      const pad = GameScene.HOVER_PAD_WORLD * cam.zoom; // world-space gap so the corners clear the art's vertices
       this.hoverModel = {
         visible: true, onObject: true, z: cam.zoom,
         x: (cx - cam.worldView.x) * cam.zoom,
@@ -2544,7 +2544,7 @@ export class GameScene extends Phaser.Scene {
         h: b.h * cam.zoom + pad * 2,
         name: this.toolPaletteOpen ? '' : target.name, // hide the name while the tool wheel is open
         nameX: (cx - cam.worldView.x) * cam.zoom,
-        nameY: (b.y - cam.worldView.y) * cam.zoom - 3, // pill just above the art's top
+        nameY: (b.y - cam.worldView.y) * cam.zoom - pad - 3, // pill above the (now padded) bracket top
       };
       this.registry.set('hover', this.hoverModel);
       return; // the triangle mouse cursor stays visible — the bracket just ADDS a highlight
@@ -2558,10 +2558,11 @@ export class GameScene extends Phaser.Scene {
       const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y);
       if (w) {
         const cxw = w.x + TILE / 2, cyw = w.y + TILE / 2, z = cam.zoom;
+        const tileFrame = (TILE + 2 * GameScene.HOVER_PAD_WORLD) * z; // same world-pad as objects (= 28 at pad 6)
         this.hoverModel = {
           visible: true, onObject: true, z,
           x: (cxw - cam.worldView.x) * z, y: (cyw - cam.worldView.y) * z,
-          w: 28 * z, h: 28 * z, // frame the 16px tile — 28 local clears the white-corner-bracket nine-slice min (2×14)
+          w: tileFrame, h: tileFrame,
           name: '', nameX: 0, nameY: 0,
         };
         this.registry.set('hover', this.hoverModel);
@@ -2628,6 +2629,10 @@ export class GameScene extends Phaser.Scene {
    *  o'clock). Cancel (mouse) sits at the top (0,-1), handled separately. A slot with a null tool
    *  (the 6-o'clock reserved spot) or an unowned tool just shows the empty circle base. Fixed
    *  positions = muscle memory. Mirrors the reference: pickaxe↗ axe↘ (reserved)↓ hoe↙ can↖. */
+  // World-space gap between the focus target (opaque bbox / tile) and the corner bracket, so the
+  // corners sit clear of the art's vertices instead of hugging them. In WORLD px (× zoom on screen)
+  // so the spacing is consistent at any zoom. 6 matches the empty-grass tile frame (16 + 2×6 = 28).
+  private static HOVER_PAD_WORLD = 6;
   // Wheel sizing + appear/disappear animation.
   private static WHEEL_D = 54;          // circle diameter (screen px) — a touch bigger than the old 48
   private static WHEEL_OPEN_MS = 220;   // spring-out from centre (Back.easeOut) on open; the select-close plays this REVERSED
