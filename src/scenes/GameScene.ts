@@ -771,7 +771,11 @@ export class GameScene extends Phaser.Scene {
   private toolPaletteHover = -2; // wheel circle under the cursor: -2 none, -1 close, ≥0 WHEEL_TOOLS idx
   private wheelOpenAt = 0;        // time the wheel opened (drives the spring-out appear anim)
   private wheelClose: { at: number; chosen: number } | null = null; // closing anim: chosen ≥0 tool / -1 cancel / -2 miss
-  private toolHudExpanded = false; // the tool-HUD fly-out row (tap the HUD slot to open/close)
+  private touchPressTimer?: Phaser.Time.TimerEvent; // long-press → open the tool wheel (touch)
+  private touchLongFired = false; // the current touch already opened the wheel via long-press
+  private touchStartX = 0; private touchStartY = 0;
+  private touchLastAt = 0; // time of the last touch event — used to swallow the GHOST mouse events browsers synthesise right after a touch
+  private static LONG_PRESS_MS = 380; // touch hold before the wheel pops
   private hotbarHover = -1; // hotbar cell the mouse cursor is over (-1 = none; backpack = INV_COLS)
   private inventoryOpen = false;
   private heldStack: ItemStack | null = null; // picked-up stack following the cursor
@@ -1506,8 +1510,27 @@ export class GameScene extends Phaser.Scene {
     // is a game/HUD action routed through the virtual cursor (the OS pointer is
     // frozen under lock, so Phaser's own hit-testing can't see the cursor).
     // Touch is handled separately (pointerup tap below) — it never locks.
+    // Suppress the browser context menu so RIGHT-CLICK is free to open the tool wheel.
+    const onCtx = (e: Event) => e.preventDefault();
+    this.game.canvas.addEventListener('contextmenu', onCtx);
+
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.wasTouch) return;
+      // Swallow GHOST mouse events: after a touchend, browsers synthesise a mouse down/up/click at the
+      // same spot — on a touch device that would hit the unlocked wheel-pick path and dismiss the
+      // wheel a long-press just opened. A pure-desktop session never sets touchLastAt, so this no-ops.
+      if (this.time.now - this.touchLastAt < 600) return;
+      // RIGHT-CLICK = open (or close) the contextual tool wheel — the desktop use/switch split:
+      // LEFT-click only points + uses the held tool, RIGHT-click summons the wheel. Works under
+      // pointer lock (via the virtual cursor) or unlocked (the OS pointer position).
+      if (pointer.rightButtonDown()) {
+        if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.confirmOpen || this.inventoryOpen) return;
+        if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // right-click again → animated dismiss
+        const rx = this.locked ? this.vcursor.x : pointer.x, ry = this.locked ? this.vcursor.y : pointer.y;
+        const rwp = this.cameras.main.getWorldPoint(rx, ry);
+        this.openToolWheelAt(rwp.x, rwp.y, true);
+        return;
+      }
       // Dialog open: a canvas click (outside the HTML input, which sits on top
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
@@ -1524,6 +1547,8 @@ export class GameScene extends Phaser.Scene {
         this.handleMenuClick(pointer.x, pointer.y); return;
       }
       if (this.locked) { this.handleLockedClick(); return; }
+      // Wheel open but pointer NOT locked (e.g. just after a dialog) → a left-click picks from it.
+      if (this.toolPaletteOpen) { this.actAt(pointer.x, pointer.y); return; }
       // Not locked yet: clicking the cat opens the dialog; anything else captures
       // the pointer (the normal edge-scroll / camera mode). NOTE: Cato's top-right
       // portrait is handled by the findCatHit GameObject's own pointerdown (the
@@ -1547,6 +1572,7 @@ export class GameScene extends Phaser.Scene {
     //    camera pan) acts at the touched point via the SAME `actAt(x,y)` as mouse.
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
+      this.touchLastAt = this.time.now;
       // Unified menu: touch scrolls via a SWIPE (handled in MenuScene) — no rail drag here.
       // A finger on a Settings volume slider starts a drag (pointermove scrubs it).
       if (this.menuOpen) {
@@ -1554,10 +1580,28 @@ export class GameScene extends Phaser.Scene {
         if (sl) { this.menuSliderDrag = sl; this.menuApplySliderVol(sl, pointer.x); }
         return;
       }
+      // LONG-PRESS anywhere in the world → open the tool wheel (the touch switch gesture; replaces
+      // the old tool-HUD fly-out). A short tap still just uses the held tool / picks from an open
+      // wheel. Cancelled on move (pan) or release before the timer.
+      this.touchLongFired = false;
+      this.touchStartX = pointer.x; this.touchStartY = pointer.y;
+      this.touchPressTimer?.remove();
+      const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.inventoryOpen && !this.toolPaletteOpen;
+      this.touchPressTimer = canWheel
+        ? this.time.delayedCall(GameScene.LONG_PRESS_MS, () => {
+            const wp = this.cameras.main.getWorldPoint(this.touchStartX, this.touchStartY);
+            this.touchLongFired = this.openToolWheelAt(wp.x, wp.y, true); // false = nothing here → the release falls back to a normal tap
+          })
+        : undefined;
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.menuSliderDrag) { this.menuApplySliderVol(this.menuSliderDrag, pointer.x); return; } // scrub a volume slider
       if (this.menuDragging) { this.menuDragTo(pointer.y); return; } // drag the unified menu scroll rail
+      // Finger travelled → it's a pan/drag, not a long-press: cancel the pending wheel-open.
+      if (pointer.wasTouch && this.touchPressTimer && !this.touchLongFired) {
+        const dx = pointer.x - this.touchStartX, dy = pointer.y - this.touchStartY;
+        if (dx * dx + dy * dy > 14 * 14) { this.touchPressTimer.remove(); this.touchPressTimer = undefined; }
+      }
     });
     this.input.on('pointerup', () => {
       this.menuDragging = false; // end a rail drag
@@ -1565,6 +1609,9 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
+      this.touchLastAt = this.time.now;
+      this.touchPressTimer?.remove(); this.touchPressTimer = undefined;
+      if (this.touchLongFired) { this.touchLongFired = false; return; } // long-press opened the wheel — the release doesn't act
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
       if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
@@ -1617,6 +1664,7 @@ export class GameScene extends Phaser.Scene {
     document.addEventListener('pointerlockchange', onLockChange);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       document.removeEventListener('pointerlockchange', onLockChange);
+      this.game.canvas.removeEventListener('contextmenu', onCtx);
       this.game.events.off('hud:submit', this.onHudSubmit);
       this.game.events.off('hud:cancel', this.onHudCancel);
     });
@@ -1668,13 +1716,10 @@ export class GameScene extends Phaser.Scene {
       const sk = this.stoneAtPoint(wp.x, wp.y);
       if (sk) { const [sx, sy] = sk.split(',').map(Number); this.knockStone(sx!, sy!); return; }
     }
-    // EMPTY HAND on any tool-usable spot → pop the radial tool wheel; tap a tool to grab+equip it
-    // (from the hotbar / backpack / chest). UNIFIED: tree→axe, stone→pickaxe, grass/bush/berries/
-    // crop/foragable→hoe, tilled→hoe/watering-can — no more empty-hand direct harvest; you pick the
-    // tool from the wheel, then use it. (Once a tool IS held, the branches below act directly.)
-    if (this.activeTool === 'hand' && !this.activeSeed && !this.activePlace) {
-      if (this.openToolWheelAt(wp.x, wp.y)) return;
-    }
+    // NB: the tool WHEEL is no longer summoned by a left-click / tap — it opens on RIGHT-CLICK
+    // (desktop) or LONG-PRESS (touch). A left-click / tap only USES the held tool (and picks from an
+    // already-open wheel, via handleToolPaletteClick above). With an empty hand a plain click here
+    // simply does nothing — you right-click / long-press to bring up the wheel and pick a tool first.
     // The HOE harvests a MATURE wild foragable (sprite bounds — tall sunflower). Empty hand does
     // NOT — it pops the wheel above (pick the hoe first); harvesting is a tool action, uniformly.
     if (this.activeTool === 'hoe') {
@@ -2758,60 +2803,34 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  // ── Tool HUD (current-tool indicator under the weather + tap-to-fly-out switcher) ──────
-  private static HUD_X = 16;  private static HUD_Y = 100; private static HUD_SLOT = 42; private static HUD_GAP = 6;
+  // ── Tool HUD — a current-tool INDICATOR under the weather (which tool is held) ──────
+  //  The old tap-to-fly-out switcher was removed: you now open the wheel via RIGHT-CLICK (desktop)
+  //  or LONG-PRESS (touch), so the HUD only SHOWS the held tool — it isn't a control anymore.
+  private static HUD_X = 16;  private static HUD_Y = 100; private static HUD_SLOT = 42;
 
-  /** The row items for the fly-out: a mouse (cancel) + every OWNED tool, left→right. */
-  private toolHudItems(): Array<{ key: string; frame: string | number; toolId: ToolId | null }> {
-    const items: Array<{ key: string; frame: string | number; toolId: ToolId | null }> = [{ key: 'cursor', frame: 0, toolId: null }];
-    for (const slot of GameScene.WHEEL_RING) {
-      if (slot.toolId && this.findOwnedTool(slot.toolId)) { const ic = this.toolIcon(slot.toolId); items.push({ key: ic.key, frame: ic.frame, toolId: slot.toolId }); }
-    }
-    return items;
-  }
-
-  /** Publish the tool-HUD model + tap hit-boxes (called on load + whenever the held item changes). */
+  /** Publish the tool-HUD model (called on load + each frame): just the held-tool icon (or the mouse
+   *  icon when empty-handed). No fly-out (`expanded:false`, no `items`). */
   private publishToolHud(): void {
-    const S = GameScene.HUD_SLOT, G = GameScene.HUD_GAP, HX = GameScene.HUD_X, HY = GameScene.HUD_Y;
+    const S = GameScene.HUD_SLOT, HX = GameScene.HUD_X, HY = GameScene.HUD_Y;
     const held = this.heldCell();
     const cur = held?.toolId ? this.toolIcon(held.toolId) : { key: 'cursor', frame: 0 };
-    const items = this.toolHudItems();
-    const rendered = items.map((it, i) => ({ x: HX + S / 2 + (i + 1) * (S + G), y: HY + S / 2, key: it.key, frame: it.frame, selected: it.toolId === (held?.toolId ?? null) }));
     const hidden = !this.gameReady || this.cutscene || (this.dialogOpen && !this.cutscene) || this.menuOpen || this.craftOpen || this.inventoryOpen;
-    if (hidden && this.toolHudExpanded) { this.toolHudExpanded = false; } // collapse the fly-out when hidden
     this.registry.set('toolHud', {
       visible: !hidden,
       slot: S, hx: HX + S / 2, hy: HY + S / 2,
       currentKey: cur.key, currentFrame: cur.frame,
-      expanded: this.toolHudExpanded, items: rendered,
+      expanded: false, items: [],
     });
-    const bounds: Array<{ x: number; y: number; w: number; h: number; action: string; idx: number }> = [{ x: HX, y: HY, w: S, h: S, action: 'toggle', idx: -1 }];
-    if (this.toolHudExpanded) items.forEach((_it, i) => bounds.push({ x: HX + (i + 1) * (S + G), y: HY, w: S, h: S, action: 'pick', idx: i }));
-    this.registry.set('toolHudBounds', bounds);
+    // Keep the slot as a swallow rect so a tap ON the indicator doesn't act on the world tile beneath it.
+    this.registry.set('toolHudBounds', hidden ? [] : [{ x: HX, y: HY, w: S, h: S }]);
   }
 
-  private toggleToolHud(): void {
-    this.toolHudExpanded = !this.toolHudExpanded;
-    playSfx(this);
-    this.publishToolHud();
-  }
-
-  /** Route a click on the tool-HUD: the slot toggles the fly-out; a row item equips that tool (or
-   *  the mouse = cancel) + collapses. Returns true if it consumed the click. */
+  /** The tool-HUD is an INDICATOR only now — a tap on its slot is swallowed (so it doesn't till the
+   *  grass beneath it); it no longer opens anything. Returns true if the tap landed on the slot. */
   private handleToolHudClick(x: number, y: number): boolean {
-    const bounds = this.registry.get('toolHudBounds') as Array<{ x: number; y: number; w: number; h: number; action: string; idx: number }> | undefined;
+    const bounds = this.registry.get('toolHudBounds') as Array<{ x: number; y: number; w: number; h: number }> | undefined;
     if (!bounds) return false;
-    const hit = bounds.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    if (!hit) { if (this.toolHudExpanded) { this.toolHudExpanded = false; this.publishToolHud(); return true; } return false; }
-    if (hit.action === 'toggle') { this.toggleToolHud(); return true; }
-    // pick: equip the row item (or cancel), collapse.
-    const it = this.toolHudItems()[hit.idx];
-    if (it?.toolId) { const loc = this.findOwnedTool(it.toolId); if (loc) { if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); } else this.holdExternal(loc.store, loc.item); } }
-    else this.clearHeld(); // the mouse item = empty hand
-    this.toolHudExpanded = false;
-    this.publishToolHud();
-    playSfx(this);
-    return true;
+    return bounds.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
   }
 
   // ── House building: placement cursor + rotate ─────────────────────────
