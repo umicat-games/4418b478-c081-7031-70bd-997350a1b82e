@@ -5338,14 +5338,17 @@ export class GameScene extends Phaser.Scene {
       .image(centerX, centerY, texture, frame)
       .setOrigin(0.5, 0.5)
       .setDepth(1e6 + 2);
-    const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1; // fly left or right
-    const dist = 20; // how far to the side
-    const arcH = 22; // arc (jump) height
+    // Who's collecting? Cato (a running catoTask drives the harvest) → the item flies to HIM; else the
+    // player harvested → it flies to the CURSOR. Captured now (the fly is short).
+    const toCato = !!(this.catoTask && this.child);
+    const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1; // pop left or right
+    const dist = 18; // how far to the side
+    const arcH = 20; // arc (jump) height
     const p = { t: 0 };
     this.tweens.add({
       targets: p,
       t: 1,
-      duration: 520,
+      duration: 320, // a quick pop, THEN it flies to the collector
       ease: 'Sine.easeOut',
       onUpdate: () => {
         const t = p.t;
@@ -5353,27 +5356,25 @@ export class GameScene extends Phaser.Scene {
         item.y = centerY - arcH * Math.sin(Math.PI * t); // up then down (semicircle)
         item.setScale(0.85 + 0.3 * Math.sin(Math.PI * t)); // grows at the apex — cute
       },
-      onComplete: () => {
-        // A little landing bounce, then a squash + fade out.
-        this.tweens.add({
-          targets: item,
-          y: item.y - 6,
-          duration: 120,
-          yoyo: true,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            this.tweens.add({
-              targets: item,
-              alpha: 0,
-              scaleX: 1.15,
-              scaleY: 0.65,
-              duration: 200,
-              ease: 'Quad.easeIn',
-              onComplete: () => item.destroy(),
-            });
-          },
-        });
-      },
+      onComplete: () => this.flyItemToCollector(item, toCato),
+    });
+  }
+
+  /** After the pop, the harvested item flies to whoever collected it — Cato's body (Cato harvest) or
+   *  the world point under the player's pointer (player harvest) — shrinking + fading as it "goes in". */
+  private flyItemToCollector(item: Phaser.GameObjects.Image, toCato: boolean): void {
+    let tx: number, ty: number;
+    if (toCato && this.child) { tx = this.child.x; ty = this.child.y - 14; } // aim at Cato's mid-body
+    else { const wp = this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y); tx = wp.x; ty = wp.y; } // the cursor / last tap
+    this.tweens.add({
+      targets: item,
+      x: tx,
+      y: ty,
+      scale: 0.25,
+      alpha: 0,
+      duration: 300,
+      ease: 'Cubic.easeIn', // accelerate as it "gets sucked in"
+      onComplete: () => item.destroy(),
     });
   }
 

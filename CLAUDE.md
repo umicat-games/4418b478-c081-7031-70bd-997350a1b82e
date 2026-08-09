@@ -335,7 +335,8 @@ Sprout Lands premium pack sheets are imported via the **Asset Manager** (region-
   - `replayIntro` (★) — the new-game intro **plays on EVERY load** (ignores the once-only `dialogueSeen` gate in `maybePlayIntro`) so editing `public/dialogue/intro.json` in the Dialogue tool → Save (rebuild+reload) → the fresh intro auto-plays. Plus **X** replays on demand mid-session.
   - `coinFloor` — tops `money` up to 5000 when below (live).
   - `clearMailbox` (★) — empties an existing save's mailbox on load.
-- `CHILD_WANDER = true` (roaming ON). Tunables: growth `CROP_STAGE_MS_*` / `WET_DURATION_MS`; leash `CATO_LEASH_*`; wet tint `WET_SOIL_TINT`; harvest-pop arc in `playHarvestPop`.
+- `CHILD_WANDER = true` (roaming ON). Tunables: growth `CROP_STAGE_MS_*` / `WET_DURATION_MS`; leash `CATO_LEASH_*`; wet tint `WET_SOIL_TINT`; harvest-pop arc in `playPopOut`.
+- **Harvest FLY-to-collector (2026-08-09):** every harvested item (crops/fruit/berries/forage/stone — all route through `playPopOut`) does a quick pop-arc, THEN **flies to whoever collected it** (`flyItemToCollector`) and shrinks+fades away: **Cato** (a running `catoTask` at pop time → `toCato`) → flies to his mid-body (`child.x, child.y−14`); **the player** → flies to the world point under the pointer (`getWorldPoint(activePointer)` = the cursor on desktop / last tap on touch). Target captured at fly-start (the fly is ~300ms). Verified in prod (SwiftShader spy): player pop → target = mouse world point; Cato pop → target = Cato.
 
 ## Working style
 Catopia is developed via the **LOCAL repo** (this dir, branch `game/20308f8c…`) + `./deploy-preview.sh` (S3+CDN preview override — TEMPORARY, any workspace rebuild wipes it; **Restart workspace** pulls the branch's latest commit for a real fresh clone). Build check: `npm run build` (3 pre-existing tsc errors in rex/visuals are unrelated — filter them). Not driven by the in-editor agent.
