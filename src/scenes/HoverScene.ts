@@ -30,7 +30,7 @@ const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette
 // makes the empty-hand "inspect" frame and the "holding a tool" frame look the same (the user
 // asked for consistent corner size).
 const BRACKET_TEX = 'tile-select';
-const BRACKET_SLICE = 8;            // corner size in the 24×24 texture (fits each L-mark)
+const BRACKET_SLICE = 10;           // corner size in the 24×24 texture (contains each thin L-mark, extent ≤10)
 const BRACKET_MIN = BRACKET_SLICE * 2; // don't shrink below the two corners (local units, pre-scale)
 
 /**

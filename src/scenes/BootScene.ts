@@ -45,7 +45,10 @@ export class BootScene extends Phaser.Scene {
     // Tile-selection bracket cursor (24×24, frames a 16px cell) — the "you can
     // till here" highlight that snaps to the hovered grass tile when the hoe is
     // the active tool.
-    this.load.image('tile-select', 'uploaded/tile_select_cursor.png');
+    // The THIN corner-bracket variant (4px arms vs the original's ~6px beveled block) — used for
+    // BOTH the tool tile-cursor AND the empty-hand hover-inspect frame (they share this texture), so
+    // thinning it here slims both consistently. Same 24×24 / same palette, just finer arms.
+    this.load.image('tile-select', 'uploaded/tile_select_cursor_thin.png');
     // Rounded-square UI button sheet (96×192, 8 buttons) — region-tagged
     // `white-button` in the Asset Manager (26×28 @ 11,11, nine-patch L6/R6/T7/B7).
     // Used as the pixel background frame behind the build-palette orientation cells
