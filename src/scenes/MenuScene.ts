@@ -250,7 +250,8 @@ export class MenuScene extends Phaser.Scene {
     const startX = lx + (lw - N * tabW) / 2;
     const tabH = H * 0.07; // a touch taller so the icon isn't cramped near the top edge
     const OVERLAP = tabH * 0.22; // the tab's bottom dips a LITTLE into the frame top (merge the border)
-    const ACTIVE_OVER = tabW * 0.08; // active tab grows this much on EACH side, over its neighbours
+    // The active tab is distinguished by being TALLER + lighter + drawn on top — NOT wider. (A
+    // horizontal grow would push the edge tabs PAST the panel when the tabs already fill the width.)
     const ACTIVE_TALLER = 1.14;      // active tab is this much taller (grows UPWARD, bottom stays merged)
     const BOTTOM = ly + OVERLAP;     // every tab's bottom edge (merged into the frame)
     const slotCx = (pos: number) => startX + pos * tabW + tabW / 2; // pos = index WITHIN tabsToShow
@@ -259,7 +260,7 @@ export class MenuScene extends Phaser.Scene {
     let activeChip: Phaser.GameObjects.Image | undefined, activeIcon: Phaser.GameObjects.Image | undefined, activeCy = 0, activeH = tabH;
     const drawTab = (tabIdx: number, pos: number) => {
       const active = tabIdx === m.tab;
-      const w = active ? tabW + ACTIVE_OVER * 2 : tabW;
+      const w = tabW; // same width for all (no horizontal grow → edge tabs never overflow the panel)
       const h = active ? tabH * ACTIVE_TALLER : tabH;
       const cy = BOTTOM - h / 2; // bottom pinned → taller tab rises upward
       const chip = this.add.image(slotCx(pos), cy, ATLAS, TAB_TEX).setScale(w / 100, h / 23);
