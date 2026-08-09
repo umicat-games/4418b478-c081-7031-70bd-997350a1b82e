@@ -1876,7 +1876,7 @@ export class GameScene extends Phaser.Scene {
    *  tool here, so you can always cancel), or close it if already open. */
   private toggleToolWheelAtCursor(): void {
     if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen) return;
-    if (this.toolPaletteOpen) { this.closeToolPalette(); return; } // Tab again → dismiss instantly (no tool picked)
+    if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // Tab again → animate the dismiss
     const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
     const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
     const wp = this.cameras.main.getWorldPoint(sx, sy);
@@ -2654,9 +2654,11 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('toolPaletteBounds', []);
   }
 
-  /** Start the animated exit on a TOOL-SELECT — plays the open spring in reverse (retract inward +
-   *  shrink away). Cancel/miss/forced dismissals use `closeToolPalette` (instant, no animation).
-   *  `publishToolPalette` advances the tween each frame + finalizes when done. */
+  /** Start the animated exit — the open spring played in reverse (retract inward + shrink away).
+   *  `chosen≥0` = a tool was picked (publishToolPalette adds a hold; the select SFX fires at the call
+   *  site); `chosen<0` = a plain dismiss (re-click the item / mouse-cancel circle / Tab-again),
+   *  animated with NO hold + no SFX. Only FORCED closes (modal open / hotbar pick) skip the animation
+   *  via `closeToolPalette`. `publishToolPalette` advances the tween each frame + finalizes when done. */
   private beginCloseWheel(chosen: number): void {
     if (!this.toolPaletteOpen || this.wheelClose) return;
     this.wheelClose = { at: this.time.now, chosen };
@@ -2678,9 +2680,10 @@ export class GameScene extends Phaser.Scene {
     let f = 1, s = 1;
     const now = this.time.now;
     if (this.wheelClose) {
-      // Tool-select exit: (SFX already played on the pick) → a brief HOLD at rest → then the open
-      // spring in REVERSE (retract inward + shrink away).
-      const HOLD = GameScene.WHEEL_HOLD_MS;
+      // Exit = the open spring played in REVERSE (retract inward + shrink away). A TOOL-SELECT
+      // (chosen≥0) first HOLDs at rest for a beat (after its select SFX); a plain DISMISS (re-click
+      // the item / mouse-cancel circle / Tab-again, chosen<0) skips the hold — straight to the anim.
+      const HOLD = this.wheelClose.chosen >= 0 ? GameScene.WHEEL_HOLD_MS : 0;
       const e = now - this.wheelClose.at;
       if (e >= HOLD + GameScene.WHEEL_OPEN_MS) { this.closeToolPalette(); return; } // exit finished → clear + stop
       if (e < HOLD) { f = 1; s = 1; } // pause
@@ -2748,9 +2751,9 @@ export class GameScene extends Phaser.Scene {
       this.beginCloseWheel(hit.idx);
     } else if (hit && hit.idx === -1) {
       this.clearHeld(); // the mouse circle = cancel → drop the held tool, empty hand
-      this.closeToolPalette(); // no tool picked → no exit animation, just vanish
+      this.beginCloseWheel(-1); // animate the disappear (no select SFX/hold — nothing was picked)
     } else {
-      this.closeToolPalette(); // miss → dismiss instantly (no animation)
+      this.beginCloseWheel(-2); // miss / re-click the same item → animate the disappear too
     }
     return true;
   }
