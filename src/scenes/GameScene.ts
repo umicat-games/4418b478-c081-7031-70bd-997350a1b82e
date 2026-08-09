@@ -2504,7 +2504,7 @@ export class GameScene extends Phaser.Scene {
         this.hoverModel = {
           visible: true, onObject: true, z,
           x: (cxw - cam.worldView.x) * z, y: (cyw - cam.worldView.y) * z,
-          w: 24 * z, h: 24 * z, // the tile-select cursor is 24 world px (16px tile + 4px margin each side)
+          w: 28 * z, h: 28 * z, // frame the 16px tile — 28 local clears the white-corner-bracket nine-slice min (2×14)
           name: '', nameX: 0, nameY: 0,
         };
         this.registry.set('hover', this.hoverModel);

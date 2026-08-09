@@ -23,15 +23,16 @@ const CIRCLE_BG = 'tool-circle-bg';            // the round tool-button backgrou
 const CIRCLE_BG_SEL = 'tool-circle-bg-selected'; // the hovered/selected circle (blue ring)
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
-// The hover bracket uses the SAME art as the tool tile-cursor (`tile_select_cursor.png`, 24×24 —
-// four L-shaped corner marks with ~8px arms). Drawn as a nine-slice (8px corners, stretchy
-// transparent edges) so the four corners hug ANY-size object bbox, and SCALED by the camera zoom
-// so the corner marks render at exactly `8×zoom` — identical to the world-space tool cursor. This
-// makes the empty-hand "inspect" frame and the "holding a tool" frame look the same (the user
-// asked for consistent corner size).
-const BRACKET_TEX = 'tile-select';
-const BRACKET_SLICE = 10;           // corner size in the 24×24 texture (contains each thin L-mark, extent ≤10)
-const BRACKET_MIN = BRACKET_SLICE * 2; // don't shrink below the two corners (local units, pre-scale)
+// The hover bracket = the `white-corner-bracket` region of the `ui-sheet` atlas
+// (all_ui_assets_on_one_sheet), tagged as a nine-slice (32×32 frame, 14px corners). Drawn as a
+// nine-slice so the four corners hug ANY-size object bbox, and **SCALED by the camera zoom** so its
+// visible ~8px corner mark renders at ~`8×zoom` — matching the world-space tool tile-cursor's
+// corner size. (It looked tiny before because it was drawn screen-space at scale 1 = an 8px mark,
+// while the tool cursor's 8px mark renders at 8×zoom; zoom-scaling fixes the "corners too small".)
+const BRACKET_ATLAS = 'ui-sheet';
+const BRACKET_FRAME = 'white-corner-bracket';
+const BRACKET_SLICE = 14;              // native nine-patch corner in the 32×32 frame
+const BRACKET_MIN = BRACKET_SLICE * 2; // nine-slice min (2 corners), local/pre-scale units
 
 /**
  * Empty-hand "inspect" overlay: a white corner-bracket that hugs whatever world object the
@@ -49,9 +50,9 @@ export class HoverScene extends Phaser.Scene {
   constructor() { super({ key: 'HoverScene' }); }
 
   create(): void {
-    if (this.textures.exists(BRACKET_TEX)) {
+    if (this.textures.exists(BRACKET_ATLAS) && this.textures.get(BRACKET_ATLAS).has(BRACKET_FRAME)) {
       this.bracket = this.add
-        .nineslice(0, 0, BRACKET_TEX, undefined, 24, 24, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
+        .nineslice(0, 0, BRACKET_ATLAS, BRACKET_FRAME, 32, 32, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
         .setOrigin(0.5, 0.5)
         .setVisible(false);
     }
