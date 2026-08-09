@@ -24,7 +24,7 @@ const BAR_FILL = 0xefe4c8;// the cream row bar
 const BAR_STROKE = 0xd8c69e;
 
 export interface ReceiptLine { iconKey: string; iconFrame: number | string; label: string; count: number; subtotal: number; }
-export interface ReceiptModel { visible: boolean; rev: number; sender: string; title: string; lines: ReceiptLine[]; total: number; }
+export interface ReceiptModel { visible: boolean; rev: number; sender: string; title: string; lines: ReceiptLine[]; total: number; claim?: boolean; }
 
 export class ReceiptScene extends Phaser.Scene {
   private lastRev = -1;
@@ -110,8 +110,9 @@ export class ReceiptScene extends Phaser.Scene {
       box.add(T(barX + barW - bh * 0.35, y, ln.subtotal.toLocaleString(), fs, INK).setOrigin(1, 0.5));
     });
 
-    // TOTAL (bottom-left) + ✓ button (bottom-right, blue selection ring).
-    box.add(T(-pw / 2 + pw * 0.05, ph / 2 - ph * 0.075, `TOTAL: ${m.total.toLocaleString()}`, Math.round(fs * 1.1), '#ffffff').setOrigin(0, 0.5));
+    // TOTAL (bottom-left, sales receipts only — a delivery package has no total) + ✓ button
+    // (bottom-right; on a delivery it means 领取/Claim, routed by GameScene).
+    if (!m.claim) box.add(T(-pw / 2 + pw * 0.05, ph / 2 - ph * 0.075, `TOTAL: ${m.total.toLocaleString()}`, Math.round(fs * 1.1), '#ffffff').setOrigin(0, 0.5));
     const btnSize = Math.round(ph * 0.11);
     const bx = pw / 2 - pw * 0.08, by = ph / 2 - ph * 0.125;
     const btn = this.add.container(bx, by);

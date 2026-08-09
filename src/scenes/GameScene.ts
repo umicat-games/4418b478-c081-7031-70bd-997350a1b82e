@@ -169,6 +169,9 @@ const TAB_SETTINGS = 4, TAB_CALENDAR = 5;
 // stay SEPARATE (their own in-world objects open them standalone), so they're NOT here. Append
 // achievements etc. as new TAB_DEFS entries + push the index here + a MenuScene render branch.
 const MENU_SYSTEM_TABS = [TAB_SETTINGS, TAB_CALENDAR];
+// The door MAILBOX opens a 3-tab menu: 信 (mail) + 取货 (pickup grid) + 待售 (for-sale bin).
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 3, TAB_PICKUP = 6, TAB_FORSALE = 7;
+const MAILBOX_TABS = [TAB_MAIL, TAB_PICKUP, TAB_FORSALE];
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -178,6 +181,8 @@ const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragabl
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
 const BACKPACK_SLOTS = 24; // the player's carried backpack (distinct stacks) — full → can't harvest/buy
+const PICKUP_SLOTS = 24; // mailbox 取货 grid — delivered orders land here; full → the delivery waits as a claim letter
+const SALE_SLOTS = 24; // mailbox 待售 shipping bin — items here auto-sell at the next day-settle
 const MAX_STACK = 99;
 
 /** One stack of items in a single inventory/hotbar cell. Tools are
@@ -200,13 +205,14 @@ interface ItemStack {
  *  a sales receipt opens the ReceiptScene from its `lines` + `total`. */
 interface MailEntry {
   id: string;
-  kind: 'sell-receipt';
+  kind: 'sell-receipt' | 'delivery'; // sell-receipt = sales receipt; delivery = an order that couldn't fit the 取货 grid (claim it)
   sender: string;
   title: string;
   iconFrame: number;
   read: boolean;
   lines: ReceiptLine[];
   total: number;
+  items?: Array<{ id: string; count: number }>; // delivery only — the actual package to claim into the pickup grid / backpack
 }
 
 // --- House building (Sprout Lands premium "Building parts") ---
@@ -552,9 +558,12 @@ interface SaveBlob {
   dayCount?: number; // v6: whole days elapsed (weather pick)
   mailbox?: Array<{ id: string; count: number }>; // v7: mailbox contents (vestigial)
   chest?: Array<{ id: string; count: number }>; // v7: chest contents
-  // v8 (`order`/`orderDeliverDay`) is retired — the order book was replaced by the instant
-  // shop; old v8 saves just ignore those keys.
-  mail?: MailEntry[]; // v9: the Mail-tab list (sales receipts, …)
+  // v16: the OVERNIGHT economy is back — pending purchase orders, the 取货 pickup grid, the 待售
+  // shipping bin. (v8's old `order`/`orderDeliverDay` shape is not reused.)
+  orders?: Array<{ id: string; count: number; deliverDay: number }>; // v16: placed purchases, delivered when dayCount ≥ deliverDay
+  pickup?: Array<{ id: string; count: number }>; // v16: 取货 grid (arrived deliveries)
+  sale?: Array<{ id: string; count: number }>; // v16: 待售 shipping bin (auto-sold next settle)
+  mail?: MailEntry[]; // v9: the Mail-tab list (sales receipts, delivery claims, …)
   autonomy?: { harvest: boolean; water: boolean }; // v10: Cato's standing auto-farm prefs
   staminaMax?: number; // v11: Cato's energy cap (raisable by future upgrades)
   stamina?: number; // v11: current energy
@@ -703,6 +712,12 @@ export class GameScene extends Phaser.Scene {
   // player's only storage. `mailboxStore` is vestigial (kept for save compat / DEBUG clear).
   private mailboxStore: ItemStack[] = [];
   private chestStore: ItemStack[] = [];
+  // Overnight economy: pending purchase ORDERS (delivered at the next day-settle), the mailbox
+  // 取货 PICKUP grid (arrived deliveries you take to the backpack), and the 待售 SHIPPING BIN
+  // (items auto-sold at the next settle → coins + a receipt letter). See settleDay.
+  private orders: Array<{ id: string; count: number; deliverDay: number }> = [];
+  private pickupStore: ItemStack[] = [];
+  private saleStore: ItemStack[] = [];
   private chestSeeded = false; // one-time starter-seed grant into the chest (saved v12)
   // Cato's own small backpack (v13) — the player gives Cato items here (future: food he
   // eats to recover stamina). Its own menu tab; items flow chest ↔ cato-bag.
@@ -4166,7 +4181,7 @@ export class GameScene extends Phaser.Scene {
    *  menu plays its close swing. (mailbox-mail-open vs -empty-open per mail state.) */
   private openMailboxViaDoor(): void {
     this.mailboxHasMail = this.mailList.length > 0;
-    this.openMenuViaObject(this.mailbox, this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open', 'mailbox-close', 0);
+    this.openMenuViaObject(this.mailbox, this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open', 'mailbox-close', TAB_MAIL, MAILBOX_TABS);
   }
 
   /** Door chest clicked → play its open swing, THEN open the menu on Chest; closing plays close. */
@@ -4184,14 +4199,14 @@ export class GameScene extends Phaser.Scene {
    *  close animation to play when the menu closes. Falls back to opening immediately if
    *  the sprite / anim is missing, and has a safety timer so a missing COMPLETE event
    *  can't strand the menu closed. */
-  private openMenuViaObject(sprite: Phaser.GameObjects.Sprite | undefined, openAnim: string, closeAnim: string, tab: number): void {
-    if (this.menuOpen || !sprite) { this.openMenu(tab); return; } // already open, or no sprite → just open (no anim)
+  private openMenuViaObject(sprite: Phaser.GameObjects.Sprite | undefined, openAnim: string, closeAnim: string, tab: number, tabSet: number[] | null = null): void {
+    if (this.menuOpen || !sprite) { this.openMenu(tab, tabSet); return; } // already open, or no sprite → just open (no anim)
     sprite.play({ key: openAnim, repeat: 0 }); // authored loop:true → repeat:0 plays once + holds open
     let done = false;
     const go = (): void => {
       if (done || this.menuOpen) return;
       done = true;
-      this.openMenu(tab); // this clears the source on a fresh open; set it right after so close plays the swing
+      this.openMenu(tab, tabSet); // this clears the source on a fresh open; set it right after so close plays the swing
       this.menuSourceSprite = sprite;
       this.menuCloseAnim = closeAnim;
     };
@@ -4252,9 +4267,14 @@ export class GameScene extends Phaser.Scene {
     if (sprite && closeAnim) this.time.delayedCall(180, () => sprite.play({ key: closeAnim, repeat: 0 }));
   }
 
-  /** The item grid backing the active tab — only the Chest (tab 1) is a grid now. */
+  /** The item grid backing the active tab (chest / cato-bag / backpack / mailbox 取货 + 待售). */
   private menuStore(): ItemStack[] {
-    return this.menuTab === TAB_BACKPACK ? this.backpackStore : this.menuTab === 1 ? this.chestStore : this.menuTab === 2 ? this.catoBagStore : [];
+    return this.menuTab === TAB_BACKPACK ? this.backpackStore
+      : this.menuTab === TAB_CHEST ? this.chestStore
+      : this.menuTab === 2 ? this.catoBagStore
+      : this.menuTab === TAB_PICKUP ? this.pickupStore
+      : this.menuTab === TAB_FORSALE ? this.saleStore
+      : [];
   }
 
   /** Open the BACKPACK — a standalone MenuScene view (left grid / right detail) with NO tab bar,
@@ -4308,19 +4328,18 @@ export class GameScene extends Phaser.Scene {
     this.publishMenu();
   }
 
-  /** Instant purchase of `menuBuyQty` of the selected item into the chest. */
+  /** ORDER `menuBuyQty` of the selected item. Money is deducted NOW (下单即扣钱); the item is
+   *  DELIVERED at the next day-settle (into the mailbox 取货 grid, or a claim letter if it's full). */
   private menuBuy(): void {
     playSfx(this); // buy-button click
     const id = this.menuShopSel;
     if (!id) return;
     const n = this.menuBuyQty, cost = this.priceOf(id) * n;
     if (cost > this.money) { this.flashShopMsg(t('shop_no_coins')); return; }
-    if (!this.backpackHasSpaceFor(id)) { this.flashShopMsg(t('bag_full')); return; } // bought items → backpack
-    this.addMoney(-cost);
-    this.addToBackpack(itemFromId(id, n));
+    this.addMoney(-cost);                                        // pay at order time
+    this.orders.push({ id, count: n, deliverDay: this.dayCount + 1 }); // arrives tomorrow morning
     this.menuBuyQty = 1;
-    this.shopMsg = '';
-    this.publishMenu();
+    this.flashShopMsg(t('shop_ordered'));                        // "已下单，明早送达" (also re-publishes the menu)
     this.scheduleSave();
   }
 
@@ -4328,7 +4347,7 @@ export class GameScene extends Phaser.Scene {
   private flashShopMsg(msg: string): void {
     this.shopMsg = msg;
     this.publishMenu();
-    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && this.menuTab === 2) this.publishMenu(); } });
+    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && this.menuTab === TAB_SHOP) this.publishMenu(); } });
   }
 
   /** Does the chest have room for `id`? A stackable item that already has a stack merges
@@ -4350,6 +4369,17 @@ export class GameScene extends Phaser.Scene {
   private backpackHasSpaceFor(id: string): boolean {
     if (this.backpackStore.some((s) => s.id === id)) return true;
     return this.backpackStore.length < BACKPACK_SLOTS;
+  }
+
+  /** Room in the mailbox 取货 grid / 待售 bin for `id`? (merge-into-stack always fits; a new id
+   *  needs a free slot). */
+  private pickupHasSpaceFor(id: string): boolean {
+    if (this.pickupStore.some((s) => s.id === id)) return true;
+    return this.pickupStore.length < PICKUP_SLOTS;
+  }
+  private saleHasSpaceFor(id: string): boolean {
+    if (this.saleStore.some((s) => s.id === id)) return true;
+    return this.saleStore.length < SALE_SLOTS;
   }
 
   /** Add to the player's backpack (merges same-id). Returns false if it can't fit (full). */
@@ -4577,11 +4607,17 @@ export class GameScene extends Phaser.Scene {
    *  tap-away close. */
   private handleMenuClick(x: number, y: number): boolean {
     if (!this.menuOpen) return false;
-    // A receipt (opened from the Mail tab) sits ON TOP — the ✓ or a tap outside closes.
+    // A receipt / delivery-package (opened from the Mail tab) sits ON TOP. For a normal receipt the
+    // ✓ or a tap outside closes; for a DELIVERY package the ✓ = 领取 (claim to the pickup grid /
+    // backpack), a tap outside just closes.
     if (this.openMailId !== null) {
       const rc = this.registry.get('receiptClose') as { x: number; y: number; w: number; h: number } | null;
       const onOk = !!rc && x >= rc.x && x <= rc.x + rc.w && y >= rc.y && y <= rc.y + rc.h;
-      if (onOk || !this.overPanel('receiptPanel', x, y)) this.closeReceipt();
+      const mail = this.mailList.find((m) => m.id === this.openMailId);
+      if (mail && mail.kind === 'delivery') {
+        if (onOk) this.claimDelivery(this.openMailId);
+        else if (!this.overPanel('receiptPanel', x, y)) this.closeReceipt();
+      } else if (onOk || !this.overPanel('receiptPanel', x, y)) this.closeReceipt();
       return true;
     }
     // "Sell how many?" keypad.
@@ -4601,6 +4637,7 @@ export class GameScene extends Phaser.Scene {
       else if (opt === 'store' && it && !this.chestHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('bag_chest_full')); } // chest full → decline
       else if (opt === 'take' && it && !this.backpackHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('bag_full')); } // backpack full → decline
       else if (opt === 'give' && it && !this.catoBagHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.catoSay('chatter_bag_full'); } // Cato's bag is full → decline
+      else if (opt === 'sell' && it && !this.saleHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('sale_full')); } // 待售 bin full → decline
       else if (opt === 'sell' || opt === 'give' || opt === 'tochest' || opt === 'store' || opt === 'take') this.openMenuKeypad(opt);
       else if (opt === 'feed') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuFeed(idx); }
       else if (opt === 'delete') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuPerformAction('delete', idx); }
@@ -4614,8 +4651,9 @@ export class GameScene extends Phaser.Scene {
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
     if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet); return true; } // keep the tab bar on a switch
-    // Backpack / Chest / Cato-bag: tap an item → select it (right detail) AND open its action menu.
-    if (this.menuTab === TAB_BACKPACK || this.menuTab === 1 || this.menuTab === 2) {
+    // Any item grid (Chest / Cato-bag / Backpack / mailbox 取货 + 待售): tap an item → select it
+    // (right detail) AND open its action menu.
+    if (this.menuTab === TAB_BACKPACK || this.menuTab === TAB_CHEST || this.menuTab === 2 || this.menuTab === TAB_PICKUP || this.menuTab === TAB_FORSALE) {
       const idx = this.itemSlotAt('menuSlots', x, y);
       if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); this.openMenuItemMenu(idx, x, y); return true; }
     } else if (this.menuTab === 0) {
@@ -4708,17 +4746,30 @@ export class GameScene extends Phaser.Scene {
   private menuItemOptions(index: number): Array<{ action: MenuItemAction; label: string }> {
     const it = this.menuStore()[index];
     const opts: Array<{ action: MenuItemAction; label: string }> = [];
+    // Mailbox 取货 (delivered orders) → Take to backpack / Delete.
+    if (this.menuTab === TAB_PICKUP) {
+      opts.push({ action: 'take', label: t('action_take') });
+      opts.push({ action: 'delete', label: t('action_delete') });
+      return opts;
+    }
+    // Mailbox 待售 (shipping bin) → 取回 back to the backpack (before it sells) / Delete.
+    if (this.menuTab === TAB_FORSALE) {
+      opts.push({ action: 'take', label: t('action_take_back') });
+      opts.push({ action: 'delete', label: t('action_delete') });
+      return opts;
+    }
     // USE = hold this item straight from the store as the active tool / seed / material.
     if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t('action_use') });
-    if (this.menuTab === TAB_BACKPACK) { // Backpack (shared w/ Cato): use / feed / store→chest / delete
+    if (this.menuTab === TAB_BACKPACK) { // Backpack: use / feed / 上架 / store→chest / delete
       if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed Cato from the shared bag
+      if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_list') }); // list for sale → 待售 bin
       opts.push({ action: 'store', label: t('action_store') });
       opts.push({ action: 'delete', label: t('action_delete') });
       return opts;
     }
-    // Chest (pure storage): Take → backpack, Sell, Delete. (No 'give' — Cato shares the backpack now.)
+    // Chest (pure storage): Take → backpack, 上架 (list for sale), Delete.
     opts.push({ action: 'take', label: t('action_take') });
-    if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_sell') });
+    if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_list') });
     opts.push({ action: 'delete', label: t('action_delete') });
     return opts;
   }
@@ -4809,7 +4860,10 @@ export class GameScene extends Phaser.Scene {
     if (!it) return;
     const n = Math.min(qty ?? it.count, it.count);
     if (n <= 0) return;
-    if (action === 'sell') this.addMoney(sellPrice(it.id) * n);
+    if (action === 'sell') { // LIST for sale → the mailbox 待售 bin (auto-sold at the next day-settle)
+      if (!this.saleHasSpaceFor(it.id)) { this.flashShopMsg(t('sale_full')); return; }
+      this.addToStore(this.saleStore, { ...it, count: n });
+    }
     else if (action === 'give') {
       if (!this.catoBagHasSpaceFor(it.id)) { this.catoSay('chatter_bag_full'); return; } // safety: bag filled since the menu opened
       this.addToStore(this.catoBagStore, { ...it, count: n }); // chest → Cato's bag
@@ -4906,11 +4960,62 @@ export class GameScene extends Phaser.Scene {
 
   private priceOf(id: string): number { return buyPrice(id) ?? 0; }
 
-  /** Day rollover hook. Buying + selling are now INSTANT (into/out of the chest), so
-   *  there's no overnight shipping-bin settlement or order delivery any more — this is a
-   *  no-op kept as the seam for any future daily event (weather, growth, AI, …). */
+  /** Day rollover: DELIVER due purchase orders (into the mailbox 取货 grid, or a claim letter if it's
+   *  full) and SETTLE the 待售 shipping bin (auto-sell everything → coins + a receipt letter). */
   private settleDay(): void {
-    /* instant economy — nothing to settle at the day boundary */
+    this.settleOrders();
+    this.settleSales();
+    this.scheduleSave();
+    if (this.menuOpen) this.publishMenu(); // reflect deliveries / emptied bin if the mailbox is open
+  }
+
+  /** Deliver every order whose day has come → the 取货 pickup grid; if it's full, a claim letter (信). */
+  private settleOrders(): void {
+    if (!this.orders.length) return;
+    const due = this.orders.filter((o) => o.deliverDay <= this.dayCount);
+    this.orders = this.orders.filter((o) => o.deliverDay > this.dayCount);
+    for (const o of due) {
+      if (this.pickupHasSpaceFor(o.id)) this.addToStore(this.pickupStore, itemFromId(o.id, o.count));
+      else this.addMail({ kind: 'delivery', sender: t('mail_sender_market'), title: t('mail_delivery_title'), iconFrame: 245, lines: this.itemsToLines([{ id: o.id, count: o.count }]), total: 0, items: [{ id: o.id, count: o.count }] });
+    }
+  }
+
+  /** Sell everything in the 待售 bin at once → coins in + a "Sales Receipt" letter; clear the bin. */
+  private settleSales(): void {
+    if (!this.saleStore.length) return;
+    let total = 0;
+    const lines: ReceiptLine[] = [];
+    for (const it of this.saleStore) {
+      const sub = sellPrice(it.id) * it.count;
+      total += sub;
+      lines.push({ iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, label: this.itemName(it.id), count: it.count, subtotal: sub });
+    }
+    this.addMoney(total);
+    this.addMail({ kind: 'sell-receipt', sender: t('mail_sender_market'), title: t('mail_sales_receipt'), iconFrame: 245, lines, total });
+    this.saleStore = [];
+  }
+
+  /** ReceiptLine[] (mail display) from a list of {id,count} — subtotal 0 (a package, not a sale). */
+  private itemsToLines(items: Array<{ id: string; count: number }>): ReceiptLine[] {
+    return items.map((it) => { const s = itemFromId(it.id, it.count); return { iconKey: s.iconKey ?? 'fruit-items', iconFrame: s.iconFrame ?? 0, label: this.itemName(it.id), count: it.count, subtotal: 0 }; });
+  }
+
+  /** Claim a delivery letter's package → the 取货 grid if there's room, else the backpack; leftover
+   *  stays in the letter. Removes the letter once fully claimed. */
+  private claimDelivery(id: string): void {
+    const mail = this.mailList.find((m) => m.id === id);
+    if (!mail || mail.kind !== 'delivery' || !mail.items) { this.closeReceipt(); return; }
+    const leftover: Array<{ id: string; count: number }> = [];
+    for (const it of mail.items) {
+      if (this.pickupHasSpaceFor(it.id)) this.addToStore(this.pickupStore, itemFromId(it.id, it.count));
+      else if (this.backpackHasSpaceFor(it.id)) this.addToStore(this.backpackStore, itemFromId(it.id, it.count));
+      else leftover.push({ id: it.id, count: it.count });
+    }
+    if (leftover.length === 0) { this.mailList = this.mailList.filter((m) => m.id !== id); }
+    else { mail.items = leftover; mail.lines = this.itemsToLines(leftover); this.notifyBagFull(); } // no room → Cato says so, letter stays
+    this.closeReceipt();
+    this.publishMenu();
+    this.scheduleSave();
   }
 
   /** Add a new mail (newest first) + refresh the unified menu if it's open on the Mail tab. */
@@ -4934,7 +5039,7 @@ export class GameScene extends Phaser.Scene {
     // so the receipt must jump above it too); keep the cursor topmost.
     this.scene.bringToTop('ReceiptScene');
     this.scene.bringToTop('CursorScene');
-    this.registry.set('receipt', { visible: true, rev: ++this.receiptRev, sender: mail.sender, title: mail.title, lines: mail.lines, total: mail.total });
+    this.registry.set('receipt', { visible: true, rev: ++this.receiptRev, sender: mail.sender, title: mail.title, lines: mail.lines, total: mail.total, claim: mail.kind === 'delivery' });
   }
 
   private closeReceipt(): void {
@@ -7149,7 +7254,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 14,
+      v: 16,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -7167,6 +7272,9 @@ export class GameScene extends Phaser.Scene {
       dayCount: this.dayCount,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
+      orders: this.orders.map((o) => ({ ...o })),
+      pickup: this.pickupStore.map((it) => ({ id: it.id, count: it.count })),
+      sale: this.saleStore.map((it) => ({ id: it.id, count: it.count })),
       mail: this.mailList.map((m) => ({ ...m })),
       autonomy: { ...this.autonomy },
       staminaMax: this.staminaMax,
@@ -7329,6 +7437,10 @@ export class GameScene extends Phaser.Scene {
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
       if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count));
+      // Overnight economy (v16): pending orders + the pickup grid + the shipping bin.
+      if (s.orders) this.orders = s.orders.map((o) => ({ id: o.id, count: o.count, deliverDay: o.deliverDay }));
+      if (s.pickup) this.pickupStore = s.pickup.map((it) => itemFromId(it.id, it.count));
+      if (s.sale) this.saleStore = s.sale.map((it) => itemFromId(it.id, it.count));
       // Cato shares the player's backpack now — fold any old Cato-bag items into it, then drop it.
       if (s.catoBag) for (const it of s.catoBag) this.addToStore(this.backpackStore, itemFromId(it.id, it.count));
       this.catoBagStore = [];

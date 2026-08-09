@@ -55,10 +55,12 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'shop', frame: 262, title: '商店' },
   { key: 'settings', frame: 164, title: '设置' },
   { key: 'calendar', frame: 294, title: '日历' }, // all_icons calendar-page glyph (row18 col6). Placeholder tab.
+  { key: 'pickup', frame: 293, title: '取货' },   // mailbox: delivered orders (icon tunable like paw)
+  { key: 'forsale', frame: 261, title: '待售' },  // mailbox: shipping bin ($ glyph, tunable)
 ];
 // NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_BACKPACK = 10;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_BACKPACK = 10;
 
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
@@ -302,8 +304,8 @@ export class MenuScene extends Phaser.Scene {
     else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx, lw); // placeholder (empty) tab
     else if (m.tab === TAB_MAIL) this.renderMailList(content, m.mails ?? []);
     else if (m.tab === TAB_SHOP) this.renderShop(content, m);
-    else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack
-    if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK) {
+    else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack / 取货 / 待售
+    if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);

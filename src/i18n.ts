@@ -154,6 +154,14 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   shop_buy: { en: 'Buy', 'zh-CN': '购买' },                // rendered "Buy 20" / "购买 20"
   shop_no_coins: { en: 'Not enough coins', 'zh-CN': '金币不够' },
   chest_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
+  shop_ordered: { en: 'Ordered — arrives tomorrow', 'zh-CN': '已下单，明早送达' },
+  sale_full: { en: 'For-sale bin is full', 'zh-CN': '待售格满了' },
+  // Overnight economy: the 3-tab mailbox + delivery/sale letters
+  tab_pickup: { en: 'Pickup', 'zh-CN': '取货' },
+  tab_forsale: { en: 'For Sale', 'zh-CN': '待售' },
+  mail_sender_market: { en: 'Market Manager', 'zh-CN': '集市管理员' },
+  mail_sales_receipt: { en: 'Sales Receipt', 'zh-CN': '销售回执' },
+  mail_delivery_title: { en: 'Order Delivered', 'zh-CN': '订单送达' },
   // Crafting (work station modal)
   craft_title: { en: 'CRAFTING', 'zh-CN': '合成' },
   craft_pick: { en: 'Pick something to craft', 'zh-CN': '选一个要合成的东西' },
@@ -169,6 +177,8 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   bag_chest_full: { en: 'Chest full', 'zh-CN': '箱子满了' },
   action_hotbar: { en: 'To Hotbar', 'zh-CN': '放到快捷栏' },
   action_sell: { en: 'Sell', 'zh-CN': '出售' },
+  action_list: { en: 'List for sale', 'zh-CN': '上架待售' },
+  action_take_back: { en: 'Take back', 'zh-CN': '取回' },
   action_delete: { en: 'Delete', 'zh-CN': '丢弃' },
   keypad_how_many: { en: 'How Many?', 'zh-CN': '选择数量' },
   // ── Item names (shown in the chest / shop / detail). Keyed `item_<id>` (hyphens→_).
