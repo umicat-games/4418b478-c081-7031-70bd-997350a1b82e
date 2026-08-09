@@ -638,7 +638,7 @@ export class GameScene extends Phaser.Scene {
   // cursor snaps to empty tilled soil and a click plants this crop there.
   private activeSeed?: CropName;
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
-  private tileCursor?: Phaser.GameObjects.Image; // bracket that frames the target cell
+  private tileCursor?: Phaser.GameObjects.NineSlice | Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private waterCan?: Phaser.GameObjects.Sprite; // the god-hand watering-can pour (one at a time)
   private hoeSwing?: Phaser.GameObjects.GameObject; // the god-hand tool swing (hoe / axe) — suppresses the tile cursor
@@ -1782,15 +1782,25 @@ export class GameScene extends Phaser.Scene {
     this.wireSceneForageAndStones();
     this.createControlToggle(); // on-screen TEST button: drive Cato ↔ pan camera
 
-    // Bracket cursor (24×24, frames a 16px cell) + the held-tool icon inside it.
-    // Hidden until the hoe is out + hovering a farmable tile. High depth so they
-    // read over tiles + Cato. When shown, the bracket IS the cursor (the normal
-    // mouse pointer hides — see updateTileCursor).
-    this.tileCursor = this.add
-      .image(0, 0, 'tile-select')
-      .setOrigin(0.5, 0.5)
-      .setDepth(1e6)
-      .setVisible(false);
+    // Bracket cursor (frames a 16px cell) + the held-tool icon inside it. Hidden until a tool is out
+    // + hovering a farmable tile. High depth so they read over tiles + Cato. When shown, the bracket
+    // IS the cursor (the normal mouse pointer hides — see updateTileCursor).
+    // It's the SAME `white-corner-bracket` the empty-hand hover-inspect uses, at the SAME on-screen
+    // corner size (~5×zoom): a WORLD-space nine-slice (camera applies the zoom) scaled by 0.625 so
+    // its ~8px mark renders at ~5×zoom — matching HoverScene's CORNER_SCALE. Sized so the frame is
+    // ~28 world px (frames the 16px tile like the hover bracket). Falls back to the tile-select image
+    // if the atlas frame is somehow missing.
+    const TILE_BR = 0.625; // == HoverScene CORNER_SCALE (5×zoom); keep the two in sync
+    if (this.textures.exists('ui-sheet') && this.textures.get('ui-sheet').has('white-corner-bracket')) {
+      this.tileCursor = this.add
+        .nineslice(0, 0, 'ui-sheet', 'white-corner-bracket', 28 / TILE_BR, 28 / TILE_BR, 14, 14, 14, 14)
+        .setScale(TILE_BR)
+        .setOrigin(0.5, 0.5)
+        .setDepth(1e6)
+        .setVisible(false);
+    } else {
+      this.tileCursor = this.add.image(0, 0, 'tile-select').setOrigin(0.5, 0.5).setDepth(1e6).setVisible(false);
+    }
     this.hoeIcon = this.add
       .image(0, 0, 'tools_and_meterials', 'hoe') // held-hoe icon = the `hoe` region
       .setOrigin(0.5, 0.5)
