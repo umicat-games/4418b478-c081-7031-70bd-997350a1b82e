@@ -54,8 +54,11 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'catobag', frame: 310, title: '猫包' }, // white-cat-claw (all_icons region @96,304)
   { key: 'shop', frame: 262, title: '商店' },
   { key: 'settings', frame: 164, title: '设置' },
+  { key: 'calendar', frame: 294, title: '日历' }, // all_icons calendar-page glyph (row18 col6). Placeholder tab.
 ];
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_BACKPACK = 5;
+// NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
+// view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_BACKPACK = 10;
 
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
@@ -294,6 +297,7 @@ export class MenuScene extends Phaser.Scene {
     const content = this.add.container(0, 0); panel.add(content);
     this.detailBox = undefined;
     if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx, lw);
+    else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx, lw); // placeholder (empty) tab
     else if (m.tab === TAB_MAIL) this.renderMailList(content, m.mails ?? []);
     else if (m.tab === TAB_SHOP) this.renderShop(content, m);
     else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack
@@ -441,6 +445,13 @@ export class MenuScene extends Phaser.Scene {
     });
     this.registry.set('menuMailRows', bounds);
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visible * step - MAIL.gapPx, visible, mails.length);
+  }
+
+  /** CALENDAR tab — placeholder for now (a centred "coming soon"): lets the user test that tab
+   *  switching works + reads like a real tabbed menu. Fill in the real calendar UI here later. */
+  private renderCalendar(c: Phaser.GameObjects.Container, lx: number, lw: number): void {
+    const H = this.scale.height;
+    c.add(this.T(lx + lw / 2, H * 0.46, t('menu_coming_soon'), H * 0.03, INK).setAlpha(0.65));
   }
 
   /** SETTINGS tab: a Music volume slider (tap the bar to set — mirrors the title

@@ -128,6 +128,8 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_shop: { en: 'Shop', 'zh-CN': '商店' },
   tab_catobag: { en: "Cato's bag", 'zh-CN': 'Cato的背包' },
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
+  tab_calendar: { en: 'Calendar', 'zh-CN': '日历' },
+  menu_coming_soon: { en: 'Coming soon', 'zh-CN': '敬请期待' },
   settings_music: { en: 'Music', 'zh-CN': '音乐' },
   settings_sfx: { en: 'Sound', 'zh-CN': '音效' },
   settings_language: { en: 'Language', 'zh-CN': '语言' },

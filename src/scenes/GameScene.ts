@@ -163,12 +163,12 @@ type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
 // Actions on an item in the backpack / chest / Cato-bag menu. `use` = hold it; `store` = backpack→
 // chest; `take` = chest→backpack.
 type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
-const TAB_BACKPACK = 5; // the standalone backpack view (no tab bar) — distinct from the 0-4 menu tabs
-const TAB_SETTINGS = 4;
-// The paw (bottom-right) opens a TABBED "menu" — the tabs it shows (TAB_DEFS indices). Settings for
-// now; append calendar / achievements (new TAB_DEFS entries) here later. Chest / mail / shop stay
-// SEPARATE (their own in-world objects open them standalone), so they're NOT in this set.
-const MENU_SYSTEM_TABS = [TAB_SETTINGS];
+const TAB_BACKPACK = 10; // the standalone backpack view (no tab bar) — kept ABOVE the TAB_DEFS range so appended tabs don't collide
+const TAB_SETTINGS = 4, TAB_CALENDAR = 5;
+// The paw (bottom-right) opens a TABBED "menu" — the TAB_DEFS indices it shows. Chest / mail / shop
+// stay SEPARATE (their own in-world objects open them standalone), so they're NOT here. Append
+// achievements etc. as new TAB_DEFS entries + push the index here + a MenuScene render branch.
+const MENU_SYSTEM_TABS = [TAB_SETTINGS, TAB_CALENDAR];
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
