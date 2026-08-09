@@ -1876,7 +1876,7 @@ export class GameScene extends Phaser.Scene {
    *  tool here, so you can always cancel), or close it if already open. */
   private toggleToolWheelAtCursor(): void {
     if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen) return;
-    if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // Tab again → animated dismiss
+    if (this.toolPaletteOpen) { this.closeToolPalette(); return; } // Tab again → dismiss instantly (no tool picked)
     const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
     const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
     const wp = this.cameras.main.getWorldPoint(sx, sy);
@@ -2583,13 +2583,10 @@ export class GameScene extends Phaser.Scene {
    *  o'clock). Cancel (mouse) sits at the top (0,-1), handled separately. A slot with a null tool
    *  (the 6-o'clock reserved spot) or an unowned tool just shows the empty circle base. Fixed
    *  positions = muscle memory. Mirrors the reference: pickaxe↗ axe↘ (reserved)↓ hoe↙ can↖. */
-  // Wheel sizing + appear/disappear animation timings.
+  // Wheel sizing + appear/disappear animation.
   private static WHEEL_D = 54;          // circle diameter (screen px) — a touch bigger than the old 48
-  private static WHEEL_OPEN_MS = 200;   // spring-out from centre (Back.easeOut) on open
-  private static WHEEL_HOLD_MS = 90;    // (on tool-select) brief pause before the pop
-  private static WHEEL_POP_MS = 120;    // (on tool-select) pop outward + grow
-  private static WHEEL_SHRINK_MS = 160; // shrink to nothing
-  private static WHEEL_POP_AMT = 0.18;  // pop overshoot (fraction of radius/size)
+  private static WHEEL_OPEN_MS = 220;   // spring-out from centre (Back.easeOut) on open; the select-close plays this REVERSED
+  private static WHEEL_OVERSHOOT = 3.0; // Back.easeOut overshoot — higher = more pronounced bounce
   private static WHEEL_RING: Array<{ toolId: ToolId | null; ux: number; uy: number }> = [
     { toolId: 'pickaxe', ux: 0.866, uy: -0.5 },       // 2 o'clock
     { toolId: 'axe', ux: 0.866, uy: 0.5 },            // 4 o'clock
@@ -2656,8 +2653,9 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('toolPaletteBounds', []);
   }
 
-  /** Start the animated exit: a tool-select (chosen ≥0) pauses → pops outward → shrinks; a
-   *  cancel/miss (chosen <0) just quick-shrinks. `publishToolPalette` runs the tween + finalizes. */
+  /** Start the animated exit on a TOOL-SELECT — plays the open spring in reverse (retract inward +
+   *  shrink away). Cancel/miss/forced dismissals use `closeToolPalette` (instant, no animation).
+   *  `publishToolPalette` advances the tween each frame + finalizes when done. */
   private beginCloseWheel(chosen: number): void {
     if (!this.toolPaletteOpen || this.wheelClose) return;
     this.wheelClose = { at: this.time.now, chosen };
@@ -2671,23 +2669,21 @@ export class GameScene extends Phaser.Scene {
 
     // --- Appear / disappear tween (uniform across the wheel). `f` = radial position factor (0 = at
     //     the centre, 1 = at rest, >1 = popped outward); `s` = circle size factor. Icons follow
-    //     because HoverScene scales each icon by the button `size` and draws it at the button pos. ---
+    //     because HoverScene scales each icon by the button `size` and draws it at the button pos.
+    //     OPEN = spring out from the centre (Back.easeOut). SELECT-CLOSE = that SAME spring played in
+    //     REVERSE (retract inward + shrink away). Cancel/miss don't animate (they call
+    //     closeToolPalette directly), so a live `wheelClose` here always means a tool was picked. ---
+    const spring = (p: number) => Phaser.Math.Easing.Back.Out(Phaser.Math.Clamp(p, 0, 1), GameScene.WHEEL_OVERSHOOT);
     let f = 1, s = 1;
     const now = this.time.now;
     if (this.wheelClose) {
-      const sel = this.wheelClose.chosen >= 0; // a tool was picked → full pause+pop+shrink; else quick shrink
-      const HOLD = sel ? GameScene.WHEEL_HOLD_MS : 0;
-      const POP = sel ? GameScene.WHEEL_POP_MS : 0;
-      const SHR = sel ? GameScene.WHEEL_SHRINK_MS : 120;
       const e = now - this.wheelClose.at;
-      if (e >= HOLD + POP + SHR) { this.closeToolPalette(); return; } // exit finished → clear + stop
-      const amt = GameScene.WHEEL_POP_AMT;
-      if (e < HOLD) { f = 1; s = 1; }                                                   // pause
-      else if (e < HOLD + POP) { const q = Phaser.Math.Easing.Cubic.Out((e - HOLD) / POP); f = 1 + amt * q; s = 1 + amt * q; } // pop outward + grow
-      else { const q = Phaser.Math.Easing.Cubic.In((e - HOLD - POP) / SHR); const base = sel ? 1 + amt : 1; f = base; s = base * (1 - q); } // shrink away
+      if (e >= GameScene.WHEEL_OPEN_MS) { this.closeToolPalette(); return; } // exit finished → clear + stop
+      const be = spring(1 - e / GameScene.WHEEL_OPEN_MS); // reverse of the open curve: 1 → 0
+      f = be; s = be;
     } else {
       const e = now - this.wheelOpenAt;
-      if (e < GameScene.WHEEL_OPEN_MS) { const be = Phaser.Math.Easing.Back.Out(e / GameScene.WHEEL_OPEN_MS); f = be; s = be; } // spring out from centre
+      if (e < GameScene.WHEEL_OPEN_MS) { const be = spring(e / GameScene.WHEEL_OPEN_MS); f = be; s = be; } // spring out from centre
     }
 
     const cam = this.cameras.main, z = cam.zoom;
@@ -2744,12 +2740,12 @@ export class GameScene extends Phaser.Scene {
       // Snap the cursor back onto the ITEM the wheel opened on, so the newly-picked tool is ready
       // to use right there (else it'd sit off at the tool circle's ring position). Mouse-locked only.
       if (this.locked) this.snapCursorToWorld((pal.bbox.wl + pal.bbox.wr) / 2, (pal.bbox.wt + pal.bbox.wb) / 2);
-      this.beginCloseWheel(hit.idx); // tool picked → pause, pop out, shrink away
+      this.beginCloseWheel(hit.idx); // tool picked → play the open anim in reverse (retract + shrink)
     } else if (hit && hit.idx === -1) {
       this.clearHeld(); // the mouse circle = cancel → drop the held tool, empty hand
-      this.beginCloseWheel(-1); // quick shrink
+      this.closeToolPalette(); // no tool picked → no exit animation, just vanish
     } else {
-      this.beginCloseWheel(-2); // miss → dismiss (quick shrink)
+      this.closeToolPalette(); // miss → dismiss instantly (no animation)
     }
     return true;
   }
