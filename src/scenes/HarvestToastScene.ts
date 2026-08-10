@@ -13,7 +13,7 @@ const SLICE = { l: 6, r: 6, t: 6, b: 6 };  // this button's 9-slice insets (per 
 const CORNER_SCALE = 3;                    // draw the 9-slice at 3× → rounded pill, corners stay crisp
 const FS = 20;                             // text size (smaller)
 const PAD_X = 40, PAD_Y = 18;              // text inset inside the pill
-const BOTTOM = 108;                        // pill centre y = H - BOTTOM (lower — nearer the screen bottom)
+const BOTTOM = 78;                         // pill centre y = H - BOTTOM (lower — nearer the screen bottom)
 const INK = '#ffffff', STROKE = '#7a5c34';
 // DPI-aware text resolution so the pixel font stays crisp on high-DPI tablets.
 const RES = Math.min(8, Math.max(3, Math.round((typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1) * 3)));
