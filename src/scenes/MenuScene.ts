@@ -5,6 +5,7 @@ import { getBgmVolume } from '../bgm';
 import { getSfxVolume, playSfx, SFX_HOVER } from '../sfx';
 import { DEBUG_FLAGS, DEBUG_PANEL, isDebug } from '../debug';
 import type { MailListEntry } from './menu-types';
+import type { ReceiptLine } from './ReceiptScene';
 
 // The UNIFIED menu (Zelda-style): ONE screen with icon TABS — Mail / For-sale / Chest /
 // Settings — replacing the separate mailbox + chest + bag modals. Left = the tab's
@@ -86,7 +87,13 @@ export interface MenuModel {
   money?: number;               // coin balance (shop footer)
   buyQty?: number;              // how many to buy (right-side stepper)
   shopMsg?: string;             // transient warning ("金币不够" / "箱子满了")
+  mailSelected?: string;        // Mail tab: selected mail id → right-side receipt detail + row highlight
+  mailDetail?: { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number }; // the selected mail's receipt
 }
+
+// Mail-tab RIGHT-side receipt panel (screen fractions) — the sales receipt / delivery
+// package renders here instead of a separate modal.
+const MAIL_DETAIL = { x: 0.565, y: 0.30, w: 0.40, h: 0.58 }; // aligns with the mail list (y 0.30–0.88), right of it + below the close X
 
 export class MenuScene extends Phaser.Scene {
   private lastRev = -1;
@@ -302,7 +309,10 @@ export class MenuScene extends Phaser.Scene {
     this.detailBox = undefined;
     if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx, lw);
     else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx, lw); // placeholder (empty) tab
-    else if (m.tab === TAB_MAIL) this.renderMailList(content, m.mails ?? []);
+    else if (m.tab === TAB_MAIL) {
+      this.renderMailList(content, m.mails ?? [], m.mailSelected);
+      this.renderMailDetail(content, m.mailDetail); // right-side receipt (was a separate modal)
+    }
     else if (m.tab === TAB_SHOP) this.renderShop(content, m);
     else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack / 取货 / 待售
     if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {
@@ -422,7 +432,7 @@ export class MenuScene extends Phaser.Scene {
     c.add(desc);
   }
 
-  private renderMailList(c: Phaser.GameObjects.Container, mails: MailListEntry[]): void {
+  private renderMailList(c: Phaser.GameObjects.Container, mails: MailListEntry[], selectedId?: string): void {
     const W = this.scale.width, H = this.scale.height;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
     const rowH = MAIL.rowH * H, step = rowH + MAIL.gapPx;
@@ -435,9 +445,10 @@ export class MenuScene extends Phaser.Scene {
     if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
     mails.slice(this.scroll, this.scroll + visible).forEach((mail, k) => {
       const ry = gy + k * step;
+      const sel = mail.id === selectedId;
       const bar = this.add.graphics();
-      bar.fillStyle(mail.read ? 0xe7dcc2 : 0xf3ead1, 1); bar.fillRoundedRect(gx, ry, gw, rowH, 8);
-      bar.lineStyle(2, 0xd2be95, 1); bar.strokeRoundedRect(gx, ry, gw, rowH, 8); c.add(bar);
+      bar.fillStyle(sel ? 0xfff6de : mail.read ? 0xe7dcc2 : 0xf3ead1, 1); bar.fillRoundedRect(gx, ry, gw, rowH, 8);
+      bar.lineStyle(sel ? 3 : 2, sel ? 0x4aa3df : 0xd2be95, 1); bar.strokeRoundedRect(gx, ry, gw, rowH, 8); c.add(bar);
       if (this.textures.exists('ui-icons')) {
         const icon = this.add.image(gx + rowH * 0.6, ry + rowH / 2, 'ui-icons', mail.iconFrame);
         icon.setScale((rowH * 0.5) / 16); c.add(icon);
@@ -449,6 +460,54 @@ export class MenuScene extends Phaser.Scene {
     });
     this.registry.set('menuMailRows', bounds);
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visible * step - MAIL.gapPx, visible, mails.length);
+  }
+
+  /** RIGHT-side receipt panel for the selected mail (sales receipt lines + total, or a
+   *  delivery package + a 领取/Claim button). Replaces the old separate ReceiptScene modal —
+   *  GameScene publishes `mailDetail`; the Claim hit-rect is `menuMailClaim`. */
+  private renderMailDetail(c: Phaser.GameObjects.Container, d?: MenuModel['mailDetail']): void {
+    const W = this.scale.width, H = this.scale.height;
+    const rx = MAIL_DETAIL.x * W, ry = MAIL_DETAIL.y * H, rw = MAIL_DETAIL.w * W, rh = MAIL_DETAIL.h * H;
+    c.add(this.add.nineslice(rx + rw / 2, ry + rh / 2, ATLAS, PANEL_FRAME, rw / PANEL_SCALE, rh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
+    this.registry.set('menuMailClaim', null); // cleared unless a delivery draws the button
+    if (!d) { c.add(this.T(rx + rw / 2, ry + rh * 0.5, t('menu_select_mail'), H * 0.024, SUB).setAlpha(0.6)); return; }
+    const fs = Math.max(14, Math.round(H * 0.026));
+    const isDelivery = d.kind === 'delivery';
+    // Title + underline + sender.
+    c.add(this.T(rx + rw / 2, ry + rh * 0.08, d.title.toUpperCase(), Math.round(fs * 1.15), '#ffffff'));
+    const rule = this.add.graphics(); rule.fillStyle(0xa98d63, 1); rule.fillRect(rx + rw * 0.16, ry + rh * 0.145, rw * 0.68, Math.max(2, rh * 0.006)); c.add(rule);
+    c.add(this.T(rx + rw / 2, ry + rh * 0.205, d.sender, Math.round(fs * 0.8), SUB));
+    // Item rows: cream bars (icon + count subscript + name + subtotal / ×count).
+    const listTop = ry + rh * 0.28, listBot = ry + rh * (isDelivery ? 0.80 : 0.85);
+    const rowH = Math.min(rh * 0.13, (listBot - listTop) / Math.max(1, d.lines.length));
+    const barW = rw * 0.9, barX = rx + rw * 0.05;
+    d.lines.forEach((ln, i) => {
+      const yy = listTop + rowH * (i + 0.5);
+      const bh = rowH * 0.82;
+      const g = this.add.graphics();
+      g.fillStyle(0xefe4c8, 1); g.fillRoundedRect(barX, yy - bh / 2, barW, bh, Math.max(4, bh * 0.22));
+      g.lineStyle(Math.max(1, bh * 0.04), 0xd8c69e, 1); g.strokeRoundedRect(barX, yy - bh / 2, barW, bh, Math.max(4, bh * 0.22));
+      c.add(g);
+      const iconCx = barX + bh * 0.7;
+      if (this.textures.exists(ln.iconKey)) {
+        const icon = this.add.image(iconCx, yy, ln.iconKey, ln.iconFrame);
+        icon.setScale((bh * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
+        c.add(this.T(iconCx + bh * 0.24, yy + bh * 0.22, String(ln.count), Math.round(fs * 0.7), '#ffffff'));
+      }
+      c.add(this.T(barX + bh * 1.2, yy, ln.label, fs, INK, 0));
+      c.add(this.T(barX + barW - bh * 0.35, yy, isDelivery ? '×' + ln.count : ln.subtotal.toLocaleString(), fs, INK, 1));
+    });
+    // Total (sales receipt) OR a Claim button (delivery package).
+    if (!isDelivery) {
+      c.add(this.T(rx + rw * 0.07, ry + rh * 0.93, `${t('receipt_total')}: ${d.total.toLocaleString()}`, Math.round(fs * 1.05), '#ffffff', 0));
+    } else {
+      const bw = rw * 0.42, bh = rh * 0.11, bcx = rx + rw / 2, bcy = ry + rh * 0.9;
+      const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
+      c.add(has ? this.add.nineslice(bcx, bcy, 'square-buttons', 'grey-button', bw, bh, 6, 6, 6, 6)
+               : this.add.rectangle(bcx, bcy, bw, bh, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e));
+      c.add(this.T(bcx, bcy, t('mail_claim'), Math.round(fs), '#5b4327'));
+      this.registry.set('menuMailClaim', { x: bcx - bw / 2, y: bcy - bh / 2, w: bw, h: bh });
+    }
   }
 
   /** CALENDAR tab — placeholder for now (a centred "coming soon"): lets the user test that tab

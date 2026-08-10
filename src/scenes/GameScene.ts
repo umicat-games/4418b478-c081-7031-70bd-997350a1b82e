@@ -756,7 +756,8 @@ export class GameScene extends Phaser.Scene {
   // inbox; a receipt opens the ReceiptScene. Saved (v9).
   private mailList: MailEntry[] = [];
   private mailIdSeq = 0;
-  private openMailId: string | null = null; // which receipt is open (over the menu)
+  private openMailId: string | null = null; // (legacy ReceiptScene modal — no longer opened; mail now renders in the right pane)
+  private menuMailSel: string | null = null; // Mail tab: which mail's receipt shows in the right detail pane
   private receiptRev = 0;
   private placePreview?: Phaser.GameObjects.Sprite; // semi-transparent placement ghost
   private placeCell: { cx: number; cy: number } | null = null; // the valid cell the ghost is over
@@ -4223,6 +4224,7 @@ export class GameScene extends Phaser.Scene {
     this.menuTab = tab;
     this.menuTabSet = tabSet; // null = standalone (no tab bar); a list = the tabbed paw menu
     this.menuSelected = -1;
+    this.menuMailSel = null; // fresh open/tab-switch → publishMenu auto-selects the newest mail for the receipt pane
     if (tab === 3) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // Shop defaults
     if (!this.menuOpen) {
       // Fresh open → no source object by default (E/I / order button / backpack button).
@@ -4292,6 +4294,9 @@ export class GameScene extends Phaser.Scene {
     const catalog = this.menuTab === 3
       ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
+    // Mail tab: resolve the selected mail's receipt for the RIGHT detail pane FIRST (it may
+    // auto-select the newest + mark it read, which must reflect in the list model below).
+    const mailDetail = this.menuTab === TAB_MAIL ? this.selectedMailDetail() : undefined;
     this.registry.set('menu', {
       visible: true, rev: ++this.menuRev, tab: this.menuTab,
       noTabs: this.menuTabSet === null, tabSet: this.menuTabSet ?? undefined, // paw menu shows a tab bar of `tabSet`; object/backpack opens are standalone
@@ -4301,8 +4306,20 @@ export class GameScene extends Phaser.Scene {
       })),
       mails: this.mailListModel(),
       selected: this.menuSelected,
+      mailSelected: this.menuMailSel ?? undefined, mailDetail,
       catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
     });
+  }
+
+  /** The selected mail's receipt for the right detail pane. Auto-selects the newest mail
+   *  when nothing valid is selected (so the pane isn't blank on open), marking it read. */
+  private selectedMailDetail(): { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number } | undefined {
+    let mail = this.menuMailSel ? this.mailList.find((m) => m.id === this.menuMailSel) : undefined;
+    if (!mail && this.mailList.length) mail = this.mailList[0]; // auto-select newest
+    if (!mail) { this.menuMailSel = null; return undefined; }
+    this.menuMailSel = mail.id;
+    if (!mail.read) { mail.read = true; this.scheduleSave(); }
+    return { kind: mail.kind, sender: mail.sender, title: mail.title, lines: mail.lines, total: mail.total };
   }
 
   /** Shop catalog row under (x,y) → its id. */
@@ -4682,10 +4699,22 @@ export class GameScene extends Phaser.Scene {
     if (this.menuTab === TAB_BACKPACK || this.menuTab === TAB_CHEST || this.menuTab === 2 || this.menuTab === TAB_PICKUP || this.menuTab === TAB_FORSALE) {
       const idx = this.itemSlotAt('menuSlots', x, y);
       if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); this.openMenuItemMenu(idx, x, y); return true; }
-    } else if (this.menuTab === 0) {
-      // Mail: tap a row → open its receipt.
+    } else if (this.menuTab === TAB_MAIL) {
+      // Mail: a delivery's 领取/Claim button (right pane) → claim it; else tap a row → select
+      // it so its receipt shows in the right detail pane (marks it read).
+      const cbtn = this.registry.get('menuMailClaim') as { x: number; y: number; w: number; h: number } | null;
+      if (cbtn && x >= cbtn.x && x <= cbtn.x + cbtn.w && y >= cbtn.y && y <= cbtn.y + cbtn.h) {
+        if (this.menuMailSel) this.claimDelivery(this.menuMailSel);
+        return true;
+      }
       const mid = this.menuMailRowAt(x, y);
-      if (mid) { this.openReceipt(mid); return true; }
+      if (mid) {
+        this.menuMailSel = mid;
+        const mm = this.mailList.find((m) => m.id === mid);
+        if (mm && !mm.read) { mm.read = true; this.scheduleSave(); }
+        this.publishMenu();
+        return true;
+      }
     } else if (this.menuTab === 3) {
       // Shop: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
       const sk = this.menuStepperAt(x, y);
@@ -5037,9 +5066,8 @@ export class GameScene extends Phaser.Scene {
       else if (this.backpackHasSpaceFor(it.id)) this.addToStore(this.backpackStore, itemFromId(it.id, it.count));
       else leftover.push({ id: it.id, count: it.count });
     }
-    if (leftover.length === 0) { this.mailList = this.mailList.filter((m) => m.id !== id); }
+    if (leftover.length === 0) { this.mailList = this.mailList.filter((m) => m.id !== id); if (this.menuMailSel === id) this.menuMailSel = null; }
     else { mail.items = leftover; mail.lines = this.itemsToLines(leftover); this.notifyBagFull(); } // no room → Cato says so, letter stays
-    this.closeReceipt();
     this.publishMenu();
     this.scheduleSave();
   }

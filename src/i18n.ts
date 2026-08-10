@@ -147,6 +147,9 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   action_feed: { en: 'Feed now', 'zh-CN': '喂食' },
   action_to_chest: { en: 'To Chest', 'zh-CN': '放回箱子' },
   menu_no_mail: { en: 'No mail yet', 'zh-CN': '还没有邮件' },
+  menu_select_mail: { en: 'Select a mail to read', 'zh-CN': '点一封邮件查看' },
+  receipt_total: { en: 'TOTAL', 'zh-CN': '总计' },
+  mail_claim: { en: 'Claim', 'zh-CN': '领取' },
   menu_settings_todo: { en: 'Settings (coming soon)', 'zh-CN': '设置（待补充）' },
   shop_pick_item: { en: 'Pick an item to buy', 'zh-CN': '选一个要买的物品' },
   shop_unit_price: { en: 'Price', 'zh-CN': '单价' },       // rendered "Price 20" / "单价 20"
