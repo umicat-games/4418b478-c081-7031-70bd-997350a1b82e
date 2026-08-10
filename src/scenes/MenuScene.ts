@@ -29,7 +29,7 @@ const WHEEL_MS = 110; // min ms between wheel-scroll rows (tames trackpad event 
 const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (deep)
 // Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
 // corner; the X was landing on it → clicking it opened the chat).
-const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.955, y: 0.17, size: 0.07 };
+const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.80, y: 0.115, size: 0.065 }; // ABOVE the right detail panel (clear of the top-right Cato portrait)
 const CLOSE_PRESSED = 'close-light-big-pressed-down'; // brief click-flash frame on the X
 
 // Layout in SCREEN fractions (resize-mode canvas). Tuned against screenshots.
@@ -93,7 +93,7 @@ export interface MenuModel {
 
 // Mail-tab RIGHT-side receipt panel (screen fractions) — the sales receipt / delivery
 // package renders here instead of a separate modal.
-const MAIL_DETAIL = { x: 0.565, y: 0.30, w: 0.40, h: 0.58 }; // aligns with the mail list (y 0.30–0.88), right of it + below the close X
+const MAIL_DETAIL = { x: 0.61, y: 0.18, w: 0.36, h: 0.74 }; // SAME box as the left frame L (y 0.18–0.92), just to its RIGHT (past L's 0.58 edge → no overlap)
 
 export class MenuScene extends Phaser.Scene {
   private lastRev = -1;
