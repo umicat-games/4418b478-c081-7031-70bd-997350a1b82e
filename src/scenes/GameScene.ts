@@ -1536,17 +1536,24 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.wasTouch) return;
       this.locked = true; // a mouse event → desktop cursor mode
-      this.vcursor.x = pointer.x; this.vcursor.y = pointer.y;
+      // While a cursor SNAP is latched (just picked a tool from the wheel → cursor parked ON the
+      // item), the PHYSICAL mouse is stale: keep the snapped vcursor and route the click to IT,
+      // so a click actually acts on the item (not the old mouse spot) and the cursor doesn't jump
+      // back to the physical position. The latch clears as soon as the mouse moves (see update()).
+      if (!this.cursorSnapActive) { this.vcursor.x = pointer.x; this.vcursor.y = pointer.y; }
       // Swallow GHOST mouse events: after a touchend, browsers synthesise a mouse down/up/click at the
       // same spot — on a touch device that would hit the world-click path. A pure-desktop session
       // never sets touchLastAt, so this no-ops.
       if (this.time.now - this.touchLastAt < 600) return;
+      // Effective click position: the snapped item while latched, else the real pointer.
+      const sx = this.cursorSnapActive ? this.vcursor.x : pointer.x;
+      const sy = this.cursorSnapActive ? this.vcursor.y : pointer.y;
       // RIGHT-CLICK = open (or close) the contextual tool wheel — the desktop use/switch split:
       // LEFT-click only points + uses the held tool, RIGHT-click summons the wheel.
       if (pointer.rightButtonDown()) {
         if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.confirmOpen || this.inventoryOpen) return;
         if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // right-click again → animated dismiss
-        const rwp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        const rwp = this.cameras.main.getWorldPoint(sx, sy);
         this.openToolWheelAt(rwp.x, rwp.y, true);
         return;
       }
@@ -1566,9 +1573,10 @@ export class GameScene extends Phaser.Scene {
         this.handleMenuClick(pointer.x, pointer.y); return;
       }
       // Everything else (world tiles, cat, mailbox/chest/pad/craft objects, HUD buttons, the tool
-      // wheel) → the SAME router as touch, at the real pointer. (Cato's top-right portrait is caught
-      // by the HUD scene's own icon-button first and never reaches here.)
-      this.actAt(pointer.x, pointer.y);
+      // wheel) → the SAME router as touch, at the effective cursor (the snapped item while latched,
+      // else the real pointer). (Cato's top-right portrait is caught by the HUD scene's own
+      // icon-button first and never reaches here.)
+      this.actAt(sx, sy);
     });
 
     // TOUCH: no pointer lock / virtual cursor. Two gestures:
