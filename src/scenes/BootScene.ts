@@ -366,6 +366,9 @@ export class BootScene extends Phaser.Scene {
     // `white-button`.
     if (btnTex && !btnTex.has('light-brown-button')) btnTex.add('light-brown-button', 0, 11, 59, 26, 28);
     if (btnTex && !btnTex.has('white-button-pressed-down')) btnTex.add('white-button-pressed-down', 0, 59, 11, 26, 26);
+    // `light-brown-button-pressed-down` (26×26 @ 59,59) = the pressed/flat variant of the
+    // light-brown cell (row-2 col-2 of the 2×4 sheet) — the harvest-toast pill background.
+    if (btnTex && !btnTex.has('light-brown-button-pressed-down')) btnTex.add('light-brown-button-pressed-down', 0, 59, 59, 26, 26);
     // Dark-brown button (26×26 @ 59,155) — the LaptopScene dialogue/input box bg (white
     // text reads clearly on it, unlike the pale square-button-26_26-* frames).
     if (btnTex && !btnTex.has('dialog-brown')) btnTex.add('dialog-brown', 0, 59, 155, 26, 26);
