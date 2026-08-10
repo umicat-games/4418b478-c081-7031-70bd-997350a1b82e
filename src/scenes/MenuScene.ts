@@ -246,7 +246,11 @@ export class MenuScene extends Phaser.Scene {
     // Tabs sit ON the frame's TOP-LEFT edge (bottom overlaps into the frame so the
     // brown tab + brown frame border MERGE into one piece — like the reference). Drawn
     // BEFORE the frame so the frame's top border covers the tab's bottom seam.
-    const lx = L.x * W, ly = L.y * H, lw = L.w * W, lh = L.h * H;
+    // Settings / Calendar have NO right-side detail, so their frame spans the FULL width
+    // (symmetric L.x margins) instead of leaving room on the right like the grid/mail tabs.
+    const wideFrame = m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR;
+    const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
+    const lx = L.x * W, ly = L.y * H, lw = frameWFrac * W, lh = L.h * H;
     // Tabs TOUCH (no gap) + the ACTIVE tab is a bit wider + drawn ON TOP so it covers its
     // neighbours' edges (browser/Zelda tab look). `medium-brown-tab` (100×23) is stretched
     // non-uniformly (width fills the slot, height set taller so the icon isn't cramped).
@@ -307,8 +311,10 @@ export class MenuScene extends Phaser.Scene {
     // of the frame/tabs (which stay put).
     const content = this.add.container(0, 0); panel.add(content);
     this.detailBox = undefined;
-    if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx, lw);
-    else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx, lw); // placeholder (empty) tab
+    // Settings/Calendar: centre content on the (now full-width) frame, but keep the content
+    // sized as before (the original L.w) so the sliders/buttons don't stretch out.
+    if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx + lw / 2, L.w * W);
+    else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx + lw / 2); // placeholder (empty) tab
     else if (m.tab === TAB_MAIL) {
       this.renderMailList(content, m.mails ?? [], m.mailSelected);
       this.renderMailDetail(content, m.mailDetail); // right-side receipt (was a separate modal)
@@ -518,18 +524,19 @@ export class MenuScene extends Phaser.Scene {
 
   /** CALENDAR tab — placeholder for now (a centred "coming soon"): lets the user test that tab
    *  switching works + reads like a real tabbed menu. Fill in the real calendar UI here later. */
-  private renderCalendar(c: Phaser.GameObjects.Container, lx: number, lw: number): void {
+  private renderCalendar(c: Phaser.GameObjects.Container, cx: number): void {
     const H = this.scale.height;
-    c.add(this.T(lx + lw / 2, H * 0.46, t('menu_coming_soon'), H * 0.03, INK).setAlpha(0.65));
+    c.add(this.T(cx, H * 0.46, t('menu_coming_soon'), H * 0.03, INK).setAlpha(0.65));
   }
 
   /** SETTINGS tab: a Music volume slider (tap the bar to set — mirrors the title
    *  screen's slider, same `settings-buttons` tick/knob art) + a "Title screen" button
    *  (empty `button-idle` + text, like the title buttons) that returns to the menu.
    *  GameScene routes taps via the published `menuSettingsTrack` / `menuSettingsBack`. */
-  private renderSettings(c: Phaser.GameObjects.Container, lx: number, lw: number): void {
+  private renderSettings(c: Phaser.GameObjects.Container, cx: number, lw: number): void {
     const W = this.scale.width, H = this.scale.height;
-    const cx = lx + lw / 2; // centre on the LEFT content panel (settings has no right detail)
+    // cx = frame centre (passed in); lw = content sizing width (kept at the original L.w so the
+    // sliders/buttons stay their size even though the Settings frame now spans full width).
 
     // ── Volume sliders: Music (BGM) + SFX ────────────────────────────────────
     this.renderVolumeSlider(c, cx, lw, 0.26 * H, 0.335 * H, t('settings_music'), getBgmVolume(), 'menuSettingsTrack');
