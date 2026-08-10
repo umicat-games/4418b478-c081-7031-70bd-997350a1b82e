@@ -21,6 +21,10 @@ const HOVER_KEY = 'hover';
 const PALETTE_KEY = 'toolPalette';
 const CIRCLE_BG = 'tool-circle-bg';            // the round tool-button background (16×16, scaled)
 const CIRCLE_BG_SEL = 'tool-circle-bg-selected'; // the hovered/selected circle (blue ring)
+// The circle art is near-white → the WHITE-bordered tool icons vanished into it. Multiply-tint it
+// to a warm brown (matches Catopia's wooden UI) so the tools pop; the hovered circle brightens.
+const CIRCLE_TINT = 0x8a6240;       // warm brown base
+const CIRCLE_TINT_HOVER = 0xcaa46b; // lighter warm → the focused circle reads as highlighted
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
 // The hover bracket = the `white-corner-bracket` region of the `ui-sheet` atlas
@@ -110,7 +114,8 @@ export class HoverScene extends Phaser.Scene {
       // disabled = an owned tool that doesn't apply here → circle + greyed icon, not tappable.
       const empty = b.kind === 'empty', disabled = b.kind === 'disabled';
       p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size, b.size)
-        .setAlpha(empty ? 0.5 : disabled ? 0.85 : 1).setTexture(b.hovered ? CIRCLE_BG_SEL : CIRCLE_BG); // hover → blue-ring bg
+        .setAlpha(empty ? 0.5 : disabled ? 0.85 : 1).setTexture(b.hovered ? CIRCLE_BG_SEL : CIRCLE_BG) // hover → highlighted ring
+        .setTint(b.hovered ? CIRCLE_TINT_HOVER : CIRCLE_TINT); // warm brown so white-bordered tools contrast
       if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame);
       p.icon.clearTint().setAlpha(disabled ? 0.4 : 1); // inapplicable tool → just faded (no ugly grey tint)
