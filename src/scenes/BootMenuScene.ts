@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
+import { loadWorldScene, getEntityRegistry, Umicat } from '@umicat/phaser-sdk';
 import { crossToBgm } from '../bgm';
 import { startTransition, finishTransition } from '../transition';
 import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
@@ -35,12 +35,20 @@ export class BootMenuScene extends Phaser.Scene {
    *  reads these to place the "Settings" button directly BELOW Play, at Play's size. */
   playButton?: Phaser.GameObjects.Sprite;
   playBaseScale = 1;
+  /** Resolves to true when the signed-in account already has a CLOUD save. Kicked
+   *  off at scene create so it's (almost always) settled by the time Play is
+   *  pressed — lets `startGame` decide new-vs-returning from the real save, not
+   *  the per-device localStorage flag (the "fresh device replays the intro" bug). */
+  private cloudSaveCheck?: Promise<boolean>;
 
   constructor() {
     super({ key: 'BootMenuScene' });
   }
 
   async create(): Promise<void> {
+    // Fire the cloud-save probe FIRST (before the async world load) so the SDK
+    // handshake + saves.get overlap the title screen the player is looking at.
+    this.cloudSaveCheck = this.checkCloudSave();
     const { sceneFile } = await loadWorldScene(this, 'boot');
     this.worldW = sceneFile.world?.width ?? this.worldW;
     this.worldH = sceneFile.world?.height ?? this.worldH;
@@ -194,17 +202,46 @@ export class BootMenuScene extends Phaser.Scene {
     this.layoutWallpaper(); // reflow the screen-fixed wallpaper on resize
   };
 
+  /** Does this signed-in player already have a saved game? Probes the SAME store
+   *  GameScene loads (`umicat.saves` key `state`) — backed by the backend when
+   *  signed in, so it answers "returning player?" on ANY device, not just the one
+   *  that first played. Best-effort: any error → treat as new (show the intro). */
+  private async checkCloudSave(): Promise<boolean> {
+    try {
+      const u = await Umicat.init({});
+      const s = await u?.saves.get<{ v?: number }>('state');
+      const has = !!(s && typeof s.v === 'number' && s.v >= 1);
+      // Cache on THIS device too, so the next Play here is the instant fast-path.
+      if (has) { try { localStorage.setItem('catopia:laptopDone', '1'); } catch { /* no storage */ } }
+      return has;
+    } catch { return false; }
+  }
+
   /** Public: SettingsScene's Play button calls this (it owns the visible buttons now). */
   startGame(): void {
     this.scene.stop('SettingsScene'); // the buttons/modal are title-screen only (hidden under the curtain)
-    // NEW game (first time) → the "message from Cato" laptop cold-open first; a returning
-    // player goes straight into the game. (P1 gate: a localStorage flag set once the
-    // laptop is accepted; later this aligns with the real save-based new-game check.)
-    let seen = false;
-    try { seen = localStorage.getItem('catopia:laptopDone') === '1'; } catch { /* no storage */ }
-    // Cream paw curtain (DEF_COLOR default) — the title AND the laptop scene are both green, so a
-    // green curtain was invisible; cream contrasts both so the paw actually reads on this switch.
-    if (seen) startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'paw', ms: 1050, loading: true });
-    else startTransition(this, 'LaptopScene', {}, { effect: 'paw', ms: 1050 });
+    // NEW game (first time) → the "message from Cato" laptop cold-open first; a
+    // returning player goes straight into the game. "Returning" = this device
+    // already did the intro (localStorage fast-path) OR the account has a CLOUD
+    // save (so a phone / fresh computer loads progress instead of replaying the
+    // opening — the cross-device "starts over" bug).
+    let seenLocal = false;
+    try { seenLocal = localStorage.getItem('catopia:laptopDone') === '1'; } catch { /* no storage */ }
+    if (seenLocal) { this.toGame(); return; }
+    const decide = (hasCloudSave: boolean): void => {
+      // Cream paw curtain (DEF_COLOR default) — the title AND the laptop scene are both green, so a
+      // green curtain was invisible; cream contrasts both so the paw actually reads on this switch.
+      if (hasCloudSave) this.toGame();
+      else startTransition(this, 'LaptopScene', {}, { effect: 'paw', ms: 1050 });
+    };
+    // The probe was kicked off at scene create — almost always settled by now.
+    // Await it (fall back to "new game" on any error) so a returning player on a
+    // fresh device skips the intro and loads their save.
+    (this.cloudSaveCheck ?? Promise.resolve(false)).then(decide, () => decide(false));
+  }
+
+  /** Enter the game world (returning-player path). */
+  private toGame(): void {
+    startTransition(this, 'GameScene', { sceneId: GO_TO }, { effect: 'paw', ms: 1050, loading: true });
   }
 }
