@@ -113,7 +113,7 @@ export class HoverScene extends Phaser.Scene {
         .setAlpha(empty ? 0.5 : disabled ? 0.85 : 1).setTexture(b.hovered ? CIRCLE_BG_SEL : CIRCLE_BG); // hover → blue-ring bg
       if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame);
-      if (disabled) p.icon.setTint(0x555555).setAlpha(0.45); else p.icon.clearTint().setAlpha(1); // grey out inapplicable tools
+      p.icon.clearTint().setAlpha(disabled ? 0.4 : 1); // inapplicable tool → just faded (no ugly grey tint)
       const fill = b.kind === 'close' ? 0.56 : 0.72; // bigger tool icons than before
       p.icon.setScale((b.size * fill) / Math.max(p.icon.width, p.icon.height || 1));
       this.children.bringToTop(p.icon);

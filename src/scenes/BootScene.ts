@@ -207,6 +207,14 @@ export class BootScene extends Phaser.Scene {
     this.load.atlas('forage', 'uploaded/mushrooms_flowers_stones.png', 'uploaded/mushrooms_flowers_stones.json');
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
+    // Tool-WHEEL icons: bordered 16×16 art (item-*-with-border), one per wheel tool. Used only
+    // in the contextual wheel (not the held-tool bracket / HUD indicator). fishing-rod is loaded
+    // for the reserved 6-o'clock slot (no fishing mechanic yet).
+    this.load.image('wheel-hoe', 'uploaded/item-hoe-with-border.png');
+    this.load.image('wheel-water-can', 'uploaded/item-water-can-with-border.png');
+    this.load.image('wheel-axe', 'uploaded/item-axe-with-border.png');
+    this.load.image('wheel-pickaxe', 'uploaded/item-pixaxe-with-border.png');
+    this.load.image('wheel-fishing-rod', 'uploaded/item-fishing-rod-with-border.png');
     // Top-left weather / time / money HUD (atlas frames: `weather-frame-big`,
     // `balance-frame-big`, `time-bg`, `arrow-big-1..5`; icons `sunny`/…; `coin-…`).
     this.load.atlas('weather-ui', 'uploaded/weather_ui.png', 'uploaded/weather_ui.json');

@@ -2616,6 +2616,17 @@ export class GameScene extends Phaser.Scene {
     return { key: 'tools_and_meterials', frame: toolId }; // 'hoe' / 'watering-can' / 'axe'
   }
 
+  /** WHEEL-only tool icon: the bordered art (item-*-with-border, loaded as `wheel-*`). Falls back
+   *  to the plain toolIcon if a tool has no bordered variant. Kept separate from toolIcon so the
+   *  held-tool bracket + HUD indicator keep their own art. */
+  private static WHEEL_ICON: Partial<Record<ToolId, string>> = {
+    hoe: 'wheel-hoe', 'watering-can': 'wheel-water-can', axe: 'wheel-axe', pickaxe: 'wheel-pickaxe',
+  };
+  private wheelToolIcon(toolId: ToolId): { key: string; frame: string | number } {
+    const k = GameScene.WHEEL_ICON[toolId];
+    return k && this.textures.exists(k) ? { key: k, frame: 0 } : this.toolIcon(toolId);
+  }
+
   /** Where the player owns a tool: a hotbar slot (row 0) → select it; else a backpack / chest /
    *  Cato-bag stack → hold it as an external item. null = not owned anywhere. */
   private findOwnedTool(toolId: ToolId): { hotbar: number } | { store: ItemStack[]; item: ItemStack } | null {
@@ -2768,7 +2779,7 @@ export class GameScene extends Phaser.Scene {
       const owned = slot.toolId !== null && this.findOwnedTool(slot.toolId) !== null;
       const active = owned && pal.applicable.has(slot.toolId!);
       const kind = !owned ? 'empty' : active ? 'tool' : 'disabled'; // empty = reserved/unowned → just the circle base
-      const ic = owned ? this.toolIcon(slot.toolId!) : { key: '', frame: 0 };
+      const ic = owned ? this.wheelToolIcon(slot.toolId!) : { key: '', frame: 0 };
       buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
       if (active) bounds.push({ x: cx + slot.ux * RB, y: cy + slot.uy * RB, r: GameScene.WHEEL_D / 2, idx: i }); // only ENABLED circles are tappable
     });
