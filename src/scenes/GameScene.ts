@@ -5324,12 +5324,14 @@ export class GameScene extends Phaser.Scene {
    *  already animates the fall — so this reads as picking up what fell, not a fresh pop. */
   private playFruitCollect(x: number, y: number, texture: string, frame: string | number): void {
     const item = this.add.image(x, y, texture, frame).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
+    // Same collector rule as playPopOut: Cato harvest (a running catoTask) → flies to HIM,
+    // else the player harvested → flies to the cursor. Captured now (the fly is short).
+    const toCato = !!(this.catoTask && this.child);
+    // Pop the fruit in at its drop spot ("it fell here"), hold a beat so it reads as landed,
+    // THEN fly it to whoever collected it (mirrors playPopOut) instead of fading in place.
     this.tweens.add({
       targets: item, scale: 1, duration: 160, ease: 'Back.easeOut',
-      onComplete: () => this.tweens.add({
-        targets: item, y: y - 14, alpha: 0, duration: 300, delay: 220, ease: 'Quad.easeIn',
-        onComplete: () => item.destroy(),
-      }),
+      onComplete: () => this.time.delayedCall(200, () => { if (item.active) this.flyItemToCollector(item, toCato); }),
     });
   }
 
