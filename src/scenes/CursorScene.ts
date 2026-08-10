@@ -33,20 +33,32 @@ export class CursorScene extends Phaser.Scene {
     // Stay above the HUD even if it launched after us (loadWorldScene order).
     this.scene.bringToTop();
 
-    const c = this.registry.get('cursor') as
-      | { x: number; y: number; visible: boolean }
-      | undefined;
-    if (!c || !this.sprite) return;
+    if (!this.sprite) return;
+
+    // Two drive modes:
+    //  • GameScene publishes the `cursor` registry model (its virtual-cursor logic +
+    //    touch handling) → use it.
+    //  • No model (e.g. the TITLE screen, where GameScene isn't running) → self-drive
+    //    from the real pointer: show the triangle once a MOUSE has moved, hide for touch.
+    const c = this.registry.get('cursor') as { x: number; y: number; visible: boolean } | undefined;
+    let x: number, y: number, visible: boolean;
+    if (c) {
+      x = c.x; y = c.y; visible = c.visible;
+    } else {
+      const p = this.input.activePointer;
+      x = p.x; y = p.y;
+      visible = !p.wasTouch && p.moveTime > 0;
+    }
 
     // Re-assert the hidden OS cursor every frame while we're drawing our own triangle.
-    // Interactive HUD controls (e.g. the SDK HUD photo-frame button under Cato's
-    // portrait) set `canvas.style.cursor = 'pointer'` on hover via useHandCursor, which
+    // Interactive controls (e.g. the SDK HUD photo-frame button, or the title's Play
+    // button) set `canvas.style.cursor = 'pointer'` on hover via useHandCursor, which
     // would otherwise pop the OS arrow back over our triangle. Cheap — only writes on change.
     const canvas = this.game.canvas;
-    if (canvas && c.visible && canvas.style.cursor !== 'none') canvas.style.cursor = 'none';
+    if (canvas && visible && canvas.style.cursor !== 'none') canvas.style.cursor = 'none';
 
-    this.sprite.setVisible(c.visible);
-    if (!c.visible) return;
+    this.sprite.setVisible(visible);
+    if (!visible) return;
 
     // Clamp the SPRITE so the whole cursor stays on-screen (it would clip off
     // the canvas at the far right/bottom edges). The hotspot the GAME reads for
@@ -56,9 +68,9 @@ export class CursorScene extends Phaser.Scene {
     const sh = this.sprite.displayHeight;
     const w = this.scale.width;
     const h = this.scale.height;
-    const x = Phaser.Math.Clamp(c.x, CURSOR_HOTSPOT.x * sw, w - (1 - CURSOR_HOTSPOT.x) * sw);
-    const y = Phaser.Math.Clamp(c.y, CURSOR_HOTSPOT.y * sh, h - (1 - CURSOR_HOTSPOT.y) * sh);
-    this.sprite.setPosition(x, y);
+    const px = Phaser.Math.Clamp(x, CURSOR_HOTSPOT.x * sw, w - (1 - CURSOR_HOTSPOT.x) * sw);
+    const py = Phaser.Math.Clamp(y, CURSOR_HOTSPOT.y * sh, h - (1 - CURSOR_HOTSPOT.y) * sh);
+    this.sprite.setPosition(px, py);
   }
 
   /** Real cursor asset if loaded, else a placeholder arrow. */

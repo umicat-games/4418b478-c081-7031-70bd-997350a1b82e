@@ -62,6 +62,11 @@ export class BootMenuScene extends Phaser.Scene {
 
     const reg = getEntityRegistry(this);
 
+    // Custom triangle cursor on the title screen too (self-drives from the pointer when
+    // GameScene isn't publishing the `cursor` model). Launched once; persists into the
+    // game, where GameScene takes over driving it.
+    if (!this.scene.isActive('CursorScene')) this.scene.launch('CursorScene');
+
     // Title-screen BGM (its own track; stops the in-game one if it were playing).
     // Swell in from silence — paired with the transition wipe (return-to-title ducks
     // the game track out); also a soft intro on a cold boot.
