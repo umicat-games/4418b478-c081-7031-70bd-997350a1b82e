@@ -5363,20 +5363,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** After the pop, the harvested item flies to whoever collected it — Cato's body (Cato harvest) or
-   *  the world point under the player's pointer (player harvest) — shrinking + fading as it "goes in". */
+   *  the world point under the player's pointer (player harvest) — and only "goes in" (shrink + fade)
+   *  ONCE IT ARRIVES. It stays fully visible during the flight, and the flight time scales with the
+   *  distance, so a far collector no longer makes the item vanish mid-air (the old fixed-300ms tween
+   *  faded alpha→0 over the whole trip → early disappear when far). */
   private flyItemToCollector(item: Phaser.GameObjects.Image, toCato: boolean): void {
     let tx: number, ty: number;
     if (toCato && this.child) { tx = this.child.x; ty = this.child.y - 14; } // aim at Cato's mid-body
     else { const wp = this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y); tx = wp.x; ty = wp.y; } // the cursor / last tap
+    const dist = Phaser.Math.Distance.Between(item.x, item.y, tx, ty);
+    const dur = Phaser.Math.Clamp(dist / 0.9, 180, 700); // ~0.9 px/ms → near = quick, far = longer (never a blink)
     this.tweens.add({
       targets: item,
       x: tx,
       y: ty,
-      scale: 0.25,
-      alpha: 0,
-      duration: 300,
-      ease: 'Cubic.easeIn', // accelerate as it "gets sucked in"
-      onComplete: () => item.destroy(),
+      scale: 0.6,        // shrink a little on the way, but STAY visible the whole flight
+      duration: dur,
+      ease: 'Cubic.easeIn', // accelerate as it heads for the collector
+      onComplete: () => {
+        // Arrived at Cato / the cursor → NOW get "sucked in": a quick shrink + fade, then gone.
+        this.tweens.add({ targets: item, scale: 0, alpha: 0, duration: 130, ease: 'Quad.easeIn', onComplete: () => item.destroy() });
+      },
     });
   }
 
