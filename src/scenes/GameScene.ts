@@ -3386,9 +3386,10 @@ export class GameScene extends Phaser.Scene {
     // exact spots — where they fell — so it reads as picking up what fell, not a fresh pop.
     // Offsets are from the tree FOOT (frame 24,48 @ scale 1) — see FRUIT_DROP_OFFSETS.
     const footX = w.x + TILE / 2, footY = w.y + TILE;
+    const byCato = this.catoActing; // capture NOW — the fruit pops below are DEFERRED, past the flag reset
     for (let i = 0; i < FRUIT_DROP_OFFSETS.length; i++) {
       const d = FRUIT_DROP_OFFSETS[i];
-      this.time.delayedCall(i * 70, () => this.playFruitCollect(footX + d.dx, footY + d.dy, 'fruit-items', FRUIT_FRAME[type] ?? 0));
+      this.time.delayedCall(i * 70, () => this.playFruitCollect(footX + d.dx, footY + d.dy, 'fruit-items', FRUIT_FRAME[type] ?? 0, byCato));
     }
     this.collect(makeFruit(type, 3));
     this.catoReact('love'); // Cato loves a fruit harvest
@@ -3795,8 +3796,9 @@ export class GameScene extends Phaser.Scene {
     if (!stone) return;
     const def = BIG_STONES[stone.tier] ?? BIG_STONES[1]!;
     const sx = stone.sprite.x, topY = stone.sprite.y - stone.sprite.displayHeight * 0.55;
+    const byCato = this.catoActing; // capture NOW — the stone pops below are DEFERRED, past the flag reset
     for (let i = 0; i < def.breakBonus; i++) {
-      this.time.delayedCall(i * 110, () => this.playPopOut(sx, topY, 'forage', 'small-stone-6'));
+      this.time.delayedCall(i * 110, () => this.playPopOut(sx, topY, 'forage', 'small-stone-6', byCato));
     }
     if (def.breakBonus > 0) { this.collect(makeStone(def.breakBonus)); }
     this.removeBigStone(cx, cy);
@@ -5322,27 +5324,40 @@ export class GameScene extends Phaser.Scene {
   /** Fruit-harvest flourish: a fruit appears ON THE GROUND at (x,y) with a little landing
    *  pop, holds a beat, then floats up + fades (collected). Used for tree fruit, whose sheet
    *  already animates the fall — so this reads as picking up what fell, not a fresh pop. */
-  private playFruitCollect(x: number, y: number, texture: string, frame: string | number): void {
+  /** True ONLY while a Cato task is executing a harvest effect (set via runAsCato around
+   *  the task's dispatch call). The pop/fly functions read it to decide the collector —
+   *  Cato's body vs the player's cursor. **Distinct from `catoTask != null`**, which is
+   *  ALSO true when the PLAYER harvests during a Cato chore (the bug where the player's
+   *  harvested item wrongly flew to Cato). */
+  private catoActing = false;
+
+  /** Run `fn` with `catoActing` set, so any harvest pop it produces flies to CATO.
+   *  Synchronous — pops fired inside `fn` see the flag live; a harvest that DEFERS its
+   *  pop (fruit / big-stone break) captures `this.catoActing` at its own entry instead. */
+  private runAsCato(fn: () => void): void {
+    this.catoActing = true;
+    try { fn(); } finally { this.catoActing = false; }
+  }
+
+  private playFruitCollect(x: number, y: number, texture: string, frame: string | number, byCato = this.catoActing): void {
     const item = this.add.image(x, y, texture, frame).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
-    // Same collector rule as playPopOut: Cato harvest (a running catoTask) → flies to HIM,
-    // else the player harvested → flies to the cursor. Captured now (the fly is short).
-    const toCato = !!(this.catoTask && this.child);
     // Pop the fruit in at its drop spot ("it fell here"), hold a beat so it reads as landed,
     // THEN fly it to whoever collected it (mirrors playPopOut) instead of fading in place.
     this.tweens.add({
       targets: item, scale: 1, duration: 160, ease: 'Back.easeOut',
-      onComplete: () => this.time.delayedCall(200, () => { if (item.active) this.flyItemToCollector(item, toCato); }),
+      onComplete: () => this.time.delayedCall(200, () => { if (item.active) this.flyItemToCollector(item, byCato); }),
     });
   }
 
-  private playPopOut(centerX: number, centerY: number, texture: string, frame: string | number): void {
+  private playPopOut(centerX: number, centerY: number, texture: string, frame: string | number, byCato = this.catoActing): void {
     const item = this.add
       .image(centerX, centerY, texture, frame)
       .setOrigin(0.5, 0.5)
       .setDepth(1e6 + 2);
-    // Who's collecting? Cato (a running catoTask drives the harvest) → the item flies to HIM; else the
-    // player harvested → it flies to the CURSOR. Captured now (the fly is short).
-    const toCato = !!(this.catoTask && this.child);
+    // Who collects THIS item? Cato when a Cato TASK is executing the harvest (byCato,
+    // defaulting to the live catoActing flag) → flies to him; else the PLAYER harvested
+    // → flies to the cursor. NOT `catoTask != null` — that's true even when the player
+    // harvests during a Cato chore (the "player's harvest flew to Cato" bug).
     const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1; // pop left or right
     const dist = 18; // how far to the side
     const arcH = 20; // arc (jump) height
@@ -5358,7 +5373,7 @@ export class GameScene extends Phaser.Scene {
         item.y = centerY - arcH * Math.sin(Math.PI * t); // up then down (semicircle)
         item.setScale(0.85 + 0.3 * Math.sin(Math.PI * t)); // grows at the apex — cute
       },
-      onComplete: () => this.flyItemToCollector(item, toCato),
+      onComplete: () => this.flyItemToCollector(item, byCato),
     });
   }
 
@@ -6267,15 +6282,15 @@ export class GameScene extends Phaser.Scene {
     } else if (task.type === 'water') {
       this.time.delayedCall(K, () => this.waterCropAt(tx, ty));
     } else if (task.type === 'harvest') {
-      this.time.delayedCall(K, () => this.reapCrop(tx, ty));
+      this.time.delayedCall(K, () => this.runAsCato(() => this.reapCrop(tx, ty)));
     } else if (task.type === 'bush') {
-      this.time.delayedCall(K, () => this.reapBush(tx, ty));
+      this.time.delayedCall(K, () => this.runAsCato(() => this.reapBush(tx, ty)));
     } else if (task.type === 'forage') {
-      this.time.delayedCall(K, () => this.reapForagable(tx, ty));
+      this.time.delayedCall(K, () => this.runAsCato(() => this.reapForagable(tx, ty)));
     } else if (task.type === 'chop' || task.type === 'fruit') {
-      this.time.delayedCall(K, () => this.onChopStrike(tx, ty)); // combo → fell / de-fruit on the 3rd
+      this.time.delayedCall(K, () => this.runAsCato(() => this.onChopStrike(tx, ty))); // combo → fell / de-fruit on the 3rd
     } else if (task.type === 'mine') {
-      this.time.delayedCall(K, () => this.onKnockStrike(tx, ty)); // chip a stone off / break it
+      this.time.delayedCall(K, () => this.runAsCato(() => this.onKnockStrike(tx, ty))); // chip a stone off / break it
     }
     task.cooldown = CATO_TILL_STEP_MS;
     // Multi-strike (chop/fruit/mine): stay beside the target and hit again next tick.
