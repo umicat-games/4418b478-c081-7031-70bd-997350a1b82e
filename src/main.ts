@@ -14,6 +14,7 @@ import { ConfirmScene } from './scenes/ConfirmScene';
 import { ReceiptScene } from './scenes/ReceiptScene';
 import { CraftScene } from './scenes/CraftScene';
 import { ChatterScene } from './scenes/ChatterScene';
+import { HarvestToastScene } from './scenes/HarvestToastScene';
 import { MenuScene } from './scenes/MenuScene';
 import { DialogueScene } from './scenes/DialogueScene';
 import { LaptopScene } from './scenes/LaptopScene';
@@ -53,7 +54,7 @@ function startGame(): void {
     // HotbarScene (bottom tool hotbar) + CursorScene are registered but not
     // auto-started; GameScene launches them after the HUD exists so they layer
     // above it (cursor stays topmost — see CursorScene.update bringToTop).
-    scenes: [BootScene, BootMenuScene, LaptopScene, SettingsScene, GameScene, LetterboxScene, HotbarScene, WeatherScene, PaletteScene, ConfirmScene, ReceiptScene, ChatterScene, MenuScene, CraftScene, DialogueScene, ToolHudScene, BackpackButtonScene, HoverScene, CursorScene, TransitionScene],
+    scenes: [BootScene, BootMenuScene, LaptopScene, SettingsScene, GameScene, LetterboxScene, HotbarScene, WeatherScene, PaletteScene, ConfirmScene, ReceiptScene, ChatterScene, HarvestToastScene, MenuScene, CraftScene, DialogueScene, ToolHudScene, BackpackButtonScene, HoverScene, CursorScene, TransitionScene],
     renderScripts,
   });
 }

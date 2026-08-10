@@ -1490,6 +1490,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
     if (!this.scene.isActive('ReceiptScene')) this.scene.launch('ReceiptScene');
     if (!this.scene.isActive('ChatterScene')) this.scene.launch('ChatterScene');
+    if (!this.scene.isActive('HarvestToastScene')) this.scene.launch('HarvestToastScene');
     if (!this.scene.isActive('MenuScene')) this.scene.launch('MenuScene');
     if (!this.scene.isActive('CraftScene')) this.scene.launch('CraftScene');
     if (!this.scene.isActive('DialogueScene')) this.scene.launch('DialogueScene');
@@ -4399,7 +4400,30 @@ export class GameScene extends Phaser.Scene {
     if (!this.addToBackpack(item)) { this.notifyBagFull(); return false; }
     if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu();
     this.scheduleSave();
+    this.showHarvestToast(item);
     return true;
+  }
+
+  // ── Harvest toast — the bottom-centre "<item> x <count>" pill (HarvestToastScene
+  //    renders `harvestToast`). Accumulates while the SAME item keeps coming in, and
+  //    auto-hides a beat after the last pickup. ─────────────────────────────────────
+  private toastId = '';
+  private toastCount = 0;
+  private toastRev = 0;
+  private toastTimer?: Phaser.Time.TimerEvent;
+  private static readonly TOAST_HOLD_MS = 2400;
+  private showHarvestToast(item: ItemStack): void {
+    // Same item still on screen → tally up; otherwise start a fresh count.
+    if (this.toastTimer && this.toastId === item.id) this.toastCount += item.count;
+    else { this.toastId = item.id; this.toastCount = item.count; }
+    this.toastRev += 1;
+    this.registry.set('harvestToast', { visible: true, rev: this.toastRev, text: `${this.itemName(item.id)} x ${this.toastCount}` });
+    this.toastTimer?.remove();
+    this.toastTimer = this.time.delayedCall(GameScene.TOAST_HOLD_MS, () => {
+      this.toastTimer = undefined;
+      this.toastRev += 1;
+      this.registry.set('harvestToast', { visible: false, rev: this.toastRev });
+    });
   }
 
   /** Transient "背包满了" notice (throttled) — Cato says it in his voice; the player sees a flash. */
