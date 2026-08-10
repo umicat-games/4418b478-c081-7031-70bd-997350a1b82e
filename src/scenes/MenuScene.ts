@@ -321,8 +321,14 @@ export class MenuScene extends Phaser.Scene {
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);
     }
 
-    // Close button (top-right) — the empty-area tap-to-close isn't obvious, so give an X.
-    const cs = CLOSE.size * H, cbx = CLOSE.x * W, cby = CLOSE.y * H;
+    // Close button — INSIDE the left frame's top-right corner, with the gap to the RIGHT
+    // border equal (in px) to the gap above (a symmetric corner). CLOSE.y fixes the vertical
+    // position; the right x is derived from that same margin so it holds at any aspect ratio
+    // (fixed x/y fractions can't — the px margins would differ once W/H changes).
+    const cs = CLOSE.size * H;
+    const cm = Math.max(0, (CLOSE.y - CLOSE.size / 2 - L.y) * H); // top-edge gap in px → mirror on the right
+    const cbx = lx + lw - cm - cs / 2;   // lx+lw = left frame's right edge
+    const cby = CLOSE.y * H;
     this.closeImg = undefined;
     if (this.textures.exists(CLOSE.atlas)) {
       this.closeImg = this.add.image(cbx, cby, CLOSE.atlas, CLOSE.frame).setDisplaySize(cs, cs);
