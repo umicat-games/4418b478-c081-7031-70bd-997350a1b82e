@@ -23,7 +23,7 @@ const CIRCLE_BG = 'tool-circle-bg';            // (placeholder texture for the p
 // The near-white `tool-circle-bg` gave the WHITE-bordered tool icons no contrast. Use the warm
 // circle the creator made (`tool-circle-bg-selected`) as the base for EVERY slot instead; the
 // hovered slot grows slightly (colour unchanged — a plain multiply-tint looked off).
-const CIRCLE_BG_WARM = 'tool-circle-bg-selected';
+const CIRCLE_BG_WARM = 'tool-circle-bg-2';
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
 // The hover bracket = the `white-corner-bracket` region of the `ui-sheet` atlas

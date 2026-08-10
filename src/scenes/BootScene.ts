@@ -42,6 +42,7 @@ export class BootScene extends Phaser.Scene {
     // contextual wheel that pops around a tapped object/tile.
     this.load.image('tool-circle-bg', 'uploaded/tool-circle-bg-16-16.png');
     this.load.image('tool-circle-bg-selected', 'uploaded/tool-circle-bg-selected-16-16.png');
+    this.load.image('tool-circle-bg-2', 'uploaded/tool-circle-bg-2-16-16.png'); // the wheel slot background (creator's warm circle)
     // Tile-selection bracket cursor (24×24, frames a 16px cell) — the "you can
     // till here" highlight that snaps to the hovered grass tile when the hoe is
     // the active tool.
