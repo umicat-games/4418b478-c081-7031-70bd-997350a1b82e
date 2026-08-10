@@ -23,7 +23,8 @@ const CIRCLE_BG = 'tool-circle-bg';            // (placeholder texture for the p
 // The near-white `tool-circle-bg` gave the WHITE-bordered tool icons no contrast. Use the warm
 // circle the creator made (`tool-circle-bg-selected`) as the base for EVERY slot instead; the
 // hovered slot grows slightly (colour unchanged — a plain multiply-tint looked off).
-const CIRCLE_BG_WARM = 'tool-circle-bg-2';
+const CIRCLE_BG_WARM = 'tool-circle-bg-2';        // base slot
+const CIRCLE_BG_SEL = 'tool-circle-bg-selected'; // hovered slot (creator's highlighted ring)
 const LABEL_BG = 0x2a1c0c;  // dark brown pill behind the name (reads on any background)
 const LABEL_TXT = '#fff3d6';// warm cream text (matches the pixel cursor palette)
 // The hover bracket = the `white-corner-bracket` region of the `ui-sheet` atlas
@@ -112,14 +113,13 @@ export class HoverScene extends Phaser.Scene {
       // empty  = a slot with no owned tool → faded circle, no icon.
       // disabled = an owned tool that doesn't apply here → circle + greyed icon, not tappable.
       const empty = b.kind === 'empty', disabled = b.kind === 'disabled';
-      const hk = b.hovered ? 1.12 : 1; // hovered slot grows a touch (hover cue; the warm base colour is unchanged)
-      p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size * hk, b.size * hk)
-        .setAlpha(empty ? 0.5 : disabled ? 0.85 : 1).clearTint().setTexture(CIRCLE_BG_WARM); // the creator's warm circle for every slot
+      p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size, b.size)
+        .setAlpha(empty ? 0.5 : disabled ? 0.85 : 1).clearTint().setTexture(b.hovered ? CIRCLE_BG_SEL : CIRCLE_BG_WARM); // hover → the highlighted-ring circle
       if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame);
       p.icon.clearTint().setAlpha(disabled ? 0.4 : 1); // inapplicable tool → just faded (no ugly grey tint)
       const fill = b.kind === 'close' ? 0.56 : 0.78; // tools fill more of the circle so the bordered art reads clearly
-      p.icon.setScale((b.size * hk * fill) / Math.max(p.icon.width, p.icon.height || 1));
+      p.icon.setScale((b.size * fill) / Math.max(p.icon.width, p.icon.height || 1));
       this.children.bringToTop(p.icon);
     });
   }
