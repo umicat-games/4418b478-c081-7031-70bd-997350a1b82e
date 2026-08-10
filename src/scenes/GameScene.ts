@@ -7968,6 +7968,13 @@ export class GameScene extends Phaser.Scene {
     // position is set by the touch handlers (e.g. the dragged backpack stack), so
     // overwriting it here each frame would fight them → a flickering "ghost".
     if (this.locked) {
+      // Track the REAL pointer every frame from the GLOBAL activePointer — not only via
+      // the scene 'pointermove' event, which the HUD scene (rendered above us) swallows
+      // while the cursor is over a HUD control, freezing the triangle (it stalled just
+      // under Cato's top-right portrait). activePointer.x/y stay live regardless of which
+      // scene handled the event, so the triangle keeps following the mouse over the HUD.
+      this.vcursor.x = this.input.activePointer.x;
+      this.vcursor.y = this.input.activePointer.y;
       this.cursorState.x = this.vcursor.x;
       this.cursorState.y = this.vcursor.y;
     }

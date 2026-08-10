@@ -38,6 +38,13 @@ export class CursorScene extends Phaser.Scene {
       | undefined;
     if (!c || !this.sprite) return;
 
+    // Re-assert the hidden OS cursor every frame while we're drawing our own triangle.
+    // Interactive HUD controls (e.g. the SDK HUD photo-frame button under Cato's
+    // portrait) set `canvas.style.cursor = 'pointer'` on hover via useHandCursor, which
+    // would otherwise pop the OS arrow back over our triangle. Cheap — only writes on change.
+    const canvas = this.game.canvas;
+    if (canvas && c.visible && canvas.style.cursor !== 'none') canvas.style.cursor = 'none';
+
     this.sprite.setVisible(c.visible);
     if (!c.visible) return;
 
