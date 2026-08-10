@@ -630,6 +630,12 @@ export class GameScene extends Phaser.Scene {
   // at the real pointer, exactly like touch taps.
   private locked = false;
   private vcursor = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
+  // After a wheel/ring selection the cursor is SNAPPED onto the picked item (snapCursorTo*)
+  // so it visibly "returns" there. Latch it so the per-frame activePointer refresh doesn't
+  // immediately drag the triangle back to the physical mouse — held until the mouse MOVES.
+  private cursorSnapActive = false;
+  private snapPtrX = 0;
+  private snapPtrY = 0;
   private findCatBounds = new Phaser.Geom.Rectangle();
   private findCatHit?: Phaser.GameObjects.Rectangle;
   // Camera lock: clicking Cato's portrait makes the camera FOLLOW him around;
@@ -3055,6 +3061,7 @@ export class GameScene extends Phaser.Scene {
     if (!w) return;
     this.vcursor.x = Phaser.Math.Clamp((w.x + TILE / 2 - cam.worldView.x) * cam.zoom, 0, cam.width);
     this.vcursor.y = Phaser.Math.Clamp((w.y + TILE / 2 - cam.worldView.y) * cam.zoom, 0, cam.height);
+    this.latchCursorSnap();
   }
 
   /** Move the virtual cursor to a WORLD point (screen-projected + clamped). Mouse-locked only. */
@@ -3062,6 +3069,15 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     this.vcursor.x = Phaser.Math.Clamp((wx - cam.worldView.x) * cam.zoom, 0, cam.width);
     this.vcursor.y = Phaser.Math.Clamp((wy - cam.worldView.y) * cam.zoom, 0, cam.height);
+    this.latchCursorSnap();
+  }
+
+  /** Hold the just-set snap position (against the per-frame activePointer refresh) until the
+   *  physical mouse actually moves — recorded here so `update` can tell when that happens. */
+  private latchCursorSnap(): void {
+    this.cursorSnapActive = true;
+    this.snapPtrX = this.input.activePointer.x;
+    this.snapPtrY = this.input.activePointer.y;
   }
 
   /** Place the held building material at a cell (assumes canPlaceAt is true).
@@ -8001,8 +8017,11 @@ export class GameScene extends Phaser.Scene {
       // while the cursor is over a HUD control, freezing the triangle (it stalled just
       // under Cato's top-right portrait). activePointer.x/y stay live regardless of which
       // scene handled the event, so the triangle keeps following the mouse over the HUD.
-      this.vcursor.x = this.input.activePointer.x;
-      this.vcursor.y = this.input.activePointer.y;
+      // EXCEPTION: right after a wheel/ring pick the cursor is SNAPPED onto the item — hold
+      // that spot (so it visibly "returns" to the item) until the physical mouse MOVES.
+      const p = this.input.activePointer;
+      if (this.cursorSnapActive && Math.hypot(p.x - this.snapPtrX, p.y - this.snapPtrY) > 3) this.cursorSnapActive = false;
+      if (!this.cursorSnapActive) { this.vcursor.x = p.x; this.vcursor.y = p.y; }
       this.cursorState.x = this.vcursor.x;
       this.cursorState.y = this.vcursor.y;
     }
