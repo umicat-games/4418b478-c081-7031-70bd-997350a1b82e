@@ -114,7 +114,7 @@ export class HoverScene extends Phaser.Scene {
       if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame);
       p.icon.clearTint().setAlpha(disabled ? 0.4 : 1); // inapplicable tool → just faded (no ugly grey tint)
-      const fill = b.kind === 'close' ? 0.56 : 0.72; // bigger tool icons than before
+      const fill = b.kind === 'close' ? 0.56 : 0.78; // tools fill more of the circle so the bordered art reads clearly
       p.icon.setScale((b.size * fill) / Math.max(p.icon.width, p.icon.height || 1));
       this.children.bringToTop(p.icon);
     });

@@ -2646,7 +2646,7 @@ export class GameScene extends Phaser.Scene {
   // so the spacing is consistent at any zoom. 6 matches the empty-grass tile frame (16 + 2×6 = 28).
   private static HOVER_PAD_WORLD = 6;
   // Wheel sizing + appear/disappear animation.
-  private static WHEEL_D = 54;          // circle diameter (screen px) — a touch bigger than the old 48
+  private static WHEEL_D = 70;          // circle diameter (screen px) — bigger so the bordered tool icons read clearly (was 54)
   private static WHEEL_OPEN_MS = 220;   // spring-out from centre (Back.easeOut) on open; the select-close plays this REVERSED
   private static WHEEL_OVERSHOOT = 3.0; // Back.easeOut overshoot — higher = more pronounced bounce
   private static WHEEL_HOLD_MS = 150;   // (on tool-select) pause after the select SFX, before the reverse disappear anim
