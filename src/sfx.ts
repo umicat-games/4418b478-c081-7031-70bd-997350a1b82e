@@ -20,6 +20,8 @@ export const SFX_CONFIRM = 'sfx-confirm';
 export const SFX_DROP = 'sfx-drop';
 /** Laptop cold-open: per-character typewriter tick (click_002). */
 export const SFX_TYPE = 'sfx-type';
+/** A harvested item lands in the collector (Cato / the player's cursor) — drop_004. */
+export const SFX_COLLECT = 'sfx-collect';
 
 function readVolume(): number {
   try {

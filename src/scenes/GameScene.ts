@@ -20,7 +20,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT } from '../sfx';
 import { coverAndReload, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -5396,7 +5396,8 @@ export class GameScene extends Phaser.Scene {
       duration: dur,
       ease: 'Cubic.easeIn', // accelerate as it heads for the collector
       onComplete: () => {
-        // Arrived at Cato / the cursor → NOW get "sucked in": a quick shrink + fade, then gone.
+        // Arrived at Cato / the cursor → the collect blip + get "sucked in": a quick shrink + fade, then gone.
+        playSfx(this, SFX_COLLECT);
         this.tweens.add({ targets: item, scale: 0, alpha: 0, duration: 130, ease: 'Quad.easeIn', onComplete: () => item.destroy() });
       },
     });
