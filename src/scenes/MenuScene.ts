@@ -29,7 +29,7 @@ const WHEEL_MS = 110; // min ms between wheel-scroll rows (tames trackpad event 
 const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (deep)
 // Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
 // corner; the X was landing on it → clicking it opened the chat).
-const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.645, y: 0.115, size: 0.065 }; // above the right detail panel's LEFT edge (right frame starts at 0.61)
+const CLOSE = { atlas: 'icon-buttons', frame: 'close-light-big', x: 0.525, y: 0.235, size: 0.06 }; // INSIDE the left frame, top-right corner (frame is x 0.03–0.58; content grid/list starts at 0.30, so this sits above it)
 const CLOSE_PRESSED = 'close-light-big-pressed-down'; // brief click-flash frame on the X
 
 // Layout in SCREEN fractions (resize-mode canvas). Tuned against screenshots.
