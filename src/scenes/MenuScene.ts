@@ -450,25 +450,32 @@ export class MenuScene extends Phaser.Scene {
     const W = this.scale.width, H = this.scale.height;
     // Right detail region (right of the divider): NAME on top (centred, white + black outline like
     // the slot count numbers), the IMAGE below it, then the DESCRIPTION below that. No inner box.
-    const cx = 0.76 * W; // centre of the right region (divider 0.555 → frame edge 0.97)
+    const cx = 0.76 * W;           // centre of the right region (divider 0.555 → frame edge 0.97)
+    const yName = 0.28 * H, yImg = 0.47 * H, yDesc = 0.64 * H;
     if (!it) return;
+    // All content in a sub-container centred on the image, so it can POP in (scale from small
+    // around that centre) — the usual grow-out flourish.
+    const box = this.add.container(cx, yImg); c.add(box);
     // Name — white with a dark outline (mirrors the grid slot count style).
-    const name = this.T(cx, 0.28 * H, it.label ?? it.id ?? '', H * 0.032, '#ffffff', 0.5);
+    const name = this.T(cx, yName, it.label ?? it.id ?? '', H * 0.032, '#ffffff', 0.5).setPosition(0, yName - yImg);
     name.setStroke('#2b1d0e', Math.max(2, H * 0.005));
-    c.add(name);
+    box.add(name);
     // Image (centred, below the name).
     if (this.textures.exists(it.iconKey)) {
-      const img = this.add.image(cx, 0.47 * H, it.iconKey, it.iconFrame);
+      const img = this.add.image(0, 0, it.iconKey, it.iconFrame);
       img.setScale((0.18 * W) / Math.max(img.width, img.height));
-      c.add(img);
+      box.add(img);
     }
     // Description (centred, below the image).
     if (it.desc) {
-      const desc = this.add.text(cx, 0.64 * H, it.desc, {
+      const desc = this.add.text(0, yDesc - yImg, it.desc, {
         fontFamily: dialogFont(), fontSize: Math.round(H * 0.022) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: 0.36 * W },
       }).setOrigin(0.5, 0);
-      c.add(desc);
+      box.add(desc);
     }
+    // Pop-in: grow from small around the centre (Back.easeOut overshoot).
+    box.setScale(0.2);
+    this.tweens.add({ targets: box, scale: 1, duration: 240, ease: 'Back.easeOut' });
   }
 
   private renderMailList(c: Phaser.GameObjects.Container, mails: MailListEntry[], selectedId?: string): void {
