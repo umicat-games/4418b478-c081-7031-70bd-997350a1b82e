@@ -159,7 +159,7 @@ const GRASS_ISLAND_NAME = 'island';
 
 type FaceDir = 'down' | 'up' | 'left' | 'right';
 
-type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe';
+type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe' | 'fishing-rod';
 // Actions on an item in the backpack / chest / Cato-bag menu. `use` = hold it; `store` = backpack→
 // chest; `take` = chest→backpack.
 type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
@@ -410,6 +410,7 @@ function itemFromId(id: string, count: number): ItemStack {
   if (id === 'watering-can') return { id, label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
   if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false, toolId: 'axe' };
   if (id === 'pickaxe') return { id, label: 'Pickaxe', iconKey: 'pickaxe', count: 1, stackable: false, toolId: 'pickaxe' };
+  if (id === 'fishing-rod') return { id, label: 'Fishing rod', iconKey: 'wheel-fishing-rod', iconFrame: 0, count: 1, stackable: false, toolId: 'fishing-rod' };
   if (id === 'stone') return makeStone(count);
   if (id === 'wall') return makePlaceable('wall', count);
   if (id === 'floor') return makePlaceable('floor', count);
@@ -630,12 +631,15 @@ export class GameScene extends Phaser.Scene {
   // at the real pointer, exactly like touch taps.
   private locked = false;
   private vcursor = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
-  // After a wheel/ring selection the cursor is SNAPPED onto the picked item (snapCursorTo*)
-  // so it visibly "returns" there. Latch it so the per-frame activePointer refresh doesn't
-  // immediately drag the triangle back to the physical mouse — held until the mouse MOVES.
-  private cursorSnapActive = false;
-  private snapPtrX = 0;
-  private snapPtrY = 0;
+  // After a wheel/ring pick the cursor SNAPS onto the item (snapCursorTo*): we store an OFFSET
+  // = (item − physical pointer) and draw the triangle at (pointer + offset), so it sits on the
+  // item. When the mouse MOVES, the offset decays to 0 → the triangle slides FROM the item and
+  // catches up to the real pointer (no teleport), then tracks 1:1 again. Clicks act at
+  // (pointer + offset) too, so a click after a pick really hits the item.
+  private cursorOffX = 0;
+  private cursorOffY = 0;
+  private lastPtrX = 0;
+  private lastPtrY = 0;
   private findCatBounds = new Phaser.Geom.Rectangle();
   private findCatHit?: Phaser.GameObjects.Rectangle;
   // Camera lock: clicking Cato's portrait makes the camera FOLLOW him around;
@@ -1536,18 +1540,15 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.wasTouch) return;
       this.locked = true; // a mouse event → desktop cursor mode
-      // While a cursor SNAP is latched (just picked a tool from the wheel → cursor parked ON the
-      // item), the PHYSICAL mouse is stale: keep the snapped vcursor and route the click to IT,
-      // so a click actually acts on the item (not the old mouse spot) and the cursor doesn't jump
-      // back to the physical position. The latch clears as soon as the mouse moves (see update()).
-      if (!this.cursorSnapActive) { this.vcursor.x = pointer.x; this.vcursor.y = pointer.y; }
       // Swallow GHOST mouse events: after a touchend, browsers synthesise a mouse down/up/click at the
       // same spot — on a touch device that would hit the world-click path. A pure-desktop session
       // never sets touchLastAt, so this no-ops.
       if (this.time.now - this.touchLastAt < 600) return;
-      // Effective click position: the snapped item while latched, else the real pointer.
-      const sx = this.cursorSnapActive ? this.vcursor.x : pointer.x;
-      const sy = this.cursorSnapActive ? this.vcursor.y : pointer.y;
+      // Effective click position = pointer + snap offset (so a click right after a wheel pick hits
+      // the item the triangle sits on; the offset is 0 in normal play → just the pointer).
+      const sx = pointer.x + this.cursorOffX;
+      const sy = pointer.y + this.cursorOffY;
+      this.vcursor.x = sx; this.vcursor.y = sy;
       // RIGHT-CLICK = open (or close) the contextual tool wheel — the desktop use/switch split:
       // LEFT-click only points + uses the held tool, RIGHT-click summons the wheel.
       if (pointer.rightButtonDown()) {
@@ -1659,14 +1660,12 @@ export class GameScene extends Phaser.Scene {
       if (this.cutscene) this.advanceCutscene(); else this.advanceDialog();
     });
 
-    // The virtual cursor simply TRACKS the real mouse position (no pointer lock → the OS pointer is
-    // free, so its absolute position is valid). CursorScene draws the triangle here; the OS cursor is
-    // hidden via CSS. A mouse move also (re)enters desktop-cursor mode.
+    // A mouse move (re)enters desktop-cursor mode; update() drives vcursor from the live pointer
+    // (+ any snap offset, which decays here), so no need to set it per-event. CursorScene draws the
+    // triangle; the OS cursor is hidden via CSS.
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.wasTouch) return;
       this.locked = true;
-      this.vcursor.x = pointer.x;
-      this.vcursor.y = pointer.y;
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -2613,6 +2612,7 @@ export class GameScene extends Phaser.Scene {
   /** The tool's inventory-icon texture/frame (same art the hotbar + tool cursor use). */
   private toolIcon(toolId: ToolId): { key: string; frame: string | number } {
     if (toolId === 'pickaxe') return { key: 'pickaxe', frame: 0 };
+    if (toolId === 'fishing-rod') return { key: 'wheel-fishing-rod', frame: 0 };
     return { key: 'tools_and_meterials', frame: toolId }; // 'hoe' / 'watering-can' / 'axe'
   }
 
@@ -2620,7 +2620,7 @@ export class GameScene extends Phaser.Scene {
    *  to the plain toolIcon if a tool has no bordered variant. Kept separate from toolIcon so the
    *  held-tool bracket + HUD indicator keep their own art. */
   private static WHEEL_ICON: Partial<Record<ToolId, string>> = {
-    hoe: 'wheel-hoe', 'watering-can': 'wheel-water-can', axe: 'wheel-axe', pickaxe: 'wheel-pickaxe',
+    hoe: 'wheel-hoe', 'watering-can': 'wheel-water-can', axe: 'wheel-axe', pickaxe: 'wheel-pickaxe', 'fishing-rod': 'wheel-fishing-rod',
   };
   private wheelToolIcon(toolId: ToolId): { key: string; frame: string | number } {
     const k = GameScene.WHEEL_ICON[toolId];
@@ -2653,7 +2653,7 @@ export class GameScene extends Phaser.Scene {
   private static WHEEL_RING: Array<{ toolId: ToolId | null; ux: number; uy: number }> = [
     { toolId: 'pickaxe', ux: 0.866, uy: -0.5 },       // 2 o'clock
     { toolId: 'axe', ux: 0.866, uy: 0.5 },            // 4 o'clock
-    { toolId: null, ux: 0, uy: 1 },                   // 6 o'clock — reserved (empty)
+    { toolId: 'fishing-rod', ux: 0, uy: 1 },          // 6 o'clock — fishing rod (mechanic coming; previewed disabled for now)
     { toolId: 'hoe', ux: -0.866, uy: 0.5 },           // 8 o'clock
     { toolId: 'watering-can', ux: -0.866, uy: -0.5 }, // 10 o'clock
   ];
@@ -2777,9 +2777,13 @@ export class GameScene extends Phaser.Scene {
     GameScene.WHEEL_RING.forEach((slot, i) => {
       const x = cx + slot.ux * R, y = cy + slot.uy * R;
       const owned = slot.toolId !== null && this.findOwnedTool(slot.toolId) !== null;
+      // The fishing-rod slot always PREVIEWS its icon (its mechanic is coming) — shown disabled
+      // (faded, not tappable) like any not-applicable tool, until fishing lands + a rod is owned.
+      const preview = slot.toolId === 'fishing-rod';
+      const showIcon = owned || preview;
       const active = owned && pal.applicable.has(slot.toolId!);
-      const kind = !owned ? 'empty' : active ? 'tool' : 'disabled'; // empty = reserved/unowned → just the circle base
-      const ic = owned ? this.wheelToolIcon(slot.toolId!) : { key: '', frame: 0 };
+      const kind = active ? 'tool' : showIcon ? 'disabled' : 'empty'; // empty = reserved/unowned → just the circle base
+      const ic = showIcon ? this.wheelToolIcon(slot.toolId!) : { key: '', frame: 0 };
       buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
       if (active) bounds.push({ x: cx + slot.ux * RB, y: cy + slot.uy * RB, r: GameScene.WHEEL_D / 2, idx: i }); // only ENABLED circles are tappable
     });
@@ -3091,12 +3095,12 @@ export class GameScene extends Phaser.Scene {
     this.latchCursorSnap();
   }
 
-  /** Hold the just-set snap position (against the per-frame activePointer refresh) until the
-   *  physical mouse actually moves — recorded here so `update` can tell when that happens. */
+  /** Anchor the just-set vcursor to the item: offset = item − physical pointer, so `update` draws
+   *  the triangle ON the item and (as the mouse moves) decays the offset to slide it back to the
+   *  real pointer with no teleport. */
   private latchCursorSnap(): void {
-    this.cursorSnapActive = true;
-    this.snapPtrX = this.input.activePointer.x;
-    this.snapPtrY = this.input.activePointer.y;
+    this.cursorOffX = this.vcursor.x - this.input.activePointer.x;
+    this.cursorOffY = this.vcursor.y - this.input.activePointer.y;
   }
 
   /** Place the held building material at a cell (assumes canPlaceAt is true).
@@ -8031,16 +8035,18 @@ export class GameScene extends Phaser.Scene {
     // position is set by the touch handlers (e.g. the dragged backpack stack), so
     // overwriting it here each frame would fight them → a flickering "ghost".
     if (this.locked) {
-      // Track the REAL pointer every frame from the GLOBAL activePointer — not only via
-      // the scene 'pointermove' event, which the HUD scene (rendered above us) swallows
-      // while the cursor is over a HUD control, freezing the triangle (it stalled just
-      // under Cato's top-right portrait). activePointer.x/y stay live regardless of which
-      // scene handled the event, so the triangle keeps following the mouse over the HUD.
-      // EXCEPTION: right after a wheel/ring pick the cursor is SNAPPED onto the item — hold
-      // that spot (so it visibly "returns" to the item) until the physical mouse MOVES.
+      // Draw the triangle at the GLOBAL activePointer (+ any snap offset). activePointer stays
+      // live even over the HUD scene (which swallows the scene 'pointermove'), so the cursor never
+      // freezes there. The snap offset (set on a wheel/ring pick) parks it on the item, then DECAYS
+      // to 0 as the mouse moves → it slides from the item and catches up smoothly (no teleport).
       const p = this.input.activePointer;
-      if (this.cursorSnapActive && Math.hypot(p.x - this.snapPtrX, p.y - this.snapPtrY) > 3) this.cursorSnapActive = false;
-      if (!this.cursorSnapActive) { this.vcursor.x = p.x; this.vcursor.y = p.y; }
+      if (p.x !== this.lastPtrX || p.y !== this.lastPtrY) {
+        this.cursorOffX *= 0.8; this.cursorOffY *= 0.8;
+        if (Math.abs(this.cursorOffX) < 1 && Math.abs(this.cursorOffY) < 1) { this.cursorOffX = 0; this.cursorOffY = 0; }
+      }
+      this.lastPtrX = p.x; this.lastPtrY = p.y;
+      this.vcursor.x = p.x + this.cursorOffX;
+      this.vcursor.y = p.y + this.cursorOffY;
       this.cursorState.x = this.vcursor.x;
       this.cursorState.y = this.vcursor.y;
     }
