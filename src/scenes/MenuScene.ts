@@ -246,11 +246,15 @@ export class MenuScene extends Phaser.Scene {
     // Tabs sit ON the frame's TOP-LEFT edge (bottom overlaps into the frame so the
     // brown tab + brown frame border MERGE into one piece — like the reference). Drawn
     // BEFORE the frame so the frame's top border covers the tab's bottom seam.
-    // Settings / Calendar have NO right-side detail, so their frame spans the FULL width
-    // (symmetric L.x margins) instead of leaving room on the right like the grid/mail tabs.
-    const wideFrame = m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR;
+    // Tabs with a left content grid/list AND a right detail (chest / mailbox / bags / pickup /
+    // for-sale) share ONE full-width frame, split by a dashed divider — instead of two frames.
+    // Settings / Calendar are full-width too (no right detail). Shop keeps its own layout.
+    const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK
+      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL;
+    const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR;
     const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
     const lx = L.x * W, ly = L.y * H, lw = frameWFrac * W, lh = L.h * H;
+    const DIVIDER_X = 0.555; // screen-fraction x of the dashed divider (left content | right detail)
     // Tabs TOUCH (no gap) + the ACTIVE tab is a bit wider + drawn ON TOP so it covers its
     // neighbours' edges (browser/Zelda tab look). `medium-brown-tab` (100×23) is stretched
     // non-uniformly (width fills the slot, height set taller so the icon isn't cramped).
@@ -300,12 +304,14 @@ export class MenuScene extends Phaser.Scene {
 
     // Left content panel — `frame-medium` 9-slice ON TOP of the tabs' bottom seam.
     panel.add(this.add.nineslice(lx + lw / 2, ly + lh / 2, ATLAS, PANEL_FRAME, lw / PANEL_SCALE, lh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
+    if (hasDetail) this.drawDivider(panel, DIVIDER_X); // dashed line between the left content + the right detail
     tabIcons.forEach((ic) => panel.add(ic)); // icons back on top of the frame border
 
     // Title (no underline rule — the user didn't want it). Localized via i18n `tab_<key>`.
     const tkey = TAB_DEFS[m.tab]?.key;
     const title = tkey ? t('tab_' + tkey) : m.tab === TAB_BACKPACK ? t('tab_backpack') : '';
-    panel.add(this.T(lx + lw / 2, TITLE_Y * H, title, H * 0.03, INK));
+    const titleCx = hasDetail ? ((L.x + DIVIDER_X) / 2) * W : lx + lw / 2; // over the LEFT content for split tabs
+    panel.add(this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK));
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
@@ -425,11 +431,24 @@ export class MenuScene extends Phaser.Scene {
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + rows * (cell + gap) - gap, rows, totalRows);
   }
 
+  /** Vertical DASHED divider (a column of brown dots) at screen-fraction `xFrac`, splitting the
+   *  merged frame's left content from its right detail. Drawn with graphics dots for now (the
+   *  `brown-dot` region isn't synced into the local ui-sheet atlas yet — swap to it once it is). */
+  private drawDivider(c: Phaser.GameObjects.Container, xFrac: number): void {
+    const W = this.scale.width, H = this.scale.height;
+    const x = xFrac * W;
+    const y0 = (L.y + 0.055) * H, y1 = (L.y + L.h - 0.05) * H;
+    const g = this.add.graphics();
+    g.fillStyle(0x9a7247, 1); // warm brown, matches the wooden frame
+    const r = Math.max(2, H * 0.006), step = r * 3.4;
+    for (let y = y0; y <= y1; y += step) g.fillCircle(x, y, r);
+    c.add(g);
+  }
+
   private renderDetail(c: Phaser.GameObjects.Container, it?: MenuItem): void {
     const W = this.scale.width, H = this.scale.height;
-    // Detail panel (name + description) — `frame-medium`; always drawn, empty when nothing selected.
+    // Name + description render straight onto the SHARED frame (right of the divider) — no inner box.
     const px = DETAIL.panelX * W, py = DETAIL.panelY * H, pw = DETAIL.panelW * W, ph = DETAIL.panelH * H;
-    c.add(this.add.nineslice(px + pw / 2, py + ph / 2, ATLAS, PANEL_FRAME, pw / PANEL_SCALE, ph / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
     if (!it) return;
     // Big image.
     if (this.textures.exists(it.iconKey)) {
@@ -480,7 +499,7 @@ export class MenuScene extends Phaser.Scene {
   private renderMailDetail(c: Phaser.GameObjects.Container, d?: MenuModel['mailDetail']): void {
     const W = this.scale.width, H = this.scale.height;
     const rx = MAIL_DETAIL.x * W, ry = MAIL_DETAIL.y * H, rw = MAIL_DETAIL.w * W, rh = MAIL_DETAIL.h * H;
-    c.add(this.add.nineslice(rx + rw / 2, ry + rh / 2, ATLAS, PANEL_FRAME, rw / PANEL_SCALE, rh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
+    // Renders straight onto the SHARED frame (right of the divider) — no inner box.
     this.registry.set('menuMailClaim', null); // cleared unless a delivery draws the button
     if (!d) { c.add(this.T(rx + rw / 2, ry + rh * 0.5, t('menu_select_mail'), H * 0.024, SUB).setAlpha(0.6)); return; }
     const fs = Math.max(14, Math.round(H * 0.026));
