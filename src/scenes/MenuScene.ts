@@ -454,7 +454,7 @@ export class MenuScene extends Phaser.Scene {
     if (!it) return;
     // Name — white with a dark outline (mirrors the grid slot count style).
     const name = this.T(cx, 0.28 * H, it.label ?? it.id ?? '', H * 0.032, '#ffffff', 0.5);
-    name.setStroke('#2b1d0e', Math.max(4, H * 0.009));
+    name.setStroke('#2b1d0e', Math.max(2, H * 0.005));
     c.add(name);
     // Image (centred, below the name).
     if (this.textures.exists(it.iconKey)) {
