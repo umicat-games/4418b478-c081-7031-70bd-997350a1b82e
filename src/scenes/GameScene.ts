@@ -633,9 +633,10 @@ export class GameScene extends Phaser.Scene {
   private vcursor = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
   // After a wheel/ring pick the cursor SNAPS onto the item (snapCursorTo*): we store an OFFSET
   // = (item − physical pointer) and draw the triangle at (pointer + offset), so it sits on the
-  // item. When the mouse MOVES, the offset decays to 0 → the triangle slides FROM the item and
-  // catches up to the real pointer (no teleport), then tracks 1:1 again. Clicks act at
-  // (pointer + offset) too, so a click after a pick really hits the item.
+  // item. As the mouse MOVES, the offset heals toward 0 by at most a FRACTION of each move (so the
+  // cursor always travels in the mouse's direction — never backwards), sliding from the item and
+  // catching up to the real pointer. Clicks act at (pointer + offset) too, so a click after a pick
+  // really hits the item.
   private cursorOffX = 0;
   private cursorOffY = 0;
   private lastPtrX = 0;
@@ -8040,11 +8041,15 @@ export class GameScene extends Phaser.Scene {
       // freezes there. The snap offset (set on a wheel/ring pick) parks it on the item, then DECAYS
       // to 0 as the mouse moves → it slides from the item and catches up smoothly (no teleport).
       const p = this.input.activePointer;
-      if (p.x !== this.lastPtrX || p.y !== this.lastPtrY) {
-        this.cursorOffX *= 0.8; this.cursorOffY *= 0.8;
-        if (Math.abs(this.cursorOffX) < 1 && Math.abs(this.cursorOffY) < 1) { this.cursorOffX = 0; this.cursorOffY = 0; }
-      }
+      const mvx = p.x - this.lastPtrX, mvy = p.y - this.lastPtrY;
       this.lastPtrX = p.x; this.lastPtrY = p.y;
+      // Heal the snap offset toward 0 as the mouse moves — per axis, by at most HEAL× the movement
+      // (never overshooting 0). Capping to a FRACTION of the movement guarantees the cursor's net
+      // travel is always in the mouse's direction (the ×0.8 decay could out-pace a slow move and
+      // send the cursor BACKWARDS — the "moved right, slid left" bug).
+      const HEAL = 0.4;
+      this.cursorOffX -= Math.sign(this.cursorOffX) * Math.min(Math.abs(this.cursorOffX), Math.abs(mvx) * HEAL);
+      this.cursorOffY -= Math.sign(this.cursorOffY) * Math.min(Math.abs(this.cursorOffY), Math.abs(mvy) * HEAL);
       this.vcursor.x = p.x + this.cursorOffX;
       this.vcursor.y = p.y + this.cursorOffY;
       this.cursorState.x = this.vcursor.x;
