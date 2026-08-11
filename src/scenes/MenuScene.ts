@@ -448,20 +448,27 @@ export class MenuScene extends Phaser.Scene {
 
   private renderDetail(c: Phaser.GameObjects.Container, it?: MenuItem): void {
     const W = this.scale.width, H = this.scale.height;
-    // Name + description render straight onto the SHARED frame (right of the divider) — no inner box.
-    const px = DETAIL.panelX * W, py = DETAIL.panelY * H, pw = DETAIL.panelW * W, ph = DETAIL.panelH * H;
+    // Right detail region (right of the divider): NAME on top (centred, white + black outline like
+    // the slot count numbers), the IMAGE below it, then the DESCRIPTION below that. No inner box.
+    const cx = 0.76 * W; // centre of the right region (divider 0.555 → frame edge 0.97)
     if (!it) return;
-    // Big image.
+    // Name — white with a dark outline (mirrors the grid slot count style).
+    const name = this.T(cx, 0.28 * H, it.label ?? it.id ?? '', H * 0.032, '#ffffff', 0.5);
+    name.setStroke('#2b1d0e', Math.max(4, H * 0.009));
+    c.add(name);
+    // Image (centred, below the name).
     if (this.textures.exists(it.iconKey)) {
-      const img = this.add.image(DETAIL.imgCx * W, DETAIL.imgCy * H, it.iconKey, it.iconFrame);
-      img.setScale((DETAIL.imgMax * W) / Math.max(img.width, img.height));
+      const img = this.add.image(cx, 0.47 * H, it.iconKey, it.iconFrame);
+      img.setScale((0.18 * W) / Math.max(img.width, img.height));
       c.add(img);
     }
-    c.add(this.T(px + pw * 0.05, py + ph * 0.16, it.label ?? it.id ?? '', H * 0.028, INK, 0));
-    const desc = this.add.text(px + pw * 0.05, py + ph * 0.34, it.desc ?? '', {
-      fontFamily: dialogFont(), fontSize: Math.round(H * 0.022) + 'px', color: SUB, resolution: RES, wordWrap: { width: pw * 0.9 },
-    }).setOrigin(0, 0);
-    c.add(desc);
+    // Description (centred, below the image).
+    if (it.desc) {
+      const desc = this.add.text(cx, 0.64 * H, it.desc, {
+        fontFamily: dialogFont(), fontSize: Math.round(H * 0.022) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: 0.36 * W },
+      }).setOrigin(0.5, 0);
+      c.add(desc);
+    }
   }
 
   private renderMailList(c: Phaser.GameObjects.Container, mails: MailListEntry[], selectedId?: string): void {
