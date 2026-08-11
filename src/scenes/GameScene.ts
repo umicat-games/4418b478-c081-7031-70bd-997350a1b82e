@@ -665,8 +665,8 @@ export class GameScene extends Phaser.Scene {
   // cursor snaps to empty tilled soil and a click plants this crop there.
   private activeSeed?: CropName;
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
-  // Decorative fish swimming in circles in the open water (see spawnFish/updateFish).
-  private fish: Array<{ s: Phaser.GameObjects.Sprite; cx: number; cy: number; r: number; a: number; w: number }> = [];
+  // Decorative fish in the open water — play `fish-swimming` IN PLACE (the turn is in the sheet).
+  private fish: Phaser.GameObjects.Sprite[] = [];
   private tileCursor?: Phaser.GameObjects.NineSlice | Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private waterCan?: Phaser.GameObjects.Sprite; // the god-hand watering-can pour (one at a time)
@@ -1793,52 +1793,28 @@ export class GameScene extends Phaser.Scene {
 
   // ── Decorative fish (circle the open water) ───────────────────────────
 
-  /** Spawn a few decorative fish, each circling a centre that sits in OPEN WATER (off the grass
-   *  island). Frames are driven by the swim angle in updateFish, so they face their travel dir. */
+  /** Spawn a few decorative fish at spots that sit in OPEN WATER (off the grass island) and PLAY
+   *  the `fish-swimming` turn animation IN PLACE — the circling motion is baked into the sheet. */
   private spawnFish(): void {
     if (!this.textures.exists('fish') || !this.islandLayer) return;
     const b = this.cameras.main.getBounds();
     const COUNT = 9;
     for (let tries = 0; this.fish.length < COUNT && tries < 500; tries++) {
-      const r = Phaser.Math.Between(10, 22);
-      const cx = Phaser.Math.Between(Math.ceil(b.x + r + 8), Math.floor(b.right - r - 8));
-      const cy = Phaser.Math.Between(Math.ceil(b.y + r + 8), Math.floor(b.bottom - r - 8));
-      if (!this.circleInWater(cx, cy, r)) continue;
-      const s = this.add.sprite(cx, cy, 'fish', 0).setDepth(2);
-      const w = Phaser.Math.FloatBetween(0.35, 0.8) * (Phaser.Math.Between(0, 1) ? 1 : -1); // rad/s, cw or ccw
-      this.fish.push({ s, cx, cy, r, a: Phaser.Math.FloatBetween(0, Math.PI * 2), w });
+      const x = Phaser.Math.Between(Math.ceil(b.x + 12), Math.floor(b.right - 12));
+      const y = Phaser.Math.Between(Math.ceil(b.y + 12), Math.floor(b.bottom - 12));
+      // the spot + a little margin all around must be open water (keep off the shore)
+      if (!this.isWaterAt(x, y) || !this.isWaterAt(x + 10, y) || !this.isWaterAt(x - 10, y) || !this.isWaterAt(x, y + 10) || !this.isWaterAt(x, y - 10)) continue;
+      const s = this.add.sprite(x, y, 'fish', 0).setDepth(2);
+      s.play('fish-swimming');
+      s.anims.setProgress(Phaser.Math.FloatBetween(0, 1)); // desync so they aren't all in lockstep
+      this.fish.push(s);
     }
-  }
-
-  /** True if the whole little swim circle (centre + 8 rim samples) is open water (no grass tile). */
-  private circleInWater(cx: number, cy: number, r: number): boolean {
-    if (!this.isWaterAt(cx, cy)) return false;
-    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; if (!this.isWaterAt(cx + Math.cos(a) * r, cy + Math.sin(a) * r)) return false; }
-    return true;
   }
 
   /** A world point is water when there's no grass-island tile there. */
   private isWaterAt(x: number, y: number): boolean {
     const t = this.islandLayer?.getTileAtWorldXY(x, y);
     return !t || t.index < 0;
-  }
-
-  /** Move each fish around its circle and pick the frame matching its DIRECTION OF TRAVEL (the
-   *  sheet is a 15-frame turn), so it reads as swimming in a circle — NOT playing in place. */
-  private updateFish(delta: number): void {
-    if (!this.fish.length) return;
-    const dt = delta / 1000, FRAMES = 15;
-    // Calibration (tune if a fish faces the wrong way): DIR flips the frame order; OFF shifts which
-    // frame ≈ heading 0.
-    const FISH_FRAME_DIR = 1, FISH_FRAME_OFF = 0;
-    for (const f of this.fish) {
-      f.a += f.w * dt;
-      f.s.setPosition(f.cx + Math.cos(f.a) * f.r, f.cy + Math.sin(f.a) * f.r);
-      const heading = f.a + Math.sign(f.w) * (Math.PI / 2); // tangent = direction of travel
-      let idx = Math.round((heading / (Math.PI * 2)) * FRAMES) * FISH_FRAME_DIR + FISH_FRAME_OFF;
-      idx = ((idx % FRAMES) + FRAMES) % FRAMES;
-      f.s.setFrame(idx);
-    }
   }
 
   // ── Farming: hoe → till grass ─────────────────────────────────────────
@@ -8072,7 +8048,6 @@ export class GameScene extends Phaser.Scene {
     this.updateBushBrush(); // rustle a bush as Cato walks onto its cell
     this.updateForagables(delta); // grow wild foragables toward their max stage
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
-    this.updateFish(delta); // fish circle in the water (frame driven by heading → never in-place)
     if (SPAWN_WILD) this.trySpawn(delta); // drop new foragables / big-stones onto empty grass (TEMP off while authoring)
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.updateHouseDoor(); // the editor-authored default-house door

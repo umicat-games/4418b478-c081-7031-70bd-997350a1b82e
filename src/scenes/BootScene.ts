@@ -280,6 +280,11 @@ export class BootScene extends Phaser.Scene {
         repeat: 0,
       });
     }
+    // Decorative fish swim-turn (13 frames 0-12, loops) — played IN PLACE; the turn is baked
+    // into the sheet, so a stationary fish reads as swimming/turning in a little circle.
+    if (!this.anims.exists('fish-swimming')) {
+      this.anims.create({ key: 'fish-swimming', frames: this.anims.generateFrameNumbers('fish', { start: 0, end: 12 }), frameRate: 9, repeat: -1 });
+    }
     // God-hand watering-can pour (tools.png row 0-1: can upright→tilt→pour). The
     // player's watering analogue of the hoe swing (`hoe-swing`).
     if (!this.anims.exists('water-pour')) {
