@@ -208,6 +208,8 @@ export class BootScene extends Phaser.Scene {
     this.load.atlas('forage', 'uploaded/mushrooms_flowers_stones.png', 'uploaded/mushrooms_flowers_stones.json');
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
+    // Decorative fish (16×16, 15-frame top-down swim/turn) — swim in circles in the water.
+    this.load.spritesheet('fish', 'uploaded/fish-spritesheet.png', { frameWidth: 16, frameHeight: 16 });
     // Tool-WHEEL icons: bordered 16×16 art (item-*-with-border), one per wheel tool. Used only
     // in the contextual wheel (not the held-tool bracket / HUD indicator). fishing-rod is loaded
     // for the reserved 6-o'clock slot (no fishing mechanic yet).
