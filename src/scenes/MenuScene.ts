@@ -431,18 +431,19 @@ export class MenuScene extends Phaser.Scene {
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + rows * (cell + gap) - gap, rows, totalRows);
   }
 
-  /** Vertical DASHED divider (a column of brown dots) at screen-fraction `xFrac`, splitting the
-   *  merged frame's left content from its right detail. Drawn with graphics dots for now (the
-   *  `brown-dot` region isn't synced into the local ui-sheet atlas yet — swap to it once it is). */
+  /** Vertical DASHED divider — a column of the `brown-dot` sprite (ui-sheet atlas) at screen-
+   *  fraction `xFrac`, splitting the merged frame's left content from its right detail. */
   private drawDivider(c: Phaser.GameObjects.Container, xFrac: number): void {
     const W = this.scale.width, H = this.scale.height;
     const x = xFrac * W;
     const y0 = (L.y + 0.055) * H, y1 = (L.y + L.h - 0.05) * H;
-    const g = this.add.graphics();
-    g.fillStyle(0x9a7247, 1); // warm brown, matches the wooden frame
-    const r = Math.max(2, H * 0.006), step = r * 3.4;
-    for (let y = y0; y <= y1; y += step) g.fillCircle(x, y, r);
-    c.add(g);
+    const hasDot = this.textures.exists('ui-sheet') && this.textures.get('ui-sheet').has('brown-dot');
+    const size = Math.max(6, H * 0.02);   // on-screen dot size
+    const step = size * 1.7;              // centre-to-centre spacing
+    for (let y = y0; y <= y1; y += step) {
+      if (hasDot) c.add(this.add.image(x, y, 'ui-sheet', 'brown-dot').setDisplaySize(size, size));
+      else { const g = this.add.graphics(); g.fillStyle(0x9a7247, 1); g.fillCircle(x, y, size / 2.6); c.add(g); }
+    }
   }
 
   private renderDetail(c: Phaser.GameObjects.Container, it?: MenuItem): void {
