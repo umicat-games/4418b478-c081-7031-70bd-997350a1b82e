@@ -453,29 +453,25 @@ export class MenuScene extends Phaser.Scene {
     const cx = 0.76 * W;           // centre of the right region (divider 0.555 → frame edge 0.97)
     const yName = 0.28 * H, yImg = 0.47 * H, yDesc = 0.64 * H;
     if (!it) return;
-    // All content in a sub-container centred on the image, so it can POP in (scale from small
-    // around that centre) — the usual grow-out flourish.
-    const box = this.add.container(cx, yImg); c.add(box);
-    // Name — white with a dark outline (mirrors the grid slot count style).
-    const name = this.T(cx, yName, it.label ?? it.id ?? '', H * 0.032, '#ffffff', 0.5).setPosition(0, yName - yImg);
+    // Name — white with a dark outline (mirrors the grid slot count style). No animation.
+    const name = this.T(cx, yName, it.label ?? it.id ?? '', H * 0.032, '#ffffff', 0.5);
     name.setStroke('#2b1d0e', Math.max(2, H * 0.005));
-    box.add(name);
-    // Image (centred, below the name).
+    c.add(name);
+    // Image (centred, below the name) — POPS in (scale from small around its centre).
     if (this.textures.exists(it.iconKey)) {
-      const img = this.add.image(0, 0, it.iconKey, it.iconFrame);
-      img.setScale((0.18 * W) / Math.max(img.width, img.height));
-      box.add(img);
+      const img = this.add.image(cx, yImg, it.iconKey, it.iconFrame);
+      const s = (0.18 * W) / Math.max(img.width, img.height);
+      c.add(img);
+      img.setScale(s * 0.2);
+      this.tweens.add({ targets: img, scale: s, duration: 240, ease: 'Back.easeOut' });
     }
-    // Description (centred, below the image).
+    // Description (centred, below the image). No animation.
     if (it.desc) {
-      const desc = this.add.text(0, yDesc - yImg, it.desc, {
+      const desc = this.add.text(cx, yDesc, it.desc, {
         fontFamily: dialogFont(), fontSize: Math.round(H * 0.022) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: 0.36 * W },
       }).setOrigin(0.5, 0);
-      box.add(desc);
+      c.add(desc);
     }
-    // Pop-in: grow from small around the centre (Back.easeOut overshoot).
-    box.setScale(0.2);
-    this.tweens.add({ targets: box, scale: 1, duration: 240, ease: 'Back.easeOut' });
   }
 
   private renderMailList(c: Phaser.GameObjects.Container, mails: MailListEntry[], selectedId?: string): void {
