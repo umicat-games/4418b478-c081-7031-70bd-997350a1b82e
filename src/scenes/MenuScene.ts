@@ -438,8 +438,8 @@ export class MenuScene extends Phaser.Scene {
     const x = xFrac * W;
     const y0 = (L.y + 0.055) * H, y1 = (L.y + L.h - 0.05) * H;
     const hasDot = this.textures.exists('ui-sheet') && this.textures.get('ui-sheet').has('brown-dot');
-    const size = Math.max(6, H * 0.02);   // on-screen dot size
-    const step = size * 1.7;              // centre-to-centre spacing
+    const size = Math.max(9, H * 0.03);   // on-screen dot size (bigger)
+    const step = size * 1.6;              // centre-to-centre spacing
     for (let y = y0; y <= y1; y += step) {
       if (hasDot) c.add(this.add.image(x, y, 'ui-sheet', 'brown-dot').setDisplaySize(size, size));
       else { const g = this.add.graphics(); g.fillStyle(0x9a7247, 1); g.fillCircle(x, y, size / 2.6); c.add(g); }
