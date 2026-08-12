@@ -1922,7 +1922,7 @@ export class GameScene extends Phaser.Scene {
     const g = F.line; g.clear();
     const rx = F.attachX, ry = F.attachY, fxp = F.fx, fyp = floatY;
     const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 2.5 + F.wobble * 3;
-    g.lineStyle(2, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
+    g.lineStyle(1, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
     for (let i = 1; i <= 10; i++) {
       const t = i / 10;
       g.lineTo(Phaser.Math.Interpolation.QuadraticBezier(t, rx, midx, fxp), Phaser.Math.Interpolation.QuadraticBezier(t, ry, midy, fyp));
