@@ -1840,8 +1840,6 @@ export class GameScene extends Phaser.Scene {
 
   // ── Fishing ───────────────────────────────────────────────────────────
   private static readonly FISH_BITE_RANGE = 26;    // float within this of a fish → it bites (~1.5 tiles)
-  private static readonly FISH_ROD_DX = 14;        // rod sits this far to the SIDE of the float (left/right by screen half)
-  private static readonly FISH_ROD_DY = 18;        // ... and this far ABOVE it
   private static readonly FISH_BOB_MS = 950;       // float bob period
   private static readonly FISH_APPROACH_MS = 850;  // fish swims to the float
   private static readonly FISH_NIBBLES = 3;        // bumps before it hooks
@@ -1853,12 +1851,14 @@ export class GameScene extends Phaser.Scene {
    *  fish sits within a tile — set that fish approaching. */
   private startFishing(fx: number, fy: number): void {
     if (this.fishing) this.cancelFishing(false);
-    // Rod sits just up-LEFT of the float when the cast is in the left half of the screen, up-RIGHT
-    // otherwise — flipped so the rod's low tip (where the line ties on) faces the float.
-    const onLeft = fx < this.cameras.main.midPoint.x;
-    const rodX = fx + (onLeft ? -GameScene.FISH_ROD_DX : GameScene.FISH_ROD_DX), rodY = fy - GameScene.FISH_ROD_DY;
-    const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2).setFlipX(onLeft);
-    const attachX = rodX + (onLeft ? 5 : -5), attachY = rodY + 5; // the rod's tip NEAREST the float — line comes off there (no crossing the rod body)
+    // The rod is planted on the nearest SHORE (land) to the drop point and ROTATED so its tip aims
+    // at the float; the line runs from the tip out to the float.
+    const shore = this.nearestShore(fx, fy);
+    const rodX = shore ? shore.x : fx, rodY = shore ? shore.y : fy - 24;
+    const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2);
+    const toFloat = Math.atan2(fy - rodY, fx - rodX);
+    rod.setRotation(toFloat + Math.PI / 4); // art tip points up-right (−45°) → rotate to aim it at the float
+    const attachX = rodX + Math.cos(toFloat) * 7, attachY = rodY + Math.sin(toFloat) * 7; // the tip, toward the float
     const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1);
     const line = this.add.graphics().setDepth(1e5);
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
@@ -1866,6 +1866,21 @@ export class GameScene extends Phaser.Scene {
     if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); }
     this.fishing = { fx, fy, rodX, rodY, attachX, attachY, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
     playSfx(this);
+  }
+
+  /** Nearest LAND (grass-island) world point to a water spot — where the rod is planted. Scans
+   *  tiles in a box out to ~8 tiles; null if no shore is close (open sea → rod falls back above). */
+  private nearestShore(fx: number, fy: number): { x: number; y: number } | null {
+    if (!this.islandLayer) return null;
+    let best: { x: number; y: number } | null = null, bestD = Infinity;
+    const R = 8;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const x = fx + dx * TILE, y = fy + dy * TILE;
+      if (this.isWaterAt(x, y)) continue; // want LAND
+      const d = Math.hypot(x - fx, y - fy);
+      if (d < bestD) { bestD = d; best = { x, y }; }
+    }
+    return best;
   }
 
   private updateFishing(delta: number): void {
