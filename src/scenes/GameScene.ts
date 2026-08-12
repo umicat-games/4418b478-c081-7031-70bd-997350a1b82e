@@ -1994,6 +1994,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: F.rod, rotation: back, duration: 190, ease: 'Quad.easeOut' });
     // Reel the float (+ the hooked fish) BACK to the tip along a little arc.
     const sfx = F.float.x, sfy = F.float.y, fish = F.caught ? F.fish : undefined, fsx = fish?.x ?? tipX, fsy = fish?.y ?? tipY;
+    this.waterSplash(sfx, sfy + 2); // splash as the float is yanked out of the water
     const arc = { p: 0 };
     this.tweens.add({
       targets: arc, p: 1, duration: 210, ease: 'Quad.easeIn',
