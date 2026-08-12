@@ -1805,6 +1805,7 @@ export class GameScene extends Phaser.Scene {
       // the spot + a little margin all around must be open water (keep off the shore)
       if (!this.isWaterAt(x, y) || !this.isWaterAt(x + 10, y) || !this.isWaterAt(x - 10, y) || !this.isWaterAt(x, y + 10) || !this.isWaterAt(x, y - 10)) continue;
       const s = this.add.sprite(x, y, 'fish', 0).setDepth(2);
+      s.setTintFill(0x9a8b76); // the sheet is a dark silhouette → recolour to a lighter warm tone
       s.setFlipX(Phaser.Math.Between(0, 1) === 1); // mirror ~half of them → they turn the OTHER way
       s.play('fish-swimming');
       s.anims.setProgress(Phaser.Math.FloatBetween(0, 1)); // desync so they aren't all in lockstep
