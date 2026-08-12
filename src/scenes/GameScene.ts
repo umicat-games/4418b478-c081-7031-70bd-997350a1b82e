@@ -1868,13 +1868,44 @@ export class GameScene extends Phaser.Scene {
     const floatRight = fx >= rodX;
     const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2).setFlipX(!floatRight);
     const attachX = rodX + (floatRight ? 6 : -6), attachY = rodY - 6; // the upper tip, toward the float
-    const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1);
+    const tipDX = attachX - rodX, tipDY = attachY - rodY;
+    const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1).setVisible(false); // hidden until the throw
     const line = this.add.graphics().setDepth(1e5);
-    let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
-    for (const f of this.fish) { const d = Math.hypot(f.x - fx, f.y - fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
-    if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); }
-    this.fishing = { fx, fy, rodX, rodY, attachX, attachY, tipDX: attachX - rodX, tipDY: attachY - rodY, floatRight, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
+    // Start in the CAST animation — the fish is only found once the float LANDS (see landCast).
+    this.fishing = { fx, fy, rodX, rodY, attachX, attachY, tipDX, tipDY, floatRight, rod, float, line, bobT: 0, phase: 'casting', t: 0, fishOrigX: fx, fishOrigY: fy, nibbles: 0, wobble: 0 };
     playSfx(this);
+    // Wind the rod BACK, then swing it forward (overshoot) while the float ARCS out to the spot.
+    const back = floatRight ? -Math.PI / 2 : Math.PI / 2;
+    this.tweens.add({
+      targets: rod, rotation: back, duration: 180, ease: 'Quad.easeIn',
+      onComplete: () => {
+        if (this.fishing?.rod !== rod) return; // superseded by a re-cast
+        const cos = Math.cos(rod.rotation), sin = Math.sin(rod.rotation);
+        const tx = rodX + tipDX * cos - tipDY * sin, ty = rodY + tipDX * sin + tipDY * cos; // wound-back tip
+        float.setPosition(tx, ty).setVisible(true);
+        this.tweens.add({ targets: rod, rotation: 0, duration: 320, ease: 'Back.easeOut' }); // throw + follow-through
+        const arc = { p: 0 };
+        this.tweens.add({
+          targets: arc, p: 1, duration: 300, ease: 'Quad.easeOut',
+          onUpdate: () => { if (float.active) float.setPosition(Phaser.Math.Linear(tx, fx, arc.p), Phaser.Math.Linear(ty, fy, arc.p) - Math.sin(Math.PI * arc.p) * 14); },
+          onComplete: () => { if (this.fishing?.rod === rod) this.landCast(); },
+        });
+        playSfx(this);
+      },
+    });
+  }
+
+  /** The float has landed at the target: settle the rod, look for a fish within range, and start the
+   *  normal bob/approach flow. */
+  private landCast(): void {
+    const F = this.fishing; if (!F || F.phase !== 'casting') return;
+    F.float.setPosition(F.fx, F.fy);
+    F.rod.setRotation(0);
+    let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = F.fx, foy = F.fy;
+    for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
+    if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); F.fish = fish; F.fishOrigX = fox; F.fishOrigY = foy; }
+    F.phase = fish ? 'approach' : 'wait';
+    F.t = 0; F.bobT = 0;
   }
 
   /** Nearest LAND (grass-island) world point to a water spot — where the rod is planted. Scans
@@ -1894,13 +1925,16 @@ export class GameScene extends Phaser.Scene {
 
   private updateFishing(delta: number): void {
     const F = this.fishing; if (!F) return;
-    if (F.phase === 'reeling') { this.drawFishingLine(F, F.float.y); return; } // frozen; tweens drive the rod tilt + line stretch
+    // casting = throw tweens drive the rod + flying float; reeling = tilt tweens drive them. Both
+    // just need the line redrawn to follow. (Line is hidden during the wind-up while the float is.)
+    if (F.phase === 'casting') { if (F.float.visible) this.drawFishingLine(F); return; }
+    if (F.phase === 'reeling') { this.drawFishingLine(F); return; }
     F.bobT += delta; F.t += delta;
     F.wobble = Math.max(0, F.wobble - delta * 0.004);
     const baseAmp = F.phase === 'hooked' ? 3.2 : F.phase === 'nibble' ? 2.4 : 1.6;
     const floatY = F.fy + Math.sin((F.bobT / GameScene.FISH_BOB_MS) * Math.PI * 2) * (baseAmp + F.wobble * 6);
     F.float.setPosition(F.fx, floatY);
-    this.drawFishingLine(F, floatY);
+    this.drawFishingLine(F);
     if (F.phase === 'wait') {
       if (F.t >= GameScene.FISH_WAIT_MS) this.cancelFishing(false); // nothing biting → reel in
     } else if (F.phase === 'approach') {
@@ -1920,13 +1954,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Whitish line from the rod's lower-left tip to the float, with a gentle sag + wobble. */
-  private drawFishingLine(F: FishingState, floatY: number): void {
+  /** Whitish line from the rod's live tip to the float (its live position), a gentle sag + wobble. */
+  private drawFishingLine(F: FishingState): void {
     const g = F.line; g.clear();
-    // Rod tip from its LIVE rotation (so the line stays glued to the tip as the rod tilts on reel).
+    // Rod tip from its LIVE rotation (so the line stays glued to the tip as the rod tilts/casts).
     const cos = Math.cos(F.rod.rotation), sin = Math.sin(F.rod.rotation);
     const rx = F.rodX + F.tipDX * cos - F.tipDY * sin, ry = F.rodY + F.tipDX * sin + F.tipDY * cos;
-    const fxp = F.fx, fyp = floatY;
+    const fxp = F.float.x, fyp = F.float.y;
     const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 2.5 + F.wobble * 3;
     g.lineStyle(1, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
     for (let i = 1; i <= 10; i++) {
@@ -1946,7 +1980,7 @@ export class GameScene extends Phaser.Scene {
   /** A reel click while fishing → play the reel-in animation (rod tilts back, line stretches, beat,
    *  then everything vanishes). CATCH if the fish was hooked; otherwise it's a miss (empty reel). */
   private handleFishingClick(): void {
-    const F = this.fishing; if (!F || F.phase === 'reeling') return;
+    const F = this.fishing; if (!F || F.phase === 'reeling' || F.phase === 'casting') return;
     F.caught = F.phase === 'hooked';
     F.phase = 'reeling';
     if (F.exclaim) { this.tweens.killTweensOf(F.exclaim); F.exclaim.destroy(); F.exclaim = undefined; }
