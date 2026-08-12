@@ -219,6 +219,7 @@ interface MailEntry {
 interface FishingState {
   fx: number; fy: number; rodX: number; rodY: number;
   rod: Phaser.GameObjects.Sprite; float: Phaser.GameObjects.Sprite; line: Phaser.GameObjects.Graphics;
+  attachX: number; attachY: number; // where the LINE meets the rod (its lower tip toward the float)
   bobT: number; phase: 'wait' | 'approach' | 'nibble' | 'hooked'; t: number;
   fish?: Phaser.GameObjects.Sprite; fishOrigX: number; fishOrigY: number; nibbles: number;
   exclaim?: Phaser.GameObjects.Sprite; wobble: number;
@@ -1839,7 +1840,8 @@ export class GameScene extends Phaser.Scene {
 
   // ── Fishing ───────────────────────────────────────────────────────────
   private static readonly FISH_BITE_RANGE = 26;    // float within this of a fish → it bites (~1.5 tiles)
-  private static readonly FISH_ROD_OFF = { x: 44, y: -58 }; // rod tip offset from the float (up-right)
+  private static readonly FISH_ROD_DX = 14;        // rod sits this far to the SIDE of the float (left/right by screen half)
+  private static readonly FISH_ROD_DY = 18;        // ... and this far ABOVE it
   private static readonly FISH_BOB_MS = 950;       // float bob period
   private static readonly FISH_APPROACH_MS = 850;  // fish swims to the float
   private static readonly FISH_NIBBLES = 3;        // bumps before it hooks
@@ -1851,14 +1853,18 @@ export class GameScene extends Phaser.Scene {
    *  fish sits within a tile — set that fish approaching. */
   private startFishing(fx: number, fy: number): void {
     if (this.fishing) this.cancelFishing(false);
-    const rodX = fx + GameScene.FISH_ROD_OFF.x, rodY = fy + GameScene.FISH_ROD_OFF.y;
-    const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2);
+    // Rod sits just up-LEFT of the float when the cast is in the left half of the screen, up-RIGHT
+    // otherwise — flipped so the rod's low tip (where the line ties on) faces the float.
+    const onLeft = fx < this.cameras.main.midPoint.x;
+    const rodX = fx + (onLeft ? -GameScene.FISH_ROD_DX : GameScene.FISH_ROD_DX), rodY = fy - GameScene.FISH_ROD_DY;
+    const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2).setFlipX(onLeft);
+    const attachX = rodX + (onLeft ? 5 : -5), attachY = rodY + 5; // the rod's lower tip toward the float
     const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1);
     const line = this.add.graphics().setDepth(1e5);
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - fx, f.y - fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
     if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); }
-    this.fishing = { fx, fy, rodX, rodY, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
+    this.fishing = { fx, fy, rodX, rodY, attachX, attachY, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
     playSfx(this);
   }
 
@@ -1892,8 +1898,8 @@ export class GameScene extends Phaser.Scene {
   /** Whitish line from the rod's lower-left tip to the float, with a gentle sag + wobble. */
   private drawFishingLine(F: FishingState, floatY: number): void {
     const g = F.line; g.clear();
-    const rx = F.rodX - 5, ry = F.rodY + 5, fxp = F.fx, fyp = floatY;
-    const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 6 + F.wobble * 4;
+    const rx = F.attachX, ry = F.attachY, fxp = F.fx, fyp = floatY;
+    const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 2.5 + F.wobble * 3;
     g.lineStyle(2, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
     for (let i = 1; i <= 10; i++) {
       const t = i / 10;
