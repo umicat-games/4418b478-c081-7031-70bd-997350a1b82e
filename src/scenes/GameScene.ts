@@ -1977,19 +1977,31 @@ export class GameScene extends Phaser.Scene {
     playSfx(this);
   }
 
-  /** A reel click while fishing → play the reel-in animation (rod tilts back, line stretches, beat,
-   *  then everything vanishes). CATCH if the fish was hooked; otherwise it's a miss (empty reel). */
+  /** A reel click while fishing → play the reel-in: rod tips back while the FLOAT (and the hooked
+   *  fish) get reeled BACK to the rod tip in an arc; then a beat, then it clears. CATCH if the fish
+   *  was hooked, else a miss. */
   private handleFishingClick(): void {
     const F = this.fishing; if (!F || F.phase === 'reeling' || F.phase === 'casting') return;
     F.caught = F.phase === 'hooked';
     F.phase = 'reeling';
     if (F.exclaim) { this.tweens.killTweensOf(F.exclaim); F.exclaim.destroy(); F.exclaim = undefined; }
-    F.fish?.anims.stop(); // fish freezes on the line
-    // Rod tips BACK (tip lifts up + away from the float); the line stays glued to the tip (drawn from
-    // the live rotation) and stretches as the float/fish hold still. Then a beat, then it all clears.
+    F.fish?.anims.stop();
+    // Rod tips back; compute where its tip ENDS so the float can reel home to it.
+    const back = F.floatRight ? -Math.PI / 2 : Math.PI / 2;
+    const bc = Math.cos(back), bs = Math.sin(back);
+    const tipX = F.rodX + F.tipDX * bc - F.tipDY * bs, tipY = F.rodY + F.tipDX * bs + F.tipDY * bc;
+    this.tweens.add({ targets: F.rod, rotation: back, duration: 300, ease: 'Quad.easeOut' });
+    // Reel the float (+ the hooked fish) BACK to the tip along a little arc.
+    const sfx = F.float.x, sfy = F.float.y, fish = F.caught ? F.fish : undefined, fsx = fish?.x ?? tipX, fsy = fish?.y ?? tipY;
+    const arc = { p: 0 };
     this.tweens.add({
-      targets: F.rod, rotation: F.floatRight ? -Math.PI / 2 : Math.PI / 2, duration: 260, ease: 'Quad.easeOut',
-      onComplete: () => this.time.delayedCall(280, () => this.finishReel(F)),
+      targets: arc, p: 1, duration: 320, ease: 'Quad.easeIn',
+      onUpdate: () => {
+        const lift = -Math.sin(Math.PI * arc.p) * 8;
+        if (F.float.active) F.float.setPosition(Phaser.Math.Linear(sfx, tipX, arc.p), Phaser.Math.Linear(sfy, tipY, arc.p) + lift);
+        if (fish?.active) fish.setPosition(Phaser.Math.Linear(fsx, tipX, arc.p), Phaser.Math.Linear(fsy, tipY, arc.p) + lift);
+      },
+      onComplete: () => { if (this.fishing === F) this.time.delayedCall(150, () => this.finishReel(F)); },
     });
     playSfx(this);
   }
