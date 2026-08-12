@@ -1990,18 +1990,18 @@ export class GameScene extends Phaser.Scene {
     const back = F.floatRight ? -Math.PI / 2 : Math.PI / 2;
     const bc = Math.cos(back), bs = Math.sin(back);
     const tipX = F.rodX + F.tipDX * bc - F.tipDY * bs, tipY = F.rodY + F.tipDX * bs + F.tipDY * bc;
-    this.tweens.add({ targets: F.rod, rotation: back, duration: 300, ease: 'Quad.easeOut' });
+    this.tweens.add({ targets: F.rod, rotation: back, duration: 190, ease: 'Quad.easeOut' });
     // Reel the float (+ the hooked fish) BACK to the tip along a little arc.
     const sfx = F.float.x, sfy = F.float.y, fish = F.caught ? F.fish : undefined, fsx = fish?.x ?? tipX, fsy = fish?.y ?? tipY;
     const arc = { p: 0 };
     this.tweens.add({
-      targets: arc, p: 1, duration: 320, ease: 'Quad.easeIn',
+      targets: arc, p: 1, duration: 210, ease: 'Quad.easeIn',
       onUpdate: () => {
         const lift = -Math.sin(Math.PI * arc.p) * 8;
         if (F.float.active) F.float.setPosition(Phaser.Math.Linear(sfx, tipX, arc.p), Phaser.Math.Linear(sfy, tipY, arc.p) + lift);
         if (fish?.active) fish.setPosition(Phaser.Math.Linear(fsx, tipX, arc.p), Phaser.Math.Linear(fsy, tipY, arc.p) + lift);
       },
-      onComplete: () => { if (this.fishing === F) this.time.delayedCall(150, () => this.finishReel(F)); },
+      onComplete: () => { if (this.fishing === F) this.time.delayedCall(90, () => this.finishReel(F)); },
     });
     playSfx(this);
   }
