@@ -1858,7 +1858,7 @@ export class GameScene extends Phaser.Scene {
     const onLeft = fx < this.cameras.main.midPoint.x;
     const rodX = fx + (onLeft ? -GameScene.FISH_ROD_DX : GameScene.FISH_ROD_DX), rodY = fy - GameScene.FISH_ROD_DY;
     const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2).setFlipX(onLeft);
-    const attachX = rodX + (onLeft ? -5 : 5), attachY = rodY - 5; // the rod's UPPER tip — the line exits the top
+    const attachX = rodX + (onLeft ? 5 : -5), attachY = rodY + 5; // the rod's tip NEAREST the float — line comes off there (no crossing the rod body)
     const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1);
     const line = this.add.graphics().setDepth(1e5);
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
