@@ -1901,6 +1901,7 @@ export class GameScene extends Phaser.Scene {
     const F = this.fishing; if (!F || F.phase !== 'casting') return;
     F.float.setPosition(F.fx, F.fy);
     F.rod.setRotation(0);
+    this.waterSplash(F.fx, F.fy + 2); // plop where the float hits the water
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = F.fx, foy = F.fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
     if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).setFlipY(true).play('fish-bite'); F.fish = fish; F.fishOrigX = fox; F.fishOrigY = foy; } // flipY → head (bottom of the sheet) faces UP at the float
@@ -2604,6 +2605,24 @@ export class GameScene extends Phaser.Scene {
     p.setDepth(1e6 - 1);
     p.explode(6); // a few clods, not a shower
     this.time.delayedCall(700, () => p.destroy());
+  }
+
+  /** Water splash when the fishing float lands — a little particle system: a burst of
+   *  blue-white droplets fan UP + out and fall back (gravity), like a plop in the pond. */
+  private waterSplash(x: number, y: number): void {
+    const p = this.add.particles(x, y, 'white-particle', {
+      speed: { min: 30, max: 88 },
+      angle: { min: 205, max: 335 }, // wide fan UP + out (nothing straight down)
+      gravityY: 300, // the droplets arc up then rain back into the water
+      lifespan: { min: 260, max: 520 },
+      scale: { start: 1.7, end: 0.2 },
+      alpha: { start: 0.95, end: 0 },
+      tint: [0xffffff, 0xbfe6f5, 0x8fd0ec], // white foam → watery blue droplets
+      emitting: false,
+    });
+    p.setDepth(1e5 + 2); // just above the float so the splash reads on top
+    p.explode(11);
+    this.time.delayedCall(760, () => p.destroy());
   }
 
   private setTool(tool: ToolId): void {
