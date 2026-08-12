@@ -219,7 +219,8 @@ interface MailEntry {
 interface FishingState {
   fx: number; fy: number; rodX: number; rodY: number;
   rod: Phaser.GameObjects.Sprite; float: Phaser.GameObjects.Sprite; line: Phaser.GameObjects.Graphics;
-  attachX: number; attachY: number; // where the LINE meets the rod (its tip toward the float)
+  attachX: number; attachY: number; // where the LINE meets the rod (its tip toward the float) at rest
+  tipDX: number; tipDY: number;     // tip offset from the rod centre → live tip = centre + rotate(off, rod.rotation)
   floatRight: boolean;              // is the float to the right of the rod (→ reel-tilt direction)
   bobT: number; phase: 'wait' | 'approach' | 'nibble' | 'hooked' | 'reeling'; t: number; caught?: boolean;
   fish?: Phaser.GameObjects.Sprite; fishOrigX: number; fishOrigY: number; nibbles: number;
@@ -1872,7 +1873,7 @@ export class GameScene extends Phaser.Scene {
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - fx, f.y - fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
     if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); }
-    this.fishing = { fx, fy, rodX, rodY, attachX, attachY, floatRight, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
+    this.fishing = { fx, fy, rodX, rodY, attachX, attachY, tipDX: attachX - rodX, tipDY: attachY - rodY, floatRight, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
     playSfx(this);
   }
 
@@ -1922,7 +1923,10 @@ export class GameScene extends Phaser.Scene {
   /** Whitish line from the rod's lower-left tip to the float, with a gentle sag + wobble. */
   private drawFishingLine(F: FishingState, floatY: number): void {
     const g = F.line; g.clear();
-    const rx = F.attachX, ry = F.attachY, fxp = F.fx, fyp = floatY;
+    // Rod tip from its LIVE rotation (so the line stays glued to the tip as the rod tilts on reel).
+    const cos = Math.cos(F.rod.rotation), sin = Math.sin(F.rod.rotation);
+    const rx = F.rodX + F.tipDX * cos - F.tipDY * sin, ry = F.rodY + F.tipDX * sin + F.tipDY * cos;
+    const fxp = F.fx, fyp = floatY;
     const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 2.5 + F.wobble * 3;
     g.lineStyle(1, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
     for (let i = 1; i <= 10; i++) {
@@ -1947,11 +1951,10 @@ export class GameScene extends Phaser.Scene {
     F.phase = 'reeling';
     if (F.exclaim) { this.tweens.killTweensOf(F.exclaim); F.exclaim.destroy(); F.exclaim = undefined; }
     F.fish?.anims.stop(); // fish freezes on the line
-    // Rod tilts BACK ~45° (tip lifts up and away from the float).
-    this.tweens.add({ targets: F.rod, rotation: F.floatRight ? -Math.PI / 4 : Math.PI / 4, duration: 240, ease: 'Quad.easeOut' });
-    // Line STRETCHES: pull the tie-on point up + back (away from the float side); float/fish stay put.
+    // Rod tips BACK (tip lifts up + away from the float); the line stays glued to the tip (drawn from
+    // the live rotation) and stretches as the float/fish hold still. Then a beat, then it all clears.
     this.tweens.add({
-      targets: F, attachX: F.attachX + (F.floatRight ? -10 : 10), attachY: F.attachY - 14, duration: 240, ease: 'Quad.easeOut',
+      targets: F.rod, rotation: F.floatRight ? -Math.PI / 2 : Math.PI / 2, duration: 260, ease: 'Quad.easeOut',
       onComplete: () => this.time.delayedCall(280, () => this.finishReel(F)),
     });
     playSfx(this);
