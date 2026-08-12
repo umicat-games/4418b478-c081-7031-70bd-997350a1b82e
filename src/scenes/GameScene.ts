@@ -1855,10 +1855,11 @@ export class GameScene extends Phaser.Scene {
     // at the float; the line runs from the tip out to the float.
     const shore = this.nearestShore(fx, fy);
     const rodX = shore ? shore.x : fx, rodY = shore ? shore.y : fy - 24;
-    const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2);
-    const toFloat = Math.atan2(fy - rodY, fx - rodX);
-    rod.setRotation(toFloat + Math.PI / 4); // art tip points up-right (−45°) → rotate to aim it at the float
-    const attachX = rodX + Math.cos(toFloat) * 7, attachY = rodY + Math.sin(toFloat) * 7; // the tip, toward the float
+    // Keep the rod at its natural 45° (tip UP); just flip it so the tip points toward the float's
+    // side. The line ties on at that upper tip and drops out to the float.
+    const floatRight = fx >= rodX;
+    const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2).setFlipX(!floatRight);
+    const attachX = rodX + (floatRight ? 6 : -6), attachY = rodY - 6; // the upper tip, toward the float
     const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1);
     const line = this.add.graphics().setDepth(1e5);
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
