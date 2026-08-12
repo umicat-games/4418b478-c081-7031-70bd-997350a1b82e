@@ -1903,7 +1903,7 @@ export class GameScene extends Phaser.Scene {
     F.rod.setRotation(0);
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = F.fx, foy = F.fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
-    if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); F.fish = fish; F.fishOrigX = fox; F.fishOrigY = foy; }
+    if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).setFlipY(true).play('fish-bite'); F.fish = fish; F.fishOrigX = fox; F.fishOrigY = foy; } // flipY → head (bottom of the sheet) faces UP at the float
     F.phase = fish ? 'approach' : 'wait';
     F.t = 0; F.bobT = 0;
   }
@@ -2019,7 +2019,7 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: icon, y: wp.y - 20, alpha: 0, scale: 1.4, duration: 320, delay: 250, ease: 'Quad.easeIn', onComplete: () => icon.destroy() }) });
       this.showHarvestToast({ id: 'fish', iconKey: 'fish', iconFrame: 0, count: 1, stackable: true });
       this.catoReact('love');
-    } else if (F.fish?.active) { F.fish.setDepth(2).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
+    } else if (F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
     else F.fish?.destroy();
     this.tearDownFishing(F);
   }
@@ -2029,7 +2029,7 @@ export class GameScene extends Phaser.Scene {
   private cancelFishing(escaped: boolean): void {
     const F = this.fishing; if (!F) return;
     this.fishing = null;
-    if (escaped && F.fish?.active) { F.fish.setDepth(2).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); }
+    if (escaped && F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); }
     else F.fish?.destroy();
     this.tearDownFishing(F);
   }
