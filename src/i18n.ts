@@ -215,6 +215,8 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   item_watering_can: { en: 'Watering can', 'zh-CN': '洒水壶' },
   item_axe: { en: 'Axe', 'zh-CN': '斧头' },
   item_pickaxe: { en: 'Pickaxe', 'zh-CN': '镐' },
+  item_fishing_rod: { en: 'Fishing rod', 'zh-CN': '鱼竿' },
+  item_fish: { en: 'Fish', 'zh-CN': '鱼' },
   item_tree_apple: { en: 'Apple tree seedling', 'zh-CN': '苹果树苗' },
   item_tree_pear: { en: 'Pear tree seedling', 'zh-CN': '梨树苗' },
   item_tree_peach: { en: 'Peach tree seedling', 'zh-CN': '桃树苗' },

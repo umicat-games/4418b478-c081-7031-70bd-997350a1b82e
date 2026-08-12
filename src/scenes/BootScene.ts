@@ -210,6 +210,10 @@ export class BootScene extends Phaser.Scene {
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
     // Decorative fish (16×16, 15-frame top-down swim/turn) — swim in circles in the water.
     this.load.spritesheet('fish', 'uploaded/fish-spritesheet.png', { frameWidth: 16, frameHeight: 16 });
+    // Fishing: rod segment + float bobber (16×16 each) + the 2-frame fish-bite (nibble) sheet.
+    this.load.image('fishing-rod', 'uploaded/fishing-rod.png');
+    this.load.image('fishing-float', 'uploaded/fishing-rode-float.png');
+    this.load.spritesheet('fish-bite', 'uploaded/fish-bite-spritesheet.png', { frameWidth: 16, frameHeight: 16 });
     // Tool-WHEEL icons: bordered 16×16 art (item-*-with-border), one per wheel tool. Used only
     // in the contextual wheel (not the held-tool bracket / HUD indicator). fishing-rod is loaded
     // for the reserved 6-o'clock slot (no fishing mechanic yet).
@@ -284,6 +288,10 @@ export class BootScene extends Phaser.Scene {
     // into the sheet, so a stationary fish reads as swimming/turning in a little circle.
     if (!this.anims.exists('fish-swimming')) {
       this.anims.create({ key: 'fish-swimming', frames: this.anims.generateFrameNumbers('fish', { start: 0, end: 12 }), frameRate: 8, repeat: -1 });
+    }
+    // Fish nibbling the float (2 frames, loops).
+    if (!this.anims.exists('fish-bite')) {
+      this.anims.create({ key: 'fish-bite', frames: this.anims.generateFrameNumbers('fish-bite', { start: 0, end: 1 }), frameRate: 6, repeat: -1 });
     }
     // God-hand watering-can pour (tools.png row 0-1: can upright→tilt→pour). The
     // player's watering analogue of the hoe swing (`hoe-swing`).

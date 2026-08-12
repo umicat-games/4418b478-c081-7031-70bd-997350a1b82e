@@ -215,6 +215,15 @@ interface MailEntry {
   items?: Array<{ id: string; count: number }>; // delivery only — the actual package to claim into the pickup grid / backpack
 }
 
+/** In-progress fishing cast (rod + float + line, and a fish that swims over to bite). */
+interface FishingState {
+  fx: number; fy: number; rodX: number; rodY: number;
+  rod: Phaser.GameObjects.Sprite; float: Phaser.GameObjects.Sprite; line: Phaser.GameObjects.Graphics;
+  bobT: number; phase: 'wait' | 'approach' | 'nibble' | 'hooked'; t: number;
+  fish?: Phaser.GameObjects.Sprite; fishOrigX: number; fishOrigY: number; nibbles: number;
+  exclaim?: Phaser.GameObjects.Sprite; wobble: number;
+}
+
 // --- House building (Sprout Lands premium "Building parts") ---
 // The player places wooden walls, a door, and furniture from the backpack to
 // build Cato a house. Walls block Cato (static bodies); furniture is decorative;
@@ -667,6 +676,7 @@ export class GameScene extends Phaser.Scene {
   private islandLayer?: Phaser.Tilemaps.TilemapLayer;
   // Decorative fish in the open water — play `fish-swimming` IN PLACE (the turn is in the sheet).
   private fish: Phaser.GameObjects.Sprite[] = [];
+  private fishing: FishingState | null = null; // an in-progress fishing cast (see startFishing)
   private tileCursor?: Phaser.GameObjects.NineSlice | Phaser.GameObjects.Image; // bracket that frames the target cell
   private hoeIcon?: Phaser.GameObjects.Image; // the held-tool icon shown inside the bracket
   private waterCan?: Phaser.GameObjects.Sprite; // the god-hand watering-can pour (one at a time)
@@ -1703,10 +1713,18 @@ export class GameScene extends Phaser.Scene {
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
     if (this.overHotbarAt(x, y)) return;
 
+    // Fishing in progress → this click reels: CATCH if the fish is hooked (exclamation), else miss.
+    if (this.fishing) { this.handleFishingClick(); return; }
+
     // World-tile actions (validity computed here, so touch works without a hover
     // cursor). Harvest takes priority; only the hoe / empty hand harvests.
     const wp = this.cameras.main.getWorldPoint(x, y);
     const tile = this.islandLayer?.getTileAtWorldXY(wp.x, wp.y);
+    // FISHING ROD → cast onto open water (starts the fishing flow).
+    if (this.activeTool === 'fishing-rod') {
+      if (this.isWaterAt(wp.x, wp.y)) this.startFishing(wp.x, wp.y);
+      return;
+    }
     // AXE chops any tree the click lands on. A tree sprite is ~3 tiles tall (its
     // canopy sits ABOVE the trunk tile), so match by sprite bounds — clicking the
     // leaves would otherwise map to an empty tile above the trunk and do nothing.
@@ -1819,6 +1837,111 @@ export class GameScene extends Phaser.Scene {
     return !t || t.index < 0;
   }
 
+  // ── Fishing ───────────────────────────────────────────────────────────
+  private static readonly FISH_BITE_RANGE = 26;    // float within this of a fish → it bites (~1.5 tiles)
+  private static readonly FISH_ROD_OFF = { x: 44, y: -58 }; // rod tip offset from the float (up-right)
+  private static readonly FISH_BOB_MS = 950;       // float bob period
+  private static readonly FISH_APPROACH_MS = 850;  // fish swims to the float
+  private static readonly FISH_NIBBLES = 3;        // bumps before it hooks
+  private static readonly FISH_NIBBLE_MS = 360;    // per nibble
+  private static readonly FISH_CATCH_MS = 1700;    // exclamation window to click before it escapes
+  private static readonly FISH_WAIT_MS = 6000;     // empty cast (no fish near) auto-reels after this
+
+  /** Cast onto open water: drop the float, hold the rod up-right of it (line between), and — if a
+   *  fish sits within a tile — set that fish approaching. */
+  private startFishing(fx: number, fy: number): void {
+    if (this.fishing) this.cancelFishing(false);
+    const rodX = fx + GameScene.FISH_ROD_OFF.x, rodY = fy + GameScene.FISH_ROD_OFF.y;
+    const rod = this.add.sprite(rodX, rodY, 'fishing-rod').setDepth(1e5 + 2);
+    const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1);
+    const line = this.add.graphics().setDepth(1e5);
+    let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
+    for (const f of this.fish) { const d = Math.hypot(f.x - fx, f.y - fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
+    if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); }
+    this.fishing = { fx, fy, rodX, rodY, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
+    playSfx(this);
+  }
+
+  private updateFishing(delta: number): void {
+    const F = this.fishing; if (!F) return;
+    F.bobT += delta; F.t += delta;
+    F.wobble = Math.max(0, F.wobble - delta * 0.004);
+    const baseAmp = F.phase === 'hooked' ? 3.2 : F.phase === 'nibble' ? 2.4 : 1.6;
+    const floatY = F.fy + Math.sin((F.bobT / GameScene.FISH_BOB_MS) * Math.PI * 2) * (baseAmp + F.wobble * 6);
+    F.float.setPosition(F.fx, floatY);
+    this.drawFishingLine(F, floatY);
+    if (F.phase === 'wait') {
+      if (F.t >= GameScene.FISH_WAIT_MS) this.cancelFishing(false); // nothing biting → reel in
+    } else if (F.phase === 'approach') {
+      const p = Math.min(1, F.t / GameScene.FISH_APPROACH_MS);
+      F.fish?.setPosition(Phaser.Math.Linear(F.fishOrigX, F.fx, p), Phaser.Math.Linear(F.fishOrigY, F.fy + 8, p));
+      if (p >= 1) { F.phase = 'nibble'; F.t = 0; F.nibbles = 0; }
+    } else if (F.phase === 'nibble') {
+      if (F.t >= GameScene.FISH_NIBBLE_MS) {
+        F.t = 0; F.nibbles++; F.wobble = 1; playSfx(this);
+        if (F.nibbles >= GameScene.FISH_NIBBLES) { F.phase = 'hooked'; F.t = 0; this.showFishExclaim(F); }
+      }
+      F.fish?.setPosition(F.fx, F.fy + 9 - Math.sin((F.t / GameScene.FISH_NIBBLE_MS) * Math.PI) * 3); // dart at the float
+    } else if (F.phase === 'hooked') {
+      F.fish?.setPosition(F.fx, floatY + 8); // stuck to the float
+      F.exclaim?.setPosition(F.fx, (F.fish?.y ?? F.fy) - 16);
+      if (F.t >= GameScene.FISH_CATCH_MS) this.cancelFishing(true); // got away
+    }
+  }
+
+  /** Whitish line from the rod's lower-left tip to the float, with a gentle sag + wobble. */
+  private drawFishingLine(F: FishingState, floatY: number): void {
+    const g = F.line; g.clear();
+    const rx = F.rodX - 5, ry = F.rodY + 5, fxp = F.fx, fyp = floatY;
+    const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 6 + F.wobble * 4;
+    g.lineStyle(2, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10;
+      g.lineTo(Phaser.Math.Interpolation.QuadraticBezier(t, rx, midx, fxp), Phaser.Math.Interpolation.QuadraticBezier(t, ry, midy, fyp));
+    }
+    g.strokePath();
+  }
+
+  private showFishExclaim(F: FishingState): void {
+    if (!this.textures.exists('emoji')) return;
+    F.exclaim = this.add.sprite(F.fx, F.fy - 16, 'emoji', 85).setDepth(1e5 + 3).setScale(0.5); // 85 = exclamation region
+    this.tweens.add({ targets: F.exclaim, scale: 0.7, duration: 220, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    playSfx(this);
+  }
+
+  /** A reel click while fishing: CATCH if the fish is hooked (exclamation), else a miss (reel empty). */
+  private handleFishingClick(): void {
+    if (this.fishing?.phase === 'hooked') this.catchFish();
+    else this.cancelFishing(false);
+  }
+
+  private catchFish(): void {
+    const F = this.fishing; if (!F) return;
+    this.fishing = null;
+    F.fish?.destroy(); // consumed
+    this.tearDownFishing(F);
+    // Show the caught fish at the cursor (placeholder = the fish sprite, blue-grey) → pop + fly up.
+    const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
+    const icon = this.add.image(wp.x, wp.y, 'fish', 0).setTintFill(0x7c8f9d).setDepth(1e6).setScale(0);
+    this.tweens.add({ targets: icon, scale: 2, duration: 220, ease: 'Back.easeOut', onComplete: () =>
+      this.tweens.add({ targets: icon, y: wp.y - 20, alpha: 0, scale: 1.4, duration: 320, delay: 250, ease: 'Quad.easeIn', onComplete: () => icon.destroy() }) });
+    this.showHarvestToast({ id: 'fish', iconKey: 'fish', iconFrame: 0, count: 1, stackable: true });
+    this.catoReact('love');
+  }
+
+  /** End the cast. `escaped` = the fish got away — return an uncaught fish to the decorative pool. */
+  private cancelFishing(escaped: boolean): void {
+    const F = this.fishing; if (!F) return;
+    this.fishing = null;
+    if (escaped && F.fish?.active) { F.fish.setDepth(2).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); }
+    else F.fish?.destroy();
+    this.tearDownFishing(F);
+  }
+
+  private tearDownFishing(F: FishingState): void {
+    F.rod.destroy(); F.float.destroy(); F.line.destroy(); F.exclaim?.destroy();
+  }
+
   // ── Farming: hoe → till grass ─────────────────────────────────────────
 
   /** Wire up the hoe tool: resolve the grass-island layer, spawn the bracket
@@ -1917,7 +2040,7 @@ export class GameScene extends Phaser.Scene {
     this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null); // vestigial (no hotbar) — save compat
     // The BACKPACK is the portable store you carry + Use things from: everyday tools, seeds, a wall.
     this.backpackStore = [
-      itemFromId('hoe', 1), itemFromId('watering-can', 1), itemFromId('axe', 1), itemFromId('pickaxe', 1),
+      itemFromId('hoe', 1), itemFromId('watering-can', 1), itemFromId('axe', 1), itemFromId('pickaxe', 1), itemFromId('fishing-rod', 1),
       ...CROP_NAMES.map((c) => makeSeed(c, 10)),
       makePlaceable('wall', 99),
     ];
@@ -2705,6 +2828,12 @@ export class GameScene extends Phaser.Scene {
     if (tk) { const o = this.trees.get(tk); if (o) { applicable.add('axe'); bbox = boxOf(this.spriteWorldSolidRect(o.sprite)); } }
     else if (sk) { const o = this.bigStones.get(sk); if (o) { applicable.add('pickaxe'); bbox = boxOf(this.spriteWorldSolidRect(o.sprite)); } }
     else if (fk) { const f = this.foragables.get(fk); if (f) { if (f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(f.sprite)); } }
+    else if (this.isWaterAt(wx, wy)) {
+      // Open water → the FISHING ROD applies. bbox = the 16px tile under the cursor.
+      applicable.add('fishing-rod');
+      const tx = Math.floor(wx / TILE) * TILE, ty = Math.floor(wy / TILE) * TILE;
+      bbox = { wl: tx, wt: ty, wr: tx + TILE, wb: ty + TILE };
+    }
     else {
       const tile = this.islandLayer?.getTileAtWorldXY(wx, wy);
       if (tile && !tile.collides) {
@@ -7598,7 +7727,7 @@ export class GameScene extends Phaser.Scene {
       // hoe/watering-can/axe/pickaxe ended up on the old hotbar / vestigial `inventory` (never
       // persisted in SaveBlob) → `findOwnedTool` returned null → the tool wheel wouldn't open on
       // grass/stone/berries. Idempotent (skips a tool already present).
-      for (const t of ['hoe', 'watering-can', 'axe', 'pickaxe'] as ToolId[]) {
+      for (const t of ['hoe', 'watering-can', 'axe', 'pickaxe', 'fishing-rod'] as ToolId[]) {
         if (!this.backpackStore.some((s2) => s2.toolId === t)) this.addToStore(this.backpackStore, itemFromId(t, 1));
       }
       // Grant missing starter items INTO THE CHEST — AFTER it's restored (else the
@@ -8050,6 +8179,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBushBrush(); // rustle a bush as Cato walks onto its cell
     this.updateForagables(delta); // grow wild foragables toward their max stage
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
+    this.updateFishing(delta); // rod/float bob + line, fish approach → nibble → hook, escape timer
     if (SPAWN_WILD) this.trySpawn(delta); // drop new foragables / big-stones onto empty grass (TEMP off while authoring)
     this.updateDoors(); // open placed doors as Cato approaches, close when he leaves
     this.updateHouseDoor(); // the editor-authored default-house door
