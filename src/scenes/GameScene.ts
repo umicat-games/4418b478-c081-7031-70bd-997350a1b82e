@@ -219,8 +219,9 @@ interface MailEntry {
 interface FishingState {
   fx: number; fy: number; rodX: number; rodY: number;
   rod: Phaser.GameObjects.Sprite; float: Phaser.GameObjects.Sprite; line: Phaser.GameObjects.Graphics;
-  attachX: number; attachY: number; // where the LINE meets the rod (its lower tip toward the float)
-  bobT: number; phase: 'wait' | 'approach' | 'nibble' | 'hooked'; t: number;
+  attachX: number; attachY: number; // where the LINE meets the rod (its tip toward the float)
+  floatRight: boolean;              // is the float to the right of the rod (→ reel-tilt direction)
+  bobT: number; phase: 'wait' | 'approach' | 'nibble' | 'hooked' | 'reeling'; t: number; caught?: boolean;
   fish?: Phaser.GameObjects.Sprite; fishOrigX: number; fishOrigY: number; nibbles: number;
   exclaim?: Phaser.GameObjects.Sprite; wobble: number;
 }
@@ -1871,7 +1872,7 @@ export class GameScene extends Phaser.Scene {
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = fx, foy = fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - fx, f.y - fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
     if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).play('fish-bite'); }
-    this.fishing = { fx, fy, rodX, rodY, attachX, attachY, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
+    this.fishing = { fx, fy, rodX, rodY, attachX, attachY, floatRight, rod, float, line, bobT: 0, phase: fish ? 'approach' : 'wait', t: 0, fish, fishOrigX: fox, fishOrigY: foy, nibbles: 0, wobble: 0 };
     playSfx(this);
   }
 
@@ -1892,6 +1893,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateFishing(delta: number): void {
     const F = this.fishing; if (!F) return;
+    if (F.phase === 'reeling') { this.drawFishingLine(F, F.float.y); return; } // frozen; tweens drive the rod tilt + line stretch
     F.bobT += delta; F.t += delta;
     F.wobble = Math.max(0, F.wobble - delta * 0.004);
     const baseAmp = F.phase === 'hooked' ? 3.2 : F.phase === 'nibble' ? 2.4 : 1.6;
@@ -1937,27 +1939,44 @@ export class GameScene extends Phaser.Scene {
     playSfx(this);
   }
 
-  /** A reel click while fishing: CATCH if the fish is hooked (exclamation), else a miss (reel empty). */
+  /** A reel click while fishing → play the reel-in animation (rod tilts back, line stretches, beat,
+   *  then everything vanishes). CATCH if the fish was hooked; otherwise it's a miss (empty reel). */
   private handleFishingClick(): void {
-    if (this.fishing?.phase === 'hooked') this.catchFish();
-    else this.cancelFishing(false);
+    const F = this.fishing; if (!F || F.phase === 'reeling') return;
+    F.caught = F.phase === 'hooked';
+    F.phase = 'reeling';
+    if (F.exclaim) { this.tweens.killTweensOf(F.exclaim); F.exclaim.destroy(); F.exclaim = undefined; }
+    F.fish?.anims.stop(); // fish freezes on the line
+    // Rod tilts BACK ~45° (tip lifts up and away from the float).
+    this.tweens.add({ targets: F.rod, rotation: F.floatRight ? -Math.PI / 4 : Math.PI / 4, duration: 240, ease: 'Quad.easeOut' });
+    // Line STRETCHES: pull the tie-on point up + back (away from the float side); float/fish stay put.
+    this.tweens.add({
+      targets: F, attachX: F.attachX + (F.floatRight ? -10 : 10), attachY: F.attachY - 14, duration: 240, ease: 'Quad.easeOut',
+      onComplete: () => this.time.delayedCall(280, () => this.finishReel(F)),
+    });
+    playSfx(this);
   }
 
-  private catchFish(): void {
-    const F = this.fishing; if (!F) return;
+  /** After the reel beat: land the outcome (caught → fish-on-cursor + toast; miss → fish darts back)
+   *  and clear the rod / float / line. */
+  private finishReel(F: FishingState): void {
+    if (this.fishing !== F) return; // superseded (e.g. re-cast)
     this.fishing = null;
-    F.fish?.destroy(); // consumed
+    if (F.caught) {
+      F.fish?.destroy(); // reeled in
+      const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
+      const icon = this.add.image(wp.x, wp.y, 'fish', 0).setTintFill(0x7c8f9d).setDepth(1e6).setScale(0);
+      this.tweens.add({ targets: icon, scale: 2, duration: 220, ease: 'Back.easeOut', onComplete: () =>
+        this.tweens.add({ targets: icon, y: wp.y - 20, alpha: 0, scale: 1.4, duration: 320, delay: 250, ease: 'Quad.easeIn', onComplete: () => icon.destroy() }) });
+      this.showHarvestToast({ id: 'fish', iconKey: 'fish', iconFrame: 0, count: 1, stackable: true });
+      this.catoReact('love');
+    } else if (F.fish?.active) { F.fish.setDepth(2).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
+    else F.fish?.destroy();
     this.tearDownFishing(F);
-    // Show the caught fish at the cursor (placeholder = the fish sprite, blue-grey) → pop + fly up.
-    const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
-    const icon = this.add.image(wp.x, wp.y, 'fish', 0).setTintFill(0x7c8f9d).setDepth(1e6).setScale(0);
-    this.tweens.add({ targets: icon, scale: 2, duration: 220, ease: 'Back.easeOut', onComplete: () =>
-      this.tweens.add({ targets: icon, y: wp.y - 20, alpha: 0, scale: 1.4, duration: 320, delay: 250, ease: 'Quad.easeIn', onComplete: () => icon.destroy() }) });
-    this.showHarvestToast({ id: 'fish', iconKey: 'fish', iconFrame: 0, count: 1, stackable: true });
-    this.catoReact('love');
   }
 
-  /** End the cast. `escaped` = the fish got away — return an uncaught fish to the decorative pool. */
+  /** Immediate teardown (re-cast / no-bite timeout / fish escapes) — no reel animation. `escaped`
+   *  returns an uncaught fish to the decorative pool. */
   private cancelFishing(escaped: boolean): void {
     const F = this.fishing; if (!F) return;
     this.fishing = null;
@@ -1967,6 +1986,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tearDownFishing(F: FishingState): void {
+    this.tweens.killTweensOf([F.rod, F.float, F.line, F as unknown as object]);
     F.rod.destroy(); F.float.destroy(); F.line.destroy(); F.exclaim?.destroy();
   }
 
