@@ -1854,7 +1854,13 @@ export class GameScene extends Phaser.Scene {
     // The rod is planted on the nearest SHORE (land) to the drop point and ROTATED so its tip aims
     // at the float; the line runs from the tip out to the float.
     const shore = this.nearestShore(fx, fy);
-    const rodX = shore ? shore.x : fx, rodY = shore ? shore.y : fy - 24;
+    const rx0 = shore ? shore.x : fx, ry0 = shore ? shore.y : fy - 24;
+    // Offset the rod PERPENDICULAR to the shore→float line so the line is never dead-flat/vertical
+    // (a natural cast angle): float to the SIDE → raise the rod up; float ABOVE/BELOW → step it
+    // sideways. Creates a nice height/side difference between the rod tip and the float.
+    const dx = fx - rx0, dy = fy - ry0, OFF = 16;
+    const rodX = Math.abs(dx) >= Math.abs(dy) ? rx0 : rx0 + (dx >= 0 ? OFF : -OFF);
+    const rodY = Math.abs(dx) >= Math.abs(dy) ? ry0 - OFF : ry0;
     // Keep the rod at its natural 45° (tip UP); just flip it so the tip points toward the float's
     // side. The line ties on at that upper tip and drops out to the float.
     const floatRight = fx >= rodX;
