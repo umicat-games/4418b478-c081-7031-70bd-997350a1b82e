@@ -6596,27 +6596,33 @@ export class GameScene extends Phaser.Scene {
     this.startCatoFishing(fx, fy, dir);
   }
 
-  /** Find a castable fishing spot near Cato: the NEAREST open-water cell that has a walkable SHORE
-   *  neighbour to stand on. The fish don't need to be right there — Cato casts at the coast and the
-   *  nearest fish is lured over (see landCast's byCato branch). Only requires that fish EXIST. */
-  private findFishingSpot(): { cx: number; cy: number } | null {
-    const layer = this.islandLayer; if (!layer || !this.child) return null;
-    if (this.fish.length === 0) return null; // genuinely no fish anywhere to catch
-    const o = layer.worldToTileXY(this.child.x, this.child.y); if (!o) return null;
+  /** A castable coastal water cell (has a walkable SHORE neighbour) nearest to a world point, within
+   *  `R` tiles of it. Used both to find a shore by a FISH and to fall back to a shore by Cato. */
+  private coastalCellNear(wx: number, wy: number, R: number): { cx: number; cy: number } | null {
+    const layer = this.islandLayer; if (!layer) return null;
+    const o = layer.worldToTileXY(wx, wy); if (!o) return null;
     const ocx = Math.floor(o.x), ocy = Math.floor(o.y);
     let best: { cx: number; cy: number } | null = null, bestD = Infinity;
-    const R = 12;
     for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
       const cx = ocx + dx, cy = ocy + dy;
       const w = layer.tileToWorldXY(cx, cy); if (!w) continue;
-      const wx = w.x + TILE / 2, wy = w.y + TILE / 2;
-      if (!this.isWaterAt(wx, wy)) continue;                                    // float must land in water
+      const cwx = w.x + TILE / 2, cwy = w.y + TILE / 2;
+      if (!this.isWaterAt(cwx, cwy)) continue;                                  // float must land in water
       const hasShore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ax, ay]) => this.isWalkableCell(cx + ax, cy + ay));
       if (!hasShore) continue;                                                  // a shore to stand on
-      const d = Math.hypot(wx - this.child.x, wy - this.child.y);
+      const d = Math.hypot(cwx - wx, cwy - wy);
       if (d < bestD) { bestD = d; best = { cx, cy }; }
     }
     return best;
+  }
+
+  /** Find a castable fishing spot = the NEAREST coast to Cato (always reachable — he's standing right
+   *  by it — so he never walks off to an unreachable far spot and gives up). The fish don't need to be
+   *  there: landCast's byCato branch LURES the nearest fish over. Null only when there are no fish. */
+  private findFishingSpot(): { cx: number; cy: number } | null {
+    if (!this.islandLayer || !this.child) return null;
+    if (this.fish.length === 0) return null; // genuinely no fish anywhere to catch
+    return this.coastalCellNear(this.child.x, this.child.y, 12);
   }
 
   /** "Go fishing": Cato walks to the nearest reachable shore spot by a fish, casts, and reels one in. */
