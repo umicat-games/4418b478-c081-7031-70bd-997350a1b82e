@@ -6562,8 +6562,25 @@ export class GameScene extends Phaser.Scene {
   /** Cato arrived at the shore facing the water: start ONE cast, then hold while the fishing episode
    *  plays out (updateFishing drives the float/fish + his auto-catch). When it clears (caught / gave
    *  up), the task is done. */
+  private static readonly CATO_FISH_ROW: Record<FaceDir, number> = { right: 0, left: 1, up: 2, down: 3 };
   private updateCatoFishingTask(task: NonNullable<typeof this.catoTask>, dir: FaceDir, cell: { cx: number; cy: number }): void {
-    if (this.fishing) return; // a cast is live → keep standing (the fishing machine owns Cato's rod anim)
+    const F = this.fishing;
+    if (F?.byCato) {
+      // A cast is live → the fishing task OWNS Cato's body anim (else the idle/wander driver would
+      // stamp `idle-<dir>` over it and he'd just look like he's standing there — the reported bug).
+      const child = this.child; if (child) {
+        const cur = child.anims?.currentAnim?.key;
+        if (F.phase === 'casting') { if (cur !== `cato-fish-cast-${dir}`) child.play(`cato-fish-cast-${dir}`, true); }
+        else if (F.phase === 'reeling') { if (cur !== `cato-fish-reel-${dir}`) child.play(`cato-fish-reel-${dir}`, true); }
+        else { // wait / approach / nibble / hooked → HOLD the rod-out pose (last cast frame)
+          const hold = GameScene.CATO_FISH_ROW[dir] * 8 + 7;
+          if (child.texture.key !== 'cato-fish-cast' || child.anims.isPlaying || String(child.frame.name) !== String(hold)) {
+            child.anims.stop(); child.setTexture('cato-fish-cast', hold);
+          }
+        }
+      }
+      return; // keep standing while the episode plays out
+    }
     if (task.casted) { this.finishCatoTask(); return; } // the episode ended → done
     task.casted = true;
     const w = this.islandLayer?.tileToWorldXY(cell.cx, cell.cy);
