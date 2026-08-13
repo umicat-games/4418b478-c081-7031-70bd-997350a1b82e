@@ -6589,9 +6589,11 @@ export class GameScene extends Phaser.Scene {
     let fx = (w?.x ?? this.child!.x) + TILE / 2, fy = (w?.y ?? this.child!.y) + TILE / 2;
     const dv: Record<FaceDir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
     const [vx, vy] = dv[dir];
-    for (let step = 2; step <= 3; step++) {
+    let found = false;
+    for (let step = 1; step <= 4; step++) {
       const px = this.child!.x + vx * TILE * step, py = this.child!.y + vy * TILE * step;
-      if (this.isWaterAt(px, py)) { fx = px; fy = py; } // furthest still-water point within reach
+      if (this.isWaterAt(px, py)) { fx = px; fy = py; found = true; } // furthest still-water point within reach
+      else if (found) break; // stop at the first land past the water (don't cast onto the far shore)
     }
     this.startCatoFishing(fx, fy, dir);
   }
@@ -6817,6 +6819,16 @@ export class GameScene extends Phaser.Scene {
       const wp = task.path[0];
       const d = Math.hypot(wp.x - this.child.x, wp.y - this.child.y);
       if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; return; }
+      // FISHING stands sit at the WATER'S EDGE: Cato's foot-box catches on the water/edge collider a
+      // few px short of the cell centre, so he'd never reach CATO_ARRIVE_DIST (3px) and would push
+      // into the edge until the stall backstop gave up (the "walks up, stuck, then leaves" bug). For
+      // a fish task's FINAL waypoint (the stand), count "arrived" once he's within ~1 tile OR blocked
+      // toward it — he's at the shore, which is close enough to cast from.
+      if (task.type === 'fish' && task.path.length === 1) {
+        const towardBlocked = (wp.y < this.child.y && body.blocked.up) || (wp.y > this.child.y && body.blocked.down)
+          || (wp.x < this.child.x && body.blocked.left) || (wp.x > this.child.x && body.blocked.right);
+        if (d <= TILE || towardBlocked) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; return; }
+      }
       // Stall backstop for a DYNAMIC block (wall placed mid-walk / physics wedge): no
       // progress for a while → abandon this target (A* already routed around all the
       // static obstacles up front).
