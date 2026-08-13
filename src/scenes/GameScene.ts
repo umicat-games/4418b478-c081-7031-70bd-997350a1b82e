@@ -2682,18 +2682,23 @@ export class GameScene extends Phaser.Scene {
     const watering = this.activeTool === 'watering-can';
     const chopping = this.activeTool === 'axe';
     const mining = this.activeTool === 'pickaxe';
-    const holdingTool = tilling || planting || watering || chopping || mining;
+    const fishing = this.activeTool === 'fishing-rod';
+    const holdingTool = tilling || planting || watering || chopping || mining || fishing;
     // No tool held / not locked / over UI / dialog / menu / backpack → real mouse (no tile bracket).
     if (!holdingTool || !this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar()) {
       showMouse();
       return;
     }
+    // A cast is already in the water → the bracket would fight the float; use the plain
+    // cursor (a click reels in).
+    if (fishing && this.fishing) { showMouse(); return; }
 
     // The held tool's icon, always shown (dimmed when the spot is invalid).
     if (tilling) icon.setTexture('tools_and_meterials', 'hoe');
     else if (watering) icon.setTexture('tools_and_meterials', 'watering-can');
     else if (chopping) icon.setTexture('tools_and_meterials', 'axe');
     else if (mining) icon.setTexture('pickaxe');
+    else if (fishing) icon.setTexture('fishing-rod');
     else if (this.activeSeed) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
 
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
@@ -2706,6 +2711,7 @@ export class GameScene extends Phaser.Scene {
     let valid = false;
     if (chopping) valid = !!treeKey;
     else if (mining) valid = !!stoneKey;
+    else if (fishing) valid = this.isWaterAt(wp.x, wp.y); // cast onto open water
     else if (tile) {
       const key = `${tile.x},${tile.y}`;
       if (tilling) {
@@ -2739,6 +2745,10 @@ export class GameScene extends Phaser.Scene {
     if (tile) {
       const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
       if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
+    } else if (fishing) {
+      // Over water there's no island tile — snap to the shared 16px grid cell anyway.
+      const t = this.islandLayer.worldToTileXY(wp.x, wp.y);
+      if (t) { const w = this.islandLayer.tileToWorldXY(t.x, t.y); if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; } }
     }
     // Axe over a tree: snap the bracket to the tree's BASE (trunk tile), not the
     // canopy tile the cursor happens to be over, so it clearly frames the target.
