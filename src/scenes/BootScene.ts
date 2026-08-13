@@ -213,6 +213,7 @@ export class BootScene extends Phaser.Scene {
     // Fishing: rod segment + float bobber (16×16 each) + the 2-frame fish-bite (nibble) sheet.
     this.load.image('fishing-rod', 'uploaded/fishing-rod.png');
     this.load.image('fishing-float', 'uploaded/fishing-rode-float.png');
+    this.load.image('sea-bream', 'uploaded/sea-bream.png'); // the caught fish (32×32) shown on the catch
     this.load.spritesheet('fish-bite', 'uploaded/fish-bite-spritesheet.png', { frameWidth: 16, frameHeight: 16 });
     // Tool-WHEEL icons: bordered 16×16 art (item-*-with-border), one per wheel tool. Used only
     // in the contextual wheel (not the held-tool bracket / HUD indicator). fishing-rod is loaded

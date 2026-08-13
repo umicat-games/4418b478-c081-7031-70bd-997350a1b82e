@@ -2014,11 +2014,13 @@ export class GameScene extends Phaser.Scene {
     if (this.fishing !== F) return; // superseded (e.g. re-cast)
     this.fishing = null;
     if (F.caught) {
-      F.fish?.destroy(); // reeled in
-      const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
-      const icon = this.add.image(wp.x, wp.y, 'fish', 0).setTintFill(0x7c8f9d).setDepth(1e6).setScale(0);
-      this.tweens.add({ targets: icon, scale: 2, duration: 220, ease: 'Back.easeOut', onComplete: () =>
-        this.tweens.add({ targets: icon, y: wp.y - 20, alpha: 0, scale: 1.4, duration: 320, delay: 250, ease: 'Quad.easeIn', onComplete: () => icon.destroy() }) });
+      // The caught sea-bream lands at the shore (the rod tip / reeled-in spot), lingers a beat,
+      // THEN flies to the pointer and vanishes — same collect motion + SFX as a harvested crop.
+      const sx = F.fish?.active ? F.fish.x : F.float.x, sy = F.fish?.active ? F.fish.y : F.float.y;
+      F.fish?.destroy(); // the little biter sprite → replaced by the caught fish
+      const bream = this.add.image(sx, sy, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
+      this.tweens.add({ targets: bream, scale: 1, duration: 220, ease: 'Back.easeOut',
+        onComplete: () => this.time.delayedCall(650, () => { if (bream.active) this.flyItemToCollector(bream, false); }) }); // fly to the cursor (player caught)
       this.showHarvestToast({ id: 'fish', iconKey: 'fish', iconFrame: 0, count: 1, stackable: true });
       this.catoReact('love');
     } else if (F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
