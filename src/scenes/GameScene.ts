@@ -2851,7 +2851,25 @@ export class GameScene extends Phaser.Scene {
         return;
       }
     }
-    this.setHover(false); // over water / off the island → no bracket; just the normal triangle cursor
+    // Over open WATER (no island tile) → still show the tile bracket, snapped to the shared 16px
+    // grid cell, so the highlight is unified with land (empty-handed).
+    if (this.isWaterAt(wp.x, wp.y)) {
+      const t = this.islandLayer?.worldToTileXY(wp.x, wp.y);
+      const w = t ? this.islandLayer!.tileToWorldXY(t.x, t.y) : null;
+      if (w) {
+        const cxw = w.x + TILE / 2, cyw = w.y + TILE / 2, z = cam.zoom;
+        const tileFrame = (TILE + 2 * GameScene.HOVER_PAD_WORLD) * z;
+        this.hoverModel = {
+          visible: true, onObject: true, z,
+          x: (cxw - cam.worldView.x) * z, y: (cyw - cam.worldView.y) * z,
+          w: tileFrame, h: tileFrame,
+          name: '', nameX: 0, nameY: 0,
+        };
+        this.registry.set('hover', this.hoverModel);
+        return;
+      }
+    }
+    this.setHover(false); // off the map entirely → no bracket; just the normal triangle cursor
   }
 
   private setHover(visible: boolean): void {
