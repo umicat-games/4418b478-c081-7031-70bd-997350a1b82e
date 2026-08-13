@@ -2698,7 +2698,7 @@ export class GameScene extends Phaser.Scene {
     else if (watering) icon.setTexture('tools_and_meterials', 'watering-can');
     else if (chopping) icon.setTexture('tools_and_meterials', 'axe');
     else if (mining) icon.setTexture('pickaxe');
-    else if (fishing) icon.setTexture('fishing-rod');
+    else if (fishing) icon.setTexture('wheel-fishing-rod'); // the wheel's bordered rod icon
     else if (this.activeSeed) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
 
     const wp = this.cameras.main.getWorldPoint(this.vcursor.x, this.vcursor.y);
