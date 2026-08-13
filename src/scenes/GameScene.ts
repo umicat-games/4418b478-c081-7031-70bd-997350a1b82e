@@ -1959,6 +1959,22 @@ export class GameScene extends Phaser.Scene {
     F.float.setPosition(F.fx, F.fy);
     F.rod?.setRotation(0);
     this.waterSplash(F.fx, F.fy + 2); // plop where the float hits the water
+    // CATO lures the NEAREST fish (no range cap — he casts at the coast, the fish swims over), starting
+    // it a short swim from the float so the approach reads naturally regardless of how far it really was.
+    if (F.byCato) {
+      let nf: Phaser.GameObjects.Sprite | undefined, nb = Infinity;
+      for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < nb) { nb = d; nf = f; } }
+      if (nf) {
+        this.fish = this.fish.filter((f) => f !== nf);
+        const dx = nf.x - F.fx, dy = nf.y - F.fy, dd = Math.hypot(dx, dy) || 1, sd = Math.min(dd, 46);
+        const fox = F.fx + (dx / dd) * sd, foy = F.fy + (dy / dd) * sd;
+        nf.setPosition(fox, foy).setDepth(1e5 + 1).setFlipY(true).play('fish-bite');
+        F.fish = nf; F.fishOrigX = fox; F.fishOrigY = foy;
+      }
+      F.phase = nf ? 'approach' : 'wait';
+      F.t = 0; F.bobT = 0;
+      return;
+    }
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = F.fx, foy = F.fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
     if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).setFlipY(true).play('fish-bite'); F.fish = fish; F.fishOrigX = fox; F.fishOrigY = foy; } // flipY → head (bottom of the sheet) faces UP at the float
@@ -6555,27 +6571,25 @@ export class GameScene extends Phaser.Scene {
     this.startCatoFishing(fx, fy, dir);
   }
 
-  /** Find a castable fishing spot near Cato: a WATER cell that (a) sits within bite range of a
-   *  decorative fish and (b) has a walkable SHORE neighbour to stand on. Nearest to Cato wins. */
+  /** Find a castable fishing spot near Cato: the NEAREST open-water cell that has a walkable SHORE
+   *  neighbour to stand on. The fish don't need to be right there — Cato casts at the coast and the
+   *  nearest fish is lured over (see landCast's byCato branch). Only requires that fish EXIST. */
   private findFishingSpot(): { cx: number; cy: number } | null {
     const layer = this.islandLayer; if (!layer || !this.child) return null;
-    const leash = this.wanderLeashRadius() * 1.15;
+    if (this.fish.length === 0) return null; // genuinely no fish anywhere to catch
+    const o = layer.worldToTileXY(this.child.x, this.child.y); if (!o) return null;
+    const ocx = Math.floor(o.x), ocy = Math.floor(o.y);
     let best: { cx: number; cy: number } | null = null, bestD = Infinity;
-    for (const f of this.fish) {
-      if (Math.hypot(f.x - this.child.x, f.y - this.child.y) > leash) continue;
-      const ft = layer.worldToTileXY(f.x, f.y); if (!ft) continue;
-      const fcx = Math.floor(ft.x), fcy = Math.floor(ft.y);
-      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-        const cx = fcx + dx, cy = fcy + dy;
-        const w = layer.tileToWorldXY(cx, cy); if (!w) continue;
-        const wx = w.x + TILE / 2, wy = w.y + TILE / 2;
-        if (!this.isWaterAt(wx, wy)) continue;                                        // float must land in water
-        if (Math.hypot(wx - f.x, wy - f.y) > GameScene.FISH_BITE_RANGE - 4) continue; // a fish within reach of the drop
-        const hasShore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ax, ay]) => this.isWalkableCell(cx + ax, cy + ay));
-        if (!hasShore) continue;                                                      // somewhere to stand
-        const d = Math.hypot(wx - this.child.x, wy - this.child.y);
-        if (d < bestD) { bestD = d; best = { cx, cy }; }
-      }
+    const R = 12;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const cx = ocx + dx, cy = ocy + dy;
+      const w = layer.tileToWorldXY(cx, cy); if (!w) continue;
+      const wx = w.x + TILE / 2, wy = w.y + TILE / 2;
+      if (!this.isWaterAt(wx, wy)) continue;                                    // float must land in water
+      const hasShore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ax, ay]) => this.isWalkableCell(cx + ax, cy + ay));
+      if (!hasShore) continue;                                                  // a shore to stand on
+      const d = Math.hypot(wx - this.child.x, wy - this.child.y);
+      if (d < bestD) { bestD = d; best = { cx, cy }; }
     }
     return best;
   }
