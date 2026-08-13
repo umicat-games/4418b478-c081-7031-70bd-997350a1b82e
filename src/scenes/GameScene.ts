@@ -218,13 +218,14 @@ interface MailEntry {
 /** In-progress fishing cast (rod + float + line, and a fish that swims over to bite). */
 interface FishingState {
   fx: number; fy: number; rodX: number; rodY: number;
-  rod: Phaser.GameObjects.Sprite; float: Phaser.GameObjects.Sprite; line: Phaser.GameObjects.Graphics;
+  rod?: Phaser.GameObjects.Sprite; float: Phaser.GameObjects.Sprite; line: Phaser.GameObjects.Graphics;
   attachX: number; attachY: number; // where the LINE meets the rod (its tip toward the float) at rest
   tipDX: number; tipDY: number;     // tip offset from the rod centre → live tip = centre + rotate(off, rod.rotation)
   floatRight: boolean;              // is the float to the right of the rod (→ reel-tilt direction)
-  bobT: number; phase: 'wait' | 'approach' | 'nibble' | 'hooked' | 'reeling'; t: number; caught?: boolean;
+  bobT: number; phase: 'casting' | 'wait' | 'approach' | 'nibble' | 'hooked' | 'reeling'; t: number; caught?: boolean;
   fish?: Phaser.GameObjects.Sprite; fishOrigX: number; fishOrigY: number; nibbles: number;
   exclaim?: Phaser.GameObjects.Sprite; wobble: number;
+  byCato?: boolean; catoDir?: FaceDir; // CATO fishing: no god-hand rod sprite — his BODY plays the cast/reel anim, the line ties to his rod tip (per-direction offset), and he auto-catches (no player click)
 }
 
 // --- House building (Sprout Lands premium "Building parts") ---
@@ -907,10 +908,11 @@ export class GameScene extends Phaser.Scene {
   private catoTask: {
     // Single-strike (one hit per cell → advance): till/plant/water/harvest/bush/forage.
     // Multi-strike (keep hitting the SAME target until it's gone): chop/fruit/mine.
-    type: 'till' | 'plant' | 'water' | 'harvest' | 'chop' | 'fruit' | 'mine' | 'bush' | 'forage';
+    type: 'till' | 'plant' | 'water' | 'harvest' | 'chop' | 'fruit' | 'mine' | 'bush' | 'forage' | 'fish';
     queue: Array<{ cx: number; cy: number }>;
     crop: string; // flavour label ('corn', 'crops', 'trees', 'stones', …)
     plantName?: CropName; // for a plant task: what to sow
+    casted?: boolean; // fish task: the cast has been kicked off (wait for the fishing episode to resolve)
     cooldown: number;
     // Multi-strike safety: hits landed on the CURRENT target (reset when it drops).
     // chop/mine targets self-invalidate (felled / broken) via taskCellValid; this just
@@ -1215,6 +1217,12 @@ export class GameScene extends Phaser.Scene {
                 },
               },
               {
+                name: 'go_fishing',
+                description:
+                  "Go fishing at the water's edge. You walk to the nearest shore beside a fish, cast the line, wait for a bite, and reel one in — the fish goes into the friend's backpack. Use when the friend asks you to fish / catch a fish / go fishing. If no fish is close enough to a shore right now you'll say so. No arguments.",
+                args: {},
+              },
+              {
                 name: 'set_behavior',
                 description:
                   'Change your STANDING autonomous behaviour — whether you tend the farm ON YOUR OWN (without being asked each time). Use when the friend tells you to (or NOT to) do chores automatically. Examples: "don\'t harvest on your own" → harvest:false; "you can water the crops yourself again" → water:true; "stop doing things on your own" / "just relax and keep me company" → harvest:false, water:false; "help me farm automatically" / "take care of the crops for me" → harvest:true, water:true. Only include the field(s) the friend actually changed; omit the rest. This sets a lasting preference — it is NOT a one-time chore (still use harvest_crops / water_crops for a one-off "go harvest now").',
@@ -1259,6 +1267,7 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-N', () => { if (canAct()) this.startMineTask({}); });    // N = mine big stones
         this.input.keyboard?.on('keydown-J', () => { if (canAct()) this.startBushTask({}); });    // J = pick berry bushes
         this.input.keyboard?.on('keydown-K', () => { if (canAct()) this.startForageTask({}); });  // K = gather foragables
+        this.input.keyboard?.on('keydown-Z', () => { if (canAct()) this.startFishingTask({}); });  // Z = go fishing
         this.input.keyboard?.on('keydown-X', () => this.debugReplayIntro());                       // X = replay the intro dialogue
         // M = open the dialog with a long multi-page reply to exercise the RPG
         // typewriter + pagination + "more" icon without the AI.
@@ -1849,6 +1858,23 @@ export class GameScene extends Phaser.Scene {
   private static readonly FISH_NIBBLE_MS = 360;    // per nibble
   private static readonly FISH_CATCH_MS = 1700;    // exclamation window to click before it escapes
   private static readonly FISH_WAIT_MS = 6000;     // empty cast (no fish near) auto-reels after this
+  private static readonly CATO_REEL_REACT_MS = 480; // Cato "notices" the bite + reels this soon after hooking (well before the escape window)
+  // Cato's rod TIP offset from his position (feet-origin), per facing direction — where the line
+  // ties on. The rod is baked into his body sheet; these are the resting-pose tip. TUNABLE.
+  private static readonly CATO_ROD_TIP: Record<FaceDir, { x: number; y: number }> = {
+    right: { x: 12, y: -23 }, left: { x: -12, y: -23 }, up: { x: 1, y: -27 }, down: { x: 1, y: -25 },
+  };
+  /** Cato's live rod-tip world point for the line to tie to (his position + the per-direction offset). */
+  private catoRodTip(dir: FaceDir): { x: number; y: number } {
+    const o = GameScene.CATO_ROD_TIP[dir] ?? GameScene.CATO_ROD_TIP.down;
+    return { x: (this.child?.x ?? 0) + o.x, y: (this.child?.y ?? 0) + o.y };
+  }
+  /** Where the line meets the rod: Cato's rod tip (byCato) or the god-hand rod's live-rotation tip. */
+  private rodTipOf(F: FishingState): { x: number; y: number } {
+    if (F.byCato) return this.catoRodTip(F.catoDir ?? 'down');
+    const cos = Math.cos(F.rod!.rotation), sin = Math.sin(F.rod!.rotation);
+    return { x: F.rodX + F.tipDX * cos - F.tipDY * sin, y: F.rodY + F.tipDX * sin + F.tipDY * cos };
+  }
 
   /** Cast onto open water: drop the float, hold the rod up-right of it (line between), and — if a
    *  fish sits within a tile — set that fish approaching. */
@@ -1896,12 +1922,42 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** CATO casts at a water spot: his BODY plays the cast anim, the float flies from his rod tip out to
+   *  the spot, then the normal fish approach/nibble/hook flow runs (he auto-catches — see updateFishing).
+   *  No god-hand rod sprite: `byCato` makes the line tie to his rod tip + skips the rod tweens. */
+  private startCatoFishing(fx: number, fy: number, dir: FaceDir): void {
+    if (this.fishing) this.cancelFishing(false);
+    this.child?.setFlipX(false).play(`cato-fish-cast-${dir}`, true);
+    const float = this.add.sprite(fx, fy, 'fishing-float').setDepth(1e5 + 1).setVisible(false);
+    const line = this.add.graphics().setDepth(1e5);
+    const F: FishingState = {
+      byCato: true, catoDir: dir, fx, fy, rodX: 0, rodY: 0, tipDX: 0, tipDY: 0, attachX: 0, attachY: 0,
+      floatRight: fx >= (this.child?.x ?? fx), float, line, bobT: 0, phase: 'casting', t: 0,
+      fishOrigX: fx, fishOrigY: fy, nibbles: 0, wobble: 0,
+    };
+    this.fishing = F;
+    playSfx(this);
+    // The float arcs out from his rod tip AFTER the wind-up part of the cast anim plays.
+    this.time.delayedCall(220, () => {
+      if (this.fishing !== F) return; // superseded / cancelled
+      const t0 = this.catoRodTip(dir);
+      F.float.setPosition(t0.x, t0.y).setVisible(true);
+      const arc = { p: 0 };
+      this.tweens.add({
+        targets: arc, p: 1, duration: 360, ease: 'Quad.easeOut',
+        onUpdate: () => { if (F.float.active) F.float.setPosition(Phaser.Math.Linear(t0.x, fx, arc.p), Phaser.Math.Linear(t0.y, fy, arc.p) - Math.sin(Math.PI * arc.p) * 14); },
+        onComplete: () => { if (this.fishing === F) this.landCast(); },
+      });
+      playSfx(this);
+    });
+  }
+
   /** The float has landed at the target: settle the rod, look for a fish within range, and start the
    *  normal bob/approach flow. */
   private landCast(): void {
     const F = this.fishing; if (!F || F.phase !== 'casting') return;
     F.float.setPosition(F.fx, F.fy);
-    F.rod.setRotation(0);
+    F.rod?.setRotation(0);
     this.waterSplash(F.fx, F.fy + 2); // plop where the float hits the water
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = F.fx, foy = F.fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
@@ -1952,6 +2008,8 @@ export class GameScene extends Phaser.Scene {
     } else if (F.phase === 'hooked') {
       F.fish?.setPosition(F.fx, floatY + 8); // stuck to the float
       F.exclaim?.setPosition(F.fx, (F.fish?.y ?? F.fy) - 16);
+      // CATO auto-catches: he "notices" the bite and reels a beat after hooking (the player has to click).
+      if (F.byCato) { if (F.t >= GameScene.CATO_REEL_REACT_MS) this.handleFishingClick(); return; }
       if (F.t >= GameScene.FISH_CATCH_MS) this.cancelFishing(true); // got away
     }
   }
@@ -1959,9 +2017,10 @@ export class GameScene extends Phaser.Scene {
   /** Whitish line from the rod's live tip to the float (its live position), a gentle sag + wobble. */
   private drawFishingLine(F: FishingState): void {
     const g = F.line; g.clear();
-    // Rod tip from its LIVE rotation (so the line stays glued to the tip as the rod tilts/casts).
-    const cos = Math.cos(F.rod.rotation), sin = Math.sin(F.rod.rotation);
-    const rx = F.rodX + F.tipDX * cos - F.tipDY * sin, ry = F.rodY + F.tipDX * sin + F.tipDY * cos;
+    // Rod tip: Cato's per-direction tip (byCato) or the god-hand rod's LIVE-rotation tip (so the
+    // line stays glued to the tip as the rod tilts/casts).
+    const tip = this.rodTipOf(F);
+    const rx = tip.x, ry = tip.y;
     const fxp = F.float.x, fyp = F.float.y;
     const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 2.5 + F.wobble * 3;
     g.lineStyle(1, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
@@ -1988,11 +2047,18 @@ export class GameScene extends Phaser.Scene {
     F.phase = 'reeling';
     if (F.exclaim) { this.tweens.killTweensOf(F.exclaim); F.exclaim.destroy(); F.exclaim = undefined; }
     F.fish?.anims.stop();
-    // Rod tips back; compute where its tip ENDS so the float can reel home to it.
-    const back = F.floatRight ? -Math.PI / 2 : Math.PI / 2;
-    const bc = Math.cos(back), bs = Math.sin(back);
-    const tipX = F.rodX + F.tipDX * bc - F.tipDY * bs, tipY = F.rodY + F.tipDX * bs + F.tipDY * bc;
-    this.tweens.add({ targets: F.rod, rotation: back, duration: 190, ease: 'Quad.easeOut' });
+    // Swing the rod BACK, and compute where the tip ENDS so the float can reel home to it. CATO plays
+    // his swing-back BODY anim (his rod tip stays put); the god-hand rod ROTATES back.
+    let tipX: number, tipY: number;
+    if (F.byCato) {
+      this.child?.setFlipX(false).play(`cato-fish-reel-${F.catoDir ?? 'down'}`, true);
+      const tip = this.catoRodTip(F.catoDir ?? 'down'); tipX = tip.x; tipY = tip.y;
+    } else {
+      const back = F.floatRight ? -Math.PI / 2 : Math.PI / 2;
+      const bc = Math.cos(back), bs = Math.sin(back);
+      tipX = F.rodX + F.tipDX * bc - F.tipDY * bs; tipY = F.rodY + F.tipDX * bs + F.tipDY * bc;
+      this.tweens.add({ targets: F.rod, rotation: back, duration: 190, ease: 'Quad.easeOut' });
+    }
     // Reel the float (+ the hooked fish) BACK to the tip along a little arc.
     const sfx = F.float.x, sfy = F.float.y, fish = F.caught ? F.fish : undefined, fsx = fish?.x ?? tipX, fsy = fish?.y ?? tipY;
     this.waterSplash(sfx, sfy + 2); // splash as the float is yanked out of the water
@@ -2027,7 +2093,7 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => {
           this.tweens.add({
             targets: bream, y: riseY - 6, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
-            onComplete: () => this.time.delayedCall(120, () => { if (bream.active) this.flyItemToCollector(bream, false); }), // fly to the cursor (player caught)
+            onComplete: () => this.time.delayedCall(120, () => { if (bream.active) this.flyItemToCollector(bream, F.byCato ?? false); }), // fly to Cato (he caught it) or the cursor (player)
           });
         },
       });
@@ -2049,8 +2115,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tearDownFishing(F: FishingState): void {
-    this.tweens.killTweensOf([F.rod, F.float, F.line, F as unknown as object]);
-    F.rod.destroy(); F.float.destroy(); F.line.destroy(); F.exclaim?.destroy();
+    const targets = [F.float, F.line, F as unknown as object];
+    if (F.rod) targets.push(F.rod);
+    this.tweens.killTweensOf(targets);
+    F.rod?.destroy(); F.float.destroy(); F.line.destroy(); F.exclaim?.destroy();
   }
 
   // ── Farming: hoe → till grass ─────────────────────────────────────────
@@ -6144,6 +6212,7 @@ export class GameScene extends Phaser.Scene {
       else if (a.name === 'mine_stones') { this.startMineTask(a.args); acted = true; }
       else if (a.name === 'harvest_bushes') { this.startBushTask(a.args); acted = true; }
       else if (a.name === 'forage') { this.startForageTask(a.args); acted = true; }
+      else if (a.name === 'go_fishing') { this.startFishingTask(a.args); acted = true; }
       else if (a.name === 'set_behavior') { this.setAutonomy(a.args); } // standing pref, not a walk-off task
     }
     // Let the friend read Cato's reply, then close the chat so he walks off to
@@ -6474,6 +6543,52 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = true;
   }
 
+  /** Cato arrived at the shore facing the water: start ONE cast, then hold while the fishing episode
+   *  plays out (updateFishing drives the float/fish + his auto-catch). When it clears (caught / gave
+   *  up), the task is done. */
+  private updateCatoFishingTask(task: NonNullable<typeof this.catoTask>, dir: FaceDir, cell: { cx: number; cy: number }): void {
+    if (this.fishing) return; // a cast is live → keep standing (the fishing machine owns Cato's rod anim)
+    if (task.casted) { this.finishCatoTask(); return; } // the episode ended → done
+    task.casted = true;
+    const w = this.islandLayer?.tileToWorldXY(cell.cx, cell.cy);
+    const fx = (w?.x ?? this.child!.x) + TILE / 2, fy = (w?.y ?? this.child!.y) + TILE / 2;
+    this.startCatoFishing(fx, fy, dir);
+  }
+
+  /** Find a castable fishing spot near Cato: a WATER cell that (a) sits within bite range of a
+   *  decorative fish and (b) has a walkable SHORE neighbour to stand on. Nearest to Cato wins. */
+  private findFishingSpot(): { cx: number; cy: number } | null {
+    const layer = this.islandLayer; if (!layer || !this.child) return null;
+    const leash = this.wanderLeashRadius() * 1.15;
+    let best: { cx: number; cy: number } | null = null, bestD = Infinity;
+    for (const f of this.fish) {
+      if (Math.hypot(f.x - this.child.x, f.y - this.child.y) > leash) continue;
+      const ft = layer.worldToTileXY(f.x, f.y); if (!ft) continue;
+      const fcx = Math.floor(ft.x), fcy = Math.floor(ft.y);
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const cx = fcx + dx, cy = fcy + dy;
+        const w = layer.tileToWorldXY(cx, cy); if (!w) continue;
+        const wx = w.x + TILE / 2, wy = w.y + TILE / 2;
+        if (!this.isWaterAt(wx, wy)) continue;                                        // float must land in water
+        if (Math.hypot(wx - f.x, wy - f.y) > GameScene.FISH_BITE_RANGE - 4) continue; // a fish within reach of the drop
+        const hasShore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ax, ay]) => this.isWalkableCell(cx + ax, cy + ay));
+        if (!hasShore) continue;                                                      // somewhere to stand
+        const d = Math.hypot(wx - this.child.x, wy - this.child.y);
+        if (d < bestD) { bestD = d; best = { cx, cy }; }
+      }
+    }
+    return best;
+  }
+
+  /** "Go fishing": Cato walks to the nearest reachable shore spot by a fish, casts, and reels one in. */
+  private startFishingTask(_rawArgs: unknown): void {
+    if (!this.islandLayer || !this.child) return;
+    const spot = this.findFishingSpot();
+    if (!spot) { this.setImmediateDialog('Cato peers at the water… no fish close enough to a shore to cast for right now.'); return; }
+    this.catoTask = { type: 'fish', queue: [spot], crop: 'fish', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
+    this.cameraFollow = true;
+  }
+
   /** Does a foragable of `type` fall under the friend's requested `kind`? Matches the
    *  kind keyword (singular-ised) against the type's id + label — "mushroom(s)" → red &
    *  purple mushroom, "flower(s)" → wild-flower & sunflower, "grass"/"weed(s)" → grass,
@@ -6674,6 +6789,9 @@ export class GameScene extends Phaser.Scene {
     // through the swing (commitCatoTill / delayed plant).
     body.setVelocity(0, 0);
     this.faceDir = s.dir;
+    // FISHING is its own long episode (cast → wait → nibble → hook → reel), not a per-cell strike:
+    // hand off to the fishing handler, which starts the cast once + waits for it to resolve.
+    if (task.type === 'fish') { this.updateCatoFishingTask(task, s.dir, next); return; }
     // Pick Cato's body animation for this task: water can, axe (chop/fruit — he has a
     // real axe-swing sheet), else the generic attack (hoe) swing for till/plant/harvest/
     // mine/bush/forage.
@@ -6718,11 +6836,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Is (cx,cy) still a valid target for a task of this type? */
   private taskCellValid(
-    type: 'till' | 'plant' | 'water' | 'harvest' | 'chop' | 'fruit' | 'mine' | 'bush' | 'forage',
+    type: 'till' | 'plant' | 'water' | 'harvest' | 'chop' | 'fruit' | 'mine' | 'bush' | 'forage' | 'fish',
     cx: number,
     cy: number,
   ): boolean {
     const key = `${cx},${cy}`;
+    if (type === 'fish') { const w = this.islandLayer?.tileToWorldXY(cx, cy); return !!w && this.isWaterAt(w.x + TILE / 2, w.y + TILE / 2); } // still open water
     if (type === 'till') return !this.tilledCells.has(key) && this.isFarmable(cx, cy);
     if (type === 'plant') return this.tilledCells.has(key) && !this.crops.has(key);
     if (type === 'chop') return this.trees.has(key); // any tree — chop until it's felled
@@ -6939,6 +7058,8 @@ export class GameScene extends Phaser.Scene {
       this.cato?.note("You picked the ripe berry bushes; the berries are in the friend's backpack now.");
     } else if (task?.type === 'forage') {
       this.cato?.note("You gathered the wild mushrooms, flowers and other growth; it's in the friend's backpack now.");
+    } else if (task?.type === 'fish') {
+      this.cato?.note("You went fishing and reeled a fish in; it's in the friend's backpack now.");
     } else {
       this.cato?.note(`You finished tilling a plot of soil, ready for the friend to plant ${task?.crop ?? 'crops'}.`);
     }
@@ -7592,6 +7713,7 @@ export class GameScene extends Phaser.Scene {
         bigStones: this.bigStones.size, // big rocks you can mine (mine_stones)
         ripeBushes, // berry bushes ready to pick (harvest_bushes)
         matureForageables, // wild mushrooms/flowers/grass/stones grown enough to gather (forage)
+        fishInWater: this.fish.length, // fish swimming in the surrounding water Cato can try to catch (go_fishing)
       },
     };
   }

@@ -215,6 +215,10 @@ export class BootScene extends Phaser.Scene {
     this.load.image('fishing-float', 'uploaded/fishing-rode-float.png');
     this.load.image('sea-bream', 'uploaded/sea-bream.png'); // the caught fish (32×32) shown on the catch
     this.load.spritesheet('fish-bite', 'uploaded/fish-bite-spritesheet.png', { frameWidth: 16, frameHeight: 16 });
+    // Cato's own fishing body anims (48×48, 8 cols × 4 rows = right/left/up/down): cast (throw out)
+    // + swing-back (reel in). Same frame size as his character sheet so his foot-origin carries over.
+    this.load.spritesheet('cato-fish-cast', 'uploaded/cato-fishing-all-directions.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('cato-fish-reel', 'uploaded/cato-fishing-swing-back-fishing-rod.png', { frameWidth: 48, frameHeight: 48 });
     // Tool-WHEEL icons: bordered 16×16 art (item-*-with-border), one per wheel tool. Used only
     // in the contextual wheel (not the held-tool bracket / HUD indicator). fishing-rod is loaded
     // for the reserved 6-o'clock slot (no fishing mechanic yet).
@@ -293,6 +297,14 @@ export class BootScene extends Phaser.Scene {
     // Fish nibbling the float (2 frames, loops).
     if (!this.anims.exists('fish-bite')) {
       this.anims.create({ key: 'fish-bite', frames: this.anims.generateFrameNumbers('fish-bite', { start: 0, end: 1 }), frameRate: 6, repeat: -1 });
+    }
+    // Cato casting / reeling the rod — rows: right(0) / left(1) / up(2, back view) / down(3, front),
+    // 8 frames each, played ONCE (holds the last frame = the fishing pose / rod-back pose).
+    if (!this.anims.exists('cato-fish-cast-right')) {
+      ['right', 'left', 'up', 'down'].forEach((d, row) => {
+        this.anims.create({ key: `cato-fish-cast-${d}`, frames: this.anims.generateFrameNumbers('cato-fish-cast', { start: row * 8, end: row * 8 + 7 }), frameRate: 14, repeat: 0 });
+        this.anims.create({ key: `cato-fish-reel-${d}`, frames: this.anims.generateFrameNumbers('cato-fish-reel', { start: row * 8, end: row * 8 + 7 }), frameRate: 16, repeat: 0 });
+      });
     }
     // God-hand watering-can pour (tools.png row 0-1: can upright→tilt→pour). The
     // player's watering analogue of the hoe swing (`hoe-swing`).
