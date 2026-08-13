@@ -913,6 +913,7 @@ export class GameScene extends Phaser.Scene {
     crop: string; // flavour label ('corn', 'crops', 'trees', 'stones', …)
     plantName?: CropName; // for a plant task: what to sow
     casted?: boolean; // fish task: the cast has been kicked off (wait for the fishing episode to resolve)
+    fishFloat?: { x: number; y: number }; // fish task: where the float is cast (right by the targeted real fish)
     cooldown: number;
     // Multi-strike safety: hits landed on the CURRENT target (reset when it drops).
     // chop/mine targets self-invalidate (felled / broken) via taskCellValid; this just
@@ -1959,22 +1960,8 @@ export class GameScene extends Phaser.Scene {
     F.float.setPosition(F.fx, F.fy);
     F.rod?.setRotation(0);
     this.waterSplash(F.fx, F.fy + 2); // plop where the float hits the water
-    // CATO lures the NEAREST fish (no range cap — he casts at the coast, the fish swims over), starting
-    // it a short swim from the float so the approach reads naturally regardless of how far it really was.
-    if (F.byCato) {
-      let nf: Phaser.GameObjects.Sprite | undefined, nb = Infinity;
-      for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < nb) { nb = d; nf = f; } }
-      if (nf) {
-        this.fish = this.fish.filter((f) => f !== nf);
-        const dx = nf.x - F.fx, dy = nf.y - F.fy, dd = Math.hypot(dx, dy) || 1, sd = Math.min(dd, 46);
-        const fox = F.fx + (dx / dd) * sd, foy = F.fy + (dy / dd) * sd;
-        nf.setPosition(fox, foy).setDepth(1e5 + 1).setFlipY(true).play('fish-bite');
-        F.fish = nf; F.fishOrigX = fox; F.fishOrigY = foy;
-      }
-      F.phase = nf ? 'approach' : 'wait';
-      F.t = 0; F.bobT = 0;
-      return;
-    }
+    // A REAL fish within range bites (player AND Cato — Cato was aimed right by one). No summoning: if
+    // nothing's near the float it's an empty cast that reels in after the wait.
     let fish: Phaser.GameObjects.Sprite | undefined, best = GameScene.FISH_BITE_RANGE, fox = F.fx, foy = F.fy;
     for (const f of this.fish) { const d = Math.hypot(f.x - F.fx, f.y - F.fy); if (d < best) { best = d; fish = f; fox = f.x; foy = f.y; } }
     if (fish) { this.fish = this.fish.filter((f) => f !== fish); fish.setDepth(1e5 + 1).setFlipY(true).play('fish-bite'); F.fish = fish; F.fishOrigX = fox; F.fishOrigY = foy; } // flipY → head (bottom of the sheet) faces UP at the float
@@ -6583,56 +6570,57 @@ export class GameScene extends Phaser.Scene {
     }
     if (task.casted) { this.finishCatoTask(); return; } // the episode ended → done
     task.casted = true;
-    // Cast the float a few tiles OUT into open water (in the facing direction) — not just the 1-tile
-    // shore cell, which lands at his feet and reads as "standing", not fishing.
-    const w = this.islandLayer?.tileToWorldXY(cell.cx, cell.cy);
-    let fx = (w?.x ?? this.child!.x) + TILE / 2, fy = (w?.y ?? this.child!.y) + TILE / 2;
-    const dv: Record<FaceDir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-    const [vx, vy] = dv[dir];
-    let found = false;
-    for (let step = 1; step <= 4; step++) {
-      const px = this.child!.x + vx * TILE * step, py = this.child!.y + vy * TILE * step;
-      if (this.isWaterAt(px, py)) { fx = px; fy = py; found = true; } // furthest still-water point within reach
-      else if (found) break; // stop at the first land past the water (don't cast onto the far shore)
+    // Cast the float where planFishing put it — right by the targeted REAL fish (no summoning).
+    const fl = task.fishFloat ?? { x: this.child!.x, y: this.child!.y - TILE * 2 };
+    this.startCatoFishing(fl.x, fl.y, dir);
+  }
+
+  /** Plan a REAL fishing trip: find a fish that has a walkable, REACHABLE shore within casting range,
+   *  where the float lands right by that fish. Cato walks to the shore, faces the fish, and casts — a
+   *  genuine fish is there (NO summoning). Tries fish nearest to Cato first. Null = no reachable fish. */
+  private planFishing():
+    | { stand: { x: number; y: number; dir: FaceDir }; path: Array<{ x: number; y: number }>; fishCell: { cx: number; cy: number }; float: { x: number; y: number } }
+    | null {
+    const layer = this.islandLayer; if (!layer || !this.child) return null;
+    const cur = layer.worldToTileXY(this.child.x, this.child.y); if (!cur) return null;
+    const scx = Math.floor(cur.x), scy = Math.floor(cur.y);
+    const toWorld = (cx: number, cy: number) => { const w = layer.tileToWorldXY(cx, cy)!; return { x: w.x + TILE / 2, y: w.y + TILE / 2 }; };
+    const CAST_TILES = 5; // how far out Cato can cast (shore → fish)
+    const byNear = [...this.fish].sort((a, b) => Math.hypot(a.x - this.child!.x, a.y - this.child!.y) - Math.hypot(b.x - this.child!.x, b.y - this.child!.y));
+    for (const f of byNear) {
+      const ft = layer.worldToTileXY(f.x, f.y); if (!ft) continue;
+      const fcx = Math.floor(ft.x), fcy = Math.floor(ft.y);
+      // Look in each cardinal direction FROM the fish for the nearest walkable shore (open water in
+      // between). That shore = where Cato stands; he faces back toward the fish.
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+        for (let s = 1; s <= CAST_TILES; s++) {
+          const cx = fcx + dx * s, cy = fcy + dy * s;
+          const w = layer.tileToWorldXY(cx, cy); if (!w) break;
+          if (this.isWaterAt(w.x + TILE / 2, w.y + TILE / 2)) continue; // still open water → keep stepping toward land
+          if (!this.isWalkableCell(cx, cy)) break;                      // hit land but it's a wall/blocked → this direction fails
+          const steps = this.findPath(scx, scy, cx, cy);
+          if (!steps) break;                                            // shore unreachable from Cato → try another fish/direction
+          const dir: FaceDir = dy > 0 ? 'up' : dy < 0 ? 'down' : dx > 0 ? 'left' : 'right'; // face back toward the fish
+          const st = toWorld(cx, cy);
+          // Float lands just SHORT of the fish (toward Cato) so it visibly swims the last bit to bite.
+          const ux = f.x - st.x, uy = f.y - st.y, ud = Math.hypot(ux, uy) || 1;
+          const float = { x: f.x - (ux / ud) * 20, y: f.y - (uy / ud) * 20 };
+          return { stand: { ...st, dir }, path: steps.map((p) => toWorld(p.cx, p.cy)), fishCell: { cx: fcx, cy: fcy }, float };
+        }
+      }
     }
-    this.startCatoFishing(fx, fy, dir);
+    return null;
   }
 
-  /** A castable coastal water cell (has a walkable SHORE neighbour) nearest to a world point, within
-   *  `R` tiles of it. Used both to find a shore by a FISH and to fall back to a shore by Cato. */
-  private coastalCellNear(wx: number, wy: number, R: number): { cx: number; cy: number } | null {
-    const layer = this.islandLayer; if (!layer) return null;
-    const o = layer.worldToTileXY(wx, wy); if (!o) return null;
-    const ocx = Math.floor(o.x), ocy = Math.floor(o.y);
-    let best: { cx: number; cy: number } | null = null, bestD = Infinity;
-    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
-      const cx = ocx + dx, cy = ocy + dy;
-      const w = layer.tileToWorldXY(cx, cy); if (!w) continue;
-      const cwx = w.x + TILE / 2, cwy = w.y + TILE / 2;
-      if (!this.isWaterAt(cwx, cwy)) continue;                                  // float must land in water
-      const hasShore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ax, ay]) => this.isWalkableCell(cx + ax, cy + ay));
-      if (!hasShore) continue;                                                  // a shore to stand on
-      const d = Math.hypot(cwx - wx, cwy - wy);
-      if (d < bestD) { bestD = d; best = { cx, cy }; }
-    }
-    return best;
-  }
-
-  /** Find a castable fishing spot = the NEAREST coast to Cato (always reachable — he's standing right
-   *  by it — so he never walks off to an unreachable far spot and gives up). The fish don't need to be
-   *  there: landCast's byCato branch LURES the nearest fish over. Null only when there are no fish. */
-  private findFishingSpot(): { cx: number; cy: number } | null {
-    if (!this.islandLayer || !this.child) return null;
-    if (this.fish.length === 0) return null; // genuinely no fish anywhere to catch
-    return this.coastalCellNear(this.child.x, this.child.y, 12);
-  }
-
-  /** "Go fishing": Cato walks to the nearest reachable shore spot by a fish, casts, and reels one in. */
+  /** "Go fishing": Cato walks to a reachable shore beside a real fish, casts right by it, and reels it in. */
   private startFishingTask(_rawArgs: unknown): void {
     if (!this.islandLayer || !this.child) return;
-    const spot = this.findFishingSpot();
-    if (!spot) { this.setImmediateDialog('Cato peers at the water… no fish close enough to a shore to cast for right now.'); return; }
-    this.catoTask = { type: 'fish', queue: [spot], crop: 'fish', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null };
+    const plan = this.planFishing();
+    if (!plan) { this.setImmediateDialog('Cato scans the water… there’s no fish near a shore he can reach to cast for right now.'); return; }
+    this.catoTask = {
+      type: 'fish', queue: [plan.fishCell], crop: 'fish', cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity,
+      stand: plan.stand, path: plan.path, fishFloat: plan.float, // pre-planned nav (skip planStand) + where to cast
+    };
     this.cameraFollow = true;
   }
 
@@ -6835,7 +6823,12 @@ export class GameScene extends Phaser.Scene {
       if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
       else {
         task.walkMs += delta;
-        if (task.walkMs > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
+        if (task.walkMs > CATO_STUCK_MS) {
+          // FISH task wedged mid-walk at a coastline (A* routed through a cell his foot-box catches on):
+          // don't give up — he's at the shore, so just cast from here (arrival → updateCatoFishingTask).
+          if (task.type === 'fish') { task.path = []; task.walkMs = 0; return; }
+          task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return;
+        }
       }
       this.walkCardinalToward(wp.x, wp.y, CATO_TILL_SPEED); // cardinal step to the next tile
       return;
