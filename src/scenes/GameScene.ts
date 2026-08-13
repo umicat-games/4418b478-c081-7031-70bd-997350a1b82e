@@ -2026,7 +2026,7 @@ export class GameScene extends Phaser.Scene {
         targets: bream, y: riseY, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut',
         onComplete: () => {
           this.tweens.add({
-            targets: bream, y: riseY - 6, duration: 170, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
+            targets: bream, y: riseY - 6, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
             onComplete: () => this.time.delayedCall(120, () => { if (bream.active) this.flyItemToCollector(bream, false); }), // fly to the cursor (player caught)
           });
         },
