@@ -2019,9 +2019,18 @@ export class GameScene extends Phaser.Scene {
       // THEN flies to the pointer and vanishes — same collect motion + SFX as a harvested crop.
       const sx = F.fish?.active ? F.fish.x : F.float.x, sy = F.fish?.active ? F.fish.y : F.float.y;
       F.fish?.destroy(); // the little biter sprite → replaced by the caught fish
-      const bream = this.add.image(sx, sy, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
-      this.tweens.add({ targets: bream, scale: 1, duration: 220, ease: 'Back.easeOut',
-        onComplete: () => this.time.delayedCall(650, () => { if (bream.active) this.flyItemToCollector(bream, false); }) }); // fly to the cursor (player caught)
+      const riseY = sy - 8; // it pops UP out of the water to here, then bobs around this line
+      const bream = this.add.image(sx, sy + 8, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0).setAlpha(0);
+      // 1) rise UP into view (scale + fade in), 2) bob up/down twice, 3) fly to the cursor.
+      this.tweens.add({
+        targets: bream, y: riseY, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: bream, y: riseY - 6, duration: 170, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
+            onComplete: () => this.time.delayedCall(120, () => { if (bream.active) this.flyItemToCollector(bream, false); }), // fly to the cursor (player caught)
+          });
+        },
+      });
       this.collect(itemFromId('fish', 1)); // bank it in the backpack (+ toast + save); notifies if the bag is full
       this.catoReact('love');
     } else if (F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
