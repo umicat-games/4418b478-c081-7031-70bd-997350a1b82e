@@ -423,6 +423,7 @@ function itemFromId(id: string, count: number): ItemStack {
   if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false, toolId: 'axe' };
   if (id === 'pickaxe') return { id, label: 'Pickaxe', iconKey: 'pickaxe', count: 1, stackable: false, toolId: 'pickaxe' };
   if (id === 'fishing-rod') return { id, label: 'Fishing rod', iconKey: 'wheel-fishing-rod', iconFrame: 0, count: 1, stackable: false, toolId: 'fishing-rod' };
+  if (id === 'fish') return { id, label: 'Sea bream', iconKey: 'sea-bream', count, stackable: true }; // caught fish (icon = sea-bream)
   if (id === 'stone') return makeStone(count);
   if (id === 'wall') return makePlaceable('wall', count);
   if (id === 'floor') return makePlaceable('floor', count);
@@ -2021,7 +2022,7 @@ export class GameScene extends Phaser.Scene {
       const bream = this.add.image(sx, sy, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
       this.tweens.add({ targets: bream, scale: 1, duration: 220, ease: 'Back.easeOut',
         onComplete: () => this.time.delayedCall(650, () => { if (bream.active) this.flyItemToCollector(bream, false); }) }); // fly to the cursor (player caught)
-      this.showHarvestToast({ id: 'fish', iconKey: 'fish', iconFrame: 0, count: 1, stackable: true });
+      this.collect(itemFromId('fish', 1)); // bank it in the backpack (+ toast + save); notifies if the bag is full
       this.catoReact('love');
     } else if (F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
     else F.fish?.destroy();
