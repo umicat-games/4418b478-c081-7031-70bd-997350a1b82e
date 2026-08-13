@@ -6583,8 +6583,16 @@ export class GameScene extends Phaser.Scene {
     }
     if (task.casted) { this.finishCatoTask(); return; } // the episode ended → done
     task.casted = true;
+    // Cast the float a few tiles OUT into open water (in the facing direction) — not just the 1-tile
+    // shore cell, which lands at his feet and reads as "standing", not fishing.
     const w = this.islandLayer?.tileToWorldXY(cell.cx, cell.cy);
-    const fx = (w?.x ?? this.child!.x) + TILE / 2, fy = (w?.y ?? this.child!.y) + TILE / 2;
+    let fx = (w?.x ?? this.child!.x) + TILE / 2, fy = (w?.y ?? this.child!.y) + TILE / 2;
+    const dv: Record<FaceDir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    const [vx, vy] = dv[dir];
+    for (let step = 2; step <= 3; step++) {
+      const px = this.child!.x + vx * TILE * step, py = this.child!.y + vy * TILE * step;
+      if (this.isWaterAt(px, py)) { fx = px; fy = py; } // furthest still-water point within reach
+    }
     this.startCatoFishing(fx, fy, dir);
   }
 
