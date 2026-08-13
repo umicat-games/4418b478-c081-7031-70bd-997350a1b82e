@@ -415,7 +415,7 @@ export class MenuScene extends Phaser.Scene {
       if (i === selected && it) bg.setTint(HOVER_TINT);
       if (!it) continue;
       if (this.textures.exists(it.iconKey)) {
-        const icon = this.add.image(sx + cell / 2, sy + cell / 2, it.iconKey, it.iconFrame);
+        const icon = this.add.image(sx + cell / 2, sy + cell / 2, it.iconKey, this.fitFrame(it.iconKey, it.iconFrame));
         icon.setScale((cell * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
       }
       // Count: white with a dark outline so it reads on the light-tan slot (plain white was too low-contrast).
@@ -429,6 +429,36 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuSlots', bounds);
     // Scroll bar just right of the grid, spanning the visible rows.
     this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + rows * (cell + gap) - gap, rows, totalRows);
+  }
+
+  /** Content-fit frame for an item icon. Many item images are drawn on a canvas BIGGER than the art
+   *  (transparent padding all round), so scaling by the full frame makes the icon look tiny in a slot.
+   *  This registers ONCE (cached on the texture) a tight sub-frame `<frame>__fit` = the opaque-pixel
+   *  bbox of `frame`, and returns its name — so the icon scales to the ART, not the padding. Works for
+   *  plain images AND atlas/sheet frames; every item icon flows through here, so ANY padded item image
+   *  (now or future) auto-fits with zero per-asset work. Falls back to the original frame if the
+   *  texture is unreadable (tainted) or fully transparent. */
+  private fitFrame(key: string, frame: number | string): number | string {
+    const tex = this.textures.get(key);
+    if (!tex) return frame;
+    const src = tex.get(frame ?? 0); // resolves to __BASE if the frame is missing (plain images)
+    const fitName = `${src.name}__fit`;
+    if (tex.has(fitName)) return fitName; // already computed for this frame
+    const img = tex.getSourceImage(src.sourceIndex) as CanvasImageSource & { width: number; height: number };
+    const fw = src.cutWidth, fh = src.cutHeight;
+    if (!img || fw <= 0 || fh <= 0) return frame;
+    const cnv = document.createElement('canvas'); cnv.width = img.width; cnv.height = img.height;
+    const ctx = cnv.getContext('2d'); if (!ctx) return frame;
+    ctx.drawImage(img, 0, 0);
+    let data: Uint8ClampedArray;
+    try { data = ctx.getImageData(src.cutX, src.cutY, fw, fh).data; } catch { return frame; } // tainted → leave as-is
+    let minX = fw, minY = fh, maxX = -1, maxY = -1;
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+      if (data[(y * fw + x) * 4 + 3]! > 8) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    }
+    if (maxX < minX) return frame; // fully transparent
+    tex.add(fitName, src.sourceIndex, src.cutX + minX, src.cutY + minY, maxX - minX + 1, maxY - minY + 1);
+    return fitName;
   }
 
   /** Vertical DASHED divider — a column of the `brown-dot` sprite (ui-sheet atlas) at screen-
@@ -459,7 +489,7 @@ export class MenuScene extends Phaser.Scene {
     c.add(name);
     // Image (centred, below the name) — POPS in (scale from small around its centre).
     if (this.textures.exists(it.iconKey)) {
-      const img = this.add.image(cx, yImg, it.iconKey, it.iconFrame);
+      const img = this.add.image(cx, yImg, it.iconKey, this.fitFrame(it.iconKey, it.iconFrame));
       const s = (0.18 * W) / Math.max(img.width, img.height);
       c.add(img);
       img.setScale(s * 0.2);
@@ -532,7 +562,7 @@ export class MenuScene extends Phaser.Scene {
       c.add(g);
       const iconCx = barX + bh * 0.7;
       if (this.textures.exists(ln.iconKey)) {
-        const icon = this.add.image(iconCx, yy, ln.iconKey, ln.iconFrame);
+        const icon = this.add.image(iconCx, yy, ln.iconKey, this.fitFrame(ln.iconKey, ln.iconFrame));
         icon.setScale((bh * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
         c.add(this.T(iconCx + bh * 0.24, yy + bh * 0.22, String(ln.count), Math.round(fs * 0.7), '#ffffff'));
       }
@@ -659,7 +689,7 @@ export class MenuScene extends Phaser.Scene {
       bar.fillStyle(sel ? 0xf3ead1 : 0xe7dcc2, 1); bar.fillRoundedRect(gx, ry, gw, rowH, 8);
       bar.lineStyle(sel ? 3 : 2, sel ? 0xb89a5e : 0xd2be95, 1); bar.strokeRoundedRect(gx, ry, gw, rowH, 8); c.add(bar);
       if (this.textures.exists(e.iconKey)) {
-        const icon = this.add.image(gx + rowH * 0.62, ry + rowH / 2, e.iconKey, e.iconFrame);
+        const icon = this.add.image(gx + rowH * 0.62, ry + rowH / 2, e.iconKey, this.fitFrame(e.iconKey, e.iconFrame));
         icon.setScale((rowH * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
       }
       c.add(this.T(gx + rowH * 1.2, ry + rowH * 0.5, e.label, H * 0.024, INK, 0));
@@ -684,7 +714,7 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuStepper', []);
     if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, t('shop_pick_item'), H * 0.024, SUB)); return; }
     if (this.textures.exists(e.iconKey)) {
-      const img = this.add.image(px + pw / 2, 0.40 * H, e.iconKey, e.iconFrame);
+      const img = this.add.image(px + pw / 2, 0.40 * H, e.iconKey, this.fitFrame(e.iconKey, e.iconFrame));
       img.setScale((H * 0.14) / Math.max(img.width, img.height)); c.add(img); // ~0.14H tall, not the huge 0.22W
     }
     c.add(this.T(px + pw / 2, 0.52 * H, e.label, H * 0.028, INK));
