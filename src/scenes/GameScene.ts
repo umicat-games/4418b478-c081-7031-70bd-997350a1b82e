@@ -914,7 +914,6 @@ export class GameScene extends Phaser.Scene {
     plantName?: CropName; // for a plant task: what to sow
     casted?: boolean; // fish task: the cast has been kicked off (wait for the fishing episode to resolve)
     fishFloat?: { x: number; y: number }; // fish task: where the float is cast (right by the targeted real fish)
-    fishRetries?: number; // fish task: how many times we've re-planned to another fish after getting stuck
     cooldown: number;
     // Multi-strike safety: hits landed on the CURRENT target (reset when it drops).
     // chop/mine targets self-invalidate (felled / broken) via taskCellValid; this just
@@ -6577,19 +6576,6 @@ export class GameScene extends Phaser.Scene {
     this.startCatoFishing(float.x, float.y, dir);
   }
 
-  /** A fish task couldn't reach its target: re-plan to another reachable fish from where Cato is now
-   *  (bounded retries), else give up cleanly. Keeps him from wandering forever OR pushing the shore. */
-  private fishReplanOrGiveUp(task: NonNullable<typeof this.catoTask>): void {
-    const plan = (task.fishRetries ?? 0) < 1 ? this.planFishing() : null;
-    if (plan) {
-      task.fishRetries = (task.fishRetries ?? 0) + 1;
-      task.queue = [plan.fishCell]; task.stand = plan.stand; task.path = plan.path; task.fishFloat = plan.float;
-      task.walkMs = 0; task.walkDist = Infinity;
-      return;
-    }
-    this.finishCatoTask();
-  }
-
   /** Plan a REAL fishing trip: find a fish that has a walkable, REACHABLE shore within casting range,
    *  where the float lands right by that fish. Cato walks to the shore, faces the fish, and casts — a
    *  genuine fish is there (NO summoning). Tries fish nearest to Cato first. Null = no reachable fish. */
@@ -6832,22 +6818,35 @@ export class GameScene extends Phaser.Scene {
     // Follow the A* path one tile at a time. Consecutive path cells are always walkable
     // with nothing between them, so walkCardinalToward reaches each without wedging.
     if (task.path && task.path.length > 0) {
+      // An active SIDESTEP-escape (fish task wedged on an obstacle) runs to completion first.
+      if (task.type === 'fish' && this.time.now < this.wanderEscapeUntil) { this.moveDir(this.wanderEscapeDir, CATO_TILL_SPEED); return; }
       const wp = task.path[0];
       const d = Math.hypot(wp.x - this.child.x, wp.y - this.child.y);
-      if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; return; }
+      if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; task.strikes = 0; return; }
       // Stall backstop for a DYNAMIC block (wall placed mid-walk / physics wedge): no
       // progress for a while → abandon this target (A* already routed around all the
       // static obstacles up front).
       if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
       else {
         task.walkMs += delta;
-        // Fishing detects a wedge FAST (~1s, not 2.2s) so a shore he can't reach doesn't turn into a
-        // long "wander around then give up". Progress resets walkMs, so a legit long detour is fine.
-        const stall = task.type === 'fish' ? 1000 : CATO_STUCK_MS;
-        if (task.walkMs > stall) {
-          if (task.type === 'fish') { this.fishReplanOrGiveUp(task); return; } // try ONE other reachable fish, then give up
-          task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return;
+        // FISH: his foot-box can catch on a tree trunk / big-stone collider that A* routed him past
+        // (A* uses tile-walkability, not the sub-tile colliders). SIDESTEP perpendicular to clear the
+        // pinch (like the wander stuck-escape) up to a few times before giving up — so a far fish
+        // behind obstacles is still reached instead of "wandered a bit then gave up".
+        if (task.type === 'fish' && task.walkMs > 900) {
+          task.strikes = (task.strikes ?? 0) + 1;
+          if (task.strikes <= 2) {
+            const horiz = this.faceDir === 'left' || this.faceDir === 'right';
+            this.wanderEscapeDir = horiz ? (body.blocked.up ? 'down' : 'up') : (body.blocked.left ? 'right' : 'left');
+            this.wanderEscapeUntil = this.time.now + 550;
+            task.walkMs = 0; task.walkDist = Infinity;
+            this.moveDir(this.wanderEscapeDir, CATO_TILL_SPEED);
+            return;
+          }
+          this.finishCatoTask(); return; // sidesteps didn't clear the pinch → give up cleanly (no wandering off to another fish)
         }
+        // Patient stall (2.2s) so a LONG detour around trees/stones/bays isn't mistaken for "stuck".
+        if (task.walkMs > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
       }
       this.walkCardinalToward(wp.x, wp.y, CATO_TILL_SPEED); // cardinal step to the next tile
       return;
