@@ -6827,6 +6827,16 @@ export class GameScene extends Phaser.Scene {
       const wp = task.path[0];
       const d = Math.hypot(wp.x - this.child.x, wp.y - this.child.y);
       if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; return; }
+      // FISH: the final waypoint (the stand) sits at the water's edge, and the WATER's collider (which
+      // A* can't see — it only reads the grass layer) stops Cato's foot-box a few px short of the cell
+      // centre. He's ALREADY at the shore with the fish across the water, so cast from RIGHT HERE once
+      // he's within ~1.4 tiles OR blocked toward the stand — instead of pushing into the edge
+      // ("walks up up up") and giving up without ever casting.
+      if (task.type === 'fish' && task.path.length === 1 && task.stand) {
+        const towardBlocked = (wp.y < this.child.y && body.blocked.up) || (wp.y > this.child.y && body.blocked.down)
+          || (wp.x < this.child.x && body.blocked.left) || (wp.x > this.child.x && body.blocked.right);
+        if (d <= TILE * 1.4 || towardBlocked) { this.beginCatoCast(task.stand.dir, task.fishFloat ?? { x: task.stand.x, y: task.stand.y }); return; }
+      }
       // Progress toward the current waypoint resets the stall timer (so a LONG detour around
       // trees/stones/bays to a far fish is fine — a brief no-progress while rounding one is tolerated).
       if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
@@ -6838,6 +6848,17 @@ export class GameScene extends Phaser.Scene {
         // reachable fish (a few times) before giving up — so a blocked spot tries another fish.
         if (task.type === 'fish' && task.walkMs > 450) {
           body.setVelocity(0, 0); // no oscillation → no camera shake
+          // If he's stuck AT A SHORE with the fish across the water (open water within ~2 tiles in the
+          // stand's facing direction), just CAST from here — the water-layer collider (invisible to A*)
+          // stops his foot-box short of the shore cell, but he's close enough to fish. This fixes the
+          // "walks up up up at the shore then gives up without casting" bug.
+          if (task.stand && task.fishFloat) {
+            const dv: Record<FaceDir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+            const [vx, vy] = dv[task.stand.dir];
+            if (this.isWaterAt(this.child.x + vx * TILE, this.child.y + vy * TILE) || this.isWaterAt(this.child.x + vx * TILE * 2, this.child.y + vy * TILE * 2)) {
+              this.beginCatoCast(task.stand.dir, task.fishFloat); return;
+            }
+          }
           if (task.walkMs > 1300) {
             task.strikes = (task.strikes ?? 0) + 1;
             const plan = task.strikes <= 1 ? this.planFishing(task.queue[0]) : null; // ONE re-plan to a DIFFERENT fish, then give up
