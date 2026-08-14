@@ -6569,41 +6569,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Can Cato cast from EXACTLY where he stands right now? Looks in each cardinal direction for OPEN
-   *  WATER right in front + a fish well-aligned with that ray, within casting reach. Returns the facing
-   *  + a float point OUT IN THE WATER (so the line always runs over water, never across land) — or null
-   *  if he isn't yet at a shore facing a nearby fish. This is what makes him STOP at the water's edge
-   *  and cast the moment a fish is straight across, instead of walking-in-place or casting over land. */
-  private fishCastNow(): { dir: FaceDir; float: { x: number; y: number } } | null {
-    if (!this.child) return null;
-    const cx = this.child.x, cy = this.child.y, BITE = GameScene.FISH_BITE_RANGE;
-    const dirs: Array<[FaceDir, number, number]> = [['up', 0, -1], ['down', 0, 1], ['left', -1, 0], ['right', 1, 0]];
-    let best: { dir: FaceDir; float: { x: number; y: number } } | null = null, bestAlong = Infinity;
-    for (const [dir, vx, vy] of dirs) {
-      // Find the open-water SPAN in this direction (it may start a tile ahead if he's a hair inland).
-      let wStart = 0, wEnd = 0;
-      for (let s = 1; s <= 5; s++) { const water = this.isWaterAt(cx + vx * TILE * s, cy + vy * TILE * s); if (water) { if (!wStart) wStart = s; wEnd = s; } else if (wStart) break; }
-      if (!wStart || wStart > 2) continue;   // open water must be close ahead (≤ 2 tiles) — he's at the shore
-      const maxOut = wEnd * TILE;
-      for (const f of this.fish) {
-        const along = (f.x - cx) * vx + (f.y - cy) * vy;          // signed distance along this ray
-        const perp = Math.abs((f.x - cx) * vy - (f.y - cy) * vx); // sideways offset from the ray
-        if (along < TILE * 0.5 || perp > BITE) continue;          // roughly IN FRONT (float still lands ON the cardinal ray = over water)
-        if (along > maxOut + BITE) continue;                      // beyond the water + a bite's reach → can't
-        const fd = Math.min(along - 10, maxOut);                  // float in the water span, just short of the fish
-        if (fd < wStart * TILE - 6) continue;                     // keep the float in the water
-        if (along < bestAlong) { bestAlong = along; best = { dir, float: { x: cx + vx * fd, y: cy + vy * fd } }; }
-      }
-    }
-    return best;
-  }
-
   /** Kick off Cato's cast toward `float` facing `dir`, and mark the task cast. */
   private beginCatoCast(dir: FaceDir, float: { x: number; y: number }): void {
     if (this.catoTask) this.catoTask.casted = true;
     this.faceDir = dir;
     (this.child?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
     this.startCatoFishing(float.x, float.y, dir);
+  }
+
+  /** A fish task couldn't reach its target: re-plan to another reachable fish from where Cato is now
+   *  (bounded retries), else give up cleanly. Keeps him from wandering forever OR pushing the shore. */
+  private fishReplanOrGiveUp(task: NonNullable<typeof this.catoTask>): void {
+    const plan = (task.fishRetries ?? 0) < 1 ? this.planFishing() : null;
+    if (plan) {
+      task.fishRetries = (task.fishRetries ?? 0) + 1;
+      task.queue = [plan.fishCell]; task.stand = plan.stand; task.path = plan.path; task.fishFloat = plan.float;
+      task.walkMs = 0; task.walkDist = Infinity;
+      return;
+    }
+    this.finishCatoTask();
   }
 
   /** Plan a REAL fishing trip: find a fish that has a walkable, REACHABLE shore within casting range,
@@ -6629,10 +6613,16 @@ export class GameScene extends Phaser.Scene {
           const w = layer.tileToWorldXY(cx, cy); if (!w) break;
           if (this.isWaterAt(w.x + TILE / 2, w.y + TILE / 2)) continue; // still open water → keep stepping toward land
           if (!this.isWalkableCell(cx, cy)) break;                      // hit land but it's a wall/blocked → this direction fails
-          const steps = this.findPath(scx, scy, cx, cy);
+          // STAND ONE TILE FURTHER INLAND (solid ground) when possible, so Cato's foot-box never
+          // catches on the water-edge collider (the "walks-in-place at the shore" wedge). Fall back to
+          // the edge cell itself if the inland tile is blocked/unreachable.
+          const inx = cx + dx, iny = cy + dy;
+          let stx = cx, sty = cy, steps: Array<{ cx: number; cy: number }> | null = null;
+          if (this.isWalkableCell(inx, iny)) { steps = this.findPath(scx, scy, inx, iny); if (steps) { stx = inx; sty = iny; } }
+          if (!steps) steps = this.findPath(scx, scy, cx, cy);
           if (!steps) break;                                            // shore unreachable from Cato → try another fish/direction
           const dir: FaceDir = dy > 0 ? 'up' : dy < 0 ? 'down' : dx > 0 ? 'left' : 'right'; // face back toward the fish
-          const st = toWorld(cx, cy);
+          const st = toWorld(stx, sty);
           // Float lands just SHORT of the fish (toward Cato) so it visibly swims the last bit to bite.
           const ux = f.x - st.x, uy = f.y - st.y, ud = Math.hypot(ux, uy) || 1;
           const float = { x: f.x - (ux / ud) * 20, y: f.y - (uy / ud) * 20 };
@@ -6816,39 +6806,11 @@ export class GameScene extends Phaser.Scene {
       this.catoEscapeMs = 0;
     }
 
-    // FISHING is its own episode, not a per-cell strike — this block OWNS the whole fish task.
+    // FISHING is an episode, not a per-cell strike. Handle its live states; navigation (walk to the
+    // pre-planned INLAND stand) + cast-on-arrival fall through to the shared path logic below.
     if (task.type === 'fish') {
       if (this.fishing?.byCato) { body.setVelocity(0, 0); this.holdCatoFishingPose(this.fishing); return; } // a cast is live → hold
       if (task.casted) { this.finishCatoTask(); return; }                                                   // the episode ended → done
-      // The MOMENT he's at a shore with a fish straight across open water, cast (line always over water).
-      const cast = this.fishCastNow();
-      if (cast) { this.beginCatoCast(cast.dir, cast.float); return; }
-      // Otherwise walk toward the fish. Progress is tracked against the FISH (not a waypoint), so
-      // hugging-the-coast detours still count as progress; NO long walk-in-place — if he stops getting
-      // closer for ~0.7s he gives up quickly (rather than pushing the shore for 2.2s then casting weird).
-      const target = task.fishFloat ?? { x: this.child.x, y: this.child.y };
-      const dist = Math.hypot(target.x - this.child.x, target.y - this.child.y);
-      if (dist < task.walkDist - 2) { task.walkDist = dist; task.walkMs = 0; }
-      else {
-        task.walkMs += delta;
-        if (task.walkMs > 700) {
-          // Stuck reaching this fish. Re-plan to another reachable fish from where he is now (bounded);
-          // give up cleanly if that keeps failing (no long walk-in-place either way).
-          const plan = (task.fishRetries ?? 0) < 2 ? this.planFishing() : null;
-          if (plan) { task.fishRetries = (task.fishRetries ?? 0) + 1; task.queue = [plan.fishCell]; task.stand = plan.stand; task.path = plan.path; task.fishFloat = plan.float; task.walkMs = 0; task.walkDist = Infinity; return; }
-          this.finishCatoTask(); return;
-        }
-      }
-      // Follow the A* route until the LAST waypoint, then make a straight final approach at the fish
-      // (the coastal A* stand tends to wedge; walking straight at the water stops cleanly at the edge,
-      // where fishCastNow fires next frame).
-      if (task.path && task.path.length > 1) {
-        const wp = task.path[0];
-        if (Math.hypot(wp.x - this.child.x, wp.y - this.child.y) <= CATO_ARRIVE_DIST) task.path.shift();
-        else { this.walkCardinalToward(wp.x, wp.y, CATO_TILL_SPEED); return; }
-      }
-      this.walkCardinalToward(target.x, target.y, CATO_TILL_SPEED); // straight at the fish → stops at the shore edge
-      return;
     }
 
     // Skip a cell that's no longer a valid target for this task type — idempotent
@@ -6879,7 +6841,13 @@ export class GameScene extends Phaser.Scene {
       if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
       else {
         task.walkMs += delta;
-        if (task.walkMs > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
+        // Fishing detects a wedge FAST (~1s, not 2.2s) so a shore he can't reach doesn't turn into a
+        // long "wander around then give up". Progress resets walkMs, so a legit long detour is fine.
+        const stall = task.type === 'fish' ? 1000 : CATO_STUCK_MS;
+        if (task.walkMs > stall) {
+          if (task.type === 'fish') { this.fishReplanOrGiveUp(task); return; } // try ONE other reachable fish, then give up
+          task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return;
+        }
       }
       this.walkCardinalToward(wp.x, wp.y, CATO_TILL_SPEED); // cardinal step to the next tile
       return;
@@ -6890,7 +6858,8 @@ export class GameScene extends Phaser.Scene {
     // through the swing (commitCatoTill / delayed plant).
     body.setVelocity(0, 0);
     this.faceDir = s.dir;
-    // (Fishing is fully handled in the fish block above — it never reaches here.)
+    // FISH arrived at the (inland) stand → cast toward the float by the real fish.
+    if (task.type === 'fish') { this.beginCatoCast(s.dir, task.fishFloat ?? { x: s.x, y: s.y }); return; }
     // Pick Cato's body animation for this task: water can, axe (chop/fruit — he has a
     // real axe-swing sheet), else the generic attack (hoe) swing for till/plant/harvest/
     // mine/bush/forage.
