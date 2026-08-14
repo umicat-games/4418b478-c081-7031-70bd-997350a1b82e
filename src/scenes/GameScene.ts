@@ -914,6 +914,7 @@ export class GameScene extends Phaser.Scene {
     plantName?: CropName; // for a plant task: what to sow
     casted?: boolean; // fish task: the cast has been kicked off (wait for the fishing episode to resolve)
     fishFloat?: { x: number; y: number }; // fish task: where the float is cast (right by the targeted real fish)
+    fishStuck?: boolean; // fish task: wedged toward a waypoint → stay FROZEN (no push/oscillation → no camera shake) until re-plan
     cooldown: number;
     // Multi-strike safety: hits landed on the CURRENT target (reset when it drops).
     // chop/mine targets self-invalidate (felled / broken) via taskCellValid; this just
@@ -6827,48 +6828,38 @@ export class GameScene extends Phaser.Scene {
       const wp = task.path[0];
       const d = Math.hypot(wp.x - this.child.x, wp.y - this.child.y);
       if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; return; }
-      // FISH: the final waypoint (the stand) sits at the water's edge, and the WATER's collider (which
-      // A* can't see — it only reads the grass layer) stops Cato's foot-box a few px short of the cell
-      // centre. He's ALREADY at the shore with the fish across the water, so cast from RIGHT HERE once
-      // he's within ~1.4 tiles OR blocked toward the stand — instead of pushing into the edge
-      // ("walks up up up") and giving up without ever casting.
-      if (task.type === 'fish' && task.path.length === 1 && task.stand) {
+      // FISH: the stand sits at the water's edge, and the WATER-layer collider (invisible to A*, which
+      // only reads the grass layer) stops his foot-box short of the cell centre. So CAST THE MOMENT he
+      // reaches a castable shore — open water within ~2 tiles in the stand's facing direction, when
+      // he's near the target — BEFORE he pushes into the edge (the camera-shake). If he's blocked
+      // toward the waypoint but NOT at a fishable shore, FREEZE this frame and STAY frozen (no
+      // walk-then-hit oscillation → no shake) while re-planning to another fish.
+      if (task.type === 'fish' && task.stand && task.fishFloat) {
+        const dvv: Record<FaceDir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const [fvx, fvy] = dvv[task.stand.dir];
+        const nearTarget = Math.hypot(task.stand.x - this.child.x, task.stand.y - this.child.y) <= TILE * 6;
+        const atShore = nearTarget && this.isWaterAt(this.child.x + fvx * TILE, this.child.y + fvy * TILE); // open water RIGHT ahead → he's at the shore edge (short line)
+        if (atShore || (task.path.length === 1 && d <= TILE * 1.4)) { this.beginCatoCast(task.stand.dir, task.fishFloat); return; }
         const towardBlocked = (wp.y < this.child.y && body.blocked.up) || (wp.y > this.child.y && body.blocked.down)
           || (wp.x < this.child.x && body.blocked.left) || (wp.x > this.child.x && body.blocked.right);
-        if (d <= TILE * 1.4 || towardBlocked) { this.beginCatoCast(task.stand.dir, task.fishFloat ?? { x: task.stand.x, y: task.stand.y }); return; }
+        if (towardBlocked || task.fishStuck) {
+          // Wedged right AT the shore (water within ~2 tiles ahead)? Cast anyway rather than re-plan.
+          if (nearTarget && (this.isWaterAt(this.child.x + fvx * TILE, this.child.y + fvy * TILE) || this.isWaterAt(this.child.x + fvx * TILE * 2, this.child.y + fvy * TILE * 2))) { this.beginCatoCast(task.stand.dir, task.fishFloat); return; }
+          task.fishStuck = true; body.setVelocity(0, 0); // frozen — no push into the collider, so no camera shake
+          task.walkMs += delta;
+          if (task.walkMs > 900) {
+            task.strikes = (task.strikes ?? 0) + 1;
+            const plan = task.strikes <= 1 ? this.planFishing(task.queue[0]) : null; // ONE re-plan to a DIFFERENT fish, then give up
+            if (plan) { task.queue = [plan.fishCell]; task.stand = plan.stand; task.path = plan.path; task.fishFloat = plan.float; task.fishStuck = false; task.walkMs = 0; task.walkDist = Infinity; return; }
+            this.finishCatoTask(); return;
+          }
+          return; // stay frozen while stuck
+        }
       }
       // Progress toward the current waypoint resets the stall timer (so a LONG detour around
       // trees/stones/bays to a far fish is fine — a brief no-progress while rounding one is tolerated).
       if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
-      else {
-        task.walkMs += delta;
-        // FISH wedged: his foot-box won't fit a SUB-TILE pinch A* thought was passable. Do NOT keep
-        // pushing — walkCardinalToward would oscillate and, with the exact camera-follow, SHAKE the
-        // whole screen (the reported bug). FREEZE him (camera settles), then RE-PLAN to a DIFFERENT
-        // reachable fish (a few times) before giving up — so a blocked spot tries another fish.
-        if (task.type === 'fish' && task.walkMs > 450) {
-          body.setVelocity(0, 0); // no oscillation → no camera shake
-          // If he's stuck AT A SHORE with the fish across the water (open water within ~2 tiles in the
-          // stand's facing direction), just CAST from here — the water-layer collider (invisible to A*)
-          // stops his foot-box short of the shore cell, but he's close enough to fish. This fixes the
-          // "walks up up up at the shore then gives up without casting" bug.
-          if (task.stand && task.fishFloat) {
-            const dv: Record<FaceDir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-            const [vx, vy] = dv[task.stand.dir];
-            if (this.isWaterAt(this.child.x + vx * TILE, this.child.y + vy * TILE) || this.isWaterAt(this.child.x + vx * TILE * 2, this.child.y + vy * TILE * 2)) {
-              this.beginCatoCast(task.stand.dir, task.fishFloat); return;
-            }
-          }
-          if (task.walkMs > 1300) {
-            task.strikes = (task.strikes ?? 0) + 1;
-            const plan = task.strikes <= 1 ? this.planFishing(task.queue[0]) : null; // ONE re-plan to a DIFFERENT fish, then give up
-            if (plan) { task.queue = [plan.fishCell]; task.stand = plan.stand; task.path = plan.path; task.fishFloat = plan.float; task.walkMs = 0; task.walkDist = Infinity; return; }
-            this.finishCatoTask(); return;
-          }
-          return; // stay put while frozen
-        }
-        if (task.walkMs > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
-      }
+      else if ((task.walkMs += delta) > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
       this.walkCardinalToward(wp.x, wp.y, CATO_TILL_SPEED); // cardinal step to the next tile
       return;
     }
