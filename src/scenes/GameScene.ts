@@ -4136,7 +4136,11 @@ export class GameScene extends Phaser.Scene {
     let body: Phaser.GameObjects.Sprite | undefined;
     if (this.wallGroup) {
       const b = this.wallGroup.create(footX, footY - 5, '__WHITE') as Phaser.Physics.Arcade.Sprite;
-      b.setVisible(false).setDisplaySize(22, 10).refreshBody();
+      // 14px wide (fits WITHIN the 16px tile) so it never overhangs into a neighbour cell — a wider
+      // (22px) collider's edge exactly met Cato's foot-box when he walked the ADJACENT cell A* thinks
+      // is clear, wedging him there (A* routes around the tile, not the sub-tile collider). Still blocks
+      // walking into the stone + leaves room to stand beside it to mine.
+      b.setVisible(false).setDisplaySize(14, 10).refreshBody();
       body = b;
     }
     this.bigStones.set(key, { tier: def.tier, ready: Math.max(0, Math.min(ready, def.readyStones)), regen: [], emptyKnocks: 0, sprite, body });
@@ -6579,7 +6583,7 @@ export class GameScene extends Phaser.Scene {
   /** Plan a REAL fishing trip: find a fish that has a walkable, REACHABLE shore within casting range,
    *  where the float lands right by that fish. Cato walks to the shore, faces the fish, and casts — a
    *  genuine fish is there (NO summoning). Tries fish nearest to Cato first. Null = no reachable fish. */
-  private planFishing():
+  private planFishing(exclude?: { cx: number; cy: number }):
     | { stand: { x: number; y: number; dir: FaceDir }; path: Array<{ x: number; y: number }>; fishCell: { cx: number; cy: number }; float: { x: number; y: number } }
     | null {
     const layer = this.islandLayer; if (!layer || !this.child) return null;
@@ -6591,6 +6595,7 @@ export class GameScene extends Phaser.Scene {
     for (const f of byNear) {
       const ft = layer.worldToTileXY(f.x, f.y); if (!ft) continue;
       const fcx = Math.floor(ft.x), fcy = Math.floor(ft.y);
+      if (exclude && fcx === exclude.cx && fcy === exclude.cy) continue; // skip the fish we just failed to reach → pick a DIFFERENT one
       // Look in each cardinal direction FROM the fish for the nearest walkable shore (open water in
       // between). That shore = where Cato stands; he faces back toward the fish.
       for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
@@ -6827,14 +6832,19 @@ export class GameScene extends Phaser.Scene {
       if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
       else {
         task.walkMs += delta;
-        // FISH wedged: his foot-box won't fit a SUB-TILE gap A* thought was passable (a pinch between
-        // the house/furniture/stones). Do NOT keep pushing — walkCardinalToward would oscillate and,
-        // with the exact camera-follow, SHAKE the whole screen (the reported bug). FREEZE him so the
-        // camera settles, then give up cleanly.
+        // FISH wedged: his foot-box won't fit a SUB-TILE pinch A* thought was passable. Do NOT keep
+        // pushing — walkCardinalToward would oscillate and, with the exact camera-follow, SHAKE the
+        // whole screen (the reported bug). FREEZE him (camera settles), then RE-PLAN to a DIFFERENT
+        // reachable fish (a few times) before giving up — so a blocked spot tries another fish.
         if (task.type === 'fish' && task.walkMs > 450) {
-          body.setVelocity(0, 0);
-          if (task.walkMs > 1300) { this.finishCatoTask(); return; }
-          return; // stay put (no oscillation → no camera shake)
+          body.setVelocity(0, 0); // no oscillation → no camera shake
+          if (task.walkMs > 1300) {
+            task.strikes = (task.strikes ?? 0) + 1;
+            const plan = task.strikes <= 1 ? this.planFishing(task.queue[0]) : null; // ONE re-plan to a DIFFERENT fish, then give up
+            if (plan) { task.queue = [plan.fishCell]; task.stand = plan.stand; task.path = plan.path; task.fishFloat = plan.float; task.walkMs = 0; task.walkDist = Infinity; return; }
+            this.finishCatoTask(); return;
+          }
+          return; // stay put while frozen
         }
         if (task.walkMs > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
       }
