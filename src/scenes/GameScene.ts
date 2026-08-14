@@ -6819,33 +6819,23 @@ export class GameScene extends Phaser.Scene {
     // with nothing between them, so walkCardinalToward reaches each without wedging.
     if (task.path && task.path.length > 0) {
       // An active SIDESTEP-escape (fish task wedged on an obstacle) runs to completion first.
-      if (task.type === 'fish' && this.time.now < this.wanderEscapeUntil) { this.moveDir(this.wanderEscapeDir, CATO_TILL_SPEED); return; }
       const wp = task.path[0];
       const d = Math.hypot(wp.x - this.child.x, wp.y - this.child.y);
-      if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; task.strikes = 0; return; }
-      // Stall backstop for a DYNAMIC block (wall placed mid-walk / physics wedge): no
-      // progress for a while → abandon this target (A* already routed around all the
-      // static obstacles up front).
+      if (d <= CATO_ARRIVE_DIST) { task.path.shift(); task.walkMs = 0; task.walkDist = Infinity; return; }
+      // Progress toward the current waypoint resets the stall timer (so a LONG detour around
+      // trees/stones/bays to a far fish is fine — a brief no-progress while rounding one is tolerated).
       if (d < task.walkDist - 2) { task.walkDist = d; task.walkMs = 0; }
       else {
         task.walkMs += delta;
-        // FISH: his foot-box can catch on a tree trunk / big-stone collider that A* routed him past
-        // (A* uses tile-walkability, not the sub-tile colliders). SIDESTEP perpendicular to clear the
-        // pinch (like the wander stuck-escape) up to a few times before giving up — so a far fish
-        // behind obstacles is still reached instead of "wandered a bit then gave up".
-        if (task.type === 'fish' && task.walkMs > 900) {
-          task.strikes = (task.strikes ?? 0) + 1;
-          if (task.strikes <= 2) {
-            const horiz = this.faceDir === 'left' || this.faceDir === 'right';
-            this.wanderEscapeDir = horiz ? (body.blocked.up ? 'down' : 'up') : (body.blocked.left ? 'right' : 'left');
-            this.wanderEscapeUntil = this.time.now + 550;
-            task.walkMs = 0; task.walkDist = Infinity;
-            this.moveDir(this.wanderEscapeDir, CATO_TILL_SPEED);
-            return;
-          }
-          this.finishCatoTask(); return; // sidesteps didn't clear the pinch → give up cleanly (no wandering off to another fish)
+        // FISH wedged: his foot-box won't fit a SUB-TILE gap A* thought was passable (a pinch between
+        // the house/furniture/stones). Do NOT keep pushing — walkCardinalToward would oscillate and,
+        // with the exact camera-follow, SHAKE the whole screen (the reported bug). FREEZE him so the
+        // camera settles, then give up cleanly.
+        if (task.type === 'fish' && task.walkMs > 450) {
+          body.setVelocity(0, 0);
+          if (task.walkMs > 1300) { this.finishCatoTask(); return; }
+          return; // stay put (no oscillation → no camera shake)
         }
-        // Patient stall (2.2s) so a LONG detour around trees/stones/bays isn't mistaken for "stuck".
         if (task.walkMs > CATO_STUCK_MS) { task.queue.shift(); task.stand = null; task.path = null; task.strikes = 0; return; }
       }
       this.walkCardinalToward(wp.x, wp.y, CATO_TILL_SPEED); // cardinal step to the next tile
