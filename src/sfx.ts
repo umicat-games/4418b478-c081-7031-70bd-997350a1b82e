@@ -24,6 +24,8 @@ export const SFX_TYPE = 'sfx-type';
 export const SFX_COLLECT = 'sfx-collect';
 /** A fish nibbles / tests the fishing float — phaserup2. */
 export const SFX_NIBBLE = 'sfx-nibble';
+/** The fish is hooked and the line reeled in — fish-splash-water. */
+export const SFX_SPLASH = 'sfx-splash';
 
 function readVolume(): number {
   try {

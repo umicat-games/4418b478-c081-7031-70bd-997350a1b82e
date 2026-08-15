@@ -20,7 +20,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH } from '../sfx';
 import { coverAndReload, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -2076,7 +2076,7 @@ export class GameScene extends Phaser.Scene {
       },
       onComplete: () => { if (this.fishing === F) this.time.delayedCall(90, () => this.finishReel(F)); },
     });
-    playSfx(this);
+    playSfx(this, SFX_SPLASH); // water-splash on the reel (not the UI click)
   }
 
   /** After the reel beat: land the outcome (caught → fish-on-cursor + toast; miss → fish darts back)

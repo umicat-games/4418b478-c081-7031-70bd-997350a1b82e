@@ -83,6 +83,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('sfx-drop', 'uploaded/drop_002.ogg'); // laptop: player sends a message
     this.load.audio('sfx-collect', 'uploaded/drop_004.ogg'); // a harvested item lands in the collector (Cato / cursor)
     this.load.audio('sfx-nibble', 'uploaded/phaserup2.ogg'); // a fish tests/nibbles the fishing float
+    this.load.audio('sfx-splash', 'uploaded/fish-splash-water.mp3'); // reeling the hooked fish in (water splash)
     this.load.audio('sfx-type', 'uploaded/click_002.ogg'); // laptop: per-character typewriter tick
     // Cato's stamina gauge: a 16×16 radial pie (37 frames, empty→full; colour purple→
     // orange→green). frame = round(fraction*36). Shown over his head while he works.
