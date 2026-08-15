@@ -22,6 +22,8 @@ export const SFX_DROP = 'sfx-drop';
 export const SFX_TYPE = 'sfx-type';
 /** A harvested item lands in the collector (Cato / the player's cursor) — drop_004. */
 export const SFX_COLLECT = 'sfx-collect';
+/** A fish nibbles / tests the fishing float — phaserup2. */
+export const SFX_NIBBLE = 'sfx-nibble';
 
 function readVolume(): number {
   try {

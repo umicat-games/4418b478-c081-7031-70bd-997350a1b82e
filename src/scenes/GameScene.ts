@@ -20,7 +20,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE } from '../sfx';
 import { coverAndReload, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -2005,7 +2005,7 @@ export class GameScene extends Phaser.Scene {
       if (p >= 1) { F.phase = 'nibble'; F.t = 0; F.nibbles = 0; }
     } else if (F.phase === 'nibble') {
       if (F.t >= GameScene.FISH_NIBBLE_MS) {
-        F.t = 0; F.nibbles++; F.wobble = 1; playSfx(this);
+        F.t = 0; F.nibbles++; F.wobble = 1; playSfx(this, SFX_NIBBLE); // a fish tests the float
         if (F.nibbles >= GameScene.FISH_NIBBLES) { F.phase = 'hooked'; F.t = 0; this.showFishExclaim(F); }
       }
       F.fish?.setPosition(F.fx, F.fy + 9 - Math.sin((F.t / GameScene.FISH_NIBBLE_MS) * Math.PI) * 3); // dart at the float
