@@ -2037,7 +2037,6 @@ export class GameScene extends Phaser.Scene {
     if (!this.textures.exists('emoji')) return;
     F.exclaim = this.add.sprite(F.fx, F.fy - 16, 'emoji', 85).setDepth(1e5 + 3).setScale(0.5); // 85 = exclamation region
     this.tweens.add({ targets: F.exclaim, scale: 0.7, duration: 220, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    playSfx(this);
   }
 
   /** A reel click while fishing → play the reel-in: rod tips back while the FLOAT (and the hooked
@@ -2061,20 +2060,42 @@ export class GameScene extends Phaser.Scene {
       tipX = F.rodX + F.tipDX * bc - F.tipDY * bs; tipY = F.rodY + F.tipDX * bs + F.tipDY * bc;
       this.tweens.add({ targets: F.rod, rotation: back, duration: 190, ease: 'Quad.easeOut' });
     }
-    // Reel the float (+ the hooked fish) BACK to the tip along a little arc.
-    const sfx = F.float.x, sfy = F.float.y, fish = F.caught ? F.fish : undefined, fsx = fish?.x ?? tipX, fsy = fish?.y ?? tipY;
-    this.waterSplash(sfx, sfy + 2); // splash as the float is yanked out of the water
-    const arc = { p: 0 };
-    this.tweens.add({
-      targets: arc, p: 1, duration: 210, ease: 'Quad.easeIn',
-      onUpdate: () => {
-        const lift = -Math.sin(Math.PI * arc.p) * 8;
-        if (F.float.active) F.float.setPosition(Phaser.Math.Linear(sfx, tipX, arc.p), Phaser.Math.Linear(sfy, tipY, arc.p) + lift);
-        if (fish?.active) fish.setPosition(Phaser.Math.Linear(fsx, tipX, arc.p), Phaser.Math.Linear(fsy, tipY, arc.p) + lift);
-      },
-      onComplete: () => { if (this.fishing === F) this.time.delayedCall(90, () => this.finishReel(F)); },
-    });
-    playSfx(this, SFX_SPLASH); // water-splash on the reel (not the UI click)
+    const fish = F.caught ? F.fish : undefined;
+    this.waterSplash(F.float.x, F.float.y + 2); // first splash as the line goes taut
+    playSfx(this, SFX_SPLASH); // water-splash sound (not the UI click)
+    // Reel the float (+ hooked fish) BACK to the rod tip — reads the LIVE float pos so a preceding
+    // struggle is respected.
+    const doArc = (): void => {
+      const sfx = F.float.x, sfy = F.float.y, fsx = fish?.x ?? tipX, fsy = fish?.y ?? tipY;
+      const arc = { p: 0 };
+      this.tweens.add({
+        targets: arc, p: 1, duration: 260, ease: 'Quad.easeIn',
+        onUpdate: () => {
+          const lift = -Math.sin(Math.PI * arc.p) * 8;
+          if (F.float.active) F.float.setPosition(Phaser.Math.Linear(sfx, tipX, arc.p), Phaser.Math.Linear(sfy, tipY, arc.p) + lift);
+          if (fish?.active) fish.setPosition(Phaser.Math.Linear(fsx, tipX, arc.p), Phaser.Math.Linear(fsy, tipY, arc.p) + lift);
+        },
+        onComplete: () => { if (this.fishing === F) this.time.delayedCall(90, () => this.finishReel(F)); },
+      });
+    };
+    if (F.caught) {
+      // STRUGGLE: the hooked fish FIGHTS — the float + fish thrash side to side, kicking up water for a
+      // beat before it's reeled in. Repeated splash bursts + the splash sfx make the catch feel bigger.
+      const bx = F.float.x, by = F.float.y, st = { t: 0 };
+      let lastSplash = -1, splashes = 0;
+      this.tweens.add({
+        targets: st, t: 1, duration: 850, ease: 'Sine.easeInOut',
+        onUpdate: () => {
+          const j = Math.sin(st.t * Math.PI * 9) * 5, b = Math.sin(st.t * Math.PI * 7) * 2;
+          if (F.float.active) F.float.setPosition(bx + j, by + b);
+          if (fish?.active) fish.setPosition(bx + j, by + 8 + b);
+          if (st.t - lastSplash > 0.28) { lastSplash = st.t; this.waterSplash(bx + j, by + 2); if (++splashes % 2 === 1) playSfx(this, SFX_SPLASH); } // extra splashes + a sustained splash sound
+        },
+        onComplete: doArc,
+      });
+    } else {
+      doArc();
+    }
   }
 
   /** After the reel beat: land the outcome (caught → fish-on-cursor + toast; miss → fish darts back)
