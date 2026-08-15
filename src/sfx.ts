@@ -26,6 +26,8 @@ export const SFX_COLLECT = 'sfx-collect';
 export const SFX_NIBBLE = 'sfx-nibble';
 /** The fish is hooked and the line reeled in — fish-splash-water. */
 export const SFX_SPLASH = 'sfx-splash';
+/** Casting the fishing rod (the swing) — swing-fishing-rod. */
+export const SFX_SWING = 'sfx-swing';
 
 function readVolume(): number {
   try {

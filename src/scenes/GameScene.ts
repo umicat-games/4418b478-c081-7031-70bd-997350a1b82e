@@ -20,7 +20,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING } from '../sfx';
 import { coverAndReload, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -1902,7 +1902,7 @@ export class GameScene extends Phaser.Scene {
     const line = this.add.graphics().setDepth(1e5);
     // Start in the CAST animation — the fish is only found once the float LANDS (see landCast).
     this.fishing = { fx, fy, rodX, rodY, attachX, attachY, tipDX, tipDY, floatRight, rod, float, line, bobT: 0, phase: 'casting', t: 0, fishOrigX: fx, fishOrigY: fy, nibbles: 0, wobble: 0 };
-    playSfx(this);
+    playSfx(this, SFX_SWING); // rod-swing whoosh on the cast
     // Wind the rod BACK, then swing it forward (overshoot) while the float ARCS out to the spot.
     const back = floatRight ? -Math.PI / 2 : Math.PI / 2;
     this.tweens.add({
@@ -1919,7 +1919,6 @@ export class GameScene extends Phaser.Scene {
           onUpdate: () => { if (float.active) float.setPosition(Phaser.Math.Linear(tx, fx, arc.p), Phaser.Math.Linear(ty, fy, arc.p) - Math.sin(Math.PI * arc.p) * 14); },
           onComplete: () => { if (this.fishing?.rod === rod) this.landCast(); },
         });
-        playSfx(this);
       },
     });
   }
@@ -1938,7 +1937,7 @@ export class GameScene extends Phaser.Scene {
       fishOrigX: fx, fishOrigY: fy, nibbles: 0, wobble: 0,
     };
     this.fishing = F;
-    playSfx(this);
+    playSfx(this, SFX_SWING); // rod-swing whoosh on the cast
     // The float arcs out from his rod tip AFTER the wind-up part of the cast anim plays.
     this.time.delayedCall(220, () => {
       if (this.fishing !== F) return; // superseded / cancelled
@@ -1950,7 +1949,6 @@ export class GameScene extends Phaser.Scene {
         onUpdate: () => { if (F.float.active) F.float.setPosition(Phaser.Math.Linear(t0.x, fx, arc.p), Phaser.Math.Linear(t0.y, fy, arc.p) - Math.sin(Math.PI * arc.p) * 14); },
         onComplete: () => { if (this.fishing === F) this.landCast(); },
       });
-      playSfx(this);
     });
   }
 
