@@ -225,6 +225,7 @@ interface FishingState {
   bobT: number; phase: 'casting' | 'wait' | 'approach' | 'nibble' | 'hooked' | 'reeling'; t: number; caught?: boolean;
   fish?: Phaser.GameObjects.Sprite; fishOrigX: number; fishOrigY: number; nibbles: number;
   exclaim?: Phaser.GameObjects.Sprite; wobble: number;
+  struggle?: number; // PLAYER catch mini-game (once hooked): 0..1 — each tap adds, it decays over time; reaches 1 → caught, drops to 0 → the fish gets away
   byCato?: boolean; catoDir?: FaceDir; // CATO fishing: no god-hand rod sprite — his BODY plays the cast/reel anim, the line ties to his rod tip (per-direction offset), and he auto-catches (no player click)
 }
 
@@ -1729,7 +1730,7 @@ export class GameScene extends Phaser.Scene {
     if (this.overHotbarAt(x, y)) return;
 
     // Fishing in progress → this click reels: CATCH if the fish is hooked (exclamation), else miss.
-    if (this.fishing) { this.handleFishingClick(); return; }
+    if (this.fishing) { this.tapReel(); return; }
 
     // World-tile actions (validity computed here, so touch works without a hover
     // cursor). Harvest takes priority; only the hoe / empty hand harvests.
@@ -1859,6 +1860,10 @@ export class GameScene extends Phaser.Scene {
   private static readonly FISH_NIBBLES = 3;        // bumps before it hooks
   private static readonly FISH_NIBBLE_MS = 360;    // per nibble
   private static readonly FISH_CATCH_MS = 1700;    // exclamation window to click before it escapes
+  // Player catch mini-game (once hooked): tap RAPIDLY to reel it in before it wriggles off.
+  private static readonly STRUGGLE_START = 0.18;   // progress buffer the moment it hooks
+  private static readonly STRUGGLE_GAIN = 0.11;    // added per mouse tap (need ~8+ rapid taps to land it)
+  private static readonly STRUGGLE_DECAY = 0.42;   // lost per second (stop / tap too slow → it gets away)
   private static readonly FISH_WAIT_MS = 6000;     // empty cast (no fish near) auto-reels after this
   private static readonly CATO_REEL_REACT_MS = 480; // Cato "notices" the bite + reels this soon after hooking (well before the escape window)
   // Cato's rod TIP offset from his position (feet-origin), per facing direction — where the line
@@ -2004,15 +2009,17 @@ export class GameScene extends Phaser.Scene {
     } else if (F.phase === 'nibble') {
       if (F.t >= GameScene.FISH_NIBBLE_MS) {
         F.t = 0; F.nibbles++; F.wobble = 1; playSfx(this, SFX_NIBBLE); // a fish tests the float
-        if (F.nibbles >= GameScene.FISH_NIBBLES) { F.phase = 'hooked'; F.t = 0; this.showFishExclaim(F); }
+        if (F.nibbles >= GameScene.FISH_NIBBLES) { F.phase = 'hooked'; F.t = 0; F.struggle = GameScene.STRUGGLE_START; this.showFishExclaim(F); }
       }
       F.fish?.setPosition(F.fx, F.fy + 9 - Math.sin((F.t / GameScene.FISH_NIBBLE_MS) * Math.PI) * 3); // dart at the float
     } else if (F.phase === 'hooked') {
       F.fish?.setPosition(F.fx, floatY + 8); // stuck to the float
       F.exclaim?.setPosition(F.fx, (F.fish?.y ?? F.fy) - 16);
-      // CATO auto-catches: he "notices" the bite and reels a beat after hooking (the player has to click).
+      // CATO auto-catches: he "notices" the bite and reels a beat after hooking (the player has to tap).
       if (F.byCato) { if (F.t >= GameScene.CATO_REEL_REACT_MS) this.handleFishingClick(); return; }
-      if (F.t >= GameScene.FISH_CATCH_MS) this.cancelFishing(true); // got away
+      // PLAYER: keep TAPPING to reel it in — the struggle meter decays, so pausing lets it wriggle off.
+      F.struggle = (F.struggle ?? 0) - GameScene.STRUGGLE_DECAY * (delta / 1000);
+      if (F.struggle <= 0) this.cancelFishing(true); // stopped tapping in time → the fish got away
     }
   }
 
@@ -2037,6 +2044,20 @@ export class GameScene extends Phaser.Scene {
     if (!this.textures.exists('emoji')) return;
     F.exclaim = this.add.sprite(F.fx, F.fy - 16, 'emoji', 85).setDepth(1e5 + 3).setScale(0.5); // 85 = exclamation region
     this.tweens.add({ targets: F.exclaim, scale: 0.7, duration: 220, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** A player tap while fishing. Once HOOKED, tap RAPIDLY: each tap fills the struggle meter (it decays
+   *  between taps), and only when it's full does the fish actually get reeled in. A tap BEFORE the bite
+   *  reels in empty (a miss). */
+  private tapReel(): void {
+    const F = this.fishing; if (!F || F.phase === 'reeling' || F.phase === 'casting') return;
+    if (F.phase === 'hooked') {
+      F.struggle = Math.min(1, (F.struggle ?? 0) + GameScene.STRUGGLE_GAIN);
+      F.wobble = 1; // the line + float jerk on each tap (feedback)
+      if (F.struggle >= 1) this.handleFishingClick(); // meter full → reel it in (CAUGHT)
+      return;
+    }
+    this.handleFishingClick(); // tapped before the bite → reel in empty (a miss)
   }
 
   /** A reel click while fishing → play the reel-in: rod tips back while the FLOAT (and the hooked
