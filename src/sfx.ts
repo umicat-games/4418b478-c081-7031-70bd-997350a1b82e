@@ -28,6 +28,8 @@ export const SFX_NIBBLE = 'sfx-nibble';
 export const SFX_SPLASH = 'sfx-splash';
 /** Casting the fishing rod (the swing) — swing-fishing-rod. */
 export const SFX_SWING = 'sfx-swing';
+/** The "new item!" catch-reveal jingle — get-item-sound. */
+export const SFX_GETITEM = 'sfx-getitem';
 
 function readVolume(): number {
   try {

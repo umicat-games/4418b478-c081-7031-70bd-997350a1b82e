@@ -20,7 +20,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING } from '../sfx';
+import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM } from '../sfx';
 import { coverAndReload, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -2122,6 +2122,7 @@ export class GameScene extends Phaser.Scene {
     const BG_SCALE = 2.4, FISH_SCALE = 1;
     const bg = this.add.sprite(cx, cy, 'newitem-appear', 0).setDepth(1e6 + 1).setScale(BG_SCALE);
     const bream = this.add.image(cx, cy, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(FISH_SCALE).setVisible(false);
+    playSfx(this, SFX_GETITEM); // "new item!" jingle over the reveal
     bg.play('newitem-appear'); // FAST appear — burst grows, no fish yet
     bg.once(AC, () => {
       // HOLD (slow): the fish pops in on the burst.
