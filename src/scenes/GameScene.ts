@@ -2025,7 +2025,7 @@ export class GameScene extends Phaser.Scene {
     const rx = tip.x, ry = tip.y;
     const fxp = F.float.x, fyp = F.float.y;
     const midx = (rx + fxp) / 2, midy = (ry + fyp) / 2 + 2.5 + F.wobble * 3;
-    g.lineStyle(1, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry);
+    g.lineStyle(0.5, 0xf3ead4, 0.95).beginPath(); g.moveTo(rx, ry); // thin line (world-space, so ~1.5px at 3× zoom)
     for (let i = 1; i <= 10; i++) {
       const t = i / 10;
       g.lineTo(Phaser.Math.Interpolation.QuadraticBezier(t, rx, midx, fxp), Phaser.Math.Interpolation.QuadraticBezier(t, ry, midy, fyp));
