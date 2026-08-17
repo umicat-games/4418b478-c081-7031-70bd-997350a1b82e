@@ -218,6 +218,10 @@ export class BootScene extends Phaser.Scene {
     this.load.image('fishing-float', 'uploaded/fishing-rode-float.png');
     this.load.image('sea-bream', 'uploaded/sea-bream.png'); // the caught fish (32×32) shown on the catch
     this.load.spritesheet('fish-bite', 'uploaded/fish-bite-spritesheet.png', { frameWidth: 16, frameHeight: 16 });
+    // "New item!" starburst bg for a catch reveal (16×16 frames): appear (3), hold/pulse (11), disappear (3).
+    this.load.spritesheet('newitem-appear', 'uploaded/new-item-appear.png', { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('newitem-bg', 'uploaded/new-item-bg-sprite-sheet.png', { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('newitem-disappear', 'uploaded/new-item-bg-disappear.png', { frameWidth: 16, frameHeight: 16 });
     // Cato's own fishing body anims (48×48, 8 cols × 4 rows = right/left/up/down): cast (throw out)
     // + swing-back (reel in). Same frame size as his character sheet so his foot-origin carries over.
     this.load.spritesheet('cato-fish-cast', 'uploaded/cato-fishing-all-directions.png', { frameWidth: 48, frameHeight: 48 });
@@ -300,6 +304,12 @@ export class BootScene extends Phaser.Scene {
     // Fish nibbling the float (2 frames, loops).
     if (!this.anims.exists('fish-bite')) {
       this.anims.create({ key: 'fish-bite', frames: this.anims.generateFrameNumbers('fish-bite', { start: 0, end: 1 }), frameRate: 6, repeat: -1 });
+    }
+    // "New item!" catch-reveal burst: appear + disappear play FAST, the middle hold plays SLOW.
+    if (!this.anims.exists('newitem-appear')) {
+      this.anims.create({ key: 'newitem-appear', frames: this.anims.generateFrameNumbers('newitem-appear', { start: 0, end: 2 }), frameRate: 20, repeat: 0 });
+      this.anims.create({ key: 'newitem-hold', frames: this.anims.generateFrameNumbers('newitem-bg', { start: 0, end: 10 }), frameRate: 10, repeat: 0 });
+      this.anims.create({ key: 'newitem-disappear', frames: this.anims.generateFrameNumbers('newitem-disappear', { start: 0, end: 2 }), frameRate: 20, repeat: 0 });
     }
     // Cato casting / reeling the rod — rows: right(0) / left(1) / up(2, back view) / down(3, front),
     // 8 frames each, played ONCE (holds the last frame = the fishing pose / rod-back pose).

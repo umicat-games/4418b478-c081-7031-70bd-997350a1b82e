@@ -2104,27 +2104,45 @@ export class GameScene extends Phaser.Scene {
     if (this.fishing !== F) return; // superseded (e.g. re-cast)
     this.fishing = null;
     if (F.caught) {
-      // The caught sea-bream lands at the shore (the rod tip / reeled-in spot), lingers a beat,
-      // THEN flies to the pointer and vanishes — same collect motion + SFX as a harvested crop.
       const sx = F.fish?.active ? F.fish.x : F.float.x, sy = F.fish?.active ? F.fish.y : F.float.y;
       F.fish?.destroy(); // the little biter sprite → replaced by the caught fish
-      const riseY = sy - 8; // it pops UP out of the water to here, then bobs around this line
-      const bream = this.add.image(sx, sy + 8, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0).setAlpha(0);
-      // 1) rise UP into view (scale + fade in), 2) bob up/down twice, 3) fly to the cursor.
-      this.tweens.add({
-        targets: bream, y: riseY, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut',
-        onComplete: () => {
-          this.tweens.add({
-            targets: bream, y: riseY - 6, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
-            onComplete: () => this.time.delayedCall(120, () => { if (bream.active) this.flyItemToCollector(bream, F.byCato ?? false); }), // fly to Cato (he caught it) or the cursor (player)
-          });
-        },
-      });
       this.collect(itemFromId('fish', 1)); // bank it in the backpack (+ toast + save); notifies if the bag is full
       this.catoReact('love');
+      this.playCatchReveal(sx, sy - 6, F.byCato ?? false); // "new item!" burst above the rod tip / Cato's head
     } else if (F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
     else F.fish?.destroy();
     this.tearDownFishing(F);
+  }
+
+  /** The catch reveal at (cx,cy): a starburst bg APPEARS (fast) → HOLDS (slow) with the caught fish
+   *  shown on it → DISAPPEARS (fast, fish hidden) → then the fish bobs up/down and flies to the
+   *  collector (Cato or the cursor) and vanishes. */
+  private playCatchReveal(cx: number, cy: number, toCato: boolean): void {
+    const AC = Phaser.Animations.Events.ANIMATION_COMPLETE;
+    const BG_SCALE = 2.4, FISH_SCALE = 1;
+    const bg = this.add.sprite(cx, cy, 'newitem-appear', 0).setDepth(1e6 + 1).setScale(BG_SCALE);
+    const bream = this.add.image(cx, cy, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(FISH_SCALE).setVisible(false);
+    bg.play('newitem-appear'); // FAST appear — burst grows, no fish yet
+    bg.once(AC, () => {
+      // HOLD (slow): the fish pops in on the burst.
+      bream.setVisible(true).setScale(0).setAlpha(0);
+      this.tweens.add({ targets: bream, scale: FISH_SCALE, alpha: 1, duration: 180, ease: 'Back.easeOut' });
+      bg.play('newitem-hold');
+      bg.once(AC, () => {
+        // DISAPPEAR (fast): hide the fish while the burst shrinks away.
+        bream.setVisible(false);
+        bg.play('newitem-disappear');
+        bg.once(AC, () => {
+          bg.destroy();
+          // Burst gone → the fish bobs up/down, then flies to Cato / the cursor and vanishes.
+          bream.setVisible(true).setScale(FISH_SCALE).setAlpha(1).setPosition(cx, cy);
+          this.tweens.add({
+            targets: bream, y: cy - 6, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
+            onComplete: () => this.time.delayedCall(100, () => { if (bream.active) this.flyItemToCollector(bream, toCato); }),
+          });
+        });
+      });
+    });
   }
 
   /** Immediate teardown (re-cast / no-bite timeout / fish escapes) — no reel animation. `escaped`
