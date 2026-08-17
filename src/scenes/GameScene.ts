@@ -2210,7 +2210,7 @@ export class GameScene extends Phaser.Scene {
     // its ~8px mark renders at ~5×zoom — matching HoverScene's CORNER_SCALE. Sized so the frame is
     // ~28 world px (frames the 16px tile like the hover bracket). Falls back to the tile-select image
     // if the atlas frame is somehow missing.
-    const TILE_BR = 0.625; // == HoverScene CORNER_SCALE (5×zoom); keep the two in sync
+    const TILE_BR = GameScene.BRACKET_BR; // == HoverScene CORNER_SCALE (5×zoom); keep the two in sync
     if (this.textures.exists('ui-sheet') && this.textures.get('ui-sheet').has('white-corner-bracket')) {
       this.tileCursor = this.add
         .nineslice(0, 0, 'ui-sheet', 'white-corner-bracket', 28 / TILE_BR, 28 / TILE_BR, 14, 14, 14, 14)
@@ -2757,6 +2757,10 @@ export class GameScene extends Phaser.Scene {
    *  (semi-transparent icon + light-gray bracket) when you can't — so the held
    *  tool never just "vanishes". With an empty hand / over the UI / in a dialog or
    *  the backpack it's just the plain mouse cursor (no bracket). */
+  private static readonly BRACKET_BR = 0.625; // base scale of the corner-bracket tile cursor (== HoverScene CORNER_SCALE)
+  /** A slow, tiny in/out "breathing" factor (≈±5%) for the selection brackets — a live pulse, no sheet. */
+  private bracketBreathe(): number { return 1 + Math.sin((this.time.now / 1500) * Math.PI * 2) * 0.05; }
+
   private updateTileCursor(): void {
     const cursor = this.tileCursor;
     const icon = this.hoeIcon;
@@ -2882,7 +2886,7 @@ export class GameScene extends Phaser.Scene {
       const w = this.islandLayer.tileToWorldXY(tx!, ty!);
       if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
     }
-    cursor.setPosition(px, py).setVisible(true);
+    cursor.setPosition(px, py).setVisible(true).setScale(GameScene.BRACKET_BR * this.bracketBreathe()); // subtle in/out "breathing"
     icon.setPosition(px, py).setVisible(true);
     // Keep the mouse cursor visible too (it follows the exact pointer); the
     // bracket just snaps to the tile the mouse is over — so movement reads clearly.
@@ -3355,7 +3359,7 @@ export class GameScene extends Phaser.Scene {
       : this.isPlacingFloor() ? this.canPlaceFloor(cx, cy)
       : this.canPlaceAt(cx, cy);
     // The rounded tile bracket (圆角框), snapped to the cell centre — same as the tools.
-    cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true);
+    cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true).setScale(GameScene.BRACKET_BR * this.bracketBreathe());
     if (valid) cursor.setAlpha(1).clearTint();
     else cursor.setAlpha(0.55).setTint(0xbbbbbb);
     // The object ghost inside the bracket.

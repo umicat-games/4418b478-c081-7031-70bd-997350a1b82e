@@ -86,7 +86,10 @@ export class HoverScene extends Phaser.Scene {
     const z = m.z && m.z > 0 ? m.z : 1;
     const s = z * CORNER_SCALE;
     const w = Math.max(BRACKET_MIN * s, m.w), h = Math.max(BRACKET_MIN * s, m.h);
-    if (this.bracket) this.bracket.setVisible(true).setScale(s).setPosition(m.x, m.y).setSize(w / s, h / s);
+    // A slow tiny in/out "breathing" pulse (≈±5%): scale by s×pulse but keep the pre-scale size w/s,
+    // so the whole bracket (corners included) grows/shrinks around the hovered object.
+    const pulse = 1 + Math.sin((this.time.now / 1500) * Math.PI * 2) * 0.05;
+    if (this.bracket) this.bracket.setVisible(true).setScale(s * pulse).setPosition(m.x, m.y).setSize(w / s, h / s);
 
     if (!m.name) { label.setVisible(false); return; } // name blanked (e.g. while the wheel is open)
     label.setText(m.name).setVisible(true).setPosition(m.nameX, m.nameY);
