@@ -2135,12 +2135,9 @@ export class GameScene extends Phaser.Scene {
         bg.play('newitem-disappear');
         bg.once(AC, () => {
           bg.destroy();
-          // Burst gone → the fish bobs up/down, then flies to Cato / the cursor and vanishes.
+          // Burst gone → the fish flies STRAIGHT to Cato / the cursor and vanishes (no bob).
           bream.setVisible(true).setScale(FISH_SCALE).setAlpha(1).setPosition(cx, cy);
-          this.tweens.add({
-            targets: bream, y: cy - 6, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
-            onComplete: () => this.time.delayedCall(100, () => { if (bream.active) this.flyItemToCollector(bream, toCato); }),
-          });
+          this.time.delayedCall(80, () => { if (bream.active) this.flyItemToCollector(bream, toCato); });
         });
       });
     });

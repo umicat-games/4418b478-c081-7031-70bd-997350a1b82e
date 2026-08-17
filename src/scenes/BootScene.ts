@@ -309,7 +309,7 @@ export class BootScene extends Phaser.Scene {
     // "New item!" catch-reveal burst: appear + disappear play FAST, the middle hold plays SLOW.
     if (!this.anims.exists('newitem-appear')) {
       this.anims.create({ key: 'newitem-appear', frames: this.anims.generateFrameNumbers('newitem-appear', { start: 0, end: 2 }), frameRate: 20, repeat: 0 });
-      this.anims.create({ key: 'newitem-hold', frames: this.anims.generateFrameNumbers('newitem-bg', { start: 0, end: 10 }), frameRate: 10, repeat: 0 });
+      this.anims.create({ key: 'newitem-hold', frames: this.anims.generateFrameNumbers('newitem-bg', { start: 0, end: 10 }), frameRate: 8, repeat: 0 });
       this.anims.create({ key: 'newitem-disappear', frames: this.anims.generateFrameNumbers('newitem-disappear', { start: 0, end: 2 }), frameRate: 20, repeat: 0 });
     }
     // Cato casting / reeling the rod — rows: right(0) / left(1) / up(2, back view) / down(3, front),
