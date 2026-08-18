@@ -141,7 +141,7 @@ export class HouseScene extends Phaser.Scene {
     if (this.exiting) return;
     const gs = this.scene.get('GameScene') as GameScene | undefined;
     if (!gs || !gs.renovateHome(nextId)) return; // not enough coins / unknown tier
-    coverAndHandoff(this, () => this.scene.restart({ sceneId: nextId }), { effect: 'dissolve', ms: 300 });
+    coverAndHandoff(this, () => this.scene.restart({ sceneId: nextId }), { effect: 'dissolve', color: 0x000000, ms: 220 });
   }
 
   /** Tap the exit door → cover, resume the island (GameScene), stop this scene.
@@ -150,9 +150,10 @@ export class HouseScene extends Phaser.Scene {
     if (this.exiting) return;
     this.exiting = true;
     if (this.exitDoor && this.anims.exists('door-open')) this.exitDoor.play({ key: 'door-open', repeat: 0 });
+    // Quick fade to black, then back on the island (matches the enter fade — no iris/loading).
     coverAndHandoff(this, () => {
       this.scene.resume('GameScene');
       this.scene.stop('HouseScene');
-    }, { effect: 'circle', ms: 600 });
+    }, { effect: 'dissolve', color: 0x000000, ms: 220 });
   }
 }

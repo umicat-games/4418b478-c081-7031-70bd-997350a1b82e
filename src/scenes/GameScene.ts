@@ -4280,13 +4280,15 @@ export class GameScene extends Phaser.Scene {
     if (ts?.isBusy?.()) return;
     this.houseEntering = true;
     if (this.houseDoor && !this.houseDoorOpen && !this.houseDoorAnimating) this.setHouseDoorOpen(true);
-    this.time.delayedCall(260, () => { // let the door swing read before the cover closes
+    this.time.delayedCall(260, () => { // let the door swing read before the fade
+      // Simple, quick fade to BLACK (no iris, no "Loading") — the house bg is black too, so it's
+      // seamless. Holds black until HouseScene is ready, then fades in. (Door SFX added later.)
       coverAndHandoff(this, () => {
         this.inHouse = true; // set only when the handoff actually runs (pause + launch)
         this.sleepIslandHud();
         this.scene.pause('GameScene');
         this.scene.launch('HouseScene', { sceneId: this.currentHome });
-      }, { effect: 'circle', ms: 700, loading: true });
+      }, { effect: 'dissolve', color: 0x000000, ms: 220 });
     });
   }
 
