@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "id": "home_1",
+  "name": "Home (Basic)",
+  "type": "world",
+  "world": {
+    "width": 224,
+    "height": 160,
+    "background": {
+      "color": "#000000"
+    }
+  },
+  "camera": {
+    "follow": null
+  },
+  "entities": [
+    {
+      "id": "home_1-room",
+      "kind": "tilemap-ref",
+      "tilemapId": "home-1-room",
+      "transform": {
+        "x": 112,
+        "y": 80,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      },
+      "name": "room"
+    },
+    {
+      "id": "home_1-cato",
+      "kind": "sprite",
+      "role": "child",
+      "assetId": "premium_character_spritesheet",
+      "transform": {
+        "x": 112,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "name": "cato"
+    },
+    {
+      "id": "home_1-exit",
+      "kind": "sprite",
+      "assetId": "door_animation_sprites",
+      "transform": {
+        "x": 112,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 5
+      },
+      "name": "exit-door"
+    },
+    {
+      "id": "home_1-bed",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "bed-pink",
+      "transform": {
+        "x": 40,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-table",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "table",
+      "transform": {
+        "x": 176,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-renovate",
+      "kind": "sprite",
+      "assetId": "work_station",
+      "transform": {
+        "x": 200,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "name": "renovate-board"
+    }
+  ]
+}

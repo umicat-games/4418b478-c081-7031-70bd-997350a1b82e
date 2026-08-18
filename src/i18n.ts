@@ -57,21 +57,6 @@ export function dialogFont(): string {
 }
 
 const STRINGS: Record<string, Record<Lang, string>> = {
-  // Demolish confirm — one full sentence per target (avoids cross-language grammar
-  // issues from interpolating a noun into a template).
-  demolish_floor: { en: 'Remove this floor?', 'zh-CN': '你想拆除这块地板吗？' },
-  demolish_wall: { en: 'Remove this wall?', 'zh-CN': '你想拆除这面墙吗？' },
-  demolish_window: { en: 'Remove this window?', 'zh-CN': '你想拆除这扇窗户吗？' },
-  demolish_door: { en: 'Remove this door?', 'zh-CN': '你想拆除这扇门吗？' },
-  demolish_generic: { en: 'Remove this?', 'zh-CN': '你想拆除这个吗？' },
-  demolish_furn_plant: { en: 'Remove this potted plant?', 'zh-CN': '你想拆除这盆植物吗？' },
-  demolish_furn_flower: { en: 'Remove these flowers?', 'zh-CN': '你想拆除这束花吗？' },
-  demolish_furn_lamp: { en: 'Remove this lamp?', 'zh-CN': '你想拆除这盏灯吗？' },
-  demolish_furn_dresser: { en: 'Remove this dresser?', 'zh-CN': '你想拆除这个柜子吗？' },
-  demolish_furn_chair: { en: 'Remove this chair?', 'zh-CN': '你想拆除这把椅子吗？' },
-  demolish_furn_stool: { en: 'Remove this stool?', 'zh-CN': '你想拆除这个凳子吗？' },
-  demolish_furn_clock: { en: 'Remove this clock?', 'zh-CN': '你想拆除这个时钟吗？' },
-  demolish_furn_rug: { en: 'Remove this rug?', 'zh-CN': '你想拆除这块地毯吗？' },
   // Cato's proactive small-talk chips (top-right, left of his portrait). Generic (no
   // crop-name interpolation) to dodge cross-language grammar — same rule as demolish.
   chatter_harvest_start: { en: 'The {crop} is ripe — going to pick it!', 'zh-CN': '{crop}熟了，我去收一下！' },

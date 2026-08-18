@@ -152,6 +152,33 @@ export class TransitionScene extends Phaser.Scene {
     this.animateCover(onCovered);
   }
 
+  /**
+   * Cover the screen, run `onCovered` at full cover (NO `scene.start` — the caller
+   * does its own handoff, e.g. pause + launch a scene over the paused one), then
+   * WAIT for `done()` (via {@link finishTransition}) to uncover; an 8s safety
+   * backstops. The house enter/exit path (see `transition.ts` `coverAndHandoff`).
+   */
+  coverHandoff(onCovered: () => void, opts: BeginOpts): void {
+    if (this.busy) return;
+    this.busy = true;
+    this.effect = opts.effect ?? 'dissolve';
+    this.ms = opts.ms ?? DEF_MS;
+    this.focus = opts.focus;
+    this.loading = opts.loading ?? false;
+    this.revealScheduled = false;
+    const W = this.scale.width, H = this.scale.height;
+    this.scene.bringToTop();
+    this.curtain.clearMask();
+    this.curtain.setFillStyle(opts.color ?? DEF_COLOR, 1).setSize(W, H).setPosition(0, 0).setAlpha(1).setVisible(true);
+    fadeBgmTo(this, 0, this.ms);
+    this.animateCover(() => {
+      this.coverAt = performance.now();
+      if (this.loading) this.showLoadingText();
+      onCovered();
+      this.safety = this.time.delayedCall(8000, () => this.done());
+    });
+  }
+
   /** The stencil + mask + unit-radius for the active iris effect (circle or paw). */
   private iris(): { g: Phaser.GameObjects.Graphics; mask: Phaser.Display.Masks.GeometryMask; unit: number } {
     return this.effect === 'paw'

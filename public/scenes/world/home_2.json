@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "id": "home_2",
+  "name": "Home (+Kitchen)",
+  "type": "world",
+  "world": {
+    "width": 320,
+    "height": 192,
+    "background": {
+      "color": "#000000"
+    }
+  },
+  "camera": {
+    "follow": null
+  },
+  "entities": [
+    {
+      "id": "home_2-room",
+      "kind": "tilemap-ref",
+      "tilemapId": "home-2-room",
+      "transform": {
+        "x": 160,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      },
+      "name": "room"
+    },
+    {
+      "id": "home_2-cato",
+      "kind": "sprite",
+      "role": "child",
+      "assetId": "premium_character_spritesheet",
+      "transform": {
+        "x": 160,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "name": "cato"
+    },
+    {
+      "id": "home_2-exit",
+      "kind": "sprite",
+      "assetId": "door_animation_sprites",
+      "transform": {
+        "x": 160,
+        "y": 184,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 5
+      },
+      "name": "exit-door"
+    },
+    {
+      "id": "home_2-bed",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "bed-pink",
+      "transform": {
+        "x": 40,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_2-table",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "table",
+      "transform": {
+        "x": 176,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_2-kitchen",
+      "kind": "sprite",
+      "assetId": "work_station",
+      "transform": {
+        "x": 272,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "name": "kitchen-station"
+    }
+  ]
+}

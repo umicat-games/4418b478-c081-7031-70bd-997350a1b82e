@@ -15,6 +15,16 @@
       "type": "world",
       "file": "world/main.json",
       "hud": "game-hud"
+    },
+    {
+      "id": "home_1",
+      "type": "world",
+      "file": "world/home_1.json"
+    },
+    {
+      "id": "home_2",
+      "type": "world",
+      "file": "world/home_2.json"
     }
   ],
   "huds": [

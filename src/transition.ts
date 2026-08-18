@@ -9,6 +9,7 @@ interface TransitionOpts {
   ms?: number;
   focus?: { x: number; y: number };       // circle-iris centre
   onCovered?: () => void;                 // runs at full cover, before the scene switch
+  loading?: boolean;                      // HOLD the cover (with "Loading") until the incoming scene finishes
 }
 
 /**
@@ -51,4 +52,20 @@ export function coverAndReload(from: Phaser.Scene, effect: TransitionEffect, onC
   const ts = from.scene.get('TransitionScene') as TransitionScene | undefined;
   if (!ts || !from.scene.isActive('TransitionScene')) { onCovered(); return; }
   ts.coverAndHold(effect, onCovered, { ms });
+}
+
+/**
+ * Cover the screen, run `onCovered` at full cover (WITHOUT `scene.start` — the
+ * caller does its own scene handoff there, e.g. pause one scene + launch another
+ * OVER it), then WAIT for the incoming scene to call {@link finishTransition} to
+ * uncover (an 8s safety uncovers regardless). This is the house enter/exit path:
+ * entering pauses GameScene + launches HouseScene on top (island stays in memory,
+ * so re-entry never hits the scene-reuse "stuck on loading" trap); exiting resumes
+ * GameScene + stops HouseScene. Unlike {@link startTransition} it never shuts the
+ * outgoing scene down; unlike {@link coverAndReload} it DOES reveal afterward.
+ */
+export function coverAndHandoff(from: Phaser.Scene, onCovered: () => void, opts: TransitionOpts = {}): void {
+  const ts = from.scene.get('TransitionScene') as TransitionScene | undefined;
+  if (!ts || !from.scene.isActive('TransitionScene')) { opts.onCovered = undefined; onCovered(); return; }
+  ts.coverHandoff(onCovered, opts);
 }
