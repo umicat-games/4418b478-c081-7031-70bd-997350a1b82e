@@ -4,8 +4,8 @@
   "name": "Home (Basic)",
   "type": "world",
   "world": {
-    "width": 224,
-    "height": 160,
+    "width": 144,
+    "height": 112,
     "background": {
       "color": "#000000"
     }
@@ -19,43 +19,14 @@
       "kind": "tilemap-ref",
       "tilemapId": "home-1-room",
       "transform": {
-        "x": 112,
-        "y": 80,
+        "x": 72,
+        "y": 56,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
         "depth": 1
       },
       "name": "room"
-    },
-    {
-      "id": "home_1-cato",
-      "kind": "sprite",
-      "role": "child",
-      "assetId": "premium_character_spritesheet",
-      "transform": {
-        "x": 112,
-        "y": 120,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "name": "cato"
-    },
-    {
-      "id": "home_1-exit",
-      "kind": "sprite",
-      "assetId": "door_animation_sprites",
-      "transform": {
-        "x": 112,
-        "y": 152,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 5
-      },
-      "name": "exit-door"
     },
     {
       "id": "home_1-bed",
@@ -72,12 +43,12 @@
       }
     },
     {
-      "id": "home_1-table",
+      "id": "home_1-drawer",
       "kind": "sprite",
       "assetId": "basic_furniture",
-      "frame": "table",
+      "frame": "drawer",
       "transform": {
-        "x": 176,
+        "x": 68,
         "y": 40,
         "rotation": 0,
         "scaleX": 1,
@@ -86,18 +57,159 @@
       }
     },
     {
-      "id": "home_1-renovate",
+      "id": "home_1-picture",
       "kind": "sprite",
-      "assetId": "work_station",
+      "assetId": "basic_furniture",
+      "frame": "picture-2",
       "transform": {
-        "x": 200,
-        "y": 96,
+        "x": 100,
+        "y": 22,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-clock",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "clock-3",
+      "transform": {
+        "x": 116,
+        "y": 22,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-ruggreen",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "rug-green",
+      "transform": {
+        "x": 72,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 2
+      }
+    },
+    {
+      "id": "home_1-table",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "table",
+      "transform": {
+        "x": 72,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-chairR",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "chair-right",
+      "transform": {
+        "x": 56,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-chairL",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "chair-left",
+      "transform": {
+        "x": 88,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-chairB",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "chair-back",
+      "transform": {
+        "x": 72,
+        "y": 76,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-rugblue",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "rug-blue",
+      "transform": {
+        "x": 36,
+        "y": 76,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 2
+      }
+    },
+    {
+      "id": "home_1-smalltable",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "small-table",
+      "transform": {
+        "x": 36,
+        "y": 76,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-cato",
+      "kind": "sprite",
+      "role": "child",
+      "assetId": "premium_character_spritesheet",
+      "transform": {
+        "x": 104,
+        "y": 72,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 9
+      },
+      "name": "cato"
+    },
+    {
+      "id": "home_1-exit",
+      "kind": "sprite",
+      "assetId": "door_animation_sprites",
+      "transform": {
+        "x": 72,
+        "y": 104,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
         "depth": 10
       },
-      "name": "renovate-board"
+      "name": "exit-door"
     }
   ]
 }

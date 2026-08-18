@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { finishTransition, coverAndHandoff } from '../transition';
 import { DESIGN_ZOOM } from '../config';
+import { isDebug } from '../debug';
 import type { GameScene } from './GameScene';
 
 const DOOR_CLOSED_FRAME = 5; // `door` sheet: frame 5 = shut (matches GameScene's DOOR_CLOSED_FRAME)
@@ -78,14 +79,10 @@ export class HouseScene extends Phaser.Scene {
       exit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => this.exitHouse());
     }
 
-    // The work_station sprite: in home_1 it's the RENOVATION station (tap → buy the
-    // +kitchen tier); in home_2 it's the (decorative) kitchen — no action yet.
-    const station = reg?.all().find(
-      (go) => go.getData('entityAssetId') === 'work_station',
-    ) as Phaser.GameObjects.Sprite | undefined;
-    if (station && this.homeSceneId === 'home_1') {
-      station.setInteractive({ useHandCursor: true });
-      station.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => this.tryRenovate('home_2'));
+    // Renovate (buy the next tier) is a DEBUG key for now — the work station stays OUTSIDE
+    // the house, and the in-house purchase affordance is a later design. R = renovate.
+    if (isDebug('devTools') && this.homeSceneId === 'home_1') {
+      this.input.keyboard?.on('keydown-R', () => this.tryRenovate('home_2'));
     }
 
     // Keep the pixel cursor on top (it self-drives from the real pointer when GameScene
@@ -101,11 +98,15 @@ export class HouseScene extends Phaser.Scene {
     const gs = this.scene.get('GameScene') as Phaser.Scene | undefined;
     const zoom = gs?.cameras?.main?.zoom || DESIGN_ZOOM;
     cam.setZoom(zoom);
-    // `setBounds` does three things we want at once: (1) tilemap CULLING keys off the
-    // camera bounds — WITHOUT them the room's tiles get culled away (black room); (2) a
-    // room SMALLER than the view is auto-CENTRED (black around it); (3) a BIGGER room
-    // clamps panning to its edges. `centerOn` sets the initial view (middle of the room).
-    cam.setBounds(0, 0, this.worldW, this.worldH);
+    // We need BOTH: tilemap CULLING keys off the camera bounds (remove them and the room's
+    // tiles get culled away → black room), AND a room smaller than the view must be CENTRED
+    // (plain setBounds(0,0,room) clamps a small room to the top-left corner, not centred).
+    // So set the bounds to at least the viewport size, CENTRED on the room: a small
+    // dimension centres (black around it, can't pan off), a bigger one keeps its full extent
+    // so panning still works. `centerOn` sets the initial view to the room's middle.
+    const viewW = this.scale.width / zoom, viewH = this.scale.height / zoom;
+    const bw = Math.max(this.worldW, viewW), bh = Math.max(this.worldH, viewH);
+    cam.setBounds(this.worldW / 2 - bw / 2, this.worldH / 2 - bh / 2, bw, bh);
     cam.centerOn(this.worldW / 2, this.worldH / 2);
   };
 
