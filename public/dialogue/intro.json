@@ -42,8 +42,7 @@
     "tool_pad": {
       "type": "line",
       "speaker": "cato",
-      "data": { "focus": "pad" },
-      "text": { "en": "This little tablet is for shopping. Tap it to buy seeds, tools, and all sorts of goodies.", "zh-CN": "这个小平板是用来买东西的。点开它就能买种子、工具，各种好东西。" },
+      "text": { "en": "For shopping, there's a little tablet button in the bottom-right corner of the screen. Tap it to buy seeds, tools, and all sorts of goodies.", "zh-CN": "想买东西的话，屏幕右下角有个小平板按钮。点开它就能买种子、工具，各种好东西。" },
       "next": "tool_workstation"
     },
     "tool_workstation": {

@@ -1689,7 +1689,8 @@ export class GameScene extends Phaser.Scene {
     if (this.handleToolHudClick(x, y)) return;
     // Contextual tool palette open → a button equips that tool, a miss dismisses it.
     if (this.handleToolPaletteClick(x, y)) return;
-    // Bottom-right corner buttons: sprout → backpack, gear → Settings.
+    // Bottom-right corner buttons: tablet → Shop, sprout → backpack, paw → menu/Settings.
+    if (this.overShopButton(x, y)) { this.pressShopThenOpen(); return; }
     if (this.overBackpackButton(x, y)) { this.pressBackpackThenOpen(); return; }
     if (this.overSettingsButton(x, y)) { this.pressSettingsThenOpen(); return; }
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
@@ -1740,7 +1741,6 @@ export class GameScene extends Phaser.Scene {
     // the grass under it.
     if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; }
     if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }
-    if (!this.activePlace && this.padContains(wp.x, wp.y)) { this.openShopViaPad(); return; }
     if (!this.activePlace && this.craftStationContains(wp.x, wp.y)) { this.openCraft(); return; }
     // Tap the house → enter its interior (a separate scene). Checked after the door
     // objects (mailbox/chest/pad/craft) so those win over the house footprint they sit on.
@@ -2641,10 +2641,27 @@ export class GameScene extends Phaser.Scene {
 
   private bagBtnPressed = false;
   private settingsBtnPressed = false;
-  /** Publish the bottom-right corner buttons (backpack sprout + settings gear) visibility + press. */
+  private shopBtnPressed = false;
+  /** Publish the bottom-right corner buttons (shop tablet + backpack sprout + paw menu) visibility + press. */
   private publishBackpackBtn(): void {
     const hidden = !this.gameReady || this.cutscene || (this.dialogOpen && !this.cutscene) || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen;
-    this.registry.set('backpackBtn', { visible: !hidden, bagPressed: this.bagBtnPressed, settingsPressed: this.settingsBtnPressed });
+    this.registry.set('backpackBtn', { visible: !hidden, bagPressed: this.bagBtnPressed, settingsPressed: this.settingsBtnPressed, shopPressed: this.shopBtnPressed });
+  }
+
+  private overShopButton(x: number, y: number): boolean {
+    const r = this.registry.get('shopBtnBounds') as { x: number; y: number; w: number; h: number } | undefined;
+    return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
+  /** Shop tablet tapped → flash pressed, THEN open the Shop tab (standalone, no tab bar).
+   *  Shopping is done OUTSIDE on the island — the house interior is for cooking/games. */
+  private pressShopThenOpen(): void {
+    if (this.menuOpen) return;
+    this.shopBtnPressed = true; this.publishBackpackBtn();
+    this.time.delayedCall(120, () => {
+      this.shopBtnPressed = false; this.publishBackpackBtn();
+      this.openMenu(TAB_SHOP);
+    });
   }
 
   private overSettingsButton(x: number, y: number): boolean {
@@ -2974,7 +2991,6 @@ export class GameScene extends Phaser.Scene {
     if (this.child && this.catContains(wx, wy)) return { name: t('hover_cato'), sprite: this.child };
     if (this.mailbox && this.mailboxContains(wx, wy)) return { name: t('hover_mailbox'), sprite: this.mailbox };
     if (this.chest && this.chestContains(wx, wy)) return { name: t('hover_chest'), sprite: this.chest };
-    if (this.pad && this.padContains(wx, wy)) return { name: t('hover_shop'), sprite: this.pad };
     if (this.craftStation && this.craftStationContains(wx, wy)) return { name: t('hover_workstation'), sprite: this.craftStation };
     const tk = this.treeAtPoint(wx, wy);
     if (tk) { const o = this.trees.get(tk); if (o) return { name: t(`hover_tree_${o.type}`), sprite: o.sprite }; }
@@ -4368,12 +4384,6 @@ export class GameScene extends Phaser.Scene {
     // above the furniture it overlaps, but still under Cato when he's in front).
   }
 
-  private padContains(wx: number, wy: number): boolean {
-    if (!this.pad) return false;
-    const b = this.pad.getBounds();
-    return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
-  }
-
   // ── Unified menu (MenuScene) — tabs: mail / chest / cato-bag / shop / settings ──
 
   /** Door mailbox clicked → play its open swing, THEN open the menu on Mail; closing the
@@ -4386,12 +4396,6 @@ export class GameScene extends Phaser.Scene {
   /** Door chest clicked → play its open swing, THEN open the menu on Chest; closing plays close. */
   private openChestViaDoor(): void {
     this.openMenuViaObject(this.chest, 'chest-open-front', 'chest-close-front', 1);
-  }
-
-  /** Desk pad clicked → play its screen-on swing, THEN open the menu on the Shop tab;
-   *  closing the menu plays the screen-off swing. (Replaces the bottom-right shop button.) */
-  private openShopViaPad(): void {
-    this.openMenuViaObject(this.pad, 'pad-open', 'pad-close', 3);
   }
 
   /** Play `sprite`'s open animation, then open the unified menu on `tab`; remember the
