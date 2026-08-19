@@ -7,6 +7,8 @@ import type { GameScene } from './GameScene';
 
 const DOOR_CLOSED_FRAME = 5; // `door` sheet: frame 5 = shut (matches GameScene's DOOR_CLOSED_FRAME)
 const PAN_SPEED = 260; // world px/sec for keyboard camera panning (a bigger-than-screen room)
+const BRACKET_BR = 0.625; // corner-bracket scale — matches the island's white-corner-bracket (~5×zoom)
+const HOVER_PAD = 6;      // world-px gap around the framed object (== GameScene.HOVER_PAD_WORLD)
 
 /**
  * House INTERIOR scene (Animal Crossing / Stardew style). The island house is a
@@ -26,6 +28,7 @@ export class HouseScene extends Phaser.Scene {
   private worldW = 224;
   private worldH = 160;
   private exitDoor?: Phaser.GameObjects.Sprite;
+  private hoverBracket?: Phaser.GameObjects.NineSlice; // corner frame shown when the mouse is over the exit door
   private exiting = false;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
@@ -79,6 +82,15 @@ export class HouseScene extends Phaser.Scene {
       exit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => this.exitHouse());
     }
 
+    // Hover affordance: a white corner-bracket around the exit door (the SAME frame the island's
+    // hover-inspect uses) so the player sees the door is clickable to leave. World-space nine-slice
+    // (the camera applies the zoom) scaled 0.625 → ~5×zoom corners, matching the island brackets.
+    if (this.textures.exists('ui-sheet') && this.textures.get('ui-sheet').has('white-corner-bracket')) {
+      this.hoverBracket = this.add
+        .nineslice(0, 0, 'ui-sheet', 'white-corner-bracket', 32, 32, 14, 14, 14, 14)
+        .setScale(BRACKET_BR).setOrigin(0.5, 0.5).setDepth(1e6).setVisible(false);
+    }
+
     // Renovate (buy the next tier) is a DEBUG key for now — the work station stays OUTSIDE
     // the house, and the in-house purchase affordance is a later design. R = renovate.
     if (isDebug('devTools') && this.homeSceneId === 'home_1') {
@@ -110,13 +122,31 @@ export class HouseScene extends Phaser.Scene {
     cam.centerOn(this.worldW / 2, this.worldH / 2);
   };
 
-  /** Touch drag pans the room (desktop pans with keys, like the island). setBounds clamps. */
+  /** Touch drag pans the room (desktop pans with keys, like the island). setBounds clamps.
+   *  Also drives the exit-door hover bracket (desktop mouse). */
   private onPointerMove = (p: Phaser.Input.Pointer): void => {
+    this.updateDoorHover(p);
     if (!p.isDown || !p.wasTouch) return;
     const cam = this.cameras.main;
     cam.scrollX -= (p.x - p.prevPosition.x) / cam.zoom;
     cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom;
   };
+
+  /** Show the corner bracket around the exit door while the mouse is over it (frames the door,
+   *  like the island's hover-inspect), else hide it. */
+  private updateDoorHover(p: Phaser.Input.Pointer): void {
+    const br = this.hoverBracket, door = this.exitDoor;
+    if (!br || !door || this.exiting) { br?.setVisible(false); return; }
+    const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+    const b = door.getBounds();
+    const on = wp.x >= b.x && wp.x <= b.right && wp.y >= b.y && wp.y <= b.bottom;
+    if (on) {
+      br.setSize((b.width + HOVER_PAD * 2) / BRACKET_BR, (b.height + HOVER_PAD * 2) / BRACKET_BR)
+        .setPosition(b.centerX, b.centerY).setVisible(true);
+    } else {
+      br.setVisible(false);
+    }
+  }
 
   update(_t: number, delta: number): void {
     // Keyboard pan (WASD / arrows) — the camera bounds clamp it, so a fits-on-screen
