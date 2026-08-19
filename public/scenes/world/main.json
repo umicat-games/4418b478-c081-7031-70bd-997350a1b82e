@@ -1222,19 +1222,6 @@
       "assetId": "chest"
     },
     {
-      "id": "e-ms7qoik9-4kvh",
-      "kind": "sprite",
-      "transform": {
-        "x": 153,
-        "y": 220,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "ipad_qkzld"
-    },
-    {
       "id": "e-workstation-1",
       "kind": "sprite",
       "transform": {
