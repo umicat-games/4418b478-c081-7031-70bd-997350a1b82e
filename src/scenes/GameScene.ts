@@ -323,6 +323,10 @@ const FLOOR_DEPTH = 1.2;
 // re-sorts every sprite's depth by foot Y each frame; a rug's low foot made it
 // cover furniture. Below FLOOR_DEPTH-adjacent floor tiles? No — just above them.
 const RUG_DEPTH = 1.5;
+// The roof tilemap layer's fixed depth. The house bottom edge is world y≈288 (rows 13–17); a
+// static roof at this depth y-sorts against Cato's foot-Y like a sprite would: Cato SOUTH of the
+// house (foot Y > 287) draws in FRONT of the roof, NORTH of it (< 287) is occluded by it.
+const ROOF_DEPTH = 287;
 
 // --- Crops (Sprout Lands "Farming Plants") ---
 // Each crop grows through N stages (frames `grow-<name>-<stage>` in the
@@ -686,6 +690,7 @@ export class GameScene extends Phaser.Scene {
   // sprites. Both feed pathfinding (isWalkableCell) so Cato routes around the house
   // interior, and the furniture also gets real colliders in wallGroup.
   private wallLayer?: Phaser.Tilemaps.TilemapLayer;
+  private roofLayer?: Phaser.Tilemaps.TilemapLayer; // the roof painted over the house (depth-sorted, ROOF_DEPTH)
   private houseBlocked = new Set<string>(); // "cx,cy" of solid furniture (pathfinding)
   // The editor-placed door sprite (door_animation_sprites). Swings open as Cato
   // nears + closes when he leaves — cosmetic only (the doorway is a walkable floor
@@ -2173,6 +2178,13 @@ export class GameScene extends Phaser.Scene {
       layers?.find((l) => l.getData('tilemapTilesetId') === 'wooden_house_walls_tilset') ??
       layers?.find((l) => l.layer?.name === 'wooden_house');
     if (!this.wallLayer) console.warn('[catopia] wooden_house wall layer not found — wall pathfinding + floor strip disabled');
+    // The creator painted the ROOF into a third layer (`wooden_house_roof_tilset`). Resolve it by
+    // its tileset id (the SDK drops the JSON layer name) + pin it to ROOF_DEPTH so it sorts against
+    // Cato's foot-Y (in front when he's south of the house, behind when north).
+    this.roofLayer =
+      layers?.find((l) => l.getData('tilemapTilesetId') === 'wooden_house_roof_tilset') ??
+      layers?.find((l) => l.layer?.name === 'roof');
+    this.roofLayer?.setDepth(ROOF_DEPTH);
     this.stripFloorColliders();
     this.wireHouseFurniture();
     this.wireHouseDoor();
@@ -5391,17 +5403,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The editor-placed roof sprite over the house. The house is now a solid FACADE (entering
-   *  it switches to the interior scene), so: (1) the roof y-sorts by its foot Y like any world
-   *  sprite — Cato passes IN FRONT when he's south of the house, BEHIND when he's north; and
-   *  (2) the whole house footprint is marked non-walkable so Cato never wanders UNDER the roof
-   *  (where he'd vanish) — the interior is reached by tapping, not by walking in. */
+  /** The house is now a solid FACADE (entering it switches to the interior scene). The roof
+   *  itself is a TILEMAP layer the creator painted with `wooden_house_roof_tilset` — depth-sorted
+   *  in setupFarming (a static layer at a FIXED depth == a foot-Y sort: Cato SOUTH of the house
+   *  draws in front, NORTH behind). Here we only block the whole footprint so Cato never wanders
+   *  UNDER the roof (where he'd vanish) — the interior is reached by tapping, not by walking in. */
   private wireHouseRoof(): void {
-    const reg = getEntityRegistry(this);
-    const roof = reg?.all().find(
-      (go) => go.getData('entityAssetId') === 'wooden_house_roof_tilset',
-    ) as Phaser.GameObjects.Sprite | undefined;
-    if (roof && !this.ySortSprites.includes(roof)) this.ySortSprites.push(roof);
     // Block every house cell (the `wooden_house` layer holds walls + floor, so every non-empty
     // tile is part of the house) so A* routes Cato around the whole building.
     this.wallLayer?.forEachTile((t) => { if (t && t.index !== -1) this.houseBlocked.add(`${t.x},${t.y}`); });
@@ -8262,6 +8269,11 @@ export class GameScene extends Phaser.Scene {
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
+    // Pin the roof layer's depth every frame: the SDK's tilemap layer-sync mirrors each layer's
+    // depth back to its tilemap-ref transform.depth (1) every frame, which would otherwise clobber
+    // the ROOF_DEPTH we set at load — so Cato would always draw in front of the roof (north-side
+    // occlusion lost). Re-asserting here keeps the foot-Y sort against the static roof correct.
+    if (this.roofLayer && this.roofLayer.depth !== ROOF_DEPTH) this.roofLayer.setDepth(ROOF_DEPTH);
 
     // Camera follow runs in POST_UPDATE (updateCameraFollow) so it sees Cato's
     // FINAL position for the frame — see the note where it's registered in create().

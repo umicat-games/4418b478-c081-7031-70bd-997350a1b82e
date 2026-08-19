@@ -1246,20 +1246,6 @@
         "depth": 10
       },
       "assetId": "work_station"
-    },
-    {
-      "id": "e-house-roof",
-      "kind": "sprite",
-      "assetId": "wooden_house_roof_tilset",
-      "transform": {
-        "x": 168,
-        "y": 248,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "name": "house-roof"
     }
   ]
 }

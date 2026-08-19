@@ -2061,8 +2061,21 @@
       "id": "wooden_house_roof_tilset",
       "textureKey": "wooden_house_roof_tilset",
       "path": "uploaded/wooden_house_roof_tilset.png",
-      "kind": "image",
-      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/wooden_house_roof_tilset.png"
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/wooden_house_roof_tilset.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 16,
+        "frameHeight": 16
+      },
+      "pixelArt": true,
+      "tileset": {
+        "cellSize": {
+          "width": 16,
+          "height": 16
+        },
+        "cols": 7,
+        "rows": 5
+      }
     }
   ]
 }
