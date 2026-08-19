@@ -4235,6 +4235,12 @@ export class GameScene extends Phaser.Scene {
     this.houseDoor = door;
     door.stop();
     door.setTexture('door', DOOR_CLOSED_FRAME); // start closed, on the anim-bearing sheet
+    // The door is part of the fixed facade — the ROOF (its eaves row) must draw OVER the door's
+    // top. Pull it out of the foot-Y y-sort (which pins it at ~288, one above ROOF_DEPTH 287, so
+    // it would cover the eaves) and fix it just UNDER the roof — still well above the wall tilemap
+    // so it fills the doorway. Cato (foot Y > 287 when south of the house) still draws in front.
+    this.ySortSprites = this.ySortSprites.filter((s) => s !== door);
+    door.setDepth(ROOF_DEPTH - 2);
   }
 
   /** Swing the editor door open as Cato approaches, close when he leaves
