@@ -90,160 +90,6 @@
       "animation": "door-open"
     },
     {
-      "id": "e-mrzpwa6c-e4j9",
-      "kind": "sprite",
-      "transform": {
-        "x": 136,
-        "y": 224,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "bed-pink"
-    },
-    {
-      "id": "e-mrzpwgpk-24r2",
-      "kind": "sprite",
-      "transform": {
-        "x": 169,
-        "y": 223,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "drawer"
-    },
-    {
-      "id": "e-mrzpwutn-nzdw",
-      "kind": "sprite",
-      "transform": {
-        "x": 200,
-        "y": 216,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "picture-2"
-    },
-    {
-      "id": "e-mrzpxxqy-ok3x",
-      "kind": "sprite",
-      "transform": {
-        "x": 186.26927713343488,
-        "y": 252.49767098919568,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "rug-green"
-    },
-    {
-      "id": "e-mrzpy10s-gmb8",
-      "kind": "sprite",
-      "transform": {
-        "x": 186.26927713343488,
-        "y": 252.49767098919568,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "table"
-    },
-    {
-      "id": "e-mrzpzmw4-7p4i",
-      "kind": "sprite",
-      "transform": {
-        "x": 171,
-        "y": 251,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "chair-right"
-    },
-    {
-      "id": "e-mrzpzt3i-ex0y",
-      "kind": "sprite",
-      "transform": {
-        "x": 200,
-        "y": 251,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "chair-left"
-    },
-    {
-      "id": "e-mrzpzyfv-hah0",
-      "kind": "sprite",
-      "transform": {
-        "x": 186,
-        "y": 262,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "chair-back"
-    },
-    {
-      "id": "e-mrzq21c2-5kbd",
-      "kind": "sprite",
-      "transform": {
-        "x": 140,
-        "y": 256,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "rug-blue"
-    },
-    {
-      "id": "e-mrzq23te-eynk",
-      "kind": "sprite",
-      "transform": {
-        "x": 140,
-        "y": 256,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "small-table"
-    },
-    {
-      "id": "e-mrzq3icd-n71l",
-      "kind": "sprite",
-      "transform": {
-        "x": 184,
-        "y": 217,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "clock-3"
-    },
-    {
       "id": "e-ms0htzrn-ojlj",
       "kind": "sprite",
       "transform": {
@@ -1376,20 +1222,6 @@
       "assetId": "chest"
     },
     {
-      "id": "e-ms7qoa1r-j925",
-      "kind": "sprite",
-      "transform": {
-        "x": 153,
-        "y": 227,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "basic_furniture",
-      "frame": "table"
-    },
-    {
       "id": "e-ms7qoik9-4kvh",
       "kind": "sprite",
       "transform": {
@@ -1414,6 +1246,20 @@
         "depth": 10
       },
       "assetId": "work_station"
+    },
+    {
+      "id": "e-house-roof",
+      "kind": "sprite",
+      "assetId": "wooden_house_roof_tilset",
+      "transform": {
+        "x": 168,
+        "y": 248,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "name": "house-roof"
     }
   ]
 }

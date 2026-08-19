@@ -2056,6 +2056,13 @@
       "atlasPath": "uploaded/water_objects.json",
       "atlasFormat": "json",
       "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/water_objects.json"
+    },
+    {
+      "id": "wooden_house_roof_tilset",
+      "textureKey": "wooden_house_roof_tilset",
+      "path": "uploaded/wooden_house_roof_tilset.png",
+      "kind": "image",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/wooden_house_roof_tilset.png"
     }
   ]
 }

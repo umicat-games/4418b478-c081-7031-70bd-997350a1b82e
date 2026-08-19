@@ -2176,6 +2176,7 @@ export class GameScene extends Phaser.Scene {
     this.stripFloorColliders();
     this.wireHouseFurniture();
     this.wireHouseDoor();
+    this.wireHouseRoof();
     this.wireMailbox();
     this.wireChest();
     this.wirePad();
@@ -5388,6 +5389,22 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  /** The editor-placed roof sprite over the house. The house is now a solid FACADE (entering
+   *  it switches to the interior scene), so: (1) the roof y-sorts by its foot Y like any world
+   *  sprite — Cato passes IN FRONT when he's south of the house, BEHIND when he's north; and
+   *  (2) the whole house footprint is marked non-walkable so Cato never wanders UNDER the roof
+   *  (where he'd vanish) — the interior is reached by tapping, not by walking in. */
+  private wireHouseRoof(): void {
+    const reg = getEntityRegistry(this);
+    const roof = reg?.all().find(
+      (go) => go.getData('entityAssetId') === 'wooden_house_roof_tilset',
+    ) as Phaser.GameObjects.Sprite | undefined;
+    if (roof && !this.ySortSprites.includes(roof)) this.ySortSprites.push(roof);
+    // Block every house cell (the `wooden_house` layer holds walls + floor, so every non-empty
+    // tile is part of the house) so A* routes Cato around the whole building.
+    this.wallLayer?.forEachTile((t) => { if (t && t.index !== -1) this.houseBlocked.add(`${t.x},${t.y}`); });
   }
 
   private addSolid(cx: number, cy: number, texture: string, frame: number): Phaser.Physics.Arcade.Sprite[] {
