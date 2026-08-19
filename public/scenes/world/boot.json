@@ -280,20 +280,6 @@
       "animation": "mailbox-idle"
     },
     {
-      "id": "e-mscfrs2k-mhh0",
-      "kind": "sprite",
-      "transform": {
-        "x": 269.45834169619286,
-        "y": 200.5,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "trees_stumps_and_bushes",
-      "frame": "bush-with-strawberry"
-    },
-    {
       "id": "e-mscfrup8-dpiv",
       "kind": "sprite",
       "transform": {
