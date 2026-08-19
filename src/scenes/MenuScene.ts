@@ -247,10 +247,10 @@ export class MenuScene extends Phaser.Scene {
     // brown tab + brown frame border MERGE into one piece — like the reference). Drawn
     // BEFORE the frame so the frame's top border covers the tab's bottom seam.
     // Tabs with a left content grid/list AND a right detail (chest / mailbox / bags / pickup /
-    // for-sale) share ONE full-width frame, split by a dashed divider — instead of two frames.
-    // Settings / Calendar are full-width too (no right detail). Shop keeps its own layout.
+    // for-sale / SHOP) share ONE full-width frame, split by a dashed divider — instead of two
+    // frames. Settings / Calendar are full-width too (no right detail).
     const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK
-      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL;
+      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP;
     const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR;
     const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
     const lx = L.x * W, ly = L.y * H, lw = frameWFrac * W, lh = L.h * H;
@@ -708,23 +708,23 @@ export class MenuScene extends Phaser.Scene {
 
   private renderShopDetail(c: Phaser.GameObjects.Container, e: MenuCatalogItem | undefined, qty: number, money: number, msg: string): void {
     const W = this.scale.width, H = this.scale.height;
-    const px = DETAIL.panelX * W, pw = DETAIL.panelW * W;
-    const top = 0.30 * H, ph = 0.62 * H; // tall panel (0.30–0.92) so the stepper + buy button fit
-    c.add(this.add.nineslice(px + pw / 2, top + ph / 2, ATLAS, PANEL_FRAME, pw / PANEL_SCALE, ph / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
+    // Draws straight onto the SHARED main frame, right of the dashed divider — NO second frame.
+    // `cx` = the right-region centre (matches renderDetail); `regionW` sizes wordwrap + the buy button.
+    const cx = 0.76 * W, regionW = 0.40 * W;
     this.registry.set('menuStepper', []);
-    if (!e) { c.add(this.T(px + pw / 2, 0.6 * H, t('shop_pick_item'), H * 0.024, SUB)); return; }
+    if (!e) { c.add(this.T(cx, 0.6 * H, t('shop_pick_item'), H * 0.024, SUB)); return; }
     if (this.textures.exists(e.iconKey)) {
-      const img = this.add.image(px + pw / 2, 0.40 * H, e.iconKey, this.fitFrame(e.iconKey, e.iconFrame));
+      const img = this.add.image(cx, 0.40 * H, e.iconKey, this.fitFrame(e.iconKey, e.iconFrame));
       img.setScale((H * 0.14) / Math.max(img.width, img.height)); c.add(img); // ~0.14H tall, not the huge 0.22W
     }
-    c.add(this.T(px + pw / 2, 0.52 * H, e.label, H * 0.028, INK));
-    c.add(this.T(px + pw / 2, 0.565 * H, `${t('shop_unit_price')} ${e.price}`, H * 0.023, '#7a5a34'));
-    const desc = this.add.text(px + pw / 2, 0.60 * H, e.desc, {
-      fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: pw * 0.84 },
+    c.add(this.T(cx, 0.52 * H, e.label, H * 0.028, INK));
+    c.add(this.T(cx, 0.565 * H, `${t('shop_unit_price')} ${e.price}`, H * 0.023, '#7a5a34'));
+    const desc = this.add.text(cx, 0.60 * H, e.desc, {
+      fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: regionW * 0.84 },
     }).setOrigin(0.5, 0); c.add(desc);
     // Quantity stepper: [−]  N  [+]
     const cy = STEP.y * H, btn = STEP.btn * H, dx = STEP.gap * W;
-    const cxN = px + pw / 2, cxMinus = cxN - dx, cxPlus = cxN + dx;
+    const cxN = cx, cxMinus = cxN - dx, cxPlus = cxN + dx;
     const bounds: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
     const mkBtn = (cx: number, label: string, key: string, w = btn, h = btn) => {
       const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
@@ -743,7 +743,7 @@ export class MenuScene extends Phaser.Scene {
     mkBtn(cxPlus, '+', 'inc');
     // BUY button — wide, shows the subtotal; greyed intent when unaffordable (still tappable → warns).
     const sub = e.price * qty;
-    mkBtn(cxN, `${t('shop_buy')} ${sub}`, 'buy', pw * 0.62, btn * 1.05);
+    mkBtn(cxN, `${t('shop_buy')} ${sub}`, 'buy', regionW * 0.62, btn * 1.05);
     this.registry.set('menuStepper', bounds);
     // Transient warning (金币不够 / 箱子满了).
     if (msg) c.add(this.T(cxN, STEP.msgY * H, msg, H * 0.022, '#b5533a'));
