@@ -179,11 +179,24 @@ export class HouseScene extends Phaser.Scene {
   private exitHouse(): void {
     if (this.exiting) return;
     this.exiting = true;
-    if (this.exitDoor && this.anims.exists('door-open')) this.exitDoor.play({ key: 'door-open', repeat: 0 });
-    // Quick fade to black, then back on the island (matches the enter fade — no iris/loading).
-    coverAndHandoff(this, () => {
-      this.scene.resume('GameScene');
-      this.scene.stop('HouseScene');
-    }, { effect: 'dissolve', color: 0x000000, ms: 220 });
+    this.hoverBracket?.setVisible(false); // drop the hover frame while leaving
+    // Play the door-open swing FIRST, THEN fade to black + back to the island (matches the enter
+    // fade — no iris/loading). Guarded so the ANIMATION_COMPLETE + the safety timer can't both fire.
+    let started = false;
+    const fadeOut = (): void => {
+      if (started) return;
+      started = true;
+      coverAndHandoff(this, () => {
+        this.scene.resume('GameScene');
+        this.scene.stop('HouseScene');
+      }, { effect: 'dissolve', color: 0x000000, ms: 220 });
+    };
+    if (this.exitDoor && this.anims.exists('door-open')) {
+      this.exitDoor.once(Phaser.Animations.Events.ANIMATION_COMPLETE, fadeOut);
+      this.exitDoor.play({ key: 'door-open', repeat: 0 });
+      this.time.delayedCall(2000, fadeOut); // safety: a missed COMPLETE event can't strand the exit
+    } else {
+      fadeOut();
+    }
   }
 }
