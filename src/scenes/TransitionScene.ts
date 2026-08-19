@@ -221,8 +221,12 @@ export class TransitionScene extends Phaser.Scene {
     if (this.effect === 'circle' || this.effect === 'paw') {
       this.irisScale(true, onComplete);
     } else if (this.effect === 'slide') {
+      this.curtain.setX(-W); // move off-screen NOW so the from:-W tween can't flash a covering frame
       this.tweens.add({ targets: this.curtain, x: { from: -W, to: 0 }, duration: this.ms, ease: 'Cubic.easeInOut', onComplete });
     } else {
+      // The curtain was just set opaque (alpha 1, for circle/paw/slide). Force it transparent NOW so
+      // the `from:0` dissolve tween doesn't render a 1-frame FULL-BLACK flash before its first update.
+      this.curtain.setAlpha(0);
       this.tweens.add({ targets: this.curtain, alpha: { from: 0, to: 1 }, duration: this.ms, ease: 'Sine.easeInOut', onComplete });
     }
   }
