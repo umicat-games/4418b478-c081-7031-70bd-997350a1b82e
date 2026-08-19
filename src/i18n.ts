@@ -238,6 +238,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   hover_chest: { en: 'Chest', 'zh-CN': '箱子' },
   hover_shop: { en: 'Shop', 'zh-CN': '商店' },
   hover_workstation: { en: 'Workbench', 'zh-CN': '工作台' },
+  hover_house: { en: 'House', 'zh-CN': '房子' },
 };
 
 /** Translate a key for the active language (English fallback, then the key itself). */

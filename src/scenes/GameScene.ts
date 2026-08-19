@@ -691,6 +691,7 @@ export class GameScene extends Phaser.Scene {
   // interior, and the furniture also gets real colliders in wallGroup.
   private wallLayer?: Phaser.Tilemaps.TilemapLayer;
   private roofLayer?: Phaser.Tilemaps.TilemapLayer; // the roof painted over the house (depth-sorted, ROOF_DEPTH)
+  private houseRect?: { x: number; y: number; w: number; h: number }; // cached world bbox of the house footprint
   private houseBlocked = new Set<string>(); // "cx,cy" of solid furniture (pathfinding)
   // The editor-placed door sprite (door_animation_sprites). Swings open as Cato
   // nears + closes when he leaves — cosmetic only (the doorway is a walkable floor
@@ -2933,8 +2934,9 @@ export class GameScene extends Phaser.Scene {
 
     if (target) {
       // TIGHT box = the sprite's opaque-pixel bbox (not the padded frame), so the bracket hugs
-      // the actual art regardless of how much transparent margin the asset has.
-      const b = this.spriteWorldSolidRect(target.sprite);
+      // the actual art regardless of how much transparent margin the asset has. A `rect` target
+      // (the house) supplies its own world bbox directly (no sprite to measure).
+      const b = target.rect ?? this.spriteWorldSolidRect(target.sprite!);
       const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
       const pad = GameScene.HOVER_PAD_WORLD * cam.zoom; // world-space gap so the corners clear the art's vertices
       this.hoverModel = {
@@ -3000,11 +3002,15 @@ export class GameScene extends Phaser.Scene {
   /** The topmost nameable object under a world point, for the inspect hover (name + the sprite
    *  whose bounds the ring hugs). Priority: Cato → interactables → trees/stones/forage (tall,
    *  by sprite bounds) → cell props (bushes/crops). */
-  private hoverTargetAt(wx: number, wy: number): { name: string; sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image } | null {
+  private hoverTargetAt(wx: number, wy: number): { name: string; sprite?: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image; rect?: { x: number; y: number; w: number; h: number } } | null {
     if (this.child && this.catContains(wx, wy)) return { name: t('hover_cato'), sprite: this.child };
     if (this.mailbox && this.mailboxContains(wx, wy)) return { name: t('hover_mailbox'), sprite: this.mailbox };
     if (this.chest && this.chestContains(wx, wy)) return { name: t('hover_chest'), sprite: this.chest };
     if (this.craftStation && this.craftStationContains(wx, wy)) return { name: t('hover_workstation'), sprite: this.craftStation };
+    // The HOUSE: hovering its walls / roof / door frames the WHOLE building (a `rect`, not one
+    // tile). After the door objects (mailbox/chest sit INSIDE the footprint, so they win); before
+    // trees / tiles. The bracket hugs the footprint rect via updateHoverInspect's rect branch.
+    { const hr = this.houseFootprintRect(); if (hr && wx >= hr.x && wx <= hr.x + hr.w && wy >= hr.y && wy <= hr.y + hr.h) return { name: t('hover_house'), rect: hr }; }
     const tk = this.treeAtPoint(wx, wy);
     if (tk) { const o = this.trees.get(tk); if (o) return { name: t(`hover_tree_${o.type}`), sprite: o.sprite }; }
     const sk = this.stoneAtPoint(wx, wy);
@@ -4266,26 +4272,38 @@ export class GameScene extends Phaser.Scene {
 
   // ── House as a facade → interior scene ─────────────────────────────────────
 
-  /** Is a world point on the house (its `wooden_house` tile footprint, or the door
-   *  sprite)? Tapping the house enters the interior. Footprint-based (not just the
-   *  door) so it still works once the creator adds a roof over the whole building. */
-  private houseDoorContains(wx: number, wy: number): boolean {
-    const door = this.houseDoor;
-    if (door) {
-      const b = door.getBounds();
-      if (wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4) return true;
-    }
-    const layer = this.wallLayer;
-    if (!layer) return false;
+  /** The house's world-space footprint rect (the `wooden_house` painted-tile bbox), cached (the
+   *  house never moves). Used by BOTH the tap-to-enter hit test and the hover bracket that frames
+   *  the whole building. */
+  private houseFootprintRect(): { x: number; y: number; w: number; h: number } | null {
+    if (this.houseRect) return this.houseRect;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, found = false;
-    layer.forEachTile((t) => {
+    // Union the WALL + ROOF painted tiles so the bbox covers the whole visible building — the roof
+    // extends above the walls (its ridge row), so a wall-only bbox would clip the roof top.
+    const scan = (layer?: Phaser.Tilemaps.TilemapLayer) => layer?.forEachTile((t) => {
       if (t && t.index !== -1) {
         found = true;
         minX = Math.min(minX, t.getLeft()); minY = Math.min(minY, t.getTop());
         maxX = Math.max(maxX, t.getRight()); maxY = Math.max(maxY, t.getBottom());
       }
     });
-    return found && wx >= minX - 4 && wx <= maxX + 4 && wy >= minY - 4 && wy <= maxY + 4;
+    scan(this.wallLayer); scan(this.roofLayer);
+    if (!found) return null;
+    this.houseRect = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    return this.houseRect;
+  }
+
+  /** Is a world point on the house (its `wooden_house` tile footprint, or the door
+   *  sprite)? Tapping the house enters the interior. Footprint-based (not just the
+   *  door) so it still works with the roof over the whole building. */
+  private houseDoorContains(wx: number, wy: number): boolean {
+    const door = this.houseDoor;
+    if (door) {
+      const b = door.getBounds();
+      if (wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4) return true;
+    }
+    const r = this.houseFootprintRect();
+    return !!r && wx >= r.x - 4 && wx <= r.x + r.w + 4 && wy >= r.y - 4 && wy <= r.y + r.h + 4;
   }
 
   /** Tap the house → play the door-open swing, then cover, PAUSE this scene and launch
