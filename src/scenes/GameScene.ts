@@ -2197,6 +2197,7 @@ export class GameScene extends Phaser.Scene {
     this.wireSceneTrees();
     this.wireSceneBushes();
     this.wireSceneForageAndStones();
+    this.wireWaterObjects(); // lily pads bob up-down, water grass sways — a living water surface
     this.createControlToggle(); // on-screen TEST button: drive Cato ↔ pan camera
 
     // Bracket cursor (frames a 16px cell) + the held-tool icon inside it. Hidden until a tool is out
@@ -5436,6 +5437,34 @@ export class GameScene extends Phaser.Scene {
     // Block every house cell (the `wooden_house` layer holds walls + floor, so every non-empty
     // tile is part of the house) so A* routes Cato around the whole building.
     this.wallLayer?.forEachTile((t) => { if (t && t.index !== -1) this.houseBlocked.add(`${t.x},${t.y}`); });
+  }
+
+  /** Bring the editor-placed `water_objects` (an atlas of lily pads / grass / stones / shadows) to
+   *  life: lily pads BOB up-and-down and water grass SWAYS left-right, each on its own phase +
+   *  speed so the water surface looks alive (not a synchronized pulse). Stones + shadows stay
+   *  static. Frame-name prefix picks the behaviour. Runs once at load — the tweens loop forever. */
+  private wireWaterObjects(): void {
+    const reg = getEntityRegistry(this);
+    const objs = reg?.all().filter(
+      (go) => go.getData('entityAssetId') === 'water_objects',
+    ) as Phaser.GameObjects.Sprite[] | undefined;
+    if (!objs?.length) return;
+    for (const s of objs) {
+      const f = String(s.frame?.name ?? '');
+      if (f.startsWith('water-lily')) {
+        // Bob up-down. Amplitude/period jittered per pad; a random start delay desyncs them.
+        const amp = 2 + Math.random() * 2;           // 2–4 px rise
+        const dur = 1600 + Math.random() * 1100;     // 1.6–2.7 s each way
+        this.tweens.add({ targets: s, y: s.y - amp, duration: dur, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * dur });
+      } else if (f.startsWith('water-grass')) {
+        // Sway left-right — a gentle rotation rock (like reeds drifting in the current).
+        const ang = 0.05 + Math.random() * 0.05;     // ~3–5.7° each side
+        const dur = 1400 + Math.random() * 1000;     // 1.4–2.4 s each way
+        s.setRotation(-ang);
+        this.tweens.add({ targets: s, rotation: ang, duration: dur, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * dur });
+      }
+      // water-stone-* / water-shadow-* stay static.
+    }
   }
 
   private addSolid(cx: number, cy: number, texture: string, frame: number): Phaser.Physics.Arcade.Sprite[] {
