@@ -327,6 +327,9 @@ const RUG_DEPTH = 1.5;
 // static roof at this depth y-sorts against Cato's foot-Y like a sprite would: Cato SOUTH of the
 // house (foot Y > 287) draws in FRONT of the roof, NORTH of it (< 287) is occluded by it.
 const ROOF_DEPTH = 287;
+// water-shadow reflections sit JUST above the water tilemap (depth 1) but BELOW every lily/grass/
+// stone (which foot-Y sort at ~y288, several hundred) — so a lily always draws over its shadow.
+const WATER_SHADOW_DEPTH = 2;
 
 // --- Crops (Sprout Lands "Farming Plants") ---
 // Each crop grows through N stages (frames `grow-<name>-<stage>` in the
@@ -5449,6 +5452,7 @@ export class GameScene extends Phaser.Scene {
       (go) => go.getData('entityAssetId') === 'water_objects',
     ) as Phaser.GameObjects.Sprite[] | undefined;
     if (!objs?.length) return;
+    const shadows: Phaser.GameObjects.Sprite[] = [];
     for (const s of objs) {
       const f = String(s.frame?.name ?? '');
       if (f.startsWith('water-lily')) {
@@ -5462,9 +5466,15 @@ export class GameScene extends Phaser.Scene {
         const dur = 1400 + Math.random() * 1000;     // 1.4–2.4 s each way
         s.setRotation(-ang);
         this.tweens.add({ targets: s, rotation: ang, duration: dur, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * dur });
+      } else if (f.startsWith('water-shadow')) {
+        // Reflections stay static AND must draw UNDER the lily/grass/stone — pin them to a fixed low
+        // depth + take them OUT of the foot-Y y-sort (whose footY sometimes put a shadow above a pad).
+        s.setDepth(WATER_SHADOW_DEPTH);
+        shadows.push(s);
       }
-      // water-stone-* / water-shadow-* stay static.
+      // water-stone-* stay static (kept in the y-sort — they sit among the plants, not under them).
     }
+    if (shadows.length) this.ySortSprites = this.ySortSprites.filter((x) => !shadows.includes(x));
   }
 
   private addSolid(cx: number, cy: number, texture: string, frame: number): Phaser.Physics.Arcade.Sprite[] {
