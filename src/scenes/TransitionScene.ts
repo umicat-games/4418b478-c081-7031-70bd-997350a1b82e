@@ -61,6 +61,7 @@ export class TransitionScene extends Phaser.Scene {
   private coverAt = 0;               // performance.now() when the cover finished closing
   private revealScheduled = false;
   private loadingText?: Phaser.GameObjects.Text;
+  private dotsText?: Phaser.GameObjects.Text; // the cycling "…" — a SEPARATE object so growing dots don't shift "Loading"
   private dotTimer?: Phaser.Time.TimerEvent;
   private dots = 0;
 
@@ -77,9 +78,13 @@ export class TransitionScene extends Phaser.Scene {
     drawPaw(this.pawG);
     this.pawMask = this.pawG.createGeometryMask();
     this.pawMask.invertAlpha = true;
-    // "Loading" text shown over the fully-closed cover (above the curtain).
+    // "Loading" text shown over the fully-closed cover (above the curtain). The cycling dots are a
+    // SEPARATE left-anchored text pinned to "Loading"'s right edge, so growing/shrinking dots don't
+    // shift the (centred) "Loading" word left and right.
     this.loadingText = this.add.text(W / 2, H / 2, t('loading'), { fontFamily: 'zpix, sans-serif', color: LOADING_TEXT_COLOR })
       .setOrigin(0.5).setDepth(11).setVisible(false);
+    this.dotsText = this.add.text(W / 2, H / 2, '', { fontFamily: 'zpix, sans-serif', color: LOADING_TEXT_COLOR })
+      .setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
   }
@@ -119,20 +124,23 @@ export class TransitionScene extends Phaser.Scene {
 
   /** Fade in the "Loading" label at the cover centre + cycle its dots. */
   private showLoadingText(): void {
-    const lt = this.loadingText; if (!lt) return;
+    const lt = this.loadingText, dt = this.dotsText; if (!lt) return;
     const W = this.scale.width, H = this.scale.height;
     const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
     const base = t('loading'); this.dots = 0;
-    lt.setText(base).setPosition(fx, fy).setFontSize(Math.max(20, Math.round(Math.min(W, H) * 0.05)))
-      .setVisible(true).setAlpha(0);
-    this.tweens.add({ targets: lt, alpha: 1, duration: 240, ease: 'Sine.easeOut' });
+    const fs = Math.max(20, Math.round(Math.min(W, H) * 0.05));
+    lt.setText(base).setFontSize(fs).setPosition(fx, fy).setVisible(true).setAlpha(0);
+    // Pin the dots to "Loading"'s right edge (word stays centred + fixed; only the dots grow).
+    dt?.setText('').setFontSize(fs).setPosition(fx + lt.width / 2, fy).setVisible(true).setAlpha(0);
+    this.tweens.add({ targets: dt ? [lt, dt] : [lt], alpha: 1, duration: 240, ease: 'Sine.easeOut' });
     this.dotTimer?.remove();
-    this.dotTimer = this.time.addEvent({ delay: 340, loop: true, callback: () => { this.dots = (this.dots + 1) % 4; lt.setText(base + '.'.repeat(this.dots)); } });
+    this.dotTimer = this.time.addEvent({ delay: 340, loop: true, callback: () => { this.dots = (this.dots + 1) % 4; dt?.setText('.'.repeat(this.dots)); } });
   }
 
   private hideLoadingText(): void {
     this.dotTimer?.remove(); this.dotTimer = undefined;
     this.loadingText?.setVisible(false);
+    this.dotsText?.setVisible(false);
   }
 
   /** Cover the screen with `effect`, then run `onCovered` — and STOP (no scene
