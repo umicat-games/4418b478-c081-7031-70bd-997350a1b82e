@@ -18,15 +18,18 @@ const LOADING_TEXT_COLOR = '#7c5a38'; // warm brown — reads on the cream curta
 // off-screen at full cover). Kept conservative so no curtain sliver shows fully-open.
 const PAW_CORE = 40;
 
-/** Draw a paw (pad + 4 toe beans) into `g` at unit size, origin ≈ the pad centre. */
+/** Draw a paw (pad + 4 SEPARATE toe beans) into `g` at unit size, origin ≈ the pad centre. Real
+ *  cat paws have the toe beans DETACHED from the pad (a gap between them), so the pad + 4 toes are
+ *  drawn as five disjoint ellipses with a clear gap. The pad still covers a ≥`PAW_CORE` radius
+ *  around the origin so the cover/reveal iris fully seals the screen (the gaps sit outside it). */
 function drawPaw(g: Phaser.GameObjects.Graphics): void {
   g.clear();
   g.fillStyle(0xffffff, 1);
-  g.fillEllipse(0, 10, 122, 106);   // main pad (rx61 ry53), just below the origin
-  g.fillEllipse(-31, -60, 48, 56);  // inner toe beans
-  g.fillEllipse(31, -60, 48, 56);
-  g.fillEllipse(-70, -16, 44, 52);  // outer toe beans
-  g.fillEllipse(70, -16, 44, 52);
+  g.fillEllipse(0, 5, 100, 92);     // main pad (rx50 ry46), centred near the origin (covers PAW_CORE)
+  g.fillEllipse(-18, -66, 30, 40);  // inner toe beans — apart from each other AND the pad
+  g.fillEllipse(18, -66, 30, 40);
+  g.fillEllipse(-52, -50, 30, 40);  // outer toe beans — an arc above the pad, each detached
+  g.fillEllipse(52, -50, 30, 40);
 }
 
 interface BeginOpts {
