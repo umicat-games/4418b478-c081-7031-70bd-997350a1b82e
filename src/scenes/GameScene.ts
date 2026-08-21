@@ -2930,7 +2930,12 @@ export class GameScene extends Phaser.Scene {
     // Source point: the frozen virtual cursor under pointer-lock, else the real OS pointer.
     const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
     const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
-    if (this.overHotbarAt(sx, sy)) { this.setHover(false); return; } // let the hotbar own its band
+    // Don't frame world objects UNDER a screen-space HUD control: the hotbar band, the
+    // bottom-right shop/backpack/settings buttons, or Cato's top-right portrait.
+    if (this.overHotbarAt(sx, sy) || this.overShopButton(sx, sy) || this.overBackpackButton(sx, sy)
+      || this.overSettingsButton(sx, sy) || Phaser.Geom.Rectangle.Contains(this.findCatBounds, sx, sy)) {
+      this.setHover(false); return;
+    }
 
     const cam = this.cameras.main;
     const wp = cam.getWorldPoint(sx, sy);
