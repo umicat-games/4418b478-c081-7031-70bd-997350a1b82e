@@ -67,9 +67,12 @@ export class HouseScene extends Phaser.Scene {
 
     const reg = getEntityRegistry(this);
 
-    // Cato inside — stands idle (no wander/collision yet; fixed camera).
+    // Cato inside — hidden for now. Making him auto-appear in the room felt odd (he's a
+    // separate instance from the paused island Cato, not one who "walks in"), so we keep the
+    // authored child entity in the scene data but don't show it. Re-enable (play idle / add
+    // in-house behaviours) here later.
     const cato = reg?.byRole('child')[0] as Phaser.GameObjects.Sprite | undefined;
-    if (cato && this.anims.exists('idle-down')) cato.play('idle-down');
+    cato?.setVisible(false);
 
     // Exit door — force onto the anim sheet at closed; tap to leave.
     const exit = reg?.all().find(
