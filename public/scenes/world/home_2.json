@@ -34,8 +34,8 @@
       "assetId": "basic_furniture",
       "frame": "bed-pink",
       "transform": {
-        "x": 40,
-        "y": 40,
+        "x": 28,
+        "y": 16,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -48,8 +48,8 @@
       "assetId": "basic_furniture",
       "frame": "drawer",
       "transform": {
-        "x": 68,
-        "y": 40,
+        "x": 56,
+        "y": 16,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -63,7 +63,7 @@
       "frame": "picture-2",
       "transform": {
         "x": 100,
-        "y": 22,
+        "y": 8,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -77,7 +77,7 @@
       "frame": "clock-3",
       "transform": {
         "x": 116,
-        "y": 22,
+        "y": 8,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,

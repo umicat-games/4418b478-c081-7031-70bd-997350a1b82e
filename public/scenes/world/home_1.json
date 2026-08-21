@@ -34,8 +34,8 @@
       "assetId": "basic_furniture",
       "frame": "bed-pink",
       "transform": {
-        "x": 40,
-        "y": 40,
+        "x": 28,
+        "y": 14,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -48,8 +48,8 @@
       "assetId": "basic_furniture",
       "frame": "drawer",
       "transform": {
-        "x": 68,
-        "y": 40,
+        "x": 60,
+        "y": 17.277048733927245,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -62,8 +62,8 @@
       "assetId": "basic_furniture",
       "frame": "picture-2",
       "transform": {
-        "x": 100,
-        "y": 22,
+        "x": 89,
+        "y": 9.277048733927245,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -76,8 +76,8 @@
       "assetId": "basic_furniture",
       "frame": "clock-3",
       "transform": {
-        "x": 116,
-        "y": 22,
+        "x": 76,
+        "y": 9.277048733927245,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -90,8 +90,8 @@
       "assetId": "basic_furniture",
       "frame": "rug-green",
       "transform": {
-        "x": 72,
-        "y": 64,
+        "x": 92,
+        "y": 54,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -104,8 +104,8 @@
       "assetId": "basic_furniture",
       "frame": "table",
       "transform": {
-        "x": 72,
-        "y": 64,
+        "x": 92,
+        "y": 54,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -118,8 +118,8 @@
       "assetId": "basic_furniture",
       "frame": "chair-right",
       "transform": {
-        "x": 56,
-        "y": 64,
+        "x": 72,
+        "y": 52,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -132,8 +132,8 @@
       "assetId": "basic_furniture",
       "frame": "chair-left",
       "transform": {
-        "x": 88,
-        "y": 64,
+        "x": 112.1756688208651,
+        "y": 52,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -146,8 +146,8 @@
       "assetId": "basic_furniture",
       "frame": "chair-back",
       "transform": {
-        "x": 72,
-        "y": 76,
+        "x": 92,
+        "y": 68,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -188,8 +188,8 @@
       "role": "child",
       "assetId": "premium_character_spritesheet",
       "transform": {
-        "x": 104,
-        "y": 72,
+        "x": 31,
+        "y": 61,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -210,6 +210,20 @@
         "depth": 10
       },
       "name": "exit-door"
+    },
+    {
+      "id": "e-mt2bp9z5-8rqu",
+      "kind": "sprite",
+      "transform": {
+        "x": 92,
+        "y": 38,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "chair-front"
     }
   ]
 }
