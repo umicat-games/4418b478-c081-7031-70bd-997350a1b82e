@@ -22,6 +22,12 @@
       "file": "world/home_1.json"
     },
     {
+      "id": "home_1-copy",
+      "name": "home_1 copy",
+      "type": "world",
+      "file": "world/home_1-copy.json"
+    },
+    {
       "id": "home_2",
       "type": "world",
       "file": "world/home_2.json"

@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "id": "home_1-copy",
+  "name": "home_1 copy",
+  "type": "world",
+  "world": {
+    "width": 144,
+    "height": 112,
+    "background": {
+      "color": "#000000"
+    }
+  },
+  "camera": {
+    "follow": null
+  },
+  "entities": [
+    {
+      "id": "home_1-room",
+      "kind": "tilemap-ref",
+      "tilemapId": "home-1-room",
+      "transform": {
+        "x": 72,
+        "y": 56,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      },
+      "name": "room"
+    },
+    {
+      "id": "home_1-bed",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "bed-pink",
+      "transform": {
+        "x": 28,
+        "y": 14,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-drawer",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "drawer",
+      "transform": {
+        "x": 60,
+        "y": 17.277048733927245,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-picture",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "picture-2",
+      "transform": {
+        "x": 89,
+        "y": 9.277048733927245,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-clock",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "clock-3",
+      "transform": {
+        "x": 76,
+        "y": 9.277048733927245,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-ruggreen",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "rug-green",
+      "transform": {
+        "x": 92,
+        "y": 54,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 2
+      }
+    },
+    {
+      "id": "home_1-table",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "table",
+      "transform": {
+        "x": 92,
+        "y": 54,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-chairR",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "chair-right",
+      "transform": {
+        "x": 72,
+        "y": 52,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-chairL",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "chair-left",
+      "transform": {
+        "x": 112.1756688208651,
+        "y": 52,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-chairB",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "chair-back",
+      "transform": {
+        "x": 92,
+        "y": 68,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-rugblue",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "rug-blue",
+      "transform": {
+        "x": 36,
+        "y": 76,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 2
+      }
+    },
+    {
+      "id": "home_1-smalltable",
+      "kind": "sprite",
+      "assetId": "basic_furniture",
+      "frame": "small-table",
+      "transform": {
+        "x": 36,
+        "y": 76,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      }
+    },
+    {
+      "id": "home_1-cato",
+      "kind": "sprite",
+      "role": "child",
+      "assetId": "premium_character_spritesheet",
+      "transform": {
+        "x": 31,
+        "y": 61,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 9
+      },
+      "name": "cato"
+    },
+    {
+      "id": "home_1-exit",
+      "kind": "sprite",
+      "assetId": "door_animation_sprites",
+      "transform": {
+        "x": 72,
+        "y": 104,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "name": "exit-door"
+    },
+    {
+      "id": "e-mt2bp9z5-8rqu",
+      "kind": "sprite",
+      "transform": {
+        "x": 92,
+        "y": 38,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "chair-front"
+    }
+  ]
+}
