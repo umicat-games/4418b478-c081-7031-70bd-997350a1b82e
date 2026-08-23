@@ -17,7 +17,7 @@
     {
       "id": "home_1-room",
       "kind": "tilemap-ref",
-      "tilemapId": "home-1-room",
+      "tilemapId": "home-1-room-copy",
       "transform": {
         "x": 72,
         "y": 56,
