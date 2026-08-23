@@ -170,8 +170,9 @@ const TAB_SETTINGS = 4, TAB_CALENDAR = 5;
 // achievements etc. as new TAB_DEFS entries + push the index here + a MenuScene render branch.
 const MENU_SYSTEM_TABS = [TAB_SETTINGS, TAB_CALENDAR];
 // The door MAILBOX opens a 3-tab menu: 信 (mail) + 取货 (pickup grid) + 待售 (for-sale bin).
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 3, TAB_PICKUP = 6, TAB_FORSALE = 7;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 3, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8;
 const MAILBOX_TABS = [TAB_MAIL, TAB_PICKUP, TAB_FORSALE];
+const SHOP_TABS = [TAB_SHOP, TAB_HOUSE]; // the shop opens with two folder tabs: 物品 + 房子
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -760,9 +761,8 @@ export class GameScene extends Phaser.Scene {
   private menuActionRev = 0;
   private menuDragging = false; // dragging the unified menu's scroll rail
   private menuSliderDrag: 'bgm' | 'sfx' | null = null; // dragging a Settings-tab volume slider
-  private menuShopSel?: string; // selected catalog id on the Shop tab (→ right detail + stepper)
-  private menuShopTab: 'items' | 'house' = 'items'; // Shop sub-tab (物品 / 房子)
-  private menuHouseSel?: string; // selected house tier id on the Shop 房子 sub-tab
+  private menuShopSel?: string; // selected catalog id on the 物品 tab (→ right detail + stepper)
+  private menuHouseSel?: string; // selected house tier id on the 房子 tab
   // When the menu was opened by clicking a physical door object (mailbox / chest), the
   // object plays its OPEN anim first; closing the menu plays its CLOSE anim.
   private menuSourceSprite?: Phaser.GameObjects.Sprite;
@@ -2679,14 +2679,14 @@ export class GameScene extends Phaser.Scene {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
 
-  /** Shop tablet tapped → flash pressed, THEN open the Shop tab (standalone, no tab bar).
+  /** Shop tablet tapped → flash pressed, THEN open the shop on its two folder tabs (物品 + 房子).
    *  Shopping is done OUTSIDE on the island — the house interior is for cooking/games. */
   private pressShopThenOpen(): void {
     if (this.menuOpen) return;
     this.shopBtnPressed = true; this.publishBackpackBtn();
     this.time.delayedCall(120, () => {
       this.shopBtnPressed = false; this.publishBackpackBtn();
-      this.openMenu(TAB_SHOP);
+      this.openMenu(TAB_SHOP, SHOP_TABS);
     });
   }
 
@@ -4510,11 +4510,8 @@ export class GameScene extends Phaser.Scene {
     this.menuTabSet = tabSet; // null = standalone (no tab bar); a list = the tabbed paw menu
     this.menuSelected = -1;
     this.menuMailSel = null; // fresh open/tab-switch → publishMenu auto-selects the newest mail for the receipt pane
-    if (tab === 3) { // Shop defaults: reset qty/msg, default the item + house selections, land on 物品
-      this.menuBuyQty = 1; this.shopMsg = ''; this.menuShopTab = 'items';
-      if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id;
-      if (!this.menuHouseSel) this.menuHouseSel = HOME_TIERS.find((h) => h.price > 0)?.id;
-    }
+    if (tab === TAB_SHOP) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // 物品 tab defaults
+    if (tab === TAB_HOUSE) { this.shopMsg = ''; if (!this.menuHouseSel) this.menuHouseSel = HOME_TIERS.find((h) => h.price > 0)?.id; } // 房子 tab defaults
     if (!this.menuOpen) {
       // Fresh open → no source object by default (E/I / order button / backpack button).
       // openMenuViaObject sets the source AFTER this so a door-open still animates on close.
@@ -4583,8 +4580,8 @@ export class GameScene extends Phaser.Scene {
     const catalog = this.menuTab === 3
       ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
-    // Shop 房子 sub-tab: the purchasable house tiers (starter excluded — price 0).
-    const houses = this.menuTab === 3
+    // 房子 tab: the purchasable house tiers (starter excluded — price 0).
+    const houses = this.menuTab === TAB_HOUSE
       ? HOME_TIERS.filter((h) => h.price > 0).map((h) => ({
           id: h.id, name: t(h.nameKey), desc: t(h.descKey), preview: h.preview, price: h.price,
           owned: this.currentHome === h.id, pending: this.pendingHome?.id === h.id,
@@ -4604,7 +4601,7 @@ export class GameScene extends Phaser.Scene {
       selected: this.menuSelected,
       mailSelected: this.menuMailSel ?? undefined, mailDetail,
       catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
-      shopTab: this.menuShopTab, houses, houseSelected: this.menuHouseSel,
+      houses, houseSelected: this.menuHouseSel,
     });
   }
 
@@ -4624,13 +4621,6 @@ export class GameScene extends Phaser.Scene {
     const rows = this.registry.get('menuShopRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
     const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
     return hit ? hit.id : null;
-  }
-
-  /** Shop sub-tab (物品 / 房子) under (x,y). */
-  private menuShopSubtabAt(x: number, y: number): 'items' | 'house' | null {
-    const b = this.registry.get('menuShopSubtabs') as Array<{ x: number; y: number; w: number; h: number; key: 'items' | 'house' }> | null;
-    const hit = b?.find((s) => x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
-    return hit ? hit.key : null;
   }
 
   /** House-catalog row (房子 tab) under (x,y) → its tier id. */
@@ -4678,7 +4668,7 @@ export class GameScene extends Phaser.Scene {
   private flashShopMsg(msg: string): void {
     this.shopMsg = msg;
     this.publishMenu();
-    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && this.menuTab === TAB_SHOP) this.publishMenu(); } });
+    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && (this.menuTab === TAB_SHOP || this.menuTab === TAB_HOUSE)) this.publishMenu(); } });
   }
 
   /** Does the chest have room for `id`? A stackable item that already has a stack merges
@@ -5026,26 +5016,18 @@ export class GameScene extends Phaser.Scene {
         this.publishMenu();
         return true;
       }
-    } else if (this.menuTab === 3) {
-      // Shop sub-tabs (物品 / 房子): a sub-tab click switches the pane.
-      const sub = this.menuShopSubtabAt(x, y);
-      if (sub && sub !== this.menuShopTab) { this.menuShopTab = sub; this.shopMsg = ''; this.publishMenu(); return true; }
-      if (this.menuShopTab === 'house') {
-        // 房子 tab: a BUY button buys the selected house (pay now, move in tomorrow); a row selects it.
-        const hb = this.registry.get('menuHouseBuy') as { x: number; y: number; w: number; h: number } | null;
-        if (hb && x >= hb.x && x <= hb.x + hb.w && y >= hb.y && y <= hb.y + hb.h) {
-          if (this.menuHouseSel) this.buyHouse(this.menuHouseSel);
-          return true;
-        }
-        const hid = this.menuHouseRowAt(x, y);
-        if (hid) { this.menuHouseSel = hid; this.shopMsg = ''; this.publishMenu(); return true; }
-        return true; // stay inside the house pane (don't fall through to close)
-      }
+    } else if (this.menuTab === TAB_SHOP) {
       // 物品 tab: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
       const sk = this.menuStepperAt(x, y);
       if (sk) { this.menuShopStep(sk); return true; }
       const rid = this.menuShopRowAt(x, y);
       if (rid) { this.menuShopSel = rid; this.shopMsg = ''; this.publishMenu(); return true; }
+    } else if (this.menuTab === TAB_HOUSE) {
+      // 房子 tab: a BUY button buys the selected house (pay now, move in tomorrow); a row selects it.
+      const hb = this.registry.get('menuHouseBuy') as { x: number; y: number; w: number; h: number } | null;
+      if (hb && x >= hb.x && x <= hb.x + hb.w && y >= hb.y && y <= hb.y + hb.h) { if (this.menuHouseSel) this.buyHouse(this.menuHouseSel); return true; }
+      const hid = this.menuHouseRowAt(x, y);
+      if (hid) { this.menuHouseSel = hid; this.shopMsg = ''; this.publishMenu(); return true; }
     } else if (this.menuTab === 4) {
       // Settings: tap/drag the volume bar to set the level; tap 返回标题 to go back.
       const slider = this.menuSliderAt(x, y);

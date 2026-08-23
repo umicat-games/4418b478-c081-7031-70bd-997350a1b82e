@@ -53,15 +53,16 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'mail', frame: 245, title: '邮件' },
   { key: 'chest', frame: 229, title: '箱子' },
   { key: 'catobag', frame: 310, title: '猫包' }, // white-cat-claw (all_icons region @96,304)
-  { key: 'shop', frame: 262, title: '商店' },
+  { key: 'shop', frame: 229, title: '物品' },     // shop 物品 sub-tab (white-sprout placeholder icon; user picks a better one later)
   { key: 'settings', frame: 164, title: '设置' },
   { key: 'calendar', frame: 294, title: '日历' }, // all_icons calendar-page glyph (row18 col6). Placeholder tab.
   { key: 'pickup', frame: 293, title: '取货' },   // mailbox: delivered orders (icon tunable like paw)
   { key: 'forsale', frame: 261, title: '待售' },  // mailbox: shipping bin ($ glyph, tunable)
+  { key: 'house', frame: 254, title: '房子' },    // shop 房子 sub-tab (white-home icon)
 ];
 // NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_BACKPACK = 10;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_BACKPACK = 10;
 
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
@@ -70,9 +71,6 @@ const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS =
 // bottom/footY stay INSIDE the frame — the 9-slice bottom border eats ~0.035H, so the
 // panel's inner content ends ~0.885H; the balance sits above that, the list above it.
 const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.81, footY: 0.85 };
-// Shop sub-tabs (物品 / 房子): a two-button band just above the content, over the LEFT region.
-const SHOP_SUBTAB = { y: 0.30, h: 0.05, x0: 0.06, x1: 0.52, gapPx: 6 };
-const SHOP_LIST_Y = 0.365; // the item/house list starts BELOW the sub-tab band (was GRID.y 0.30)
 const STEP = { y: 0.72, btn: 0.052, gap: 0.05, buyY: 0.82, msgY: 0.87 }; // right-side qty stepper + buy button (kept clear of the desc above + the frame border below)
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
@@ -87,8 +85,7 @@ export interface MenuModel {
   selected?: number;         // selected grid index → right detail
   catalog?: MenuCatalogItem[];  // shop tab (物品 sub-tab)
   shopSelected?: string;        // selected catalog id → right detail + buy
-  shopTab?: 'items' | 'house';  // shop sub-tab (物品 / 房子)
-  houses?: Array<{ id: string; name: string; desc: string; preview?: string; price: number; owned: boolean; pending: boolean }>; // 房子 sub-tab
+  houses?: Array<{ id: string; name: string; desc: string; preview?: string; price: number; owned: boolean; pending: boolean }>; // 房子 tab
   houseSelected?: string;       // selected house tier id → right detail + buy
   money?: number;               // coin balance (shop footer)
   buyQty?: number;              // how many to buy (right-side stepper)
@@ -256,7 +253,7 @@ export class MenuScene extends Phaser.Scene {
     // for-sale / SHOP) share ONE full-width frame, split by a dashed divider — instead of two
     // frames. Settings / Calendar are full-width too (no right detail).
     const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK
-      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP;
+      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP || m.tab === TAB_HOUSE;
     const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR;
     const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
     const lx = L.x * W, ly = L.y * H, lw = frameWFrac * W, lh = L.h * H;
@@ -332,6 +329,7 @@ export class MenuScene extends Phaser.Scene {
       this.renderMailDetail(content, m.mailDetail); // right-side receipt (was a separate modal)
     }
     else if (m.tab === TAB_SHOP) this.renderShop(content, m);
+    else if (m.tab === TAB_HOUSE) this.renderHouse(content, m);
     else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack / 取货 / 待售
     if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
@@ -680,17 +678,9 @@ export class MenuScene extends Phaser.Scene {
    *  Buying is INSTANT (coins out → item into the chest, or a warning). */
   private renderShop(c: Phaser.GameObjects.Container, m: MenuModel): void {
     const W = this.scale.width, H = this.scale.height;
-    const shopTab = m.shopTab ?? 'items';
-    // Sub-tab bar (物品 / 房子) above the content; pushes the list down a touch.
-    this.renderShopSubtabs(c, shopTab);
-    if (shopTab === 'house') {
-      this.renderHouseList(c, m);
-      this.renderHouseDetail(c, (m.houses ?? []).find((h) => h.id === m.houseSelected), m.money ?? 0, m.shopMsg ?? '');
-      return;
-    }
     const catalog = m.catalog ?? [];
     const selId = m.shopSelected;
-    const gx = GRID.x * W, gy = SHOP_LIST_Y * H, gw = GRID.w * W;
+    const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
     const rowH = SHOP.rowH * H, step = rowH + SHOP.gapPx;
     this.scrollStepPx = step;
     const visible = Math.max(1, Math.floor((SHOP.bottom * H - gy) / step));
@@ -764,36 +754,18 @@ export class MenuScene extends Phaser.Scene {
     else if (sub > money) c.add(this.T(cxN, STEP.msgY * H, t('shop_no_coins'), H * 0.02, '#b5896a'));
   }
 
-  /** Shop sub-tab bar (物品 / 房子) — two buttons over the LEFT content region. Registers hit bounds. */
-  private renderShopSubtabs(c: Phaser.GameObjects.Container, active: 'items' | 'house'): void {
-    const W = this.scale.width, H = this.scale.height;
-    const y = SHOP_SUBTAB.y * H, h = SHOP_SUBTAB.h * H;
-    const x0 = SHOP_SUBTAB.x0 * W, x1 = SHOP_SUBTAB.x1 * W;
-    const bw = (x1 - x0 - SHOP_SUBTAB.gapPx) / 2;
-    const bounds: Array<{ x: number; y: number; w: number; h: number; key: 'items' | 'house' }> = [];
-    // Icons are ui-icons (all_icons.png) frames: 229 = white-sprout (物品 placeholder), 254 = white-home (房子).
-    const tabs: Array<{ key: 'items' | 'house'; label: string; frame: number }> = [
-      { key: 'items', label: t('shop_tab_items'), frame: 229 },
-      { key: 'house', label: t('shop_tab_house'), frame: 254 },
-    ];
-    tabs.forEach((tb, i) => {
-      const bx = x0 + i * (bw + SHOP_SUBTAB.gapPx), sel = tb.key === active;
-      const g = this.add.graphics();
-      g.fillStyle(sel ? 0xf3ead1 : 0xe1d4b6, 1); g.fillRoundedRect(bx, y, bw, h, 8);
-      g.lineStyle(sel ? 3 : 2, sel ? 0xb89a5e : 0xcdb88f, 1); g.strokeRoundedRect(bx, y, bw, h, 8); c.add(g);
-      if (this.textures.exists('ui-icons')) c.add(this.add.image(bx + h * 0.55, y + h / 2, 'ui-icons', tb.frame).setScale((h * 0.6) / 16));
-      c.add(this.T(bx + h * 1.05, y + h / 2, tb.label, H * 0.026, sel ? INK : SUB, 0));
-      bounds.push({ x: bx, y, w: bw, h, key: tb.key });
-    });
-    this.registry.set('menuShopSubtabs', bounds);
+  /** 房子 tab: the house catalog LIST (left) + the selected house's DETAIL (right). */
+  private renderHouse(c: Phaser.GameObjects.Container, m: MenuModel): void {
+    this.renderHouseList(c, m);
+    this.renderHouseDetail(c, (m.houses ?? []).find((h) => h.id === m.houseSelected), m.money ?? 0, m.shopMsg ?? '');
   }
 
-  /** House catalog LIST (房子 sub-tab): a row per purchasable house — name + price / state badge. */
+  /** House catalog LIST (房子 tab): a row per purchasable house — name + price / state badge. */
   private renderHouseList(c: Phaser.GameObjects.Container, m: MenuModel): void {
     const W = this.scale.width, H = this.scale.height;
     const houses = m.houses ?? [];
     const selId = m.houseSelected;
-    const gx = GRID.x * W, gy = SHOP_LIST_Y * H, gw = GRID.w * W;
+    const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
     const rowH = 0.10 * H, step = rowH + SHOP.gapPx; // houses are few → taller rows
     const rowBounds: Array<{ x: number; y: number; w: number; h: number; id: string }> = [];
     houses.forEach((hh, k) => {
@@ -880,7 +852,7 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuTabs', []); this.registry.set('menuSlots', []); this.registry.set('menuMailRows', []);
     this.registry.set('menuPanel', null); this.registry.set('menuActionBounds', []); this.registry.set('menuCloseBtn', null);
     this.registry.set('menuRail', null); this.registry.set('menuShopRows', []); this.registry.set('menuStepper', []);
-    this.registry.set('menuShopSubtabs', []); this.registry.set('menuHouseRows', []); this.registry.set('menuHouseBuy', null);
+    this.registry.set('menuHouseRows', []); this.registry.set('menuHouseBuy', null);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
     this.slotTargets = []; this.menuTargets = []; this.hovered = null;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; this.panel = undefined; this.dim = undefined; return; }
