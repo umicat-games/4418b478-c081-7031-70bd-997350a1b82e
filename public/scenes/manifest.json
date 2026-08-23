@@ -2082,6 +2082,41 @@
         "cols": 7,
         "rows": 5
       }
+    },
+    {
+      "id": "stove",
+      "textureKey": "stove",
+      "path": "uploaded/stove.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/stove.png",
+      "kind": "image"
+    },
+    {
+      "id": "pot",
+      "textureKey": "pot",
+      "path": "uploaded/pot.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/pot.png",
+      "kind": "image"
+    },
+    {
+      "id": "book-shelf",
+      "textureKey": "book-shelf",
+      "path": "uploaded/book-shelf.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/book-shelf.png",
+      "kind": "image"
+    },
+    {
+      "id": "fry-pan-small",
+      "textureKey": "fry-pan-small",
+      "path": "uploaded/fry-pan-small.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/fry-pan-small.png",
+      "kind": "image"
+    },
+    {
+      "id": "fry-pan",
+      "textureKey": "fry-pan",
+      "path": "uploaded/fry-pan.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/fry-pan.png",
+      "kind": "image"
     }
   ]
 }

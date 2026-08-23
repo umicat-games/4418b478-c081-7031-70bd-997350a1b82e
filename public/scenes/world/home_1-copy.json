@@ -209,6 +209,71 @@
       },
       "assetId": "basic_furniture",
       "frame": "chair-front"
+    },
+    {
+      "id": "e-mt6a4956-92lv",
+      "kind": "sprite",
+      "transform": {
+        "x": 97.6,
+        "y": 19.677048733927244,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "stove"
+    },
+    {
+      "id": "e-mt6a4zrt-spld",
+      "kind": "sprite",
+      "transform": {
+        "x": 97.6,
+        "y": 11.677048733927244,
+        "rotation": 0,
+        "scaleX": 0.7,
+        "scaleY": 0.7,
+        "depth": 10
+      },
+      "assetId": "pot"
+    },
+    {
+      "id": "e-mt6a66vu-6ckf",
+      "kind": "sprite",
+      "transform": {
+        "x": 136.7539004548662,
+        "y": 15.677048733927244,
+        "rotation": 0,
+        "scaleX": 0.6,
+        "scaleY": 0.6,
+        "depth": 10
+      },
+      "assetId": "book-shelf"
+    },
+    {
+      "id": "e-mt6a9mrg-obaa",
+      "kind": "sprite",
+      "transform": {
+        "x": 111.19999999999999,
+        "y": 10.077048733927246,
+        "rotation": 0,
+        "scaleX": 0.7,
+        "scaleY": 0.7,
+        "depth": 10
+      },
+      "assetId": "fry-pan-small"
+    },
+    {
+      "id": "e-mt6aa4kp-5mgg",
+      "kind": "sprite",
+      "transform": {
+        "x": 120.1756688208651,
+        "y": 10.077048733927247,
+        "rotation": 0,
+        "scaleX": 0.6,
+        "scaleY": 0.6,
+        "depth": 10
+      },
+      "assetId": "fry-pan"
     }
   ]
 }
