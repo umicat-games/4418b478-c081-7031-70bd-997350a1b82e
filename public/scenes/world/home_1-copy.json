@@ -91,7 +91,7 @@
       "frame": "rug-green",
       "transform": {
         "x": 104.1756688208651,
-        "y": 62,
+        "y": 70.75828279777477,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -105,7 +105,7 @@
       "frame": "table",
       "transform": {
         "x": 104.1756688208651,
-        "y": 62,
+        "y": 70.75828279777477,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -119,7 +119,7 @@
       "frame": "chair-right",
       "transform": {
         "x": 84,
-        "y": 60,
+        "y": 70.75828279777477,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -132,8 +132,8 @@
       "assetId": "basic_furniture",
       "frame": "chair-left",
       "transform": {
-        "x": 123.37817446756216,
-        "y": 60,
+        "x": 123.3756688208651,
+        "y": 70.75828279777477,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -147,7 +147,7 @@
       "frame": "chair-back",
       "transform": {
         "x": 104.1756688208651,
-        "y": 76,
+        "y": 84,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -201,7 +201,7 @@
       "kind": "sprite",
       "transform": {
         "x": 104.1756688208651,
-        "y": 46,
+        "y": 56,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -214,8 +214,8 @@
       "id": "e-mt6a4956-92lv",
       "kind": "sprite",
       "transform": {
-        "x": 97.6,
-        "y": 19.677048733927244,
+        "x": 96.1756688208651,
+        "y": 36.00000000000001,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -227,8 +227,8 @@
       "id": "e-mt6a4zrt-spld",
       "kind": "sprite",
       "transform": {
-        "x": 97.6,
-        "y": 11.677048733927244,
+        "x": 96.1756688208651,
+        "y": 28.000000000000004,
         "rotation": 0,
         "scaleX": 0.7,
         "scaleY": 0.7,
@@ -240,8 +240,8 @@
       "id": "e-mt6a66vu-6ckf",
       "kind": "sprite",
       "transform": {
-        "x": 136.7539004548662,
-        "y": 15.677048733927244,
+        "x": 137.75691238132976,
+        "y": 32.00000000000001,
         "rotation": 0,
         "scaleX": 0.6,
         "scaleY": 0.6,
@@ -254,7 +254,7 @@
       "kind": "sprite",
       "transform": {
         "x": 111.19999999999999,
-        "y": 10.077048733927246,
+        "y": 26.07704873392725,
         "rotation": 0,
         "scaleX": 0.7,
         "scaleY": 0.7,
@@ -267,7 +267,7 @@
       "kind": "sprite",
       "transform": {
         "x": 120.1756688208651,
-        "y": 10.077048733927247,
+        "y": 26.877048733927246,
         "rotation": 0,
         "scaleX": 0.6,
         "scaleY": 0.6,
