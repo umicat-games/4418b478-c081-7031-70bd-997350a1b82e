@@ -52,6 +52,7 @@ export class BootScene extends Phaser.Scene {
     // Used as the pixel background frame behind the build-palette orientation cells
     // (registered as a frame in create() so a nine-slice can reference it).
     this.load.image('square-buttons', 'uploaded/square_buttons_26x26.png');
+    this.load.image('house-kitchen-preview', 'uploaded/house-kitchen-preview.png'); // shop 房子 tab house preview
     // (ui-icons — the 16×16 grid used by the confirm dialog / build palette / HUD — is
     //  loaded FIRST, above, so the cozy loading screen can use it.)
     // Title-screen SETTINGS menu: the rounded panel (SETTINGS baked in) + the volume

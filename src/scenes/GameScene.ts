@@ -528,10 +528,14 @@ interface PlacedObj {
  *  this tier is current; `price` = coins to unlock it (0 = the starter tier). Buying a
  *  tier swaps the WHOLE interior (walls/floor/furniture + stations authored per scene).
  *  Add a tier = add a `home_N` scene JSON + a manifest entry + a row here. */
-interface HomeTier { id: string; sceneId: string; price: number; }
+// A house tier. `id` = the persisted/currentHome key (decoupled from the SCENE id so a
+// scene renamed in the editor doesn't churn saves); `sceneId` = the authored interior
+// scene loaded when this tier is current; `nameKey`/`descKey` = i18n display for the shop
+// house tab; `preview` = the shop preview image texture key (loaded in BootScene).
+interface HomeTier { id: string; sceneId: string; price: number; nameKey: string; descKey: string; preview?: string; }
 const HOME_TIERS: HomeTier[] = [
-  { id: 'home_1', sceneId: 'home_1', price: 0 },    // starter (no kitchen)
-  { id: 'home_2', sceneId: 'home_2', price: 1200 }, // +kitchen
+  { id: 'home_1', sceneId: 'home_1', price: 0, nameKey: 'home_basic_name', descKey: 'home_basic_desc' },              // starter (no kitchen)
+  { id: 'home_kitchen', sceneId: 'home_1-copy', price: 1200, nameKey: 'home_kitchen_name', descKey: 'home_kitchen_desc', preview: 'house-kitchen-preview' }, // +kitchen (authored scene 'home_1-copy' / name home_with_kitchen)
 ];
 
 interface SaveBlob {
@@ -565,7 +569,8 @@ interface SaveBlob {
   backpack?: Array<{ id: string; count: number }>; // v15: the player's portable backpack
   dialogueSeen?: string[]; // v14: scripted dialogues already played (once-only, e.g. the intro)
   dialogueFlags?: string[]; // v14: dialogue flags set by choices (branch memory)
-  currentHome?: string; // v17: the unlocked house interior tier scene id (see HOME_TIERS)
+  currentHome?: string; // v17→v18: the current house TIER id (see HOME_TIERS; decoupled from scene id)
+  pendingHome?: { id: string; applyDay: number }; // v18: house bought but not moved into yet (applies at settleDay)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -706,6 +711,7 @@ export class GameScene extends Phaser.Scene {
   // and launches HouseScene over it (see enterHouse). `currentHome` = the interior tier
   // scene id (persisted); `inHouse` guards the paused round-trip; `houseEntering` debounces.
   private currentHome = 'home_1';
+  private pendingHome: { id: string; applyDay: number } | null = null; // bought-but-not-moved-in (applies at settleDay)
   private inHouse = false;
   private houseEntering = false;
   // The editor-placed mailbox / chest sprites (door objects). Clicking one plays its
@@ -755,6 +761,8 @@ export class GameScene extends Phaser.Scene {
   private menuDragging = false; // dragging the unified menu's scroll rail
   private menuSliderDrag: 'bgm' | 'sfx' | null = null; // dragging a Settings-tab volume slider
   private menuShopSel?: string; // selected catalog id on the Shop tab (→ right detail + stepper)
+  private menuShopTab: 'items' | 'house' = 'items'; // Shop sub-tab (物品 / 房子)
+  private menuHouseSel?: string; // selected house tier id on the Shop 房子 sub-tab
   // When the menu was opened by clicking a physical door object (mailbox / chest), the
   // object plays its OPEN anim first; closing the menu plays its CLOSE anim.
   private menuSourceSprite?: Phaser.GameObjects.Sprite;
@@ -4333,7 +4341,7 @@ export class GameScene extends Phaser.Scene {
         this.inHouse = true; // set only when the handoff actually runs (pause + launch)
         this.sleepIslandHud();
         this.scene.pause('GameScene');
-        this.scene.launch('HouseScene', { sceneId: this.currentHome });
+        this.scene.launch('HouseScene', { sceneId: this.homeSceneId() });
       }, { effect: 'dissolve', color: 0x000000, ms: 220 });
     });
   }
@@ -4360,6 +4368,36 @@ export class GameScene extends Phaser.Scene {
     this.currentHome = tier.id;
     this.scheduleSave();
     return true;
+  }
+
+  /** The interior SCENE id for the current home tier (the persisted `currentHome` is the
+   *  tier id, decoupled from the scene id — see HOME_TIERS). Falls back to the starter. */
+  private homeSceneId(): string {
+    return (HOME_TIERS.find((t) => t.id === this.currentHome) ?? HOME_TIERS[0]).sceneId;
+  }
+
+  /** BUY a house from the shop's 房子 tab: pay NOW, MOVE IN TOMORROW (mirrors the item
+   *  order economy — deduct at purchase, apply at the next day-settle). Returns false (no
+   *  change) if it's already current / already pending / unknown / can't afford. */
+  private buyHouse(tierId: string): boolean {
+    const tier = HOME_TIERS.find((t) => t.id === tierId);
+    if (!tier || tier.price <= 0) return false;              // starter isn't purchasable
+    if (this.currentHome === tierId || this.pendingHome?.id === tierId) return false; // owned / already ordered
+    if (this.money < tier.price) { this.flashShopMsg(t('shop_no_coins')); return false; }
+    this.addMoney(-tier.price);
+    this.pendingHome = { id: tierId, applyDay: this.dayCount + 1 };  // move in tomorrow morning
+    this.flashShopMsg(t('house_bought'));
+    this.scheduleSave();
+    return true;
+  }
+
+  /** Day rollover: if a bought house is due, MOVE IN (swap the current home tier). The
+   *  next time the player enters the house it loads the new interior scene. */
+  private settleHomeUpgrade(): void {
+    const p = this.pendingHome;
+    if (!p || p.applyDay > this.dayCount) return;
+    this.currentHome = p.id;
+    this.pendingHome = null;
   }
 
   private static readonly ISLAND_HUD = ['HotbarScene', 'ToolHudScene', 'BackpackButtonScene', 'HoverScene'];
@@ -4472,7 +4510,11 @@ export class GameScene extends Phaser.Scene {
     this.menuTabSet = tabSet; // null = standalone (no tab bar); a list = the tabbed paw menu
     this.menuSelected = -1;
     this.menuMailSel = null; // fresh open/tab-switch → publishMenu auto-selects the newest mail for the receipt pane
-    if (tab === 3) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // Shop defaults
+    if (tab === 3) { // Shop defaults: reset qty/msg, default the item + house selections, land on 物品
+      this.menuBuyQty = 1; this.shopMsg = ''; this.menuShopTab = 'items';
+      if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id;
+      if (!this.menuHouseSel) this.menuHouseSel = HOME_TIERS.find((h) => h.price > 0)?.id;
+    }
     if (!this.menuOpen) {
       // Fresh open → no source object by default (E/I / order button / backpack button).
       // openMenuViaObject sets the source AFTER this so a door-open still animates on close.
@@ -4541,6 +4583,13 @@ export class GameScene extends Phaser.Scene {
     const catalog = this.menuTab === 3
       ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
+    // Shop 房子 sub-tab: the purchasable house tiers (starter excluded — price 0).
+    const houses = this.menuTab === 3
+      ? HOME_TIERS.filter((h) => h.price > 0).map((h) => ({
+          id: h.id, name: t(h.nameKey), desc: t(h.descKey), preview: h.preview, price: h.price,
+          owned: this.currentHome === h.id, pending: this.pendingHome?.id === h.id,
+        }))
+      : undefined;
     // Mail tab: resolve the selected mail's receipt for the RIGHT detail pane FIRST (it may
     // auto-select the newest + mark it read, which must reflect in the list model below).
     const mailDetail = this.menuTab === TAB_MAIL ? this.selectedMailDetail() : undefined;
@@ -4555,6 +4604,7 @@ export class GameScene extends Phaser.Scene {
       selected: this.menuSelected,
       mailSelected: this.menuMailSel ?? undefined, mailDetail,
       catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
+      shopTab: this.menuShopTab, houses, houseSelected: this.menuHouseSel,
     });
   }
 
@@ -4572,6 +4622,20 @@ export class GameScene extends Phaser.Scene {
   /** Shop catalog row under (x,y) → its id. */
   private menuShopRowAt(x: number, y: number): string | null {
     const rows = this.registry.get('menuShopRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
+    const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    return hit ? hit.id : null;
+  }
+
+  /** Shop sub-tab (物品 / 房子) under (x,y). */
+  private menuShopSubtabAt(x: number, y: number): 'items' | 'house' | null {
+    const b = this.registry.get('menuShopSubtabs') as Array<{ x: number; y: number; w: number; h: number; key: 'items' | 'house' }> | null;
+    const hit = b?.find((s) => x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
+    return hit ? hit.key : null;
+  }
+
+  /** House-catalog row (房子 tab) under (x,y) → its tier id. */
+  private menuHouseRowAt(x: number, y: number): string | null {
+    const rows = this.registry.get('menuHouseRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
     const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
     return hit ? hit.id : null;
   }
@@ -4963,7 +5027,21 @@ export class GameScene extends Phaser.Scene {
         return true;
       }
     } else if (this.menuTab === 3) {
-      // Shop: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
+      // Shop sub-tabs (物品 / 房子): a sub-tab click switches the pane.
+      const sub = this.menuShopSubtabAt(x, y);
+      if (sub && sub !== this.menuShopTab) { this.menuShopTab = sub; this.shopMsg = ''; this.publishMenu(); return true; }
+      if (this.menuShopTab === 'house') {
+        // 房子 tab: a BUY button buys the selected house (pay now, move in tomorrow); a row selects it.
+        const hb = this.registry.get('menuHouseBuy') as { x: number; y: number; w: number; h: number } | null;
+        if (hb && x >= hb.x && x <= hb.x + hb.w && y >= hb.y && y <= hb.y + hb.h) {
+          if (this.menuHouseSel) this.buyHouse(this.menuHouseSel);
+          return true;
+        }
+        const hid = this.menuHouseRowAt(x, y);
+        if (hid) { this.menuHouseSel = hid; this.shopMsg = ''; this.publishMenu(); return true; }
+        return true; // stay inside the house pane (don't fall through to close)
+      }
+      // 物品 tab: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
       const sk = this.menuStepperAt(x, y);
       if (sk) { this.menuShopStep(sk); return true; }
       const rid = this.menuShopRowAt(x, y);
@@ -5267,6 +5345,7 @@ export class GameScene extends Phaser.Scene {
   private settleDay(): void {
     this.settleOrders();
     this.settleSales();
+    this.settleHomeUpgrade();
     this.scheduleSave();
     if (this.menuOpen) this.publishMenu(); // reflect deliveries / emptied bin if the mailbox is open
   }
@@ -7717,7 +7796,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 17,
+      v: 18,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -7746,6 +7825,7 @@ export class GameScene extends Phaser.Scene {
       dialogueSeen: [...this.dialogueSeen],
       dialogueFlags: [...this.dialogueFlags],
       currentHome: this.currentHome,
+      pendingHome: this.pendingHome ?? undefined, // v18: bought-but-not-moved-in
     };
   }
 
@@ -7919,7 +7999,10 @@ export class GameScene extends Phaser.Scene {
       this.chestSeeded = s.chestSeeded ?? false;
       this.dialogueSeen = new Set(s.dialogueSeen ?? []);
       this.dialogueFlags = new Set(s.dialogueFlags ?? []);
-      this.currentHome = s.currentHome ?? 'home_1'; // v17 (old saves → the starter tier)
+      // v17→v18: currentHome is now a TIER id (home_1 / home_kitchen), decoupled from the scene id.
+      // An unknown value (e.g. the retired placeholder 'home_2') → the starter tier.
+      this.currentHome = HOME_TIERS.some((h) => h.id === s.currentHome) ? (s.currentHome as string) : 'home_1';
+      this.pendingHome = s.pendingHome ?? null; // v18: bought-but-not-moved-in
       this.ensureBuildingMaterials();
       this.grantStarterSeedsOnce();
       if (s.mail) {

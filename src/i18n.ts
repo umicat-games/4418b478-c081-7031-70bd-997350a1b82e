@@ -144,6 +144,18 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   chest_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
   shop_ordered: { en: 'Ordered — arrives tomorrow', 'zh-CN': '已下单，明早送达' },
   sale_full: { en: 'For-sale bin is full', 'zh-CN': '待售格满了' },
+  // Shop sub-tabs (items / houses) + house purchase
+  shop_tab_items: { en: 'Items', 'zh-CN': '物品' },
+  shop_tab_house: { en: 'Houses', 'zh-CN': '房子' },
+  house_pick: { en: 'Pick a house', 'zh-CN': '选一间房子' },
+  house_buy: { en: 'Buy', 'zh-CN': '购买' },                  // rendered "Buy 1200" / "购买 1200"
+  house_owned: { en: 'Current home', 'zh-CN': '当前的家' },
+  house_pending: { en: 'Moving in tomorrow', 'zh-CN': '明天入住' },
+  house_bought: { en: "Bought! You'll move in tomorrow", 'zh-CN': '已购买，明天入住新家' },
+  home_basic_name: { en: 'Cozy Cabin', 'zh-CN': '温馨小屋' },
+  home_basic_desc: { en: 'A snug one-room home to start out in.', 'zh-CN': '起步的一间小屋，简单温馨。' },
+  home_kitchen_name: { en: 'Home with Kitchen', 'zh-CN': '带厨房的家' },
+  home_kitchen_desc: { en: 'A roomier home with a real kitchen — stove, pots and a dining table.', 'zh-CN': '更宽敞的家，带真正的厨房——灶台、锅具和餐桌。' },
   // Overnight economy: the 3-tab mailbox + delivery/sale letters
   tab_pickup: { en: 'Pickup', 'zh-CN': '取货' },
   tab_forsale: { en: 'For Sale', 'zh-CN': '待售' },

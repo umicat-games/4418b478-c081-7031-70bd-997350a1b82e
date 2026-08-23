@@ -70,6 +70,9 @@ const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS =
 // bottom/footY stay INSIDE the frame — the 9-slice bottom border eats ~0.035H, so the
 // panel's inner content ends ~0.885H; the balance sits above that, the list above it.
 const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.81, footY: 0.85 };
+// Shop sub-tabs (物品 / 房子): a two-button band just above the content, over the LEFT region.
+const SHOP_SUBTAB = { y: 0.30, h: 0.05, x0: 0.06, x1: 0.52, gapPx: 6 };
+const SHOP_LIST_Y = 0.365; // the item/house list starts BELOW the sub-tab band (was GRID.y 0.30)
 const STEP = { y: 0.72, btn: 0.052, gap: 0.05, buyY: 0.82, msgY: 0.87 }; // right-side qty stepper + buy button (kept clear of the desc above + the frame border below)
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
@@ -82,8 +85,11 @@ export interface MenuModel {
   items?: MenuItem[];        // grid (chest / cato-bag)
   mails?: MailListEntry[];   // mail list
   selected?: number;         // selected grid index → right detail
-  catalog?: MenuCatalogItem[];  // shop tab
+  catalog?: MenuCatalogItem[];  // shop tab (物品 sub-tab)
   shopSelected?: string;        // selected catalog id → right detail + buy
+  shopTab?: 'items' | 'house';  // shop sub-tab (物品 / 房子)
+  houses?: Array<{ id: string; name: string; desc: string; preview?: string; price: number; owned: boolean; pending: boolean }>; // 房子 sub-tab
+  houseSelected?: string;       // selected house tier id → right detail + buy
   money?: number;               // coin balance (shop footer)
   buyQty?: number;              // how many to buy (right-side stepper)
   shopMsg?: string;             // transient warning ("金币不够" / "箱子满了")
@@ -674,9 +680,17 @@ export class MenuScene extends Phaser.Scene {
    *  Buying is INSTANT (coins out → item into the chest, or a warning). */
   private renderShop(c: Phaser.GameObjects.Container, m: MenuModel): void {
     const W = this.scale.width, H = this.scale.height;
+    const shopTab = m.shopTab ?? 'items';
+    // Sub-tab bar (物品 / 房子) above the content; pushes the list down a touch.
+    this.renderShopSubtabs(c, shopTab);
+    if (shopTab === 'house') {
+      this.renderHouseList(c, m);
+      this.renderHouseDetail(c, (m.houses ?? []).find((h) => h.id === m.houseSelected), m.money ?? 0, m.shopMsg ?? '');
+      return;
+    }
     const catalog = m.catalog ?? [];
     const selId = m.shopSelected;
-    const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
+    const gx = GRID.x * W, gy = SHOP_LIST_Y * H, gw = GRID.w * W;
     const rowH = SHOP.rowH * H, step = rowH + SHOP.gapPx;
     this.scrollStepPx = step;
     const visible = Math.max(1, Math.floor((SHOP.bottom * H - gy) / step));
@@ -750,6 +764,81 @@ export class MenuScene extends Phaser.Scene {
     else if (sub > money) c.add(this.T(cxN, STEP.msgY * H, t('shop_no_coins'), H * 0.02, '#b5896a'));
   }
 
+  /** Shop sub-tab bar (物品 / 房子) — two buttons over the LEFT content region. Registers hit bounds. */
+  private renderShopSubtabs(c: Phaser.GameObjects.Container, active: 'items' | 'house'): void {
+    const W = this.scale.width, H = this.scale.height;
+    const y = SHOP_SUBTAB.y * H, h = SHOP_SUBTAB.h * H;
+    const x0 = SHOP_SUBTAB.x0 * W, x1 = SHOP_SUBTAB.x1 * W;
+    const bw = (x1 - x0 - SHOP_SUBTAB.gapPx) / 2;
+    const bounds: Array<{ x: number; y: number; w: number; h: number; key: 'items' | 'house' }> = [];
+    // Icons are ui-icons (all_icons.png) frames: 229 = white-sprout (物品 placeholder), 254 = white-home (房子).
+    const tabs: Array<{ key: 'items' | 'house'; label: string; frame: number }> = [
+      { key: 'items', label: t('shop_tab_items'), frame: 229 },
+      { key: 'house', label: t('shop_tab_house'), frame: 254 },
+    ];
+    tabs.forEach((tb, i) => {
+      const bx = x0 + i * (bw + SHOP_SUBTAB.gapPx), sel = tb.key === active;
+      const g = this.add.graphics();
+      g.fillStyle(sel ? 0xf3ead1 : 0xe1d4b6, 1); g.fillRoundedRect(bx, y, bw, h, 8);
+      g.lineStyle(sel ? 3 : 2, sel ? 0xb89a5e : 0xcdb88f, 1); g.strokeRoundedRect(bx, y, bw, h, 8); c.add(g);
+      if (this.textures.exists('ui-icons')) c.add(this.add.image(bx + h * 0.55, y + h / 2, 'ui-icons', tb.frame).setScale((h * 0.6) / 16));
+      c.add(this.T(bx + h * 1.05, y + h / 2, tb.label, H * 0.026, sel ? INK : SUB, 0));
+      bounds.push({ x: bx, y, w: bw, h, key: tb.key });
+    });
+    this.registry.set('menuShopSubtabs', bounds);
+  }
+
+  /** House catalog LIST (房子 sub-tab): a row per purchasable house — name + price / state badge. */
+  private renderHouseList(c: Phaser.GameObjects.Container, m: MenuModel): void {
+    const W = this.scale.width, H = this.scale.height;
+    const houses = m.houses ?? [];
+    const selId = m.houseSelected;
+    const gx = GRID.x * W, gy = SHOP_LIST_Y * H, gw = GRID.w * W;
+    const rowH = 0.10 * H, step = rowH + SHOP.gapPx; // houses are few → taller rows
+    const rowBounds: Array<{ x: number; y: number; w: number; h: number; id: string }> = [];
+    houses.forEach((hh, k) => {
+      const ry = gy + k * step, sel = hh.id === selId;
+      const bar = this.add.graphics();
+      bar.fillStyle(sel ? 0xf3ead1 : 0xe7dcc2, 1); bar.fillRoundedRect(gx, ry, gw, rowH, 8);
+      bar.lineStyle(sel ? 3 : 2, sel ? 0xb89a5e : 0xd2be95, 1); bar.strokeRoundedRect(gx, ry, gw, rowH, 8); c.add(bar);
+      c.add(this.T(gx + rowH * 0.3, ry + rowH * 0.5, hh.name, H * 0.026, INK, 0));
+      const badge = hh.owned ? t('house_owned') : hh.pending ? t('house_pending') : String(hh.price);
+      const bcol = hh.owned ? '#6f8f4e' : hh.pending ? '#a9791f' : '#7a5a34';
+      c.add(this.T(gx + gw - rowH * 0.3, ry + rowH * 0.5, badge, H * 0.024, bcol, 1));
+      rowBounds.push({ x: gx, y: ry, w: gw, h: rowH, id: hh.id });
+    });
+    this.registry.set('menuHouseRows', rowBounds);
+    c.add(this.T(gx, SHOP.footY * H, `${t('shop_balance')} ${m.money ?? 0}`, H * 0.026, INK, 0));
+  }
+
+  /** House DETAIL (房子 sub-tab, right pane): big preview image on top, name + desc below, BUY button
+   *  (or 当前的家 / 明天入住 state). Buying pays now + moves in tomorrow — see GameScene.buyHouse. */
+  private renderHouseDetail(c: Phaser.GameObjects.Container, h: NonNullable<MenuModel['houses']>[number] | undefined, money: number, msg: string): void {
+    const W = this.scale.width, H = this.scale.height;
+    const cx = 0.76 * W, regionW = 0.40 * W;
+    this.registry.set('menuHouseBuy', null);
+    if (!h) { c.add(this.T(cx, 0.6 * H, t('house_pick'), H * 0.024, SUB)); return; }
+    if (h.preview && this.textures.exists(h.preview)) {
+      const img = this.add.image(cx, 0.32 * H, h.preview);
+      img.setScale(Math.min((regionW * 0.92) / img.width, (0.28 * H) / img.height)); c.add(img);
+    }
+    c.add(this.T(cx, 0.52 * H, h.name, H * 0.028, INK));
+    c.add(this.T(cx, 0.565 * H, `${t('shop_unit_price')} ${h.price}`, H * 0.023, '#7a5a34'));
+    const desc = this.add.text(cx, 0.60 * H, h.desc, {
+      fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: regionW * 0.84 },
+    }).setOrigin(0.5, 0); c.add(desc);
+    const buyCy = STEP.buyY * H, btnH = STEP.btn * H * 1.05, btnW = regionW * 0.62;
+    if (h.owned) { c.add(this.T(cx, buyCy, t('house_owned'), H * 0.028, '#6f8f4e')); return; }
+    if (h.pending) { c.add(this.T(cx, buyCy, t('house_pending'), H * 0.028, '#a9791f')); return; }
+    const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
+    const bg = has ? this.add.nineslice(cx, buyCy, 'square-buttons', 'grey-button', btnW, btnH, 6, 6, 6, 6)
+      : this.add.rectangle(cx, buyCy, btnW, btnH, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
+    c.add(bg); c.add(this.T(cx, buyCy, `${t('house_buy')} ${h.price}`, H * 0.026, '#5b4327'));
+    this.registry.set('menuHouseBuy', { x: cx - btnW / 2, y: buyCy - btnH / 2, w: btnW, h: btnH });
+    if (msg) c.add(this.T(cx, STEP.msgY * H, msg, H * 0.022, '#b5533a'));
+    else if (h.price > money) c.add(this.T(cx, STEP.msgY * H, t('shop_no_coins'), H * 0.02, '#b5896a'));
+  }
+
   private renderMenu(m: ActionMenuModel): void {
     this.menuRoot?.destroy(); this.menuRoot = undefined;
     this.menuTargets = []; this.hovered = null;
@@ -791,6 +880,7 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuTabs', []); this.registry.set('menuSlots', []); this.registry.set('menuMailRows', []);
     this.registry.set('menuPanel', null); this.registry.set('menuActionBounds', []); this.registry.set('menuCloseBtn', null);
     this.registry.set('menuRail', null); this.registry.set('menuShopRows', []); this.registry.set('menuStepper', []);
+    this.registry.set('menuShopSubtabs', []); this.registry.set('menuHouseRows', []); this.registry.set('menuHouseBuy', null);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
     this.slotTargets = []; this.menuTargets = []; this.hovered = null;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; this.panel = undefined; this.dim = undefined; return; }
