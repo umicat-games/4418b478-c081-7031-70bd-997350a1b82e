@@ -214,7 +214,7 @@
       "id": "e-mt6a4956-92lv",
       "kind": "sprite",
       "transform": {
-        "x": 110.25,
+        "x": 112.1756688208651,
         "y": 36.00000000000001,
         "rotation": 0,
         "scaleX": 1,
@@ -227,7 +227,7 @@
       "id": "e-mt6a4zrt-spld",
       "kind": "sprite",
       "transform": {
-        "x": 110.25,
+        "x": 112.1756688208651,
         "y": 28.000000000000004,
         "rotation": 0,
         "scaleX": 0.7,
@@ -263,23 +263,10 @@
       "assetId": "fry-pan"
     },
     {
-      "id": "e-mt7kkjx7-hqas",
-      "kind": "sprite",
-      "transform": {
-        "x": 142.25,
-        "y": 52.00000000000001,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "kitchen-right-vertical"
-    },
-    {
       "id": "e-mt7kktzu-h5a2",
       "kind": "sprite",
       "transform": {
-        "x": 142.25,
+        "x": 144.1756688208651,
         "y": 36.00000000000001,
         "rotation": 0,
         "scaleX": 1,
@@ -292,7 +279,7 @@
       "id": "e-mt7kl6y2-chrg",
       "kind": "sprite",
       "transform": {
-        "x": 126.25,
+        "x": 128.1756688208651,
         "y": 36.00000000000001,
         "rotation": 0,
         "scaleX": 1,
@@ -305,8 +292,8 @@
       "id": "e-mt7koyna-66w5",
       "kind": "sprite",
       "transform": {
-        "x": 128.1756688208651,
-        "y": 32.80000000000001,
+        "x": 131.05,
+        "y": 31.677048733927244,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -331,7 +318,7 @@
       "id": "e-mt7kr6uj-8eez",
       "kind": "sprite",
       "transform": {
-        "x": 142.25,
+        "x": 144.1756688208651,
         "y": 52.00000000000001,
         "rotation": 0,
         "scaleX": 1,
@@ -344,7 +331,7 @@
       "id": "e-mt7krp7h-eecp",
       "kind": "sprite",
       "transform": {
-        "x": 142.25,
+        "x": 144.1756688208651,
         "y": 64,
         "rotation": 0,
         "scaleX": 1,
@@ -357,7 +344,7 @@
       "id": "e-mt7ks5f9-2hwp",
       "kind": "sprite",
       "transform": {
-        "x": 142.25,
+        "x": 144.1756688208651,
         "y": 80,
         "rotation": 0,
         "scaleX": 1,
@@ -370,7 +357,7 @@
       "id": "e-mt7ktdmm-x60m",
       "kind": "sprite",
       "transform": {
-        "x": 126.25,
+        "x": 128.1756688208651,
         "y": 80,
         "rotation": 0,
         "scaleX": 1,
@@ -383,7 +370,7 @@
       "id": "e-mt7ktv5e-ueac",
       "kind": "sprite",
       "transform": {
-        "x": 110.25,
+        "x": 112.1756688208651,
         "y": 80,
         "rotation": 0,
         "scaleX": 1,
