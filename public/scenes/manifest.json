@@ -2117,6 +2117,76 @@
       "path": "uploaded/fry-pan.png",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/fry-pan.png",
       "kind": "image"
+    },
+    {
+      "id": "kitchen-right-vertical",
+      "textureKey": "kitchen-right-vertical",
+      "path": "uploaded/kitchen-right-vertical.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/kitchen-right-vertical.png",
+      "kind": "image"
+    },
+    {
+      "id": "kitchen-corner-up",
+      "textureKey": "kitchen-corner-up",
+      "path": "uploaded/kitchen-corner-up.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/kitchen-corner-up.png",
+      "kind": "image"
+    },
+    {
+      "id": "kitchen-cabinet",
+      "textureKey": "kitchen-cabinet",
+      "path": "uploaded/kitchen-cabinet.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/kitchen-cabinet.png",
+      "kind": "image"
+    },
+    {
+      "id": "chopping-board",
+      "textureKey": "chopping-board",
+      "path": "uploaded/chopping-board.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/chopping-board.png",
+      "kind": "image"
+    },
+    {
+      "id": "spoons",
+      "textureKey": "spoons",
+      "path": "uploaded/spoons.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/spoons.png",
+      "kind": "image"
+    },
+    {
+      "id": "kitchen-sink",
+      "textureKey": "kitchen-sink",
+      "path": "uploaded/kitchen-sink.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/kitchen-sink.png",
+      "kind": "image"
+    },
+    {
+      "id": "kitchen-corner-down",
+      "textureKey": "kitchen-corner-down",
+      "path": "uploaded/kitchen-corner-down.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/kitchen-corner-down.png",
+      "kind": "image"
+    },
+    {
+      "id": "kitchen-down-center",
+      "textureKey": "kitchen-down-center",
+      "path": "uploaded/kitchen-down-center.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/kitchen-down-center.png",
+      "kind": "image"
+    },
+    {
+      "id": "kitchen-down-left",
+      "textureKey": "kitchen-down-left",
+      "path": "uploaded/kitchen-down-left.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/kitchen-down-left.png",
+      "kind": "image"
+    },
+    {
+      "id": "spoon-and-fork",
+      "textureKey": "spoon-and-fork",
+      "path": "uploaded/spoon-and-fork.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/spoon-and-fork.png",
+      "kind": "image"
     }
   ]
 }

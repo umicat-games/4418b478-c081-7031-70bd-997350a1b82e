@@ -48,8 +48,8 @@
       "assetId": "basic_furniture",
       "frame": "drawer",
       "transform": {
-        "x": 24,
-        "y": 17.277048733927245,
+        "x": 18.25,
+        "y": 17.5,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -76,8 +76,8 @@
       "assetId": "basic_furniture",
       "frame": "clock-3",
       "transform": {
-        "x": 46.50006846369777,
-        "y": 9.277048733927245,
+        "x": 32,
+        "y": 9.5,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -90,8 +90,8 @@
       "assetId": "basic_furniture",
       "frame": "rug-green",
       "transform": {
-        "x": 104.1756688208651,
-        "y": 70.75828279777477,
+        "x": 54.50006846369777,
+        "y": 68,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -104,8 +104,8 @@
       "assetId": "basic_furniture",
       "frame": "table",
       "transform": {
-        "x": 104.1756688208651,
-        "y": 70.75828279777477,
+        "x": 54.50006846369777,
+        "y": 68,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -118,8 +118,8 @@
       "assetId": "basic_furniture",
       "frame": "chair-right",
       "transform": {
-        "x": 84,
-        "y": 70.75828279777477,
+        "x": 34.25,
+        "y": 68,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -132,8 +132,8 @@
       "assetId": "basic_furniture",
       "frame": "chair-left",
       "transform": {
-        "x": 123.3756688208651,
-        "y": 70.75828279777477,
+        "x": 75.37566882086509,
+        "y": 68,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -146,8 +146,8 @@
       "assetId": "basic_furniture",
       "frame": "chair-back",
       "transform": {
-        "x": 104.1756688208651,
-        "y": 84,
+        "x": 54.50006846369777,
+        "y": 80,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -160,7 +160,7 @@
       "assetId": "basic_furniture",
       "frame": "rug-blue",
       "transform": {
-        "x": 0,
+        "x": -10.18691953243183,
         "y": 76,
         "rotation": 0,
         "scaleX": 1,
@@ -174,7 +174,7 @@
       "assetId": "basic_furniture",
       "frame": "small-table",
       "transform": {
-        "x": 0,
+        "x": -10.18691953243183,
         "y": 76,
         "rotation": 0,
         "scaleX": 1,
@@ -200,8 +200,8 @@
       "id": "e-mt2bp9z5-8rqu",
       "kind": "sprite",
       "transform": {
-        "x": 104.1756688208651,
-        "y": 56,
+        "x": 54.50006846369777,
+        "y": 52.00000000000001,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -214,7 +214,7 @@
       "id": "e-mt6a4956-92lv",
       "kind": "sprite",
       "transform": {
-        "x": 96.1756688208651,
+        "x": 110.25,
         "y": 36.00000000000001,
         "rotation": 0,
         "scaleX": 1,
@@ -227,7 +227,7 @@
       "id": "e-mt6a4zrt-spld",
       "kind": "sprite",
       "transform": {
-        "x": 96.1756688208651,
+        "x": 110.25,
         "y": 28.000000000000004,
         "rotation": 0,
         "scaleX": 0.7,
@@ -240,8 +240,8 @@
       "id": "e-mt6a66vu-6ckf",
       "kind": "sprite",
       "transform": {
-        "x": 137.75691238132976,
-        "y": 32.00000000000001,
+        "x": 83.37566882086509,
+        "y": 31.677048733927244,
         "rotation": 0,
         "scaleX": 0.6,
         "scaleY": 0.6,
@@ -250,30 +250,160 @@
       "assetId": "book-shelf"
     },
     {
-      "id": "e-mt6a9mrg-obaa",
-      "kind": "sprite",
-      "transform": {
-        "x": 111.19999999999999,
-        "y": 26.07704873392725,
-        "rotation": 0,
-        "scaleX": 0.7,
-        "scaleY": 0.7,
-        "depth": 10
-      },
-      "assetId": "fry-pan-small"
-    },
-    {
       "id": "e-mt6aa4kp-5mgg",
       "kind": "sprite",
       "transform": {
-        "x": 120.1756688208651,
-        "y": 26.877048733927246,
+        "x": 98.5756688208651,
+        "y": 26.877048733927243,
         "rotation": 0,
         "scaleX": 0.6,
         "scaleY": 0.6,
         "depth": 10
       },
       "assetId": "fry-pan"
+    },
+    {
+      "id": "e-mt7kkjx7-hqas",
+      "kind": "sprite",
+      "transform": {
+        "x": 142.25,
+        "y": 52.00000000000001,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "kitchen-right-vertical"
+    },
+    {
+      "id": "e-mt7kktzu-h5a2",
+      "kind": "sprite",
+      "transform": {
+        "x": 142.25,
+        "y": 36.00000000000001,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "kitchen-corner-up"
+    },
+    {
+      "id": "e-mt7kl6y2-chrg",
+      "kind": "sprite",
+      "transform": {
+        "x": 126.25,
+        "y": 36.00000000000001,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "kitchen-cabinet"
+    },
+    {
+      "id": "e-mt7koyna-66w5",
+      "kind": "sprite",
+      "transform": {
+        "x": 128.1756688208651,
+        "y": 32.80000000000001,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "chopping-board"
+    },
+    {
+      "id": "e-mt7kposy-a5k9",
+      "kind": "sprite",
+      "transform": {
+        "x": 144.65,
+        "y": 28.000000000000014,
+        "rotation": 0,
+        "scaleX": 0.7,
+        "scaleY": 0.7,
+        "depth": 10
+      },
+      "assetId": "spoons"
+    },
+    {
+      "id": "e-mt7kr6uj-8eez",
+      "kind": "sprite",
+      "transform": {
+        "x": 142.25,
+        "y": 52.00000000000001,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 11
+      },
+      "assetId": "kitchen-sink"
+    },
+    {
+      "id": "e-mt7krp7h-eecp",
+      "kind": "sprite",
+      "transform": {
+        "x": 142.25,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "kitchen-right-vertical"
+    },
+    {
+      "id": "e-mt7ks5f9-2hwp",
+      "kind": "sprite",
+      "transform": {
+        "x": 142.25,
+        "y": 80,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "kitchen-corner-down"
+    },
+    {
+      "id": "e-mt7ktdmm-x60m",
+      "kind": "sprite",
+      "transform": {
+        "x": 126.25,
+        "y": 80,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "kitchen-down-center"
+    },
+    {
+      "id": "e-mt7ktv5e-ueac",
+      "kind": "sprite",
+      "transform": {
+        "x": 110.25,
+        "y": 80,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "kitchen-down-left"
+    },
+    {
+      "id": "e-mt7kx0uk-t32w",
+      "kind": "sprite",
+      "transform": {
+        "x": 144.65,
+        "y": 70.39999999999999,
+        "rotation": 0,
+        "scaleX": 0.7,
+        "scaleY": 0.7,
+        "depth": 10
+      },
+      "assetId": "spoon-and-fork"
     }
   ]
 }
