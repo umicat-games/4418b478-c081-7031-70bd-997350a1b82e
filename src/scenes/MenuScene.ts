@@ -58,7 +58,7 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'calendar', frame: 294, title: '日历' }, // all_icons calendar-page glyph (row18 col6). Placeholder tab.
   { key: 'pickup', frame: 293, title: '取货' },   // mailbox: delivered orders (icon tunable like paw)
   { key: 'forsale', frame: 261, title: '待售' },  // mailbox: shipping bin ($ glyph, tunable)
-  { key: 'house', frame: 254, title: '房子' },    // shop 房子 sub-tab (white-home icon)
+  { key: 'house', frame: 278, title: '房子' },    // shop 房子 sub-tab (white-home = all_icons row17 col6, under white-cart 262)
 ];
 // NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
