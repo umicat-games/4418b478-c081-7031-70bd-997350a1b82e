@@ -274,7 +274,7 @@ export class MenuScene extends Phaser.Scene {
     const OVERLAP = tabH * 0.22; // the tab's bottom dips a LITTLE into the frame top (merge the border)
     // The active tab is distinguished by being TALLER + lighter + drawn on top — NOT wider. (A
     // horizontal grow would push the edge tabs PAST the panel when the tabs already fill the width.)
-    const ACTIVE_TALLER = 1.14;      // active tab is this much taller (grows UPWARD, bottom stays merged)
+    const ACTIVE_TALLER = 1.06;      // active tab is just a LITTLE taller (grows UPWARD, bottom stays merged)
     const BOTTOM = ly + OVERLAP;     // every tab's bottom edge (merged into the frame)
     const slotCx = (pos: number) => startX + pos * tabW + tabW / 2; // pos = index WITHIN tabsToShow
     const tabBounds: Array<{ x: number; y: number; w: number; h: number; tab: number }> = [];
