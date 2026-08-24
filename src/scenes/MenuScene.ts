@@ -279,7 +279,7 @@ export class MenuScene extends Phaser.Scene {
     const slotCx = (pos: number) => startX + pos * tabW + tabW / 2; // pos = index WITHIN tabsToShow
     const tabBounds: Array<{ x: number; y: number; w: number; h: number; tab: number }> = [];
     const tabIcons: Phaser.GameObjects.Image[] = [];
-    let activeChip: Phaser.GameObjects.Image | undefined, activeIcon: Phaser.GameObjects.Image | undefined, activeCy = 0, activeH = tabH;
+    let activeChip: Phaser.GameObjects.NineSlice | undefined, activeIcon: Phaser.GameObjects.Image | undefined, activeCy = 0, activeH = tabH;
     const drawTab = (tabIdx: number, pos: number) => {
       const active = tabIdx === m.tab;
       const w = tabW; // same width for all (no horizontal grow → edge tabs never overflow the panel)
@@ -375,9 +375,12 @@ export class MenuScene extends Phaser.Scene {
       content.setAlpha(0); content.y = H * 0.02;
       this.tweens.add({ targets: content, alpha: 1, y: 0, duration: 190, ease: 'Cubic.easeOut' });
       if (activeChip) {
-        const fullSY = activeH / 23, startH = activeH * 0.78;
-        activeChip.scaleY = startH / 23; activeChip.y = BOTTOM - startH / 2;
-        this.tweens.add({ targets: activeChip, scaleY: fullSY, y: activeCy, duration: 240, ease: 'Back.easeOut' });
+        // The tab is a NINESLICE — its display height is already `activeH`, so scaleY 1 = full
+        // height. Spring it up from 0.78→1 (bottom pinned). (The old image tab used scaleY = h/23
+        // since the source was 23px tall; on a nineslice that formula balloons it ~2× — the bug.)
+        const startH = activeH * 0.78;
+        activeChip.scaleY = 0.78; activeChip.y = BOTTOM - startH / 2;
+        this.tweens.add({ targets: activeChip, scaleY: 1, y: activeCy, duration: 240, ease: 'Back.easeOut' });
       }
       if (activeIcon) {
         const iy = activeCy - OVERLAP / 2;
