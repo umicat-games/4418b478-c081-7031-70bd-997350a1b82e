@@ -795,10 +795,11 @@ export class MenuScene extends Phaser.Scene {
     const cx = 0.76 * W, regionW = 0.40 * W;
     this.registry.set('menuHouseBuy', null);
     if (!h) { c.add(this.T(cx, 0.6 * H, t('house_pick'), H * 0.024, SUB)); return; }
+    let nameY = 0.52 * H; // default when there's no preview; else anchored below the card
     if (h.preview && this.textures.exists(h.preview)) {
-      const imgCy = 0.38 * H;
+      const imgCy = 0.36 * H;
       const img = this.add.image(cx, imgCy, h.preview); // lower so it clears the frame top border
-      img.setScale(Math.min((regionW * 0.72) / img.width, (0.22 * H) / img.height)); // a touch smaller
+      img.setScale(Math.min((regionW * 0.72) / img.width, (0.21 * H) / img.height)); // a touch smaller
       // Card border = the SAME `slot-light` 9-slice the item cells use (line ~419), NOT a drawn
       // strokeRoundedRect — the vector stroke reads as a smooth/rounded line; the item cards have a
       // PIXEL-GRAIN outline (the atlas frame's chunky corners). The house image sits in the slot's
@@ -807,10 +808,11 @@ export class MenuScene extends Phaser.Scene {
       const bw = iw + pad * 2, bh = ih + pad * 2;
       const frame = this.add.nineslice(cx, imgCy, ATLAS, SLOT_FRAME, bw / SLOT_SCALE, bh / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
       c.add(frame); c.add(img); // slot under, image on top
+      nameY = imgCy + bh / 2 + H * 0.045; // title sits a clear gap BELOW the card, never touching its border
     }
-    c.add(this.T(cx, 0.52 * H, h.name, H * 0.028, INK));
-    c.add(this.T(cx, 0.565 * H, `${t('shop_unit_price')} ${h.price}`, H * 0.023, '#7a5a34'));
-    const desc = this.add.text(cx, 0.60 * H, h.desc, {
+    c.add(this.T(cx, nameY, h.name, H * 0.028, INK));
+    c.add(this.T(cx, nameY + 0.045 * H, `${t('shop_unit_price')} ${h.price}`, H * 0.023, '#7a5a34'));
+    const desc = this.add.text(cx, nameY + 0.08 * H, h.desc, {
       fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: regionW * 0.84 },
     }).setOrigin(0.5, 0); c.add(desc);
     const buyCy = STEP.buyY * H, btnH = STEP.btn * H * 1.05, btnW = regionW * 0.62;
