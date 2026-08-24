@@ -799,14 +799,14 @@ export class MenuScene extends Phaser.Scene {
       const imgCy = 0.38 * H;
       const img = this.add.image(cx, imgCy, h.preview); // lower so it clears the frame top border
       img.setScale(Math.min((regionW * 0.72) / img.width, (0.22 * H) / img.height)); // a touch smaller
-      // Card border drawn in CODE (not baked into the preview PNG) so it stays a consistent chunky
-      // frame like the item cards — a border painted into the big PNG would shrink to a hairline here.
-      const iw = img.displayWidth, ih = img.displayHeight, pad = H * 0.006;
-      const bx = cx - iw / 2 - pad, by = imgCy - ih / 2 - pad, bw = iw + pad * 2, bh = ih + pad * 2;
-      const g = this.add.graphics();
-      g.lineStyle(Math.max(4, H * 0.007), 0xf6ecd2, 1); g.strokeRoundedRect(bx, by, bw, bh, 6);       // cream outer
-      g.lineStyle(Math.max(2, H * 0.004), 0x8a6a44, 1); g.strokeRoundedRect(bx + 3, by + 3, bw - 6, bh - 6, 5); // brown inner
-      c.add(g); c.add(img); // frame under, image on top
+      // Card border = the SAME `slot-light` 9-slice the item cells use (line ~419), NOT a drawn
+      // strokeRoundedRect — the vector stroke reads as a smooth/rounded line; the item cards have a
+      // PIXEL-GRAIN outline (the atlas frame's chunky corners). The house image sits in the slot's
+      // cream interior; the nineslice corners stay a constant chunky size at any card size.
+      const iw = img.displayWidth, ih = img.displayHeight, pad = SLOT_SLICE.l * SLOT_SCALE; // image lands inside the border
+      const bw = iw + pad * 2, bh = ih + pad * 2;
+      const frame = this.add.nineslice(cx, imgCy, ATLAS, SLOT_FRAME, bw / SLOT_SCALE, bh / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
+      c.add(frame); c.add(img); // slot under, image on top
     }
     c.add(this.T(cx, 0.52 * H, h.name, H * 0.028, INK));
     c.add(this.T(cx, 0.565 * H, `${t('shop_unit_price')} ${h.price}`, H * 0.023, '#7a5a34'));
