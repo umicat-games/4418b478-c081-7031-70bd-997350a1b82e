@@ -791,8 +791,8 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuHouseBuy', null);
     if (!h) { c.add(this.T(cx, 0.6 * H, t('house_pick'), H * 0.024, SUB)); return; }
     if (h.preview && this.textures.exists(h.preview)) {
-      const img = this.add.image(cx, 0.32 * H, h.preview);
-      img.setScale(Math.min((regionW * 0.92) / img.width, (0.28 * H) / img.height)); c.add(img);
+      const img = this.add.image(cx, 0.38 * H, h.preview); // lower so it clears the frame top border
+      img.setScale(Math.min((regionW * 0.72) / img.width, (0.22 * H) / img.height)); c.add(img); // a touch smaller
     }
     c.add(this.T(cx, 0.52 * H, h.name, H * 0.028, INK));
     c.add(this.T(cx, 0.565 * H, `${t('shop_unit_price')} ${h.price}`, H * 0.023, '#7a5a34'));
