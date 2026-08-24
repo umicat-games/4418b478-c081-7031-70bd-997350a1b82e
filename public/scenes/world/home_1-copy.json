@@ -187,7 +187,7 @@
       "kind": "sprite",
       "assetId": "door_animation_sprites",
       "transform": {
-        "x": 72,
+        "x": 32,
         "y": 104,
         "rotation": 0,
         "scaleX": 1,
