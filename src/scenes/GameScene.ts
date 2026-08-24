@@ -536,7 +536,7 @@ interface PlacedObj {
 interface HomeTier { id: string; sceneId: string; price: number; nameKey: string; descKey: string; preview?: string; }
 const HOME_TIERS: HomeTier[] = [
   { id: 'home_1', sceneId: 'home_1', price: 0, nameKey: 'home_basic_name', descKey: 'home_basic_desc' },              // starter (no kitchen)
-  { id: 'home_kitchen', sceneId: 'home_1-copy', price: 1200, nameKey: 'home_kitchen_name', descKey: 'home_kitchen_desc', preview: 'house-kitchen-preview' }, // +kitchen (authored scene 'home_1-copy' / name home_with_kitchen)
+  { id: 'home_kitchen', sceneId: 'home_1-copy', price: 1200, nameKey: 'home_kitchen_name', descKey: 'home_kitchen_desc', preview: 'home-with-kitchen' }, // +kitchen (authored scene 'home_1-copy' / name home_with_kitchen)
 ];
 
 interface SaveBlob {
