@@ -1,1 +1,144 @@
-{"frames": {"slot-rounded-light": {"frame": {"x": 233, "y": 73, "w": 30, "h": 32}, "sourceSize": {"w": 30, "h": 32}}, "slot-rounded-medium": {"frame": {"x": 281, "y": 73, "w": 30, "h": 32}, "sourceSize": {"w": 30, "h": 32}}, "slot-rounded-dark": {"frame": {"x": 329, "y": 73, "w": 30, "h": 32}, "sourceSize": {"w": 30, "h": 32}}, "slot-light": {"frame": {"x": 233, "y": 121, "w": 30, "h": 32}, "sourceSize": {"w": 30, "h": 32}}, "slot-medium": {"frame": {"x": 281, "y": 121, "w": 30, "h": 32}, "sourceSize": {"w": 30, "h": 32}}, "slot-dark": {"frame": {"x": 329, "y": 121, "w": 30, "h": 32}, "sourceSize": {"w": 30, "h": 32}}, "frame-light": {"frame": {"x": 227, "y": 162, "w": 42, "h": 44}, "sourceSize": {"w": 42, "h": 44}}, "frame-medium": {"frame": {"x": 275, "y": 162, "w": 42, "h": 44}, "sourceSize": {"w": 42, "h": 44}}, "frame-dark": {"frame": {"x": 323, "y": 162, "w": 42, "h": 44}, "sourceSize": {"w": 42, "h": 44}}, "medium-brown-tab": {"frame": {"x": 6, "y": 249, "w": 100, "h": 23}, "sourceSize": {"w": 100, "h": 23}}}, "meta": {"image": "inventory_spritesheet.png", "size": {"w": 368, "h": 336}, "scale": "1"}}
+{
+ "frames": {
+  "slot-rounded-light": {
+   "frame": {
+    "x": 233,
+    "y": 73,
+    "w": 30,
+    "h": 32
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 32
+   }
+  },
+  "slot-rounded-medium": {
+   "frame": {
+    "x": 281,
+    "y": 73,
+    "w": 30,
+    "h": 32
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 32
+   }
+  },
+  "slot-rounded-dark": {
+   "frame": {
+    "x": 329,
+    "y": 73,
+    "w": 30,
+    "h": 32
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 32
+   }
+  },
+  "slot-light": {
+   "frame": {
+    "x": 233,
+    "y": 121,
+    "w": 30,
+    "h": 32
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 32
+   }
+  },
+  "slot-medium": {
+   "frame": {
+    "x": 281,
+    "y": 121,
+    "w": 30,
+    "h": 32
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 32
+   }
+  },
+  "slot-dark": {
+   "frame": {
+    "x": 329,
+    "y": 121,
+    "w": 30,
+    "h": 32
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 32
+   }
+  },
+  "frame-light": {
+   "frame": {
+    "x": 227,
+    "y": 162,
+    "w": 42,
+    "h": 44
+   },
+   "sourceSize": {
+    "w": 42,
+    "h": 44
+   }
+  },
+  "frame-medium": {
+   "frame": {
+    "x": 275,
+    "y": 162,
+    "w": 42,
+    "h": 44
+   },
+   "sourceSize": {
+    "w": 42,
+    "h": 44
+   }
+  },
+  "frame-dark": {
+   "frame": {
+    "x": 323,
+    "y": 162,
+    "w": 42,
+    "h": 44
+   },
+   "sourceSize": {
+    "w": 42,
+    "h": 44
+   }
+  },
+  "medium-brown-tab": {
+   "frame": {
+    "x": 6,
+    "y": 249,
+    "w": 100,
+    "h": 23
+   },
+   "sourceSize": {
+    "w": 100,
+    "h": 23
+   }
+  },
+  "small-light-brown-tab": {
+   "frame": {
+    "x": 8,
+    "y": 217,
+    "w": 95,
+    "h": 23
+   },
+   "sourceSize": {
+    "w": 95,
+    "h": 23
+   }
+  }
+ },
+ "meta": {
+  "image": "inventory_spritesheet.png",
+  "size": {
+   "w": 368,
+   "h": 336
+  },
+  "scale": "1"
+ }
+}

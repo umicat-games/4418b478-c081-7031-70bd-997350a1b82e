@@ -21,10 +21,12 @@ const INK = '#3a2a12', SUB = '#7a6a45';
 
 const SLOT_FRAME = 'slot-light', SLOT_SLICE = { l: 7, r: 7, t: 8, b: 8 }, SLOT_SCALE = 2; // item cell bg (inventory atlas)
 // Frames from the `inventory` atlas: panel = `frame-medium` 9-slice (like ConfirmScene),
-// tab chip = `medium-brown-tab` (100×23, plain — no 9-patch; unselected is tinted darker).
+// tab chip = `small-light-brown-tab` (95×23) rendered as a 9-SLICE so the rounded corners
+// stay crisp at any tab width (was `medium-brown-tab` stretched via setScale → distorted).
+// 9-slice borders match the region tag in the Asset Manager (inventory_spritesheet.png).
 const ATLAS = 'inventory';
 const PANEL_FRAME = 'frame-medium', PANEL_SLICE = { l: 10, r: 10, t: 11, b: 11 }, PANEL_SCALE = 3;
-const TAB_TEX = 'medium-brown-tab', TAB_UNSEL_TINT = 0x9a8467;
+const TAB_TEX = 'small-light-brown-tab', TAB_9 = { l: 23, r: 23, t: 8, b: 5 }, TAB_UNSEL_TINT = 0x9a8467;
 const WHEEL_MS = 110; // min ms between wheel-scroll rows (tames trackpad event bursts)
 const DIM_ALPHA = 0.82; // full-screen mask darkening the game behind the menu (deep)
 // Close button — top-right but BELOW the Cato portrait (which lives at the very top-right
@@ -283,7 +285,7 @@ export class MenuScene extends Phaser.Scene {
       const w = tabW; // same width for all (no horizontal grow → edge tabs never overflow the panel)
       const h = active ? tabH * ACTIVE_TALLER : tabH;
       const cy = BOTTOM - h / 2; // bottom pinned → taller tab rises upward
-      const chip = this.add.image(slotCx(pos), cy, ATLAS, TAB_TEX).setScale(w / 100, h / 23);
+      const chip = this.add.nineslice(slotCx(pos), cy, ATLAS, TAB_TEX, w, h, TAB_9.l, TAB_9.r, TAB_9.t, TAB_9.b);
       if (!active) chip.setTint(TAB_UNSEL_TINT); else { activeChip = chip; activeCy = cy; activeH = h; }
       panel.add(chip);
       let ic: Phaser.GameObjects.Image | undefined;
