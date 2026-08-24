@@ -796,8 +796,17 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuHouseBuy', null);
     if (!h) { c.add(this.T(cx, 0.6 * H, t('house_pick'), H * 0.024, SUB)); return; }
     if (h.preview && this.textures.exists(h.preview)) {
-      const img = this.add.image(cx, 0.38 * H, h.preview); // lower so it clears the frame top border
-      img.setScale(Math.min((regionW * 0.72) / img.width, (0.22 * H) / img.height)); c.add(img); // a touch smaller
+      const imgCy = 0.38 * H;
+      const img = this.add.image(cx, imgCy, h.preview); // lower so it clears the frame top border
+      img.setScale(Math.min((regionW * 0.72) / img.width, (0.22 * H) / img.height)); // a touch smaller
+      // Card border drawn in CODE (not baked into the preview PNG) so it stays a consistent chunky
+      // frame like the item cards — a border painted into the big PNG would shrink to a hairline here.
+      const iw = img.displayWidth, ih = img.displayHeight, pad = H * 0.006;
+      const bx = cx - iw / 2 - pad, by = imgCy - ih / 2 - pad, bw = iw + pad * 2, bh = ih + pad * 2;
+      const g = this.add.graphics();
+      g.lineStyle(Math.max(4, H * 0.007), 0xf6ecd2, 1); g.strokeRoundedRect(bx, by, bw, bh, 6);       // cream outer
+      g.lineStyle(Math.max(2, H * 0.004), 0x8a6a44, 1); g.strokeRoundedRect(bx + 3, by + 3, bw - 6, bh - 6, 5); // brown inner
+      c.add(g); c.add(img); // frame under, image on top
     }
     c.add(this.T(cx, 0.52 * H, h.name, H * 0.028, INK));
     c.add(this.T(cx, 0.565 * H, `${t('shop_unit_price')} ${h.price}`, H * 0.023, '#7a5a34'));
