@@ -2091,6 +2091,18 @@
       "kind": "image"
     },
     {
+      "id": "stove-turn-on",
+      "textureKey": "stove-turn-on",
+      "path": "uploaded/stove-turn-on.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/stove-turn-on.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": { "frameWidth": 16, "frameHeight": 16 },
+      "animations": [
+        { "name": "stove-on", "from": 0, "to": 14, "loop": true },
+        { "name": "stove-off", "frames": [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], "loop": false }
+      ]
+    },
+    {
       "id": "pot",
       "textureKey": "pot",
       "path": "uploaded/pot.png",

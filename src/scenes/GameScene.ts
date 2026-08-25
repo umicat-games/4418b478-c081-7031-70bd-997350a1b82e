@@ -16,6 +16,8 @@ import type { LetterboxScene } from './LetterboxScene';
 import type { HoverModel } from './HoverScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
 import { RECIPES, type Recipe } from '../data/recipes';
+import { COOKING_RECIPES } from '../data/cooking';
+import type { CookModel, CookRowView } from './CookScene';
 import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
@@ -4930,6 +4932,59 @@ export class GameScene extends Phaser.Scene {
     this.craftMsg = msg;
     this.publishCraft();
     this.time.delayedCall(1400, () => { if (this.craftMsg === msg) { this.craftMsg = ''; if (this.craftOpen) this.publishCraft(); } });
+  }
+
+  // ── Cooking (kitchen stove, INSIDE the house). The modal + input are owned by CookScene
+  //    because this scene is PAUSED while inside; but its chest logic is intact, so CookScene
+  //    calls these PUBLIC methods synchronously. Mirrors crafting: ingredients from the chest,
+  //    the dish back into the chest. (Ingredient/output store TBD — chest for now; see notes.) ──
+
+  /** Build the cooking model (recipe list + selected detail) from COOKING_RECIPES + chest counts.
+   *  Called by CookScene each render (this scene is paused, so it can't publish a registry model). */
+  public buildCookModel(sel: number): CookModel {
+    const recipes: CookRowView[] = COOKING_RECIPES.map((r) => ({
+      id: r.id,
+      iconKey: itemFromId(r.output, 1).iconKey ?? 'fruit-items',
+      iconFrame: itemFromId(r.output, 1).iconFrame ?? 0,
+      name: this.itemName(r.output),
+      count: r.count,
+      ok: r.materials.every((m) => this.chestCountOf(m.id) >= m.count),
+    }));
+    const s = COOKING_RECIPES[sel];
+    const detail = s
+      ? {
+          name: s.count > 1 ? `${this.itemName(s.output)} ×${s.count}` : this.itemName(s.output),
+          desc: this.itemDesc(s.output),
+          iconKey: itemFromId(s.output, 1).iconKey ?? 'fruit-items',
+          iconFrame: itemFromId(s.output, 1).iconFrame ?? 0,
+          outCount: s.count,
+          materials: s.materials.map((m) => {
+            const have = this.chestCountOf(m.id);
+            return {
+              iconKey: itemFromId(m.id, 1).iconKey ?? 'fruit-items',
+              iconFrame: itemFromId(m.id, 1).iconFrame ?? 0,
+              need: m.count,
+              have,
+              ok: have >= m.count,
+            };
+          }),
+          canCook: s.materials.every((m) => this.chestCountOf(m.id) >= m.count) && this.chestHasSpaceFor(s.output),
+        }
+      : undefined;
+    return { recipes, detail };
+  }
+
+  /** Cook the selected recipe: deduct ingredients from the chest, add the dish. Returns an
+   *  i18n message key (empty on success is fine; CookScene shows `cook_done` / `cook_need` / …). */
+  public tryCook(sel: number): { ok: boolean; key: string } {
+    const r = COOKING_RECIPES[sel];
+    if (!r) return { ok: false, key: '' };
+    if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) return { ok: false, key: 'cook_need' };
+    if (!this.chestHasSpaceFor(r.output)) return { ok: false, key: 'cook_full' };
+    for (const m of r.materials) this.takeFromChest(m.id, m.count);
+    this.addToChest(itemFromId(r.output, r.count));
+    this.scheduleSave();
+    return { ok: true, key: 'cook_done' };
   }
 
   /** Route a tap while the crafting modal is open (modal — always consumes). */

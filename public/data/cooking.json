@@ -1,0 +1,7 @@
+{
+  "recipes": [
+    { "id": "cook-veggie-stew", "output": "crop-pumpkin", "count": 1, "materials": [ { "id": "crop-corn", "count": 1 }, { "id": "crop-carrot", "count": 1 } ] },
+    { "id": "cook-fruit-bowl", "output": "fruit-peach", "count": 1, "materials": [ { "id": "fruit-apple", "count": 1 }, { "id": "fruit-pear", "count": 1 } ] },
+    { "id": "cook-mushroom-saute", "output": "forage-red-mushroom", "count": 1, "materials": [ { "id": "forage-purple-mushroom", "count": 1 }, { "id": "forage-grass", "count": 1 } ] }
+  ]
+}

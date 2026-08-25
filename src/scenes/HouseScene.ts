@@ -28,7 +28,10 @@ export class HouseScene extends Phaser.Scene {
   private worldW = 224;
   private worldH = 160;
   private exitDoor?: Phaser.GameObjects.Sprite;
-  private hoverBracket?: Phaser.GameObjects.NineSlice; // corner frame shown when the mouse is over the exit door
+  private hoverBracket?: Phaser.GameObjects.NineSlice; // corner frame shown when the mouse is over an interactable (exit door / stove)
+  private stove?: Phaser.GameObjects.Sprite;           // kitchen stove — click to cook (lights up via stove-on anim)
+  private stoveRect?: Phaser.Geom.Rectangle;           // world bbox of the stove + pot (the clickable / hover group)
+  private cooking = false;                             // the cooking modal (CookScene) is open
   private exiting = false;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
@@ -94,6 +97,22 @@ export class HouseScene extends Phaser.Scene {
         .setScale(BRACKET_BR).setOrigin(0.5, 0.5).setDepth(1e6).setVisible(false);
     }
 
+    // Kitchen STOVE + POT — click to open the cooking modal (the stove counterpart of the
+    // island work station's crafting). The pot sits just above the stove; together they're ONE
+    // interactable (a single hover bracket frames both, a click on either opens cooking). The
+    // stove sprite is swapped to the `stove-turn-on` sheet + lit while cooking (turned off on close).
+    const stove = reg?.all().find((go) => go.getData('entityAssetId') === 'stove') as Phaser.GameObjects.Sprite | undefined;
+    const pot = reg?.all().find((go) => go.getData('entityAssetId') === 'pot') as Phaser.GameObjects.Sprite | undefined;
+    if (stove) {
+      this.stove = stove;
+      const sb = stove.getBounds();
+      this.stoveRect = pot ? Phaser.Geom.Rectangle.Union(sb, pot.getBounds()) : sb;
+      for (const go of [stove, pot]) {
+        go?.setInteractive({ useHandCursor: true });
+        go?.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => this.openCooking());
+      }
+    }
+
     // Renovate (buy the next tier) is a DEBUG key for now — the work station stays OUTSIDE
     // the house, and the in-house purchase affordance is a later design. R = renovate.
     if (isDebug('devTools') && this.homeSceneId === 'home_1') {
@@ -126,28 +145,65 @@ export class HouseScene extends Phaser.Scene {
   };
 
   /** Touch drag pans the room (desktop pans with keys, like the island). setBounds clamps.
-   *  Also drives the exit-door hover bracket (desktop mouse). */
+   *  Also drives the hover bracket over the interactables (desktop mouse). */
   private onPointerMove = (p: Phaser.Input.Pointer): void => {
-    this.updateDoorHover(p);
+    this.updateHover(p);
     if (!p.isDown || !p.wasTouch) return;
     const cam = this.cameras.main;
     cam.scrollX -= (p.x - p.prevPosition.x) / cam.zoom;
     cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom;
   };
 
-  /** Show the corner bracket around the exit door while the mouse is over it (frames the door,
-   *  like the island's hover-inspect), else hide it. */
-  private updateDoorHover(p: Phaser.Input.Pointer): void {
-    const br = this.hoverBracket, door = this.exitDoor;
-    if (!br || !door || this.exiting) { br?.setVisible(false); return; }
+  /** Frame the interactable under the mouse with the corner bracket (exit door OR the kitchen
+   *  stove group), like the island's hover-inspect; else hide it. */
+  private updateHover(p: Phaser.Input.Pointer): void {
+    const br = this.hoverBracket;
+    if (!br || this.exiting || this.cooking) { br?.setVisible(false); return; }
     const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-    const b = door.getBounds();
-    const on = wp.x >= b.x && wp.x <= b.right && wp.y >= b.y && wp.y <= b.bottom;
-    if (on) {
-      br.setSize((b.width + HOVER_PAD * 2) / BRACKET_BR, (b.height + HOVER_PAD * 2) / BRACKET_BR)
-        .setPosition(b.centerX, b.centerY).setVisible(true);
+    // Priority: exit door, then the stove+pot group. Whichever contains the point wins.
+    const door = this.exitDoor?.getBounds();
+    const target = (door && door.contains(wp.x, wp.y)) ? door
+      : (this.stoveRect && this.stoveRect.contains(wp.x, wp.y)) ? this.stoveRect
+        : undefined;
+    if (target) {
+      br.setSize((target.width + HOVER_PAD * 2) / BRACKET_BR, (target.height + HOVER_PAD * 2) / BRACKET_BR)
+        .setPosition(target.centerX, target.centerY).setVisible(true);
     } else {
       br.setVisible(false);
+    }
+  }
+
+  /** Click the stove/pot → light the burner + open the cooking modal (CookScene). CookScene owns
+   *  its own input; HouseScene input is disabled while it's open (modal), re-enabled on close. */
+  private openCooking(): void {
+    if (this.cooking || this.exiting) return;
+    this.cooking = true;
+    this.hoverBracket?.setVisible(false);
+    // Light the stove (swap the static `stove` sprite onto the turn-on sheet, loop the flame).
+    if (this.stove && this.anims.exists('stove-on')) {
+      this.stove.setTexture('stove-turn-on', 0);
+      this.stove.play('stove-on');
+    }
+    this.input.enabled = false; // modal: only CookScene handles input while cooking
+    const cook = this.scene.get('CookScene');
+    cook.events.once('cook-closed', this.onCookClosed, this);
+    this.scene.launch('CookScene', { gameScene: 'GameScene' });
+    this.scene.bringToTop('CookScene');
+    if (this.scene.isActive('CursorScene')) this.scene.bringToTop('CursorScene'); // keep the pixel cursor above the modal
+  }
+
+  /** Cooking modal closed → turn the stove off (reverse anim → static) + re-enable input. */
+  private onCookClosed(): void {
+    this.cooking = false;
+    this.input.enabled = true;
+    const stove = this.stove;
+    if (stove && this.anims.exists('stove-off')) {
+      stove.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        if (this.textures.exists('stove')) stove.setTexture('stove', 0);
+      });
+      stove.play('stove-off');
+    } else if (stove && this.textures.exists('stove')) {
+      stove.setTexture('stove', 0);
     }
   }
 

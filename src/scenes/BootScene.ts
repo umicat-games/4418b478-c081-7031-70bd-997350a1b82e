@@ -5,6 +5,7 @@ import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
 import { applyItemData } from '../data/items';
 import { applyRecipeData } from '../data/recipes';
+import { applyCookingData } from '../data/cooking';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -180,6 +181,15 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 16,
     });
 
+    // The STOVE turn-on animation (16×16, 15 frames) — swapped onto the interior's static
+    // `stove` sprite while the cooking modal is open (the flame lights up), reversed to turn
+    // it off on close. Loaded here so the anim keys exist globally (BootScene, where a Build
+    // can't clobber them — same reason as the door/hoe anims).
+    this.load.spritesheet('stove-turn-on', 'uploaded/stove-turn-on.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+
     // The desk PAD (iPad) — a 5-frame 16×16 sheet. Frame 0 = resting (screen on,
     // matches the static ipad_qkzld placed in the scene); 0→4 = the screen wiping to
     // the shop. Clicking the pad plays `pad-open` then opens the Shop menu.
@@ -284,6 +294,7 @@ export class BootScene extends Phaser.Scene {
     // Item property table (buy/sell/food). Applied in create(). See src/data/items.ts.
     this.load.json('data-items', 'data/items.json');
     this.load.json('data-recipes', 'data/recipes.json');
+    this.load.json('data-cooking', 'data/cooking.json');
     // Scripted-dialogue graphs (authored, non-AI): the new-game intro cutscene.
     this.load.json('dialogue-intro', 'dialogue/intro.json');
   }
@@ -372,6 +383,26 @@ export class BootScene extends Phaser.Scene {
         frameRate: 14,
         repeat: 0,
       });
+    }
+    // Stove on/off: `stove-on` lights the burner (0→14, loops while cooking); `stove-off`
+    // reverses it (14→0, once) then the sprite is set back to the static `stove` texture.
+    if (this.textures.exists('stove-turn-on')) {
+      if (!this.anims.exists('stove-on')) {
+        this.anims.create({
+          key: 'stove-on',
+          frames: this.anims.generateFrameNumbers('stove-turn-on', { start: 0, end: 14 }),
+          frameRate: 8,
+          repeat: -1,
+        });
+      }
+      if (!this.anims.exists('stove-off')) {
+        this.anims.create({
+          key: 'stove-off',
+          frames: this.anims.generateFrameNumbers('stove-turn-on', { frames: [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0] }),
+          frameRate: 8,
+          repeat: 0,
+        });
+      }
     }
     // Pad open/close: 0→4 turns the screen on + wipes to the shop, holding on frame 4;
     // `pad-close` reverses back to the resting frame 0.
@@ -462,6 +493,7 @@ export class BootScene extends Phaser.Scene {
     applyForagableData(this.cache.json.get('data-foragables'));
     applyItemData(this.cache.json.get('data-items'));
     applyRecipeData(this.cache.json.get('data-recipes'));
+    applyCookingData(this.cache.json.get('data-cooking'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
     // BGM is started per-scene now (title vs game use different tracks): BootMenuScene
