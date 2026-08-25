@@ -13,7 +13,9 @@ const ATLAS = 'inventory';
 const PANEL_FRAME = 'frame-medium', PANEL_SLICE = { l: 10, r: 10, t: 11, b: 11 }, PANEL_SCALE = 3;
 const SLOT_FRAME = 'slot-light', SLOT_SLICE = { l: 7, r: 7, t: 8, b: 8 }, SLOT_SCALE = 2;
 const BTN = 'square-buttons', BTN_FRAME = 'white-button';
-const ICONS = 'ui-icons', ICON_CLOSE = 46;
+// Close button — the SAME `icon-buttons` graphic the chest/mail/shop modals use (a complete
+// button image, not a nineslice + icon), with a pressed-down frame for the click feedback.
+const CLOSE_ATLAS = 'icon-buttons', CLOSE_FRAME = 'close-light-big', CLOSE_PRESSED = 'close-light-big-pressed-down';
 const INK = '#5b3a1e', SUB = '#8a6a44', BAD = '#b5533a';
 const SEL_TINT = 0xffe6a8, DIM_TINT = 0x9a8467;
 const DIM_ALPHA = 0.82;
@@ -39,6 +41,7 @@ export class CookScene extends Phaser.Scene {
   private swipeY = 0;
   private swipeAccum = 0;
   private closing = false;
+  private closeImg?: Phaser.GameObjects.Image; // the X (frame-swapped for the press flash)
 
   constructor() { super({ key: 'CookScene' }); }
 
@@ -116,12 +119,17 @@ export class CookScene extends Phaser.Scene {
     const left = -pw / 2, top = -ph / 2;
     box.add(this.T(0, top + ph * 0.07, t('cook_title'), ph * 0.05, '#fff8e6'));
 
-    // Close button (top-right).
-    const closeSz = ph * 0.09, closeX = pw / 2 - closeSz * 0.75, closeY = top + closeSz * 0.75;
-    const closeBtn = this.add.container(closeX, closeY);
-    closeBtn.add(this.add.nineslice(0, 0, BTN, BTN_FRAME, closeSz, closeSz, 6, 6, 7, 7));
-    if (this.textures.exists(ICONS)) { const ic = this.add.image(0, 0, ICONS, ICON_CLOSE); ic.setScale((closeSz * 0.5) / Math.max(ic.width, ic.height)); closeBtn.add(ic); }
-    box.add(closeBtn);
+    // Close button (top-right) — the shared `close-light-big` graphic (like chest/mail/shop).
+    const closeSz = ph * 0.1, closeX = pw / 2 - closeSz * 0.7, closeY = top + closeSz * 0.7;
+    this.closeImg = undefined;
+    if (this.textures.exists(CLOSE_ATLAS) && this.textures.get(CLOSE_ATLAS).has(CLOSE_FRAME)) {
+      this.closeImg = this.add.image(closeX, closeY, CLOSE_ATLAS, CLOSE_FRAME).setDisplaySize(closeSz, closeSz);
+      box.add(this.closeImg);
+    } else {
+      const cb = this.add.container(closeX, closeY);
+      cb.add(this.add.nineslice(0, 0, BTN, BTN_FRAME, closeSz, closeSz, 6, 6, 7, 7));
+      box.add(cb);
+    }
 
     // Empty state — no recipes defined yet.
     if (m.recipes.length === 0) {
@@ -210,7 +218,18 @@ export class CookScene extends Phaser.Scene {
     const b = this.lastBounds;
     if (!b || this.closing) return;
     const hit = (r: { x: number; y: number; w: number; h: number }) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-    if (hit(b.close)) { this.close(); return; }
+    if (hit(b.close)) {
+      // Press feedback: swap to the pressed-down frame, then close a beat later.
+      const img = this.closeImg;
+      if (img?.active && this.textures.get(CLOSE_ATLAS).has(CLOSE_PRESSED)) {
+        img.setFrame(CLOSE_PRESSED);
+        this.closing = true; // swallow further taps during the flash
+        this.time.delayedCall(110, () => { this.closing = false; this.close(); });
+      } else {
+        this.close();
+      }
+      return;
+    }
     const row = b.rows.find((r) => hit(r));
     if (row) { this.sel = row.idx; this.msg = ''; this.render(false); return; }
     if (b.cook && hit(b.cook)) { this.cook(); return; }

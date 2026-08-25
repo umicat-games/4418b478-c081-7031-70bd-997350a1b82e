@@ -391,15 +391,15 @@ export class BootScene extends Phaser.Scene {
         this.anims.create({
           key: 'stove-on',
           frames: this.anims.generateFrameNumbers('stove-turn-on', { start: 0, end: 14 }),
-          frameRate: 8,
-          repeat: -1,
+          frameRate: 18, // ~0.8s light-up (plays fully before the cooking modal opens)
+          repeat: 0,
         });
       }
       if (!this.anims.exists('stove-off')) {
         this.anims.create({
           key: 'stove-off',
           frames: this.anims.generateFrameNumbers('stove-turn-on', { frames: [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0] }),
-          frameRate: 8,
+          frameRate: 18,
           repeat: 0,
         });
       }

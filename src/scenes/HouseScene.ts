@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { finishTransition, coverAndHandoff } from '../transition';
+import { crossToBgm } from '../bgm';
 import { DESIGN_ZOOM } from '../config';
 import { isDebug } from '../debug';
+import { t } from '../i18n';
 import type { GameScene } from './GameScene';
 
 const DOOR_CLOSED_FRAME = 5; // `door` sheet: frame 5 = shut (matches GameScene's DOOR_CLOSED_FRAME)
@@ -29,9 +31,12 @@ export class HouseScene extends Phaser.Scene {
   private worldH = 160;
   private exitDoor?: Phaser.GameObjects.Sprite;
   private hoverBracket?: Phaser.GameObjects.NineSlice; // corner frame shown when the mouse is over an interactable (exit door / stove)
+  private hoverPill?: Phaser.GameObjects.Graphics;     // dark pill behind the hover name label
+  private hoverLabel?: Phaser.GameObjects.Text;        // the interactable's NAME (like the island's hover-inspect)
   private stove?: Phaser.GameObjects.Sprite;           // kitchen stove — click to cook (lights up via stove-on anim)
   private stoveRect?: Phaser.Geom.Rectangle;           // world bbox of the stove + pot (the clickable / hover group)
   private cooking = false;                             // the cooking modal (CookScene) is open
+  private stoveBusy = false;                           // stove turn-on / turn-off anim is playing (block re-trigger)
   private exiting = false;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
@@ -96,6 +101,12 @@ export class HouseScene extends Phaser.Scene {
         .nineslice(0, 0, 'ui-sheet', 'white-corner-bracket', 32, 32, 14, 14, 14, 14)
         .setScale(BRACKET_BR).setOrigin(0.5, 0.5).setDepth(1e6).setVisible(false);
     }
+    // Name label above the bracket (like the island's hover-inspect pill) — so an interactable
+    // shows its title on hover. World-space (the camera zooms it); a small font renders crisp at
+    // the room's zoom. Dark pill so it reads on any wall/floor.
+    this.hoverPill = this.add.graphics().setDepth(1e6 + 1).setVisible(false);
+    this.hoverLabel = this.add.text(0, 0, '', { fontFamily: 'zpix, sans-serif', fontSize: '6px', color: '#fff3d6', resolution: 6 })
+      .setOrigin(0.5, 1).setDepth(1e6 + 2).setVisible(false);
 
     // Kitchen STOVE + POT — click to open the cooking modal (the stove counterpart of the
     // island work station's crafting). The pot sits just above the stove; together they're ONE
@@ -122,6 +133,11 @@ export class HouseScene extends Phaser.Scene {
     // Keep the pixel cursor on top (it self-drives from the real pointer when GameScene
     // isn't publishing the cursor model).
     if (this.scene.isActive('CursorScene')) this.scene.bringToTop('CursorScene');
+
+    // Restore the game BGM: the enter-transition ducks it to 0 (TransitionScene.begin), and
+    // only the OUTGOING scene's create swells it back — GameScene stays paused, so the house
+    // must do it or the music is silent inside. Same `bgm` track keeps playing (global mgr).
+    crossToBgm(this, 'bgm', [], 700);
 
     finishTransition(this); // room is ready → uncover
   }
@@ -154,54 +170,87 @@ export class HouseScene extends Phaser.Scene {
     cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom;
   };
 
-  /** Frame the interactable under the mouse with the corner bracket (exit door OR the kitchen
-   *  stove group), like the island's hover-inspect; else hide it. */
+  /** Frame the interactable under the mouse with the corner bracket + its NAME (exit door OR the
+   *  kitchen stove group), like the island's hover-inspect; else hide it. */
   private updateHover(p: Phaser.Input.Pointer): void {
     const br = this.hoverBracket;
-    if (!br || this.exiting || this.cooking) { br?.setVisible(false); return; }
+    if (!br || this.exiting || this.cooking || this.stoveBusy) { this.hideHover(); return; }
     const wp = this.cameras.main.getWorldPoint(p.x, p.y);
     // Priority: exit door, then the stove+pot group. Whichever contains the point wins.
     const door = this.exitDoor?.getBounds();
-    const target = (door && door.contains(wp.x, wp.y)) ? door
-      : (this.stoveRect && this.stoveRect.contains(wp.x, wp.y)) ? this.stoveRect
-        : undefined;
-    if (target) {
-      br.setSize((target.width + HOVER_PAD * 2) / BRACKET_BR, (target.height + HOVER_PAD * 2) / BRACKET_BR)
-        .setPosition(target.centerX, target.centerY).setVisible(true);
-    } else {
-      br.setVisible(false);
+    const [target, name] = (door && door.contains(wp.x, wp.y)) ? [door, t('hover_exit')] as const
+      : (this.stoveRect && this.stoveRect.contains(wp.x, wp.y)) ? [this.stoveRect, t('hover_stove')] as const
+        : [undefined, ''] as const;
+    if (!target) { this.hideHover(); return; }
+    br.setSize((target.width + HOVER_PAD * 2) / BRACKET_BR, (target.height + HOVER_PAD * 2) / BRACKET_BR)
+      .setPosition(target.centerX, target.centerY).setVisible(true);
+    // Name pill just above the bracket top (world-space; a dark pill so it reads on any wall).
+    const label = this.hoverLabel, pill = this.hoverPill;
+    if (label && pill) {
+      const topY = target.centerY - target.height / 2 - HOVER_PAD - 2;
+      label.setText(name).setPosition(target.centerX, topY).setVisible(!!name);
+      pill.clear();
+      if (name) {
+        const padX = 2, padY = 1, bw = label.width + padX * 2, bh = label.height + padY * 2;
+        pill.fillStyle(0x2a1c0c, 0.8).fillRoundedRect(target.centerX - bw / 2, topY - bh, bw, bh, 2).setVisible(true);
+      } else { pill.setVisible(false); }
     }
   }
 
-  /** Click the stove/pot → light the burner + open the cooking modal (CookScene). CookScene owns
-   *  its own input; HouseScene input is disabled while it's open (modal), re-enabled on close. */
-  private openCooking(): void {
-    if (this.cooking || this.exiting) return;
-    this.cooking = true;
+  private hideHover(): void {
     this.hoverBracket?.setVisible(false);
-    // Light the stove (swap the static `stove` sprite onto the turn-on sheet, loop the flame).
-    if (this.stove && this.anims.exists('stove-on')) {
-      this.stove.setTexture('stove-turn-on', 0);
-      this.stove.play('stove-on');
-    }
-    this.input.enabled = false; // modal: only CookScene handles input while cooking
-    const cook = this.scene.get('CookScene');
-    cook.events.once('cook-closed', this.onCookClosed, this);
-    this.scene.launch('CookScene', { gameScene: 'GameScene' });
-    this.scene.bringToTop('CookScene');
-    if (this.scene.isActive('CursorScene')) this.scene.bringToTop('CursorScene'); // keep the pixel cursor above the modal
+    this.hoverLabel?.setVisible(false);
+    this.hoverPill?.setVisible(false);
   }
 
-  /** Cooking modal closed → turn the stove off (reverse anim → static) + re-enable input. */
+  /** Click the stove/pot → play the turn-on animation to COMPLETION, THEN open the cooking modal
+   *  (CookScene). CookScene owns its own input; HouseScene input is disabled while it's open. */
+  private openCooking(): void {
+    if (this.cooking || this.exiting || this.stoveBusy) return;
+    this.hideHover();
+    this.input.enabled = false; // lock input through the light-up + the modal
+    const launch = (): void => {
+      this.stoveBusy = false;
+      this.cooking = true;
+      const cook = this.scene.get('CookScene');
+      cook.events.once('cook-closed', this.onCookClosed, this);
+      this.scene.launch('CookScene', { gameScene: 'GameScene' });
+      this.scene.bringToTop('CookScene');
+      if (this.scene.isActive('CursorScene')) this.scene.bringToTop('CursorScene'); // keep the pixel cursor above the modal
+    };
+    // Light the stove (swap onto the turn-on sheet), play ONCE, and open cooking only when the
+    // burner has finished lighting. A safety timer opens it even if COMPLETE is missed.
+    if (this.stove && this.anims.exists('stove-on')) {
+      this.stoveBusy = true;
+      let opened = false;
+      const openOnce = (): void => { if (opened) return; opened = true; launch(); };
+      this.stove.setTexture('stove-turn-on', 0);
+      this.stove.once(Phaser.Animations.Events.ANIMATION_COMPLETE, openOnce);
+      this.stove.play({ key: 'stove-on', repeat: 0 });
+      this.time.delayedCall(1400, openOnce);
+    } else {
+      launch();
+    }
+  }
+
+  /** Cooking modal closed → re-enable input, THEN play the turn-off animation and revert to the
+   *  static stove (the burner cools down after you step away). */
   private onCookClosed(): void {
     this.cooking = false;
     this.input.enabled = true;
     const stove = this.stove;
     if (stove && this.anims.exists('stove-off')) {
-      stove.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.stoveBusy = true; // block a re-open while it cools down
+      let done = false;
+      const finish = (): void => {
+        if (done) return;
+        done = true;
+        this.stoveBusy = false;
         if (this.textures.exists('stove')) stove.setTexture('stove', 0);
-      });
-      stove.play('stove-off');
+      };
+      stove.once(Phaser.Animations.Events.ANIMATION_COMPLETE, finish);
+      stove.play({ key: 'stove-off', repeat: 0 });
+      this.time.delayedCall(1400, finish);
     } else if (stove && this.textures.exists('stove')) {
       stove.setTexture('stove', 0);
     }

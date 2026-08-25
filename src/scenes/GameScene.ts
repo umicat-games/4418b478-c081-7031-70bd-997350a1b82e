@@ -4355,6 +4355,7 @@ export class GameScene extends Phaser.Scene {
     this.inHouse = false;
     this.houseEntering = false;
     this.wakeIslandHud();
+    crossToBgm(this, 'bgm', [], 700); // the exit-transition ducked the BGM to 0 → swell it back
     this.frameNewGameStart(); // stand Cato at the door + frame the house (the "walked out" shot)
     finishTransition(this);
   }
