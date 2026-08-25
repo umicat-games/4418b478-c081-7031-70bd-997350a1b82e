@@ -4802,6 +4802,33 @@ export class GameScene extends Phaser.Scene {
     return n;
   }
 
+  // ── Backpack (inventory) counterparts of the chest helpers — used by COOKING, which pulls
+  //    ingredients from + returns dishes to the player's backpack (not the chest, which sits
+  //    outside at the island door). `inventory` is the whole grid; row 0 is the hotbar view. ──
+  private invCountOf(id: string): number {
+    let n = 0;
+    for (const s of this.inventory) if (s && s.id === id) n += s.count;
+    return n;
+  }
+
+  /** Remove `n` of item `id` from the backpack (across stacks). */
+  private takeFromInventory(id: string, n: number): void {
+    let left = n;
+    for (let i = this.inventory.length - 1; i >= 0 && left > 0; i--) {
+      const s = this.inventory[i];
+      if (!s || s.id !== id) continue;
+      const take = Math.min(s.count, left);
+      s.count -= take; left -= take;
+      if (s.count <= 0) this.inventory[i] = null;
+    }
+  }
+
+  /** A free cell OR an existing matching stack with room → the dish will fit. */
+  private inventoryHasSpaceFor(id: string): boolean {
+    if (this.inventory.some((c) => c === null)) return true;
+    return this.inventory.some((c) => c != null && c.id === id && c.stackable && c.count < MAX_STACK);
+  }
+
   /** Can every material of `r` be paid AND does the output have chest room? */
   private canCraftRecipe(r: Recipe): boolean {
     if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) return false;
@@ -4935,11 +4962,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── Cooking (kitchen stove, INSIDE the house). The modal + input are owned by CookScene
-  //    because this scene is PAUSED while inside; but its chest logic is intact, so CookScene
-  //    calls these PUBLIC methods synchronously. Mirrors crafting: ingredients from the chest,
-  //    the dish back into the chest. (Ingredient/output store TBD — chest for now; see notes.) ──
+  //    because this scene is PAUSED while inside; but this scene's inventory logic is intact, so
+  //    CookScene calls these PUBLIC methods synchronously. Ingredients come from + dishes go to
+  //    the player's BACKPACK (it travels into the house; the chest sits outside at the island door). ──
 
-  /** Build the cooking model (recipe list + selected detail) from COOKING_RECIPES + chest counts.
+  /** Build the cooking model (recipe list + selected detail) from COOKING_RECIPES + backpack counts.
    *  Called by CookScene each render (this scene is paused, so it can't publish a registry model). */
   public buildCookModel(sel: number): CookModel {
     const recipes: CookRowView[] = COOKING_RECIPES.map((r) => ({
@@ -4948,7 +4975,7 @@ export class GameScene extends Phaser.Scene {
       iconFrame: itemFromId(r.output, 1).iconFrame ?? 0,
       name: this.itemName(r.output),
       count: r.count,
-      ok: r.materials.every((m) => this.chestCountOf(m.id) >= m.count),
+      ok: r.materials.every((m) => this.invCountOf(m.id) >= m.count),
     }));
     const s = COOKING_RECIPES[sel];
     const detail = s
@@ -4959,7 +4986,7 @@ export class GameScene extends Phaser.Scene {
           iconFrame: itemFromId(s.output, 1).iconFrame ?? 0,
           outCount: s.count,
           materials: s.materials.map((m) => {
-            const have = this.chestCountOf(m.id);
+            const have = this.invCountOf(m.id);
             return {
               iconKey: itemFromId(m.id, 1).iconKey ?? 'fruit-items',
               iconFrame: itemFromId(m.id, 1).iconFrame ?? 0,
@@ -4968,22 +4995,22 @@ export class GameScene extends Phaser.Scene {
               ok: have >= m.count,
             };
           }),
-          canCook: s.materials.every((m) => this.chestCountOf(m.id) >= m.count) && this.chestHasSpaceFor(s.output),
+          canCook: s.materials.every((m) => this.invCountOf(m.id) >= m.count) && this.inventoryHasSpaceFor(s.output),
         }
       : undefined;
     return { recipes, detail };
   }
 
-  /** Cook the selected recipe: deduct ingredients from the chest, add the dish. Returns an
-   *  i18n message key (empty on success is fine; CookScene shows `cook_done` / `cook_need` / …). */
+  /** Cook the selected recipe: deduct ingredients from the backpack, add the dish. Returns an
+   *  i18n message key (CookScene shows `cook_done` / `cook_need` / `cook_full`). */
   public tryCook(sel: number): { ok: boolean; key: string } {
     const r = COOKING_RECIPES[sel];
     if (!r) return { ok: false, key: '' };
-    if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) return { ok: false, key: 'cook_need' };
-    if (!this.chestHasSpaceFor(r.output)) return { ok: false, key: 'cook_full' };
-    for (const m of r.materials) this.takeFromChest(m.id, m.count);
-    this.addToChest(itemFromId(r.output, r.count));
-    this.scheduleSave();
+    if (!r.materials.every((m) => this.invCountOf(m.id) >= m.count)) return { ok: false, key: 'cook_need' };
+    if (!this.inventoryHasSpaceFor(r.output)) return { ok: false, key: 'cook_full' };
+    for (const m of r.materials) this.takeFromInventory(m.id, m.count);
+    this.addToInventory(itemFromId(r.output, r.count));
+    this.publishInventory(); // refresh the hotbar (an ingredient/dish may sit on row 0) + schedules a save
     return { ok: true, key: 'cook_done' };
   }
 
