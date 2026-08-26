@@ -30,6 +30,8 @@ export const SFX_SPLASH = 'sfx-splash';
 export const SFX_SWING = 'sfx-swing';
 /** The "new item!" catch-reveal jingle — get-item-sound. */
 export const SFX_GETITEM = 'sfx-getitem';
+/** The house door swinging open (enter / exit / Cato approaching the facade). */
+export const SFX_DOOR = 'sfx-door';
 
 function readVolume(): number {
   try {

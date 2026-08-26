@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { finishTransition, coverAndHandoff } from '../transition';
 import { crossToBgm } from '../bgm';
+import { playSfx, SFX_DOOR } from '../sfx';
 import { DESIGN_ZOOM } from '../config';
 import { isDebug } from '../debug';
 import { t } from '../i18n';
@@ -287,7 +288,7 @@ export class HouseScene extends Phaser.Scene {
   private exitHouse(): void {
     if (this.exiting) return;
     this.exiting = true;
-    this.hoverBracket?.setVisible(false); // drop the hover frame while leaving
+    this.hideHover(); // drop the hover frame + name while leaving
     // Play the door-open swing FIRST, THEN fade to black + back to the island (matches the enter
     // fade — no iris/loading). Guarded so the ANIMATION_COMPLETE + the safety timer can't both fire.
     let started = false;
@@ -300,6 +301,7 @@ export class HouseScene extends Phaser.Scene {
       }, { effect: 'dissolve', color: 0x000000, ms: 220 });
     };
     if (this.exitDoor && this.anims.exists('door-open')) {
+      playSfx(this, SFX_DOOR); // the exit door creaks open
       this.exitDoor.once(Phaser.Animations.Events.ANIMATION_COMPLETE, fadeOut);
       this.exitDoor.play({ key: 'door-open', repeat: 0 });
       this.time.delayedCall(2000, fadeOut); // safety: a missed COMPLETE event can't strand the exit

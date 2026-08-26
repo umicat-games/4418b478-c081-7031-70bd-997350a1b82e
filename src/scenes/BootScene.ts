@@ -89,6 +89,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('sfx-swing', 'uploaded/swing-fishing-rod.mp3'); // casting the fishing rod (the swing)
     this.load.audio('sfx-getitem', 'uploaded/get-item-sound.mp3'); // the "new item!" catch-reveal jingle
     this.load.audio('sfx-type', 'uploaded/click_002.ogg'); // laptop: per-character typewriter tick
+    this.load.audio('sfx-door', 'uploaded/open-door.mp3'); // the house door swinging open (enter / exit / Cato approach)
     // Cato's stamina gauge: a 16×16 radial pie (37 frames, empty→full; colour purple→
     // orange→green). frame = round(fraction*36). Shown over his head while he works.
     this.load.spritesheet('stamina', 'uploaded/stamina_circle_with_white_outline_sprite_sheet.png', { frameWidth: 16, frameHeight: 16 });
