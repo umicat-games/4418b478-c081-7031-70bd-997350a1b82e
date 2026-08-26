@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
+import { playSfx } from '../sfx';
 import type { GameScene } from './GameScene';
 
 // The COOKING modal — opened by the kitchen STOVE inside the house. It looks like the
@@ -247,6 +248,7 @@ export class CookScene extends Phaser.Scene {
   private close(): void {
     if (this.closing) return;
     this.closing = true;
+    playSfx(this); // close blip (same UI click as the chest/menu close)
     const root = this.root;
     this.events.emit('cook-closed'); // HouseScene turns the stove off + re-enables input
     if (!root) { this.scene.stop(); return; }
