@@ -4408,14 +4408,20 @@ export class GameScene extends Phaser.Scene {
     this.pendingHome = null;
   }
 
-  private static readonly ISLAND_HUD = ['HotbarScene', 'ToolHudScene', 'BackpackButtonScene', 'HoverScene'];
-  /** Sleep the island-only HUD overlays while inside the house (kept in GameScene so a
-   *  HouseScene restart on renovate doesn't disturb them). Money HUD (Weather) stays. */
+  // Slept while inside the house. Includes the Cato-bound HUD — `UmicatHud` (the top-right
+  // portrait + chat widgets) and `ChatterScene` (the mood emoji / chatter bubble drawn IN the
+  // portrait) — because Cato isn't in the interior scene, and the RULE is: show his portrait/chat
+  // only where Cato is. (Also stops the portrait tap from opening the frozen-tween dialog.) The
+  // money HUD (WeatherScene) stays. Kept in GameScene so a HouseScene restart on renovate doesn't
+  // disturb them.
+  private static readonly ISLAND_HUD = ['HotbarScene', 'ToolHudScene', 'BackpackButtonScene', 'HoverScene', 'UmicatHud', 'ChatterScene'];
   private sleepIslandHud(): void {
     for (const k of GameScene.ISLAND_HUD) if (this.scene.isActive(k)) this.scene.sleep(k);
   }
   private wakeIslandHud(): void {
     for (const k of GameScene.ISLAND_HUD) if (this.scene.isSleeping(k)) this.scene.wake(k);
+    // Re-assert the ChatterScene order (mood emoji must sit ABOVE UmicatHud → in the portrait).
+    if (this.scene.isActive('ChatterScene')) this.scene.bringToTop('ChatterScene');
   }
 
   /** Find the editor-placed mailbox sprite so clicking it opens the mail modal. */
