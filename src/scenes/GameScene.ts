@@ -22,7 +22,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR } from '../sfx';
+import { playSfx, setSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB } from '../sfx';
 import { coverAndReload, coverAndHandoff, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -4519,8 +4519,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Open the unified menu on `tab` (0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings). */
-  private openMenu(tab: number, tabSet: number[] | null = null): void {
-    playSfx(this); // click blip — covers open (bag/mailbox/chest/shop/settings) + tab switch
+  private openMenu(tab: number, tabSet: number[] | null = null, sfx: string = SFX_CLICK): void {
+    playSfx(this, sfx); // open (bag/mailbox/chest/shop/settings) = click; a tab SWITCH passes SFX_TAB
     this.menuTab = tab;
     this.menuTabSet = tabSet; // null = standalone (no tab bar); a list = the tabbed paw menu
     this.menuSelected = -1;
@@ -5089,7 +5089,7 @@ export class GameScene extends Phaser.Scene {
     // Tab switch.
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
-    if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet); return true; } // keep the tab bar on a switch
+    if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet, SFX_TAB); return true; } // tab switch → the tab-select sound, keep the tab bar
     // Any item grid (Chest / Cato-bag / Backpack / mailbox 取货 + 待售): tap an item → select it
     // (right detail) AND open its action menu.
     if (this.menuTab === TAB_BACKPACK || this.menuTab === TAB_CHEST || this.menuTab === 2 || this.menuTab === TAB_PICKUP || this.menuTab === TAB_FORSALE) {

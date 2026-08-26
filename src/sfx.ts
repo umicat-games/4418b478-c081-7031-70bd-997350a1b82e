@@ -32,6 +32,8 @@ export const SFX_SWING = 'sfx-swing';
 export const SFX_GETITEM = 'sfx-getitem';
 /** The house door swinging open (enter / exit / Cato approaching the facade). */
 export const SFX_DOOR = 'sfx-door';
+/** Switching a tab in the unified menu (chest / shop / mail / …). */
+export const SFX_TAB = 'sfx-tab';
 
 function readVolume(): number {
   try {
