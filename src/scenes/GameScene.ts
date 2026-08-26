@@ -1433,6 +1433,11 @@ export class GameScene extends Phaser.Scene {
    *  lerp (update) slides onto the now-frozen Cato; openDialog is guarded so a
    *  re-click while already chatting is a no-op. */
   private focusCato(): void {
+    // Inside the house GameScene is PAUSED (and Cato is hidden), so its `openDialog` HUD tweens
+    // can't run — the chat box/portrait never slide in and only the bound text widgets show
+    // (the "just Cato + Mm? on black" bug). In-house chat is deferred, so ignore the portrait
+    // tap while in the house (the SDK HUD is above HouseScene and still emits `hud:press`).
+    if (this.inHouse) return;
     this.closeOpenModal(); // close the unified menu first → chat replaces it
     this.followCato();
     this.openDialog();
