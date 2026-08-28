@@ -2765,7 +2765,7 @@ export class GameScene extends Phaser.Scene {
     this.settingsBtnPressed = true; this.publishBackpackBtn();
     this.time.delayedCall(120, () => {
       this.settingsBtnPressed = false; this.publishBackpackBtn();
-      this.openMenu(TAB_SETTINGS, MENU_SYSTEM_TABS); // paw → the tabbed menu, landing on Settings
+      this.openMenu(TAB_CATO, MENU_SYSTEM_TABS); // paw → the tabbed menu, landing on the Cato-info tab (leftmost)
     });
   }
 
