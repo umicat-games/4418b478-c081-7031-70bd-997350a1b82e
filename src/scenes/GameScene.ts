@@ -2418,13 +2418,19 @@ export class GameScene extends Phaser.Scene {
     const d = new Date(this.nowMs());
     return Math.floor((this.nowMs() - d.getTimezoneOffset() * 60000) / 86400000);
   }
-  /** The current wall-clock time as "09:30am" (12-hour, zero-padded, for the HUD). */
+  /** The current wall-clock time, formatted in the player's language via Intl (NOT the i18n
+   *  strings table — time format is a locale concern: `Intl` covers every language for free,
+   *  e.g. en "11:00 AM" · zh-CN "上午11:00"). 12-hour with a localized am/pm marker. */
   private timeLabel(): string {
-    const d = new Date(this.nowMs());
-    let h = d.getHours(); const min = d.getMinutes();
-    const ap = h < 12 ? 'am' : 'pm';
-    h = h % 12; if (h === 0) h = 12;
-    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}${ap}`;
+    try {
+      return new Date(this.nowMs()).toLocaleTimeString(getLang(), { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch {
+      // A locale Intl can't resolve → fall back to a plain 12-hour label.
+      const d = new Date(this.nowMs());
+      let h = d.getHours(); const min = d.getMinutes();
+      const ap = h < 12 ? 'am' : 'pm'; h = h % 12 || 12;
+      return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}${ap}`;
+    }
   }
 
   /** Day fraction with a 6am START (so the authored NIGHT_KEYS line up with real hours: 6am→0
