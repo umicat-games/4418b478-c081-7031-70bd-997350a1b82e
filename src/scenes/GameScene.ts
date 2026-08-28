@@ -171,8 +171,8 @@ const TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_CATO = 9; // TAB_CATO = the append
 // The paw (bottom-right) opens a TABBED "menu" — the TAB_DEFS indices it shows. Chest / mail / shop
 // stay SEPARATE (their own in-world objects open them standalone), so they're NOT here. Append
 // achievements etc. as new TAB_DEFS entries + push the index here + a MenuScene render branch.
-// Cato-info tab is LEFTMOST (array order = display order).
-const MENU_SYSTEM_TABS = [TAB_CATO, TAB_SETTINGS, TAB_CALENDAR];
+// Array order = display order: Cato (leftmost) · Calendar · Settings.
+const MENU_SYSTEM_TABS = [TAB_CATO, TAB_CALENDAR, TAB_SETTINGS];
 // The door MAILBOX opens a 3-tab menu: 信 (mail) + 取货 (pickup grid) + 待售 (for-sale bin).
 const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 3, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8;
 const MAILBOX_TABS = [TAB_MAIL, TAB_PICKUP, TAB_FORSALE];
