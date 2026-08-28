@@ -582,6 +582,10 @@ interface SaveBlob {
   notableEvents?: Array<{ day: number; type: string; summary: string }>; // ② milestone ring buffer
   seenFirsts?: string[]; // first-time event types already promoted
   stats?: Record<string, number>; // ① lifetime counters
+  // v20: ③ narrative consolidation (ADR-027 Phase 2)
+  storySummary?: string;
+  impressionSketch?: string;
+  pendingSummary?: string[]; // un-compacted material (the watermark)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -739,6 +743,18 @@ export class GameScene extends Phaser.Scene {
   private seenFirsts = new Set<string>(); // first-time event types already promoted
   private stats: Record<string, number> = {}; // ① lifetime counters (harvests/crafts/cooks/…)
   private static readonly MAX_NOTABLE = 40; // ② cap — oldest drop off
+
+  // ── ③ Narrative consolidation (ADR-027 Phase 2, via umicat.ai.complete). Two rolling NL
+  //    artifacts a daily-ish LLM pass maintains; `pendingSummary` is the un-compacted MATERIAL
+  //    (the watermark = empty), accumulated from notable events + chat, folded + cleared on a
+  //    successful consolidation. Material-driven (session start + a mid-session threshold), NOT
+  //    calendar days. Idempotent: a failed/skipped call keeps `pendingSummary` for the next try. ──
+  private storySummary = '';       // "the story of us so far" (fed to the AI + shown as memory)
+  private impressionSketch = '';   // "who the player is" (traits/preferences)
+  private pendingSummary: string[] = []; // material since the last consolidation (event + chat lines)
+  private consolidating = false;   // a consolidation call is in flight (single-flight guard)
+  private static readonly PENDING_CAP = 60;    // hard cap on un-compacted lines (drop oldest)
+  private static readonly CONSOLIDATE_AT = 18; // mid-session threshold: compact once this many pile up
   // The editor-placed mailbox / chest sprites (door objects). Clicking one plays its
   // open animation, THEN opens the unified menu (openMenuViaObject); closing plays close.
   private mailbox?: Phaser.GameObjects.Sprite;
@@ -1278,6 +1294,10 @@ export class GameScene extends Phaser.Scene {
           await this.loadGame();
           this.markReady();
           this.setupAutosave();
+          // ③ session-start consolidation (ADR-027 Phase 2): fold whatever material piled up since
+          // the last successful compaction (usually the previous session's events). One cheap call,
+          // after a beat so it never competes with the reveal.
+          this.time.delayedCall(2000, () => void this.maybeConsolidate('session'));
         })
         .catch(() => {
           /* leave this.cato undefined; submitDialog handles a missing npc */
@@ -4521,10 +4541,12 @@ export class GameScene extends Phaser.Scene {
 
   // ── Milestone events (②) + lifetime counters (①) ──────────────────────────
 
-  /** Push a notable event onto the bounded ring buffer (oldest drops past MAX_NOTABLE). */
+  /** Push a notable event onto the bounded ring buffer (oldest drops past MAX_NOTABLE). Also feeds
+   *  the ③ consolidation material. */
   private promoteEvent(type: string, summary: string): void {
     this.notableEvents.push({ day: this.dayCount, type, summary });
     if (this.notableEvents.length > GameScene.MAX_NOTABLE) this.notableEvents.shift();
+    this.pushPending(summary);
     this.scheduleSave();
   }
 
@@ -4538,6 +4560,83 @@ export class GameScene extends Phaser.Scene {
   /** Bump a lifetime counter (① quantitative state, fed to observation). */
   private bumpStat(key: string, by = 1): void {
     this.stats[key] = (this.stats[key] ?? 0) + by;
+  }
+
+  // ── ③ Narrative consolidation (ADR-027 Phase 2) ───────────────────────────
+
+  /** Accumulate un-compacted material (an event or chat line). Capped so a long run of failed
+   *  consolidations can't grow it unbounded; crossing the mid-session threshold triggers a compact. */
+  private pushPending(line: string): void {
+    const s = line.trim();
+    if (!s) return;
+    this.pendingSummary.push(s);
+    if (this.pendingSummary.length > GameScene.PENDING_CAP) this.pendingSummary.shift();
+    if (this.pendingSummary.length >= GameScene.CONSOLIDATE_AT) this.maybeConsolidate('threshold');
+  }
+
+  /** Fold the un-compacted material into the rolling story summary + player-impression sketch via
+   *  one `umicat.ai.complete` call (ADR-027/028). Material-driven: runs at session start (if any
+   *  pending) or when the mid-session threshold is crossed — NOT on a calendar day. Idempotent:
+   *  any failure/skip (no AI, out of credits, not signed in, parse fail) leaves `pendingSummary`
+   *  intact so the next checkpoint retries. Player-paid Haiku; a game with no AI just keeps the
+   *  deterministic layers (①②). */
+  private async maybeConsolidate(reason: 'session' | 'threshold'): Promise<void> {
+    if (this.consolidating || this.pendingSummary.length === 0) return;
+    const ai = this.umicat?.ai;
+    if (!ai || typeof ai.complete !== 'function') return; // standalone / old SDK → skip (kept for retry)
+    // Don't compete with a live chat turn; the session-start call runs before any chat.
+    if (reason === 'threshold' && (this.aiBusy || this.dialogOpen)) return;
+    this.consolidating = true;
+    const material = this.pendingSummary.slice(); // snapshot — new pushes during the await stay queued
+    try {
+      const prompt = this.buildConsolidationPrompt(material);
+      const res = await ai.complete({ prompt, maxTokens: 320, temperature: 0.5 });
+      if (!res.ok || !res.text) return; // reason ∈ SIGN_IN_REQUIRED|INSUFFICIENT_CREDITS|… → keep pending, retry later
+      const parsed = this.parseConsolidation(res.text);
+      if (!parsed) return;
+      this.storySummary = parsed.story;
+      this.impressionSketch = parsed.impression;
+      // Drop exactly what we folded; material pushed DURING the await survives for the next pass.
+      this.pendingSummary.splice(0, material.length);
+      this.scheduleSave();
+    } catch { /* transient — keep pending, retry next checkpoint */ }
+    finally { this.consolidating = false; }
+  }
+
+  /** Build the summarization prompt game-side (the platform stays task-neutral — ADR-028). */
+  private buildConsolidationPrompt(material: string[]): string {
+    const zh = getLang() === 'zh-CN';
+    const name = this.umicat?.user?.name?.trim() || (zh ? '朋友' : 'the player');
+    const counters = Object.entries(this.stats).map(([k, v]) => `${k}:${v}`).join(', ') || '—';
+    return [
+      `You maintain the long-term memory for Cato, an AI cat, about their friend "${name}" in a cozy farming game.`,
+      `Fold the NEW events below into the running memory. Keep it concise, warm, second-person about the friend, and in ${zh ? 'Simplified Chinese' : 'English'}.`,
+      '',
+      `PREVIOUS STORY (our history so far): ${this.storySummary || '(none yet)'}`,
+      `PREVIOUS IMPRESSION (who the friend is): ${this.impressionSketch || '(none yet)'}`,
+      `LIFETIME TOTALS: ${counters}`,
+      `BOND: ${this.bondTier()}`,
+      '',
+      'NEW EVENTS:',
+      ...material.map((m) => `- ${m}`),
+      '',
+      'Return EXACTLY two lines, nothing else:',
+      'STORY: <=90 words, the updated story of Cato and the friend so far.',
+      'IMPRESSION: <=40 words, the friend\'s personality / preferences / habits.',
+    ].join('\n');
+  }
+
+  private truncate(s: string, n: number): string {
+    const t = s.trim();
+    return t.length > n ? t.slice(0, n - 1) + '…' : t;
+  }
+
+  /** Parse the `STORY: … / IMPRESSION: …` reply into the two artifacts (tolerant of order/casing). */
+  private parseConsolidation(text: string): { story: string; impression: string } | null {
+    const story = /STORY\s*:\s*([\s\S]*?)(?:\n\s*IMPRESSION\s*:|$)/i.exec(text)?.[1]?.trim();
+    const impression = /IMPRESSION\s*:\s*([\s\S]*)/i.exec(text)?.[1]?.trim();
+    if (!story && !impression) return null;
+    return { story: (story || this.storySummary).slice(0, 600), impression: (impression || this.impressionSketch).slice(0, 300) };
   }
 
   // Slept while inside the house. Includes the Cato-bound HUD — `UmicatHud` (the top-right
@@ -7905,6 +8004,9 @@ export class GameScene extends Phaser.Scene {
         bondTier: this.bondTier(), // stranger / acquaintance / friend / close / bonded
         dayStreak: this.playStreak, // consecutive days you've visited
       },
+      // ③ rolling narrative memory (ADR-027 Phase 2) — the story so far + who the friend is.
+      ...(this.storySummary ? { ourStory: this.storySummary } : {}),
+      ...(this.impressionSketch ? { aboutFriend: this.impressionSketch } : {}),
       recentMoments, // e.g. ["Moved into a new home", "Cooked a dish for the first time"]
       lifetime: this.stats, // {harvests, crafts, cooks, …} — totals, not the firehose
       cato: {
@@ -8027,7 +8129,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 19,
+      v: 20,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -8063,6 +8165,9 @@ export class GameScene extends Phaser.Scene {
       notableEvents: this.notableEvents.map((e) => ({ ...e })),
       seenFirsts: [...this.seenFirsts],
       stats: { ...this.stats },
+      storySummary: this.storySummary || undefined, // v20: ③ narrative memory
+      impressionSketch: this.impressionSketch || undefined,
+      pendingSummary: this.pendingSummary.length ? [...this.pendingSummary] : undefined,
     };
   }
 
@@ -8249,6 +8354,9 @@ export class GameScene extends Phaser.Scene {
       this.notableEvents = (s.notableEvents ?? []).map((e) => ({ ...e }));
       this.seenFirsts = new Set(s.seenFirsts ?? []);
       this.stats = { ...(s.stats ?? {}) };
+      this.storySummary = s.storySummary ?? ''; // v20: ③ narrative memory
+      this.impressionSketch = s.impressionSketch ?? '';
+      this.pendingSummary = [...(s.pendingSummary ?? [])];
       this.ensureBuildingMaterials();
       this.grantStarterSeedsOnce();
       if (s.mail) {
@@ -8355,6 +8463,8 @@ export class GameScene extends Phaser.Scene {
         this.addBond('chatPerDay'); // a real exchange nudges the relationship (daily-capped)
         if (r.do?.length) { this.addBond('followedInstruction'); this.runCatoActions(r.do); } // player asked → Cato acts
         this.markFirst('first_chat', 'Talked with Cato for the first time');
+        // ③ feed the exchange (compact) into the consolidation material.
+        this.pushPending(`Chat — friend: "${this.truncate(t, 80)}" · Cato: "${this.truncate(say, 80)}"`);
       } else if (r.reason === 'SIGN_IN_REQUIRED') {
         this.setImmediateDialog("Cato peers past you — sign in and we can really talk.");
       } else if (r.reason === 'INSUFFICIENT_CREDITS') {
