@@ -96,6 +96,7 @@ export interface MenuModel {
   mailSelected?: string;        // Mail tab: selected mail id → right-side receipt detail + row highlight
   mailDetail?: { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number }; // the selected mail's receipt
   catoInfo?: { name: string; stamina: number; staminaMax: number; bondTier: string; bondFrac: number }; // Cato-info tab
+  calendar?: { title: string; today: number; daysInMonth: number; firstWeekdayMon: number }; // Calendar tab (ADR-029)
 }
 
 // Mail-tab RIGHT-side receipt panel (screen fractions) — the sales receipt / delivery
@@ -316,8 +317,8 @@ export class MenuScene extends Phaser.Scene {
 
     // Title (no underline rule — the user didn't want it). Localized via i18n `tab_<key>`.
     const tkey = TAB_DEFS[m.tab]?.key;
-    // Cato-info tab draws its own name on the right, so suppress the auto panel title.
-    const title = m.tab === TAB_CATO ? '' : tkey ? t('tab_' + tkey) : m.tab === TAB_BACKPACK ? t('tab_backpack') : '';
+    // Cato + Calendar tabs draw their own header (name / month), so suppress the auto panel title.
+    const title = (m.tab === TAB_CATO || m.tab === TAB_CALENDAR) ? '' : tkey ? t('tab_' + tkey) : m.tab === TAB_BACKPACK ? t('tab_backpack') : '';
     const titleCx = hasDetail ? ((L.x + DIVIDER_X) / 2) * W : lx + lw / 2; // over the LEFT content for split tabs
     panel.add(this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK));
 
@@ -329,7 +330,7 @@ export class MenuScene extends Phaser.Scene {
     // sized as before (the original L.w) so the sliders/buttons don't stretch out.
     if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx + lw / 2, L.w * W);
     else if (m.tab === TAB_CATO) this.renderCato(content, m); // Cato portrait + vitals (energy + bond)
-    else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx + lw / 2); // placeholder (empty) tab
+    else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx + lw / 2, m); // real month grid
     else if (m.tab === TAB_MAIL) {
       this.renderMailList(content, m.mails ?? [], m.mailSelected);
       this.renderMailDetail(content, m.mailDetail); // right-side receipt (was a separate modal)
@@ -597,9 +598,36 @@ export class MenuScene extends Phaser.Scene {
 
   /** CALENDAR tab — placeholder for now (a centred "coming soon"): lets the user test that tab
    *  switching works + reads like a real tabbed menu. Fill in the real calendar UI here later. */
-  private renderCalendar(c: Phaser.GameObjects.Container, cx: number): void {
-    const H = this.scale.height;
-    c.add(this.T(cx, H * 0.46, t('menu_coming_soon'), H * 0.03, INK).setAlpha(0.65));
+  /** Calendar tab: the REAL current month grid (ADR-029) — weekday header + numbered day cells,
+   *  today highlighted. Event markers/journal come later (v2). */
+  private renderCalendar(c: Phaser.GameObjects.Container, cx: number, m: MenuModel): void {
+    const W = this.scale.width, H = this.scale.height;
+    const cal = m.calendar;
+    if (!cal) { c.add(this.T(cx, H * 0.46, t('menu_coming_soon'), H * 0.03, INK).setAlpha(0.65)); return; }
+
+    c.add(this.T(cx, 0.24 * H, cal.title, H * 0.036, INK)); // "August 2026" / "2026年8月"
+
+    // 7-column grid centred on cx.
+    const cols = 7, gridW = 0.7 * W, cellW = gridW / cols, cellH = 0.088 * H;
+    const gx = cx - gridW / 2, headY = 0.32 * H, gy = 0.36 * H;
+    const WD = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+    for (let i = 0; i < cols; i++) c.add(this.T(gx + (i + 0.5) * cellW, headY, WD[i], H * 0.022, SUB));
+
+    const rows = Math.ceil((cal.firstWeekdayMon + cal.daysInMonth) / cols);
+    for (let day = 1; day <= cal.daysInMonth; day++) {
+      const idx = cal.firstWeekdayMon + day - 1;
+      const col = idx % cols, row = Math.floor(idx / cols);
+      const x = gx + col * cellW, y = gy + row * cellH;
+      // Cell background (light slot); today gets a highlighted tint.
+      const isToday = day === cal.today;
+      if (this.textures.get(ATLAS).has('slot-light')) {
+        const bg = this.add.nineslice(x + cellW / 2, y + cellH / 2, ATLAS, 'slot-light', (cellW - 3) / SLOT_SCALE, (cellH - 3) / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
+        if (isToday) bg.setTint(0xffe0a3);
+        c.add(bg);
+      }
+      c.add(this.T(x + cellW * 0.22, y + cellH * 0.3, String(day), H * 0.02, isToday ? '#b5533a' : INK));
+    }
+    void rows;
   }
 
   /** SETTINGS tab: a Music volume slider (tap the bar to set — mirrors the title

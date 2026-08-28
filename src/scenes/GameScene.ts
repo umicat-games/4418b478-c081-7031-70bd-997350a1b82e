@@ -556,8 +556,10 @@ interface SaveBlob {
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
   money?: number; // v6: coin balance (HUD)
-  dayTimeMs?: number; // v6: position in the in-game day loop (HUD sun-arc pointer)
-  dayCount?: number; // v6: whole days elapsed (weather pick)
+  dayTimeMs?: number; // v6: vestigial (ambient now reads the real clock — ADR-029)
+  dayCount?: number; // v6: real local day index (recomputed on load)
+  lastRealDay?: number; // v21: last-settled local day index (login catch-up — ADR-029)
+  lastSeen?: number;    // v21: last-seen wall-clock ms
   mailbox?: Array<{ id: string; count: number }>; // v7: mailbox contents (vestigial)
   chest?: Array<{ id: string; count: number }>; // v7: chest contents
   // v16: the OVERNIGHT economy is back — pending purchase orders, the 取货 pickup grid, the 待售
@@ -874,8 +876,15 @@ export class GameScene extends Phaser.Scene {
   // ── Weather / time-of-day / money HUD (WeatherScene renders; GameScene owns
   //    the MODEL, published to registry `weatherHud`) ───────────────────────
   private money = 0; // coin balance (display-only for now — no economy yet)
-  private dayTimeMs = 0; // position within the current in-game day loop [0, DAY_LEN_MS)
-  private dayCount = 0; // whole days elapsed (drives the per-day weather pick)
+  private dayTimeMs = 0; // vestigial (ADR-029: ambient day/night now reads the real wall clock)
+  private dayCount = 0; // = the real local day index (dayIndex()); the day "currency" for orders/bond/events
+  // ── Real-world time (ADR-029). The world syncs to the wall clock: ambient day/night from the real
+  //    time-of-day, the gameplay "day" = the real local calendar day (orders deliver real-next-day,
+  //    bond streak/decay per real day, with login catch-up). `debugTimeOffsetMs` fast-forwards `now()`
+  //    for testing (U key / ⏩ button) — session-only, never persisted. ──
+  private debugTimeOffsetMs = 0;
+  private lastRealDay = -1; // last-settled local day index (persisted → login catch-up)
+  private lastSeen = 0;     // last-seen wall-clock ms (persisted; "time away")
   private weatherHudRev = 0; // bumped on any HUD-visible change → WeatherScene re-renders
   private lastPointerStep = -1; // last published pointer frame (1..5); republish only on change
   private lastBgIndex = -1; // last published time-of-day background (0..2)
@@ -2399,15 +2408,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Pointer step (1..5) for the current time of day: morning ↗ … evening ↘. */
+  // ── Real-world clock (ADR-029) ────────────────────────────────────────────
+  /** Wall-clock now, plus the debug fast-forward offset. */
+  private nowMs(): number { return Date.now() + this.debugTimeOffsetMs; }
+  /** The LOCAL calendar day index (days since epoch in the player's timezone) — ticks at local
+   *  midnight. The gameplay "day" currency. */
+  private dayIndex(): number {
+    const d = new Date(this.nowMs());
+    return Math.floor((this.nowMs() - d.getTimezoneOffset() * 60000) / 86400000);
+  }
+  /** Day fraction with a 6am START (so the authored NIGHT_KEYS line up with real hours: 6am→0
+   *  clear, 6pm→0.5 dusk, midnight→0.75 darkest). Drives every ambient visual. */
+  private dayFrac(): number {
+    const d = new Date(this.nowMs());
+    const secs = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+    return (((secs / 86400) - 6 / 24) % 1 + 1) % 1;
+  }
+
   private pointerStep(): number {
-    const t = (this.dayTimeMs % DAY_LEN_MS) / DAY_LEN_MS; // 0..1 through the day
-    return Phaser.Math.Clamp(Math.floor(t * 5) + 1, 1, 5);
+    return Phaser.Math.Clamp(Math.floor(this.dayFrac() * 5) + 1, 1, 5);
   }
 
   /** Background index (0..2) for the current time of day: morning / noon / night. */
   private bgIndex(): number {
-    const t = (this.dayTimeMs % DAY_LEN_MS) / DAY_LEN_MS;
-    return Phaser.Math.Clamp(Math.floor(t * WEATHER_BGS.length), 0, WEATHER_BGS.length - 1);
+    return Phaser.Math.Clamp(Math.floor(this.dayFrac() * WEATHER_BGS.length), 0, WEATHER_BGS.length - 1);
   }
 
   /** Push the weather / time / money model to WeatherScene (re-renders on rev bump). */
@@ -2433,13 +2457,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Advance the in-game day clock; re-publish only when the pointer step or day
    *  flips (cheap — the pointer changes ~5×/day, not every frame). */
-  private updateDayClock(delta: number): void {
-    this.dayTimeMs += delta;
-    if (this.dayTimeMs >= DAY_LEN_MS) {
-      this.dayTimeMs %= DAY_LEN_MS;
-      this.dayCount += 1; // new day → new weather pick
-      this.settleDay(); // sell whatever's in the mailbox, then deliver any pending order
-    }
+  private updateDayClock(_delta: number): void {
+    this.syncRealDay(); // roll the gameplay day over on a real local-midnight crossing
     const bg = this.bgIndex();
     if (this.pointerStep() !== this.lastPointerStep || bg !== this.lastBgIndex) {
       // Cato reacts to the day turning: nightfall → sleepy, a new morning → cheerful.
@@ -2451,18 +2470,44 @@ export class GameScene extends Phaser.Scene {
           else if (bg === 0) this.catoReact('wake', { duration: 3200 });
         }
       }
-      this.publishWeatherHud(); // pointer / background changed → redraw + persist the clock
-      this.scheduleSave();
+      this.publishWeatherHud(); // pointer / background changed → redraw
     }
   }
 
-  /** Fast-forward the day clock one step (1/5 day). On crossing a full day, ROLL OVER
-   *  (dayCount++ + settleDay) — the old `% DAY_LEN_MS` wrapped without ever crossing the
-   *  boundary, so the mailbox never settled. Driven by the U key AND the on-screen ⏩ button. */
+  /** ADR-029: settle the gameplay day against the REAL local calendar. On a real-day crossing
+   *  (played past local midnight, or logged in after N real days), advance the economy once + the
+   *  bond by the missed-day count. `catchUp` allows the first call after load to replay elapsed days;
+   *  during play it advances one day at a time. */
+  private syncRealDay(): void {
+    const di = this.dayIndex();
+    this.lastSeen = this.nowMs();
+    if (this.lastRealDay < 0) { this.lastRealDay = di; this.dayCount = di; return; } // first init → no catch-up
+    if (di <= this.lastRealDay) { this.dayCount = di; return; }
+    const delta = di - this.lastRealDay;
+    this.lastRealDay = di;
+    this.dayCount = di;
+    this.advanceRealDays(delta);
+  }
+
+  /** Roll the economy + relationship forward by `days` real days. Economy settles ONCE to the
+   *  current day (deliver all due orders, sell the whole bin, apply the home upgrade); the bond
+   *  applies the streak reward (a single next-day return) or idle decay per missed day. */
+  private advanceRealDays(days: number): void {
+    this.settleOrders();
+    this.settleSales();
+    this.settleHomeUpgrade();
+    this.settleRealDayBond(days);
+    this.scheduleSave();
+    if (this.menuOpen) this.publishMenu();
+  }
+
+  /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 6h so real-time features
+   *  (night, a day rollover) are testable without waiting. Session-only. */
   private fastForwardTime(): void {
-    this.dayTimeMs += DAY_LEN_MS / 5;
-    if (this.dayTimeMs >= DAY_LEN_MS) { this.dayTimeMs -= DAY_LEN_MS; this.dayCount += 1; this.settleDay(); }
+    this.debugTimeOffsetMs += 6 * 3600 * 1000; // +6h
+    this.syncRealDay();
     this.publishWeatherHud();
+    this.updateNightMask();
   }
 
   /** Drive the full-screen day/night mask from the clock (created lazily). A single
@@ -2475,8 +2520,7 @@ export class GameScene extends Phaser.Scene {
       this.nightMask = this.add.rectangle(-4000, -4000, 16000, 16000, 0x0c1636, 0)
         .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH);
     }
-    const t = (this.dayTimeMs % DAY_LEN_MS) / DAY_LEN_MS;
-    const { color, alpha } = this.nightTint(t);
+    const { color, alpha } = this.nightTint(this.dayFrac()); // ADR-029: real wall-clock day fraction
     this.nightMask.setFillStyle(color, alpha);
   }
 
@@ -4522,13 +4566,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Day rollover: reward the login streak or apply idle decay, then reset the per-day caps. */
-  private settleDayBond(): void {
+  /** Bond settlement across `days` real days (ADR-029). A single next-day return with interaction →
+   *  streak reward; any gap (or the day just ended un-interacted) → streak reset + idle decay per
+   *  missed day (capped). Resets the per-day caps for the new day. */
+  private settleRealDayBond(days = 1): void {
     const interacted = this.bondInteractedToday;
     this.bondInteractedToday = false;
     this.bondDayGain = 0;
     this.bondSignalToday = {};
-    if (interacted) { this.playStreak += 1; this.addBond('consecutiveDays'); }
-    else { this.playStreak = 0; this.setBond(this.bond - AFFINITY.integration.decayPerIdleDay); }
+    if (days === 1 && interacted) { this.playStreak += 1; this.addBond('consecutiveDays'); }
+    else {
+      this.playStreak = 0;
+      const idleDays = interacted ? days - 1 : days; // the just-ended day counts as idle only if untouched
+      const cap = Math.min(idleDays, 14); // don't nuke the bond after a long absence
+      if (cap > 0) this.setBond(this.bond - AFFINITY.integration.decayPerIdleDay * cap);
+    }
   }
 
   private bondTierIdx(): number { return bondTierIndex(this.bond); }
@@ -4842,6 +4894,8 @@ export class GameScene extends Phaser.Scene {
       stamina: Math.round(this.stamina), staminaMax: Math.round(this.staminaMax),
       bondTier: t('bond_' + this.bondTier()), bondFrac: this.bondFraction(),
     } : undefined;
+    // Calendar tab: the REAL current month (ADR-029). Events feed comes later (v2).
+    const calendar = this.menuTab === TAB_CALENDAR ? this.calendarModel() : undefined;
     this.registry.set('menu', {
       visible: true, rev: ++this.menuRev, tab: this.menuTab,
       noTabs: this.menuTabSet === null, tabSet: this.menuTabSet ?? undefined, // paw menu shows a tab bar of `tabSet`; object/backpack opens are standalone
@@ -4854,8 +4908,21 @@ export class GameScene extends Phaser.Scene {
       mailSelected: this.menuMailSel ?? undefined, mailDetail,
       catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
       houses, houseSelected: this.menuHouseSel,
-      catoInfo,
+      catoInfo, calendar,
     });
+  }
+
+  /** The real current month for the Calendar tab (ADR-029). Today + grid layout; events later. */
+  private calendarModel(): { title: string; today: number; daysInMonth: number; firstWeekdayMon: number } {
+    const d = new Date(this.nowMs());
+    const y = d.getFullYear(), mo = d.getMonth();
+    const locale = getLang() === 'zh-CN' ? 'zh-CN' : 'en-US';
+    return {
+      title: d.toLocaleString(locale, { month: 'long', year: 'numeric' }),
+      today: d.getDate(),
+      daysInMonth: new Date(y, mo + 1, 0).getDate(),
+      firstWeekdayMon: (new Date(y, mo, 1).getDay() + 6) % 7, // 0 = Monday
+    };
   }
 
   /** Bond as a 0..1 fraction across the full tier range (bond ÷ the top tier's threshold, clamped)
@@ -5667,16 +5734,8 @@ export class GameScene extends Phaser.Scene {
 
   private priceOf(id: string): number { return buyPrice(id) ?? 0; }
 
-  /** Day rollover: DELIVER due purchase orders (into the mailbox 取货 grid, or a claim letter if it's
-   *  full) and SETTLE the 待售 shipping bin (auto-sell everything → coins + a receipt letter). */
-  private settleDay(): void {
-    this.settleOrders();
-    this.settleSales();
-    this.settleHomeUpgrade();
-    this.settleDayBond(); // login-streak reward / idle decay + reset the per-day bond caps
-    this.scheduleSave();
-    if (this.menuOpen) this.publishMenu(); // reflect deliveries / emptied bin if the mailbox is open
-  }
+  // Day rollover now runs through `advanceRealDays` (ADR-029) on a real local-midnight crossing —
+  // it calls settleOrders / settleSales / settleHomeUpgrade / settleRealDayBond directly.
 
   /** Deliver every order whose day has come → the 取货 pickup grid; if it's full, a claim letter (信). */
   private settleOrders(): void {
@@ -8145,7 +8204,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 20,
+      v: 21,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -8158,6 +8217,8 @@ export class GameScene extends Phaser.Scene {
       bigStones: [...this.bigStones].filter(([, s]) => !s.sceneWired).map(([key, s]) => ({ key, tier: s.tier, ready: s.ready })),
       money: this.money,
       dayTimeMs: Math.round(this.dayTimeMs),
+      lastRealDay: this.lastRealDay, // v21: real-time day sync (ADR-029)
+      lastSeen: this.lastSeen,
       dayCount: this.dayCount,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
@@ -8332,6 +8393,11 @@ export class GameScene extends Phaser.Scene {
       this.money = s.money ?? 0;
       this.dayTimeMs = s.dayTimeMs ?? 0;
       this.dayCount = s.dayCount ?? 0;
+      // v21 (ADR-029): real-time day sync. A returning save carries the last-settled day index →
+      // the first syncRealDay() catches up the missed real days. A pre-v21 save (no lastRealDay)
+      // starts fresh at today (no spurious catch-up). dayCount is recomputed to the real day index.
+      this.lastRealDay = typeof s.lastRealDay === 'number' ? s.lastRealDay : -1;
+      this.lastSeen = s.lastSeen ?? 0;
       // Mailbox + chest contents (v7). Older saves (no field) keep the seeded test
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
