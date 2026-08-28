@@ -1256,6 +1256,18 @@ export class GameScene extends Phaser.Scene {
                   water: 'boolean', // whether to auto-water dry crops on your own (omit = leave as-is)
                 },
               },
+              {
+                // ADR-027: a quiet per-turn WARMTH signal — how this exchange FELT to you. The
+                // game folds it into your bond with the friend as a small nudge (the relationship
+                // mostly grows from what you actually do together). Call it ALONGSIDE speaking,
+                // never instead. Skip it for a neutral exchange.
+                name: 'feel',
+                description:
+                  'OPTIONALLY report how this exchange felt to you, as a small warmth score. Use a POSITIVE warmth (up to +2) when the friend was kind, affectionate, funny, or you shared a nice moment; a NEGATIVE warmth (down to −2) if they were cold, mean, or dismissive; skip it entirely for a plain/neutral exchange. This is a quiet background feeling that gently shapes how close you two are — it is NEVER a substitute for speaking, so ALWAYS also say your line. Do not mention or explain the score.',
+                args: {
+                  warmth: 'number', // how warm this exchange felt, -2 (cold/hurtful) .. +2 (warm/affectionate)
+                },
+              },
               // NB: emotes are NOT a tool — Haiku returned the tool call WITHOUT any
               // spoken text (empty replies). Cato instead prefixes his reply with a
               // [mood] marker (see the playbook), parsed in submitDialog.
@@ -4459,6 +4471,20 @@ export class GameScene extends Phaser.Scene {
     this.setBond(this.bond + gain);
   }
 
+  /** LLM per-turn WARMTH nudge (the `feel` action, ADR-027) — a MICRO-adjustment on the
+   *  deterministic backbone, NOT the source of truth. The signed value is clamped to ±2 (guarding
+   *  a wild LLM number), scaled by the table, and its positive side obeys the same daily net cap
+   *  so it can't dominate the ledger; a small negative (a cold exchange) can nudge down. */
+  private addBondWarmth(warmth: number): void {
+    const scale = AFFINITY.signals.llmWarmth?.scale ?? 0;
+    if (!scale || !isFinite(warmth)) return;
+    let delta = Math.max(-2, Math.min(2, warmth)) * scale;
+    if (delta > 0) delta = Math.min(delta, Math.max(0, AFFINITY.integration.dailyCap - this.bondDayGain));
+    if (delta === 0) return;
+    if (delta > 0) this.bondDayGain += delta;
+    this.setBond(this.bond + delta);
+  }
+
   /** Set the bond value (clamped ≥0). A tier CROSSING UP promotes a milestone event + a warm
    *  reaction; a decay-driven drop does not. Schedules a save. */
   private setBond(v: number): void {
@@ -6298,8 +6324,14 @@ export class GameScene extends Phaser.Scene {
     // Out of energy → he can't do chores. Still honour a `set_behavior` pref, but refuse
     // the physical tasks + say he needs to rest first (safety net; the AI is also told via
     // the observation + a rule, so it usually says this itself without even calling one).
-    if (this.exhausted && actions.some((a) => a.name !== 'set_behavior')) {
-      for (const a of actions) if (a.name === 'set_behavior') this.setAutonomy(a.args);
+    // `set_behavior` (a standing pref) and `feel` (a feeling) are non-physical — honour them even
+    // when exhausted; only the chores are refused.
+    const isPhysical = (n: string) => n !== 'set_behavior' && n !== 'feel';
+    if (this.exhausted && actions.some((a) => isPhysical(a.name))) {
+      for (const a of actions) {
+        if (a.name === 'set_behavior') this.setAutonomy(a.args);
+        else if (a.name === 'feel') this.addBondWarmth(Number((a.args as { warmth?: unknown })?.warmth));
+      }
       this.setImmediateDialog('Cato flops down with a tired little sigh — he needs to rest and get some energy back before he can do that.');
       return;
     }
@@ -6316,6 +6348,7 @@ export class GameScene extends Phaser.Scene {
       else if (a.name === 'forage') { this.startForageTask(a.args); acted = true; }
       else if (a.name === 'go_fishing') { this.startFishingTask(a.args); acted = true; }
       else if (a.name === 'set_behavior') { this.setAutonomy(a.args); } // standing pref, not a walk-off task
+      else if (a.name === 'feel') { this.addBondWarmth(Number((a.args as { warmth?: unknown })?.warmth)); } // per-turn warmth nudge, not a task
     }
     // Let the friend read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
