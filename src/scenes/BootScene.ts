@@ -6,6 +6,7 @@ import { applyForagableData, applyBigStoneData } from '../data/foragables';
 import { applyItemData } from '../data/items';
 import { applyRecipeData } from '../data/recipes';
 import { applyCookingData } from '../data/cooking';
+import { applyAffinityData } from '../data/affinity';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -297,6 +298,7 @@ export class BootScene extends Phaser.Scene {
     this.load.json('data-items', 'data/items.json');
     this.load.json('data-recipes', 'data/recipes.json');
     this.load.json('data-cooking', 'data/cooking.json');
+    this.load.json('data-affinity', 'data/affinity.json');
     // Scripted-dialogue graphs (authored, non-AI): the new-game intro cutscene.
     this.load.json('dialogue-intro', 'dialogue/intro.json');
   }
@@ -496,6 +498,7 @@ export class BootScene extends Phaser.Scene {
     applyItemData(this.cache.json.get('data-items'));
     applyRecipeData(this.cache.json.get('data-recipes'));
     applyCookingData(this.cache.json.get('data-cooking'));
+    applyAffinityData(this.cache.json.get('data-affinity'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     buildSoilGrassSheet(this);
     // BGM is started per-scene now (title vs game use different tracks): BootMenuScene

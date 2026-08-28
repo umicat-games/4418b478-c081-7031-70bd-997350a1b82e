@@ -1,0 +1,21 @@
+{
+  "signals": {
+    "chatPerDay":          { "gain": 2, "dailyCountCap": 5 },
+    "followedInstruction": { "gain": 3, "dailyCountCap": 5 },
+    "fed":                 { "gain": 2, "dailyCountCap": 5 },
+    "consecutiveDays":     { "gain": 4 },
+    "llmWarmth":           { "scale": 1 }
+  },
+  "integration": {
+    "dailyCap": 25,
+    "tierDiminishing": 0.35,
+    "decayPerIdleDay": 5
+  },
+  "tiers": [
+    { "name": "stranger",     "min": 0 },
+    { "name": "acquaintance", "min": 20 },
+    { "name": "friend",       "min": 60 },
+    { "name": "close",        "min": 120 },
+    { "name": "bonded",       "min": 200 }
+  ]
+}

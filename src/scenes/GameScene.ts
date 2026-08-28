@@ -17,6 +17,7 @@ import type { HoverModel } from './HoverScene';
 import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/items';
 import { RECIPES, type Recipe } from '../data/recipes';
 import { COOKING_RECIPES } from '../data/cooking';
+import { AFFINITY, bondTierName, bondTierIndex } from '../data/affinity';
 import type { CookModel, CookRowView } from './CookScene';
 import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
@@ -574,6 +575,13 @@ interface SaveBlob {
   dialogueFlags?: string[]; // v14: dialogue flags set by choices (branch memory)
   currentHome?: string; // v17→v18: the current house TIER id (see HOME_TIERS; decoupled from scene id)
   pendingHome?: { id: string; applyDay: number }; // v18: house bought but not moved into yet (applies at settleDay)
+  // v19: affinity/bond + player-model memory (ADR-027 Phase 1)
+  bond?: number; // relationship score
+  playStreak?: number; // consecutive interacted days
+  bondDay?: { gain: number; interacted: boolean; signals: Record<string, number> }; // today's caps (survive a reload)
+  notableEvents?: Array<{ day: number; type: string; summary: string }>; // ② milestone ring buffer
+  seenFirsts?: string[]; // first-time event types already promoted
+  stats?: Record<string, number>; // ① lifetime counters
 }
 
 export class GameScene extends Phaser.Scene {
@@ -717,6 +725,20 @@ export class GameScene extends Phaser.Scene {
   private pendingHome: { id: string; applyDay: number } | null = null; // bought-but-not-moved-in (applies at settleDay)
   private inHouse = false;
   private houseEntering = false;
+
+  // ── Affinity / bond + player-model memory (ADR-027, Phase 1). Bond is a deterministic number
+  //    the GAME owns (fed to the AI via observation, gates content); the algorithm is tuned in
+  //    the affinity data table. Milestone events (②) are a bounded promoted list; `seenFirsts`
+  //    dedups first-time events; `stats` are lifetime counters (① quantitative state). ──
+  private bond = 0;               // relationship score (>=0)
+  private playStreak = 0;         // consecutive days with at least one interaction
+  private bondDayGain = 0;        // net bond gained today (for the daily cap; reset at day rollover)
+  private bondSignalToday: Record<string, number> = {}; // per-signal count today (for per-signal caps)
+  private bondInteractedToday = false; // did the player engage today (drives streak vs idle decay)
+  private notableEvents: Array<{ day: number; type: string; summary: string }> = []; // ② bounded ring buffer
+  private seenFirsts = new Set<string>(); // first-time event types already promoted
+  private stats: Record<string, number> = {}; // ① lifetime counters (harvests/crafts/cooks/…)
+  private static readonly MAX_NOTABLE = 40; // ② cap — oldest drop off
   // The editor-placed mailbox / chest sprites (door objects). Clicking one plays its
   // open animation, THEN opens the unified menu (openMenuViaObject); closing plays close.
   private mailbox?: Phaser.GameObjects.Sprite;
@@ -2519,6 +2541,8 @@ export class GameScene extends Phaser.Scene {
     this.catoReact('happy', { duration: 2200, force: true });
     this.catoSay('chatter_ate');
     if (this.stamina >= this.staminaMax * STAMINA_RECOVER_FRAC) this.exhausted = false; // fed enough → back to work
+    this.addBond('fed'); // caring for Cato deepens the bond (daily-capped)
+    this.markFirst('first_feed', 'Fed Cato for the first time');
     if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu(); // refresh the backpack if it's open
     this.scheduleSave();
   }
@@ -3618,6 +3642,7 @@ export class GameScene extends Phaser.Scene {
     const tree = this.trees.get(key);
     if (!tree || tree.busy) return;
     playSfx(this, SFX_CHOP); // axe thunk (player + Cato) on each real tree strike
+    this.markFirst('first_chop', 'Chopped a tree for the first time'); // ② (deduped)
     tree.stage = tree.timer ? Math.min(tree.stage + 1, 3) : 1; // advance within the window, else restart
     tree.timer?.remove();
     tree.timer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { tree.stage = 0; tree.timer = undefined; });
@@ -4407,6 +4432,86 @@ export class GameScene extends Phaser.Scene {
     if (!p || p.applyDay > this.dayCount) return;
     this.currentHome = p.id;
     this.pendingHome = null;
+    const tier = HOME_TIERS.find((h) => h.id === p.id);
+    this.promoteEvent('home_upgrade', tier ? `Moved into a new home: ${tier.id}` : 'Moved into a new home'); // ② milestone
+  }
+
+  // ── Affinity / bond (ADR-027, Phase 1) ─────────────────────────────────────
+  //  Deterministic ledger the game owns. `addBond(signal)` applies the tuning table's per-signal
+  //  daily count cap → tier-diminishing → daily net cap; `settleDayBond()` (day rollover) awards
+  //  the login-streak signal and applies idle decay, then resets the per-day accumulators.
+
+  /** Award bond for a deterministic signal (see affinity.json `signals`). Silently no-ops past
+   *  the per-signal daily count cap or the daily net cap. Marks the day as "interacted" (except
+   *  the streak reward itself), which staves off idle decay. */
+  private addBond(signal: string): void {
+    const w = AFFINITY.signals[signal];
+    if (!w || !w.gain) return;
+    if (signal !== 'consecutiveDays') this.bondInteractedToday = true;
+    const cnt = this.bondSignalToday[signal] ?? 0;
+    if (w.dailyCountCap != null && cnt >= w.dailyCountCap) return;
+    this.bondSignalToday[signal] = cnt + 1;
+    // Higher tiers deepen more slowly, and the day's net gain is capped.
+    let gain = w.gain / (1 + this.bondTierIdx() * AFFINITY.integration.tierDiminishing);
+    gain = Math.min(gain, Math.max(0, AFFINITY.integration.dailyCap - this.bondDayGain));
+    if (gain <= 0) return;
+    this.bondDayGain += gain;
+    this.setBond(this.bond + gain);
+  }
+
+  /** Set the bond value (clamped ≥0). A tier CROSSING UP promotes a milestone event + a warm
+   *  reaction; a decay-driven drop does not. Schedules a save. */
+  private setBond(v: number): void {
+    const next = Math.max(0, Math.round(v * 100) / 100);
+    if (next === this.bond) return;
+    const beforeIdx = bondTierIndex(this.bond);
+    this.bond = next;
+    const afterIdx = bondTierIndex(this.bond);
+    if (afterIdx > beforeIdx) {
+      this.promoteEvent('bond_tier', `Grew closer with Cato — now ${this.bondTier()}`);
+      this.catoReact('love', { duration: 2200 });
+    }
+    this.scheduleSave();
+  }
+
+  /** Day rollover: reward the login streak or apply idle decay, then reset the per-day caps. */
+  private settleDayBond(): void {
+    const interacted = this.bondInteractedToday;
+    this.bondInteractedToday = false;
+    this.bondDayGain = 0;
+    this.bondSignalToday = {};
+    if (interacted) { this.playStreak += 1; this.addBond('consecutiveDays'); }
+    else { this.playStreak = 0; this.setBond(this.bond - AFFINITY.integration.decayPerIdleDay); }
+  }
+
+  private bondTierIdx(): number { return bondTierIndex(this.bond); }
+  /** The current bond tier NAME (fed to the AI + used for gating). */
+  private bondTier(): string { return bondTierName(this.bond); }
+  /** Content gate: is the bond at least the named tier? (unknown tier name → treated as reachable). */
+  bondAtLeast(tierName: string): boolean {
+    const want = AFFINITY.tiers.findIndex((t) => t.name === tierName);
+    return want < 0 ? true : this.bondTierIdx() >= want;
+  }
+
+  // ── Milestone events (②) + lifetime counters (①) ──────────────────────────
+
+  /** Push a notable event onto the bounded ring buffer (oldest drops past MAX_NOTABLE). */
+  private promoteEvent(type: string, summary: string): void {
+    this.notableEvents.push({ day: this.dayCount, type, summary });
+    if (this.notableEvents.length > GameScene.MAX_NOTABLE) this.notableEvents.shift();
+    this.scheduleSave();
+  }
+
+  /** Promote a FIRST-time event once (deduped by `type`). No-op on repeats — repeats are counters. */
+  private markFirst(type: string, summary: string): void {
+    if (this.seenFirsts.has(type)) return;
+    this.seenFirsts.add(type);
+    this.promoteEvent(type, summary);
+  }
+
+  /** Bump a lifetime counter (① quantitative state, fed to observation). */
+  private bumpStat(key: string, by = 1): void {
+    this.stats[key] = (this.stats[key] ?? 0) + by;
   }
 
   // Slept while inside the house. Includes the Cato-bound HUD — `UmicatHud` (the top-right
@@ -4732,6 +4837,8 @@ export class GameScene extends Phaser.Scene {
   private collect(item: ItemStack): boolean {
     if (!this.addToBackpack(item)) { this.notifyBagFull(); return false; }
     if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu();
+    this.bumpStat('harvests', item.count); // ① lifetime counter
+    this.markFirst('first_harvest', 'Harvested the first crop on the island');
     this.scheduleSave();
     this.showHarvestToast(item);
     return true;
@@ -4952,6 +5059,7 @@ export class GameScene extends Phaser.Scene {
     for (const m of r.materials) this.takeFromChest(m.id, m.count);
     this.addToChest(itemFromId(r.output, r.count));
     this.catoReact('happy', { duration: 1400 });
+    this.bumpStat('crafts'); this.markFirst('first_craft', 'Crafted something for the first time');
     this.flashCraftMsg(t('craft_done'));
     this.scheduleSave();
   }
@@ -5023,6 +5131,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.inventoryHasSpaceFor(r.output)) return { ok: false, key: 'cook_full' };
     for (const m of r.materials) this.takeFromInventory(m.id, m.count);
     this.addToInventory(itemFromId(r.output, r.count));
+    this.bumpStat('cooks'); this.markFirst('first_cook', 'Cooked a dish for the first time');
     this.publishInventory(); // refresh the hotbar (an ingredient/dish may sit on row 0) + schedules a save
     return { ok: true, key: 'cook_done' };
   }
@@ -5423,6 +5532,7 @@ export class GameScene extends Phaser.Scene {
     this.settleOrders();
     this.settleSales();
     this.settleHomeUpgrade();
+    this.settleDayBond(); // login-streak reward / idle decay + reset the per-day bond caps
     this.scheduleSave();
     if (this.menuOpen) this.publishMenu(); // reflect deliveries / emptied bin if the mailbox is open
   }
@@ -7750,9 +7860,20 @@ export class GameScene extends Phaser.Scene {
     let matureForageables = 0;
     for (const f of this.foragables.values()) if (f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) matureForageables += 1;
 
+    // Relationship (ADR-027): the bond TIER (not the raw number) + a few recent milestone
+    // moments give Cato conversational hooks + a tone to match. The playbook reads these.
+    const recentMoments = this.notableEvents.slice(-6).map((e) => e.summary);
+
     return {
       island: 'home',
       timeOfDay: ['morning', 'morning', 'midday', 'afternoon', 'evening'][this.pointerStep() - 1],
+      daysTogether: this.dayCount,
+      relationship: {
+        bondTier: this.bondTier(), // stranger / acquaintance / friend / close / bonded
+        dayStreak: this.playStreak, // consecutive days you've visited
+      },
+      recentMoments, // e.g. ["Moved into a new home", "Cooked a dish for the first time"]
+      lifetime: this.stats, // {harvests, crafts, cooks, …} — totals, not the firehose
       cato: {
         // Cato's own energy. exhausted → he CAN'T do chores; see the energy rule.
         energyPct: Math.round((this.stamina / this.staminaMax) * 100),
@@ -7873,7 +7994,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 18,
+      v: 19,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -7903,6 +8024,12 @@ export class GameScene extends Phaser.Scene {
       dialogueFlags: [...this.dialogueFlags],
       currentHome: this.currentHome,
       pendingHome: this.pendingHome ?? undefined, // v18: bought-but-not-moved-in
+      bond: this.bond, // v19: affinity/bond + player-model memory
+      playStreak: this.playStreak,
+      bondDay: { gain: this.bondDayGain, interacted: this.bondInteractedToday, signals: { ...this.bondSignalToday } },
+      notableEvents: this.notableEvents.map((e) => ({ ...e })),
+      seenFirsts: [...this.seenFirsts],
+      stats: { ...this.stats },
     };
   }
 
@@ -8080,6 +8207,15 @@ export class GameScene extends Phaser.Scene {
       // An unknown value (e.g. the retired placeholder 'home_2') → the starter tier.
       this.currentHome = HOME_TIERS.some((h) => h.id === s.currentHome) ? (s.currentHome as string) : 'home_1';
       this.pendingHome = s.pendingHome ?? null; // v18: bought-but-not-moved-in
+      // v19: affinity/bond + player-model memory (older saves default → fresh relationship).
+      this.bond = typeof s.bond === 'number' ? Math.max(0, s.bond) : 0;
+      this.playStreak = s.playStreak ?? 0;
+      this.bondDayGain = s.bondDay?.gain ?? 0;
+      this.bondInteractedToday = s.bondDay?.interacted ?? false;
+      this.bondSignalToday = { ...(s.bondDay?.signals ?? {}) };
+      this.notableEvents = (s.notableEvents ?? []).map((e) => ({ ...e }));
+      this.seenFirsts = new Set(s.seenFirsts ?? []);
+      this.stats = { ...(s.stats ?? {}) };
       this.ensureBuildingMaterials();
       this.grantStarterSeedsOnce();
       if (s.mail) {
@@ -8183,7 +8319,9 @@ export class GameScene extends Phaser.Scene {
         // reply); no marker → a plain blink.
         this.catoEmote = parsed.anim ?? 'blink-eye';
         this.catoTalkFor(say); // talk a beat, then settle onto catoEmote + hold
-        if (r.do?.length) this.runCatoActions(r.do);
+        this.addBond('chatPerDay'); // a real exchange nudges the relationship (daily-capped)
+        if (r.do?.length) { this.addBond('followedInstruction'); this.runCatoActions(r.do); } // player asked → Cato acts
+        this.markFirst('first_chat', 'Talked with Cato for the first time');
       } else if (r.reason === 'SIGN_IN_REQUIRED') {
         this.setImmediateDialog("Cato peers past you — sign in and we can really talk.");
       } else if (r.reason === 'INSUFFICIENT_CREDITS') {
