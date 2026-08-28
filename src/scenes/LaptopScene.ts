@@ -53,6 +53,12 @@ const opening = (name: string): string => {
 const ACCEPT = { en: "Really?! Thank you so much — I'll be waiting for you on the island! 💛", 'zh-CN': '真的吗？！太谢谢你了——我在小岛上等你！💛' };
 const DECLINE = { en: "Oh... that's alright, I understand. If you ever change your mind, just message me — I'll be right here. Take care! 🐾", 'zh-CN': '这样啊……没关系的，我明白。要是你哪天改变主意了，随时来找我就好——我一直都在。你也保重呀！🐾' };
 const FILLER = { en: "I haven't seen everything out there yet either — but I'd love to find out together in Catopia! So... will you come?", 'zh-CN': '外面的世界我也还没都见过呢——不过好想和你一起在 Catopia 里探索呀！所以……你会来吗？' };
+// ── Naming phase (after the player AGREES) — Cato asks, conversationally, whether the player
+//    wants to give him a nickname + how he should address them. Q1 is scripted (so Cato always
+//    opens the topic); the AI `namer` npc understands the free-text replies + asks the follow-up.
+const NAME_Q1 = { en: "Oh, I'm SO happy!! 💛 Before you come over — would you like to give me a nickname of your own? Or should I just stay “Cato”?", 'zh-CN': '啊，我太开心啦！！💛 在你过来之前——你想给我取一个你喜欢的昵称吗？还是就叫我「Cato」呀？' };
+const NAME_Q2 = { en: "And how would you like me to call you?", 'zh-CN': '那你希望我怎么称呼你呢？' };
+const NAME_DONE = { en: "Perfect — I can't wait to see you on the island! 🐾", 'zh-CN': '太好啦——我等不及要在小岛上见到你了！🐾' };
 
 // In-fiction fallbacks when the AI can't answer (anonymous / out of credits / hiccup).
 const SIGNIN_MSG = { en: "Oh — it looks like we haven't quite met yet! Could you sign in first? Then we can really talk. 🐾", 'zh-CN': '哦——好像我们还没正式认识呢！你能先登录一下吗？这样我们才能好好聊聊。🐾' };
@@ -97,9 +103,18 @@ export class LaptopScene extends Phaser.Scene {
 
   // Runtime AI — the recruiting-Cato npc that drives every reply after the opening line.
   private recruiter?: Npc;
+  private uref?: Awaited<ReturnType<typeof Umicat.init>>; // the Umicat handle (to spin up the namer npc after accept)
   private playerName = ''; // host-provided display name, for a personalised greeting
   private aiThinking = false;      // a say() is in flight (input hidden, taps ignored)
   private thinkTimer?: Phaser.Time.TimerEvent; // animated "…" while waiting
+
+  // Naming phase (after the player agrees) — a dedicated npc that captures the chosen names.
+  private namer?: Npc;
+  private namingTurns = 0;
+  private pendingCatoName = '';   // '' = keep the default "Cato"
+  private pendingCallName = '';   // '' = keep addressing them by their account name
+  private catoNameDecided = false;
+  private callNameDecided = false;
 
   private panelH = 10; private fs = 16; // set in layout()
 
@@ -117,6 +132,9 @@ export class LaptopScene extends Phaser.Scene {
     this.pages = []; this.pageIdx = 0; this.charIdx = 0;
     this.onLineDone = undefined;
     this.recruiter = undefined;
+    this.namer = undefined; this.namingTurns = 0;
+    this.pendingCatoName = ''; this.pendingCallName = '';
+    this.catoNameDecided = false; this.callNameDecided = false;
     this.bgW = 0; this.bgH = 0; // force the (recreated, empty) wallpaper layer to rebuild
     this.removeInput();
 
@@ -192,6 +210,7 @@ export class LaptopScene extends Phaser.Scene {
   private initRecruiter(): void {
     void Umicat.init({})
       .then((u) => {
+        this.uref = u; // kept so the naming phase can spin up its own npc after accept
         initLang(u?.locale); // match the platform-provided player language
         const name = u?.user?.name?.trim();
         this.playerName = name ?? ''; // greet the player by name in the opening line
@@ -429,7 +448,8 @@ export class LaptopScene extends Phaser.Scene {
     if (this.busy || this.typing || this.aiThinking || !text) return;
     playSfx(this, SFX_DROP); // whoosh — the player sent a message
     if (this.inputEl) this.inputEl.value = '';
-    if (this.recruiter) this.askRecruiter(text); // AI drives the reply + accept/decline
+    if (this.namer) this.askNamer(text);         // naming phase (after accept): capture the chosen names
+    else if (this.recruiter) this.askRecruiter(text); // AI drives the reply + accept/decline
     else this.offlineReply(text);                // no SDK → keyword fallback
   }
 
@@ -451,9 +471,10 @@ export class LaptopScene extends Phaser.Scene {
     if (!r.ok) { this.onAiUnavailable(r.reason); return; }
     const did = (r.do ?? []).map((d) => d.name);
     const say = (r.say ?? '').trim();
-    // Cato's OWN say IS the sign-off (the persona is told how to close). Fall back to a
-    // fixed line only if the AI somehow returned the action with no words.
-    if (did.includes('accept_help')) { this.showLine(say || tr(ACCEPT), () => this.finish(true)); return; }
+    // On ACCEPT we DON'T show the recruiter's canned goodbye — we go straight into the naming
+    // phase, whose first line (NAME_Q1) is itself a warm "I'm so happy!" acceptance beat.
+    if (did.includes('accept_help')) { this.beginNaming(); return; }
+    // Cato's OWN say IS the decline sign-off (the persona is told how to close).
     if (did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
     this.showLine(say || tr(FILLER), () => this.makeInput());
   }
@@ -482,15 +503,86 @@ export class LaptopScene extends Phaser.Scene {
     const t = text.toLowerCase();
     const yes = /(愿意|好的|好呀|好啊|我来|帮|当然|可以|答应|yes|sure|ok|okay|i will|i'?ll help|help you|of course)/.test(t) || t === '好' || t === '来';
     const no = /(不愿意|不想|拒绝|算了|不去|不行|no thanks|no\b|nope|not really|decline)/.test(t);
-    if (yes) { this.showLine(tr(ACCEPT), () => this.finish(true)); return; } // offline → the fixed sign-off
+    if (yes) { this.showLine(tr(ACCEPT), () => this.finish(true)); return; } // offline → the fixed sign-off (no AI to run the naming chat)
     if (no) { this.showLine(tr(DECLINE), () => this.finish(false)); return; }
     this.showLine(tr(FILLER), () => this.makeInput());
+  }
+
+  // ── Naming phase (after ACCEPT) ──────────────────────────────────────────────
+  /** The player agreed — before entering the game, Cato conversationally asks whether they'd
+   *  like to give him a nickname + how he should address them. A dedicated `namer` npc reads the
+   *  free-text replies (set_ / keep_ actions) and asks the follow-up; Q1 is scripted so Cato
+   *  always opens the topic. Offline / no AI → skip straight into the game with defaults. */
+  private beginNaming(): void {
+    if (this.busy) return;
+    if (!this.uref) { this.finish(true); return; } // no SDK → can't run the chat; use defaults
+    const name = this.playerName.trim();
+    this.namer = this.uref.ai.npc({
+      role:
+        'You are Cato, a small, warm-hearted cat who lives on a tiny island in Catopia. Your new friend has JUST agreed to come and live there with you and you are overjoyed. Before they arrive you want to settle two sweet little things, one at a time, in a light casual chat: (1) whether they would like to give YOU a nickname of their own instead of "Cato", and (2) how they would like YOU to address THEM' +
+        (name ? ` — by their current name "${name}" or something different` : '') +
+        '. You have ALREADY asked question (1) — about giving you a nickname — as your last message; the next thing they send is their answer to it.',
+      style: 'warm, whimsical, gentle; 1-2 short sentences, like a casual chat message',
+      rules: [
+        'You have already asked whether they want to give YOU (Cato) a nickname. Read their reply: if they offer a name for you, call set_cato_name with that name; if they say keep "Cato" / no / "you choose" / anything meaning no change, call keep_cato_name.',
+        `AFTER the nickname is settled, ask in ONE short warm line how YOU should address THEM${name ? ` — by "${name}" or a different name` : ''}. When they answer: a specific name to call them → call set_call_name with it; keep current / no preference → call keep_call_name.`,
+        'Only ask about ONE thing per message. Do not ask about both at once unless they volunteer both.',
+        'Once BOTH are settled, call naming_done in the SAME turn AND write a short happy closing line (you cannot wait to see them on the island). Do not ask anything further after that.',
+        'Keep it light, sweet and quick — this is a little formality between friends, not an interview. If they seem to want to just get going, call keep_ for whatever is still undecided and wrap up.',
+        "Reply in the player's language.",
+      ],
+      actions: [
+        { name: 'set_cato_name', description: 'The friend gave YOU (Cato) a nickname to use instead of "Cato". Pass the chosen name.', args: { name: 'string' } },
+        { name: 'keep_cato_name', description: 'The friend wants to keep calling you "Cato" (no nickname).' },
+        { name: 'set_call_name', description: 'The name the friend wants YOU to address THEM by. Pass it.', args: { name: 'string' } },
+        { name: 'keep_call_name', description: 'The friend is happy to be addressed by their current name (no change).' },
+        { name: 'naming_done', description: 'BOTH the nickname and how to address the friend are now settled. Call once, together with a warm closing line.' },
+      ],
+    });
+    this.namingTurns = 0;
+    this.showLine(tr(NAME_Q1), () => this.makeInput()); // Cato opens: "want to give me a nickname?"
+  }
+
+  /** Feed the player's reply to the naming npc; capture the chosen names + advance / finish. */
+  private async askNamer(text: string): Promise<void> {
+    this.aiThinking = true;
+    this.showThinking();
+    this.namingTurns++;
+    let r;
+    try { r = await this.namer!.say(text, { observation: {} }); }
+    catch { this.aiThinking = false; this.finishNaming(); return; } // hiccup → just head in with what we have
+    this.aiThinking = false;
+    if (this.busy) return;
+    if (!r.ok) { this.finishNaming(); return; } // no AI / out of credits → don't strand the player
+    const did = (r.do ?? []).map((d) => d.name);
+    for (const d of r.do ?? []) {
+      const argName = this.cleanName((d.args as { name?: unknown } | undefined)?.name);
+      if (d.name === 'set_cato_name') { if (argName) this.pendingCatoName = argName; this.catoNameDecided = true; }
+      else if (d.name === 'keep_cato_name') this.catoNameDecided = true;
+      else if (d.name === 'set_call_name') { if (argName) this.pendingCallName = argName; this.callNameDecided = true; }
+      else if (d.name === 'keep_call_name') this.callNameDecided = true;
+    }
+    const say = (r.say ?? '').trim();
+    // Done when the AI says so, both are settled, or we've gone too many rounds (safety).
+    const done = did.includes('naming_done') || (this.catoNameDecided && this.callNameDecided) || this.namingTurns >= 6;
+    if (done) { this.showLine(say || tr(NAME_DONE), () => this.finishNaming()); return; }
+    this.showLine(say || tr(NAME_Q2), () => this.makeInput());
+  }
+
+  /** Hand the chosen names to GameScene (via the transition init data) and enter the game. */
+  private finishNaming(): void {
+    this.finish(true, { cato: this.pendingCatoName, call: this.pendingCallName });
+  }
+
+  /** Trim + clamp a user-entered name (strip control chars, collapse spaces, cap length). */
+  private cleanName(raw: unknown): string {
+    return (typeof raw === 'string' ? raw : '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
   }
 
   /** Wrap up + leave. Cato's OWN reply (accept/decline) is already the closing line — this
    *  just gives a beat to read it, then runs the transition. NO extra hardcoded line here,
    *  or it would double up with what Cato just said. */
-  private finish(accepted: boolean): void {
+  private finish(accepted: boolean, names?: { cato?: string; call?: string }): void {
     if (this.busy) return;
     this.busy = true; this.removeInput();
     if (accepted) { try { localStorage.setItem('catopia:laptopDone', '1'); } catch { /* no storage */ } }
@@ -498,7 +590,8 @@ export class LaptopScene extends Phaser.Scene {
     const go = (): void => {
       if (gone) return; gone = true;
       // Cream paw curtain (DEF_COLOR default) so the paw reads against the green scenes on both sides.
-      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main' }, { effect: 'paw', ms: 1050, loading: true });
+      // The chosen names ride along in the init data → GameScene seeds them on a NEW game (saved on first write).
+      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main', catoName: names?.cato || undefined, callName: names?.call || undefined }, { effect: 'paw', ms: 1050, loading: true });
       else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 1050 });
     };
     this.time.delayedCall(1400, go); // read Cato's sign-off, then go
