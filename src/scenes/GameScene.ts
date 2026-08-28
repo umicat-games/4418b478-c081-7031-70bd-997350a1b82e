@@ -167,11 +167,12 @@ type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe' | 'fishing-rod
 // chest; `take` = chest→backpack.
 type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
 const TAB_BACKPACK = 10; // the standalone backpack view (no tab bar) — kept ABOVE the TAB_DEFS range so appended tabs don't collide
-const TAB_SETTINGS = 4, TAB_CALENDAR = 5;
+const TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_CATO = 9; // TAB_CATO = the appended `cato` entry in TAB_DEFS (position 9)
 // The paw (bottom-right) opens a TABBED "menu" — the TAB_DEFS indices it shows. Chest / mail / shop
 // stay SEPARATE (their own in-world objects open them standalone), so they're NOT here. Append
 // achievements etc. as new TAB_DEFS entries + push the index here + a MenuScene render branch.
-const MENU_SYSTEM_TABS = [TAB_SETTINGS, TAB_CALENDAR];
+// Cato-info tab is LEFTMOST (array order = display order).
+const MENU_SYSTEM_TABS = [TAB_CATO, TAB_SETTINGS, TAB_CALENDAR];
 // The door MAILBOX opens a 3-tab menu: 信 (mail) + 取货 (pickup grid) + 待售 (for-sale bin).
 const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 3, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8;
 const MAILBOX_TABS = [TAB_MAIL, TAB_PICKUP, TAB_FORSALE];
@@ -4835,6 +4836,12 @@ export class GameScene extends Phaser.Scene {
     // Mail tab: resolve the selected mail's receipt for the RIGHT detail pane FIRST (it may
     // auto-select the newest + mark it read, which must reflect in the list model below).
     const mailDetail = this.menuTab === TAB_MAIL ? this.selectedMailDetail() : undefined;
+    // Cato-info tab: his portrait + vitals (energy + bond). Built only for that tab.
+    const catoInfo = this.menuTab === TAB_CATO ? {
+      name: t('cato_name'),
+      stamina: Math.round(this.stamina), staminaMax: Math.round(this.staminaMax),
+      bondTier: t('bond_' + this.bondTier()), bondFrac: this.bondFraction(),
+    } : undefined;
     this.registry.set('menu', {
       visible: true, rev: ++this.menuRev, tab: this.menuTab,
       noTabs: this.menuTabSet === null, tabSet: this.menuTabSet ?? undefined, // paw menu shows a tab bar of `tabSet`; object/backpack opens are standalone
@@ -4847,7 +4854,16 @@ export class GameScene extends Phaser.Scene {
       mailSelected: this.menuMailSel ?? undefined, mailDetail,
       catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
       houses, houseSelected: this.menuHouseSel,
+      catoInfo,
     });
+  }
+
+  /** Bond as a 0..1 fraction across the full tier range (bond ÷ the top tier's threshold, clamped)
+   *  — how "full" the heart row reads on the Cato-info tab. */
+  private bondFraction(): number {
+    const tiers = AFFINITY.tiers;
+    const max = tiers.length ? tiers[tiers.length - 1].min : 200;
+    return max > 0 ? Math.max(0, Math.min(1, this.bond / max)) : 0;
   }
 
   /** The selected mail's receipt for the right detail pane. Auto-selects the newest mail

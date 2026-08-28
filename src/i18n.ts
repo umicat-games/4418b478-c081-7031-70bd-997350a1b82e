@@ -115,7 +115,17 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_catobag: { en: "Cato's bag", 'zh-CN': 'Cato的背包' },
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
   tab_calendar: { en: 'Calendar', 'zh-CN': '日历' },
+  tab_cato: { en: 'Cato', 'zh-CN': 'Cato' }, // the Cato-info tab
   menu_coming_soon: { en: 'Coming soon', 'zh-CN': '敬请期待' },
+  // Cato-info tab
+  cato_name: { en: 'Cato', 'zh-CN': 'Cato' },
+  info_bond: { en: 'Bond', 'zh-CN': '友好度' },
+  info_energy: { en: 'Energy', 'zh-CN': '精力' },
+  bond_stranger: { en: 'Stranger', 'zh-CN': '陌生' },
+  bond_acquaintance: { en: 'Acquaintance', 'zh-CN': '相识' },
+  bond_friend: { en: 'Friend', 'zh-CN': '朋友' },
+  bond_close: { en: 'Close', 'zh-CN': '亲密' },
+  bond_bonded: { en: 'Bonded', 'zh-CN': '心连心' },
   settings_music: { en: 'Music', 'zh-CN': '音乐' },
   settings_sfx: { en: 'Sound', 'zh-CN': '音效' },
   settings_language: { en: 'Language', 'zh-CN': '语言' },

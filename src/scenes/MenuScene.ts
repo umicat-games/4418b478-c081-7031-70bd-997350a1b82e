@@ -61,10 +61,11 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'pickup', frame: 293, title: '取货' },   // mailbox: delivered orders (icon tunable like paw)
   { key: 'forsale', frame: 261, title: '待售' },  // mailbox: shipping bin ($ glyph, tunable)
   { key: 'house', frame: 278, title: '房子' },    // shop 房子 sub-tab (white-home = all_icons row17 col6, under white-cart 262)
+  { key: 'cato', frame: 310, title: 'Cato' },     // Cato-info tab (white-cat-claw placeholder icon; retag later)
 ];
 // NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_BACKPACK = 10;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_BACKPACK = 10;
 
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
@@ -94,6 +95,7 @@ export interface MenuModel {
   shopMsg?: string;             // transient warning ("金币不够" / "箱子满了")
   mailSelected?: string;        // Mail tab: selected mail id → right-side receipt detail + row highlight
   mailDetail?: { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number }; // the selected mail's receipt
+  catoInfo?: { name: string; stamina: number; staminaMax: number; bondTier: string; bondFrac: number }; // Cato-info tab
 }
 
 // Mail-tab RIGHT-side receipt panel (screen fractions) — the sales receipt / delivery
@@ -256,7 +258,7 @@ export class MenuScene extends Phaser.Scene {
     // frames. Settings / Calendar are full-width too (no right detail).
     const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK
       || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP || m.tab === TAB_HOUSE;
-    const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR;
+    const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR || m.tab === TAB_CATO;
     const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
     const lx = L.x * W, ly = L.y * H, lw = frameWFrac * W, lh = L.h * H;
     const DIVIDER_X = 0.555; // screen-fraction x of the dashed divider (left content | right detail)
@@ -314,7 +316,8 @@ export class MenuScene extends Phaser.Scene {
 
     // Title (no underline rule — the user didn't want it). Localized via i18n `tab_<key>`.
     const tkey = TAB_DEFS[m.tab]?.key;
-    const title = tkey ? t('tab_' + tkey) : m.tab === TAB_BACKPACK ? t('tab_backpack') : '';
+    // Cato-info tab draws its own name on the right, so suppress the auto panel title.
+    const title = m.tab === TAB_CATO ? '' : tkey ? t('tab_' + tkey) : m.tab === TAB_BACKPACK ? t('tab_backpack') : '';
     const titleCx = hasDetail ? ((L.x + DIVIDER_X) / 2) * W : lx + lw / 2; // over the LEFT content for split tabs
     panel.add(this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK));
 
@@ -325,6 +328,7 @@ export class MenuScene extends Phaser.Scene {
     // Settings/Calendar: centre content on the (now full-width) frame, but keep the content
     // sized as before (the original L.w) so the sliders/buttons don't stretch out.
     if (m.tab === TAB_SETTINGS) this.renderSettings(content, lx + lw / 2, L.w * W);
+    else if (m.tab === TAB_CATO) this.renderCato(content, m); // Cato portrait + vitals (energy + bond)
     else if (m.tab === TAB_CALENDAR) this.renderCalendar(content, lx + lw / 2); // placeholder (empty) tab
     else if (m.tab === TAB_MAIL) {
       this.renderMailList(content, m.mails ?? [], m.mailSelected);
@@ -676,6 +680,64 @@ export class MenuScene extends Phaser.Scene {
       c.add(this.add.image(knobX, rowY, 'settings-buttons', 'slider-knob').setScale(knobScale));
     }
     this.registry.set(trackKey, { x: trackLeft, y: rowY - pitch, w: trackW, h: pitch * 2 });
+  }
+
+  /** Cato-info tab: LEFT = a big idle Cato sprite (animated); RIGHT = his name (top) + vitals —
+   *  a heart row for the friendship BOND (small_heart_full/half/empty, fuller = closer) and the
+   *  energy gauge (stamina circle + current/max). More vitals slot in below later. */
+  private renderCato(c: Phaser.GameObjects.Container, m: MenuModel): void {
+    const W = this.scale.width, H = this.scale.height;
+    const info = m.catoInfo;
+    if (!info) return;
+
+    // ── LEFT: big idle Cato (premium_character_spritesheet, idle-down anim; falls back to a
+    //    static frame if the anim isn't registered). Textures/anims are game-global. ──
+    const leftCx = 0.28 * W, cy = 0.56 * H;
+    if (this.textures.exists('premium_character_spritesheet')) {
+      const cato = this.add.sprite(leftCx, cy, 'premium_character_spritesheet');
+      // The 48px frame has a lot of transparent padding (the cat fills ~half), so scale the FRAME
+      // up big (~0.62H) → the visible cat reads as a proper portrait. NEAREST keeps it crisp.
+      cato.setScale((0.62 * H) / cato.height);
+      if (this.anims.exists('idle-down')) cato.play('idle-down');
+      c.add(cato);
+    }
+
+    // ── RIGHT: name + vitals ──
+    const rCx = 0.72 * W;
+    c.add(this.T(rCx, 0.28 * H, info.name, H * 0.05, INK)); // name, top-centre of the right side
+
+    // Friendship bond — a fixed row of hearts; fuller = closer.
+    c.add(this.T(rCx, 0.42 * H, t('info_bond') + '  ' + info.bondTier, H * 0.026, SUB));
+    this.renderHeartRow(c, rCx, 0.49 * H, info.bondFrac);
+
+    // Energy — the stamina radial gauge + current/max.
+    c.add(this.T(rCx, 0.61 * H, t('info_energy'), H * 0.026, SUB));
+    const frac = info.staminaMax > 0 ? info.stamina / info.staminaMax : 0;
+    if (this.textures.exists('stamina')) {
+      const gaugeFrame = Math.max(0, Math.min(36, Math.round(frac * 36)));
+      const g = this.add.image(rCx - 0.06 * W, 0.69 * H, 'stamina', gaugeFrame);
+      g.setScale((0.06 * H) / g.height);
+      c.add(g);
+    }
+    c.add(this.T(rCx + 0.02 * W, 0.69 * H, `${info.stamina} / ${info.staminaMax}`, H * 0.03, INK, 0));
+  }
+
+  /** A fixed row of `HEART_COUNT` hearts filled from a 0..1 fraction (full / half / empty), using
+   *  the `small_heart_*` regions of the inventory atlas. Centred at `cx`. */
+  private renderHeartRow(c: Phaser.GameObjects.Container, cx: number, y: number, frac: number): void {
+    const H = this.scale.height;
+    const N = 10, heartPx = H * 0.038, gap = heartPx * 0.12, step = heartPx + gap;
+    const totalHalves = Math.round(Math.max(0, Math.min(1, frac)) * N * 2);
+    const startX = cx - (N * step - gap) / 2 + heartPx / 2;
+    for (let i = 0; i < N; i++) {
+      const halves = Math.max(0, Math.min(2, totalHalves - i * 2));
+      const frame = halves >= 2 ? 'small_heart_full' : halves === 1 ? 'small_heart_half' : 'small_heart_empty';
+      if (this.textures.get(ATLAS).has(frame)) {
+        const img = this.add.image(startX + i * step, y, ATLAS, frame);
+        img.setScale(heartPx / img.height);
+        c.add(img);
+      }
+    }
   }
 
   /** SHOP tab: LEFT = scrollable catalog list (icon + name + buy price); footer = coin
