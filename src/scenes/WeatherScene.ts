@@ -89,15 +89,15 @@ export class WeatherScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5) // RIGHT-aligned to the bar's right end (minus a small margin)
       .setStroke('#5a4632', 2 * S);
-    // Current wall-clock time, RIGHT-aligned just BELOW the coin bar (floats over the world → white
-    // text + a dark stroke for legibility, like the money).
+    // Current wall-clock time, LEFT-aligned directly BELOW the coin bar's left (under the coin);
+    // floats over the world → white text + a dark stroke for legibility, like the money. Bigger.
     const clock = this.add
-      .text(BAR_X + (BAR_TEX_W - 8) * S, AY + 24 * S + 9 * S, m.timeLabel ?? '', {
+      .text(BAR_X + 10 * S, AY + 24 * S + 12 * S, m.timeLabel ?? '', {
         fontFamily: 'zpix, monospace',
-        fontSize: `${11 * S}px`,
+        fontSize: `${14 * S}px`,
         color: '#ffffff',
       })
-      .setOrigin(1, 0.5)
+      .setOrigin(0, 0.5)
       .setStroke('#5a4632', 2 * S);
 
     // Weather window (left): a time-tinted background FILLS the window (frame border
