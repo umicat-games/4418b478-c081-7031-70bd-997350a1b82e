@@ -7670,17 +7670,13 @@ export class GameScene extends Phaser.Scene {
     this.moreIconTween?.remove();
     this.moreIconTween = undefined;
     const on = show && this.dialogOpen;
-    // Keep the "more" arrow glued to the box, which is RAISED in a cutscene.
+    // Keep the "more" indicator glued to the box, which is RAISED in a cutscene.
+    // The bob/squash motion is the `dialog-continue` sprite animation itself now
+    // (was an alpha-pulse tween on the old static triangle), so no tween here.
     if (this.moreIconRestY === undefined) this.moreIconRestY = go.y;
     go.y = this.moreIconRestY - this.cutsceneLift;
     go.setAlpha?.(1);
     go.setVisible?.(on);
-    if (on) {
-      this.moreIconTween = this.tweens.add({
-        targets: go, alpha: 0.35, duration: 560,
-        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      });
-    }
   }
 
   /** Strip *italic stage-direction* asides ("*tilts head*") from a reply — the

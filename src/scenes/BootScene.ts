@@ -193,6 +193,15 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 16,
     });
 
+    // Dialog "there's more — tap to continue" indicator (16×16, 7 frames) — a cream
+    // downward triangle that bobs/squashes. Replaces the old ▼ glyph / `play-brown`
+    // icon in BOTH dialog contexts (the laptop cold-open chat + the in-game Cato
+    // dialog). Loaded here so `dialog-continue` exists globally (Build-safe).
+    this.load.spritesheet('dialog-continue', 'uploaded/dialog_box_continue_indicator.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+
     // The desk PAD (iPad) — a 5-frame 16×16 sheet. Frame 0 = resting (screen on,
     // matches the static ipad_qkzld placed in the scene); 0→4 = the screen wiping to
     // the shop. Clicking the pad plays `pad-open` then opens the Shop menu.
@@ -407,6 +416,15 @@ export class BootScene extends Phaser.Scene {
           repeat: 0,
         });
       }
+    }
+    // Dialog continue indicator — loops the 7 frames (bob/squash) while a page has more.
+    if (this.textures.exists('dialog-continue') && !this.anims.exists('dialog-continue')) {
+      this.anims.create({
+        key: 'dialog-continue',
+        frames: this.anims.generateFrameNumbers('dialog-continue', { start: 0, end: 6 }),
+        frameRate: 8,
+        repeat: -1,
+      });
     }
     // Pad open/close: 0→4 turns the screen on + wipes to the shop, holding on frame 4;
     // `pad-close` reverses back to the resting frame 0.

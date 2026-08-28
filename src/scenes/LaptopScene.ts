@@ -73,7 +73,7 @@ export class LaptopScene extends Phaser.Scene {
   private msgAreaH = 10;                         // message-text height budget (box minus the header row)
   private msgText!: Phaser.GameObjects.Text;
   private measure!: Phaser.GameObjects.Text;    // hidden — pagination height probe
-  private more!: Phaser.GameObjects.Text;       // ▼ "more" prompt
+  private more!: Phaser.GameObjects.Sprite;     // animated "more — tap to continue" indicator
   private pillG!: Phaser.GameObjects.Graphics;
   private sendBtn!: Phaser.GameObjects.Image;
   private inputEl?: HTMLInputElement;
@@ -134,7 +134,10 @@ export class LaptopScene extends Phaser.Scene {
     this.nameText = this.add.text(0, 0, 'Cato', { fontFamily: dialogFont(), color: NAME_COLOR, fontStyle: 'bold' }).setOrigin(0, 0.5);
     this.msgText = this.add.text(0, 0, '', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0);
     this.measure = this.add.text(-9999, 0, '', { fontFamily: dialogFont() }).setVisible(false);
-    this.more = this.add.text(0, 0, '▼', { fontFamily: dialogFont(), color: '#9bb0c4' }).setOrigin(0.5, 1).setVisible(false);
+    // Animated page-continue indicator (the shared `dialog-continue` sheet — a
+    // cream downward triangle that bobs/squashes; loaded + registered in BootScene).
+    this.more = this.add.sprite(0, 0, 'dialog-continue').setOrigin(0.5, 1).setVisible(false);
+    if (this.anims.exists('dialog-continue')) this.more.play('dialog-continue');
 
     this.pillG = this.add.graphics();
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
@@ -283,7 +286,9 @@ export class LaptopScene extends Phaser.Scene {
     this.msgText.setFontSize(fs).setPosition(px + tpad, msgY).setWordWrapWidth(pw - tpad * 2, true);
     this.msgAreaH = py + ph - tpad - msgY;
     this.measure.setFontSize(fs).setWordWrapWidth(pw - tpad * 2, true); // must match msgText for pagination height
-    this.more.setFontSize(fs).setPosition(px + pw / 2, py + ph - tpad * 0.5);
+    // Size the 16×16 indicator to ~1.5× the font height so it reads at the box scale.
+    const moreS = Math.round(fs * 1.5);
+    this.more.setDisplaySize(moreS, moreS).setPosition(px + pw / 2, py + ph - tpad * 0.5);
 
     // Input box + send button — SAME rounded panel style as Cato's message box.
     const iy = sy0 + sh - inputH, btnR = inputH * 0.44;

@@ -210,9 +210,8 @@
         "offsetY": -68
       },
       "layer": "overlay",
-      "assetId": "all_icons",
-      "frame": "play-brown",
-      "tint": "#3f2c18",
+      "assetId": "dialog-continue",
+      "animation": "dialog-continue",
       "width": 28,
       "height": 28,
       "visible": false

@@ -1524,6 +1524,26 @@
       "pixelArt": true
     },
     {
+      "id": "dialog-continue",
+      "textureKey": "dialog-continue",
+      "path": "uploaded/dialog_box_continue_indicator.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/dialog_box_continue_indicator.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 16,
+        "frameHeight": 16
+      },
+      "pixelArt": true,
+      "animations": [
+        {
+          "name": "dialog-continue",
+          "from": 0,
+          "to": 6,
+          "loop": true
+        }
+      ]
+    },
+    {
       "id": "wooden_house_walls_tilset",
       "textureKey": "house-walls",
       "path": "uploaded/wooden_house_walls_tilset.png",
