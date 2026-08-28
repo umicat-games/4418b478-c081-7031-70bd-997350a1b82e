@@ -888,6 +888,7 @@ export class GameScene extends Phaser.Scene {
   private weatherHudRev = 0; // bumped on any HUD-visible change → WeatherScene re-renders
   private lastPointerStep = -1; // last published pointer frame (1..5); republish only on change
   private lastBgIndex = -1; // last published time-of-day background (0..2)
+  private lastClockMinute = -1; // last published wall-clock minute-of-day → the HUD time updates each minute
   private nightMask?: Phaser.GameObjects.Rectangle; // full-screen day/night colour tint
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
@@ -2417,6 +2418,15 @@ export class GameScene extends Phaser.Scene {
     const d = new Date(this.nowMs());
     return Math.floor((this.nowMs() - d.getTimezoneOffset() * 60000) / 86400000);
   }
+  /** The current wall-clock time as "09:30am" (12-hour, zero-padded, for the HUD). */
+  private timeLabel(): string {
+    const d = new Date(this.nowMs());
+    let h = d.getHours(); const min = d.getMinutes();
+    const ap = h < 12 ? 'am' : 'pm';
+    h = h % 12; if (h === 0) h = 12;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}${ap}`;
+  }
+
   /** Day fraction with a 6am START (so the authored NIGHT_KEYS line up with real hours: 6am→0
    *  clear, 6pm→0.5 dusk, midnight→0.75 darkest). Drives every ambient visual. */
   private dayFrac(): number {
@@ -2442,11 +2452,16 @@ export class GameScene extends Phaser.Scene {
       weatherFrame: WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
       pointerStep: this.pointerStep(),
       money: this.money,
+      timeLabel: this.timeLabel(),
       rev: ++this.weatherHudRev,
     });
     this.lastPointerStep = this.pointerStep();
     this.lastBgIndex = this.bgIndex();
+    this.lastClockMinute = this.clockMinute();
   }
+
+  /** Minute-of-day (0..1439) for the current wall clock — the HUD time re-publishes when it flips. */
+  private clockMinute(): number { const d = new Date(this.nowMs()); return d.getHours() * 60 + d.getMinutes(); }
 
   /** Give / take coins + refresh the HUD (single choke-point for the balance). */
   private addMoney(delta: number): void {
@@ -2460,7 +2475,7 @@ export class GameScene extends Phaser.Scene {
   private updateDayClock(_delta: number): void {
     this.syncRealDay(); // roll the gameplay day over on a real local-midnight crossing
     const bg = this.bgIndex();
-    if (this.pointerStep() !== this.lastPointerStep || bg !== this.lastBgIndex) {
+    if (this.pointerStep() !== this.lastPointerStep || bg !== this.lastBgIndex || this.clockMinute() !== this.lastClockMinute) {
       // Cato reacts to the day turning: nightfall → sleepy, a new morning → cheerful.
       if (bg !== this.lastBgIndex) {
         const night = bg === WEATHER_BGS.length - 1;

@@ -19,6 +19,7 @@ export interface WeatherModel {
   weatherFrame: string; // transparent weather icon drawn on top (`*-no-bg`)
   pointerStep: number; // 1..5 → arrow-big-1..5
   money: number; // coin balance (formatted with thousands separators here)
+  timeLabel: string; // current wall-clock time, e.g. "09:30am" (ADR-029)
   rev: number; // bumped by GameScene on any change → re-render
 }
 
@@ -88,6 +89,16 @@ export class WeatherScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5) // RIGHT-aligned to the bar's right end (minus a small margin)
       .setStroke('#5a4632', 2 * S);
+    // Current wall-clock time, RIGHT-aligned just BELOW the coin bar (floats over the world → white
+    // text + a dark stroke for legibility, like the money).
+    const clock = this.add
+      .text(BAR_X + (BAR_TEX_W - 8) * S, AY + 24 * S + 9 * S, m.timeLabel ?? '', {
+        fontFamily: 'zpix, monospace',
+        fontSize: `${11 * S}px`,
+        color: '#ffffff',
+      })
+      .setOrigin(1, 0.5)
+      .setStroke('#5a4632', 2 * S);
 
     // Weather window (left): a time-tinted background FILLS the window (frame border
     // drawn last covers its square corners), with the transparent weather icon centred
@@ -116,6 +127,6 @@ export class WeatherScene extends Phaser.Scene {
     // Frame LAST so its border sits over the window contents' edges.
     const frame = this.add.image(AX, AY, 'weather-ui', 'weather-frame-big').setOrigin(0, 0).setScale(S);
 
-    this.container.add([bar, coin, money, weatherBg, weather, dial, pointer, frame]);
+    this.container.add([bar, coin, money, clock, weatherBg, weather, dial, pointer, frame]);
   }
 }
