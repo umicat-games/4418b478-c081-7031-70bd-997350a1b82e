@@ -2422,8 +2422,12 @@ export class GameScene extends Phaser.Scene {
    *  strings table — time format is a locale concern: `Intl` covers every language for free,
    *  e.g. en "11:00 AM" · zh-CN "上午11:00"). 12-hour with a localized am/pm marker. */
   private timeLabel(): string {
+    // The DEVICE locale (navigator.language) so the clock reads native to the player's phone —
+    // Intl handles every locale. (Caveat: a non-Latin/CJK script's am/pm marker may tofu in the
+    // zpix pixel font; load a Noto family via webfonts.json if that ever bites a real player.)
+    const loc = (typeof navigator !== 'undefined' && navigator.language) || getLang();
     try {
-      return new Date(this.nowMs()).toLocaleTimeString(getLang(), { hour: '2-digit', minute: '2-digit', hour12: true });
+      return new Date(this.nowMs()).toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit', hour12: true });
     } catch {
       // A locale Intl can't resolve → fall back to a plain 12-hour label.
       const d = new Date(this.nowMs());
