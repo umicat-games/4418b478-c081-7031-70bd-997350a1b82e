@@ -590,6 +590,7 @@ interface SaveBlob {
   impressionSketch?: string;
   pendingSummary?: string[]; // un-compacted material (the watermark)
   catoName?: string; // v22: Cato's player-chosen name (default "Cato")
+  callName?: string; // v22: how Cato addresses the player ('' / absent = account name)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -758,11 +759,13 @@ export class GameScene extends Phaser.Scene {
   private pendingSummary: string[] = []; // material since the last consolidation (event + chat lines)
   private consolidating = false;   // a consolidation call is in flight (single-flight guard)
 
-  // ── Cato's name (v22) ─────────────────────────────────────────────────────────
-  // The player names Cato (default "Cato") in the laptop cold-open when they agree to
-  // come, and can rename him any time later by asking in chat (the set_cato_name AI
-  // action). Saved. Cato addresses the player by their account name (no custom call-name).
+  // ── Names (v22) ───────────────────────────────────────────────────────────────
+  // In the laptop cold-open (when the player agrees to come) Cato asks two things: a name
+  // for himself, and how he should address the player. Both are chosen there and saved. Cato
+  // can be renamed later by asking in chat (the set_cato_name AI action). There's no in-game
+  // editing UI for either. `playerCallName` empty = Cato uses the account name.
   private catoName = 'Cato';        // Cato's chosen name
+  private playerCallName = '';      // how Cato addresses the player ('' = account name)
   private static readonly PENDING_CAP = 60;    // hard cap on un-compacted lines (drop oldest)
   private static readonly CONSOLIDATE_AT = 18; // mid-session threshold: compact once this many pile up
   // The editor-placed mailbox / chest sprites (door objects). Clicking one plays its
@@ -997,11 +1000,12 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
-  init(data: { sceneId: string; catoName?: string }): void {
+  init(data: { sceneId: string; catoName?: string; callName?: string }): void {
     this.sceneId = data.sceneId;
-    // Cato's name chosen in the laptop cold-open (new game). For a returning player it comes
-    // from the save instead (applySave). Sanitize defensively — it crosses a scene boundary.
+    // Names chosen in the laptop cold-open (new game). For a returning player they come from
+    // the save instead (applySave). Sanitize defensively — they cross a scene boundary.
     if (typeof data.catoName === 'string' && data.catoName.trim()) this.catoName = this.sanitizeName(data.catoName) || 'Cato';
+    if (typeof data.callName === 'string') this.playerCallName = this.sanitizeName(data.callName);
   }
 
   /** Deferred game-only load: the 4.1MB in-game BGM (NOT loaded at boot so the title
@@ -1184,12 +1188,11 @@ export class GameScene extends Phaser.Scene {
         .then(async (u) => {
           this.umicat = u;
           initLang(u?.locale); // default game UI text to the player's language
-          // Cato's NAME is player-chosen (default "Cato") — set in the laptop cold-open (new
-          // game, via init data) or later by asking Cato in chat (the set_cato_name action). A
-          // returning player's name is restored by applySave (below) which re-informs the npc.
-          // Cato addresses the player by their account display name (no custom call-name).
+          // Cato's NAME + how he addresses the player are player-chosen in the laptop cold-open
+          // (new game → init data); a returning player's are restored by applySave (below), which
+          // re-informs the npc. Cato's name can also be changed later via the set_cato_name action.
           const catoNm = this.catoDisplayName();
-          const playerName = u?.user?.name?.trim();
+          const playerName = this.callName();
           this.cato = u?.ai.npc({
             playbook: 'cato',
             role:
@@ -4711,7 +4714,7 @@ export class GameScene extends Phaser.Scene {
   /** Build the summarization prompt game-side (the platform stays task-neutral — ADR-028). */
   private buildConsolidationPrompt(material: string[]): string {
     const zh = getLang() === 'zh-CN';
-    const name = this.umicat?.user?.name?.trim() || (zh ? '朋友' : 'the player');
+    const name = this.callName() || (zh ? '朋友' : 'the player');
     const counters = Object.entries(this.stats).map(([k, v]) => `${k}:${v}`).join(', ') || '—';
     return [
       `You maintain the long-term memory for Cato, an AI cat, about their friend "${name}" in a cozy farming game.`,
@@ -8022,14 +8025,18 @@ export class GameScene extends Phaser.Scene {
     this.dialogueRunner.start();
   }
 
-  /** Fill {name} with the player's account name (or a friendly fallback). */
+  /** Fill {name} with how Cato addresses the player (or a friendly fallback). */
   private dialogueSubstitute(text: string): string {
-    const name = this.umicat?.user?.name?.trim() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
+    const name = this.callName() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
     return text.replace(/\{name\}/g, name);
   }
 
   /** Cato's chosen name (defaults to "Cato"). */
   private catoDisplayName(): string { return this.catoName.trim() || 'Cato'; }
+
+  /** How Cato addresses the player: the laptop-chosen call-name, else the account display
+   *  name, else '' (callers add their own "friend/朋友" fallback). */
+  private callName(): string { return this.playerCallName.trim() || this.umicat?.user?.name?.trim() || ''; }
 
   /** Publish Cato's name to the registry so the dialog HUD name label (`cato-name-text`,
    *  bound to `catoName`) shows it. Call on load + after a rename. */
@@ -8050,8 +8057,11 @@ export class GameScene extends Phaser.Scene {
    *  npc isn't up yet (offline / not signed in). */
   private notifyCatoOfNames(): void {
     if (!this.cato) return;
-    if (!this.catoName.trim() || this.catoName.trim() === 'Cato') return;
-    this.cato.note(`(Setup — please remember: your name is now "${this.catoDisplayName()}". Use it from now on.)`);
+    const parts: string[] = [];
+    if (this.catoName.trim() && this.catoName.trim() !== 'Cato') parts.push(`your name is now "${this.catoDisplayName()}"`);
+    if (this.playerCallName.trim()) parts.push(`your friend would like you to call them "${this.playerCallName.trim()}"`);
+    if (!parts.length) return;
+    this.cato.note(`(Setup — please remember: ${parts.join('; ')}. Use these names from now on.)`);
   }
 
   /** Trim + clamp a user-entered name (strip control chars, cap length). */
@@ -8327,6 +8337,7 @@ export class GameScene extends Phaser.Scene {
       impressionSketch: this.impressionSketch || undefined,
       pendingSummary: this.pendingSummary.length ? [...this.pendingSummary] : undefined,
       catoName: this.catoName !== 'Cato' ? this.catoName : undefined, // v22: only store a non-default name
+      callName: this.playerCallName || undefined,
     };
   }
 
@@ -8480,9 +8491,10 @@ export class GameScene extends Phaser.Scene {
       // starts fresh at today (no spurious catch-up). dayCount is recomputed to the real day index.
       this.lastRealDay = typeof s.lastRealDay === 'number' ? s.lastRealDay : -1;
       this.lastSeen = s.lastSeen ?? 0;
-      // v22: Cato's player-chosen name (default "Cato"). Refresh the HUD label + inform the
-      // live npc (note takes effect next turn).
+      // v22: Cato's name (default "Cato") + how he addresses the player. Refresh the HUD label +
+      // inform the live npc (note takes effect next turn).
       this.catoName = (typeof s.catoName === 'string' && s.catoName.trim()) ? this.sanitizeName(s.catoName) || 'Cato' : 'Cato';
+      this.playerCallName = typeof s.callName === 'string' ? this.sanitizeName(s.callName) : '';
       this.publishCatoName();
       this.notifyCatoOfNames();
       // Mailbox + chest contents (v7). Older saves (no field) keep the seeded test

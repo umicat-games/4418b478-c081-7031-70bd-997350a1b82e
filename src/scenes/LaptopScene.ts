@@ -104,9 +104,10 @@ export class LaptopScene extends Phaser.Scene {
   private aiThinking = false;      // a say() is in flight (input hidden, taps ignored)
   private thinkTimer?: Phaser.Time.TimerEvent; // animated "…" while waiting
 
-  // Nickname (folded into the recruiter): the name the player chooses to give Cato when they
-  // agree to come. '' = keep the default "Cato".
+  // Names (folded into the recruiter): what the player chooses when they agree to come —
+  // a nickname for Cato ('' = keep "Cato") and how Cato should address them ('' = account name).
   private pendingCatoName = '';
+  private pendingCallName = '';
 
   private panelH = 10; private fs = 16; // set in layout()
 
@@ -124,7 +125,7 @@ export class LaptopScene extends Phaser.Scene {
     this.pages = []; this.pageIdx = 0; this.charIdx = 0;
     this.onLineDone = undefined;
     this.recruiter = undefined;
-    this.pendingCatoName = '';
+    this.pendingCatoName = ''; this.pendingCallName = '';
     this.bgW = 0; this.bgH = 0; // force the (recreated, empty) wallpaper layer to rebuild
     this.removeInput();
 
@@ -218,18 +219,20 @@ export class LaptopScene extends Phaser.Scene {
             "If asked about something you are not sure Catopia has yet but that is RELATED (some feature or activity), do NOT over-promise — say you have not seen everything out there yet and are still figuring the island out, but you would love to find out together — then ask again if they will come.",
             'If asked about something clearly UNRELATED to Catopia or to the invitation (real-world facts, coding, math, etc.), gently say you do not really know about that — you are just a cat living on a quiet little island — and bring it right back to the invitation.',
             'Stay patient, kind, and hopeful, never pushy or annoyed, even if the player keeps dodging. Vary how you phrase the invitation so it does not feel like a broken record.',
-            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action AND respond with real, overflowing joy. Then — woven NATURALLY into that same happy reply, in your own warm words, NOT as a stiff separate question or a form — let it slip that since you two are going to be sharing the island now, they are welcome to give you a little nickname of their own if they ever feel like it (or keep calling you Cato, that is lovely too). Make it feel like an excited, offhand thought between new friends, never like you are asking them to fill something in. Keep it short and light. Do NOT call naming_done yet — wait to see what they say.',
-            'AFTER you have offered the nickname: if the player gives you a name (or clearly says what they want to call you), call set_cato_name with that name, react with delight, and in the SAME turn call naming_done with a warm sign-off (you cannot wait to see them on the island). If instead they would rather keep "Cato", brush it off, joke, say "you pick", or seem ready to just get going, do NOT push — call keep_cato_name and naming_done together with a warm sign-off. Either way naming_done is your LAST message; do not ask anything more.',
-            'Keep the nickname moment light and brief — one warm beat, not an interview. Never insist or ask twice.',
+            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action AND respond with real, overflowing joy. Now that you two are going to share the island, there are two little getting-to-know-you things you would love to settle — but handle them NATURALLY, one warm offhand thought at a time, in your OWN words, NEVER as a stiff questionnaire or a form to fill in: (a) they are welcome to give you a nickname of their own if they feel like it, or keep calling you Cato; and (b) how should YOU address THEM — do they prefer you call them by their name' + (name ? ` "${name}"` : '') + ', or a different nickname? A good, gentle example of (b) is: "do you prefer I call you' + (name ? ` ${name}` : ' that') + ', or another nickname?". Bring these up warmly across your next message(s); do NOT dump both as a checklist. Do NOT call naming_done until BOTH are settled.',
+            'Capture their answers as they come, in any order: a nickname for YOU → set_cato_name; happy to stay "Cato" / brushed it off → keep_cato_name. A name THEY want you to call them → set_call_name; happy with their own name / no preference → keep_call_name.',
+            'Once BOTH are settled (your nickname AND how to address them), call naming_done in that turn together with a warm sign-off (you cannot wait to see them on the island). naming_done is your LAST message — do not ask anything more. Keep the whole moment light and brief, a couple of warm beats between new friends, not an interview; if they seem ready to just get going, gently call keep_ for whatever is undecided and wrap up.',
             'When the player clearly REFUSES / declines the invitation itself (no, not interested, maybe later, I cannot), call the decline_help action AND write your OWN gentle sign-off: say that is okay and you understand, that it is a little sad but you get it, and that if they ever change their mind they can reach out / message you anytime. This is your LAST message and it is complete on its own — do NOT ask another question.',
             'Only call accept_help or decline_help once the player has actually made that choice. Random / off-topic / joking messages are NOT a yes or a no — while they are just messing around, asking questions, or thinking it over, keep chatting and do NOT call either action.',
           ],
           actions: [
             { name: 'accept_help', description: 'The player has agreed to come to Catopia and live / build the island with you. Call this the moment they clearly say yes / agree / accept the invitation.' },
             { name: 'decline_help', description: 'The player has declined the invitation (not now / not interested / cannot). Call this when they clearly refuse.' },
-            { name: 'set_cato_name', description: 'After you offered, the player gave you a nickname of their own. Pass the chosen name.', args: { name: 'string' } },
+            { name: 'set_cato_name', description: 'The player gave you (Cato) a nickname of their own. Pass the chosen name.', args: { name: 'string' } },
             { name: 'keep_cato_name', description: 'The player would rather keep calling you "Cato" (no nickname), or brushed the offer off.' },
-            { name: 'naming_done', description: 'The nickname question is settled (they named you or chose to keep Cato). Call this together with your final warm sign-off to head into the game.' },
+            { name: 'set_call_name', description: 'The name the player wants YOU to address THEM by. Pass it.', args: { name: 'string' } },
+            { name: 'keep_call_name', description: 'The player is happy to be addressed by their current / account name (no change).' },
+            { name: 'naming_done', description: 'BOTH the nickname and how to address the player are settled. Call this together with your final warm sign-off to head into the game.' },
           ],
         });
       })
@@ -465,15 +468,15 @@ export class LaptopScene extends Phaser.Scene {
     if (!r.ok) { this.onAiUnavailable(r.reason); return; }
     const did = (r.do ?? []).map((d) => d.name);
     const say = (r.say ?? '').trim();
-    // Capture a nickname whenever the AI reports one (may arrive with or without naming_done).
-    const setName = (r.do ?? []).find((d) => d.name === 'set_cato_name');
-    const nameArg = this.cleanName((setName?.args as { name?: unknown } | undefined)?.name);
-    if (nameArg) this.pendingCatoName = nameArg;
-    // Nickname settled → head into the game with the chosen name (Cato's own say IS the sign-off).
-    if (did.includes('naming_done')) { this.showLine(say || tr(NAME_DONE), () => this.finish(true, { cato: this.pendingCatoName })); return; }
+    // Capture the chosen names whenever the AI reports them (may arrive across turns, in any order).
+    const argOf = (n: string) => this.cleanName(((r.do ?? []).find((d) => d.name === n)?.args as { name?: unknown } | undefined)?.name);
+    const catoArg = argOf('set_cato_name'); if (catoArg) this.pendingCatoName = catoArg;
+    const callArg = argOf('set_call_name'); if (callArg) this.pendingCallName = callArg;
+    // Both settled → head into the game with the chosen names (Cato's own say IS the sign-off).
+    if (did.includes('naming_done')) { this.showLine(say || tr(NAME_DONE), () => this.finish(true, { cato: this.pendingCatoName, call: this.pendingCallName })); return; }
     // Declined the invitation → Cato's own gentle sign-off, then back to the title.
     if (did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
-    // Everything else (still deciding, OR just accepted + offered the nickname) → keep chatting.
+    // Everything else (still deciding, OR just accepted + getting to know each other) → keep chatting.
     this.showLine(say || tr(FILLER), () => this.makeInput());
   }
 
@@ -514,7 +517,7 @@ export class LaptopScene extends Phaser.Scene {
   /** Wrap up + leave. Cato's OWN reply (accept/decline) is already the closing line — this
    *  just gives a beat to read it, then runs the transition. NO extra hardcoded line here,
    *  or it would double up with what Cato just said. */
-  private finish(accepted: boolean, names?: { cato?: string }): void {
+  private finish(accepted: boolean, names?: { cato?: string; call?: string }): void {
     if (this.busy) return;
     this.busy = true; this.removeInput();
     if (accepted) { try { localStorage.setItem('catopia:laptopDone', '1'); } catch { /* no storage */ } }
@@ -522,8 +525,8 @@ export class LaptopScene extends Phaser.Scene {
     const go = (): void => {
       if (gone) return; gone = true;
       // Cream paw curtain (DEF_COLOR default) so the paw reads against the green scenes on both sides.
-      // The chosen nickname rides along in the init data → GameScene seeds it on a NEW game (saved on first write).
-      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main', catoName: names?.cato || undefined }, { effect: 'paw', ms: 1050, loading: true });
+      // The chosen names ride along in the init data → GameScene seeds them on a NEW game (saved on first write).
+      if (accepted) startTransition(this, 'GameScene', { sceneId: 'main', catoName: names?.cato || undefined, callName: names?.call || undefined }, { effect: 'paw', ms: 1050, loading: true });
       else startTransition(this, 'BootMenuScene', {}, { effect: 'paw', ms: 1050 });
     };
     this.time.delayedCall(1400, go); // read Cato's sign-off, then go
