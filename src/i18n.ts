@@ -121,7 +121,6 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   cato_name: { en: 'Cato', 'zh-CN': 'Cato' },
   info_bond: { en: 'Bond', 'zh-CN': '友好度' },
   info_energy: { en: 'Energy', 'zh-CN': '精力' },
-  info_call_you: { en: '{n} calls you', 'zh-CN': '{n} 这样称呼你' },
   bond_stranger: { en: 'Stranger', 'zh-CN': '陌生' },
   bond_acquaintance: { en: 'Acquaintance', 'zh-CN': '相识' },
   bond_friend: { en: 'Friend', 'zh-CN': '朋友' },

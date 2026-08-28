@@ -95,7 +95,7 @@ export interface MenuModel {
   shopMsg?: string;             // transient warning ("金币不够" / "箱子满了")
   mailSelected?: string;        // Mail tab: selected mail id → right-side receipt detail + row highlight
   mailDetail?: { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number }; // the selected mail's receipt
-  catoInfo?: { name: string; callName: string; stamina: number; staminaMax: number; bondTier: string; bondFrac: number }; // Cato-info tab
+  catoInfo?: { name: string; stamina: number; staminaMax: number; bondTier: string; bondFrac: number }; // Cato-info tab
   calendar?: { title: string; today: number; daysInMonth: number; firstWeekdayMon: number }; // Calendar tab (ADR-029)
 }
 
@@ -730,42 +730,24 @@ export class MenuScene extends Phaser.Scene {
       c.add(cato);
     }
 
-    // ── RIGHT: names (tappable to edit) + vitals ──
+    // ── RIGHT: Cato's name + vitals ──
     const rCx = 0.72 * W;
-    // Cato's name — a tappable chip that opens the rename box (menuCatoNameEdit).
-    this.nameChip(c, rCx, 0.235 * H, info.name, H * 0.046, 'menuCatoNameEdit');
-    // How Cato addresses you — caption ("<Cato's name> calls you") + a tappable chip.
-    c.add(this.T(rCx, 0.318 * H, t('info_call_you').replace('{n}', info.name), H * 0.024, SUB));
-    this.nameChip(c, rCx, 0.375 * H, info.callName, H * 0.03, 'menuCatoCallEdit');
+    c.add(this.T(rCx, 0.28 * H, info.name, H * 0.05, INK)); // name, top-centre of the right side
 
     // Friendship bond — a fixed row of hearts; fuller = closer.
-    c.add(this.T(rCx, 0.46 * H, t('info_bond') + '  ' + info.bondTier, H * 0.024, SUB));
-    this.renderHeartRow(c, rCx, 0.525 * H, info.bondFrac);
+    c.add(this.T(rCx, 0.42 * H, t('info_bond') + '  ' + info.bondTier, H * 0.026, SUB));
+    this.renderHeartRow(c, rCx, 0.49 * H, info.bondFrac);
 
     // Energy — the stamina radial gauge + current/max.
-    c.add(this.T(rCx, 0.63 * H, t('info_energy'), H * 0.024, SUB));
+    c.add(this.T(rCx, 0.61 * H, t('info_energy'), H * 0.026, SUB));
     const frac = info.staminaMax > 0 ? info.stamina / info.staminaMax : 0;
     if (this.textures.exists('stamina')) {
       const gaugeFrame = Math.max(0, Math.min(36, Math.round(frac * 36)));
-      const g = this.add.image(rCx - 0.06 * W, 0.70 * H, 'stamina', gaugeFrame);
+      const g = this.add.image(rCx - 0.06 * W, 0.69 * H, 'stamina', gaugeFrame);
       g.setScale((0.06 * H) / g.height);
       c.add(g);
     }
-    c.add(this.T(rCx + 0.02 * W, 0.70 * H, `${info.stamina} / ${info.staminaMax}`, H * 0.03, INK, 0));
-  }
-
-  /** A centred, tappable name "chip" (input-field-look `slot-light` nine-slice + text) that
-   *  publishes its screen bounds under `hitKey` so GameScene routes a tap → the rename box. */
-  private nameChip(c: Phaser.GameObjects.Container, cx: number, y: number, label: string, size: number, hitKey: string): void {
-    const W = this.scale.width, H = this.scale.height;
-    const txt = this.T(cx, y, label || '—', size, INK);
-    const chipW = Math.max(W * 0.16, txt.width + W * 0.04), chipH = size + H * 0.028;
-    if (this.textures.get(ATLAS).has(SLOT_FRAME)) {
-      const bg = this.add.nineslice(cx, y, ATLAS, SLOT_FRAME, chipW / SLOT_SCALE, chipH / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
-      c.add(bg);
-    }
-    c.add(txt); // text ABOVE the chip bg
-    this.registry.set(hitKey, { x: cx - chipW / 2, y: y - chipH / 2, w: chipW, h: chipH });
+    c.add(this.T(rCx + 0.02 * W, 0.69 * H, `${info.stamina} / ${info.staminaMax}`, H * 0.03, INK, 0));
   }
 
   /** A fixed row of `HEART_COUNT` hearts filled from a 0..1 fraction (full / half / empty), using
