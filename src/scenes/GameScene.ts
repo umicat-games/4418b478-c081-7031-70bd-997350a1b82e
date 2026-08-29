@@ -1800,7 +1800,10 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => {
       if (this.confirmOpen) { this.closeConfirm(); return; } // Esc = cancel the confirm
       if (this.craftOpen) { this.closeCraft(); return; }     // Esc = close the crafting modal
-      if (this.dialogOpen && !this.cutscene) this.closeDialog(); // a cutscene can't be Esc'd out of
+      if (this.coopWheel) { this.closeCoopWheel(); return; } // Esc = close the coop action wheel
+      if (this.dialogOpen && !this.cutscene) { this.closeDialog(); return; } // a cutscene can't be Esc'd out of
+      // Esc with a placeable / tool held → empty hand (so you can tap the world to interact, e.g. collect coop eggs).
+      if (this.activePlace || this.activeSeed || this.heldExternal || this.hotbarSelected >= 0) this.clearHeld();
     });
     // Enter confirms the modal dialog (✓); Esc above cancels it.
     this.input.keyboard?.on('keydown-ENTER', () => {
@@ -1842,6 +1845,7 @@ export class GameScene extends Phaser.Scene {
     if (this.chatterAt(x, y)) { this.openChatterDialog(); return; }
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
+    if (this.handleCoopWheelClick(x, y)) return; // coop action wheel (move / delete / upgrade)
     if (this.handleCraftClick(x, y)) return; // the crafting modal (work station)
     if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
     // Tool HUD (current-tool slot + fly-out switcher) — works even while holding a tool.
@@ -1906,7 +1910,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.activePlace && this.houseDoorContains(wp.x, wp.y)) { this.enterHouse(); return; }
     // Tap a chicken coop: collect its laid eggs if any (fruit-style pop); otherwise the action
     // wheel (Phase 4) — for now a no-op collect target. Checked before the tile actions.
-    if (!this.activePlace) { const coop = this.coopAtPoint(wp.x, wp.y); if (coop) { if (coop.eggsReady > 0) this.collectCoopEggs(coop); return; } }
+    if (!this.activePlace) {
+      const ck = this.coopAtPoint(wp.x, wp.y);
+      if (ck) { const coop = this.coops.get(ck)!; if (coop.eggsReady > 0) this.collectCoopEggs(coop); else this.openCoopWheel(ck); return; }
+    }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a plantable (tree / bush): place it on empty grass. (The house-building
@@ -1915,7 +1922,7 @@ export class GameScene extends Phaser.Scene {
       if (this.activePlace) {
         if (this.activePlace === 'tree') { if (this.canPlaceTree(tile.x, tile.y)) this.placeTree(tile.x, tile.y, this.activeTreeType); }
         else if (this.activePlace === 'bush') { if (this.canPlaceBush(tile.x, tile.y)) this.plantBush(tile.x, tile.y, this.activeBushType); }
-        else if (this.activePlace === 'coop') { if (this.canPlaceCoop(tile.x, tile.y)) this.placeCoop(tile.x, tile.y, this.activeCoopVariant); }
+        else if (this.activePlace === 'coop') { if (this.canPlaceCoop(tile.x, tile.y)) { if (this.movingCoop) this.placeMovedCoop(tile.x, tile.y); else this.placeCoop(tile.x, tile.y, this.activeCoopVariant); } }
         return;
       }
       const crop = this.crops.get(key);
@@ -4042,12 +4049,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The coop under a world point — its building sprite bounds OR any of its footprint tiles
-   *  (generous, so a tap on the base or the tall building both count). */
-  private coopAtPoint(wx: number, wy: number): CoopObj | null {
-    for (const coop of this.coops.values()) if (coop.sprite.getBounds().contains(wx, wy)) return coop;
+  /** The anchor key of the coop under a world point — its building sprite bounds OR any of its
+   *  footprint tiles (generous, so a tap on the base or the tall building both count). */
+  private coopAtPoint(wx: number, wy: number): string | null {
+    for (const [key, coop] of this.coops) if (coop.sprite.getBounds().contains(wx, wy)) return key;
     const tile = this.islandLayer?.getTileAtWorldXY(wx, wy);
-    if (tile) { const anchor = this.coopCells.get(`${tile.x},${tile.y}`); if (anchor) return this.coops.get(anchor) ?? null; }
+    if (tile) { const anchor = this.coopCells.get(`${tile.x},${tile.y}`); if (anchor && this.coops.has(anchor)) return anchor; }
     return null;
   }
 
@@ -4062,6 +4069,136 @@ export class GameScene extends Phaser.Scene {
       this.collect(makeCoopEgg(coop.color));
     }
     playSfx(this, SFX_COLLECT);
+    this.scheduleSave();
+  }
+
+  // ── Coop action wheel (move / delete / upgrade) ─────────────────────────────
+  private coopWheel?: { anchorKey: string };
+  private movingCoop?: { size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady: number };
+
+  /** Open the action wheel for a coop (tapped empty-handed with no eggs to collect). */
+  private openCoopWheel(anchorKey: string): void {
+    if (!this.coops.has(anchorKey)) return;
+    this.coopWheel = { anchorKey };
+    this.publishCoopWheel();
+    playSfx(this);
+  }
+
+  private closeCoopWheel(): void {
+    if (!this.coopWheel) return;
+    this.coopWheel = undefined;
+    this.registry.set('coopMenu', { visible: false, buttons: [] });
+    this.registry.set('coopMenuBounds', []);
+  }
+
+  /** Publish the wheel model (screen-space buttons around the coop) for HoverScene to render. */
+  private publishCoopWheel(): void {
+    if (!this.coopWheel) return;
+    const coop = this.coops.get(this.coopWheel.anchorKey);
+    if (!coop) { this.closeCoopWheel(); return; }
+    const zh = getLang() === 'zh-CN';
+    const idx = COOP_SIZES.indexOf(coop.size);
+    const nextSize = idx < COOP_SIZES.length - 1 ? COOP_SIZES[idx + 1]! : null;
+    const upCost = nextSize ? COOP_TIERS[nextSize].price - COOP_TIERS[coop.size].price : 0;
+    const acts: Array<{ kind: string; label: string; enabled: boolean }> = [{ kind: 'move', label: zh ? '移动' : 'Move', enabled: true }];
+    if (nextSize) acts.push({ kind: 'upgrade', label: `${zh ? '升级' : 'Upgrade'} (${upCost})`, enabled: this.money >= upCost });
+    acts.push({ kind: 'delete', label: zh ? '拆除' : 'Remove', enabled: true });
+    // Project the coop to screen (centre-zoom) + fan the buttons in a row ABOVE it.
+    const cam = this.cameras.main;
+    const cx = (coop.sprite.x - cam.worldView.x) * cam.zoom;
+    const topY = (coop.sprite.y - coop.sprite.displayHeight - cam.worldView.y) * cam.zoom;
+    const bw = 96, bh = 40, gap = 10, total = acts.length * bw + (acts.length - 1) * gap;
+    const buttons = acts.map((a, i) => ({ kind: a.kind, label: a.label, enabled: a.enabled, x: Math.round(cx - total / 2 + i * (bw + gap)), y: Math.round(topY - bh - 24), w: bw, h: bh }));
+    this.registry.set('coopMenu', { visible: true, buttons });
+    this.registry.set('coopMenuBounds', buttons.map((b) => ({ kind: b.kind, x: b.x, y: b.y, w: b.w, h: b.h, enabled: b.enabled })));
+  }
+
+  /** Route a tap while the coop wheel is open: hit a button (run its action) or tap-away (close).
+   *  Returns true if it consumed the tap. */
+  private handleCoopWheelClick(x: number, y: number): boolean {
+    if (!this.coopWheel) return false;
+    const bounds = this.registry.get('coopMenuBounds') as Array<{ kind: string; x: number; y: number; w: number; h: number; enabled: boolean }> | null;
+    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    const anchor = this.coopWheel.anchorKey;
+    this.closeCoopWheel();
+    if (hit && hit.enabled) this.runCoopAction(hit.kind, anchor);
+    return true;
+  }
+
+  private runCoopAction(kind: string, anchorKey: string): void {
+    if (kind === 'delete') this.coopDelete(anchorKey);
+    else if (kind === 'upgrade') this.coopUpgrade(anchorKey);
+    else if (kind === 'move') this.coopMove(anchorKey);
+  }
+
+  /** Remove a coop (with a confirm) + refund its coop item to the backpack. */
+  private coopDelete(anchorKey: string): void {
+    const coop = this.coops.get(anchorKey);
+    if (!coop) return;
+    const { size, color } = coop;
+    this.promptConfirm(t('coop_remove_confirm'), () => {
+      if (!this.coops.has(anchorKey)) return;
+      this.removeCoop(anchorKey);
+      this.addToBackpack(makePlaceable('coop', 1, `${size}-${color}`)); // refund the coop item
+      playSfx(this);
+    });
+  }
+
+  /** Upgrade a coop to the next size (pay the price difference) if the bigger footprint fits +
+   *  it's affordable. Keeps the chickens + laid eggs + colour. */
+  private coopUpgrade(anchorKey: string): void {
+    const coop = this.coops.get(anchorKey);
+    if (!coop) return;
+    const idx = COOP_SIZES.indexOf(coop.size);
+    if (idx >= COOP_SIZES.length - 1) return; // already big
+    const next = COOP_SIZES[idx + 1]!;
+    const cost = COOP_TIERS[next].price - COOP_TIERS[coop.size].price;
+    if (cost > this.money) { this.catoSay('chatter_bag_full'); return; } // (reuse a gentle "can't" remark)
+    const [cx, cy] = anchorKey.split(',').map(Number);
+    if (!this.coopFootprintClear(cx!, cy!, next, anchorKey)) return; // no room for the bigger coop
+    const saved = coop.chickens.map((ch) => ch.serialize(this.nowMs()));
+    const eggs = coop.eggsReady, color = coop.color;
+    this.addMoney(-cost);
+    this.restoreCoop(anchorKey, next, color, saved, eggs); // removeCoop inside → rebuild bigger, same occupants
+    playSfx(this, SFX_GETITEM);
+    this.scheduleSave();
+  }
+
+  /** Are all footprint cells for `size` at (cx,cy) free (on-island, unoccupied, off the house),
+   *  ignoring the coop anchored at `excludeAnchor` (so a coop can grow into its own cells)? */
+  private coopFootprintClear(cx: number, cy: number, size: CoopSize, excludeAnchor: string): boolean {
+    if (!this.islandLayer) return false;
+    for (const key of this.coopFootprintCells(cx, cy, size)) {
+      const [kx, ky] = key.split(',').map(Number);
+      const w = this.islandLayer.tileToWorldXY(kx!, ky!);
+      if (!w || !this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false;
+      const occupant = this.coopCells.get(key);
+      if (occupant && occupant !== excludeAnchor) return false; // another coop
+      if (this.trees.has(key) || this.crops.has(key) || this.bushes.has(key) || this.bigStones.has(key) ||
+          this.foragables.has(key) || this.tilledCells.has(key) || this.placed.has(key)) return false;
+      if (this.isDefaultHouseCell(key)) return false;
+    }
+    return true;
+  }
+
+  /** Pick up a coop to relocate: stash its state + enter placement mode; the next valid tap
+   *  re-places it (see placeMovedCoop) keeping its chickens + eggs. */
+  private coopMove(anchorKey: string): void {
+    const coop = this.coops.get(anchorKey);
+    if (!coop) return;
+    this.movingCoop = { size: coop.size, color: coop.color, chickens: coop.chickens.map((c) => c.serialize(this.nowMs())), eggsReady: coop.eggsReady };
+    this.removeCoop(anchorKey);
+    this.activePlace = 'coop'; // enter placement (no held item — placeMovedCoop bypasses the item check)
+    this.activeCoopVariant = `${coop.size}-${coop.color}`;
+  }
+
+  /** Re-place a coop being moved at (cx,cy), restoring its stashed occupants + eggs. */
+  private placeMovedCoop(cx: number, cy: number): void {
+    const m = this.movingCoop;
+    if (!m) return;
+    this.restoreCoop(`${cx},${cy}`, m.size, m.color, m.chickens, m.eggsReady);
+    this.movingCoop = undefined;
+    this.activePlace = undefined;
     this.scheduleSave();
   }
 

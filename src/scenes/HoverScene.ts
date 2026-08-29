@@ -53,10 +53,13 @@ export class HoverScene extends Phaser.Scene {
   private pill?: Phaser.GameObjects.Graphics;     // the name-label background
   private label?: Phaser.GameObjects.Text;
   private paletteBtns: Array<{ bg: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }> = []; // tool-wheel circle pool
+  private coopMenuG?: Phaser.GameObjects.Graphics; // coop action wheel button backgrounds
+  private coopMenuTexts: Phaser.GameObjects.Text[] = []; // coop action labels (pooled)
 
   constructor() { super({ key: 'HoverScene' }); }
 
   create(): void {
+    this.coopMenuG = this.add.graphics();
     if (this.textures.exists(BRACKET_ATLAS) && this.textures.get(BRACKET_ATLAS).has(BRACKET_FRAME)) {
       this.bracket = this.add
         .nineslice(0, 0, BRACKET_ATLAS, BRACKET_FRAME, 32, 32, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
@@ -73,6 +76,7 @@ export class HoverScene extends Phaser.Scene {
 
   update(): void {
     this.renderPalette(); // contextual tool palette (independent of the hover bracket)
+    this.renderCoopMenu(); // coop action wheel (move / delete / upgrade)
     const m = this.registry.get(HOVER_KEY) as HoverModel | undefined;
     const pill = this.pill, label = this.label;
     if (!pill || !label) return;
@@ -102,6 +106,28 @@ export class HoverScene extends Phaser.Scene {
   /** Render the contextual tool wheel — a ring of round tool circles around a tapped spot,
    *  each `tool-circle-bg` + the tool icon; the hovered one gets a pale-blue tint (until the
    *  dedicated `-selected` background lands). The centre circle is the mouse (close) button. */
+  /** The coop action wheel: a row of labelled brown pills above a tapped coop (move / upgrade /
+   *  remove). GameScene owns the state + routes taps via `coopMenuBounds`. */
+  private renderCoopMenu(): void {
+    const g = this.coopMenuG;
+    if (!g) return;
+    g.clear();
+    const m = this.registry.get('coopMenu') as { visible: boolean; buttons: Array<{ label: string; x: number; y: number; w: number; h: number; enabled: boolean }> } | undefined;
+    const btns = m?.visible ? m.buttons : [];
+    while (this.coopMenuTexts.length < btns.length) {
+      this.coopMenuTexts.push(this.add.text(0, 0, '', { fontFamily: 'zpix, sans-serif', fontSize: '15px', color: '#fff3d6' }).setOrigin(0.5, 0.5).setResolution(3));
+    }
+    this.coopMenuTexts.forEach((txt, i) => {
+      const b = btns[i];
+      if (!b) { txt.setVisible(false); return; }
+      const r = 8;
+      g.fillStyle(b.enabled ? 0x7a5a3a : 0x5a5148, 0.96).fillRoundedRect(b.x, b.y, b.w, b.h, r);
+      g.lineStyle(2, b.enabled ? 0x3a2a12 : 0x413a30, 1).strokeRoundedRect(b.x, b.y, b.w, b.h, r);
+      txt.setText(b.label).setColor(b.enabled ? '#fff3d6' : '#a89e8e').setPosition(b.x + b.w / 2, b.y + b.h / 2).setVisible(true);
+    });
+    for (let i = btns.length; i < this.coopMenuTexts.length; i++) this.coopMenuTexts[i]!.setVisible(false);
+  }
+
   private renderPalette(): void {
     const m = this.registry.get(PALETTE_KEY) as ToolPaletteModel | undefined;
     const btns = m?.visible ? m.buttons : [];
