@@ -828,13 +828,23 @@ export class MenuScene extends Phaser.Scene {
     const bounds: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
     const mkBtn = (cx: number, label: string, key: string, w = btn, h = btn) => {
       const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
-      const bg = has ? this.add.nineslice(cx, cy2(key), 'square-buttons', 'grey-button', w, h, 6, 6, 6, 6)
-        : this.add.rectangle(cx, cy2(key), w, h, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
-      // The pixel-font − / + glyphs render HIGH in the line box (descent space below),
-      // so nudge them DOWN to visually centre; the wide 购买 label centres fine as-is.
-      const labelDy = key === 'buy' ? 0 : H * 0.008;
-      c.add(bg); c.add(this.T(cx, cy2(key) + labelDy, label, key === 'buy' ? H * 0.026 : H * 0.036, '#5b4327'));
-      bounds.push({ x: cx - w / 2, y: cy2(key) - h / 2, w, h, key });
+      const by = cy2(key);
+      const bg = has ? this.add.nineslice(cx, by, 'square-buttons', 'grey-button', w, h, 6, 6, 6, 6)
+        : this.add.rectangle(cx, by, w, h, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
+      c.add(bg);
+      if (key === 'dec' || key === 'inc') {
+        // Draw − / + as crisp centred bars (the pixel-font glyphs sit off-centre in their line box).
+        const g = this.add.graphics();
+        const s = w * 0.26, lw = Math.max(3, Math.round(w * 0.075));
+        g.lineStyle(lw, 0x5b4327, 1);
+        g.beginPath(); g.moveTo(cx - s, by); g.lineTo(cx + s, by); // horizontal bar (minus)
+        if (key === 'inc') { g.moveTo(cx, by - s); g.lineTo(cx, by + s); } // + the vertical bar → plus
+        g.strokePath();
+        c.add(g);
+      } else {
+        c.add(this.T(cx, by, label, H * 0.026, '#5b4327'));
+      }
+      bounds.push({ x: cx - w / 2, y: by - h / 2, w, h, key });
     };
     const buyCy = STEP.buyY * H;
     const cy2 = (key: string) => (key === 'buy' ? buyCy : cy);
