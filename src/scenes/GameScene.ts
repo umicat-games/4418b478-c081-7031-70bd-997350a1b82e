@@ -861,6 +861,7 @@ export class GameScene extends Phaser.Scene {
   private menuSourceSprite?: Phaser.GameObjects.Sprite;
   private menuCloseAnim?: string;
   private menuCloseFlashRev = 0; // bumps to tell MenuScene to flash the X pressed
+  private menuBuyFlashRev = 0;   // bumps to tell MenuScene to flash the Buy button pressed
   private menuClosing = false;   // X pressed → flashing → about to close (blocks double-trigger)
   private menuBuyQty = 1;       // how many to buy (Shop right-side stepper; instant purchase)
   private shopMsg = '';         // transient Shop warning ("金币不够" / "箱子满了")
@@ -5392,7 +5393,7 @@ export class GameScene extends Phaser.Scene {
     if (!id) return;
     if (dir === 'inc') this.menuBuyQty = Math.min(99, this.menuBuyQty + 1);
     else if (dir === 'dec') this.menuBuyQty = Math.max(1, this.menuBuyQty - 1);
-    else if (dir === 'buy') { this.menuBuy(); return; }
+    else if (dir === 'buy') { this.registry.set('menuBuyFlash', ++this.menuBuyFlashRev); this.menuBuy(); return; } // press-flash the Buy button (like the X)
     this.shopMsg = '';
     this.publishMenu();
   }
