@@ -861,7 +861,7 @@ export class GameScene extends Phaser.Scene {
   private menuSourceSprite?: Phaser.GameObjects.Sprite;
   private menuCloseAnim?: string;
   private menuCloseFlashRev = 0; // bumps to tell MenuScene to flash the X pressed
-  private menuBuyFlashRev = 0;   // bumps to tell MenuScene to flash the Buy button pressed
+  private menuStepperHeld: string | null = null; // which shop stepper (−/+/buy) is held down (MenuScene shows it pressed; acts on release)
   private menuClosing = false;   // X pressed → flashing → about to close (blocks double-trigger)
   private menuBuyQty = 1;       // how many to buy (Shop right-side stepper; instant purchase)
   private shopMsg = '';         // transient Shop warning ("金币不够" / "箱子满了")
@@ -1731,6 +1731,9 @@ export class GameScene extends Phaser.Scene {
         // the rail's wide hit zone, and the rail is off while a sub-popup is up.
         const overItem = this.itemSlotAt('menuSlots', pointer.x, pointer.y) !== null || this.menuShopRowAt(pointer.x, pointer.y) !== null;
         if (!this.menuItemMenu && !this.menuItemQty && this.openMailId === null && !overItem && this.menuRailAt(pointer.x, pointer.y)) { this.menuDragging = true; this.menuDragTo(pointer.y); return; }
+        // Stepper buttons (−/+/buy) = press-and-HOLD: show pressed now, act + revert on release.
+        const sk = this.menuStepperAt(pointer.x, pointer.y);
+        if (sk) { this.beginStepperPress(sk); return; }
         this.handleMenuClick(pointer.x, pointer.y); return;
       }
       // Everything else (world tiles, cat, mailbox/chest/pad/craft objects, HUD buttons, the tool
@@ -1754,7 +1757,10 @@ export class GameScene extends Phaser.Scene {
       // A finger on a Settings volume slider starts a drag (pointermove scrubs it).
       if (this.menuOpen) {
         const sl = this.menuSliderAt(pointer.x, pointer.y);
-        if (sl) { this.menuSliderDrag = sl; this.menuApplySliderVol(sl, pointer.x); }
+        if (sl) { this.menuSliderDrag = sl; this.menuApplySliderVol(sl, pointer.x); return; }
+        // Stepper buttons (−/+/buy) = press-and-HOLD (same as mouse): show pressed now, act on release.
+        const sk = this.menuStepperAt(pointer.x, pointer.y);
+        if (sk) { this.beginStepperPress(sk); return; }
         return;
       }
       // LONG-PRESS anywhere in the world → open the tool wheel (the touch switch gesture; replaces
@@ -1780,9 +1786,10 @@ export class GameScene extends Phaser.Scene {
         if (dx * dx + dy * dy > 14 * 14) { this.touchPressTimer.remove(); this.touchPressTimer = undefined; }
       }
     });
-    this.input.on('pointerup', () => {
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       this.menuDragging = false; // end a rail drag
       this.menuSliderDrag = null; // end a slider drag
+      this.endStepperPress(pointer.x, pointer.y); // release a −/+/buy stepper → revert + act if still over it
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
@@ -5266,6 +5273,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.menuOpen) return;
     playSfx(this); // close blip
     this.menuOpen = false;
+    if (this.menuStepperHeld) { this.menuStepperHeld = null; this.registry.set('menuStepperHeld', null); } // don't leave a stepper stuck pressed
     this.closeMenuItemMenu();
     this.closeReceipt();
     this.hideHotbar(false);
@@ -5386,16 +5394,37 @@ export class GameScene extends Phaser.Scene {
     return hit ? hit.key : null;
   }
 
-  /** Shop stepper / buy: `inc`/`dec` change the buy quantity; `buy` commits an INSTANT
-   *  purchase — coins out, item into the chest (if it has room), else a warning. */
+  /** Shop stepper: `inc`/`dec` change the buy quantity (instant). `buy` is NOT handled here —
+   *  it's press/release-driven (`menuStepperHeld`, see the pointer handlers) so the button can
+   *  stay visibly pressed until the pointer lifts, then commit the order on release. */
   private menuShopStep(dir: string): void {
     const id = this.menuShopSel;
     if (!id) return;
+    playSfx(this); // −/+ button click (matches the Buy button's blip)
     if (dir === 'inc') this.menuBuyQty = Math.min(99, this.menuBuyQty + 1);
     else if (dir === 'dec') this.menuBuyQty = Math.max(1, this.menuBuyQty - 1);
-    else if (dir === 'buy') { this.registry.set('menuBuyFlash', ++this.menuBuyFlashRev); this.menuBuy(); return; } // press-flash the Buy button (like the X)
     this.shopMsg = '';
     this.publishMenu();
+  }
+
+  /** Pointer pressed a shop stepper button (−/+/buy) → hold it visibly pressed; the action
+   *  fires on RELEASE (like a real button: press down, act on lift). */
+  private beginStepperPress(key: string): void {
+    this.menuStepperHeld = key;
+    this.registry.set('menuStepperHeld', key);
+  }
+
+  /** Pointer released → un-press whichever stepper was held; if it lifted while still over the
+   *  SAME button, run its action (−/+ step the qty, buy commits the order). */
+  private endStepperPress(x: number, y: number): void {
+    const held = this.menuStepperHeld;
+    if (!held) return;
+    this.menuStepperHeld = null;
+    this.registry.set('menuStepperHeld', null);
+    if (this.menuOpen && this.menuStepperAt(x, y) === held) {
+      if (held === 'buy') this.menuBuy();
+      else this.menuShopStep(held); // 'inc' / 'dec'
+    }
   }
 
   /** ORDER `menuBuyQty` of the selected item. Money is deducted NOW (下单即扣钱); the item is
@@ -5851,8 +5880,8 @@ export class GameScene extends Phaser.Scene {
       }
     } else if (this.menuTab === TAB_SHOP || this.menuTab === TAB_COOP) {
       // 物品 / 牧场 tab: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
-      const sk = this.menuStepperAt(x, y);
-      if (sk) { this.menuShopStep(sk); return true; }
+      // Steppers (−/+/buy) are press/release-driven (menuStepperHeld) — consumed here, acted on release.
+      if (this.menuStepperAt(x, y)) return true;
       const rid = this.menuShopRowAt(x, y);
       if (rid) { this.menuShopSel = rid; this.shopMsg = ''; this.publishMenu(); return true; }
     } else if (this.menuTab === TAB_HOUSE) {

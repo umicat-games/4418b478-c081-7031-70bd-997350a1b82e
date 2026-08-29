@@ -112,8 +112,9 @@ export class MenuScene extends Phaser.Scene {
   private panel?: Phaser.GameObjects.Container; // everything except the dim → pops/scales as a unit
   private dim?: Phaser.GameObjects.Rectangle;   // full-screen mask (fades, never scales)
   private closeImg?: Phaser.GameObjects.Image;  // the X button (frame-swapped for the press flash)
-  private buyImg?: Phaser.GameObjects.NineSlice; // the shop Buy button (frame-swapped for the press flash)
-  private buyFlashRev = -1;                     // last `menuBuyFlash` rev handled
+  // The shop steppers (− / + / buy) — each frame-swapped to its pressed variant while held down
+  // (GameScene sets `menuStepperHeld` to the held key), reverting on release.
+  private stepperBtns: Array<{ key: string; img: Phaser.GameObjects.NineSlice; rest: string; pressed: string }> = [];
   private closeFlashRev = -1;                   // last `menuCloseFlash` rev handled
   private detailBox?: Phaser.GameObjects.Container; // right-side detail (re-drawn live on hover)
   private m?: MenuModel;
@@ -175,8 +176,14 @@ export class MenuScene extends Phaser.Scene {
     // Close-button press flash (fired by GameScene just before it closes the menu).
     const flash = this.registry.get('menuCloseFlash') as number | undefined;
     if (flash !== undefined && flash !== this.closeFlashRev) { this.closeFlashRev = flash; this.flashCloseButton(); }
-    const bf = this.registry.get('menuBuyFlash') as number | undefined;
-    if (bf !== undefined && bf !== this.buyFlashRev) { this.buyFlashRev = bf; this.flashBuyButton(); }
+    // Shop steppers (−/+/buy) = HELD pressed while the pointer is down (GameScene sets
+    // `menuStepperHeld` to the held key), reverting on release — the press reads clearly.
+    const held = this.registry.get('menuStepperHeld') as string | null | undefined;
+    for (const s of this.stepperBtns) {
+      if (!s.img.active) continue;
+      const want = held && held === s.key ? s.pressed : s.rest;
+      if (s.img.frame.name !== want) s.img.setFrame(want);
+    }
     const menu = this.registry.get('menuAction') as ActionMenuModel | undefined;
     if (menu && menu.rev !== this.menuRev) { this.menuRev = menu.rev; this.renderMenu(menu); }
     // Rail drag arrives as a 0..1 fraction from GameScene (touch has no wheel).
@@ -408,15 +415,6 @@ export class MenuScene extends Phaser.Scene {
     if (!img || !img.active) return;
     img.setFrame(CLOSE_PRESSED);
     this.time.delayedCall(110, () => { if (img.active) img.setFrame(CLOSE.frame); });
-  }
-
-  /** Flash the Buy button's pressed frame briefly (a click blip), then revert — driven by
-   *  GameScene's `menuBuyFlash` signal just before it places the order. */
-  private flashBuyButton(): void {
-    const img = this.buyImg;
-    if (!img || !img.active) return;
-    img.setFrame('white-button-pressed-down');
-    this.time.delayedCall(110, () => { if (img.active) img.setFrame('white-button'); });
   }
 
   private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number, rows: number = GRID.rows): void {
@@ -825,7 +823,7 @@ export class MenuScene extends Phaser.Scene {
     // `cx` = the right-region centre (matches renderDetail); `regionW` sizes wordwrap + the buy button.
     const cx = 0.76 * W, regionW = 0.40 * W;
     this.registry.set('menuStepper', []);
-    this.buyImg = undefined; // dropped/recreated each detail render
+    this.stepperBtns = []; // dropped/recreated each detail render
     if (!e) { c.add(this.T(cx, 0.6 * H, t('shop_pick_item'), H * 0.024, SUB)); return; }
     if (this.textures.exists(e.iconKey)) {
       const img = this.add.image(cx, 0.40 * H, e.iconKey, this.fitFrame(e.iconKey, e.iconFrame));
@@ -843,13 +841,14 @@ export class MenuScene extends Phaser.Scene {
     const mkBtn = (cx: number, label: string, key: string, w = btn, h = btn) => {
       const sq = this.textures.get('square-buttons');
       const by = cy2(key);
-      // The BUY button uses white-button (+ white-button-pressed-down on press, like the X); the
-      // − / + steppers keep the grey button.
-      const frame = key === 'buy' ? 'white-button' : 'grey-button';
-      const has = this.textures.exists('square-buttons') && sq.has(frame);
-      const bg = has ? this.add.nineslice(cx, by, 'square-buttons', frame, w, h, 6, 6, 7, 7)
+      // All three steppers (−/+/buy) use the raised white-button, swapping to white-button-pressed-down
+      // while held (grey-button is the flat/pressed look and has no raised counterpart, so it can't
+      // animate a press). GameScene drives the swap via `menuStepperHeld`.
+      const rest = 'white-button', pressed = 'white-button-pressed-down';
+      const has = this.textures.exists('square-buttons') && sq.has(rest);
+      const bg = has ? this.add.nineslice(cx, by, 'square-buttons', rest, w, h, 6, 6, 7, 7)
         : this.add.rectangle(cx, by, w, h, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
-      if (key === 'buy' && has) this.buyImg = bg as Phaser.GameObjects.NineSlice; // frame-swapped for the press flash
+      if (has) this.stepperBtns.push({ key, img: bg as Phaser.GameObjects.NineSlice, rest, pressed });
       c.add(bg);
       if (key === 'dec' || key === 'inc') {
         // Draw − / + as crisp centred bars (the pixel-font glyphs sit off-centre in their line box).
