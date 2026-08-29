@@ -4091,7 +4091,8 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('coopMenuBounds', []);
   }
 
-  /** Publish the wheel model (screen-space buttons around the coop) for HoverScene to render. */
+  /** Publish the wheel model — a RADIAL ring of round icon circles (same look as the tool wheel)
+   *  fanned above the tapped coop — for HoverScene to render. */
   private publishCoopWheel(): void {
     if (!this.coopWheel) return;
     const coop = this.coops.get(this.coopWheel.anchorKey);
@@ -4100,17 +4101,25 @@ export class GameScene extends Phaser.Scene {
     const idx = COOP_SIZES.indexOf(coop.size);
     const nextSize = idx < COOP_SIZES.length - 1 ? COOP_SIZES[idx + 1]! : null;
     const upCost = nextSize ? COOP_TIERS[nextSize].price - COOP_TIERS[coop.size].price : 0;
-    const acts: Array<{ kind: string; label: string; enabled: boolean }> = [{ kind: 'move', label: zh ? '移动' : 'Move', enabled: true }];
-    if (nextSize) acts.push({ kind: 'upgrade', label: `${zh ? '升级' : 'Upgrade'} (${upCost})`, enabled: this.money >= upCost });
-    acts.push({ kind: 'delete', label: zh ? '拆除' : 'Remove', enabled: true });
-    // Project the coop to screen (centre-zoom) + fan the buttons in a row ABOVE it.
+    // Each action = an icon (ui-icons frame) + a short label under the circle. Icons: move ↵ (141),
+    // upgrade crown (30), remove ✗ (45).
+    const acts: Array<{ kind: string; frame: number; label: string; enabled: boolean }> = [{ kind: 'move', frame: 141, label: zh ? '移动' : 'Move', enabled: true }];
+    if (nextSize) acts.push({ kind: 'upgrade', frame: 30, label: `${zh ? '升级' : 'Upgrade'} (${upCost})`, enabled: this.money >= upCost });
+    acts.push({ kind: 'delete', frame: 45, label: zh ? '拆除' : 'Remove', enabled: true });
+    // Project the coop centre to screen (centre-zoom) + fan the circles across an upper arc.
     const cam = this.cameras.main;
     const cx = (coop.sprite.x - cam.worldView.x) * cam.zoom;
-    const topY = (coop.sprite.y - coop.sprite.displayHeight - cam.worldView.y) * cam.zoom;
-    const bw = 96, bh = 40, gap = 10, total = acts.length * bw + (acts.length - 1) * gap;
-    const buttons = acts.map((a, i) => ({ kind: a.kind, label: a.label, enabled: a.enabled, x: Math.round(cx - total / 2 + i * (bw + gap)), y: Math.round(topY - bh - 24), w: bw, h: bh }));
+    const cyC = (coop.sprite.y - (coop.sprite.displayHeight / 2) - cam.worldView.y) * cam.zoom;
+    const size = 54, R = (coop.sprite.displayHeight / 2) * cam.zoom + 46;
+    const A0 = (-150 * Math.PI) / 180, A1 = (-30 * Math.PI) / 180; // upper arc (screen y-down: -90 = straight up)
+    const n = acts.length;
+    const buttons = acts.map((a, i) => {
+      const tt = n === 1 ? 0.5 : i / (n - 1);
+      const ang = A0 + (A1 - A0) * tt;
+      return { kind: a.kind, iconFrame: a.frame, label: a.label, enabled: a.enabled, size, x: Math.round(cx + R * Math.cos(ang)), y: Math.round(cyC + R * Math.sin(ang)) };
+    });
     this.registry.set('coopMenu', { visible: true, buttons });
-    this.registry.set('coopMenuBounds', buttons.map((b) => ({ kind: b.kind, x: b.x, y: b.y, w: b.w, h: b.h, enabled: b.enabled })));
+    this.registry.set('coopMenuBounds', buttons.map((b) => ({ kind: b.kind, x: b.x - size / 2, y: b.y - size / 2, w: size, h: size, enabled: b.enabled })));
   }
 
   /** Route a tap while the coop wheel is open: hit a button (run its action) or tap-away (close).

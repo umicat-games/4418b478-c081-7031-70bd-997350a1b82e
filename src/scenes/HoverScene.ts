@@ -53,13 +53,11 @@ export class HoverScene extends Phaser.Scene {
   private pill?: Phaser.GameObjects.Graphics;     // the name-label background
   private label?: Phaser.GameObjects.Text;
   private paletteBtns: Array<{ bg: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }> = []; // tool-wheel circle pool
-  private coopMenuG?: Phaser.GameObjects.Graphics; // coop action wheel button backgrounds
-  private coopMenuTexts: Phaser.GameObjects.Text[] = []; // coop action labels (pooled)
+  private coopBtns: Array<{ bg: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }> = []; // coop action wheel circles (pooled)
 
   constructor() { super({ key: 'HoverScene' }); }
 
   create(): void {
-    this.coopMenuG = this.add.graphics();
     if (this.textures.exists(BRACKET_ATLAS) && this.textures.get(BRACKET_ATLAS).has(BRACKET_FRAME)) {
       this.bracket = this.add
         .nineslice(0, 0, BRACKET_ATLAS, BRACKET_FRAME, 32, 32, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE, BRACKET_SLICE)
@@ -106,26 +104,31 @@ export class HoverScene extends Phaser.Scene {
   /** Render the contextual tool wheel — a ring of round tool circles around a tapped spot,
    *  each `tool-circle-bg` + the tool icon; the hovered one gets a pale-blue tint (until the
    *  dedicated `-selected` background lands). The centre circle is the mouse (close) button. */
-  /** The coop action wheel: a row of labelled brown pills above a tapped coop (move / upgrade /
-   *  remove). GameScene owns the state + routes taps via `coopMenuBounds`. */
+  /** The coop action wheel — a radial ring of round icon circles (same look as the tool wheel:
+   *  `tool-circle-bg-2` base, `-selected` under the cursor) fanned above a tapped coop, with a
+   *  short label under each. GameScene owns the state + routes taps via `coopMenuBounds`. */
   private renderCoopMenu(): void {
-    const g = this.coopMenuG;
-    if (!g) return;
-    g.clear();
-    const m = this.registry.get('coopMenu') as { visible: boolean; buttons: Array<{ label: string; x: number; y: number; w: number; h: number; enabled: boolean }> } | undefined;
+    const m = this.registry.get('coopMenu') as { visible: boolean; buttons: Array<{ kind: string; iconFrame: number; label: string; enabled: boolean; size: number; x: number; y: number }> } | undefined;
     const btns = m?.visible ? m.buttons : [];
-    while (this.coopMenuTexts.length < btns.length) {
-      this.coopMenuTexts.push(this.add.text(0, 0, '', { fontFamily: 'zpix, sans-serif', fontSize: '15px', color: '#fff3d6' }).setOrigin(0.5, 0.5).setResolution(3));
+    while (this.coopBtns.length < btns.length) {
+      const bg = this.add.image(0, 0, CIRCLE_BG_WARM);
+      const icon = this.add.image(0, 0, 'ui-icons', 0);
+      const label = this.add.text(0, 0, '', { fontFamily: 'zpix, sans-serif', fontSize: '13px', color: '#fff3d6' }).setOrigin(0.5, 0).setResolution(3).setStroke('#2a1c0c', 3);
+      this.coopBtns.push({ bg, icon, label });
     }
-    this.coopMenuTexts.forEach((txt, i) => {
+    const ptr = this.input.activePointer;
+    this.coopBtns.forEach((p, i) => {
       const b = btns[i];
-      if (!b) { txt.setVisible(false); return; }
-      const r = 8;
-      g.fillStyle(b.enabled ? 0x7a5a3a : 0x5a5148, 0.96).fillRoundedRect(b.x, b.y, b.w, b.h, r);
-      g.lineStyle(2, b.enabled ? 0x3a2a12 : 0x413a30, 1).strokeRoundedRect(b.x, b.y, b.w, b.h, r);
-      txt.setText(b.label).setColor(b.enabled ? '#fff3d6' : '#a89e8e').setPosition(b.x + b.w / 2, b.y + b.h / 2).setVisible(true);
+      if (!b) { p.bg.setVisible(false); p.icon.setVisible(false); p.label.setVisible(false); return; }
+      const hovered = b.enabled && Math.hypot(ptr.x - b.x, ptr.y - b.y) <= b.size / 2;
+      p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size, b.size).setTexture(hovered ? CIRCLE_BG_SEL : CIRCLE_BG_WARM).setAlpha(b.enabled ? 1 : 0.85);
+      p.icon.setVisible(true).setPosition(b.x, b.y).setTexture('ui-icons', b.iconFrame).clearTint().setAlpha(b.enabled ? 1 : 0.4);
+      p.icon.setScale((b.size * 0.5) / Math.max(p.icon.width, p.icon.height || 1));
+      p.label.setText(b.label).setColor(b.enabled ? '#fff3d6' : '#b8ae9e').setPosition(b.x, b.y + b.size / 2 + 1).setVisible(true);
+      this.children.bringToTop(p.icon);
+      this.children.bringToTop(p.label);
     });
-    for (let i = btns.length; i < this.coopMenuTexts.length; i++) this.coopMenuTexts[i]!.setVisible(false);
+    for (let i = btns.length; i < this.coopBtns.length; i++) { const p = this.coopBtns[i]!; p.bg.setVisible(false); p.icon.setVisible(false); p.label.setVisible(false); }
   }
 
   private renderPalette(): void {
