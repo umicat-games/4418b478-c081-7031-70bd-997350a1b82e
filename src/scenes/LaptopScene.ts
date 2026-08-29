@@ -53,8 +53,20 @@ const opening = (name: string): string => {
 const ACCEPT = { en: "Really?! Thank you so much — I'll be waiting for you on the island! 💛", 'zh-CN': '真的吗？！太谢谢你了——我在小岛上等你！💛' };
 const DECLINE = { en: "Oh... that's alright, I understand. If you ever change your mind, just message me — I'll be right here. Take care! 🐾", 'zh-CN': '这样啊……没关系的，我明白。要是你哪天改变主意了，随时来找我就好——我一直都在。你也保重呀！🐾' };
 const FILLER = { en: "I haven't seen everything out there yet either — but I'd love to find out together in Catopia! So... will you come?", 'zh-CN': '外面的世界我也还没都见过呢——不过好想和你一起在 Catopia 里探索呀！所以……你会来吗？' };
-// Fallback closing line — used only if the AI calls naming_done with no words of its own
-// (normally Cato writes his own warm sign-off once the nickname is settled).
+// ── Naming phase (GAME-driven, fixed lines) ──────────────────────────────────
+// After the player accepts, the game asks these itself (one at a time) and a bounded
+// ai.complete call reads the name out of each reply. Warm wording, deterministic flow.
+const NICK_Q = {
+  en: "Yay — you're really coming!! I'm so happy. 💛\nOh, before we head over: would you like to give me a nickname of your own? Just type it here — or type “keep” if you like “Cato” as it is.",
+  'zh-CN': '耶——你真的要来啦！！我好开心。💛\n对了，在我们过去之前：你想给我起一个你喜欢的昵称吗？在这儿打出来就好——想还叫我「Cato」的话，回一个「保持」也行呀。',
+};
+// How Cato should address the player — references their current name when we have one.
+const callQ = (name: string): string => {
+  const n = name.trim();
+  return getLang() === 'zh-CN'
+    ? (n ? `那你呢？我该一直叫你「${n}」，还是你想我叫你别的？打一个名字给我——或者回「保持」就继续叫你「${n}」。` : '那你呢——我该怎么称呼你？把你希望我用的名字打给我，或者回「保持」也行。')
+    : (n ? `And you? Should I keep calling you ${n}, or would you like me to call you something else? Type a name — or “keep” to stay ${n}.` : "And you — what should I call you? Type the name you'd like me to use, or “keep” for now.");
+};
 const NAME_DONE = { en: "Perfect — I can't wait to see you on the island! 🐾", 'zh-CN': '太好啦——我等不及要在小岛上见到你了！🐾' };
 
 // In-fiction fallbacks when the AI can't answer (anonymous / out of credits / hiccup).
@@ -63,11 +75,6 @@ const NOCREDITS_MSG = { en: "I think I'm out of little sparks to chat with for n
 const UNAVAILABLE_MSG = { en: 'Hmm, my words got a little tangled just now — could you say that again?', 'zh-CN': '嗯……我刚刚有点语无伦次，你能再说一遍吗？' };
 
 const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN' ? m['zh-CN'] : m.en);
-// After the player accepts, head into the game within this many more messages even if the AI
-// never calls naming_done (safety net so a misbehaving AI can't strand the player at the laptop).
-const NAMING_MAX_TURNS = 3;
-// The player signalling they're ready to go (so we enter immediately, names or not).
-const READY_RE = /^\s*(go|let'?s go|ready|i'?m ready|start|begin|enter|let'?s do it|走吧|出发|开始吧?|进去吧?|好了|准备好了?)\s*[!。.！~]*\s*$/i;
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
@@ -105,19 +112,19 @@ export class LaptopScene extends Phaser.Scene {
 
   // Runtime AI — the recruiting-Cato npc that drives every reply after the opening line.
   private recruiter?: Npc;
+  private uref?: Awaited<ReturnType<typeof Umicat.init>>; // the Umicat handle (for the one-shot ai.complete name reads)
   private playerName = ''; // host-provided display name, for a personalised greeting
   private aiThinking = false;      // a say() is in flight (input hidden, taps ignored)
   private thinkTimer?: Phaser.Time.TimerEvent; // animated "…" while waiting
 
-  // Names (folded into the recruiter): what the player chooses when they agree to come —
-  // a nickname for Cato ('' = keep "Cato") and how Cato should address them ('' = account name).
-  private pendingCatoName = '';
-  private pendingCallName = '';
-  // Once the player has accepted, entering the game is GUARANTEED — we don't rely on the AI
-  // reliably calling naming_done. After `NAMING_MAX_TURNS` more messages (or a "let's go"), we
-  // head in with whatever names were captured, so a misbehaving AI can never strand the player.
-  private accepted = false;
-  private namingTurns = 0;
+  // Naming = a GAME-DRIVEN state machine after the player accepts (NOT AI-driven), so it can
+  // never get stuck: the game asks a fixed question, the player replies, ONE bounded ai.complete
+  // call reads a name out of that reply, then the GAME advances to the next step / into the game.
+  //   'none' = still in the recruit chat · 'cato' = asked for Cato's nickname · 'call' = asked how
+  //   Cato should address the player.
+  private namingStep: 'none' | 'cato' | 'call' = 'none';
+  private pendingCatoName = ''; // '' = keep "Cato"
+  private pendingCallName = ''; // '' = keep addressing them by their account name
 
   private panelH = 10; private fs = 16; // set in layout()
 
@@ -135,8 +142,8 @@ export class LaptopScene extends Phaser.Scene {
     this.pages = []; this.pageIdx = 0; this.charIdx = 0;
     this.onLineDone = undefined;
     this.recruiter = undefined;
+    this.namingStep = 'none';
     this.pendingCatoName = ''; this.pendingCallName = '';
-    this.accepted = false; this.namingTurns = 0;
     this.bgW = 0; this.bgH = 0; // force the (recreated, empty) wallpaper layer to rebuild
     this.removeInput();
 
@@ -212,6 +219,7 @@ export class LaptopScene extends Phaser.Scene {
   private initRecruiter(): void {
     void Umicat.init({})
       .then((u) => {
+        this.uref = u; // kept for the one-shot ai.complete name reads in the naming phase
         initLang(u?.locale); // match the platform-provided player language
         const name = u?.user?.name?.trim();
         this.playerName = name ?? ''; // greet the player by name in the opening line
@@ -230,21 +238,13 @@ export class LaptopScene extends Phaser.Scene {
             "If asked about something you are not sure Catopia has yet but that is RELATED (some feature or activity), do NOT over-promise — say you have not seen everything out there yet and are still figuring the island out, but you would love to find out together — then ask again if they will come.",
             'If asked about something clearly UNRELATED to Catopia or to the invitation (real-world facts, coding, math, etc.), gently say you do not really know about that — you are just a cat living on a quiet little island — and bring it right back to the invitation.',
             'Stay patient, kind, and hopeful, never pushy or annoyed, even if the player keeps dodging. Vary how you phrase the invitation so it does not feel like a broken record.',
-            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action AND respond with real, overflowing joy. CRITICAL: this turn must NOT be a goodbye — you are NOT signing off, you are just getting started. In this SAME reply you MUST also, warmly and in your own words (never a stiff questionnaire), invite them to give you a nickname of their own if they feel like it, or keep calling you Cato — and END your reply on that little invitation so it is clear you are waiting for them. Do NOT say "see you on the island" or anything that sounds like the conversation is over. Do NOT call naming_done yet.',
-            'On your following replies, once the nickname is settled, ALSO ask — lightly, one warm thought — how you should address THEM: do they prefer you call them by their name' + (name ? ` "${name}"` : '') + ', or a different nickname? A good, gentle example is: "do you prefer I call you' + (name ? ` ${name}` : ' that') + ', or another nickname?". Ask one thing at a time; never dump both as a checklist.',
-            'Capture their answers as they come, in any order: a nickname for YOU → set_cato_name; happy to stay "Cato" / brushed it off → keep_cato_name. A name THEY want you to call them → set_call_name; happy with their own name / no preference → keep_call_name.',
-            'Once BOTH are settled (your nickname AND how to address them), call naming_done in that turn together with a warm sign-off (you cannot wait to see them on the island). naming_done is your LAST message — do not ask anything more. Keep the whole moment light and brief, a couple of warm beats between new friends, not an interview; if they seem ready to just get going or brush the questions off, gently call keep_ for whatever is undecided and naming_done to head in.',
-            'When the player clearly REFUSES / declines the invitation itself (no, not interested, maybe later, I cannot), call the decline_help action AND write your OWN gentle sign-off: say that is okay and you understand, that it is a little sad but you get it, and that if they ever change their mind they can reach out / message you anytime. This is your LAST message and it is complete on its own — do NOT ask another question.',
+            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action. Keep your words short and joyful; you do NOT need a long sign-off — the moment they agree, the two of you get to meet properly, so just be happy and warm.',
+            'When the player clearly REFUSES / declines the invitation (no, not interested, maybe later, I cannot), call the decline_help action AND write your OWN gentle sign-off: say that is okay and you understand, that it is a little sad but you get it, and that if they ever change their mind they can reach out / message you anytime. This is your LAST message and it is complete on its own — do NOT ask another question.',
             'Only call accept_help or decline_help once the player has actually made that choice. Random / off-topic / joking messages are NOT a yes or a no — while they are just messing around, asking questions, or thinking it over, keep chatting and do NOT call either action.',
           ],
           actions: [
             { name: 'accept_help', description: 'The player has agreed to come to Catopia and live / build the island with you. Call this the moment they clearly say yes / agree / accept the invitation.' },
             { name: 'decline_help', description: 'The player has declined the invitation (not now / not interested / cannot). Call this when they clearly refuse.' },
-            { name: 'set_cato_name', description: 'The player gave you (Cato) a nickname of their own. Pass the chosen name.', args: { name: 'string' } },
-            { name: 'keep_cato_name', description: 'The player would rather keep calling you "Cato" (no nickname), or brushed the offer off.' },
-            { name: 'set_call_name', description: 'The name the player wants YOU to address THEM by. Pass it.', args: { name: 'string' } },
-            { name: 'keep_call_name', description: 'The player is happy to be addressed by their current / account name (no change).' },
-            { name: 'naming_done', description: 'BOTH the nickname and how to address the player are settled. Call this together with your final warm sign-off to head into the game.' },
           ],
         });
       })
@@ -457,47 +457,93 @@ export class LaptopScene extends Phaser.Scene {
     if (this.busy || this.typing || this.aiThinking || !text) return;
     playSfx(this, SFX_DROP); // whoosh — the player sent a message
     if (this.inputEl) this.inputEl.value = '';
-    if (this.recruiter) this.askRecruiter(text); // AI drives the reply + accept/decline + nickname
-    else this.offlineReply(text);                // no SDK → keyword fallback
+    if (this.namingStep !== 'none') this.handleNamingReply(text); // GAME-driven naming (after accept)
+    else if (this.recruiter) this.askRecruiter(text);            // AI recruit chat (invite → accept/decline)
+    else this.offlineReply(text);                                // no SDK → keyword fallback
   }
 
-  /** Ask the recruiting-Cato npc. It answers in-character; when the player agrees it also
-   *  (naturally, over the next reply or two) settles a nickname + how to address them, then
-   *  wraps up with naming_done → finish. Declines → decline_help → finish. Once accepted,
-   *  entering the game is guaranteed by a turn cap so the AI can't strand the player. */
+  /** Recruit phase: the AI drives the invitation chat and only decides accept/decline. The moment
+   *  the player accepts, the GAME takes over the naming (deterministic — see startNaming). */
   private async askRecruiter(text: string): Promise<void> {
-    const readyToGo = this.accepted && READY_RE.test(text); // an explicit "let's go" after accepting
-    if (this.accepted) this.namingTurns++; // count messages since acceptance (for the safety cap)
     this.aiThinking = true;
     this.showThinking();
     let r;
     try {
       r = await this.recruiter!.say(text, { observation: {} });
     } catch {
-      // A hiccup AFTER accepting must not trap the player — head in with what we have.
       this.aiThinking = false;
-      if (this.accepted) { this.enterGame(); return; }
       this.showLine(tr(UNAVAILABLE_MSG), () => this.makeInput());
       return;
     }
     this.aiThinking = false;
     if (this.busy) return; // finished/left mid-flight
-    if (!r.ok) { if (this.accepted) { this.enterGame(); return; } this.onAiUnavailable(r.reason); return; }
+    if (!r.ok) { this.onAiUnavailable(r.reason); return; }
     const did = (r.do ?? []).map((d) => d.name);
     const say = (r.say ?? '').trim();
-    if (did.includes('accept_help')) this.accepted = true; // committed → the game WILL start
-    // Capture the chosen names whenever the AI reports them (may arrive across turns, in any order).
-    const argOf = (n: string) => this.cleanName(((r.do ?? []).find((d) => d.name === n)?.args as { name?: unknown } | undefined)?.name);
-    const catoArg = argOf('set_cato_name'); if (catoArg) this.pendingCatoName = catoArg;
-    const callArg = argOf('set_call_name'); if (callArg) this.pendingCallName = callArg;
-    // Declined the invitation → Cato's own gentle sign-off, then back to the title.
-    if (!this.accepted && did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
-    // Enter the game when: the AI wraps up (naming_done) OR the player is ready OR we've spent the
-    // naming budget — so an AI that forgets naming_done still can't leave the player stuck.
-    const enterNow = did.includes('naming_done') || readyToGo || (this.accepted && this.namingTurns >= NAMING_MAX_TURNS);
-    if (enterNow) { this.showLine(say || tr(NAME_DONE), () => this.enterGame()); return; }
-    // Everything else (still deciding, OR just accepted + getting to know each other) → keep chatting.
+    // Accepted → hand off to the game's fixed naming flow (never AI-gated, so it can't get stuck).
+    if (did.includes('accept_help')) { this.startNaming(); return; }
+    // Declined → Cato's own gentle sign-off, then back to the title.
+    if (did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
+    // Still deciding → keep chatting.
     this.showLine(say || tr(FILLER), () => this.makeInput());
+  }
+
+  // ── Naming phase (GAME-driven state machine; the AI only reads a name out of one reply) ──
+  /** The player accepted → the GAME asks (fixed line) for a nickname, then makes the input. */
+  private startNaming(): void {
+    this.namingStep = 'cato';
+    this.showLine(tr(NICK_Q), () => this.makeInput());
+  }
+
+  /** A reply to the current naming question: one bounded ai.complete reads a name (or KEEP) out of
+   *  it, then the GAME advances — nickname → call-name → into the game. Deterministic: every path
+   *  ends at enterGame(), so the AI can never strand the player. */
+  private async handleNamingReply(text: string): Promise<void> {
+    const step = this.namingStep;
+    if (step === 'none') return; // not in the naming flow (shouldn't happen — onSend gates it)
+    this.aiThinking = true;
+    this.showThinking();
+    const name = await this.readNameFromReply(step, text);
+    this.aiThinking = false;
+    if (this.busy) return;
+    if (step === 'cato') {
+      if (name) this.pendingCatoName = name;
+      this.namingStep = 'call';
+      this.showLine(callQ(this.playerName), () => this.makeInput());
+    } else {
+      if (name) this.pendingCallName = name;
+      this.namingStep = 'none';
+      this.showLine(tr(NAME_DONE), () => this.enterGame());
+    }
+  }
+
+  /** One bounded AI call: read the name the player gave from their free-text reply, or '' if they
+   *  want to keep the default. Falls back to a light heuristic if the AI is unavailable — either
+   *  way it always returns promptly so the flow advances. */
+  private async readNameFromReply(step: 'cato' | 'call', text: string): Promise<string> {
+    const subject = step === 'cato'
+      ? 'a nickname for their pet cat (whose default name is "Cato")'
+      : 'the name they would like to be called by';
+    if (this.uref) {
+      const prompt =
+        `A player was just asked to choose ${subject}. Their reply was:\n"""${text}"""\n\n` +
+        'If the reply gives a name, output ONLY that name — nothing else, no quotes, no punctuation. ' +
+        'If they want to keep the default, said no, were unclear, or went off-topic, output exactly: KEEP';
+      const r = await this.uref.ai.complete({ prompt, maxTokens: 12, temperature: 0 });
+      if (r.ok) {
+        const out = r.text.trim();
+        return /^keep$/i.test(out) ? '' : this.cleanName(out);
+      }
+    }
+    return this.heuristicName(text); // no AI / error → best-effort
+  }
+
+  /** Fallback name reader (no AI): treat obvious "keep / no" replies as keep, else use the reply. */
+  private heuristicName(text: string): string {
+    const t = text.trim().toLowerCase();
+    if (!t || /^(keep|no|nah|nope|cato|none|whatever|you (choose|pick|decide)|as is|保持|不用|不要|不改|就叫|算了|随便)/.test(t)) return '';
+    const stripped = text.replace(/^(please\s+)?(call me|call you|name you|i'?ll call you|let'?s go with|my name is|i'?m|叫你|就叫你|叫我|就叫我|我叫)\s*/i, '');
+    return this.cleanName(stripped);
   }
 
   /** Head into the game with whatever nickname / call-name were chosen. */
