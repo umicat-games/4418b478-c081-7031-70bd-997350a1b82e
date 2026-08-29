@@ -7667,14 +7667,15 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** The current page is fully shown — stop typing + reveal the "more" icon when
-   *  there are still pages left. */
+  /** The current page is fully shown — stop typing + reveal the "more" indicator when
+   *  there are still pages left OR (in a scripted cutscene) another line to advance to:
+   *  a tap always progresses the cutscene, so show it whenever we're waiting on the player. */
   private finishPage(): void {
     this.stopTyping();
     const page = this.dialogPages[this.dialogPageIdx] ?? '';
     this.dialogCharIdx = page.length;
     this.registry.set('catoDialogText', page);
-    this.setMoreIcon(this.dialogPageIdx < this.dialogPages.length - 1);
+    this.setMoreIcon(this.cutscene || this.dialogPageIdx < this.dialogPages.length - 1);
   }
 
   /** Player pressed advance (click / Space / tap) while the dialog is open. If
