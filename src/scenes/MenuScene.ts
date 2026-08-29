@@ -259,7 +259,7 @@ export class MenuScene extends Phaser.Scene {
     // for-sale / SHOP) share ONE full-width frame, split by a dashed divider — instead of two
     // frames. Settings / Calendar are full-width too (no right detail).
     const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK
-      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP || m.tab === TAB_HOUSE;
+      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP || m.tab === TAB_HOUSE || m.tab === TAB_COOP;
     const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR || m.tab === TAB_CATO;
     const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
     const lx = L.x * W, ly = L.y * H, lw = frameWFrac * W, lh = L.h * H;
