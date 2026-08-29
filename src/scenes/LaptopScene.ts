@@ -503,47 +503,81 @@ export class LaptopScene extends Phaser.Scene {
     if (step === 'none') return; // not in the naming flow (shouldn't happen — onSend gates it)
     this.aiThinking = true;
     this.showThinking();
-    const name = await this.readNameFromReply(step, text);
+    const res = await this.readNameFromReply(step, text);
     this.aiThinking = false;
     if (this.busy) return;
     if (step === 'cato') {
-      if (name) this.pendingCatoName = name;
+      if (res.kind === 'name') this.pendingCatoName = res.name;
       this.namingStep = 'call';
-      this.showLine(callQ(this.playerName), () => this.makeInput());
+      // Ack (positive / "kept" / "didn't catch that") + hand off to the call-name question.
+      this.showLine(this.catoStepLine(res.kind, res.name), () => this.makeInput());
     } else {
-      if (name) this.pendingCallName = name;
+      if (res.kind === 'name') this.pendingCallName = res.name;
       this.namingStep = 'none';
-      this.showLine(tr(NAME_DONE), () => this.enterGame());
+      this.showLine(this.callStepLine(res.kind, res.name), () => this.enterGame());
     }
   }
 
-  /** One bounded AI call: read the name the player gave from their free-text reply, or '' if they
-   *  want to keep the default. Falls back to a light heuristic if the AI is unavailable — either
-   *  way it always returns promptly so the flow advances. */
-  private async readNameFromReply(step: 'cato' | 'call', text: string): Promise<string> {
+  /** One bounded AI call that JUDGES the reply into name / keep / unclear (so a reply that doesn't
+   *  look like a name gets a warm "I didn't quite catch that" rather than a silent default). Falls
+   *  back to a light heuristic if the AI is unavailable — either way it returns promptly so the
+   *  deterministic flow always advances. */
+  private async readNameFromReply(step: 'cato' | 'call', text: string): Promise<{ kind: 'name' | 'keep' | 'unclear'; name: string }> {
     const subject = step === 'cato'
       ? 'a nickname for their pet cat (whose default name is "Cato")'
       : 'the name they would like to be called by';
     if (this.uref) {
       const prompt =
         `A player was just asked to choose ${subject}. Their reply was:\n"""${text}"""\n\n` +
-        'If the reply gives a name, output ONLY that name — nothing else, no quotes, no punctuation. ' +
-        'If they want to keep the default, said no, were unclear, or went off-topic, output exactly: KEEP';
+        'Decide which ONE of these the reply is, and output exactly that:\n' +
+        '- If they clearly gave a name to use, output ONLY that name (nothing else, no quotes or punctuation).\n' +
+        "- If they clearly want to keep the default (e.g. \"keep\", \"no\", \"Cato is fine\", \"my name's fine\"), output exactly: KEEP\n" +
+        '- If the reply is not really a name — unclear, gibberish, a question, off-topic, or just chit-chat — output exactly: UNCLEAR';
       const r = await this.uref.ai.complete({ prompt, maxTokens: 12, temperature: 0 });
       if (r.ok) {
         const out = r.text.trim();
-        return /^keep$/i.test(out) ? '' : this.cleanName(out);
+        if (/^keep$/i.test(out)) return { kind: 'keep', name: '' };
+        if (/^unclear$/i.test(out)) return { kind: 'unclear', name: '' };
+        const n = this.cleanName(out);
+        return n ? { kind: 'name', name: n } : { kind: 'unclear', name: '' };
       }
     }
     return this.heuristicName(text); // no AI / error → best-effort
   }
 
-  /** Fallback name reader (no AI): treat obvious "keep / no" replies as keep, else use the reply. */
-  private heuristicName(text: string): string {
+  /** Fallback reader (no AI): obvious "keep / no" → keep; empty → unclear; else best-effort name. */
+  private heuristicName(text: string): { kind: 'name' | 'keep' | 'unclear'; name: string } {
     const t = text.trim().toLowerCase();
-    if (!t || /^(keep|no|nah|nope|cato|none|whatever|you (choose|pick|decide)|as is|保持|不用|不要|不改|就叫|算了|随便)/.test(t)) return '';
+    if (!t) return { kind: 'unclear', name: '' };
+    if (/^(keep|no|nah|nope|cato|none|whatever|you (choose|pick|decide)|as is|保持|不用|不要|不改|就叫|算了|随便)/.test(t)) return { kind: 'keep', name: '' };
     const stripped = text.replace(/^(please\s+)?(call me|call you|name you|i'?ll call you|let'?s go with|my name is|i'?m|叫你|就叫你|叫我|就叫我|我叫)\s*/i, '');
-    return this.cleanName(stripped);
+    const n = this.cleanName(stripped);
+    return n ? { kind: 'name', name: n } : { kind: 'unclear', name: '' };
+  }
+
+  /** Cato's reply after the NICKNAME question: warm ack of the outcome, then the call-name question. */
+  private catoStepLine(kind: 'name' | 'keep' | 'unclear', name: string): string {
+    const zh = getLang() === 'zh-CN';
+    const ack = kind === 'name'
+      ? (zh ? `「${name}」！我好喜欢这个名字，谢谢你！💛` : `${name} — I love that name, thank you! 💛`)
+      : kind === 'keep'
+        ? (zh ? '好呀，那我就还叫 Cato！🐾' : `Cato it is, then! 🐾`)
+        : (zh ? '诶嘿，我没太看懂你的意思——那我先还叫 Cato 吧！🐾' : `Hehe, I didn't quite catch that — I'll stay Cato for now! 🐾`);
+    return ack + '\n' + callQ(this.playerName);
+  }
+
+  /** Cato's reply after the CALL-NAME question: warm ack of the outcome, then the closing line. */
+  private callStepLine(kind: 'name' | 'keep' | 'unclear', name: string): string {
+    const zh = getLang() === 'zh-CN';
+    const pn = this.playerName.trim();
+    const ack = kind === 'name'
+      ? (zh ? `「${name}」，我记住啦！💛` : `${name} — got it! 💛`)
+      : kind === 'keep'
+        ? (pn ? (zh ? `好，那我就一直叫你「${pn}」！` : `I'll keep calling you ${pn}, then!`) : (zh ? '好的！' : 'Okay!'))
+        : (pn
+            ? (zh ? `嗯……我没太看懂——那我就还叫你「${pn}」吧！🐾` : `Mm, I didn't quite catch that — I'll keep calling you ${pn} for now! 🐾`)
+            : (zh ? '嗯……我没太看懂——那我们之后再说吧！🐾' : "Mm, I didn't quite catch that — we'll sort it out later! 🐾"));
+    return ack + ' ' + tr(NAME_DONE);
   }
 
   /** Head into the game with whatever nickname / call-name were chosen. */
