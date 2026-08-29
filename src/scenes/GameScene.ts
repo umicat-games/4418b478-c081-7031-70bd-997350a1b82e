@@ -37,6 +37,7 @@ import {
   COOP_COLORS, COOP_SIZES, COOP_FOOTPRINT, COOP_TIERS, coopItemId, parseCoopId, coopFrame,
   type CoopColor, type CoopSize,
 } from '../data/coops';
+import { Chicken, type SavedChicken } from '../chickens';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
@@ -536,7 +537,8 @@ interface CoopObj {
   sprite: Phaser.GameObjects.Sprite;
   body?: Phaser.GameObjects.Sprite; // invisible base collider (Cato bumps it)
   cells: string[]; // footprint cell keys this coop occupies
-  eggs: number; // eggs ready to collect (Phase 3); placing seeds 2 that hatch (Phase 2)
+  chickens: Chicken[]; // the coop's occupants (eggs → chicks → adults; roam near the door)
+  door: { x: number; y: number }; // coop base centre — where eggs sit + chickens roam around
 }
 
 /** A placed building structure at a cell (wall / door / furniture). */
@@ -575,7 +577,7 @@ interface SaveBlob {
   crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
   cato: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
-  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; eggs: number }>; // v23: placed chicken coops
+  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[] }>; // v23: placed chicken coops + occupants
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
@@ -3913,7 +3915,7 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** Place a coop from the held item at (cx,cy) + consume one. Seeds it with 2 eggs (Phase 2). */
+  /** Place a coop from the held item at (cx,cy) + consume one. Seeds it with 2 fresh eggs. */
   private placeCoop(cx: number, cy: number, variant: string): void {
     const cell = this.heldCell();
     if (!cell || cell.count <= 0) return;
@@ -3923,9 +3925,9 @@ export class GameScene extends Phaser.Scene {
     this.scheduleSave();
   }
 
-  /** (Re)create a coop sprite (+ base collider) at an anchor cell → the `coops` map. Used by
-   *  placeCoop + save restore. */
-  private restoreCoop(anchorKey: string, size: CoopSize, color: CoopColor, eggs: number): void {
+  /** (Re)create a coop sprite (+ base collider + its chicken occupants) at an anchor cell → the
+   *  `coops` map. `occupants` = a number → that many FRESH eggs; an array → restore saved chickens. */
+  private restoreCoop(anchorKey: string, size: CoopSize, color: CoopColor, occupants: number | SavedChicken[]): void {
     if (!this.islandLayer) return;
     const [cx, cy] = anchorKey.split(',').map(Number);
     const w0 = this.islandLayer.tileToWorldXY(cx!, cy!);
@@ -3945,10 +3947,33 @@ export class GameScene extends Phaser.Scene {
     }
     const cells = this.coopFootprintCells(cx!, cy!, size);
     for (const k of cells) this.coopCells.set(k, anchorKey);
-    this.coops.set(anchorKey, { size, color, sprite, body, cells, eggs });
+    // Occupants roam in FRONT of the coop (a bit below its base so eggs sit on the ground).
+    const door = { x: footX, y: footY + 3 };
+    const chickens = this.spawnCoopChickens(color, door, occupants);
+    this.coops.set(anchorKey, { size, color, sprite, body, cells, chickens, door });
   }
 
-  /** Remove a coop at its anchor cell (destroy sprite + collider, free its cells). */
+  /** Create a coop's chicken occupants — fresh eggs (a count) or restored saved chickens. */
+  private spawnCoopChickens(color: CoopColor, door: { x: number; y: number }, occupants: number | SavedChicken[]): Chicken[] {
+    const gameNow = this.nowMs();
+    const home = { x: door.x, y: door.y };
+    const out: Chicken[] = [];
+    if (Array.isArray(occupants)) {
+      for (const s of occupants) {
+        const ch = new Chicken(this, { stage: s.stage, color: s.color as CoopColor, x: s.x, y: s.y, home, gameNow, stageEndsAt: s.remain < 0 ? Infinity : gameNow + s.remain });
+        out.push(ch); this.ySortSprites.push(ch.sprite);
+      }
+    } else {
+      const n = Math.max(0, occupants);
+      for (let i = 0; i < n; i++) {
+        const ch = new Chicken(this, { stage: 'egg', color, x: door.x + (i - (n - 1) / 2) * 9, y: door.y, home, gameNow });
+        out.push(ch); this.ySortSprites.push(ch.sprite);
+      }
+    }
+    return out;
+  }
+
+  /** Remove a coop at its anchor cell (destroy sprite + collider + chickens, free its cells). */
   private removeCoop(anchorKey: string): void {
     const coop = this.coops.get(anchorKey);
     if (!coop) return;
@@ -3956,9 +3981,17 @@ export class GameScene extends Phaser.Scene {
     if (i >= 0) this.ySortSprites.splice(i, 1);
     coop.sprite.destroy();
     coop.body?.destroy();
+    for (const ch of coop.chickens) { const j = this.ySortSprites.indexOf(ch.sprite); if (j >= 0) this.ySortSprites.splice(j, 1); ch.destroy(); }
     for (const k of coop.cells) if (this.coopCells.get(k) === anchorKey) this.coopCells.delete(k);
     this.coops.delete(anchorKey);
     this.scheduleSave();
+  }
+
+  /** Tick every coop's chickens each frame (AI state machine + egg→chick→adult maturation). */
+  private updateCoops(dt: number): void {
+    if (!this.coops.size) return;
+    const timeNow = this.time.now, gameNow = this.nowMs();
+    for (const coop of this.coops.values()) for (const ch of coop.chickens) ch.update(timeNow, gameNow, dt);
   }
 
   /** God-hand AXE chop: the axe rears UP, holds a beat, then swings DOWN onto the
@@ -8428,7 +8461,7 @@ export class GameScene extends Phaser.Scene {
       crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
-      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, eggs: c.eggs })), // v23
+      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())) })), // v23
 
       bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
@@ -8600,7 +8633,7 @@ export class GameScene extends Phaser.Scene {
         for (const b of s.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
         for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
         for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
-        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.eggs); // v23
+        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? []); // v23
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
@@ -9081,6 +9114,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBushes(delta); // grow berry bushes (+ regrow after harvest)
     this.updateBushBrush(); // rustle a bush as Cato walks onto its cell
     this.updateForagables(delta); // grow wild foragables toward their max stage
+    this.updateCoops(delta / 1000); // chicken coops: egg→chick→adult + roaming AI (dt in seconds)
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
     this.updateFishing(delta); // rod/float bob + line, fish approach → nibble → hook, escape timer
     if (SPAWN_WILD) this.trySpawn(delta); // drop new foragables / big-stones onto empty grass (TEMP off while authoring)

@@ -237,6 +237,16 @@ export class BootScene extends Phaser.Scene {
 
     // Chicken coops (placeable buildings) — one atlas, small/medium/big × 6 colours (we sell 5).
     this.load.atlas('coops', 'uploaded/chikcen_houses.png', 'uploaded/chikcen_houses.json');
+
+    // Chicken lifecycle (Phase 2): egg hatch sheet + chick/adult sheets in 5 colours (yellow =
+    // the default `chicken_baby` / `chicken_default` art). All 16×16 uniform spritesheets.
+    this.load.spritesheet('egg-hatch', 'uploaded/egg_spritesheet.png', { frameWidth: 16, frameHeight: 16 });
+    const CHICK_FILE: Record<string, string> = { red: 'chicken_baby_red', green: 'chicken_baby_green', brown: 'chicken_baby_brown', blue: 'chicken_baby_blue', yellow: 'chicken_baby' };
+    const ADULT_FILE: Record<string, string> = { red: 'chicken_red', green: 'chicken_green', brown: 'chicken_brown', blue: 'chicken_blue', yellow: 'chicken_default' };
+    for (const c of ['red', 'green', 'brown', 'blue', 'yellow']) {
+      this.load.spritesheet(`chick-${c}`, `uploaded/${CHICK_FILE[c]}.png`, { frameWidth: 16, frameHeight: 16 });
+      this.load.spritesheet(`chicken-${c}`, `uploaded/${ADULT_FILE[c]}.png`, { frameWidth: 16, frameHeight: 16 });
+    }
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
     // Decorative fish (16×16, 15-frame top-down swim/turn) — swim in circles in the water.
@@ -430,6 +440,41 @@ export class BootScene extends Phaser.Scene {
         frameRate: 8,
         repeat: -1,
       });
+    }
+    // ── Chicken lifecycle anims (Phase 2) ──────────────────────────────────────
+    // Frame ranges are CONSISTENT across all colour sheets, so we register by range (ignoring
+    // the per-asset tag-name variants like standup/stand_up, turn_to_chicken/grow_up). Keys:
+    // `chick-<color>-<name>` / `chicken-<color>-<name>` / `egg-<name>`.
+    if (this.textures.exists('egg-hatch')) {
+      const eggAnims: Array<[string, number, number, number, number]> = [
+        ['egg-still', 0, 0, -1, 4], ['egg-shake', 10, 18, -1, 10], ['egg-hatch', 60, 108, 0, 14],
+      ];
+      for (const [key, s, e, rep, fps] of eggAnims) {
+        if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers('egg-hatch', { start: s, end: e }), frameRate: fps, repeat: rep });
+      }
+    }
+    // [name, startFrame, endFrame, repeat(-1=loop,0=once), fps]
+    const CHICK_SPEC: Array<[string, number, number, number, number]> = [
+      ['idle', 0, 3, -1, 6], ['idle1', 8, 14, -1, 6], ['walk', 16, 23, -1, 10],
+      ['sitdown', 24, 30, 0, 12], ['standup', 32, 38, 0, 12],
+      ['sitidle', 56, 60, -1, 4], ['sitidle1', 64, 67, -1, 4], ['sitidle2', 72, 76, -1, 4], ['sitidle3', 80, 83, -1, 4],
+      ['eat', 88, 97, 0, 9], ['heart', 104, 110, 0, 8], ['grow', 120, 131, 0, 12],
+    ];
+    const ADULT_SPEC: Array<[string, number, number, number, number]> = [
+      ['idle', 0, 3, -1, 6], ['idle1', 8, 14, -1, 6], ['walk', 16, 23, -1, 10],
+      ['sitdown', 24, 30, 0, 12], ['standup', 32, 38, 0, 12],
+      ['sitidle', 56, 60, -1, 4], ['sitidle1', 64, 67, -1, 4], ['sitidle2', 72, 76, -1, 4], ['sitidle3', 80, 83, -1, 4],
+      ['eat', 88, 97, 0, 9], ['fly', 104, 174, 0, 16], ['heart', 200, 206, 0, 8],
+    ];
+    for (const color of ['red', 'green', 'brown', 'blue', 'yellow']) {
+      for (const [prefix, spec] of [['chick', CHICK_SPEC], ['chicken', ADULT_SPEC]] as const) {
+        const tex = `${prefix}-${color}`;
+        if (!this.textures.exists(tex)) continue;
+        for (const [name, s, e, rep, fps] of spec) {
+          const key = `${tex}-${name}`;
+          if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers(tex, { start: s, end: e }), frameRate: fps, repeat: rep });
+        }
+      }
     }
     // Pad open/close: 0→4 turns the screen on + wipes to the shop, holding on frame 4;
     // `pad-close` reverses back to the resting frame 0.
