@@ -33,6 +33,10 @@ import {
   FORAGE_SPAWN_INTERVAL_MS, FORAGE_MAX_ON_MAP, BIG_STONE_SPAWN_CHANCE,
   type ForagableName,
 } from '../data/foragables';
+import {
+  COOP_COLORS, COOP_SIZES, COOP_FOOTPRINT, coopItemId, parseCoopId, coopFrame,
+  type CoopColor, type CoopSize,
+} from '../data/coops';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
@@ -239,7 +243,7 @@ interface FishingState {
 // removed — only tree + bush placement remains — but the kinds are kept in the union
 // because `PlacedObj` (the now-vestigial `placed`/`floors` occupancy Maps) + old-save
 // migration still reference them.
-type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture' | 'tree' | 'bush';
+type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture' | 'tree' | 'bush' | 'coop';
 // Wall orientation — retained for the (vestigial) `PlacedObj.orient` field only.
 type WallOrient = 'top' | 'bottom' | 'left' | 'right' | 'tl' | 'tr' | 'bl' | 'br' | 'window';
 const FLOOR_FRAME = 6;  // brick floor tile index (the editor-authored default-house floor)
@@ -384,6 +388,13 @@ function makeCrop(crop: CropName, count: number): ItemStack {
 /** A plantable inventory item — a tree seedling or a berry bush (the house-building
  *  materials were removed). Stackable so placing decrements the held stack. */
 function makePlaceable(kind: PlaceKind, count: number, variant?: string): ItemStack {
+  if (kind === 'coop') {
+    const [s, c] = (variant ?? 'small-red').split('-');
+    const size = (COOP_SIZES.includes(s as CoopSize) ? s : 'small') as CoopSize;
+    const color = (COOP_COLORS.includes(c as CoopColor) ? c : 'red') as CoopColor;
+    // Icon = the coop atlas frame; placing spawns the real coop building (see placeCoop).
+    return { id: coopItemId(size, color), label: `${color} ${size} coop`, iconKey: 'coops', iconFrame: coopFrame(size, color), count, stackable: true, place: 'coop', variant: `${size}-${color}` };
+  }
   if (kind === 'bush') {
     const b = (BERRY_TYPES.includes(variant as BerryType) ? variant : BERRY_TYPES[0]) as BerryType;
     // Icon = the full berry-bush sprite (so the PLANTING item looks different from
@@ -415,6 +426,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (tree && TREE_BY_ID.has(tree[1] as TreeType)) return makePlaceable('tree', count, tree[1]);
   const bush = /^bush-(\w+)$/.exec(id);
   if (bush && BERRY_TYPES.includes(bush[1] as BerryType)) return makePlaceable('bush', count, bush[1]);
+  const coop = parseCoopId(id);
+  if (coop) return makePlaceable('coop', count, `${coop.size}-${coop.color}`);
   const fruit = /^fruit-(\w+)$/.exec(id);
   if (fruit) return makeFruit(fruit[1], count);
   const forage = /^forage-([\w-]+)$/.exec(id);
@@ -516,6 +529,16 @@ interface TreeObj {
   sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
 }
 
+/** A placed chicken coop (a multi-tile building; anchor = the bottom-left footprint cell). */
+interface CoopObj {
+  size: CoopSize;
+  color: CoopColor;
+  sprite: Phaser.GameObjects.Sprite;
+  body?: Phaser.GameObjects.Sprite; // invisible base collider (Cato bumps it)
+  cells: string[]; // footprint cell keys this coop occupies
+  eggs: number; // eggs ready to collect (Phase 3); placing seeds 2 that hatch (Phase 2)
+}
+
 /** A placed building structure at a cell (wall / door / furniture). */
 interface PlacedObj {
   kind: PlaceKind;
@@ -552,6 +575,7 @@ interface SaveBlob {
   crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
   cato: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
+  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; eggs: number }>; // v23: placed chicken coops
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
@@ -700,6 +724,9 @@ export class GameScene extends Phaser.Scene {
   private activePlace?: PlaceKind; // a plantable (tree/bush) is selected → placement mode
   private activeTreeType: TreeType = 'apple'; // current tree kind to plant (from the held item)
   private trees = new Map<string, TreeObj>(); // "cx,cy" → a placed tree (chop with the axe)
+  private coops = new Map<string, CoopObj>(); // anchor "cx,cy" (bottom-left of footprint) → a placed coop
+  private coopCells = new Map<string, string>(); // any footprint cell "cx,cy" → its coop's anchor key (occupancy)
+  private activeCoopVariant = 'small-red'; // `${size}-${color}` of the held coop item (placement mode)
   private activeBushType: BerryType = 'strawberry'; // current berry bush to plant
   private bushes = new Map<string, BushObj>(); // "cx,cy" → a planted berry bush
   // Wild foragables (auto-spawn on the grass, grow, harvest at max) + minable
@@ -1872,6 +1899,7 @@ export class GameScene extends Phaser.Scene {
       if (this.activePlace) {
         if (this.activePlace === 'tree') { if (this.canPlaceTree(tile.x, tile.y)) this.placeTree(tile.x, tile.y, this.activeTreeType); }
         else if (this.activePlace === 'bush') { if (this.canPlaceBush(tile.x, tile.y)) this.plantBush(tile.x, tile.y, this.activeBushType); }
+        else if (this.activePlace === 'coop') { if (this.canPlaceCoop(tile.x, tile.y)) this.placeCoop(tile.x, tile.y, this.activeCoopVariant); }
         return;
       }
       const crop = this.crops.get(key);
@@ -2371,6 +2399,8 @@ export class GameScene extends Phaser.Scene {
     this.backpackStore = [
       itemFromId('hoe', 1), itemFromId('watering-can', 1), itemFromId('axe', 1), itemFromId('pickaxe', 1), itemFromId('fishing-rod', 1),
       ...CROP_NAMES.map((c) => makeSeed(c, 10)),
+      // DEBUG: a coop of each colour to test placement before the shop flow lands (devTools only).
+      ...(CATO_DEBUG_TILL ? COOP_COLORS.map((c) => makePlaceable('coop', 3, `small-${c}`)) : []),
     ];
     // The bulk starter kit lives in the CHEST (storage) — Take what you need into the backpack:
     // spare seed stacks + plantables (trees/bushes).
@@ -2789,6 +2819,7 @@ export class GameScene extends Phaser.Scene {
     this.activePlace = cell?.place; // plantable (tree/bush) → placement mode
     if (cell?.place === 'tree' && cell.variant) this.activeTreeType = cell.variant as TreeType;
     if (cell?.place === 'bush' && cell.variant) this.activeBushType = cell.variant as BerryType;
+    if (cell?.place === 'coop' && cell.variant) this.activeCoopVariant = cell.variant;
   }
 
   /** Is the virtual cursor over a hotbar slot? Returns the slot index or null. */
@@ -3482,6 +3513,7 @@ export class GameScene extends Phaser.Scene {
    *  house-building materials were removed; the house is a fixed facade). */
   private placeAppearance(kind: PlaceKind): { texture: string; frame: string | number } {
     if (kind === 'bush') return { texture: 'bushes', frame: 'empty-bush-small' };
+    if (kind === 'coop') { const [s, c] = this.activeCoopVariant.split('-'); return { texture: 'coops', frame: coopFrame(s as CoopSize, c as CoopColor) }; }
     return { texture: `tree-${this.activeTreeType}`, frame: 0 };
   }
 
@@ -3495,7 +3527,8 @@ export class GameScene extends Phaser.Scene {
     if (!tile) { cursor.setVisible(false); this.hidePlacePreview(); return; }
     const cx = tile.x, cy = tile.y;
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
-    const valid = this.activePlace === 'bush' ? this.canPlaceBush(cx, cy) : this.canPlaceTree(cx, cy);
+    const isCoop = this.activePlace === 'coop';
+    const valid = isCoop ? this.canPlaceCoop(cx, cy) : this.activePlace === 'bush' ? this.canPlaceBush(cx, cy) : this.canPlaceTree(cx, cy);
     // The rounded tile bracket (圆角框), snapped to the cell centre — same as the tools.
     cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true).setScale(GameScene.BRACKET_BR * this.bracketBreathe());
     if (valid) cursor.setAlpha(1).clearTint();
@@ -3504,7 +3537,9 @@ export class GameScene extends Phaser.Scene {
     const look = this.placeAppearance(this.activePlace);
     const ghost = this.ensurePlacePreview();
     ghost.setTexture(look.texture, look.frame).setVisible(true);
-    ghost.setPosition(w.x + TILE / 2, w.y + TILE); // origin bottom → sits in the cell
+    // A coop is multi-tile: centre the ghost over its footprint width; else it sits in the cell.
+    const fw = isCoop ? COOP_FOOTPRINT[(this.activeCoopVariant.split('-')[0] ?? 'small') as CoopSize].w : 1;
+    ghost.setPosition(w.x + (fw * TILE) / 2, w.y + TILE); // origin bottom → sits in the cell(s)
     ghost.setAlpha(0.55).setTint(valid ? 0xffffff : 0xff6666);
     this.placeCell = valid ? { cx, cy } : null;
   }
@@ -3589,7 +3624,7 @@ export class GameScene extends Phaser.Scene {
     if (!w) return false;
     if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
     const key = `${cx},${cy}`;
-    if (this.trees.has(key) || this.crops.has(key) || this.tilledCells.has(key) || this.placed.has(key)) return false;
+    if (this.trees.has(key) || this.crops.has(key) || this.tilledCells.has(key) || this.placed.has(key) || this.coopCells.has(key)) return false;
     if (this.child) {
       const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
       if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // not on Cato
@@ -3850,6 +3885,82 @@ export class GameScene extends Phaser.Scene {
     this.scheduleSave();
   }
 
+  // ── Chicken coops (placeable buildings) ─────────────────────────────────────
+  /** Footprint cell keys for a coop of `size` anchored at (cx,cy) = the bottom-LEFT cell:
+   *  the base row extends RIGHT (w cells) and UP (h cells). */
+  private coopFootprintCells(cx: number, cy: number, size: CoopSize): string[] {
+    const { w, h } = COOP_FOOTPRINT[size];
+    const cells: string[] = [];
+    for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) cells.push(`${cx + i},${cy - j}`);
+    return cells;
+  }
+
+  /** Can a coop (the held variant's size) be placed with its bottom-left at (cx,cy)? Every
+   *  footprint cell must be on-island, empty, off the starter house, and not under Cato. */
+  private canPlaceCoop(cx: number, cy: number): boolean {
+    if (!this.islandLayer) return false;
+    const size = (this.activeCoopVariant.split('-')[0] ?? 'small') as CoopSize;
+    const ct = this.child ? this.islandLayer.worldToTileXY(this.child.x, this.child.y) : null;
+    for (const key of this.coopFootprintCells(cx, cy, size)) {
+      const [kx, ky] = key.split(',').map(Number);
+      const w = this.islandLayer.tileToWorldXY(kx!, ky!);
+      if (!w || !this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
+      if (this.trees.has(key) || this.crops.has(key) || this.bushes.has(key) || this.bigStones.has(key) ||
+          this.foragables.has(key) || this.tilledCells.has(key) || this.placed.has(key) || this.coopCells.has(key)) return false;
+      if (this.isDefaultHouseCell(key)) return false; // not on the fixed starter house
+      if (ct && Math.floor(ct.x) === kx && Math.floor(ct.y) === ky) return false; // not on Cato
+    }
+    return true;
+  }
+
+  /** Place a coop from the held item at (cx,cy) + consume one. Seeds it with 2 eggs (Phase 2). */
+  private placeCoop(cx: number, cy: number, variant: string): void {
+    const cell = this.heldCell();
+    if (!cell || cell.count <= 0) return;
+    const [s, c] = variant.split('-');
+    this.restoreCoop(`${cx},${cy}`, s as CoopSize, c as CoopColor, 2);
+    this.consumeHeldMaterial();
+    this.scheduleSave();
+  }
+
+  /** (Re)create a coop sprite (+ base collider) at an anchor cell → the `coops` map. Used by
+   *  placeCoop + save restore. */
+  private restoreCoop(anchorKey: string, size: CoopSize, color: CoopColor, eggs: number): void {
+    if (!this.islandLayer) return;
+    const [cx, cy] = anchorKey.split(',').map(Number);
+    const w0 = this.islandLayer.tileToWorldXY(cx!, cy!);
+    if (!w0) return;
+    this.removeCoop(anchorKey); // clear any existing coop at this anchor first
+    const fp = COOP_FOOTPRINT[size];
+    const footX = w0.x + (fp.w * TILE) / 2; // centred over the footprint width
+    const footY = w0.y + TILE; // bottom of the anchor (base) row
+    const sprite = this.add.sprite(footX, footY, 'coops', coopFrame(size, color)).setOrigin(0.5, 1).setDepth(footY);
+    this.ySortSprites.push(sprite); // y-sorted by foot → Cato passes in front / behind
+    // Invisible base collider spanning the footprint (Cato bumps the coop; chickens roam around it).
+    let body: Phaser.GameObjects.Sprite | undefined;
+    if (this.wallGroup) {
+      const b = this.wallGroup.create(footX, footY - 4, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+      b.setVisible(false).setDisplaySize(fp.w * TILE - 2, 8).refreshBody();
+      body = b;
+    }
+    const cells = this.coopFootprintCells(cx!, cy!, size);
+    for (const k of cells) this.coopCells.set(k, anchorKey);
+    this.coops.set(anchorKey, { size, color, sprite, body, cells, eggs });
+  }
+
+  /** Remove a coop at its anchor cell (destroy sprite + collider, free its cells). */
+  private removeCoop(anchorKey: string): void {
+    const coop = this.coops.get(anchorKey);
+    if (!coop) return;
+    const i = this.ySortSprites.indexOf(coop.sprite);
+    if (i >= 0) this.ySortSprites.splice(i, 1);
+    coop.sprite.destroy();
+    coop.body?.destroy();
+    for (const k of coop.cells) if (this.coopCells.get(k) === anchorKey) this.coopCells.delete(k);
+    this.coops.delete(anchorKey);
+    this.scheduleSave();
+  }
+
   /** God-hand AXE chop: the axe rears UP, holds a beat, then swings DOWN onto the
    *  tree — the `axe-swing` anim (tools frames 12–14, `[13,14,14,14,13,12]`, mirrors
    *  `hoe-swing`). The strike fires when it lands (animation complete). */
@@ -3880,7 +3991,7 @@ export class GameScene extends Phaser.Scene {
     if (!w) return false;
     if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
     const key = `${cx},${cy}`;
-    if (this.bushes.has(key) || this.trees.has(key) || this.crops.has(key) || this.tilledCells.has(key) || this.placed.has(key)) return false;
+    if (this.bushes.has(key) || this.trees.has(key) || this.crops.has(key) || this.tilledCells.has(key) || this.placed.has(key) || this.coopCells.has(key)) return false;
     if (this.child) {
       const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
       if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // not on Cato
@@ -4262,7 +4373,7 @@ export class GameScene extends Phaser.Scene {
   /** A cell where you can't till the ground — something occupies it (a tree, big
    *  stone, bush, or wild foragable). The hoe must not till under these. */
   private cellBlocksTill(key: string): boolean {
-    if (this.trees.has(key) || this.bigStones.has(key) || this.bushes.has(key) || this.foragables.has(key)) return true;
+    if (this.trees.has(key) || this.bigStones.has(key) || this.bushes.has(key) || this.foragables.has(key) || this.coopCells.has(key)) return true;
     if (this.isDefaultHouseCell(key)) return true; // the fixed starter house (painted walls/floor + solid furniture)
     const [cx, cy] = key.split(',').map(Number);
     return this.treeOrStoneOverCell(cx!, cy!); // footprint UNDER a tree/stone (editor trees may straddle cells)
@@ -4294,7 +4405,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
     const key = `${cx},${cy}`;
     if (this.crops.has(key) || this.trees.has(key) || this.bushes.has(key) || this.placed.has(key) ||
-        this.floors.has(key) || this.tilledCells.has(key) || this.foragables.has(key) || this.bigStones.has(key)) return false;
+        this.floors.has(key) || this.tilledCells.has(key) || this.foragables.has(key) || this.bigStones.has(key) || this.coopCells.has(key)) return false;
     if (this.child) {
       const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
       if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // not on Cato
@@ -8296,7 +8407,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 22,
+      v: 23,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -8304,6 +8415,8 @@ export class GameScene extends Phaser.Scene {
       crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
+      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, eggs: c.eggs })), // v23
+
       bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
       bigStones: [...this.bigStones].filter(([, s]) => !s.sceneWired).map(([key, s]) => ({ key, tier: s.tier, ready: s.ready })),
@@ -8429,6 +8542,9 @@ export class GameScene extends Phaser.Scene {
         t.timer?.remove();
         this.trees.delete(key);
       }
+      // Coops: tear down all placed coops (re-created from the save below).
+      for (const key of [...this.coops.keys()]) this.removeCoop(key);
+      this.coopCells.clear();
       // Bushes: tear down base + berry overlays — EXCEPT scene-wired (editor-placed)
       // bushes (re-derived from the scene each load, not the save; must survive it).
       for (const [key, b] of this.bushes) {
@@ -8471,6 +8587,7 @@ export class GameScene extends Phaser.Scene {
         for (const b of s.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
         for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
         for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
+        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.eggs); // v23
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.

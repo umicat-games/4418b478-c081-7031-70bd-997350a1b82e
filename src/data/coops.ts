@@ -18,6 +18,15 @@ export const COOP_COLORS: CoopColor[] = ['red', 'brown', 'green', 'blue', 'yello
 export type CoopSize = 'small' | 'medium' | 'big';
 export const COOP_SIZES: CoopSize[] = ['small', 'medium', 'big'];
 
+// Ground FOOTPRINT (base row of tiles the coop stands on / occupies for placement + collision).
+// The art is taller than this (it rises upward) — the footprint is just the base. Widths mirror
+// the art: small 32px=2 tiles, medium 48px=3 tiles, big 64px=4 tiles.
+export const COOP_FOOTPRINT: Record<CoopSize, { w: number; h: number }> = {
+  small: { w: 2, h: 1 },
+  medium: { w: 3, h: 1 },
+  big: { w: 4, h: 1 },
+};
+
 export interface CoopTierDef {
   size: CoopSize;
   price: number; // coins to BUY a coop at this size (small = the shop price; medium/big are the UPGRADE targets)
