@@ -7,6 +7,7 @@ import { applyItemData } from '../data/items';
 import { applyRecipeData } from '../data/recipes';
 import { applyCookingData } from '../data/cooking';
 import { applyAffinityData } from '../data/affinity';
+import { applyCoopData } from '../data/coops';
 
 /**
  * BootScene — loads the scene-as-data manifest, then hands off to
@@ -233,6 +234,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('bushes', 'uploaded/trees_stumps_and_bushes.png');
     // Wild foragables + big-stones sheet (atlas-json: `<type>-<stage>`, `big-stone-<tier>`).
     this.load.atlas('forage', 'uploaded/mushrooms_flowers_stones.png', 'uploaded/mushrooms_flowers_stones.json');
+
+    // Chicken coops (placeable buildings) — one atlas, small/medium/big × 6 colours (we sell 5).
+    this.load.atlas('coops', 'uploaded/chikcen_houses.png', 'uploaded/chikcen_houses.json');
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
     // Decorative fish (16×16, 15-frame top-down swim/turn) — swim in circles in the water.
@@ -308,6 +312,7 @@ export class BootScene extends Phaser.Scene {
     this.load.json('data-recipes', 'data/recipes.json');
     this.load.json('data-cooking', 'data/cooking.json');
     this.load.json('data-affinity', 'data/affinity.json');
+    this.load.json('data-coops', 'data/coops.json');
     // Scripted-dialogue graphs (authored, non-AI): the new-game intro cutscene.
     this.load.json('dialogue-intro', 'dialogue/intro.json');
   }
@@ -518,6 +523,7 @@ export class BootScene extends Phaser.Scene {
     applyCookingData(this.cache.json.get('data-cooking'));
     applyAffinityData(this.cache.json.get('data-affinity'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
+    applyCoopData(this.cache.json.get('data-coops'));
     buildSoilGrassSheet(this);
     // BGM is started per-scene now (title vs game use different tracks): BootMenuScene
     // plays `bgm-title`, GameScene plays `bgm` — each via crossToBgm.

@@ -1,0 +1,7 @@
+{
+  "coops": [
+    { "size": "small", "price": 800, "eggsPerDay": 2, "capacity": 2, "label": "Small Coop" },
+    { "size": "medium", "price": 2000, "eggsPerDay": 3, "capacity": 4, "label": "Medium Coop" },
+    { "size": "big", "price": 4000, "eggsPerDay": 4, "capacity": 6, "label": "Big Coop" }
+  ]
+}
