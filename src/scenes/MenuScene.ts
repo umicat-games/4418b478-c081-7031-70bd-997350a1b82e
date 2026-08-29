@@ -62,10 +62,11 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'forsale', frame: 261, title: '待售' },  // mailbox: shipping bin ($ glyph, tunable)
   { key: 'house', frame: 278, title: '房子' },    // shop 房子 sub-tab (white-home = all_icons row17 col6, under white-cart 262)
   { key: 'cato', frame: 310, title: 'Cato' },     // Cato-info tab (white-cat-claw placeholder icon; retag later)
+  { key: 'coop', frame: 261, title: '牧场' },     // shop 牧场 sub-tab: placeable buildings (coops). Placeholder icon; retag later.
 ];
 // NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_BACKPACK = 10;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_COOP = 10, TAB_BACKPACK = 11;
 
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
@@ -335,7 +336,7 @@ export class MenuScene extends Phaser.Scene {
       this.renderMailList(content, m.mails ?? [], m.mailSelected);
       this.renderMailDetail(content, m.mailDetail); // right-side receipt (was a separate modal)
     }
-    else if (m.tab === TAB_SHOP) this.renderShop(content, m);
+    else if (m.tab === TAB_SHOP || m.tab === TAB_COOP) this.renderShop(content, m); // 牧场 reuses the shop 2-pane + buy UI
     else if (m.tab === TAB_HOUSE) this.renderHouse(content, m);
     else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack / 取货 / 待售
     if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {

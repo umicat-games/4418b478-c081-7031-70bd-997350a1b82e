@@ -34,7 +34,7 @@ import {
   type ForagableName,
 } from '../data/foragables';
 import {
-  COOP_COLORS, COOP_SIZES, COOP_FOOTPRINT, coopItemId, parseCoopId, coopFrame,
+  COOP_COLORS, COOP_SIZES, COOP_FOOTPRINT, COOP_TIERS, coopItemId, parseCoopId, coopFrame,
   type CoopColor, type CoopSize,
 } from '../data/coops';
 // Rex gesture helpers — no plugin registration needed
@@ -170,8 +170,8 @@ type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe' | 'fishing-rod
 // Actions on an item in the backpack / chest / Cato-bag menu. `use` = hold it; `store` = backpack→
 // chest; `take` = chest→backpack.
 type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
-const TAB_BACKPACK = 10; // the standalone backpack view (no tab bar) — kept ABOVE the TAB_DEFS range so appended tabs don't collide
-const TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_CATO = 9; // TAB_CATO = the appended `cato` entry in TAB_DEFS (position 9)
+const TAB_BACKPACK = 11; // the standalone backpack view (no tab bar) — kept ABOVE the TAB_DEFS range so appended tabs don't collide
+const TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_CATO = 9, TAB_COOP = 10; // TAB_COOP = the appended `coop` (牧场) entry in TAB_DEFS (position 10)
 // The paw (bottom-right) opens a TABBED "menu" — the TAB_DEFS indices it shows. Chest / mail / shop
 // stay SEPARATE (their own in-world objects open them standalone), so they're NOT here. Append
 // achievements etc. as new TAB_DEFS entries + push the index here + a MenuScene render branch.
@@ -180,7 +180,7 @@ const MENU_SYSTEM_TABS = [TAB_CATO, TAB_CALENDAR, TAB_SETTINGS];
 // The door MAILBOX opens a 3-tab menu: 信 (mail) + 取货 (pickup grid) + 待售 (for-sale bin).
 const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 3, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8;
 const MAILBOX_TABS = [TAB_MAIL, TAB_PICKUP, TAB_FORSALE];
-const SHOP_TABS = [TAB_SHOP, TAB_HOUSE]; // the shop opens with two folder tabs: 物品 + 房子
+const SHOP_TABS = [TAB_SHOP, TAB_HOUSE, TAB_COOP]; // the shop opens with three folder tabs: 物品 + 房子 + 牧场(coops)
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
@@ -4974,7 +4974,11 @@ export class GameScene extends Phaser.Scene {
     this.menuTabSet = tabSet; // null = standalone (no tab bar); a list = the tabbed paw menu
     this.menuSelected = -1;
     this.menuMailSel = null; // fresh open/tab-switch → publishMenu auto-selects the newest mail for the receipt pane
-    if (tab === TAB_SHOP) { this.menuBuyQty = 1; this.shopMsg = ''; if (!this.menuShopSel) this.menuShopSel = this.orderCatalog()[0]?.id; } // 物品 tab defaults
+    if (tab === TAB_SHOP || tab === TAB_COOP) { // 物品 / 牧场 defaults (shared buy machinery)
+      this.menuBuyQty = 1; this.shopMsg = '';
+      const cat = tab === TAB_COOP ? this.coopCatalog() : this.orderCatalog();
+      if (!this.menuShopSel || !cat.some((e) => e.id === this.menuShopSel)) this.menuShopSel = cat[0]?.id; // reset if the sel isn't in this tab's catalog
+    }
     if (tab === TAB_HOUSE) { this.shopMsg = ''; if (!this.menuHouseSel) this.menuHouseSel = HOME_TIERS.find((h) => h.price > 0)?.id; } // 房子 tab defaults
     if (!this.menuOpen) {
       // Fresh open → no source object by default (E/I / order button / backpack button).
@@ -5041,8 +5045,8 @@ export class GameScene extends Phaser.Scene {
 
   private publishMenu(_open = false): void {
     // Shop catalog (only built for the Shop tab — orderCatalog() isn't free).
-    const catalog = this.menuTab === 3
-      ? this.orderCatalog().map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
+    const catalog = (this.menuTab === TAB_SHOP || this.menuTab === TAB_COOP)
+      ? (this.menuTab === TAB_COOP ? this.coopCatalog() : this.orderCatalog()).map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
       : undefined;
     // 房子 tab: the purchasable house tiers (starter excluded — price 0).
     const houses = this.menuTab === TAB_HOUSE
@@ -5162,7 +5166,7 @@ export class GameScene extends Phaser.Scene {
   private flashShopMsg(msg: string): void {
     this.shopMsg = msg;
     this.publishMenu();
-    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && (this.menuTab === TAB_SHOP || this.menuTab === TAB_HOUSE)) this.publishMenu(); } });
+    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && (this.menuTab === TAB_SHOP || this.menuTab === TAB_HOUSE || this.menuTab === TAB_COOP)) this.publishMenu(); } });
   }
 
   /** Does the chest have room for `id`? A stackable item that already has a stack merges
@@ -5594,8 +5598,8 @@ export class GameScene extends Phaser.Scene {
         this.publishMenu();
         return true;
       }
-    } else if (this.menuTab === TAB_SHOP) {
-      // 物品 tab: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
+    } else if (this.menuTab === TAB_SHOP || this.menuTab === TAB_COOP) {
+      // 物品 / 牧场 tab: a stepper (−/+/buy) acts on the selected item; a catalog row selects it.
       const sk = this.menuStepperAt(x, y);
       if (sk) { this.menuShopStep(sk); return true; }
       const rid = this.menuShopRowAt(x, y);
@@ -5898,7 +5902,16 @@ export class GameScene extends Phaser.Scene {
     return id.startsWith('tree-') ? `${base} seedling` : base;
   }
 
-  private priceOf(id: string): number { return buyPrice(id) ?? 0; }
+  /** The 牧场 tab catalog: one SMALL coop per sellable colour (medium/big come from upgrading). */
+  private coopCatalog(): OrderCatalogEntry[] {
+    return COOP_COLORS.map((c) => ({ id: coopItemId('small', c), label: itemFromId(coopItemId('small', c), 1).label ?? '', iconKey: 'coops', iconFrame: coopFrame('small', c), price: this.priceOf(coopItemId('small', c)) }));
+  }
+
+  private priceOf(id: string): number {
+    const coop = parseCoopId(id);
+    if (coop) return COOP_TIERS[coop.size].price; // coops price from the coop data table
+    return buyPrice(id) ?? 0;
+  }
 
   // Day rollover now runs through `advanceRealDays` (ADR-029) on a real local-midnight crossing —
   // it calls settleOrders / settleSales / settleHomeUpgrade / settleRealDayBond directly.

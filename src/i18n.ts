@@ -112,6 +112,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   tab_backpack: { en: 'Backpack', 'zh-CN': '背包' },
   tab_shop: { en: 'Items', 'zh-CN': '物品' },   // the shop's 物品 sub-tab (opens alongside 房子)
   tab_house: { en: 'Houses', 'zh-CN': '房子' }, // the shop's 房子 sub-tab
+  tab_coop: { en: 'Ranch', 'zh-CN': '牧场' },   // the shop's 牧场 sub-tab (placeable coops)
   tab_catobag: { en: "Cato's bag", 'zh-CN': 'Cato的背包' },
   tab_settings: { en: 'Settings', 'zh-CN': '设置' },
   tab_calendar: { en: 'Calendar', 'zh-CN': '日历' },
@@ -237,6 +238,17 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   item_bush_strawberry: { en: 'Strawberry bush', 'zh-CN': '草莓丛' },
   item_bush_grape: { en: 'Grape bush', 'zh-CN': '葡萄丛' },
   item_bush_blueberry: { en: 'Blueberry bush', 'zh-CN': '蓝莓丛' },
+  // Chicken coops (牧场 shop tab). Only the SMALL coop is sold; medium/big come from upgrading.
+  item_coop_small_red: { en: 'Red Coop', 'zh-CN': '红色鸡舍' },
+  item_coop_small_brown: { en: 'Brown Coop', 'zh-CN': '棕色鸡舍' },
+  item_coop_small_green: { en: 'Green Coop', 'zh-CN': '绿色鸡舍' },
+  item_coop_small_blue: { en: 'Blue Coop', 'zh-CN': '蓝色鸡舍' },
+  item_coop_small_yellow: { en: 'Yellow Coop', 'zh-CN': '黄色鸡舍' },
+  desc_coop_small_red: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
+  desc_coop_small_brown: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
+  desc_coop_small_green: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
+  desc_coop_small_blue: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
+  desc_coop_small_yellow: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
   item_furn_plant: { en: 'Potted plant', 'zh-CN': '盆栽' },
   item_furn_flower: { en: 'Flowers', 'zh-CN': '花' },
   item_furn_lamp: { en: 'Lamp', 'zh-CN': '灯' },
