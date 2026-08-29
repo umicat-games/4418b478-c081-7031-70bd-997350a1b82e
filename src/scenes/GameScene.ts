@@ -35,6 +35,7 @@ import {
 } from '../data/foragables';
 import {
   COOP_COLORS, COOP_SIZES, COOP_FOOTPRINT, COOP_TIERS, coopItemId, parseCoopId, coopFrame,
+  eggFrame, coopBubbleTexture,
   type CoopColor, type CoopSize,
 } from '../data/coops';
 import { Chicken, type SavedChicken } from '../chickens';
@@ -132,6 +133,7 @@ const NIGHT_KEYS: Array<[number, number, number]> = [
   [1.00, 0x0c1636, 0.00], // dawn breaking — back to clear (wraps to t=0)
 ];
 const NIGHT_MASK_DEPTH = 500000; // above every world sprite, below the loading cover (1e7) + HUD scenes
+const COOP_BUBBLE_DEPTH = 490000; // the coop "eggs ready" bubble — above world sprites, below the night mask
 // TEMP (restore to true): random wild spawning (grass/foragables + big-stones) is
 // OFF while the creator arranges the default layout, so it doesn't clutter the map.
 const SPAWN_WILD = false;
@@ -429,6 +431,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (bush && BERRY_TYPES.includes(bush[1] as BerryType)) return makePlaceable('bush', count, bush[1]);
   const coop = parseCoopId(id);
   if (coop) return makePlaceable('coop', count, `${coop.size}-${coop.color}`);
+  const egg = /^egg-(red|brown|green|blue|yellow)$/.exec(id);
+  if (egg) return makeCoopEgg(egg[1] as CoopColor, count);
   const fruit = /^fruit-(\w+)$/.exec(id);
   if (fruit) return makeFruit(fruit[1], count);
   const forage = /^forage-([\w-]+)$/.exec(id);
@@ -462,6 +466,11 @@ function makeForage(type: ForagableName, count: number): ItemStack {
  *  Icon = the largest small-stone frame. */
 function makeStone(count: number): ItemStack {
   return { id: 'stone', label: 'Stone', iconKey: 'forage', iconFrame: 'small-stone-6', count, stackable: true };
+}
+
+/** A collected chicken egg (laid daily by a coop of that colour). */
+function makeCoopEgg(color: CoopColor, count = 1): ItemStack {
+  return { id: `egg-${color}`, label: `${color} egg`, iconKey: 'egg-items', iconFrame: eggFrame(color), count, stackable: true };
 }
 
 /** Can this item DO something when selected on the hotbar? True for tools, seed
@@ -539,6 +548,8 @@ interface CoopObj {
   cells: string[]; // footprint cell keys this coop occupies
   chickens: Chicken[]; // the coop's occupants (eggs → chicks → adults; roam near the door)
   door: { x: number; y: number }; // coop base centre — where eggs sit + chickens roam around
+  eggsReady: number; // collectable eggs laid (Phase 3): daily production, click to collect
+  bubble?: { bg: Phaser.GameObjects.Image; egg: Phaser.GameObjects.Image }; // "eggs ready" indicator over the door
 }
 
 /** A placed building structure at a cell (wall / door / furniture). */
@@ -577,7 +588,7 @@ interface SaveBlob {
   crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
   cato: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
-  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[] }>; // v23: placed chicken coops + occupants
+  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number }>; // v23: placed chicken coops + occupants + laid eggs
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
@@ -1893,6 +1904,9 @@ export class GameScene extends Phaser.Scene {
     // Tap the house → enter its interior (a separate scene). Checked after the door
     // objects (mailbox/chest/pad/craft) so those win over the house footprint they sit on.
     if (!this.activePlace && this.houseDoorContains(wp.x, wp.y)) { this.enterHouse(); return; }
+    // Tap a chicken coop: collect its laid eggs if any (fruit-style pop); otherwise the action
+    // wheel (Phase 4) — for now a no-op collect target. Checked before the tile actions.
+    if (!this.activePlace) { const coop = this.coopAtPoint(wp.x, wp.y); if (coop) { if (coop.eggsReady > 0) this.collectCoopEggs(coop); return; } }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a plantable (tree / bush): place it on empty grass. (The house-building
@@ -2402,7 +2416,7 @@ export class GameScene extends Phaser.Scene {
       itemFromId('hoe', 1), itemFromId('watering-can', 1), itemFromId('axe', 1), itemFromId('pickaxe', 1), itemFromId('fishing-rod', 1),
       ...CROP_NAMES.map((c) => makeSeed(c, 10)),
       // DEBUG: a coop of each colour to test placement before the shop flow lands (devTools only).
-      ...(CATO_DEBUG_TILL ? COOP_COLORS.map((c) => makePlaceable('coop', 3, `small-${c}`)) : []),
+      ...(CATO_DEBUG_TILL ? COOP_COLORS.map((c) => makePlaceable('coop', 1, `small-${c}`)) : []),
     ];
     // The bulk starter kit lives in the CHEST (storage) — Take what you need into the backpack:
     // spare seed stacks + plantables (trees/bushes).
@@ -2583,6 +2597,7 @@ export class GameScene extends Phaser.Scene {
     this.settleOrders();
     this.settleSales();
     this.settleHomeUpgrade();
+    this.settleCoops(); // coops lay their daily eggs
     this.settleRealDayBond(days);
     this.scheduleSave();
     if (this.menuOpen) this.publishMenu();
@@ -3920,14 +3935,14 @@ export class GameScene extends Phaser.Scene {
     const cell = this.heldCell();
     if (!cell || cell.count <= 0) return;
     const [s, c] = variant.split('-');
-    this.restoreCoop(`${cx},${cy}`, s as CoopSize, c as CoopColor, 2);
+    this.restoreCoop(`${cx},${cy}`, s as CoopSize, c as CoopColor, 2, 0);
     this.consumeHeldMaterial();
     this.scheduleSave();
   }
 
   /** (Re)create a coop sprite (+ base collider + its chicken occupants) at an anchor cell → the
    *  `coops` map. `occupants` = a number → that many FRESH eggs; an array → restore saved chickens. */
-  private restoreCoop(anchorKey: string, size: CoopSize, color: CoopColor, occupants: number | SavedChicken[]): void {
+  private restoreCoop(anchorKey: string, size: CoopSize, color: CoopColor, occupants: number | SavedChicken[], eggsReady = 0): void {
     if (!this.islandLayer) return;
     const [cx, cy] = anchorKey.split(',').map(Number);
     const w0 = this.islandLayer.tileToWorldXY(cx!, cy!);
@@ -3950,7 +3965,9 @@ export class GameScene extends Phaser.Scene {
     // Occupants roam in FRONT of the coop (a bit below its base so eggs sit on the ground).
     const door = { x: footX, y: footY + 3 };
     const chickens = this.spawnCoopChickens(color, door, occupants);
-    this.coops.set(anchorKey, { size, color, sprite, body, cells, chickens, door });
+    const coop: CoopObj = { size, color, sprite, body, cells, chickens, door, eggsReady };
+    this.coops.set(anchorKey, coop);
+    this.refreshCoopBubble(coop);
   }
 
   /** Create a coop's chicken occupants — fresh eggs (a count) or restored saved chickens. */
@@ -3981,6 +3998,7 @@ export class GameScene extends Phaser.Scene {
     if (i >= 0) this.ySortSprites.splice(i, 1);
     coop.sprite.destroy();
     coop.body?.destroy();
+    coop.bubble?.bg.destroy(); coop.bubble?.egg.destroy();
     for (const ch of coop.chickens) { const j = this.ySortSprites.indexOf(ch.sprite); if (j >= 0) this.ySortSprites.splice(j, 1); ch.destroy(); }
     for (const k of coop.cells) if (this.coopCells.get(k) === anchorKey) this.coopCells.delete(k);
     this.coops.delete(anchorKey);
@@ -3992,6 +4010,59 @@ export class GameScene extends Phaser.Scene {
     if (!this.coops.size) return;
     const timeNow = this.time.now, gameNow = this.nowMs();
     for (const coop of this.coops.values()) for (const ch of coop.chickens) ch.update(timeNow, gameNow, dt);
+  }
+
+  /** Show / hide the "eggs ready" speech bubble over a coop's door (a coloured bubble + an egg
+   *  icon), matching the coop's colour. Non-interactive; sits above the coop. */
+  private refreshCoopBubble(coop: CoopObj): void {
+    if (coop.eggsReady > 0) {
+      const bx = coop.door.x, by = coop.sprite.y - coop.sprite.displayHeight - 6; // just above the coop
+      if (!coop.bubble) {
+        const bg = this.add.image(bx, by, coopBubbleTexture(coop.color)).setOrigin(0.5, 1).setDisplaySize(24, 24).setDepth(COOP_BUBBLE_DEPTH);
+        const egg = this.add.image(bx, by - 13, 'egg-items', eggFrame(coop.color)).setOrigin(0.5, 0.5).setDisplaySize(11, 11).setDepth(COOP_BUBBLE_DEPTH + 1);
+        coop.bubble = { bg, egg };
+        // A gentle pop-in.
+        bg.setScale(0); this.tweens.add({ targets: bg, scaleX: 24 / bg.width, scaleY: 24 / bg.height, duration: 240, ease: 'Back.easeOut' });
+      }
+    } else if (coop.bubble) {
+      coop.bubble.bg.destroy(); coop.bubble.egg.destroy();
+      coop.bubble = undefined;
+    }
+  }
+
+  /** Daily egg production (called from settleDay): each coop with at least one ADULT chicken lays
+   *  eggs each morning, up to eggsPerDay per day, capped so uncollected eggs don't pile forever. */
+  private settleCoops(): void {
+    for (const coop of this.coops.values()) {
+      const adults = coop.chickens.filter((c) => c.stage === 'adult').length;
+      if (adults <= 0) continue;
+      const laid = Math.min(adults, COOP_TIERS[coop.size].eggsPerDay);
+      coop.eggsReady = Math.min(COOP_TIERS[coop.size].eggsPerDay * 3, coop.eggsReady + laid);
+      this.refreshCoopBubble(coop);
+    }
+  }
+
+  /** The coop under a world point — its building sprite bounds OR any of its footprint tiles
+   *  (generous, so a tap on the base or the tall building both count). */
+  private coopAtPoint(wx: number, wy: number): CoopObj | null {
+    for (const coop of this.coops.values()) if (coop.sprite.getBounds().contains(wx, wy)) return coop;
+    const tile = this.islandLayer?.getTileAtWorldXY(wx, wy);
+    if (tile) { const anchor = this.coopCells.get(`${tile.x},${tile.y}`); if (anchor) return this.coops.get(anchor) ?? null; }
+    return null;
+  }
+
+  /** Collect a coop's laid eggs → they pop out (fruit-style) into the backpack, bubble clears. */
+  private collectCoopEggs(coop: CoopObj): void {
+    const n = coop.eggsReady;
+    if (n <= 0) return;
+    coop.eggsReady = 0;
+    this.refreshCoopBubble(coop);
+    for (let i = 0; i < n; i++) {
+      this.playPopOut(coop.door.x + (Math.random() - 0.5) * 10, coop.door.y - 6, 'egg-items', eggFrame(coop.color));
+      this.collect(makeCoopEgg(coop.color));
+    }
+    playSfx(this, SFX_COLLECT);
+    this.scheduleSave();
   }
 
   /** God-hand AXE chop: the axe rears UP, holds a beat, then swings DOWN onto the
@@ -8461,7 +8532,7 @@ export class GameScene extends Phaser.Scene {
       crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
-      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())) })), // v23
+      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady })), // v23
 
       bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
@@ -8633,7 +8704,7 @@ export class GameScene extends Phaser.Scene {
         for (const b of s.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
         for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
         for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
-        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? []); // v23
+        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? [], c.eggsReady ?? 0); // v23
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.

@@ -249,6 +249,12 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   desc_coop_small_green: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
   desc_coop_small_blue: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
   desc_coop_small_yellow: { en: 'A cozy little coop. Chickens lay eggs here every morning.', 'zh-CN': '一个温馨的小鸡舍。小鸡每天早上都会在这儿下蛋。' },
+  // Collected eggs (laid daily by the coops).
+  item_egg_red: { en: 'Red Egg', 'zh-CN': '红鸡蛋' },
+  item_egg_brown: { en: 'Brown Egg', 'zh-CN': '棕鸡蛋' },
+  item_egg_green: { en: 'Green Egg', 'zh-CN': '绿鸡蛋' },
+  item_egg_blue: { en: 'Blue Egg', 'zh-CN': '蓝鸡蛋' },
+  item_egg_yellow: { en: 'Yellow Egg', 'zh-CN': '黄鸡蛋' },
   item_furn_plant: { en: 'Potted plant', 'zh-CN': '盆栽' },
   item_furn_flower: { en: 'Flowers', 'zh-CN': '花' },
   item_furn_lamp: { en: 'Lamp', 'zh-CN': '灯' },

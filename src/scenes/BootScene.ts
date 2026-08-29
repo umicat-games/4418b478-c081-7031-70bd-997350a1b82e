@@ -247,6 +247,9 @@ export class BootScene extends Phaser.Scene {
       this.load.spritesheet(`chick-${c}`, `uploaded/${CHICK_FILE[c]}.png`, { frameWidth: 16, frameHeight: 16 });
       this.load.spritesheet(`chicken-${c}`, `uploaded/${ADULT_FILE[c]}.png`, { frameWidth: 16, frameHeight: 16 });
     }
+    // Collectable eggs (laid daily) + the "eggs ready" speech bubble over the coop door (Phase 3).
+    this.load.atlas('egg-items', 'uploaded/egg_items.png', 'uploaded/egg_items.json');
+    for (const c of ['yellow', 'purple', 'pink', 'green', 'blue', 'grey']) this.load.image(`bubble-${c}`, `uploaded/bubble-${c}.png`);
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
     // Decorative fish (16×16, 15-frame top-down swim/turn) — swim in circles in the water.
