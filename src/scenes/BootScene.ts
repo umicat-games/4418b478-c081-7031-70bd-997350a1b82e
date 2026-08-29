@@ -448,15 +448,50 @@ export class BootScene extends Phaser.Scene {
     // Frame ranges are CONSISTENT across all colour sheets, so we register by range (ignoring
     // the per-asset tag-name variants like standup/stand_up, turn_to_chicken/grow_up). Keys:
     // `chick-<color>-<name>` / `chicken-<color>-<name>` / `egg-<name>`.
-    if (this.textures.exists('egg-hatch')) {
-      const eggAnims: Array<[string, number, number, number, number]> = [
-        ['egg-still', 0, 0, -1, 4], ['egg-shake', 10, 18, -1, 10], ['egg-hatch', 60, 108, 0, 14],
-      ];
-      for (const [key, s, e, rep, fps] of eggAnims) {
-        if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers('egg-hatch', { start: s, end: e }), frameRate: fps, repeat: rep });
+    //
+    // GOTCHA: several of these uploaded sheets pad an animation with EMPTY spacer cells (e.g. the
+    // last 2 cells of a row, or a whole blank spacer row) — so a plain start→end range plays through
+    // blank frames and the sprite BLINKS INVISIBLE mid-animation (the egg-hatch + chick-eat/grow +
+    // adult-eat/fly bugs). `filledFrames(tex,s,e)` keeps only the cells that actually have pixels,
+    // so the animation is exactly the artist's real frames with the spacer cells skipped.
+    const pixCache = new Map<string, ImageData | null>();
+    const pixData = (tex: string): ImageData | null => {
+      if (pixCache.has(tex)) return pixCache.get(tex)!;
+      let out: ImageData | null = null;
+      const src = this.textures.get(tex)?.getSourceImage() as HTMLImageElement | HTMLCanvasElement | undefined;
+      if (src && src.width && src.height) {
+        const cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+        const ctx = cv.getContext('2d');
+        if (ctx) { ctx.drawImage(src as CanvasImageSource, 0, 0); out = ctx.getImageData(0, 0, cv.width, cv.height); }
       }
+      pixCache.set(tex, out);
+      return out;
+    };
+    const filledFrames = (tex: string, start: number, end: number): number[] => {
+      const data = pixData(tex);
+      const raw: number[] = []; for (let n = start; n <= end; n++) raw.push(n);
+      if (!data) return raw; // pixels unreadable (shouldn't happen; same-origin) → fall back to the raw range
+      const cols = Math.floor(data.width / 16), total = cols * Math.floor(data.height / 16);
+      const out = raw.filter((n) => {
+        if (n >= total) return false;
+        const bx = (n % cols) * 16, by = Math.floor(n / cols) * 16;
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (data.data[((by + y) * data.width + (bx + x)) * 4 + 3] > 20) return true;
+        return false;
+      });
+      return out.length ? out : [start];
+    };
+    const mkAnim = (key: string, tex: string, s: number, e: number, rep: number, fps: number): void => {
+      if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers(tex, { frames: filledFrames(tex, s, e) }), frameRate: fps, repeat: rep });
+    };
+    if (this.textures.exists('egg-hatch')) {
+      mkAnim('egg-still', 'egg-hatch', 0, 0, -1, 4);
+      mkAnim('egg-shake', 'egg-hatch', 10, 18, -1, 10);
+      // Full hatch span (crack → shell splits & bursts → chick emerges); the blank spacer cells in
+      // 40-99 (42-49, 52-65, 84-89) are dropped by filledFrames. becomeChick then swaps to the chick.
+      mkAnim('egg-hatch', 'egg-hatch', 40, 99, 0, 14);
     }
-    // [name, startFrame, endFrame, repeat(-1=loop,0=once), fps]
+    // [name, startFrame, endFrame, repeat(-1=loop,0=once), fps] — ranges may include spacer cells,
+    // filledFrames strips them.
     const CHICK_SPEC: Array<[string, number, number, number, number]> = [
       ['idle', 0, 3, -1, 6], ['idle1', 8, 14, -1, 6], ['walk', 16, 23, -1, 10],
       ['sitdown', 24, 30, 0, 12], ['standup', 32, 38, 0, 12],
@@ -473,10 +508,7 @@ export class BootScene extends Phaser.Scene {
       for (const [prefix, spec] of [['chick', CHICK_SPEC], ['chicken', ADULT_SPEC]] as const) {
         const tex = `${prefix}-${color}`;
         if (!this.textures.exists(tex)) continue;
-        for (const [name, s, e, rep, fps] of spec) {
-          const key = `${tex}-${name}`;
-          if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers(tex, { start: s, end: e }), frameRate: fps, repeat: rep });
-        }
+        for (const [name, s, e, rep, fps] of spec) mkAnim(`${tex}-${name}`, tex, s, e, rep, fps);
       }
     }
     // Pad open/close: 0→4 turns the screen on + wipes to the shop, holding on frame 4;
