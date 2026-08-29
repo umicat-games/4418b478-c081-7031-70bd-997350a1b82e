@@ -63,6 +63,11 @@ const NOCREDITS_MSG = { en: "I think I'm out of little sparks to chat with for n
 const UNAVAILABLE_MSG = { en: 'Hmm, my words got a little tangled just now — could you say that again?', 'zh-CN': '嗯……我刚刚有点语无伦次，你能再说一遍吗？' };
 
 const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN' ? m['zh-CN'] : m.en);
+// After the player accepts, head into the game within this many more messages even if the AI
+// never calls naming_done (safety net so a misbehaving AI can't strand the player at the laptop).
+const NAMING_MAX_TURNS = 3;
+// The player signalling they're ready to go (so we enter immediately, names or not).
+const READY_RE = /^\s*(go|let'?s go|ready|i'?m ready|start|begin|enter|let'?s do it|走吧|出发|开始吧?|进去吧?|好了|准备好了?)\s*[!。.！~]*\s*$/i;
 
 export class LaptopScene extends Phaser.Scene {
   private laptop!: Phaser.GameObjects.Image;
@@ -108,6 +113,11 @@ export class LaptopScene extends Phaser.Scene {
   // a nickname for Cato ('' = keep "Cato") and how Cato should address them ('' = account name).
   private pendingCatoName = '';
   private pendingCallName = '';
+  // Once the player has accepted, entering the game is GUARANTEED — we don't rely on the AI
+  // reliably calling naming_done. After `NAMING_MAX_TURNS` more messages (or a "let's go"), we
+  // head in with whatever names were captured, so a misbehaving AI can never strand the player.
+  private accepted = false;
+  private namingTurns = 0;
 
   private panelH = 10; private fs = 16; // set in layout()
 
@@ -126,6 +136,7 @@ export class LaptopScene extends Phaser.Scene {
     this.onLineDone = undefined;
     this.recruiter = undefined;
     this.pendingCatoName = ''; this.pendingCallName = '';
+    this.accepted = false; this.namingTurns = 0;
     this.bgW = 0; this.bgH = 0; // force the (recreated, empty) wallpaper layer to rebuild
     this.removeInput();
 
@@ -219,9 +230,10 @@ export class LaptopScene extends Phaser.Scene {
             "If asked about something you are not sure Catopia has yet but that is RELATED (some feature or activity), do NOT over-promise — say you have not seen everything out there yet and are still figuring the island out, but you would love to find out together — then ask again if they will come.",
             'If asked about something clearly UNRELATED to Catopia or to the invitation (real-world facts, coding, math, etc.), gently say you do not really know about that — you are just a cat living on a quiet little island — and bring it right back to the invitation.',
             'Stay patient, kind, and hopeful, never pushy or annoyed, even if the player keeps dodging. Vary how you phrase the invitation so it does not feel like a broken record.',
-            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action AND respond with real, overflowing joy. Now that you two are going to share the island, there are two little getting-to-know-you things you would love to settle — but handle them NATURALLY, one warm offhand thought at a time, in your OWN words, NEVER as a stiff questionnaire or a form to fill in: (a) they are welcome to give you a nickname of their own if they feel like it, or keep calling you Cato; and (b) how should YOU address THEM — do they prefer you call them by their name' + (name ? ` "${name}"` : '') + ', or a different nickname? A good, gentle example of (b) is: "do you prefer I call you' + (name ? ` ${name}` : ' that') + ', or another nickname?". Bring these up warmly across your next message(s); do NOT dump both as a checklist. Do NOT call naming_done until BOTH are settled.',
+            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action AND respond with real, overflowing joy. CRITICAL: this turn must NOT be a goodbye — you are NOT signing off, you are just getting started. In this SAME reply you MUST also, warmly and in your own words (never a stiff questionnaire), invite them to give you a nickname of their own if they feel like it, or keep calling you Cato — and END your reply on that little invitation so it is clear you are waiting for them. Do NOT say "see you on the island" or anything that sounds like the conversation is over. Do NOT call naming_done yet.',
+            'On your following replies, once the nickname is settled, ALSO ask — lightly, one warm thought — how you should address THEM: do they prefer you call them by their name' + (name ? ` "${name}"` : '') + ', or a different nickname? A good, gentle example is: "do you prefer I call you' + (name ? ` ${name}` : ' that') + ', or another nickname?". Ask one thing at a time; never dump both as a checklist.',
             'Capture their answers as they come, in any order: a nickname for YOU → set_cato_name; happy to stay "Cato" / brushed it off → keep_cato_name. A name THEY want you to call them → set_call_name; happy with their own name / no preference → keep_call_name.',
-            'Once BOTH are settled (your nickname AND how to address them), call naming_done in that turn together with a warm sign-off (you cannot wait to see them on the island). naming_done is your LAST message — do not ask anything more. Keep the whole moment light and brief, a couple of warm beats between new friends, not an interview; if they seem ready to just get going, gently call keep_ for whatever is undecided and wrap up.',
+            'Once BOTH are settled (your nickname AND how to address them), call naming_done in that turn together with a warm sign-off (you cannot wait to see them on the island). naming_done is your LAST message — do not ask anything more. Keep the whole moment light and brief, a couple of warm beats between new friends, not an interview; if they seem ready to just get going or brush the questions off, gently call keep_ for whatever is undecided and naming_done to head in.',
             'When the player clearly REFUSES / declines the invitation itself (no, not interested, maybe later, I cannot), call the decline_help action AND write your OWN gentle sign-off: say that is okay and you understand, that it is a little sad but you get it, and that if they ever change their mind they can reach out / message you anytime. This is your LAST message and it is complete on its own — do NOT ask another question.',
             'Only call accept_help or decline_help once the player has actually made that choice. Random / off-topic / joking messages are NOT a yes or a no — while they are just messing around, asking questions, or thinking it over, keep chatting and do NOT call either action.',
           ],
@@ -450,34 +462,47 @@ export class LaptopScene extends Phaser.Scene {
   }
 
   /** Ask the recruiting-Cato npc. It answers in-character; when the player agrees it also
-   *  (naturally, in the same reply) offers to take a nickname, then wraps up with naming_done →
-   *  finish. Declines → decline_help → finish. */
+   *  (naturally, over the next reply or two) settles a nickname + how to address them, then
+   *  wraps up with naming_done → finish. Declines → decline_help → finish. Once accepted,
+   *  entering the game is guaranteed by a turn cap so the AI can't strand the player. */
   private async askRecruiter(text: string): Promise<void> {
+    const readyToGo = this.accepted && READY_RE.test(text); // an explicit "let's go" after accepting
+    if (this.accepted) this.namingTurns++; // count messages since acceptance (for the safety cap)
     this.aiThinking = true;
     this.showThinking();
     let r;
     try {
       r = await this.recruiter!.say(text, { observation: {} });
     } catch {
+      // A hiccup AFTER accepting must not trap the player — head in with what we have.
       this.aiThinking = false;
+      if (this.accepted) { this.enterGame(); return; }
       this.showLine(tr(UNAVAILABLE_MSG), () => this.makeInput());
       return;
     }
     this.aiThinking = false;
     if (this.busy) return; // finished/left mid-flight
-    if (!r.ok) { this.onAiUnavailable(r.reason); return; }
+    if (!r.ok) { if (this.accepted) { this.enterGame(); return; } this.onAiUnavailable(r.reason); return; }
     const did = (r.do ?? []).map((d) => d.name);
     const say = (r.say ?? '').trim();
+    if (did.includes('accept_help')) this.accepted = true; // committed → the game WILL start
     // Capture the chosen names whenever the AI reports them (may arrive across turns, in any order).
     const argOf = (n: string) => this.cleanName(((r.do ?? []).find((d) => d.name === n)?.args as { name?: unknown } | undefined)?.name);
     const catoArg = argOf('set_cato_name'); if (catoArg) this.pendingCatoName = catoArg;
     const callArg = argOf('set_call_name'); if (callArg) this.pendingCallName = callArg;
-    // Both settled → head into the game with the chosen names (Cato's own say IS the sign-off).
-    if (did.includes('naming_done')) { this.showLine(say || tr(NAME_DONE), () => this.finish(true, { cato: this.pendingCatoName, call: this.pendingCallName })); return; }
     // Declined the invitation → Cato's own gentle sign-off, then back to the title.
-    if (did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
+    if (!this.accepted && did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
+    // Enter the game when: the AI wraps up (naming_done) OR the player is ready OR we've spent the
+    // naming budget — so an AI that forgets naming_done still can't leave the player stuck.
+    const enterNow = did.includes('naming_done') || readyToGo || (this.accepted && this.namingTurns >= NAMING_MAX_TURNS);
+    if (enterNow) { this.showLine(say || tr(NAME_DONE), () => this.enterGame()); return; }
     // Everything else (still deciding, OR just accepted + getting to know each other) → keep chatting.
     this.showLine(say || tr(FILLER), () => this.makeInput());
+  }
+
+  /** Head into the game with whatever nickname / call-name were chosen. */
+  private enterGame(): void {
+    this.finish(true, { cato: this.pendingCatoName, call: this.pendingCallName });
   }
 
   /** The AI couldn't reply — tell the player in-fiction and keep the chat open. */
