@@ -4193,17 +4193,15 @@ export class GameScene extends Phaser.Scene {
       const e = now - this.coopWheelOpenAt;
       if (e < GameScene.WHEEL_OPEN_MS) { const be = spring(e / GameScene.WHEEL_OPEN_MS); f = be; s = be; }
     }
-    const zh = getLang() === 'zh-CN';
     const idx = COOP_SIZES.indexOf(coop.size);
     const nextSize = idx < COOP_SIZES.length - 1 ? COOP_SIZES[idx + 1]! : null;
     const upCost = nextSize ? COOP_TIERS[nextSize].price - COOP_TIERS[coop.size].price : 0;
-    // Each action = an icon (ui-icons frame) + a short label under the circle. Icons: move ↵ (141),
+    // Each action = an ICON only (no text label — same as the tool wheel). Icons: move ↵ (141),
     // upgrade crown (30), remove ✗ (45).
-    const acts: Array<{ kind: string; frame: number; label: string; enabled: boolean }> = [{ kind: 'move', frame: 141, label: zh ? '移动' : 'Move', enabled: true }];
-    // Upgrade — no cost shown on the wheel (the confirm dialog explains cost + benefits). Hidden once
-    // an upgrade is already in progress (pendingUpgrade); greyed if you can't afford it.
-    if (nextSize && !coop.pendingUpgrade) acts.push({ kind: 'upgrade', frame: 30, label: zh ? '升级' : 'Upgrade', enabled: this.money >= upCost });
-    acts.push({ kind: 'delete', frame: 45, label: zh ? '拆除' : 'Remove', enabled: true });
+    const acts: Array<{ kind: string; frame: number; enabled: boolean }> = [{ kind: 'move', frame: 141, enabled: true }];
+    // Upgrade — hidden once an upgrade is already in progress (pendingUpgrade); greyed if unaffordable.
+    if (nextSize && !coop.pendingUpgrade) acts.push({ kind: 'upgrade', frame: 30, enabled: this.money >= upCost });
+    acts.push({ kind: 'delete', frame: 45, enabled: true });
     // Project the coop centre to screen (centre-zoom) + fan the circles across an upper arc.
     const cam = this.cameras.main;
     const cx = (coop.sprite.x - cam.worldView.x) * cam.zoom;
@@ -4213,7 +4211,7 @@ export class GameScene extends Phaser.Scene {
     const A0 = (-150 * Math.PI) / 180, A1 = (-30 * Math.PI) / 180; // upper arc (screen y-down: -90 = straight up)
     const n = acts.length;
     const ang = (i: number) => A0 + (A1 - A0) * (n === 1 ? 0.5 : i / (n - 1));
-    const buttons = acts.map((a, i) => ({ kind: a.kind, iconFrame: a.frame, label: a.label, enabled: a.enabled, size: D, x: Math.round(cx + R * Math.cos(ang(i))), y: Math.round(cyC + R * Math.sin(ang(i))) }));
+    const buttons = acts.map((a, i) => ({ kind: a.kind, iconFrame: a.frame, enabled: a.enabled, size: D, x: Math.round(cx + R * Math.cos(ang(i))), y: Math.round(cyC + R * Math.sin(ang(i))) }));
     this.registry.set('coopMenu', { visible: true, buttons });
     // Hit-boxes use the RESTING geometry (full RB / SIZE) so a fast tap mid-anim still lands.
     this.registry.set('coopMenuBounds', acts.map((a, i) => ({ kind: a.kind, x: cx + RB * Math.cos(ang(i)) - SIZE / 2, y: cyC + RB * Math.sin(ang(i)) - SIZE / 2, w: SIZE, h: SIZE, enabled: a.enabled })));

@@ -53,7 +53,7 @@ export class HoverScene extends Phaser.Scene {
   private pill?: Phaser.GameObjects.Graphics;     // the name-label background
   private label?: Phaser.GameObjects.Text;
   private paletteBtns: Array<{ bg: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }> = []; // tool-wheel circle pool
-  private coopBtns: Array<{ bg: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }> = []; // coop action wheel circles (pooled)
+  private coopBtns: Array<{ bg: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }> = []; // coop action wheel circles (pooled; icon-only, no labels — same as the tool wheel)
 
   constructor() { super({ key: 'HoverScene' }); }
 
@@ -108,27 +108,24 @@ export class HoverScene extends Phaser.Scene {
    *  `tool-circle-bg-2` base, `-selected` under the cursor) fanned above a tapped coop, with a
    *  short label under each. GameScene owns the state + routes taps via `coopMenuBounds`. */
   private renderCoopMenu(): void {
-    const m = this.registry.get('coopMenu') as { visible: boolean; buttons: Array<{ kind: string; iconFrame: number; label: string; enabled: boolean; size: number; x: number; y: number }> } | undefined;
+    const m = this.registry.get('coopMenu') as { visible: boolean; buttons: Array<{ kind: string; iconFrame: number; enabled: boolean; size: number; x: number; y: number }> } | undefined;
     const btns = m?.visible ? m.buttons : [];
     while (this.coopBtns.length < btns.length) {
       const bg = this.add.image(0, 0, CIRCLE_BG_WARM);
       const icon = this.add.image(0, 0, 'ui-icons', 0);
-      const label = this.add.text(0, 0, '', { fontFamily: 'zpix, sans-serif', fontSize: '13px', color: '#fff3d6' }).setOrigin(0.5, 0).setResolution(3).setStroke('#2a1c0c', 3);
-      this.coopBtns.push({ bg, icon, label });
+      this.coopBtns.push({ bg, icon });
     }
     const ptr = this.input.activePointer;
     this.coopBtns.forEach((p, i) => {
       const b = btns[i];
-      if (!b) { p.bg.setVisible(false); p.icon.setVisible(false); p.label.setVisible(false); return; }
+      if (!b) { p.bg.setVisible(false); p.icon.setVisible(false); return; }
       const hovered = b.enabled && Math.hypot(ptr.x - b.x, ptr.y - b.y) <= b.size / 2;
       p.bg.setVisible(true).setPosition(b.x, b.y).setDisplaySize(b.size, b.size).setTexture(hovered ? CIRCLE_BG_SEL : CIRCLE_BG_WARM).setAlpha(b.enabled ? 1 : 0.85);
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture('ui-icons', b.iconFrame).clearTint().setAlpha(b.enabled ? 1 : 0.4);
       p.icon.setScale((b.size * 0.5) / Math.max(p.icon.width, p.icon.height || 1));
-      p.label.setText(b.label).setColor(b.enabled ? '#fff3d6' : '#b8ae9e').setPosition(b.x, b.y + b.size / 2 + 1).setVisible(true);
       this.children.bringToTop(p.icon);
-      this.children.bringToTop(p.label);
     });
-    for (let i = btns.length; i < this.coopBtns.length; i++) { const p = this.coopBtns[i]!; p.bg.setVisible(false); p.icon.setVisible(false); p.label.setVisible(false); }
+    for (let i = btns.length; i < this.coopBtns.length; i++) { const p = this.coopBtns[i]!; p.bg.setVisible(false); p.icon.setVisible(false); }
   }
 
   private renderPalette(): void {
