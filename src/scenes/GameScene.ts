@@ -1713,8 +1713,12 @@ export class GameScene extends Phaser.Scene {
       // LEFT-click only points + uses the held tool, RIGHT-click summons the wheel.
       if (pointer.rightButtonDown()) {
         if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.confirmOpen || this.inventoryOpen) return;
-        if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // right-click again → animated dismiss
         const rwp = this.cameras.main.getWorldPoint(sx, sy);
+        // A COOP under the cursor → its action wheel (same summon gesture as the tool wheel).
+        if (this.coopWheel) { this.beginCloseCoopWheel(null); return; } // right-click again → animated dismiss
+        const ck = this.coopAtPoint(rwp.x, rwp.y);
+        if (ck) { this.openCoopWheel(ck); return; }
+        if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // right-click again → animated dismiss
         this.openToolWheelAt(rwp.x, rwp.y, true);
         return;
       }
@@ -1769,10 +1773,13 @@ export class GameScene extends Phaser.Scene {
       this.touchLongFired = false;
       this.touchStartX = pointer.x; this.touchStartY = pointer.y;
       this.touchPressTimer?.remove();
-      const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.inventoryOpen && !this.toolPaletteOpen;
+      const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.inventoryOpen && !this.toolPaletteOpen && !this.coopWheel;
       this.touchPressTimer = canWheel
         ? this.time.delayedCall(GameScene.LONG_PRESS_MS, () => {
             const wp = this.cameras.main.getWorldPoint(this.touchStartX, this.touchStartY);
+            // A coop under the finger → its action wheel; else the tool wheel.
+            const ck = this.coopAtPoint(wp.x, wp.y);
+            if (ck) { this.openCoopWheel(ck); this.touchLongFired = true; return; }
             this.touchLongFired = this.openToolWheelAt(wp.x, wp.y, true); // false = nothing here → the release falls back to a normal tap
           })
         : undefined;
@@ -1808,7 +1815,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => {
       if (this.confirmOpen) { this.closeConfirm(); return; } // Esc = cancel the confirm
       if (this.craftOpen) { this.closeCraft(); return; }     // Esc = close the crafting modal
-      if (this.coopWheel) { this.closeCoopWheel(); return; } // Esc = close the coop action wheel
+      if (this.coopWheel) { this.beginCloseCoopWheel(null); return; } // Esc = dismiss the coop action wheel (animated)
       if (this.dialogOpen && !this.cutscene) { this.closeDialog(); return; } // a cutscene can't be Esc'd out of
       // Esc with a placeable / tool held → empty hand (so you can tap the world to interact, e.g. collect coop eggs).
       if (this.activePlace || this.activeSeed || this.heldExternal || this.hotbarSelected >= 0) this.clearHeld();
@@ -1916,11 +1923,12 @@ export class GameScene extends Phaser.Scene {
     // Tap the house → enter its interior (a separate scene). Checked after the door
     // objects (mailbox/chest/pad/craft) so those win over the house footprint they sit on.
     if (!this.activePlace && this.houseDoorContains(wp.x, wp.y)) { this.enterHouse(); return; }
-    // Tap a chicken coop: collect its laid eggs if any (fruit-style pop); otherwise the action
-    // wheel (Phase 4) — for now a no-op collect target. Checked before the tile actions.
+    // TAP/LEFT-CLICK a coop = USE it: collect its laid eggs if any (fruit-style pop). The action
+    // WHEEL (move/upgrade/remove) opens on RIGHT-click / long-press instead (the unified summon
+    // gesture) — never on a plain tap. Checked before the tile actions; consumes the tap either way.
     if (!this.activePlace) {
       const ck = this.coopAtPoint(wp.x, wp.y);
-      if (ck) { const coop = this.coops.get(ck)!; if (coop.eggsReady > 0) this.collectCoopEggs(coop); else this.openCoopWheel(ck); return; }
+      if (ck) { const coop = this.coops.get(ck)!; if (coop.eggsReady > 0) this.collectCoopEggs(coop); return; }
     }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
@@ -4123,20 +4131,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── Coop action wheel (move / delete / upgrade) ─────────────────────────────
+  //  Opens on RIGHT-click / long-press (the unified wheel-summon gesture, same as the tool wheel);
+  //  spring-animates open + closed like the tool wheel.
   private coopWheel?: { anchorKey: string };
+  private coopWheelOpenAt = 0; // time the wheel opened (drives the spring-out)
+  private coopWheelClose: { at: number; hitKind: string | null } | null = null; // closing anim (hitKind = picked action, or null = dismiss)
   private movingCoop?: { size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady: number };
 
-  /** Open the action wheel for a coop (tapped empty-handed with no eggs to collect). */
+  /** Open the action wheel for a coop (right-click / long-press on the coop). */
   private openCoopWheel(anchorKey: string): void {
     if (!this.coops.has(anchorKey)) return;
     this.coopWheel = { anchorKey };
+    this.coopWheelOpenAt = this.time.now; // start the spring-out
+    this.coopWheelClose = null;
     this.publishCoopWheel();
     playSfx(this);
   }
 
+  /** Begin the animated close: a picked action (`hitKind`) holds a beat then reverse-springs and
+   *  runs; a dismiss (null) reverse-springs immediately. Finalised in publishCoopWheel. */
+  private beginCloseCoopWheel(hitKind: string | null): void {
+    if (!this.coopWheel || this.coopWheelClose) return;
+    this.coopWheelClose = { at: this.time.now, hitKind };
+    if (hitKind) playSfx(this); // selection blip
+  }
+
+  /** Instant close (no anim) — used by ESC / a modal forcing it shut. */
   private closeCoopWheel(): void {
     if (!this.coopWheel) return;
     this.coopWheel = undefined;
+    this.coopWheelClose = null;
     this.registry.set('coopMenu', { visible: false, buttons: [] });
     this.registry.set('coopMenuBounds', []);
   }
@@ -4147,6 +4171,26 @@ export class GameScene extends Phaser.Scene {
     if (!this.coopWheel) return;
     const coop = this.coops.get(this.coopWheel.anchorKey);
     if (!coop) { this.closeCoopWheel(); return; }
+    // --- Spring appear/disappear (mirror the tool wheel): `f` = radial factor (0 = centre, 1 = rest),
+    //     `s` = size factor. Open = spring out; select-close = the spring REVERSED after a short hold;
+    //     dismiss = reversed immediately. When the reverse finishes, finalise + run the picked action. ---
+    const spring = (p: number) => Phaser.Math.Easing.Back.Out(Phaser.Math.Clamp(p, 0, 1), GameScene.WHEEL_OVERSHOOT);
+    let f = 1, s = 1;
+    const now = this.time.now;
+    if (this.coopWheelClose) {
+      const HOLD = this.coopWheelClose.hitKind ? GameScene.WHEEL_HOLD_MS : 0;
+      const e = now - this.coopWheelClose.at;
+      if (e >= HOLD + GameScene.WHEEL_OPEN_MS) {
+        const kind = this.coopWheelClose.hitKind, anchor = this.coopWheel.anchorKey;
+        this.closeCoopWheel();
+        if (kind) this.runCoopAction(kind, anchor);
+        return;
+      }
+      if (e < HOLD) { f = 1; s = 1; } else { const be = spring(1 - (e - HOLD) / GameScene.WHEEL_OPEN_MS); f = be; s = be; }
+    } else {
+      const e = now - this.coopWheelOpenAt;
+      if (e < GameScene.WHEEL_OPEN_MS) { const be = spring(e / GameScene.WHEEL_OPEN_MS); f = be; s = be; }
+    }
     const zh = getLang() === 'zh-CN';
     const idx = COOP_SIZES.indexOf(coop.size);
     const nextSize = idx < COOP_SIZES.length - 1 ? COOP_SIZES[idx + 1]! : null;
@@ -4160,27 +4204,25 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const cx = (coop.sprite.x - cam.worldView.x) * cam.zoom;
     const cyC = (coop.sprite.y - (coop.sprite.displayHeight / 2) - cam.worldView.y) * cam.zoom;
-    const size = 54, R = (coop.sprite.displayHeight / 2) * cam.zoom + 46;
+    const SIZE = 54, RB = (coop.sprite.displayHeight / 2) * cam.zoom + 46; // resting size + ring radius
+    const D = SIZE * s, R = RB * f; // animated
     const A0 = (-150 * Math.PI) / 180, A1 = (-30 * Math.PI) / 180; // upper arc (screen y-down: -90 = straight up)
     const n = acts.length;
-    const buttons = acts.map((a, i) => {
-      const tt = n === 1 ? 0.5 : i / (n - 1);
-      const ang = A0 + (A1 - A0) * tt;
-      return { kind: a.kind, iconFrame: a.frame, label: a.label, enabled: a.enabled, size, x: Math.round(cx + R * Math.cos(ang)), y: Math.round(cyC + R * Math.sin(ang)) };
-    });
+    const ang = (i: number) => A0 + (A1 - A0) * (n === 1 ? 0.5 : i / (n - 1));
+    const buttons = acts.map((a, i) => ({ kind: a.kind, iconFrame: a.frame, label: a.label, enabled: a.enabled, size: D, x: Math.round(cx + R * Math.cos(ang(i))), y: Math.round(cyC + R * Math.sin(ang(i))) }));
     this.registry.set('coopMenu', { visible: true, buttons });
-    this.registry.set('coopMenuBounds', buttons.map((b) => ({ kind: b.kind, x: b.x - size / 2, y: b.y - size / 2, w: size, h: size, enabled: b.enabled })));
+    // Hit-boxes use the RESTING geometry (full RB / SIZE) so a fast tap mid-anim still lands.
+    this.registry.set('coopMenuBounds', acts.map((a, i) => ({ kind: a.kind, x: cx + RB * Math.cos(ang(i)) - SIZE / 2, y: cyC + RB * Math.sin(ang(i)) - SIZE / 2, w: SIZE, h: SIZE, enabled: a.enabled })));
   }
 
-  /** Route a tap while the coop wheel is open: hit a button (run its action) or tap-away (close).
-   *  Returns true if it consumed the tap. */
+  /** Route a tap while the coop wheel is open: hit a button → animated close + run its action;
+   *  tap-away → animated dismiss. Returns true if it consumed the tap. */
   private handleCoopWheelClick(x: number, y: number): boolean {
     if (!this.coopWheel) return false;
+    if (this.coopWheelClose) return true; // already animating shut → swallow
     const bounds = this.registry.get('coopMenuBounds') as Array<{ kind: string; x: number; y: number; w: number; h: number; enabled: boolean }> | null;
     const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    const anchor = this.coopWheel.anchorKey;
-    this.closeCoopWheel();
-    if (hit && hit.enabled) this.runCoopAction(hit.kind, anchor);
+    this.beginCloseCoopWheel(hit && hit.enabled ? hit.kind : null);
     return true;
   }
 
@@ -9458,6 +9500,11 @@ export class GameScene extends Phaser.Scene {
       // WHILE holding a tool (to switch or cancel). It closes on a modal, or explicit pick/dismiss.
       if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen) this.closeToolPalette();
       else { if (!this.wheelClose) this.updateToolPaletteHover(); this.publishToolPalette(); } // freeze hover while the exit plays
+    }
+    if (this.coopWheel) {
+      // Keep the coop wheel tracking the camera + advancing its spring anim; a modal forces it shut.
+      if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen) this.closeCoopWheel();
+      else this.publishCoopWheel();
     }
     this.publishToolHud(); // keep the current-tool indicator + its visibility in sync each frame
     this.publishBackpackBtn(); // keep the sprout button's visibility in sync
