@@ -486,9 +486,13 @@ export class BootScene extends Phaser.Scene {
     if (this.textures.exists('egg-hatch')) {
       mkAnim('egg-still', 'egg-hatch', 0, 0, -1, 4);
       mkAnim('egg-shake', 'egg-hatch', 10, 18, -1, 10);
-      // Full hatch span (crack → shell splits & bursts → chick emerges); the blank spacer cells in
-      // 40-99 (42-49, 52-65, 84-89) are dropped by filledFrames. becomeChick then swaps to the chick.
-      mkAnim('egg-hatch', 'egg-hatch', 40, 99, 0, 14);
+      // Hatch = egg wobbles & shell splits (70-79) → chick emerges from the burst (90-99). This can't
+      // be a plain range: within it the cells 66-69 and 80-83 are SHADOW-ONLY (a tiny ground shadow,
+      // NO egg body — filledFrames keeps them since they have pixels, so the egg still blinked), and
+      // 41/51 sit off-centre (a sideways jump). So the hatch is this explicit body-bearing list.
+      // becomeChick then swaps to the colour-matched chick sprite.
+      const hatchFrames = [70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99];
+      if (!this.anims.exists('egg-hatch')) this.anims.create({ key: 'egg-hatch', frames: this.anims.generateFrameNumbers('egg-hatch', { frames: hatchFrames }), frameRate: 14, repeat: 0 });
     }
     // [name, startFrame, endFrame, repeat(-1=loop,0=once), fps] — ranges may include spacer cells,
     // filledFrames strips them.
