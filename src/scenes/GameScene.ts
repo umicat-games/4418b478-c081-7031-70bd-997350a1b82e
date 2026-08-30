@@ -3642,6 +3642,7 @@ export class GameScene extends Phaser.Scene {
   private beginConfirmPress(action: string): void {
     this.confirmHeld = action;
     this.registry.set('confirmHeld', action);
+    playSfx(this); // button click blip
   }
 
   /** Release a held confirm button → un-press; if released while still over the SAME button, act

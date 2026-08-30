@@ -72,9 +72,11 @@ export class ConfirmScene extends Phaser.Scene {
     const c = this.add.container(0, 0);
     this.root = c;
 
-    // Modal dim backdrop (fades in).
-    const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0).setOrigin(0, 0);
-    this.tweens.add({ targets: dim, alpha: 0.45, duration: 140 });
+    // Modal dim backdrop (fades in) — blocks the game visually while the dialog is up. NB: the
+    // fill alpha must be the target (0.5); tweening the GameObject `alpha` from 0→1 fades it in
+    // (a `fillAlpha:0` rect stays invisible no matter the GO alpha — the old "no mask" bug).
+    const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.5).setOrigin(0, 0).setAlpha(0);
+    this.tweens.add({ targets: dim, alpha: 1, duration: 140 });
     c.add(dim);
 
     // A grouped panel + contents that pops in as one unit.
