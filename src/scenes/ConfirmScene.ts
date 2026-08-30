@@ -65,24 +65,30 @@ export class ConfirmScene extends Phaser.Scene {
     const box = this.add.container(cx, cy);
     c.add(box);
 
-    const panelW = 300, panelH = 170;
-    const panel = this.add.nineslice(0, 0, ATLAS, FRAME_PANEL, panelW / PANEL_SCALE, panelH / PANEL_SCALE, 10, 10, 11, 11);
-    panel.setScale(PANEL_SCALE);
-    box.add(panel);
-
+    // Panel height ADAPTS to the (wrapped) title so buttons never overlap a longer message
+    // (a one-line "Remove?" stays compact; the multi-line upgrade prompt grows taller).
+    const panelW = 340;
     const title = this.add
-      .text(0, -34, model.title, {
+      .text(0, 0, model.title, {
         fontFamily: dialogFont(),
         fontSize: '22px',
         color: '#5b3a1e',
         align: 'center',
-        wordWrap: { width: panelW - 48 },
+        wordWrap: { width: panelW - 52 },
       })
       .setOrigin(0.5);
+    const TOP = 30, GAP = 24, BOT = 28;
+    const panelH = Math.round(TOP + title.height + GAP + BTN + BOT);
+
+    const panel = this.add.nineslice(0, 0, ATLAS, FRAME_PANEL, panelW / PANEL_SCALE, panelH / PANEL_SCALE, 10, 10, 11, 11);
+    panel.setScale(PANEL_SCALE);
+    box.add(panel);
+
+    title.setPosition(0, -panelH / 2 + TOP + title.height / 2);
     box.add(title);
 
     // Two buttons, side by side below the title.
-    const okX = -58, cancelX = 58, btnY = 40;
+    const okX = -58, cancelX = 58, btnY = panelH / 2 - BOT - BTN / 2;
     box.add(this.button(okX, btnY, ICON_OK));
     box.add(this.button(cancelX, btnY, ICON_CANCEL));
 

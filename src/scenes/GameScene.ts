@@ -550,6 +550,7 @@ interface CoopObj {
   door: { x: number; y: number }; // coop base centre — where eggs sit + chickens roam around
   eggsReady: number; // collectable eggs laid (Phase 3): daily production, click to collect
   bubble?: { bg: Phaser.GameObjects.Image; egg: Phaser.GameObjects.Image }; // "eggs ready" indicator over the door
+  pendingUpgrade?: { size: CoopSize; applyDay: number }; // v24: paid upgrade in progress — applies next morning
 }
 
 /** A placed building structure at a cell (wall / door / furniture). */
@@ -588,7 +589,7 @@ interface SaveBlob {
   crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
   cato: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
-  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number }>; // v23: placed chicken coops + occupants + laid eggs
+  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number; pendingUpgrade?: { size: CoopSize; applyDay: number } }>; // v23: placed chicken coops + occupants + laid eggs; v24: pending overnight upgrade
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
@@ -2620,6 +2621,7 @@ export class GameScene extends Phaser.Scene {
     this.settleOrders();
     this.settleSales();
     this.settleHomeUpgrade();
+    this.settleCoopUpgrades(); // build any coop whose paid upgrade came due (before they lay)
     this.settleCoops(); // coops lay their daily eggs
     this.settleRealDayBond(days);
     this.scheduleSave();
@@ -3973,7 +3975,7 @@ export class GameScene extends Phaser.Scene {
 
   /** (Re)create a coop sprite (+ base collider + its chicken occupants) at an anchor cell → the
    *  `coops` map. `occupants` = a number → that many FRESH eggs; an array → restore saved chickens. */
-  private restoreCoop(anchorKey: string, size: CoopSize, color: CoopColor, occupants: number | SavedChicken[], eggsReady = 0): void {
+  private restoreCoop(anchorKey: string, size: CoopSize, color: CoopColor, occupants: number | SavedChicken[], eggsReady = 0, pendingUpgrade?: { size: CoopSize; applyDay: number }): void {
     if (!this.islandLayer) return;
     const [cx, cy] = anchorKey.split(',').map(Number);
     const w0 = this.islandLayer.tileToWorldXY(cx!, cy!);
@@ -3996,7 +3998,7 @@ export class GameScene extends Phaser.Scene {
     // Occupants roam in FRONT of the coop (a bit below its base so eggs sit on the ground).
     const door = { x: footX, y: footY + 3 };
     const chickens = this.spawnCoopChickens(color, door, occupants);
-    const coop: CoopObj = { size, color, sprite, body, cells, chickens, door, eggsReady };
+    const coop: CoopObj = { size, color, sprite, body, cells, chickens, door, eggsReady, pendingUpgrade };
     this.coops.set(anchorKey, coop);
     this.refreshCoopBubble(coop);
   }
@@ -4198,7 +4200,9 @@ export class GameScene extends Phaser.Scene {
     // Each action = an icon (ui-icons frame) + a short label under the circle. Icons: move ↵ (141),
     // upgrade crown (30), remove ✗ (45).
     const acts: Array<{ kind: string; frame: number; label: string; enabled: boolean }> = [{ kind: 'move', frame: 141, label: zh ? '移动' : 'Move', enabled: true }];
-    if (nextSize) acts.push({ kind: 'upgrade', frame: 30, label: `${zh ? '升级' : 'Upgrade'} (${upCost})`, enabled: this.money >= upCost });
+    // Upgrade — no cost shown on the wheel (the confirm dialog explains cost + benefits). Hidden once
+    // an upgrade is already in progress (pendingUpgrade); greyed if you can't afford it.
+    if (nextSize && !coop.pendingUpgrade) acts.push({ kind: 'upgrade', frame: 30, label: zh ? '升级' : 'Upgrade', enabled: this.money >= upCost });
     acts.push({ kind: 'delete', frame: 45, label: zh ? '拆除' : 'Remove', enabled: true });
     // Project the coop centre to screen (centre-zoom) + fan the circles across an upper arc.
     const cam = this.cameras.main;
@@ -4247,22 +4251,42 @@ export class GameScene extends Phaser.Scene {
 
   /** Upgrade a coop to the next size (pay the price difference) if the bigger footprint fits +
    *  it's affordable. Keeps the chickens + laid eggs + colour. */
+  /** Upgrade a coop — a CONFIRM dialog first (explains: more chickens + more eggs/day, the cost, and
+   *  that it's ready tomorrow morning), then it's an OVERNIGHT job: pay now, the bigger coop is built
+   *  at the next day-settle (settleCoopUpgrades). */
   private coopUpgrade(anchorKey: string): void {
     const coop = this.coops.get(anchorKey);
-    if (!coop) return;
+    if (!coop || coop.pendingUpgrade) return;
     const idx = COOP_SIZES.indexOf(coop.size);
     if (idx >= COOP_SIZES.length - 1) return; // already big
     const next = COOP_SIZES[idx + 1]!;
     const cost = COOP_TIERS[next].price - COOP_TIERS[coop.size].price;
     if (cost > this.money) { this.catoSay('chatter_bag_full'); return; } // (reuse a gentle "can't" remark)
     const [cx, cy] = anchorKey.split(',').map(Number);
-    if (!this.coopFootprintClear(cx!, cy!, next, anchorKey)) return; // no room for the bigger coop
-    const saved = coop.chickens.map((ch) => ch.serialize(this.nowMs()));
-    const eggs = coop.eggsReady, color = coop.color;
-    this.addMoney(-cost);
-    this.restoreCoop(anchorKey, next, color, saved, eggs); // removeCoop inside → rebuild bigger, same occupants
-    playSfx(this, SFX_GETITEM);
-    this.scheduleSave();
+    if (!this.coopFootprintClear(cx!, cy!, next, anchorKey)) { this.catoSay('chatter_coop_no_room'); return; } // no room to grow
+    const msg = t('coop_upgrade_confirm').replace('{cost}', String(cost));
+    this.promptConfirm(msg, () => {
+      const c = this.coops.get(anchorKey);
+      if (!c || c.pendingUpgrade || cost > this.money) return;
+      this.addMoney(-cost);                                  // pay now (下单即扣钱)
+      c.pendingUpgrade = { size: next, applyDay: this.dayCount + 1 }; // built tomorrow morning
+      playSfx(this, SFX_GETITEM);
+      this.catoSay('chatter_coop_upgrading');
+      this.scheduleSave();
+    });
+  }
+
+  /** Day rollover: build any coop whose paid upgrade is due — rebuild it one tier bigger, keeping its
+   *  occupants + laid eggs. Runs BEFORE settleCoops so the bigger coop lays its new rate the same morning. */
+  private settleCoopUpgrades(): void {
+    const due: Array<{ key: string; size: CoopSize }> = [];
+    for (const [key, coop] of this.coops) if (coop.pendingUpgrade && coop.pendingUpgrade.applyDay <= this.dayCount) due.push({ key, size: coop.pendingUpgrade.size });
+    for (const d of due) {
+      const coop = this.coops.get(d.key);
+      if (!coop) continue;
+      const saved = coop.chickens.map((ch) => ch.serialize(this.nowMs()));
+      this.restoreCoop(d.key, d.size, coop.color, saved, coop.eggsReady); // rebuild bigger (pendingUpgrade cleared)
+    }
   }
 
   /** Are all footprint cells for `size` at (cx,cy) free (on-island, unoccupied, off the house),
@@ -8784,7 +8808,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 23,
+      v: 24,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -8792,7 +8816,7 @@ export class GameScene extends Phaser.Scene {
       crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
-      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady })), // v23
+      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady, pendingUpgrade: c.pendingUpgrade })), // v23; v24 pendingUpgrade
 
       bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
@@ -8964,7 +8988,7 @@ export class GameScene extends Phaser.Scene {
         for (const b of s.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
         for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
         for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
-        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? [], c.eggsReady ?? 0); // v23
+        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? [], c.eggsReady ?? 0, c.pendingUpgrade); // v23; v24 pendingUpgrade
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.

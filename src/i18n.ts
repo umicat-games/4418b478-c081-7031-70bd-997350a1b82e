@@ -68,6 +68,8 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   chatter_ate: { en: 'Munch munch — that hit the spot!', 'zh-CN': '吃点东西，力气回来啦～' },
   chatter_full: { en: "I'm stuffed — couldn't eat another bite!", 'zh-CN': '我现在饱饱的，吃不下啦～' },
   chatter_bag_full: { en: "My little bag is full — no more room!", 'zh-CN': '我的小背包装不下更多啦～' },
+  chatter_coop_no_room: { en: "There's no room for a bigger coop here!", 'zh-CN': '这里放不下更大的鸡舍啦～' },
+  chatter_coop_upgrading: { en: "The bigger coop will be ready tomorrow morning!", 'zh-CN': '更大的鸡舍明早就好啦～' },
   chatter_pack_full: { en: "The backpack's full! Store some stuff in the chest.", 'zh-CN': '背包满啦！先存点东西到箱子里吧～' },
   // Names for the {crop} slot above — crops, tree fruit, and berry bushes.
   crop_generic: { en: 'crops', 'zh-CN': '作物' },
@@ -256,6 +258,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   item_egg_blue: { en: 'Blue Egg', 'zh-CN': '蓝鸡蛋' },
   item_egg_yellow: { en: 'Yellow Egg', 'zh-CN': '黄鸡蛋' },
   coop_remove_confirm: { en: 'Remove this coop? (You get the coop back.)', 'zh-CN': '拆除这个鸡舍吗？（会退回鸡舍到背包）' },
+  coop_upgrade_confirm: { en: 'Upgrade this coop? It holds more chickens and lays more eggs each day. Costs {cost} coins — ready tomorrow morning.', 'zh-CN': '升级这个鸡舍吗？可以养更多鸡、每天产更多蛋。花费 {cost} 金币，明早完工。' },
   item_furn_plant: { en: 'Potted plant', 'zh-CN': '盆栽' },
   item_furn_flower: { en: 'Flowers', 'zh-CN': '花' },
   item_furn_lamp: { en: 'Lamp', 'zh-CN': '灯' },
