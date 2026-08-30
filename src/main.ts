@@ -5,6 +5,7 @@ export const umicatReady = Umicat.init({ standaloneGameId: 'star-siege' }).catch
 import { BootScene } from './scenes/BootScene';
 import { TitleScene } from './scenes/TitleScene';
 import { GameScene } from './scenes/GameScene';
+import { PauseScene } from './scenes/PauseScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { renderScripts } from './visuals';
 
@@ -12,7 +13,7 @@ function startGame(): void {
   createUmicatGame({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scenes: [BootScene, TitleScene, GameScene],
+    scenes: [BootScene, TitleScene, GameScene, PauseScene],
     renderScripts,
   });
 }

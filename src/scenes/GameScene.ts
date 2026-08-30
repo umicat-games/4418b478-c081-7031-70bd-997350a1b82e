@@ -67,6 +67,7 @@ export class GameScene extends Phaser.Scene {
   private levelText!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
   private powerupText!: Phaser.GameObjects.Text;
+  private pauseButton!: Phaser.GameObjects.Container;
 
   // Game state
   private gameOver = false;
@@ -152,7 +153,18 @@ export class GameScene extends Phaser.Scene {
       right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
 
-    // 9. Colliders
+    // 9. Pause shortcuts (button lives in the HUD, added below). Listeners are
+    // rebound every create() (e.g. on restart), so clear them on shutdown to
+    // avoid stacking duplicate handlers on the shared keyboard plugin.
+    const onPauseKey = (): void => this.pauseGame();
+    this.input.keyboard!.on('keydown-ESC', onPauseKey);
+    this.input.keyboard!.on('keydown-P', onPauseKey);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard?.off('keydown-ESC', onPauseKey);
+      this.input.keyboard?.off('keydown-P', onPauseKey);
+    });
+
+    // 9b. Colliders
     this.physics.add.overlap(
       this.bullets, this.enemies,
       (_b, _e) => this.onBulletHitEnemy(
@@ -434,6 +446,44 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 0).setAlpha(0).setDepth(10);
     this.powerupText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 36, '', s('19px', '#88ffaa'))
       .setOrigin(0.5, 1).setAlpha(0).setDepth(10);
+
+    this.createPauseButton();
+  }
+
+  private createPauseButton(): void {
+    const bx = GAME_WIDTH - 34;
+    const by = 60;
+    const r  = 18;
+
+    const bg = this.add.graphics();
+    const drawBg = (hover: boolean): void => {
+      bg.clear();
+      bg.fillStyle(0x001322, hover ? 0.9 : 0.72);
+      bg.fillCircle(0, 0, r);
+      bg.lineStyle(2, hover ? 0x88ddff : 0x4488aa, 1);
+      bg.strokeCircle(0, 0, r);
+      // Two pause bars
+      bg.fillStyle(hover ? 0xffffff : 0xaaddee, 1);
+      bg.fillRect(-6, -7, 4, 14);
+      bg.fillRect(2, -7, 4, 14);
+    };
+    drawBg(false);
+
+    const hitZone = this.add.zone(0, 0, r * 2, r * 2).setInteractive({ useHandCursor: true });
+
+    this.pauseButton = this.add.container(bx, by, [bg, hitZone]).setDepth(100);
+
+    hitZone.on('pointerover', () => drawBg(true));
+    hitZone.on('pointerout',  () => drawBg(false));
+    hitZone.on('pointerdown', () => this.pauseGame());
+  }
+
+  // ── Pause ──────────────────────────────────────────────────────────────────
+
+  private pauseGame(): void {
+    if (!this.ready || this.gameOver || this.scene.isPaused()) return;
+    this.scene.pause();
+    this.scene.launch('PauseScene', { gameSceneKey: 'GameScene', sceneId: this.sceneId });
   }
 
   // ─── Spawning ─────────────────────────────────────────────────────────────
@@ -776,6 +826,7 @@ export class GameScene extends Phaser.Scene {
     this.playerAlive = false;
 
     this.spawnTimer?.destroy();
+    this.pauseButton?.setVisible(false);
     this.cameras.main.shake(360, 0.018);
 
     // Explode player

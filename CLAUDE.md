@@ -22,6 +22,7 @@
 - **Difficulty ramp**: Every 15s a new level unlocks. Faster spawn, faster enemies. Tougher enemy mix from LV3+.
 - **HUD**: Score (top-left), Best (top-left below score), Level (top-right), Combo text (upper center), Power-up status (lower center).
 - **Game Over screen**: Overlay + panel, score, best, NEW BEST badge, PLAY AGAIN button, top-5 global leaderboard. Restarts the scene.
+- **Pause menu**: Small circular pause icon top-right of the HUD (below the level readout); ESC or P also opens it. Pauses `GameScene` and launches an overlay `PauseScene` on top with RESUME, RESTART, and (only when `umicat.platform.canExit`) QUIT TO UMICAT buttons. Resume unpauses + closes the overlay; Restart stops both scenes and restarts `GameScene` fresh; Quit calls `umicat.platform.exit()`. Pause button hides itself once the game-over screen shows.
 - **High score persistence**: Saved to `umicat.saves` key `'highScore'` between sessions.
 - **Global leaderboard**: Stored in `umicat.gameData` key `'leaderboard'` (top 100, sorted by score desc). Submit on game over (auth required), fetch is public. Displayed: top 10 via modal (opened by 🏆 LEADERBOARD button on title screen), top 5 on game over screen.
 - **Background**: Gradient deep space, nebula blobs, seeded starfield (200 stars), 18 drifting asteroid rocks (3 sizes: sm 22×18, md 40×30, lg 54×42). Asteroids drift slowly, rotate, wrap edges. Alpha 0.28–0.52 to stay clearly behind gameplay.
@@ -40,8 +41,9 @@
 - `src/leaderboard.ts` — `fetchLeaderboard(limit)` + `submitScore(score)` shared leaderboard utilities
 - `src/visuals/player.ts` — render script for player ship
 - `src/scenes/TitleScene.ts` — title/start screen (cover image, title, slogan, START button, LEADERBOARD button + modal)
-- `src/scenes/GameScene.ts` — all game logic (movement, spawning, collisions, HUD, game over)
-- `src/main.ts` — exports `umicatReady` (Umicat platform promise)
+- `src/scenes/GameScene.ts` — all game logic (movement, spawning, collisions, HUD, game over, pause button)
+- `src/scenes/PauseScene.ts` — pause overlay (Resume/Restart/Quit-to-Umicat), launched on top of a paused `GameScene`
+- `src/main.ts` — exports `umicatReady` (Umicat platform promise); registers all scenes incl. `PauseScene`
 - `public/scenes/world/main.json` — player entity (`e-player`, role `player`, code-rendered)
 - `public/scenes/manifest.json` — title "Star Siege"
 - `public/webfonts.json` — ["Orbitron"]
@@ -56,6 +58,7 @@
 | Move | WASD / Arrow keys (desktop) OR touch & hold a point on screen (mobile) |
 | Aim | Mouse cursor / touch position |
 | Fire | Automatic (always firing toward aim point) |
+| Pause | Tap the pause icon (top-right HUD), or ESC / P |
 
 ## Architecture Notes
 - Player entity from scene JSON (`code-rendered`, script `src/visuals/player.ts`, width=48, height=40).
@@ -65,4 +68,4 @@
 - `engineTrail` is a persistent particle emitter; `explode(1)` called per frame per engine when moving.
 
 ## Last Turn
-- Added touch-to-move: holding a finger on screen moves the player toward that point (30px dead zone). Keyboard movement still works alongside. Ship always rotates toward and auto-fires at the touch/pointer position.
+- Added a pause menu: a pause icon in the HUD (plus ESC/P) pauses the game and opens an overlay scene with Resume, Restart, and Quit to Umicat (hidden when running standalone).
