@@ -3998,7 +3998,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       const n = Math.max(0, occupants);
       for (let i = 0; i < n; i++) {
-        const ch = new Chicken(this, { stage: 'egg', color, x: door.x + (i - (n - 1) / 2) * 9, y: door.y, home, gameNow });
+        const ch = new Chicken(this, { stage: 'egg', color, x: door.x + (i - (n - 1) / 2) * 14, y: door.y, home, gameNow });
         out.push(ch); this.ySortSprites.push(ch.sprite);
       }
     }
@@ -4020,11 +4020,39 @@ export class GameScene extends Phaser.Scene {
     this.scheduleSave();
   }
 
-  /** Tick every coop's chickens each frame (AI state machine + egg→chick→adult maturation). */
+  /** Tick every coop's chickens each frame (AI state machine + egg→chick→adult maturation),
+   *  then de-cluster them so two never STACK — overlapping chickens render as one malformed
+   *  "double chicken" that wiggles as their idle anims run out of phase (the "half a chicken
+   *  flickering left-right" bug). Eggs stay put (they sit in a fixed row at the door). */
   private updateCoops(dt: number): void {
     if (!this.coops.size) return;
     const timeNow = this.time.now, gameNow = this.nowMs();
-    for (const coop of this.coops.values()) for (const ch of coop.chickens) ch.update(timeNow, gameNow, dt);
+    for (const coop of this.coops.values()) {
+      for (const ch of coop.chickens) ch.update(timeNow, gameNow, dt);
+      this.separateChickens(coop.chickens, dt);
+    }
+  }
+
+  /** Gently push any two hatched chickens apart when they get closer than a body-width, so they
+   *  sit side-by-side instead of merging into one blob. Mostly HORIZONTAL (they read as two birds),
+   *  with a deterministic split when exactly stacked. Small n per coop → the O(n²) pass is cheap. */
+  private separateChickens(chickens: Chicken[], dt: number): void {
+    const MIN = 12, PUSH = 40; // px apart to keep; px/sec restoring speed
+    for (let i = 0; i < chickens.length; i++) {
+      const a = chickens[i]!;
+      if (a.stage === 'egg') continue;
+      for (let j = i + 1; j < chickens.length; j++) {
+        const b = chickens[j]!;
+        if (b.stage === 'egg') continue;
+        const dx = b.sprite.x - a.sprite.x, dy = b.sprite.y - a.sprite.y;
+        const d = Math.hypot(dx, dy);
+        if (d >= MIN) continue;
+        const nx = d > 0.01 ? dx / d : (i % 2 === 0 ? 1 : -1), ny = d > 0.01 ? dy / d : 0;
+        const push = PUSH * dt * (1 - d / MIN); // stronger the more they overlap
+        a.sprite.x -= nx * push; a.sprite.y -= ny * push * 0.4; // bias horizontal (0.4 vertical)
+        b.sprite.x += nx * push; b.sprite.y += ny * push * 0.4;
+      }
+    }
   }
 
   /** Show / hide the "eggs ready" speech bubble over a coop's door (a coloured bubble + an egg
