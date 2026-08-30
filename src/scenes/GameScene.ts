@@ -3250,6 +3250,14 @@ export class GameScene extends Phaser.Scene {
     if (this.mailbox && this.mailboxContains(wx, wy)) return { name: t('hover_mailbox'), sprite: this.mailbox };
     if (this.chest && this.chestContains(wx, wy)) return { name: t('hover_chest'), sprite: this.chest };
     if (this.craftStation && this.craftStationContains(wx, wy)) return { name: t('hover_workstation'), sprite: this.craftStation };
+    // Chicken coops (placed objects, taller than their footprint) — frame the WHOLE coop by its
+    // opaque-pixel bbox. Checked before trees/tiles so hovering the roof/body frames the coop, not
+    // a single grass tile under the cursor (the "only part of the coop" bug).
+    for (const coop of this.coops.values()) {
+      if (!coop.sprite.active) continue;
+      const r = this.spriteWorldSolidRect(coop.sprite);
+      if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) return { name: t('hover_coop'), sprite: coop.sprite };
+    }
     // The HOUSE: hovering its walls / roof / door frames the WHOLE building (a `rect`, not one
     // tile). After the door objects (mailbox/chest sit INSIDE the footprint, so they win); before
     // trees / tiles. The bracket hugs the footprint rect via updateHoverInspect's rect branch.
