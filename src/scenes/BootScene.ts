@@ -513,7 +513,7 @@ export class BootScene extends Phaser.Scene {
       ['idle', 0, 3, -1, 6], ['idle1', 8, 14, -1, 6], ['walk', 16, 23, -1, 10],
       ['sitdown', 24, 30, 0, 12], ['standup', 32, 38, 0, 12],
       ['sitidle', 56, 60, -1, 4], ['sitidle1', 64, 67, -1, 4], ['sitidle2', 72, 76, -1, 4], ['sitidle3', 80, 83, -1, 4],
-      ['eat', 88, 97, 0, 9], ['fly', 104, 174, 0, 16], ['heart', 200, 206, 0, 8],
+      ['eat', 88, 97, 0, 9], ['heart', 200, 206, 0, 8], // NB: `fly` is 32×32 — registered separately below.
     ];
     for (const color of ['red', 'green', 'brown', 'blue', 'yellow']) {
       for (const [prefix, spec] of [['chick', CHICK_SPEC], ['chicken', ADULT_SPEC]] as const) {
@@ -521,6 +521,23 @@ export class BootScene extends Phaser.Scene {
         if (!this.textures.exists(tex)) continue;
         for (const [name, s, e, rep, fps] of spec) mkAnim(`${tex}-${name}`, tex, s, e, rep, fps);
       }
+    }
+    // The adult `fly` (hop) animation is authored at 32×32 while the rest of the chicken sheet is
+    // 16×16 — and its frames sit at 16-aligned but NOT 32-aligned pixel offsets (the sheet is 27
+    // rows of 16, not a multiple of 32), so it can't be a plain spritesheet slice. Add each 32×32
+    // fly frame as a custom named frame (`fly0..flyN`) on the colour's texture, then build the anim
+    // from them. The frames are bottom-centre (feet at the cell bottom) just like the 16×16 idle
+    // frames, so switching anims lines the bird up (all sprites are setOrigin(0.5,1)).
+    const FLY_CELLS: Array<[number, number]> = [
+      [0, 208], [32, 208], [64, 208], [96, 208], [0, 240], [32, 240], [0, 272], [32, 272], [64, 272], [96, 272], [0, 304], [0, 336], [32, 336], [64, 336], [96, 336],
+    ];
+    for (const color of ['red', 'green', 'brown', 'blue', 'yellow']) {
+      const texKey = `chicken-${color}`;
+      const tex = this.textures.get(texKey);
+      if (!this.textures.exists(texKey) || !tex) continue;
+      FLY_CELLS.forEach(([x, y], i) => { const fn = `fly${i}`; if (!tex.has(fn)) tex.add(fn, 0, x, y, 32, 32); });
+      const key = `${texKey}-fly`;
+      if (!this.anims.exists(key)) this.anims.create({ key, frames: FLY_CELLS.map((_, i) => ({ key: texKey, frame: `fly${i}` })), frameRate: 14, repeat: 0 });
     }
     // Pad open/close: 0→4 turns the screen on + wipes to the shop, holding on frame 4;
     // `pad-close` reverses back to the resting frame 0.
