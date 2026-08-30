@@ -4154,7 +4154,8 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  /** Collect a coop's laid eggs: the bubble VANISHES, then a real egg appears at the door, FLOATS
+  /** Collect a coop's laid eggs: the bubble plays a little COLLECT pop (a quick bump, then shrink +
+   *  fade away) instead of just blinking out; as it pops away a real egg emerges at the door, FLOATS
    *  up-and-down a beat (so it lingers, not an instant grab), and only then flies to the collector.
    *  eggsReady is zeroed up-front so a second tap can't double-collect. */
   private collectCoopEggs(coop: CoopObj): void {
@@ -4162,20 +4163,38 @@ export class GameScene extends Phaser.Scene {
     if (n <= 0) return;
     playSfx(this); // tap feedback
     coop.eggsReady = 0;
-    this.refreshCoopBubble(coop); // bubble disappears now
+    const b = coop.bubble;
+    coop.bubble = undefined; // detach — we animate + destroy the captured sprites ourselves
     const color = coop.color, cx = coop.door.x, cy = coop.door.y - 6;
-    for (let i = 0; i < n; i++) {
-      const ex = cx + (i - (n - 1) / 2) * 10;
-      const egg = this.add.image(ex, cy, 'egg-items', eggFrame(color)).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
-      // 1) appear (pop up), 2) float up-and-down a couple times, 3) fly to the player (cursor / last tap).
+    const spawnEggs = (): void => {
+      for (let i = 0; i < n; i++) {
+        const ex = cx + (i - (n - 1) / 2) * 10;
+        const egg = this.add.image(ex, cy, 'egg-items', eggFrame(color)).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
+        // 1) appear (pop up), 2) float up-and-down a couple times, 3) fly to the player (cursor / last tap).
+        this.tweens.add({
+          targets: egg, scale: 1, y: cy - 8, duration: 220, delay: i * 70, ease: 'Back.easeOut',
+          onComplete: () => this.tweens.add({
+            targets: egg, y: egg.y - 4, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
+            onComplete: () => this.flyItemToCollector(egg, false),
+          }),
+        });
+        this.collect(makeCoopEgg(color)); // banked to the backpack (toast); the visual is decoupled
+      }
+    };
+    if (b && b.bg.active) {
+      this.tweens.killTweensOf([b.bg, b.egg]); // stop the idle bob
+      const s0 = b.bg.scaleX;
+      // Collect pop: quick bump, THEN shrink + fade the bubble (bg + its egg icon) away.
       this.tweens.add({
-        targets: egg, scale: 1, y: cy - 8, duration: 220, delay: i * 70, ease: 'Back.easeOut',
+        targets: b.bg, scaleX: s0 * 1.18, scaleY: s0 * 1.18, duration: 110, ease: 'Sine.easeOut',
         onComplete: () => this.tweens.add({
-          targets: egg, y: egg.y - 4, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
-          onComplete: () => this.flyItemToCollector(egg, false),
+          targets: [b.bg, b.egg], scaleX: 0, scaleY: 0, alpha: 0, duration: 150, ease: 'Back.easeIn',
+          onComplete: () => { b.bg.destroy(); b.egg.destroy(); },
         }),
       });
-      this.collect(makeCoopEgg(color)); // banked to the backpack (toast); the visual is decoupled
+      this.time.delayedCall(150, spawnEggs); // the egg emerges as the bubble pops away
+    } else {
+      spawnEggs();
     }
     this.scheduleSave();
   }
