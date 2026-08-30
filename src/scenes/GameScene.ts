@@ -4060,11 +4060,18 @@ export class GameScene extends Phaser.Scene {
     if (coop.eggsReady > 0) {
       const bx = coop.door.x, by = coop.sprite.y - coop.sprite.displayHeight - 6; // just above the coop
       if (!coop.bubble) {
-        const bg = this.add.image(bx, by, coopBubbleTexture(coop.color)).setOrigin(0.5, 1).setDisplaySize(24, 24).setDepth(COOP_BUBBLE_DEPTH);
-        const egg = this.add.image(bx, by - 13, 'egg-items', eggFrame(coop.color)).setOrigin(0.5, 0.5).setDisplaySize(11, 11).setDepth(COOP_BUBBLE_DEPTH + 1);
+        // The bubble texture is a tight 42×47 crop of the speech-bubble (rounded body rows 0-41 +
+        // a tail nub at the bottom-centre, rows 42-46). setScale (not setDisplaySize 24×24, which
+        // squished the 42:47 art to a square and hid the tail). Anchor the tail tip at (bx,by).
+        const S = 0.46; // ~19×22 on-map (was a too-big, distorted 24×24)
+        const bg = this.add.image(bx, by, coopBubbleTexture(coop.color)).setOrigin(0.5, 1).setScale(S).setDepth(COOP_BUBBLE_DEPTH);
+        // Egg centred in the BODY (the square part), i.e. ~0.56 of the height up from the tail tip.
+        const egg = this.add.image(bx, by - bg.displayHeight * 0.56, 'egg-items', eggFrame(coop.color)).setOrigin(0.5, 0.5).setDisplaySize(10, 10).setDepth(COOP_BUBBLE_DEPTH + 1);
+        const eSX = egg.scaleX, eSY = egg.scaleY;
         coop.bubble = { bg, egg };
-        // A gentle pop-in.
-        bg.setScale(0); this.tweens.add({ targets: bg, scaleX: 24 / bg.width, scaleY: 24 / bg.height, duration: 240, ease: 'Back.easeOut' });
+        // A gentle pop-in (bubble first, egg a beat later).
+        bg.setScale(0); this.tweens.add({ targets: bg, scaleX: S, scaleY: S, duration: 240, ease: 'Back.easeOut' });
+        egg.setScale(0); this.tweens.add({ targets: egg, scaleX: eSX, scaleY: eSY, duration: 200, delay: 110, ease: 'Back.easeOut' });
       }
     } else if (coop.bubble) {
       coop.bubble.bg.destroy(); coop.bubble.egg.destroy();
