@@ -240,7 +240,12 @@ export class BootScene extends Phaser.Scene {
 
     // Chicken lifecycle (Phase 2): egg hatch sheet + chick/adult sheets in 5 colours (yellow =
     // the default `chicken_baby` / `chicken_default` art). All 16×16 uniform spritesheets.
+    // MIXED frame sizes in one sheet: still/shake are 16×16, but the `egg_turn_to_baby` hatch
+    // frames are 32×32 (the creator authored them bigger for the burst). Load the SAME png twice
+    // so each animation reads its own cell size — slicing the hatch at 16×16 chopped every frame
+    // into quarters (the "half a chick flickering" bug).
     this.load.spritesheet('egg-hatch', 'uploaded/egg_spritesheet.png', { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('egg-hatch-32', 'uploaded/egg_spritesheet.png', { frameWidth: 32, frameHeight: 32 });
     const CHICK_FILE: Record<string, string> = { red: 'chicken_baby_red', green: 'chicken_baby_green', brown: 'chicken_baby_brown', blue: 'chicken_baby_blue', yellow: 'chicken_baby' };
     const ADULT_FILE: Record<string, string> = { red: 'chicken_red', green: 'chicken_green', brown: 'chicken_brown', blue: 'chicken_blue', yellow: 'chicken_default' };
     for (const c of ['red', 'green', 'brown', 'blue', 'yellow']) {
@@ -484,15 +489,17 @@ export class BootScene extends Phaser.Scene {
       if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers(tex, { frames: filledFrames(tex, s, e) }), frameRate: fps, repeat: rep });
     };
     if (this.textures.exists('egg-hatch')) {
+      // still + shake are 16×16 (frame 0 / 10-18 on the 16-grid).
       mkAnim('egg-still', 'egg-hatch', 0, 0, -1, 4);
       mkAnim('egg-shake', 'egg-hatch', 10, 18, -1, 10);
-      // Hatch = egg wobbles & shell splits (70-79) → chick emerges from the burst (90-99). This can't
-      // be a plain range: within it the cells 66-69 and 80-83 are SHADOW-ONLY (a tiny ground shadow,
-      // NO egg body — filledFrames keeps them since they have pixels, so the egg still blinked), and
-      // 41/51 sit off-centre (a sideways jump). So the hatch is this explicit body-bearing list.
-      // becomeChick then swaps to the colour-matched chick sprite.
-      const hatchFrames = [70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99];
-      if (!this.anims.exists('egg-hatch')) this.anims.create({ key: 'egg-hatch', frames: this.anims.generateFrameNumbers('egg-hatch', { frames: hatchFrames }), frameRate: 14, repeat: 0 });
+    }
+    if (this.textures.exists('egg-hatch-32')) {
+      // Hatch (`egg_turn_to_baby`) is authored at 32×32: on the 5×9 32-grid, frames 15→24 =
+      // egg → shell squashes & cracks → bursts → chick emerges. Both the 16×16 egg and these
+      // 32×32 frames are bottom-centre anchored (setOrigin(0.5,1)), so the egg lines up as it
+      // grows into the burst. becomeChick then swaps to the 16×16 colour-matched chick sprite.
+      const hatch32 = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+      if (!this.anims.exists('egg-hatch')) this.anims.create({ key: 'egg-hatch', frames: this.anims.generateFrameNumbers('egg-hatch-32', { frames: hatch32 }), frameRate: 12, repeat: 0 });
     }
     // [name, startFrame, endFrame, repeat(-1=loop,0=once), fps] — ranges may include spacer cells,
     // filledFrames strips them.
