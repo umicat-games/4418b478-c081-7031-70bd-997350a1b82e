@@ -550,6 +550,7 @@ interface CoopObj {
   door: { x: number; y: number }; // coop base centre — where eggs sit + chickens roam around
   eggsReady: number; // collectable eggs laid (Phase 3): daily production, click to collect
   bubble?: { bg: Phaser.GameObjects.Image; egg: Phaser.GameObjects.Image }; // "eggs ready" indicator over the door
+  collecting?: boolean; // mid collect-bounce → block a double-tap
   pendingUpgrade?: { size: CoopSize; applyDay: number }; // v24: paid upgrade in progress — applies next morning
 }
 
@@ -4123,6 +4124,9 @@ export class GameScene extends Phaser.Scene {
         // A gentle pop-in (bubble first, egg a beat later).
         bg.setScale(0); this.tweens.add({ targets: bg, scaleX: S, scaleY: S, duration: 240, ease: 'Back.easeOut' });
         egg.setScale(0); this.tweens.add({ targets: egg, scaleX: eSX, scaleY: eSY, duration: 200, delay: 110, ease: 'Back.easeOut' });
+        // Idle bob — the whole bubble (bg + egg) drifts gently up-and-down so it's never dead-still.
+        // Starts after the pop-in; a per-coop delay desyncs multiple bubbles.
+        this.tweens.add({ targets: [bg, egg], y: '-=2.5', duration: 950, delay: 300 + (Math.abs(Math.round(bx)) % 400), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
     } else if (coop.bubble) {
       coop.bubble.bg.destroy(); coop.bubble.egg.destroy();
@@ -4151,18 +4155,30 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  /** Collect a coop's laid eggs → they pop out (fruit-style) into the backpack, bubble clears. */
+  /** Collect a coop's laid eggs → the bubble egg does a little excited up-and-down bounce first (so
+   *  it lingers a beat, not an instant grab), THEN the eggs pop out (fruit-style) into the backpack
+   *  and the bubble clears. */
   private collectCoopEggs(coop: CoopObj): void {
     const n = coop.eggsReady;
-    if (n <= 0) return;
-    coop.eggsReady = 0;
-    this.refreshCoopBubble(coop);
-    for (let i = 0; i < n; i++) {
-      this.playPopOut(coop.door.x + (Math.random() - 0.5) * 10, coop.door.y - 6, 'egg-items', eggFrame(coop.color));
-      this.collect(makeCoopEgg(coop.color));
-    }
-    playSfx(this, SFX_COLLECT);
-    this.scheduleSave();
+    if (n <= 0 || coop.collecting) return;
+    playSfx(this); // tap feedback
+    const egg = coop.bubble?.egg;
+    const finish = (): void => {
+      coop.collecting = false;
+      coop.eggsReady = 0;
+      this.refreshCoopBubble(coop); // clears the bubble
+      for (let i = 0; i < n; i++) {
+        this.playPopOut(coop.door.x + (Math.random() - 0.5) * 10, coop.door.y - 6, 'egg-items', eggFrame(coop.color));
+        this.collect(makeCoopEgg(coop.color));
+      }
+      playSfx(this, SFX_COLLECT);
+      this.scheduleSave();
+    };
+    if (!egg || !egg.active) { finish(); return; } // no bubble to bounce (shouldn't happen) → collect straight away
+    coop.collecting = true;
+    this.tweens.killTweensOf([coop.bubble!.bg, egg]); // stop the idle bob
+    // Bounce up-and-down a couple of times, then collect.
+    this.tweens.add({ targets: egg, y: egg.y - 6, duration: 170, yoyo: true, repeat: 1, ease: 'Sine.easeInOut', onComplete: finish });
   }
 
   // ── Coop action wheel (move / delete / upgrade) ─────────────────────────────
