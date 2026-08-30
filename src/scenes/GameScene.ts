@@ -4033,17 +4033,16 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Gently push any two hatched chickens apart when they get closer than a body-width, so they
-   *  sit side-by-side instead of merging into one blob. Mostly HORIZONTAL (they read as two birds),
-   *  with a deterministic split when exactly stacked. Small n per coop → the O(n²) pass is cheap. */
+  /** Gently push any two coop occupants apart when they get closer than a body-width, so they
+   *  sit side-by-side instead of merging into one blob (eggs included — an old save may have them
+   *  9px apart). Mostly HORIZONTAL (they read as two birds), with a deterministic split when
+   *  exactly stacked. Small n per coop → the O(n²) pass is cheap. */
   private separateChickens(chickens: Chicken[], dt: number): void {
     const MIN = 12, PUSH = 40; // px apart to keep; px/sec restoring speed
     for (let i = 0; i < chickens.length; i++) {
       const a = chickens[i]!;
-      if (a.stage === 'egg') continue;
       for (let j = i + 1; j < chickens.length; j++) {
         const b = chickens[j]!;
-        if (b.stage === 'egg') continue;
         const dx = b.sprite.x - a.sprite.x, dy = b.sprite.y - a.sprite.y;
         const d = Math.hypot(dx, dy);
         if (d >= MIN) continue;
