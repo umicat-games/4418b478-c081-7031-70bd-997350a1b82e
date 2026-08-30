@@ -12,6 +12,7 @@ const PANEL_SCALE = 2; // 9-slice corner scale (matches HotbarScene) → crisp b
 
 const BUTTON = 'square-buttons';
 const BUTTON_FRAME = 'white-button';
+const BUTTON_FRAME_PRESSED = 'white-button-pressed-down';
 const ICONS = 'ui-icons';
 const ICON_OK = 44;     // ✓ dark-brown check
 const ICON_CANCEL = 46; // ⊘ dark-brown cancel
@@ -29,17 +30,32 @@ export class ConfirmScene extends Phaser.Scene {
   private lastRev = -1;
   private shown = false;
   private root?: Phaser.GameObjects.Container;
+  private okBg?: Phaser.GameObjects.NineSlice;     // ✓ button bg (frame-swapped while held)
+  private cancelBg?: Phaser.GameObjects.NineSlice; // ⊘ button bg
 
   constructor() {
     super({ key: 'ConfirmScene' });
   }
 
   update(): void {
+    this.updatePressed(); // hold the pressed frame while GameScene reports a held button
     const m = this.model();
     if (!m || m.rev === this.lastRev) return;
     this.lastRev = m.rev;
     if (m.visible) this.open(m);
     else this.close();
+  }
+
+  /** Swap ✓/⊘ to their pressed frame while held down (GameScene sets `confirmHeld`), revert on release. */
+  private updatePressed(): void {
+    const held = this.registry.get('confirmHeld') as string | null | undefined;
+    const set = (bg: Phaser.GameObjects.NineSlice | undefined, on: boolean): void => {
+      if (!bg || !bg.active) return;
+      const f = on ? BUTTON_FRAME_PRESSED : BUTTON_FRAME;
+      if (bg.frame.name !== f) bg.setFrame(f);
+    };
+    set(this.okBg, held === 'ok');
+    set(this.cancelBg, held === 'cancel');
   }
 
   private model(): ConfirmModel | undefined {
@@ -89,8 +105,8 @@ export class ConfirmScene extends Phaser.Scene {
 
     // Two buttons, side by side below the title.
     const okX = -58, cancelX = 58, btnY = panelH / 2 - BOT - BTN / 2;
-    box.add(this.button(okX, btnY, ICON_OK));
-    box.add(this.button(cancelX, btnY, ICON_CANCEL));
+    box.add(this.button(okX, btnY, ICON_OK, 'ok'));
+    box.add(this.button(cancelX, btnY, ICON_CANCEL, 'cancel'));
 
     // Pop-in.
     box.setScale(0.8);
@@ -103,9 +119,10 @@ export class ConfirmScene extends Phaser.Scene {
     ]);
   }
 
-  private button(x: number, y: number, iconFrame: number): Phaser.GameObjects.Container {
+  private button(x: number, y: number, iconFrame: number, action: 'ok' | 'cancel'): Phaser.GameObjects.Container {
     const b = this.add.container(x, y);
     const bg = this.add.nineslice(0, 0, BUTTON, BUTTON_FRAME, BTN, BTN, 6, 6, 7, 7).setTint(OK_TINT);
+    if (action === 'ok') this.okBg = bg; else this.cancelBg = bg;
     b.add(bg);
     if (this.textures.exists(ICONS)) {
       const icon = this.add.image(0, 0, ICONS, iconFrame);
@@ -116,6 +133,7 @@ export class ConfirmScene extends Phaser.Scene {
   }
 
   private close(): void {
+    this.okBg = undefined; this.cancelBg = undefined; // dropped with the root container
     this.registry.set('confirmBounds', []);
     if (!this.shown) { this.root?.destroy(); this.root = undefined; return; }
     this.shown = false;

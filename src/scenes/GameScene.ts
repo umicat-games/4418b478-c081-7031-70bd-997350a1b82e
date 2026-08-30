@@ -1705,6 +1705,7 @@ export class GameScene extends Phaser.Scene {
       // same spot — on a touch device that would hit the world-click path. A pure-desktop session
       // never sets touchLastAt, so this no-ops.
       if (this.time.now - this.touchLastAt < 600) return;
+      this.confirmJustActed = false; // fresh gesture (guards against a stale mouse-release flag)
       // Effective click position = pointer + snap offset (so a click right after a wheel pick hits
       // the item the triangle sits on; the offset is 0 in normal play → just the pointer).
       const sx = pointer.x + this.cursorOffX;
@@ -1727,6 +1728,9 @@ export class GameScene extends Phaser.Scene {
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
       if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
+      // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (acts on release); a tap OUTSIDE is
+      // swallowed (the dialog only closes via a button).
+      if (this.confirmOpen) { const cb = this.confirmButtonAt(sx, sy); if (cb) this.beginConfirmPress(cb); return; }
       if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal
       if (this.menuOpen) {
         // Press on a Settings volume slider → start a DRAG (held pointer scrubs it).
@@ -1758,6 +1762,7 @@ export class GameScene extends Phaser.Scene {
       if (!pointer.wasTouch) return;
       this.locked = false; // touch → no desktop cursor
       this.touchLastAt = this.time.now;
+      this.confirmJustActed = false; // fresh gesture
       // Unified menu: touch scrolls via a SWIPE (handled in MenuScene) — no rail drag here.
       // A finger on a Settings volume slider starts a drag (pointermove scrubs it).
       if (this.menuOpen) {
@@ -1768,6 +1773,8 @@ export class GameScene extends Phaser.Scene {
         if (sk) { this.beginStepperPress(sk); return; }
         return;
       }
+      // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (same as mouse); tap outside swallowed.
+      if (this.confirmOpen) { const cb = this.confirmButtonAt(pointer.x, pointer.y); if (cb) this.beginConfirmPress(cb); return; }
       // LONG-PRESS anywhere in the world → open the tool wheel (the touch switch gesture; replaces
       // the old tool-HUD fly-out). A short tap still just uses the held tool / picks from an open
       // wheel. Cancelled on move (pan) or release before the timer.
@@ -1798,12 +1805,14 @@ export class GameScene extends Phaser.Scene {
       this.menuDragging = false; // end a rail drag
       this.menuSliderDrag = null; // end a slider drag
       this.endStepperPress(pointer.x, pointer.y); // release a −/+/buy stepper → revert + act if still over it
+      this.endConfirmPress(pointer.x, pointer.y); // release a ✓/⊘ confirm button → revert + act if still over it
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
       this.locked = false;
       this.touchLastAt = this.time.now;
       this.touchPressTimer?.remove(); this.touchPressTimer = undefined;
+      if (this.confirmJustActed) { this.confirmJustActed = false; return; } // a ✓/⊘ just fired on release — don't also act at this point
       if (this.touchLongFired) { this.touchLongFired = false; return; } // long-press opened the wheel — the release doesn't act
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
@@ -3597,6 +3606,8 @@ export class GameScene extends Phaser.Scene {
   // ── Modal confirm dialog (e.g. a yes/no prompt) ────────────────────────────
   private confirmOpen = false;
   private confirmRev = 0;
+  private confirmHeld: string | null = null; // which confirm button (ok/cancel) is held down (ConfirmScene shows it pressed; acts on release)
+  private confirmJustActed = false;           // a ✓/⊘ button just released → swallow the touch pointerup so it doesn't fall through to actAt
   private pendingConfirm?: () => void;
 
   /** Pop a modal yes/no dialog (ConfirmScene renders it). `onOk` runs on confirm. */
@@ -3610,22 +3621,42 @@ export class GameScene extends Phaser.Scene {
     if (!this.confirmOpen) return;
     this.confirmOpen = false;
     this.pendingConfirm = undefined;
+    if (this.confirmHeld) { this.confirmHeld = null; this.registry.set('confirmHeld', null); } // don't leave a button stuck pressed
     this.registry.set('confirm', { visible: false, title: '', rev: ++this.confirmRev });
   }
 
-  /** Modal: while the confirm dialog is open, a tap hits ✓ (run + close), ⊘ / outside
-   *  (just close). Consumes the tap either way so nothing behind it fires. */
+  /** Modal: while the confirm dialog is open a tap is ALWAYS swallowed so nothing behind it fires.
+   *  The ✓/⊘ buttons are press-and-hold (menuConfirmHeld) and act on RELEASE — see the pointer
+   *  handlers; a tap OUTSIDE the buttons does nothing (the dialog only closes via a button). */
   private handleConfirmClick(x: number, y: number): boolean {
-    if (!this.confirmOpen) return false;
-    const bounds = this.registry.get('confirmBounds') as
-      | Array<{ action: string; x: number; y: number; w: number; h: number }>
-      | undefined;
-    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    const ok = hit?.action === 'ok';
-    const run = ok ? this.pendingConfirm : undefined;
-    this.closeConfirm();
-    run?.();
-    return true;
+    return this.confirmOpen; // swallow every tap while open (buttons handled on press/release)
+  }
+
+  /** The confirm button (ok/cancel) under (x,y), or null. */
+  private confirmButtonAt(x: number, y: number): string | null {
+    if (!this.confirmOpen) return null;
+    const b = this.registry.get('confirmBounds') as Array<{ action: string; x: number; y: number; w: number; h: number }> | undefined;
+    return b?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)?.action ?? null;
+  }
+
+  private beginConfirmPress(action: string): void {
+    this.confirmHeld = action;
+    this.registry.set('confirmHeld', action);
+  }
+
+  /** Release a held confirm button → un-press; if released while still over the SAME button, act
+   *  (✓ = run the pending action + close; ⊘ = just close). */
+  private endConfirmPress(x: number, y: number): void {
+    const held = this.confirmHeld;
+    if (!held) return;
+    this.confirmHeld = null;
+    this.registry.set('confirmHeld', null);
+    if (this.confirmOpen && this.confirmButtonAt(x, y) === held) {
+      const run = held === 'ok' ? this.pendingConfirm : undefined;
+      this.confirmJustActed = true; // swallow the follow-up touch pointerup (else it falls through to actAt)
+      this.closeConfirm();
+      run?.();
+    }
   }
 
   /** Move the virtual cursor to a WORLD point (screen-projected + clamped). Mouse-locked only. */
