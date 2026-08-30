@@ -3515,8 +3515,12 @@ export class GameScene extends Phaser.Scene {
       if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
       else this.holdExternal(loc.store, loc.item);
       // Snap the cursor back onto the ITEM the wheel opened on, so the newly-picked tool is ready
-      // to use right there (else it'd sit off at the tool circle's ring position). Mouse-locked only.
-      if (this.locked) this.snapCursorToWorld((pal.bbox.wl + pal.bbox.wr) / 2, (pal.bbox.wt + pal.bbox.wb) / 2);
+      // to use right there (else it'd sit off at the tool circle's ring position). Snap to the
+      // object's FOOT (bbox bottom, ~base tile), NOT its bbox centre — tools bracket-snap to the
+      // BASE (a tree's trunk, a stone's base), so a centre snap left the mouse up in a tall tree's
+      // canopy while the axe bracket sat at the base (they lined up only for short bushes/berries).
+      // Mouse-locked only.
+      if (this.locked) this.snapCursorToWorld((pal.bbox.wl + pal.bbox.wr) / 2, pal.bbox.wb - TILE / 2);
       playSfx(this); // selection blip — then a hold + the reverse disappear anim (see publishToolPalette)
       this.beginCloseWheel(hit.idx);
     } else if (hit && hit.idx === -1) {
