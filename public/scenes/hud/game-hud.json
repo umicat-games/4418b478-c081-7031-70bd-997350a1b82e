@@ -207,7 +207,7 @@
       "anchor": {
         "side": "bottom",
         "offsetX": 306,
-        "offsetY": -74
+        "offsetY": -64
       },
       "layer": "overlay",
       "assetId": "dialog-continue",
