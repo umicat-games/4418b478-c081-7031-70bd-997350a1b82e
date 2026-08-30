@@ -39,12 +39,14 @@ export class Chicken {
   private target?: { x: number; y: number };
   private facing: 1 | -1 = 1;
   private busyAnim = false; // a one-shot transition anim is playing (don't interrupt)
+  private blocked?: (wx: number, wy: number) => boolean; // world-point collision test (trees/coops/stones/walls)
 
-  constructor(scene: Phaser.Scene, opts: { stage: ChickenStage; color: CoopColor; x: number; y: number; home: { x: number; y: number }; gameNow: number; stageEndsAt?: number }) {
+  constructor(scene: Phaser.Scene, opts: { stage: ChickenStage; color: CoopColor; x: number; y: number; home: { x: number; y: number }; gameNow: number; stageEndsAt?: number; blocked?: (wx: number, wy: number) => boolean }) {
     this.scene = scene;
     this.stage = opts.stage;
     this.color = opts.color;
     this.home = opts.home;
+    this.blocked = opts.blocked;
     this.stageEndsAt = opts.stageEndsAt ?? opts.gameNow + (opts.stage === 'egg' ? EGG_HATCH_MS : opts.stage === 'chick' ? CHICK_GROW_MS : Infinity);
     this.sprite = scene.add.sprite(opts.x, opts.y, this.tex(), 0).setOrigin(0.5, 1);
     if (this.stage === 'egg') this.playLoop('egg-still');
@@ -84,20 +86,31 @@ export class Chicken {
     this.playLoop(this.animKey(Math.random() < 0.5 ? 'idle' : 'idle1'));
     this.until = now + rnd(1600, 4200);
   }
+  /** A random roam point near home that ISN'T on a solid cell (tree/coop/stone/wall); null if none found. */
+  private pickRoamTarget(minR: number): { x: number; y: number } | null {
+    for (let i = 0; i < 6; i++) {
+      const a = rnd(0, Math.PI * 2), r = rnd(minR, ROAM_RADIUS);
+      const t = { x: this.home.x + Math.cos(a) * r, y: this.home.y + Math.sin(a) * r * 0.6 };
+      if (!this.blocked || !this.blocked(t.x, t.y)) return t;
+    }
+    return null;
+  }
   private enterWalk(now: number): void {
+    const t = this.pickRoamTarget(10);
+    if (!t) { this.enterIdle(now); return; } // boxed in → just idle
     this.state = 'walk';
-    const a = rnd(0, Math.PI * 2), r = rnd(10, ROAM_RADIUS);
-    this.target = { x: this.home.x + Math.cos(a) * r, y: this.home.y + Math.sin(a) * r * 0.6 };
-    this.face(this.target.x - this.sprite.x);
+    this.target = t;
+    this.face(t.x - this.sprite.x);
     this.playLoop(this.animKey('walk'));
     this.until = now + rnd(2500, 5000); // safety cap if it can't reach
   }
   private enterFly(now: number): void {
     // A hop that carries the adult to a nearby spot (movement happens during the one-shot fly anim).
+    const t = this.pickRoamTarget(16);
+    if (!t) { this.enterIdle(now); return; }
     this.state = 'fly';
-    const a = rnd(0, Math.PI * 2), r = rnd(16, ROAM_RADIUS);
-    this.target = { x: this.home.x + Math.cos(a) * r, y: this.home.y + Math.sin(a) * r * 0.6 };
-    this.face(this.target.x - this.sprite.x);
+    this.target = t;
+    this.face(t.x - this.sprite.x);
     this.until = now + 6000; // safety
     this.playOnce(this.animKey('fly'), () => { this.target = undefined; this.enterIdle(this.scene.time.now); });
   }
@@ -149,9 +162,17 @@ export class Chicken {
       if (d < 2) {
         if (this.state === 'walk') { this.target = undefined; this.enterIdle(timeNow); }
       } else {
-        this.sprite.x += (dx / d) * spd * dt;
-        this.sprite.y += (dy / d) * spd * dt;
-        this.face(dx);
+        const nx = this.sprite.x + (dx / d) * spd * dt, ny = this.sprite.y + (dy / d) * spd * dt;
+        if (this.blocked && this.blocked(nx, ny)) {
+          // Bumped a prop (tree/coop/stone/wall) → stop; a walk re-picks a target next idle, a hop
+          // just halts here and lets its one-shot anim finish.
+          this.target = undefined;
+          if (this.state === 'walk') this.enterIdle(timeNow);
+        } else {
+          this.sprite.x = nx;
+          this.sprite.y = ny;
+          this.face(dx);
+        }
       }
     }
 

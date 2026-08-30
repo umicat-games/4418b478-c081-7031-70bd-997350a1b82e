@@ -4039,16 +4039,17 @@ export class GameScene extends Phaser.Scene {
   private spawnCoopChickens(color: CoopColor, door: { x: number; y: number }, occupants: number | SavedChicken[]): Chicken[] {
     const gameNow = this.nowMs();
     const home = { x: door.x, y: door.y };
+    const blocked = (wx: number, wy: number): boolean => this.worldBlocked(wx, wy); // don't roam through props
     const out: Chicken[] = [];
     if (Array.isArray(occupants)) {
       for (const s of occupants) {
-        const ch = new Chicken(this, { stage: s.stage, color: s.color as CoopColor, x: s.x, y: s.y, home, gameNow, stageEndsAt: s.remain < 0 ? Infinity : gameNow + s.remain });
+        const ch = new Chicken(this, { stage: s.stage, color: s.color as CoopColor, x: s.x, y: s.y, home, gameNow, stageEndsAt: s.remain < 0 ? Infinity : gameNow + s.remain, blocked });
         out.push(ch); this.ySortSprites.push(ch.sprite);
       }
     } else {
       const n = Math.max(0, occupants);
       for (let i = 0; i < n; i++) {
-        const ch = new Chicken(this, { stage: 'egg', color, x: door.x + (i - (n - 1) / 2) * 14, y: door.y, home, gameNow });
+        const ch = new Chicken(this, { stage: 'egg', color, x: door.x + (i - (n - 1) / 2) * 14, y: door.y, home, gameNow, blocked });
         out.push(ch); this.ySortSprites.push(ch.sprite);
       }
     }
@@ -7862,9 +7863,18 @@ export class GameScene extends Phaser.Scene {
     if (this.houseBlocked.has(key)) return false; // solid furniture (bed/table/…)
     if (this.trees.has(key) || this.bigStones.has(key)) return false;
     if (this.foragables.get(key)?.type === 'small-stone') return false; // small-stones are solid rocks
+    const coopAnchor = this.coopCells.get(key);
+    if (coopAnchor && this.coops.has(coopAnchor)) return false; // a coop's footprint is solid
     const p = this.placed.get(key);
     if (p && (p.kind === 'wall' || p.kind === 'window' || (p.kind === 'door' && !p.open))) return false;
     return true;
+  }
+
+  /** True when the world point (wx,wy) sits on a SOLID cell (a tree/stone/coop/wall/house) — the
+   *  collision predicate handed to roaming chickens so they don't walk through props. */
+  private worldBlocked(wx: number, wy: number): boolean {
+    const t = this.islandLayer?.worldToTileXY(wx, wy);
+    return !t || !this.isWalkableCell(t.x, t.y);
   }
 
   /** The walkable adjacent tiles Cato could stand on to work `target` (facing it:
