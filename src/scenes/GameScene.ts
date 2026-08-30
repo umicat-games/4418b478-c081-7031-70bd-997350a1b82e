@@ -3196,7 +3196,7 @@ export class GameScene extends Phaser.Scene {
         y: (cy - cam.worldView.y) * cam.zoom,
         w: b.w * cam.zoom + pad * 2,
         h: b.h * cam.zoom + pad * 2,
-        name: this.toolPaletteOpen ? '' : target.name, // hide the name while the tool wheel is open
+        name: this.toolPaletteOpen || this.coopWheel ? '' : target.name, // hide the name while a wheel (tool / coop) is open
         nameX: (cx - cam.worldView.x) * cam.zoom,
         nameY: (b.y - cam.worldView.y) * cam.zoom - pad - 3, // pill above the (now padded) bracket top
       };
