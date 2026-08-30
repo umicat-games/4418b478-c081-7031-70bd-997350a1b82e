@@ -550,7 +550,6 @@ interface CoopObj {
   door: { x: number; y: number }; // coop base centre — where eggs sit + chickens roam around
   eggsReady: number; // collectable eggs laid (Phase 3): daily production, click to collect
   bubble?: { bg: Phaser.GameObjects.Image; egg: Phaser.GameObjects.Image }; // "eggs ready" indicator over the door
-  collecting?: boolean; // mid collect-bounce → block a double-tap
   pendingUpgrade?: { size: CoopSize; applyDay: number }; // v24: paid upgrade in progress — applies next morning
 }
 
@@ -4155,30 +4154,30 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  /** Collect a coop's laid eggs → the bubble egg does a little excited up-and-down bounce first (so
-   *  it lingers a beat, not an instant grab), THEN the eggs pop out (fruit-style) into the backpack
-   *  and the bubble clears. */
+  /** Collect a coop's laid eggs: the bubble VANISHES, then a real egg appears at the door, FLOATS
+   *  up-and-down a beat (so it lingers, not an instant grab), and only then flies to the collector.
+   *  eggsReady is zeroed up-front so a second tap can't double-collect. */
   private collectCoopEggs(coop: CoopObj): void {
     const n = coop.eggsReady;
-    if (n <= 0 || coop.collecting) return;
+    if (n <= 0) return;
     playSfx(this); // tap feedback
-    const egg = coop.bubble?.egg;
-    const finish = (): void => {
-      coop.collecting = false;
-      coop.eggsReady = 0;
-      this.refreshCoopBubble(coop); // clears the bubble
-      for (let i = 0; i < n; i++) {
-        this.playPopOut(coop.door.x + (Math.random() - 0.5) * 10, coop.door.y - 6, 'egg-items', eggFrame(coop.color));
-        this.collect(makeCoopEgg(coop.color));
-      }
-      playSfx(this, SFX_COLLECT);
-      this.scheduleSave();
-    };
-    if (!egg || !egg.active) { finish(); return; } // no bubble to bounce (shouldn't happen) → collect straight away
-    coop.collecting = true;
-    this.tweens.killTweensOf([coop.bubble!.bg, egg]); // stop the idle bob
-    // Bounce up-and-down a couple of times, then collect.
-    this.tweens.add({ targets: egg, y: egg.y - 6, duration: 170, yoyo: true, repeat: 1, ease: 'Sine.easeInOut', onComplete: finish });
+    coop.eggsReady = 0;
+    this.refreshCoopBubble(coop); // bubble disappears now
+    const color = coop.color, cx = coop.door.x, cy = coop.door.y - 6;
+    for (let i = 0; i < n; i++) {
+      const ex = cx + (i - (n - 1) / 2) * 10;
+      const egg = this.add.image(ex, cy, 'egg-items', eggFrame(color)).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
+      // 1) appear (pop up), 2) float up-and-down a couple times, 3) fly to the player (cursor / last tap).
+      this.tweens.add({
+        targets: egg, scale: 1, y: cy - 8, duration: 220, delay: i * 70, ease: 'Back.easeOut',
+        onComplete: () => this.tweens.add({
+          targets: egg, y: egg.y - 4, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
+          onComplete: () => this.flyItemToCollector(egg, false),
+        }),
+      });
+      this.collect(makeCoopEgg(color)); // banked to the backpack (toast); the visual is decoupled
+    }
+    this.scheduleSave();
   }
 
   // ── Coop action wheel (move / delete / upgrade) ─────────────────────────────
