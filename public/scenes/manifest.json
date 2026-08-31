@@ -34,7 +34,7 @@
     },
     {
       "id": "cow-pe",
-      "name": "cow_pe",
+      "name": "cow_pen",
       "type": "world",
       "file": "world/cow-pe.json"
     }
