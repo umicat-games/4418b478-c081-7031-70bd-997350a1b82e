@@ -6,11 +6,173 @@
   "world": {
     "width": 1280,
     "height": 720,
-    "background": { "color": "#1a1a2e" }
+    "background": {
+      "color": "#1a1a2e"
+    }
   },
   "camera": {
     "follow": null,
-    "bounds": { "x": 0, "y": 0, "width": 1280, "height": 720 }
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 720
+    }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-mthqle0d-tz9r",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region"
+    },
+    {
+      "id": "e-mthqlr8p-ui7q",
+      "kind": "sprite",
+      "transform": {
+        "x": 40,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-1"
+    },
+    {
+      "id": "e-mthqlsul-6b36",
+      "kind": "sprite",
+      "transform": {
+        "x": 56,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-2"
+    },
+    {
+      "id": "e-mthqlu5e-8loi",
+      "kind": "sprite",
+      "transform": {
+        "x": 72,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-2"
+    },
+    {
+      "id": "e-mthqluzi-7tbk",
+      "kind": "sprite",
+      "transform": {
+        "x": 88,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-2"
+    },
+    {
+      "id": "e-mthqlvoi-coa3",
+      "kind": "sprite",
+      "transform": {
+        "x": 104,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-2"
+    },
+    {
+      "id": "e-mthqlw6z-15vc",
+      "kind": "sprite",
+      "transform": {
+        "x": 120,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-2"
+    },
+    {
+      "id": "e-mthqm3gk-yned",
+      "kind": "sprite",
+      "transform": {
+        "x": 88,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-10"
+    },
+    {
+      "id": "e-mthqm4v1-hewh",
+      "kind": "sprite",
+      "transform": {
+        "x": 104,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-10"
+    },
+    {
+      "id": "e-mthqm5l5-8ejt",
+      "kind": "sprite",
+      "transform": {
+        "x": 120,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-10"
+    },
+    {
+      "id": "e-mthqm6if-egb6",
+      "kind": "sprite",
+      "transform": {
+        "x": 72,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "region-10"
+    }
+  ]
 }
