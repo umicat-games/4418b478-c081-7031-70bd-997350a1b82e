@@ -568,7 +568,7 @@ interface CowPenObj {
   structures: Phaser.GameObjects.Sprite[]; // fences / barn / haystacks / trough (y-sorted decor)
   bodies: Phaser.GameObjects.Sprite[]; // invisible fence colliders (Cato bumps them)
   cells: string[]; // fence cell keys (solid — pathfinding routes around; NOT the gate opening)
-  gate: { sprites: Phaser.GameObjects.Sprite[]; at: { x: number; y: number }; open: boolean; animating: boolean };
+  gate: { sprites: Phaser.GameObjects.Sprite[]; at: { x: number; y: number }; cells: Set<string>; open: boolean; animating: boolean };
   cows: Cow[];
 }
 
@@ -4146,9 +4146,16 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    // Gate proximity point = the middle of the right-wall opening (template ≈ (132,80)).
+    // Gate proximity point = the middle of the right-wall opening (template ≈ (132,80)), and the
+    // gate OPENING cells = the gap in the right wall (template x=128, y=64/80/96). A cow waits at the
+    // cell before these until the gate swings open (gateBlocks), then passes through the OPEN gate.
     const gateAt = { x: anchor.x + 132, y: anchor.y + 80 };
-    this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, open: false, animating: false }, cows: [] };
+    const gateCells = new Set<string>();
+    for (const ly of [64, 80, 96]) {
+      const t = this.islandLayer.worldToTileXY(anchor.x + 128, anchor.y + ly);
+      if (t) gateCells.add(`${Math.floor(t.x)},${Math.floor(t.y)}`);
+    }
+    this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [] };
     this.spawnCows(occupants);
     this.scheduleSave();
   }
@@ -4193,8 +4200,17 @@ export class GameScene extends Phaser.Scene {
       planPath: (fx, fy, tx, ty) => this.cowPlanPath(fx, fy, tx, ty),
       isNight: () => this.bgIndex() === WEATHER_BGS.length - 1,
       sleepSpot: () => ({ x: A.x + 56, y: A.y + 60 }), // inside, just below the barn
-      roamCenter: () => ({ x: A.x + 72, y: A.y + 84 }), // pen interior centre — graze inside, occasionally step out the gate
-      roamRadius: () => 64,
+      // Safe grazing rect = interior inset ~half a 32px cow from every fence (walls at template
+      // x=16/128, y=16/144) so a grazing cow never overlaps the pen. Right edge kept short of the
+      // gate too, so cows only reach the gate on a deliberate excursion.
+      grazeRect: () => ({ x0: A.x + 40, y0: A.y + 44, x1: A.x + 92, y1: A.y + 122 }),
+      outsideSpot: () => ({ x: A.x + 168 + Phaser.Math.Between(-10, 10), y: A.y + 80 + Phaser.Math.Between(-14, 14) }),
+      gateBlocks: (wx, wy) => {
+        const pen = this.cowPen;
+        if (!pen || pen.gate.open) return false;
+        const t = this.islandLayer?.worldToTileXY(wx, wy);
+        return !!t && pen.gate.cells.has(`${Math.floor(t.x)},${Math.floor(t.y)}`);
+      },
     };
   }
 
@@ -4241,10 +4257,10 @@ export class GameScene extends Phaser.Scene {
     const pen = this.cowPen;
     if (!pen || pen.gate.animating || !pen.gate.sprites.length) return;
     const g = pen.gate.at;
-    // Open PREDICTIVELY (well before the cow reaches the gap) so the swing finishes before it
-    // crosses — otherwise the cow walks through a still-closing gate ("穿过门的素材" bug). Wide
-    // hysteresis so it doesn't flap as cows graze near it.
-    const OPEN_R = TILE * 2.8, CLOSE_R = TILE * 4.2;
+    // Open when a cow is right AT the gate (it waits there for the swing before stepping through —
+    // gateBlocks). Tuned so a cow WAITING at the adjacent cell (~20px) opens it, but a cow grazing
+    // the inner east edge (≥40px) does NOT — so the gate only opens for an actual crossing.
+    const OPEN_R = TILE * 2, CLOSE_R = TILE * 3.4;
     let near = Infinity;
     for (const c of pen.cows) near = Math.min(near, c.distTo(g.x, g.y));
     if (this.child) near = Math.min(near, Math.hypot(this.child.x - g.x, this.child.y - g.y));
