@@ -22,7 +22,8 @@ const OK_TINT = 0xffffff;
 
 export interface ConfirmModel {
   visible: boolean;
-  title: string;
+  title: string;   // body text (may contain \n\n paragraph breaks)
+  heading?: string; // optional bold top-centred title
   rev: number;
 }
 
@@ -83,29 +84,38 @@ export class ConfirmScene extends Phaser.Scene {
     const box = this.add.container(cx, cy);
     c.add(box);
 
-    // Panel height ADAPTS to the (wrapped) title so buttons never overlap a longer message
-    // (a one-line "Remove?" stays compact; the multi-line upgrade prompt grows taller).
+    // Panel height ADAPTS to the (wrapped) heading + body so buttons never overlap a longer message
+    // (a one-line "Remove?" stays compact; the multi-paragraph upgrade prompt grows taller).
     const panelW = 340;
+    // Optional bold top-centred TITLE (heading), a touch larger + darker than the body.
+    const heading = model.heading
+      ? this.add.text(0, 0, model.heading, { fontFamily: dialogFont(), fontSize: '27px', color: '#4a2e12', align: 'center', fontStyle: 'bold', wordWrap: { width: panelW - 52 } }).setOrigin(0.5)
+      : null;
+    // Body — supports \n\n paragraph breaks (Phaser honours the newlines; wordWrap wraps within each).
     const title = this.add
       .text(0, 0, model.title, {
         fontFamily: dialogFont(),
-        fontSize: '22px',
+        fontSize: '21px',
         color: '#5b3a1e',
         align: 'center',
+        lineSpacing: 4,
         wordWrap: { width: panelW - 52 },
       })
       .setOrigin(0.5);
-    const TOP = 30, GAP = 24, BOT = 28;
-    const panelH = Math.round(TOP + title.height + GAP + BTN + BOT);
+    const TOP = 28, HEAD_GAP = 16, GAP = 24, BOT = 28;
+    const headBlock = heading ? heading.height + HEAD_GAP : 0;
+    const panelH = Math.round(TOP + headBlock + title.height + GAP + BTN + BOT);
 
     const panel = this.add.nineslice(0, 0, ATLAS, FRAME_PANEL, panelW / PANEL_SCALE, panelH / PANEL_SCALE, 10, 10, 11, 11);
     panel.setScale(PANEL_SCALE);
     box.add(panel);
 
-    title.setPosition(0, -panelH / 2 + TOP + title.height / 2);
+    let y = -panelH / 2 + TOP;
+    if (heading) { heading.setPosition(0, y + heading.height / 2); box.add(heading); y += heading.height + HEAD_GAP; }
+    title.setPosition(0, y + title.height / 2);
     box.add(title);
 
-    // Two buttons, side by side below the title.
+    // Two buttons, side by side below the body.
     const okX = -58, cancelX = 58, btnY = panelH / 2 - BOT - BTN / 2;
     box.add(this.button(okX, btnY, ICON_OK, 'ok'));
     box.add(this.button(cancelX, btnY, ICON_CANCEL, 'cancel'));

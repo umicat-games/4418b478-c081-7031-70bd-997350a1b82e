@@ -3614,11 +3614,12 @@ export class GameScene extends Phaser.Scene {
   private confirmJustActed = false;           // a ✓/⊘ button just released → swallow the touch pointerup so it doesn't fall through to actAt
   private pendingConfirm?: () => void;
 
-  /** Pop a modal yes/no dialog (ConfirmScene renders it). `onOk` runs on confirm. */
-  private promptConfirm(title: string, onOk: () => void): void {
+  /** Pop a modal yes/no dialog (ConfirmScene renders it). `onOk` runs on confirm. An optional
+   *  `heading` shows a bold top-centred title above the body. */
+  private promptConfirm(title: string, onOk: () => void, heading?: string): void {
     this.pendingConfirm = onOk;
     this.confirmOpen = true;
-    this.registry.set('confirm', { visible: true, title, rev: ++this.confirmRev });
+    this.registry.set('confirm', { visible: true, title, heading, rev: ++this.confirmRev });
   }
 
   private closeConfirm(): void {
@@ -4315,7 +4316,7 @@ export class GameScene extends Phaser.Scene {
       this.removeCoop(anchorKey);
       this.addToBackpack(makePlaceable('coop', 1, `${size}-${color}`)); // refund the coop item
       playSfx(this);
-    });
+    }, t('coop_remove_title'));
   }
 
   /** Upgrade a coop to the next size (pay the price difference) if the bigger footprint fits +
@@ -4342,7 +4343,7 @@ export class GameScene extends Phaser.Scene {
       playSfx(this, SFX_GETITEM);
       this.catoSay('chatter_coop_upgrading');
       this.scheduleSave();
-    });
+    }, t('coop_upgrade_title'));
   }
 
   /** Day rollover: build any coop whose paid upgrade is due — rebuild it one tier bigger, keeping its

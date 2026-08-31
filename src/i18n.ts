@@ -257,8 +257,11 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   item_egg_green: { en: 'Green Egg', 'zh-CN': '绿鸡蛋' },
   item_egg_blue: { en: 'Blue Egg', 'zh-CN': '蓝鸡蛋' },
   item_egg_yellow: { en: 'Yellow Egg', 'zh-CN': '黄鸡蛋' },
-  coop_remove_confirm: { en: 'Remove this coop? (You get the coop back.)', 'zh-CN': '拆除这个鸡舍吗？（会退回鸡舍到背包）' },
-  coop_upgrade_confirm: { en: 'Upgrade this coop? It holds more chickens and lays more eggs each day. Costs {cost} coins — ready tomorrow morning.', 'zh-CN': '升级这个鸡舍吗？可以养更多鸡、每天产更多蛋。花费 {cost} 金币，明早完工。' },
+  coop_remove_title: { en: 'Remove', 'zh-CN': '移除' },
+  coop_remove_confirm: { en: 'Remove this coop? You’ll get the coop back in your backpack.', 'zh-CN': '拆除这个鸡舍吗？会把鸡舍退回你的背包。' },
+  coop_upgrade_title: { en: 'Upgrade', 'zh-CN': '升级' },
+  // Two paragraphs (benefits, then cost/timing) — ConfirmScene honours the \n\n break.
+  coop_upgrade_confirm: { en: 'It holds more chickens and lays more eggs each day.\n\nCosts {cost} coins — ready tomorrow morning.', 'zh-CN': '可以养更多鸡，每天产更多蛋。\n\n花费 {cost} 金币，明早完工。' },
   item_furn_plant: { en: 'Potted plant', 'zh-CN': '盆栽' },
   item_furn_flower: { en: 'Flowers', 'zh-CN': '花' },
   item_furn_lamp: { en: 'Lamp', 'zh-CN': '灯' },
