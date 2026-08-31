@@ -39,6 +39,7 @@ import {
   type CoopColor, type CoopSize,
 } from '../data/coops';
 import { Chicken, type SavedChicken } from '../chickens';
+import { Cow, type CowNav, type SavedCow } from '../cows';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
 import { Pan, Tap } from 'phaser3-rex-plugins/plugins/gestures.js';
@@ -134,6 +135,12 @@ const NIGHT_KEYS: Array<[number, number, number]> = [
 ];
 const NIGHT_MASK_DEPTH = 500000; // above every world sprite, below the loading cover (1e7) + HUD scenes
 const COOP_BUBBLE_DEPTH = 490000; // the coop "eggs ready" bubble — above world sprites, below the night mask
+
+// Cow pen — the world anchor the `cow_pen` template's local coords are added to (its top-left
+// fence at template (16,16) lands near this + (16,16)). A single constant for now; a buy-to-place
+// flow will make this a player choice later. Chosen on an open-ish patch of grass SE of the house.
+const COW_PEN_ANCHOR = { x: 264, y: 232 };
+const COW_COUNT = 3; // cows spawned with a fresh pen (dynamic, like chickens)
 // TEMP (restore to true): random wild spawning (grass/foragables + big-stones) is
 // OFF while the creator arranges the default layout, so it doesn't clutter the map.
 const SPAWN_WILD = false;
@@ -553,6 +560,18 @@ interface CoopObj {
   pendingUpgrade?: { size: CoopSize; applyDay: number }; // v24: paid upgrade in progress — applies next morning
 }
 
+/** A cow pen placed on the island (a group instantiated from the `cow_pen` template scene).
+ *  Fences block; the right-side gate opening is walkable + a cosmetic auto-open gate; cows are
+ *  dynamically spawned and roam in/out, sleeping inside at night. */
+interface CowPenObj {
+  anchor: { x: number; y: number }; // world offset the template's local coords are added to
+  structures: Phaser.GameObjects.Sprite[]; // fences / barn / haystacks / trough (y-sorted decor)
+  bodies: Phaser.GameObjects.Sprite[]; // invisible fence colliders (Cato bumps them)
+  cells: string[]; // fence cell keys (solid — pathfinding routes around; NOT the gate opening)
+  gate: { sprites: Phaser.GameObjects.Sprite[]; at: { x: number; y: number }; open: boolean; animating: boolean };
+  cows: Cow[];
+}
+
 /** A placed building structure at a cell (wall / door / furniture). */
 interface PlacedObj {
   kind: PlaceKind;
@@ -590,6 +609,7 @@ interface SaveBlob {
   cato: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
   coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number; pendingUpgrade?: { size: CoopSize; applyDay: number } }>; // v23: placed chicken coops + occupants + laid eggs; v24: pending overnight upgrade
+  cowPen?: { anchor: { x: number; y: number }; cows: SavedCow[] }; // v25: placed cow pen (anchor + dynamic cows)
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
@@ -740,6 +760,8 @@ export class GameScene extends Phaser.Scene {
   private trees = new Map<string, TreeObj>(); // "cx,cy" → a placed tree (chop with the axe)
   private coops = new Map<string, CoopObj>(); // anchor "cx,cy" (bottom-left of footprint) → a placed coop
   private coopCells = new Map<string, string>(); // any footprint cell "cx,cy" → its coop's anchor key (occupancy)
+  private cowPen?: CowPenObj; // the placed cow pen (one, for now — a buy-to-place flow comes later)
+  private cowPenBlocked = new Set<string>(); // "cx,cy" of pen FENCE cells (solid; gate opening excluded)
   private activeCoopVariant = 'small-red'; // `${size}-${color}` of the held coop item (placement mode)
   private activeBushType: BerryType = 'strawberry'; // current berry bush to plant
   private bushes = new Map<string, BushObj>(); // "cx,cy" → a planted berry bush
@@ -2384,6 +2406,7 @@ export class GameScene extends Phaser.Scene {
     this.wireChest();
     this.wirePad();
     this.wireCraftStation();
+    this.wireCowPen(); // cow pen on the island (auto-place; applySave replaces it if a save has one)
     this.wireSceneTrees();
     this.wireSceneBushes();
     this.wireSceneForageAndStones();
@@ -4074,6 +4097,168 @@ export class GameScene extends Phaser.Scene {
     for (const k of coop.cells) if (this.coopCells.get(k) === anchorKey) this.coopCells.delete(k);
     this.coops.delete(anchorKey);
     this.scheduleSave();
+  }
+
+  // ── Cow pen (placed on the island; cows dynamically spawned) ─────────────────
+
+  /** Auto-place the cow pen at the default anchor if none exists yet. Runs in setupFarming (before
+   *  the save loads); a save with a pen then REPLACES this in applySave. Dev default — a buy-to-place
+   *  flow will gate the FIRST placement later ("game starts without a pen"). */
+  private wireCowPen(): void {
+    if (!this.cowPen) this.placeCowPen(COW_PEN_ANCHOR, COW_COUNT);
+  }
+
+  /** Instantiate the `cow_pen` template as a GROUP at `anchor`: spawn each authored piece
+   *  (fences / barn / haystacks / trough / gate), wire fence colliders + blocked cells (minus the
+   *  gate opening), then spawn cows (a count → fresh, or saved positions). */
+  private placeCowPen(anchor: { x: number; y: number }, occupants: number | SavedCow[]): void {
+    this.removeCowPen();
+    const tpl = this.cache.json.get('cowpen-template') as
+      | { entities?: Array<{ assetId?: string; frame?: string; animation?: string; transform: { x: number; y: number } }> }
+      | undefined;
+    if (!tpl?.entities || !this.islandLayer) return;
+    const structures: Phaser.GameObjects.Sprite[] = [];
+    const bodies: Phaser.GameObjects.Sprite[] = [];
+    const cells: string[] = [];
+    const gateSprites: Phaser.GameObjects.Sprite[] = [];
+    for (const e of tpl.entities) {
+      if (!e.assetId) continue;
+      const wx = anchor.x + e.transform.x, wy = anchor.y + e.transform.y;
+      if (e.assetId === 'fence_gates_animation_sprites') {
+        // The gate — a cosmetic auto-open sprite over the right-wall opening (NO collider; the
+        // opening cells stay walkable, so cows/Cato pass through — like the house doorway).
+        const g = this.add.sprite(wx, wy, 'fence_gates_animation_sprites', 'gate-v-0').setOrigin(0.5, 0.5);
+        gateSprites.push(g); structures.push(g); this.ySortSprites.push(g);
+        continue;
+      }
+      // Faithful to the editor: SDK sprites render origin (0.5,0.5); applyYSort sorts by foot line.
+      const s = this.add.sprite(wx, wy, e.assetId, e.frame ?? 0).setOrigin(0.5, 0.5);
+      structures.push(s); this.ySortSprites.push(s);
+      if (e.assetId === 'fences') {
+        // Fences are SOLID: mark the cell blocked (pathfinding routes around) + an invisible
+        // collider (Cato physically bumps it). The gate opening has no fence → cells stay walkable.
+        const t = this.islandLayer.worldToTileXY(wx, wy);
+        if (t) { const k = `${Math.floor(t.x)},${Math.floor(t.y)}`; cells.push(k); this.cowPenBlocked.add(k); }
+        if (this.wallGroup) {
+          const b = this.wallGroup.create(wx, wy, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+          b.setVisible(false).setDisplaySize(TILE - 3, TILE - 3).refreshBody();
+          bodies.push(b);
+        }
+      }
+    }
+    // Gate proximity point = the middle of the right-wall opening (template ≈ (132,80)).
+    const gateAt = { x: anchor.x + 132, y: anchor.y + 80 };
+    this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, open: false, animating: false }, cows: [] };
+    this.spawnCows(occupants);
+    this.scheduleSave();
+  }
+
+  /** Create the pen's cows — a count → fresh cows near the barn, or restored saved positions. */
+  private spawnCows(occupants: number | SavedCow[]): void {
+    if (!this.cowPen) return;
+    const nav = this.cowNav();
+    const seed = nav.sleepSpot();
+    const out: Cow[] = [];
+    if (Array.isArray(occupants)) {
+      for (const s of occupants) { const c = new Cow(this, { x: s.x, y: s.y, nav }); out.push(c); this.ySortSprites.push(c.sprite); }
+    } else {
+      const n = Math.max(0, occupants);
+      for (let i = 0; i < n; i++) {
+        const c = new Cow(this, { x: seed.x + (i - (n - 1) / 2) * 22, y: seed.y, nav });
+        out.push(c); this.ySortSprites.push(c.sprite);
+      }
+    }
+    this.cowPen.cows = out;
+  }
+
+  /** Remove the pen (destroy sprites + colliders + cows, free its blocked cells). */
+  private removeCowPen(): void {
+    if (!this.cowPen) return;
+    const drop = new Set<Phaser.GameObjects.Sprite>();
+    for (const s of this.cowPen.structures) drop.add(s);
+    for (const c of this.cowPen.cows) drop.add(c.sprite);
+    this.ySortSprites = this.ySortSprites.filter((g) => !drop.has(g));
+    for (const s of this.cowPen.structures) s.destroy();
+    for (const b of this.cowPen.bodies) b.destroy();
+    for (const c of this.cowPen.cows) c.destroy();
+    for (const k of this.cowPen.cells) this.cowPenBlocked.delete(k);
+    this.cowPen = undefined;
+  }
+
+  /** The world/pen queries the Cow AI needs (A*-pathing routes cows through the gate opening). */
+  private cowNav(): CowNav {
+    const A = this.cowPen?.anchor ?? COW_PEN_ANCHOR;
+    return {
+      blocked: (wx, wy) => this.worldBlocked(wx, wy),
+      planPath: (fx, fy, tx, ty) => this.cowPlanPath(fx, fy, tx, ty),
+      isNight: () => this.bgIndex() === WEATHER_BGS.length - 1,
+      sleepSpot: () => ({ x: A.x + 56, y: A.y + 60 }), // inside, just below the barn
+      roamCenter: () => ({ x: A.x + 108, y: A.y + 84 }), // biased toward the gate → graze in + step out
+      roamRadius: () => 68,
+    };
+  }
+
+  /** A* world-waypoint path for a cow (cell-based on the island grid; the gate opening is walkable
+   *  so a route in/out threads through it, and fences force the detour). */
+  private cowPlanPath(fx: number, fy: number, tx: number, ty: number): Array<{ x: number; y: number }> | null {
+    const layer = this.islandLayer;
+    if (!layer) return null;
+    const a = layer.worldToTileXY(fx, fy), b = layer.worldToTileXY(tx, ty);
+    if (!a || !b) return null;
+    const steps = this.findPath(Math.floor(a.x), Math.floor(a.y), Math.floor(b.x), Math.floor(b.y));
+    if (!steps) return null;
+    return steps.map((s) => { const w = layer.tileToWorldXY(s.cx, s.cy)!; return { x: w.x + TILE / 2, y: w.y + TILE / 2 }; });
+  }
+
+  /** Tick the pen's cows each frame (AI + de-cluster + gate auto-open). */
+  private updateCows(dt: number): void {
+    if (!this.cowPen) return;
+    const now = this.time.now;
+    for (const c of this.cowPen.cows) c.update(now, dt);
+    this.separateCows(this.cowPen.cows, dt);
+    this.updateCowGate();
+  }
+
+  /** Keep two cows from stacking into one blob (same idea as separateChickens, bigger body). */
+  private separateCows(cows: Cow[], dt: number): void {
+    const MIN = 20, PUSH = 40;
+    for (let i = 0; i < cows.length; i++) {
+      for (let j = i + 1; j < cows.length; j++) {
+        const a = cows[i]!.sprite, b = cows[j]!.sprite;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        if (d >= MIN) continue;
+        const nx = d > 0.01 ? dx / d : (i % 2 === 0 ? 1 : -1), ny = d > 0.01 ? dy / d : 0;
+        const push = PUSH * dt * (1 - d / MIN);
+        a.x -= nx * push; a.y -= ny * push * 0.4;
+        b.x += nx * push; b.y += ny * push * 0.4;
+      }
+    }
+  }
+
+  /** Swing the gate open as a cow (or Cato) nears the opening, close when clear — cosmetic
+   *  (opening cells are already walkable), mirrors the house door's hysteresis. */
+  private updateCowGate(): void {
+    const pen = this.cowPen;
+    if (!pen || pen.gate.animating || !pen.gate.sprites.length) return;
+    const g = pen.gate.at;
+    const OPEN_R = TILE * 1.6, CLOSE_R = TILE * 2.6;
+    let near = Infinity;
+    for (const c of pen.cows) near = Math.min(near, c.distTo(g.x, g.y));
+    if (this.child) near = Math.min(near, Math.hypot(this.child.x - g.x, this.child.y - g.y));
+    if (!pen.gate.open && near < OPEN_R) this.setCowGateOpen(true);
+    else if (pen.gate.open && near > CLOSE_R) this.setCowGateOpen(false);
+  }
+
+  private setCowGateOpen(open: boolean): void {
+    const pen = this.cowPen;
+    if (!pen) return;
+    pen.gate.open = open;
+    pen.gate.animating = true;
+    let pending = pen.gate.sprites.length;
+    for (const g of pen.gate.sprites) {
+      g.play(open ? 'gate-v-open' : 'gate-v-close');
+      g.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { if (--pending <= 0) pen.gate.animating = false; });
+    }
   }
 
   /** Tick every coop's chickens each frame (AI state machine + egg→chick→adult maturation),
@@ -7904,6 +8089,7 @@ export class GameScene extends Phaser.Scene {
     if (this.foragables.get(key)?.type === 'small-stone') return false; // small-stones are solid rocks
     const coopAnchor = this.coopCells.get(key);
     if (coopAnchor && this.coops.has(coopAnchor)) return false; // a coop's footprint is solid
+    if (this.cowPenBlocked.has(key)) return false; // a cow-pen FENCE cell (gate opening stays walkable)
     const p = this.placed.get(key);
     if (p && (p.kind === 'wall' || p.kind === 'window' || (p.kind === 'door' && !p.open))) return false;
     return true;
@@ -8887,7 +9073,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 24,
+      v: 25,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -8896,6 +9082,7 @@ export class GameScene extends Phaser.Scene {
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
       coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady, pendingUpgrade: c.pendingUpgrade })), // v23; v24 pendingUpgrade
+      cowPen: this.cowPen ? { anchor: this.cowPen.anchor, cows: this.cowPen.cows.map((c) => c.serialize()) } : undefined, // v25
 
       bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
@@ -9068,6 +9255,7 @@ export class GameScene extends Phaser.Scene {
         for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
         for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
         for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? [], c.eggsReady ?? 0, c.pendingUpgrade); // v23; v24 pendingUpgrade
+        if (s.cowPen) this.placeCowPen(s.cowPen.anchor, s.cowPen.cows); // v25: replace the auto-placed pen with the saved one
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
@@ -9549,6 +9737,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBushBrush(); // rustle a bush as Cato walks onto its cell
     this.updateForagables(delta); // grow wild foragables toward their max stage
     this.updateCoops(delta / 1000); // chicken coops: egg→chick→adult + roaming AI (dt in seconds)
+    this.updateCows(delta / 1000); // cow pen: roam / graze / gate auto-open / night return-to-sleep
     this.updateBigStones(delta); // regenerate mined stones back into big-stones
     this.updateFishing(delta); // rod/float bob + line, fish approach → nibble → hook, escape timer
     if (SPAWN_WILD) this.trySpawn(delta); // drop new foragables / big-stones onto empty grass (TEMP off while authoring)

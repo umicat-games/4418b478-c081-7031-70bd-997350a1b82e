@@ -333,6 +333,17 @@ export class BootScene extends Phaser.Scene {
     this.load.json('data-coops', 'data/coops.json');
     // Scripted-dialogue graphs (authored, non-AI): the new-game intro cutscene.
     this.load.json('dialogue-intro', 'dialogue/intro.json');
+
+    // Cow pen (placed on the island as a group) — its assets aren't referenced by
+    // main.json's entities, so loadWorldScene won't preload them; load them here.
+    // Cows are DYNAMICALLY spawned (pink_cow sheet), so its texture must exist too.
+    this.load.spritesheet('pink_cow_animation_sprites', 'uploaded/pink_cow_animation_sprites.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('fence_gates_animation_sprites', 'uploaded/fence_gates_animation_sprites.png', { frameWidth: 16, frameHeight: 16 });
+    this.load.atlas('barn_structures', 'uploaded/barn_structures.png', 'uploaded/barn_structures.json');
+    this.load.atlas('water_tray', 'uploaded/water_tray.png', 'uploaded/water_tray.json');
+    // The authored pen TEMPLATE (fence/gate/barn/trough layout) — instantiated as a
+    // group on the island at a placement anchor (creator authors it in the editor).
+    this.load.json('cowpen-template', 'scenes/world/cow-pe.json');
   }
 
   create(): void {
@@ -367,6 +378,31 @@ export class BootScene extends Phaser.Scene {
         this.anims.create({ key: `cato-fish-cast-${d}`, frames: this.anims.generateFrameNumbers('cato-fish-cast', { start: row * 8, end: row * 8 + 7 }), frameRate: 14, repeat: 0 });
         this.anims.create({ key: `cato-fish-reel-${d}`, frames: this.anims.generateFrameNumbers('cato-fish-reel', { start: row * 8, end: row * 8 + 7 }), frameRate: 16, repeat: 0 });
       });
+    }
+    // Cow animations — the pink_cow sheet is a clean 32×32 grid (8×8). Register under
+    // `cow-<name>` PREFIXED keys (NOT the manifest's generic 'idle'/'walk', which could
+    // collide with another asset's same-named anim). Played by the Cow class.
+    if (this.textures.exists('pink_cow_animation_sprites') && !this.anims.exists('cow-idle')) {
+      const COW_ANIMS: Record<string, [number, number]> = {
+        idle: [0, 2], walk: [8, 15], sit_down: [16, 22], sit_idle: [24, 26],
+        sleep: [32, 35], start_eating: [40, 46], chew_grass: [48, 51], heart: [56, 61],
+      };
+      for (const [name, [a, b]] of Object.entries(COW_ANIMS)) {
+        this.anims.create({ key: `cow-${name}`, frames: this.anims.generateFrameNumbers('pink_cow_animation_sprites', { start: a, end: b }), frameRate: 8, repeat: -1 });
+      }
+    }
+    // Cow-pen GATE (vertical) — the `vertical-open` anim is 2×2-spanned 32×32 frames on a
+    // 16×16 sheet (cells 10,12,14,16,18 → pixel rects), so synthesize those frames with
+    // texture.add (same trick as the chicken fly frames) + register one-shot open/close
+    // anims. Frame 10 = closed, 18 = fully open; the gate plays 'gate-v-open' as a cow
+    // nears + 'gate-v-close' when it leaves (like the house door).
+    if (this.textures.exists('fence_gates_animation_sprites') && !this.anims.exists('gate-v-open')) {
+      const gt = this.textures.get('fence_gates_animation_sprites');
+      const GV: Array<[number, number]> = [[0, 16], [32, 16], [64, 16], [96, 16], [128, 16]];
+      GV.forEach(([x, y], i) => { if (!gt.has(`gate-v-${i}`)) gt.add(`gate-v-${i}`, 0, x, y, 32, 32); });
+      const mk = (key: string, order: number[]) => this.anims.create({ key, frames: order.map((i) => ({ key: 'fence_gates_animation_sprites', frame: `gate-v-${i}` })), frameRate: 10, repeat: 0 });
+      mk('gate-v-open', [0, 1, 2, 3, 4]);
+      mk('gate-v-close', [4, 3, 2, 1, 0]);
     }
     // God-hand watering-can pour (tools.png row 0-1: can upright→tilt→pour). The
     // player's watering analogue of the hoe swing (`hoe-swing`).
