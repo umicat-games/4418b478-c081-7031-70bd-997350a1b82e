@@ -31,6 +31,12 @@
       "id": "home_2",
       "type": "world",
       "file": "world/home_2.json"
+    },
+    {
+      "id": "cow-pe",
+      "name": "cow_pe",
+      "type": "world",
+      "file": "world/cow-pe.json"
     }
   ],
   "huds": [

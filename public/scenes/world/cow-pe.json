@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "cow-pe",
+  "name": "cow_pe",
+  "type": "world",
+  "world": {
+    "width": 427,
+    "height": 240,
+    "background": {
+      "color": "#1a1a2e"
+    }
+  },
+  "camera": {
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 427,
+      "height": 240
+    }
+  },
+  "entities": []
+}
