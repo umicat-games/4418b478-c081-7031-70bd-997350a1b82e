@@ -4127,7 +4127,7 @@ export class GameScene extends Phaser.Scene {
       if (e.assetId === 'fence_gates_animation_sprites') {
         // The gate — a cosmetic auto-open sprite over the right-wall opening (NO collider; the
         // opening cells stay walkable, so cows/Cato pass through — like the house doorway).
-        const g = this.add.sprite(wx, wy, 'fence_gates_animation_sprites', 'gate-v-0').setOrigin(0.5, 0.5);
+        const g = this.add.sprite(wx, wy, 'fence_gates_animation_sprites', 'gate-v-4').setOrigin(0.5, 0.5); // rest = CLOSED (wide leaves)
         gateSprites.push(g); structures.push(g); this.ySortSprites.push(g);
         continue;
       }
@@ -4146,14 +4146,25 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    // Gate proximity point = the middle of the right-wall opening (template ≈ (132,80)), and the
-    // gate OPENING cells = the gap in the right wall (template x=128, y=64/80/96). A cow waits at the
-    // cell before these until the gate swings open (gateBlocks), then passes through the OPEN gate.
-    const gateAt = { x: anchor.x + 132, y: anchor.y + 80 };
+    // The gate is a DOUBLE door: a cow passes ONLY through the MIDDLE (template y=80, where the two
+    // doors part), NOT through the door posts above/below. So block the post cells (y=64, y=96) —
+    // solid, so a cow can't clip through them — and leave only the middle cell as the passable gate
+    // opening (a cow waits at the cell before it until the gate swings open — gateBlocks).
+    const gateAt = { x: anchor.x + 128, y: anchor.y + 80 };
     const gateCells = new Set<string>();
-    for (const ly of [64, 80, 96]) {
+    const midT = this.islandLayer.worldToTileXY(anchor.x + 128, anchor.y + 80);
+    if (midT) gateCells.add(`${Math.floor(midT.x)},${Math.floor(midT.y)}`);
+    for (const ly of [64, 96]) { // the two door POSTS — solid
       const t = this.islandLayer.worldToTileXY(anchor.x + 128, anchor.y + ly);
-      if (t) gateCells.add(`${Math.floor(t.x)},${Math.floor(t.y)}`);
+      if (t) {
+        const k = `${Math.floor(t.x)},${Math.floor(t.y)}`;
+        cells.push(k); this.cowPenBlocked.add(k);
+        if (this.wallGroup) {
+          const b = this.wallGroup.create(anchor.x + 128, anchor.y + ly, '__WHITE') as Phaser.Physics.Arcade.Sprite;
+          b.setVisible(false).setDisplaySize(TILE - 3, TILE - 3).refreshBody();
+          bodies.push(b);
+        }
+      }
     }
     this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [] };
     this.spawnCows(occupants);
