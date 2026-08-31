@@ -2122,11 +2122,42 @@
       "path": "uploaded/stove-turn-on.png",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/stove-turn-on.png",
       "kind": "spritesheet",
-      "spriteSheetConfig": { "frameWidth": 16, "frameHeight": 16 },
+      "spriteSheetConfig": {
+        "frameWidth": 16,
+        "frameHeight": 16
+      },
       "animations": [
-        { "name": "stove-on", "from": 0, "to": 14, "loop": true },
-        { "name": "stove-off", "frames": [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], "loop": false }
-      ]
+        {
+          "name": "turn-on",
+          "from": 0,
+          "to": 14,
+          "loop": true
+        },
+        {
+          "name": "turn-off",
+          "from": 0,
+          "to": 14,
+          "frames": [
+            14,
+            13,
+            12,
+            11,
+            10,
+            9,
+            8,
+            7,
+            6,
+            5,
+            4,
+            3,
+            2,
+            1,
+            0
+          ],
+          "loop": true
+        }
+      ],
+      "fps": 8
     },
     {
       "id": "pot",
@@ -2225,6 +2256,132 @@
       "path": "uploaded/spoon-and-fork.png",
       "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/spoon-and-fork.png",
       "kind": "image"
+    },
+    {
+      "id": "pink_cow_animation_sprites",
+      "textureKey": "pink_cow_animation_sprites",
+      "path": "uploaded/pink_cow_animation_sprites.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/pink_cow_animation_sprites.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 32,
+        "frameHeight": 32
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "from": 0,
+          "to": 2,
+          "loop": true
+        },
+        {
+          "name": "walk",
+          "from": 8,
+          "to": 15,
+          "loop": true
+        },
+        {
+          "name": "sit_down",
+          "from": 16,
+          "to": 22,
+          "loop": true
+        },
+        {
+          "name": "sit_idle",
+          "from": 24,
+          "to": 26,
+          "loop": true
+        },
+        {
+          "name": "sleep",
+          "from": 32,
+          "to": 35,
+          "loop": true
+        },
+        {
+          "name": "start_eating",
+          "from": 40,
+          "to": 46,
+          "loop": true
+        },
+        {
+          "name": "chew_grass",
+          "from": 48,
+          "to": 51,
+          "loop": true
+        },
+        {
+          "name": "show_heart_emoji",
+          "from": 56,
+          "to": 61,
+          "loop": true
+        }
+      ],
+      "fps": 8
+    },
+    {
+      "id": "barn_structures",
+      "textureKey": "barn_structures",
+      "path": "uploaded/barn_structures.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/barn_structures.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/barn_structures.json",
+      "atlasFormat": "json",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/barn_structures.json"
+    },
+    {
+      "id": "water_tray",
+      "textureKey": "water_tray",
+      "path": "uploaded/water_tray.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/water_tray.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/water_tray.json",
+      "atlasFormat": "json",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/water_tray.json"
+    },
+    {
+      "id": "fence_gates_animation_sprites",
+      "textureKey": "fence_gates_animation_sprites",
+      "path": "uploaded/fence_gates_animation_sprites.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/fence_gates_animation_sprites.png",
+      "kind": "spritesheet",
+      "spriteSheetConfig": {
+        "frameWidth": 16,
+        "frameHeight": 16
+      },
+      "animations": [
+        {
+          "name": "horizontal-open",
+          "from": 0,
+          "to": 8,
+          "frames": [
+            0,
+            2,
+            4,
+            6,
+            8
+          ],
+          "loop": true,
+          "cellSpanX": 2,
+          "cellSpanY": 1
+        },
+        {
+          "name": "vertical-open",
+          "from": 10,
+          "to": 18,
+          "frames": [
+            10,
+            12,
+            14,
+            16,
+            18
+          ],
+          "loop": true,
+          "cellSpanX": 2,
+          "cellSpanY": 2
+        }
+      ],
+      "fps": 4
     }
   ]
 }

@@ -18,5 +18,538 @@
       "height": 240
     }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-mthlu4xh-z342",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-left"
+    },
+    {
+      "id": "e-mthlu827-hmvx",
+      "kind": "sprite",
+      "transform": {
+        "x": 32,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-center"
+    },
+    {
+      "id": "e-mthlua0f-d1ul",
+      "kind": "sprite",
+      "transform": {
+        "x": 48,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-center"
+    },
+    {
+      "id": "e-mthluaxy-xc8v",
+      "kind": "sprite",
+      "transform": {
+        "x": 64,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-center"
+    },
+    {
+      "id": "e-mthlubnw-014w",
+      "kind": "sprite",
+      "transform": {
+        "x": 80,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-center"
+    },
+    {
+      "id": "e-mthlucdv-onia",
+      "kind": "sprite",
+      "transform": {
+        "x": 96,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-center"
+    },
+    {
+      "id": "e-mthlujq3-3vja",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 32,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlukh9-v3nd",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 48,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlul4u-t04r",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlulsk-lyl0",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 80,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlumfl-4kbw",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlunad-xrbh",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 112,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlx1r7-y6ym",
+      "kind": "sprite",
+      "transform": {
+        "x": 32,
+        "y": 32,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "1-barn"
+    },
+    {
+      "id": "e-mthlx964-fs5y",
+      "kind": "sprite",
+      "transform": {
+        "x": 56,
+        "y": 32,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "1-barn"
+    },
+    {
+      "id": "e-mthlxb86-ypk3",
+      "kind": "sprite",
+      "transform": {
+        "x": 80,
+        "y": 32,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "single-haystack"
+    },
+    {
+      "id": "e-mthlxd3z-ocnf",
+      "kind": "sprite",
+      "transform": {
+        "x": 64,
+        "y": 72,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "dry-grass-small"
+    },
+    {
+      "id": "e-mthlxeaf-1xyo",
+      "kind": "sprite",
+      "transform": {
+        "x": 40,
+        "y": 104,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "dry-grass-small"
+    },
+    {
+      "id": "e-mthlxgih-mvn8",
+      "kind": "sprite",
+      "transform": {
+        "x": 96,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "dry-grass"
+    },
+    {
+      "id": "e-mthlxi1u-vs34",
+      "kind": "sprite",
+      "transform": {
+        "x": 96,
+        "y": 104,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "dry-grass"
+    },
+    {
+      "id": "e-mthlxmqr-5u6a",
+      "kind": "sprite",
+      "transform": {
+        "x": 80,
+        "y": 127.99999999999999,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "barn_structures",
+      "frame": "two-haystack"
+    },
+    {
+      "id": "e-mthlxwn9-wurv",
+      "kind": "sprite",
+      "transform": {
+        "x": 40,
+        "y": 127.99999999999999,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_tray",
+      "frame": "full"
+    },
+    {
+      "id": "e-mthlyjun-dh3u",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 128,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlyovp-vy9x",
+      "kind": "sprite",
+      "transform": {
+        "x": 16,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "botton-left"
+    },
+    {
+      "id": "e-mthlys59-8i45",
+      "kind": "sprite",
+      "transform": {
+        "x": 32,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "bottom-center"
+    },
+    {
+      "id": "e-mthlyt0j-8uwn",
+      "kind": "sprite",
+      "transform": {
+        "x": 48,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "bottom-center"
+    },
+    {
+      "id": "e-mthlytv3-a59q",
+      "kind": "sprite",
+      "transform": {
+        "x": 64,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "bottom-center"
+    },
+    {
+      "id": "e-mthlyui9-38kt",
+      "kind": "sprite",
+      "transform": {
+        "x": 80,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "bottom-center"
+    },
+    {
+      "id": "e-mthlyv40-z4q2",
+      "kind": "sprite",
+      "transform": {
+        "x": 96,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "bottom-center"
+    },
+    {
+      "id": "e-mthlz753-4mlg",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-center"
+    },
+    {
+      "id": "e-mthlzazz-iu8k",
+      "kind": "sprite",
+      "transform": {
+        "x": 128,
+        "y": 16,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "top-right"
+    },
+    {
+      "id": "e-mthlzhdu-ud3v",
+      "kind": "sprite",
+      "transform": {
+        "x": 128,
+        "y": 32,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlzi1q-vql8",
+      "kind": "sprite",
+      "transform": {
+        "x": 128,
+        "y": 48,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthlzvpt-il10",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "horizontal-middle"
+    },
+    {
+      "id": "e-mthm00n5-ux85",
+      "kind": "sprite",
+      "transform": {
+        "x": 128,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "bottom-right"
+    },
+    {
+      "id": "e-mthm04mv-rqpl",
+      "kind": "sprite",
+      "transform": {
+        "x": 128,
+        "y": 128,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthm05iu-lsad",
+      "kind": "sprite",
+      "transform": {
+        "x": 128,
+        "y": 112,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-middle"
+    },
+    {
+      "id": "e-mthm0bq6-j3qq",
+      "kind": "sprite",
+      "transform": {
+        "x": 136,
+        "y": 64,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fence_gates_animation_sprites",
+      "animation": "vertical-open"
+    },
+    {
+      "id": "e-mthm0y1o-2nqj",
+      "kind": "sprite",
+      "transform": {
+        "x": 136,
+        "y": 96,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fence_gates_animation_sprites",
+      "animation": "vertical-open"
+    }
+  ]
 }
