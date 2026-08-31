@@ -400,11 +400,11 @@ export class BootScene extends Phaser.Scene {
       const gt = this.textures.get('fence_gates_animation_sprites');
       const GV: Array<[number, number]> = [[0, 16], [32, 16], [64, 16], [96, 16], [128, 16]];
       GV.forEach(([x, y], i) => { if (!gt.has(`gate-v-${i}`)) gt.add(`gate-v-${i}`, 0, x, y, 32, 32); });
-      // Frame 4 = the door leaves facing you (CLOSED, blocking); frame 0 = swung aside to a thin
-      // rail (OPEN, passage clear). So a cow crosses during the thin-rail state = barely overlaps.
+      // frame 0 = closed (folded thin bar), 4 = open (unfolded/spread). The gate plays the unfold
+      // to open as a cow nears + folds back to close (like the house door).
       const mk = (key: string, order: number[]) => this.anims.create({ key, frames: order.map((i) => ({ key: 'fence_gates_animation_sprites', frame: `gate-v-${i}` })), frameRate: 16, repeat: 0 });
-      mk('gate-v-open', [4, 3, 2, 1, 0]);  // closed (wide leaves) → open (thin, swung aside)
-      mk('gate-v-close', [0, 1, 2, 3, 4]); // open → closed
+      mk('gate-v-open', [0, 1, 2, 3, 4]);  // closed (folded) → open (unfolded)
+      mk('gate-v-close', [4, 3, 2, 1, 0]); // open → closed
     }
     // God-hand watering-can pour (tools.png row 0-1: can upright→tilt→pour). The
     // player's watering analogue of the hoe swing (`hoe-swing`).

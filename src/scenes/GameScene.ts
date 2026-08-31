@@ -4127,13 +4127,9 @@ export class GameScene extends Phaser.Scene {
       if (e.assetId === 'fence_gates_animation_sprites') {
         // The gate — a cosmetic auto-open sprite over the right-wall opening (NO collider; the
         // opening cells stay walkable, so cows/Cato pass through — like the house doorway).
-        // A DOUBLE door: two solid leaves that PART (slide up/down) to open a real gap, so the cow
-        // passes through empty space — not clipping any gate frame. Static leaf frame; open/close is
-        // a Y-tween. Above the gate mid → slides up; below → slides down (parted by GATE_PART px).
-        const GATE_PART = 24;
-        const g = this.add.sprite(wx, wy, 'fence_gates_animation_sprites', 'gate-v-4').setOrigin(0.5, 0.5);
-        const up = wy < anchor.y + 80;
-        g.setData('gateClosedY', wy); g.setData('gateOpenY', wy + (up ? -GATE_PART : GATE_PART));
+        // The gate plays its UNFOLD (open) / fold (close) animation as a cow nears — the art is a
+        // swing-open gate, so use its frames rather than moving the sprite. Rest = closed (frame 0).
+        const g = this.add.sprite(wx, wy, 'fence_gates_animation_sprites', 'gate-v-0').setOrigin(0.5, 0.5);
         gateSprites.push(g); structures.push(g); this.ySortSprites.push(g);
         continue;
       }
@@ -4292,11 +4288,9 @@ export class GameScene extends Phaser.Scene {
     if (!open) pen.gate.open = false; // logically shut immediately; a cow won't step onto it now
     let pending = pen.gate.sprites.length;
     for (const g of pen.gate.sprites) {
-      this.tweens.killTweensOf(g);
-      const ty = g.getData(open ? 'gateOpenY' : 'gateClosedY') as number;
-      this.tweens.add({
-        targets: g, y: ty, duration: 200, ease: 'Sine.easeInOut',
-        onComplete: () => { if (--pending <= 0) { pen.gate.animating = false; if (open) pen.gate.open = true; } }, // open ONLY once fully parted
+      g.play(open ? 'gate-v-open' : 'gate-v-close');
+      g.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        if (--pending <= 0) { pen.gate.animating = false; if (open) pen.gate.open = true; } // passable only once fully unfolded
       });
     }
   }
