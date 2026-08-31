@@ -400,7 +400,7 @@ export class BootScene extends Phaser.Scene {
       const gt = this.textures.get('fence_gates_animation_sprites');
       const GV: Array<[number, number]> = [[0, 16], [32, 16], [64, 16], [96, 16], [128, 16]];
       GV.forEach(([x, y], i) => { if (!gt.has(`gate-v-${i}`)) gt.add(`gate-v-${i}`, 0, x, y, 32, 32); });
-      const mk = (key: string, order: number[]) => this.anims.create({ key, frames: order.map((i) => ({ key: 'fence_gates_animation_sprites', frame: `gate-v-${i}` })), frameRate: 10, repeat: 0 });
+      const mk = (key: string, order: number[]) => this.anims.create({ key, frames: order.map((i) => ({ key: 'fence_gates_animation_sprites', frame: `gate-v-${i}` })), frameRate: 16, repeat: 0 });
       mk('gate-v-open', [0, 1, 2, 3, 4]);
       mk('gate-v-close', [4, 3, 2, 1, 0]);
     }

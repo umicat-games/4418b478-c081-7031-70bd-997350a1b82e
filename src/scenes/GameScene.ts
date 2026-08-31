@@ -4193,8 +4193,8 @@ export class GameScene extends Phaser.Scene {
       planPath: (fx, fy, tx, ty) => this.cowPlanPath(fx, fy, tx, ty),
       isNight: () => this.bgIndex() === WEATHER_BGS.length - 1,
       sleepSpot: () => ({ x: A.x + 56, y: A.y + 60 }), // inside, just below the barn
-      roamCenter: () => ({ x: A.x + 108, y: A.y + 84 }), // biased toward the gate → graze in + step out
-      roamRadius: () => 68,
+      roamCenter: () => ({ x: A.x + 72, y: A.y + 84 }), // pen interior centre — graze inside, occasionally step out the gate
+      roamRadius: () => 64,
     };
   }
 
@@ -4241,7 +4241,10 @@ export class GameScene extends Phaser.Scene {
     const pen = this.cowPen;
     if (!pen || pen.gate.animating || !pen.gate.sprites.length) return;
     const g = pen.gate.at;
-    const OPEN_R = TILE * 1.6, CLOSE_R = TILE * 2.6;
+    // Open PREDICTIVELY (well before the cow reaches the gap) so the swing finishes before it
+    // crosses — otherwise the cow walks through a still-closing gate ("穿过门的素材" bug). Wide
+    // hysteresis so it doesn't flap as cows graze near it.
+    const OPEN_R = TILE * 2.8, CLOSE_R = TILE * 4.2;
     let near = Infinity;
     for (const c of pen.cows) near = Math.min(near, c.distTo(g.x, g.y));
     if (this.child) near = Math.min(near, Math.hypot(this.child.x - g.x, this.child.y - g.y));
