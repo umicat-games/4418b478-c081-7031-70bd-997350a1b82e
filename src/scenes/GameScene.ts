@@ -4148,26 +4148,18 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    // The gate is a DOUBLE door: a cow passes ONLY through the MIDDLE (template y=80, where the two
-    // doors part), NOT through the door posts above/below. So block the post cells (y=64, y=96) —
-    // solid, so a cow can't clip through them — and leave only the middle cell as the passable gate
-    // opening (a cow waits at the cell before it until the gate swings open — gateBlocks).
-    const gateAt = { x: anchor.x + 128, y: anchor.y + 80 };
+    // Gate opening = the WALL-GAP cell(s) the gate sprite(s) cover — DERIVED from the gate sprite's
+    // row (snapped to the right-wall column at template x=128), so it follows however the creator
+    // placed the gate. Passable only once the gate has finished opening (a cow waits — gateBlocks);
+    // the surrounding wall fences are the posts. gateAt (proximity) = the gate sprite itself.
     const gateCells = new Set<string>();
-    const midT = this.islandLayer.worldToTileXY(anchor.x + 128, anchor.y + 80);
-    if (midT) gateCells.add(`${Math.floor(midT.x)},${Math.floor(midT.y)}`);
-    for (const ly of [64, 96]) { // the two door POSTS — solid
-      const t = this.islandLayer.worldToTileXY(anchor.x + 128, anchor.y + ly);
-      if (t) {
-        const k = `${Math.floor(t.x)},${Math.floor(t.y)}`;
-        cells.push(k); this.cowPenBlocked.add(k);
-        if (this.wallGroup) {
-          const b = this.wallGroup.create(anchor.x + 128, anchor.y + ly, '__WHITE') as Phaser.Physics.Arcade.Sprite;
-          b.setVisible(false).setDisplaySize(TILE - 3, TILE - 3).refreshBody();
-          bodies.push(b);
-        }
-      }
+    let gx = 0, gy = 0;
+    for (const g of gateSprites) {
+      const t = this.islandLayer.worldToTileXY(anchor.x + 128, g.y);
+      if (t) gateCells.add(`${Math.floor(t.x)},${Math.floor(t.y)}`);
+      gx += g.x; gy += g.y;
     }
+    const gateAt = gateSprites.length ? { x: gx / gateSprites.length, y: gy / gateSprites.length } : { x: anchor.x + 128, y: anchor.y + 64 };
     this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [] };
     this.spawnCows(occupants);
     this.scheduleSave();
