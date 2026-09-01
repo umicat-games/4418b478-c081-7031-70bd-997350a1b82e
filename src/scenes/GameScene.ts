@@ -141,6 +141,7 @@ const COOP_BUBBLE_DEPTH = 490000; // the coop "eggs ready" bubble — above worl
 // flow will make this a player choice later. Chosen on an open-ish patch of grass SE of the house.
 const COW_PEN_ANCHOR = { x: 264, y: 232 };
 const COW_COUNT = 3; // cows spawned with a fresh pen (dynamic, like chickens)
+const GROUND_DECOR_DEPTH = 2; // flat on-the-ground pen decor (dry-grass): above the grass tilemap (1), below every sprite
 // TEMP (restore to true): random wild spawning (grass/foragables + big-stones) is
 // OFF while the creator arranges the default layout, so it doesn't clutter the map.
 const SPAWN_WILD = false;
@@ -4160,7 +4161,15 @@ export class GameScene extends Phaser.Scene {
       }
       // Faithful to the editor: SDK sprites render origin (0.5,0.5); applyYSort sorts by foot line.
       const s = this.add.sprite(wx, wy, e.assetId, e.frame ?? 0).setOrigin(0.5, 0.5);
-      structures.push(s); this.ySortSprites.push(s);
+      structures.push(s);
+      // Flat ON-THE-GROUND decor (the dry-grass patches) lies just above the grass tilemap but BEHIND
+      // every sprite — pin it to GROUND_DECOR_DEPTH and keep it OUT of the foot-Y sort (like rugs), so
+      // it can't occlude cows/Cato/etc. Everything else foot-Y-sorts normally.
+      if (e.assetId === 'barn_structures' && (e.frame === 'dry-grass' || e.frame === 'dry-grass-small')) {
+        s.setDepth(GROUND_DECOR_DEPTH);
+      } else {
+        this.ySortSprites.push(s);
+      }
       if (e.assetId === 'barn_structures' && e.frame === '1-barn' && !barn) barn = s;
       if (e.assetId === 'fences') {
         // Fences are SOLID: mark the cell blocked (pathfinding routes around) + an invisible
@@ -4324,9 +4333,15 @@ export class GameScene extends Phaser.Scene {
   private cowBarnRect(pen: CowPenObj): Phaser.Geom.Rectangle | null {
     const barns = pen.structures.filter((s) => s.active && s.texture.key === 'barn_structures' && s.frame.name === '1-barn');
     if (!barns.length) return null;
-    const r = barns[0]!.getBounds();
-    for (let i = 1; i < barns.length; i++) Phaser.Geom.Rectangle.Union(r, barns[i]!.getBounds(), r);
-    return r;
+    // Union the OPAQUE-pixel rects (not the frame bounds) so the bubble centres on the barn ART, not
+    // on transparent padding / the gap between two barn tiles (the "milk shows upper-right" bug).
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const s of barns) {
+      const r = this.spriteWorldSolidRect(s);
+      minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
+    }
+    return new Phaser.Geom.Rectangle(minX, minY, maxX - minX, maxY - minY);
   }
 
   private cowMilkTotal(pen: CowPenObj): number {
