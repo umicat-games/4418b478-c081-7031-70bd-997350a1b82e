@@ -1,0 +1,20 @@
+{
+  "balance": {
+    "lives": 3,
+    "_meta_lives": { "min": 1, "max": 9, "step": 1, "label": "Starting lives" },
+    "playerSpeed": 380,
+    "_meta_playerSpeed": { "min": 150, "max": 700, "step": 10, "label": "Player speed (px/s)" },
+    "shootCooldownMs": 260,
+    "_meta_shootCooldownMs": { "min": 80, "max": 800, "step": 10, "label": "Fire cooldown (ms)" },
+    "invulnerabilityMs": 1400,
+    "_meta_invulnerabilityMs": { "min": 500, "max": 3000, "step": 100, "label": "Invulnerability after hit (ms)" },
+    "enemyBulletSpeed": 260,
+    "_meta_enemyBulletSpeed": { "min": 100, "max": 500, "step": 10, "label": "Enemy bullet speed (px/s)" }
+  },
+  "difficulty": {
+    "difficultyStepPerLoop": 0.14,
+    "_meta_difficultyStepPerLoop": { "min": 0, "max": 0.5, "step": 0.01, "label": "Difficulty increase per loop" },
+    "maxDifficultyMultiplier": 2.4,
+    "_meta_maxDifficultyMultiplier": { "min": 1, "max": 4, "step": 0.1, "label": "Max difficulty multiplier" }
+  }
+}

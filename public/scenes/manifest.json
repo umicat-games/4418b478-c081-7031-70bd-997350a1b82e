@@ -10,5 +10,82 @@
   "huds": [
     { "id": "game-hud", "file": "hud/game-hud.json" }
   ],
-  "assets": []
+  "assets": [],
+  "prefabs": [
+    {
+      "id": "player_bullet",
+      "kind": "code-rendered",
+      "role": "bullet",
+      "script": "src/visuals/player-bullet.ts",
+      "width": 10,
+      "height": 22,
+      "params": { "color": "#7cffcb" },
+      "physics": { "velocityY": -620 },
+      "properties": { "damage": 1 }
+    },
+    {
+      "id": "enemy_bullet",
+      "kind": "code-rendered",
+      "role": "enemy-bullet",
+      "script": "src/visuals/enemy-bullet.ts",
+      "width": 10,
+      "height": 20,
+      "params": { "color": "#ff5566" },
+      "physics": { "velocityY": 230 },
+      "properties": { "damage": 1 }
+    },
+    {
+      "id": "enemy_drone",
+      "kind": "code-rendered",
+      "role": "enemy",
+      "script": "src/visuals/enemy-drone.ts",
+      "width": 52,
+      "height": 30,
+      "params": { "bodyColor": "#7ee787", "domeColor": "#ffe066" },
+      "physics": { "velocityY": 130, "bodyW": 34, "bodyH": 20 },
+      "properties": {
+        "hp": 1,
+        "scoreValue": 100,
+        "fireIntervalMs": 2600,
+        "aimed": false,
+        "moveType": "straight"
+      }
+    },
+    {
+      "id": "enemy_weaver",
+      "kind": "code-rendered",
+      "role": "enemy",
+      "script": "src/visuals/enemy-weaver.ts",
+      "width": 62,
+      "height": 48,
+      "params": { "bodyColor": "#ff9f43", "eyeColor": "#2d3436" },
+      "physics": { "velocityY": 100, "bodyW": 26, "bodyH": 30 },
+      "properties": {
+        "hp": 2,
+        "scoreValue": 180,
+        "fireIntervalMs": 2100,
+        "aimed": true,
+        "moveType": "weave",
+        "weaveAmplitude": 90,
+        "weaveSpeed": 1.8
+      }
+    },
+    {
+      "id": "enemy_brute",
+      "kind": "code-rendered",
+      "role": "enemy",
+      "script": "src/visuals/enemy-brute.ts",
+      "width": 110,
+      "height": 64,
+      "params": { "bodyColor": "#b06bff", "plateColor": "#7a3fd6", "coreColor": "#ff4d6d" },
+      "physics": { "velocityY": 60, "bodyW": 76, "bodyH": 48 },
+      "properties": {
+        "hp": 6,
+        "scoreValue": 450,
+        "fireIntervalMs": 1500,
+        "aimed": true,
+        "moveType": "straight"
+      }
+    }
+  ]
 }

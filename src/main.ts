@@ -1,8 +1,13 @@
-import { createUmicatGame } from '@umicat/phaser-sdk';
+import { createUmicatGame, Umicat } from '@umicat/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { renderScripts } from './visuals';
+
+// Platform services (saves, identity, exit). Games must not block their
+// first frame on this — scenes read from the resolved promise when they
+// need it (e.g. loading/saving the high score).
+export const umicatReady = Umicat.init({ standaloneGameId: 'space-shooter' }).catch(() => null);
 
 function startGame(): void {
   createUmicatGame({

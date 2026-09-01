@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "id": "endless",
+  "name": "Endless Assault",
+  "loop": true,
+  "waves": [
+    {
+      "id": "drones",
+      "spawns": [
+        {
+          "kind": "formation",
+          "prefabId": "enemy_drone",
+          "formation": {
+            "shape": "line",
+            "cols": 4,
+            "spacing": { "x": 150, "y": 0 },
+            "origin": { "x": 110, "y": -40 }
+          },
+          "startMs": 0,
+          "intervalMs": 650
+        }
+      ],
+      "endCondition": { "type": "time", "ms": 6000 }
+    },
+    {
+      "id": "weavers",
+      "delayMs": 700,
+      "spawns": [
+        {
+          "kind": "formation",
+          "prefabId": "enemy_weaver",
+          "formation": {
+            "shape": "line",
+            "cols": 3,
+            "spacing": { "x": 210, "y": 0 },
+            "origin": { "x": 150, "y": -40 }
+          },
+          "startMs": 0,
+          "intervalMs": 750
+        }
+      ],
+      "endCondition": { "type": "time", "ms": 7000 }
+    },
+    {
+      "id": "mixed",
+      "delayMs": 800,
+      "spawns": [
+        {
+          "kind": "formation",
+          "prefabId": "enemy_drone",
+          "formation": {
+            "shape": "grid",
+            "rows": 2,
+            "cols": 3,
+            "spacing": { "x": 160, "y": 100 },
+            "origin": { "x": 120, "y": -40 }
+          },
+          "startMs": 0,
+          "intervalMs": 500
+        },
+        {
+          "kind": "formation",
+          "prefabId": "enemy_weaver",
+          "formation": {
+            "shape": "line",
+            "cols": 2,
+            "spacing": { "x": 260, "y": 0 },
+            "origin": { "x": 220, "y": -160 }
+          },
+          "startMs": 300,
+          "intervalMs": 800
+        }
+      ],
+      "endCondition": { "type": "time", "ms": 8500 }
+    },
+    {
+      "id": "brute",
+      "delayMs": 1000,
+      "spawns": [
+        { "kind": "point", "prefabId": "enemy_brute", "x": 360, "y": -70, "atMs": 0 }
+      ],
+      "endCondition": { "type": "time", "ms": 18000 }
+    }
+  ]
+}

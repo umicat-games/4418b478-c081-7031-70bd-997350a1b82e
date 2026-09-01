@@ -4,13 +4,36 @@
   "name": "Main",
   "type": "world",
   "world": {
-    "width": 1280,
-    "height": 720,
-    "background": { "color": "#1a1a2e" }
+    "width": 720,
+    "height": 1280,
+    "background": { "color": "#241a52" }
   },
   "camera": {
     "follow": null,
-    "bounds": { "x": 0, "y": 0, "width": 1280, "height": 720 }
+    "bounds": { "x": 0, "y": 0, "width": 720, "height": 1280 }
   },
-  "entities": []
+  "entities": [
+    {
+      "id": "e-backdrop",
+      "kind": "code-rendered",
+      "role": "backdrop",
+      "script": "src/visuals/backdrop.ts",
+      "width": 720,
+      "height": 1280,
+      "params": { "width": 720, "height": 1280, "topColor": "#8ecbff", "bottomColor": "#241a52" },
+      "transform": { "x": 360, "y": 640, "depth": 0 }
+    },
+    {
+      "id": "e-player",
+      "kind": "code-rendered",
+      "role": "player",
+      "script": "src/visuals/player-ship.ts",
+      "width": 72,
+      "height": 90,
+      "params": { "bodyColor": "#4fd1ff", "accentColor": "#ffd23f", "canopyColor": "#eaffff", "flameColor": "#ff9f43" },
+      "transform": { "x": 360, "y": 1100, "depth": 3 },
+      "physics": { "bodyW": 28, "bodyH": 50, "collideWorldBounds": true },
+      "properties": { "maxHp": 1 }
+    }
+  ]
 }
