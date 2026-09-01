@@ -341,6 +341,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('fence_gates_animation_sprites', 'uploaded/fence_gates_animation_sprites.png', { frameWidth: 16, frameHeight: 16 });
     this.load.atlas('barn_structures', 'uploaded/barn_structures.png', 'uploaded/barn_structures.json');
     this.load.atlas('water_tray', 'uploaded/water_tray.png', 'uploaded/water_tray.json');
+    this.load.atlas('milk', 'uploaded/milk.png', 'uploaded/milk.json'); // <colour>_milk bottles — cow milk
     // The authored pen TEMPLATE (fence/gate/barn/trough layout) — instantiated as a
     // group on the island at a placement anchor (creator authors it in the editor).
     this.load.json('cowpen-template', 'scenes/world/cow-pe.json');

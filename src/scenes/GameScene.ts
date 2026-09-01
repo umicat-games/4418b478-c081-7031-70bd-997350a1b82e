@@ -440,6 +440,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (coop) return makePlaceable('coop', count, `${coop.size}-${coop.color}`);
   const egg = /^egg-(red|brown|green|blue|yellow)$/.exec(id);
   if (egg) return makeCoopEgg(egg[1] as CoopColor, count);
+  const milk = /^milk-(blue|brown|purple|red|green)$/.exec(id);
+  if (milk) return makeMilk(milk[1], count);
   const fruit = /^fruit-(\w+)$/.exec(id);
   if (fruit) return makeFruit(fruit[1], count);
   const forage = /^forage-([\w-]+)$/.exec(id);
@@ -478,6 +480,16 @@ function makeStone(count: number): ItemStack {
 /** A collected chicken egg (laid daily by a coop of that colour). */
 function makeCoopEgg(color: CoopColor, count = 1): ItemStack {
   return { id: `egg-${color}`, label: `${color} egg`, iconKey: 'egg-items', iconFrame: eggFrame(color), count, stackable: true };
+}
+
+/** The milk colours a cow can give (each cow produces one). Icon = the `<color>_milk` region of the
+ *  `milk` atlas. NOTE: the cow ART is currently only pink; the colour is the cow's MILK colour. */
+const MILK_COLORS = ['blue', 'brown', 'purple', 'red', 'green'] as const;
+const MILK_CAP_PER_COLOR = 6; // uncollected milk of one colour doesn't pile up forever
+
+/** A bottle of milk (given daily by a cow of that colour). Icon = the `<color>_milk` atlas region. */
+function makeMilk(color: string, count = 1): ItemStack {
+  return { id: `milk-${color}`, label: `${color} milk`, iconKey: 'milk', iconFrame: `${color}_milk`, count, stackable: true };
 }
 
 /** Can this item DO something when selected on the hotbar? True for tools, seed
@@ -570,6 +582,9 @@ interface CowPenObj {
   cells: string[]; // fence cell keys (solid — pathfinding routes around; NOT the gate opening)
   gate: { sprites: Phaser.GameObjects.Sprite[]; at: { x: number; y: number }; cells: Set<string>; open: boolean; animating: boolean };
   cows: Cow[];
+  barn?: Phaser.GameObjects.Sprite; // the `1-barn` sprite — milk bubble sits above it, tap it to collect
+  milkReady: Record<string, number>; // colour → collectable bottles (cows produce their colour daily)
+  milkBubble?: { bg: Phaser.GameObjects.Image; bottle: Phaser.GameObjects.Image }; // "milk ready" indicator over the barn
 }
 
 /** A placed building structure at a cell (wall / door / furniture). */
@@ -609,7 +624,7 @@ interface SaveBlob {
   cato: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
   coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number; pendingUpgrade?: { size: CoopSize; applyDay: number } }>; // v23: placed chicken coops + occupants + laid eggs; v24: pending overnight upgrade
-  cowPen?: { anchor: { x: number; y: number }; cows: SavedCow[] }; // v25: placed cow pen (anchor + dynamic cows)
+  cowPen?: { anchor: { x: number; y: number }; cows: SavedCow[]; milkReady?: Record<string, number> }; // v25: placed cow pen; v26: milk
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
   foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>; // v5: wild foragables
   bigStones?: Array<{ key: string; tier: number; ready: number }>; // v5: minable big stones
@@ -1962,6 +1977,10 @@ export class GameScene extends Phaser.Scene {
       const ck = this.coopAtPoint(wp.x, wp.y);
       if (ck) { const coop = this.coops.get(ck)!; if (coop.eggsReady > 0) this.collectCoopEggs(coop); return; }
     }
+    // TAP the barn = collect the cow pen's ready milk (fly-to-backpack, like eggs).
+    if (!this.activePlace && this.cowPen && this.cowMilkTotal(this.cowPen) > 0 && this.barnAtPoint(wp.x, wp.y)) {
+      this.collectCowMilk(); return;
+    }
     if (tile) {
       const key = `${tile.x},${tile.y}`;
       // Holding a plantable (tree / bush): place it on empty grass. (The house-building
@@ -2655,6 +2674,7 @@ export class GameScene extends Phaser.Scene {
     this.settleHomeUpgrade();
     this.settleCoopUpgrades(); // build any coop whose paid upgrade came due (before they lay)
     this.settleCoops(); // coops lay their daily eggs
+    this.settleCowPen(); // cows give their daily milk (one bottle each, by colour)
     this.settleRealDayBond(days);
     this.scheduleSave();
     if (this.menuOpen) this.publishMenu();
@@ -4111,7 +4131,7 @@ export class GameScene extends Phaser.Scene {
   /** Instantiate the `cow_pen` template as a GROUP at `anchor`: spawn each authored piece
    *  (fences / barn / haystacks / trough / gate), wire fence colliders + blocked cells (minus the
    *  gate opening), then spawn cows (a count → fresh, or saved positions). */
-  private placeCowPen(anchor: { x: number; y: number }, occupants: number | SavedCow[]): void {
+  private placeCowPen(anchor: { x: number; y: number }, occupants: number | SavedCow[], savedMilk?: Record<string, number>): void {
     this.removeCowPen();
     const tpl = this.cache.json.get('cowpen-template') as
       | { entities?: Array<{ assetId?: string; frame?: string; animation?: string; transform: { x: number; y: number } }> }
@@ -4121,6 +4141,7 @@ export class GameScene extends Phaser.Scene {
     const bodies: Phaser.GameObjects.Sprite[] = [];
     const cells: string[] = [];
     const gateSprites: Phaser.GameObjects.Sprite[] = [];
+    let barn: Phaser.GameObjects.Sprite | undefined; // the `1-barn` — milk bubble sits above it + tap to collect
     for (const e of tpl.entities) {
       if (!e.assetId) continue;
       const wx = anchor.x + e.transform.x, wy = anchor.y + e.transform.y;
@@ -4140,6 +4161,7 @@ export class GameScene extends Phaser.Scene {
       // Faithful to the editor: SDK sprites render origin (0.5,0.5); applyYSort sorts by foot line.
       const s = this.add.sprite(wx, wy, e.assetId, e.frame ?? 0).setOrigin(0.5, 0.5);
       structures.push(s); this.ySortSprites.push(s);
+      if (e.assetId === 'barn_structures' && e.frame === '1-barn' && !barn) barn = s;
       if (e.assetId === 'fences') {
         // Fences are SOLID: mark the cell blocked (pathfinding routes around) + an invisible
         // collider (Cato physically bumps it). The gate opening has no fence → cells stay walkable.
@@ -4164,23 +4186,27 @@ export class GameScene extends Phaser.Scene {
       gx += g.x; gy += g.y;
     }
     const gateAt = gateSprites.length ? { x: gx / gateSprites.length, y: gy / gateSprites.length } : { x: anchor.x + 128, y: anchor.y + 64 };
-    this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [] };
+    this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [], barn, milkReady: savedMilk ?? {}, milkBubble: undefined };
     this.spawnCows(occupants);
+    this.refreshCowMilkBubble();
     this.scheduleSave();
   }
 
-  /** Create the pen's cows — a count → fresh cows near the barn, or restored saved positions. */
+  /** Create the pen's cows — a count → fresh cows (colours cycled over the milk palette), or restored
+   *  saved positions+colours. */
   private spawnCows(occupants: number | SavedCow[]): void {
     if (!this.cowPen) return;
     const nav = this.cowNav();
     const seed = nav.sleepSpot();
     const out: Cow[] = [];
     if (Array.isArray(occupants)) {
-      for (const s of occupants) { const c = new Cow(this, { x: s.x, y: s.y, nav }); out.push(c); this.ySortSprites.push(c.sprite); }
+      for (const s of occupants) { const c = new Cow(this, { x: s.x, y: s.y, nav, color: s.color }); out.push(c); this.ySortSprites.push(c.sprite); }
     } else {
       const n = Math.max(0, occupants);
       for (let i = 0; i < n; i++) {
-        const c = new Cow(this, { x: seed.x + (i - (n - 1) / 2) * 22, y: seed.y, nav });
+        // Cycle colours over the milk palette so different cows give different-coloured milk.
+        const color = MILK_COLORS[i % MILK_COLORS.length]!;
+        const c = new Cow(this, { x: seed.x + (i - (n - 1) / 2) * 22, y: seed.y, nav, color });
         out.push(c); this.ySortSprites.push(c.sprite);
       }
     }
@@ -4197,6 +4223,7 @@ export class GameScene extends Phaser.Scene {
     for (const s of this.cowPen.structures) s.destroy();
     for (const b of this.cowPen.bodies) b.destroy();
     for (const c of this.cowPen.cows) c.destroy();
+    this.cowPen.milkBubble?.bg.destroy(); this.cowPen.milkBubble?.bottle.destroy();
     for (const k of this.cowPen.cells) this.cowPenBlocked.delete(k);
     this.cowPen = undefined;
   }
@@ -4289,6 +4316,109 @@ export class GameScene extends Phaser.Scene {
         if (--pending <= 0) { pen.gate.animating = false; if (open) pen.gate.open = true; } // passable only once fully unfolded
       });
     }
+  }
+
+  // ── Cow milk (produced daily by cow colour; bubble over the barn; tap the barn to collect) ──────
+
+  /** World bounds of the barn (union of its `1-barn` sprites). */
+  private cowBarnRect(pen: CowPenObj): Phaser.Geom.Rectangle | null {
+    const barns = pen.structures.filter((s) => s.active && s.texture.key === 'barn_structures' && s.frame.name === '1-barn');
+    if (!barns.length) return null;
+    const r = barns[0]!.getBounds();
+    for (let i = 1; i < barns.length; i++) Phaser.Geom.Rectangle.Union(r, barns[i]!.getBounds(), r);
+    return r;
+  }
+
+  private cowMilkTotal(pen: CowPenObj): number {
+    return Object.values(pen.milkReady).reduce((a, b) => a + b, 0);
+  }
+
+  /** Daily milk: each cow gives ONE bottle of its own colour (capped per colour). Day-settle. */
+  private settleCowPen(): void {
+    const pen = this.cowPen;
+    if (!pen) return;
+    for (const c of pen.cows) pen.milkReady[c.color] = Math.min(MILK_CAP_PER_COLOR, (pen.milkReady[c.color] ?? 0) + 1);
+    this.refreshCowMilkBubble();
+  }
+
+  /** Show / hide the "milk ready" bubble over the barn — a neutral speech bubble + a milk bottle (the
+   *  colour with the most ready), gently bobbing. Mirrors the coop egg bubble. */
+  private refreshCowMilkBubble(): void {
+    const pen = this.cowPen;
+    if (!pen) return;
+    if (this.cowMilkTotal(pen) > 0) {
+      const rect = this.cowBarnRect(pen);
+      if (!rect) return;
+      const bx = rect.centerX, by = rect.top - 4;
+      const color = Object.entries(pen.milkReady).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'brown';
+      if (!pen.milkBubble) {
+        const S = 0.5; // speech-bubble is 42×47, tail down → points at the barn
+        const bg = this.add.image(bx, by, 'speech-bubble').setOrigin(0.5, 1).setScale(S).setDepth(COOP_BUBBLE_DEPTH);
+        const bottle = this.add.image(bx, by - bg.displayHeight * 0.58, 'milk', `${color}_milk`).setOrigin(0.5, 0.5).setDisplaySize(12, 12).setDepth(COOP_BUBBLE_DEPTH + 1);
+        const bSX = bottle.scaleX, bSY = bottle.scaleY;
+        pen.milkBubble = { bg, bottle };
+        bg.setScale(0); this.tweens.add({ targets: bg, scaleX: S, scaleY: S, duration: 240, ease: 'Back.easeOut' });
+        bottle.setScale(0); this.tweens.add({ targets: bottle, scaleX: bSX, scaleY: bSY, duration: 200, delay: 110, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: [bg, bottle], y: '-=2.5', duration: 950, delay: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        pen.milkBubble.bottle.setFrame(`${color}_milk`); // keep in sync with the top colour
+      }
+    } else if (pen.milkBubble) {
+      pen.milkBubble.bg.destroy(); pen.milkBubble.bottle.destroy();
+      pen.milkBubble = undefined;
+    }
+  }
+
+  /** True when a world point taps the barn (padded). */
+  private barnAtPoint(wx: number, wy: number): boolean {
+    const pen = this.cowPen;
+    if (!pen) return false;
+    const r = this.cowBarnRect(pen);
+    return !!r && wx >= r.x - 4 && wx <= r.right + 4 && wy >= r.y - 4 && wy <= r.bottom + 4;
+  }
+
+  /** Collect the barn's milk: bubble pops away, bottles emerge above the barn, float, then fly to the
+   *  collector; each colour banks its own `milk-<colour>` stack. milkReady zeroed up-front. */
+  private collectCowMilk(): void {
+    const pen = this.cowPen;
+    if (!pen) return;
+    const colors = Object.entries(pen.milkReady).filter(([, n]) => n > 0);
+    if (!colors.length) return;
+    playSfx(this);
+    const rect = this.cowBarnRect(pen);
+    const cx = rect ? rect.centerX : pen.anchor.x + 44, cy = (rect ? rect.top : pen.anchor.y + 24) - 6;
+    pen.milkReady = {};
+    const b = pen.milkBubble; pen.milkBubble = undefined;
+    const units: string[] = [];
+    for (const [color, n] of colors) { this.collect(makeMilk(color, n)); for (let i = 0; i < n; i++) units.push(color); }
+    const spawn = (): void => {
+      units.forEach((color, i) => {
+        const bx = cx + (i - (units.length - 1) / 2) * 10;
+        const bottle = this.add.image(bx, cy, 'milk', `${color}_milk`).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
+        this.tweens.add({
+          targets: bottle, scale: 1, y: cy - 8, duration: 220, delay: i * 70, ease: 'Back.easeOut',
+          onComplete: () => this.tweens.add({
+            targets: bottle, y: bottle.y - 4, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
+            onComplete: () => this.flyItemToCollector(bottle, false),
+          }),
+        });
+      });
+    };
+    if (b && b.bg.active) {
+      this.tweens.killTweensOf([b.bg, b.bottle]);
+      const s0 = b.bg.scaleX;
+      this.tweens.add({
+        targets: b.bg, scaleX: s0 * 1.18, scaleY: s0 * 1.18, duration: 110, ease: 'Sine.easeOut',
+        onComplete: () => this.tweens.add({
+          targets: [b.bg, b.bottle], scaleX: 0, scaleY: 0, alpha: 0, duration: 150, ease: 'Back.easeIn',
+          onComplete: () => { b.bg.destroy(); b.bottle.destroy(); },
+        }),
+      });
+      this.time.delayedCall(150, spawn);
+    } else {
+      spawn();
+    }
+    this.scheduleSave();
   }
 
   /** Tick every coop's chickens each frame (AI state machine + egg→chick→adult maturation),
@@ -9103,7 +9233,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 25,
+      v: 26,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -9112,7 +9242,7 @@ export class GameScene extends Phaser.Scene {
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
       coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady, pendingUpgrade: c.pendingUpgrade })), // v23; v24 pendingUpgrade
-      cowPen: this.cowPen ? { anchor: this.cowPen.anchor, cows: this.cowPen.cows.map((c) => c.serialize()) } : undefined, // v25
+      cowPen: this.cowPen ? { anchor: this.cowPen.anchor, cows: this.cowPen.cows.map((c) => c.serialize()), milkReady: this.cowPen.milkReady } : undefined, // v25; v26 milk
 
       bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
@@ -9285,7 +9415,7 @@ export class GameScene extends Phaser.Scene {
         for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
         for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
         for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? [], c.eggsReady ?? 0, c.pendingUpgrade); // v23; v24 pendingUpgrade
-        if (s.cowPen) this.placeCowPen(s.cowPen.anchor, s.cowPen.cows); // v25: replace the auto-placed pen with the saved one
+        if (s.cowPen) this.placeCowPen(s.cowPen.anchor, s.cowPen.cows, s.cowPen.milkReady); // v25/v26: replace the auto-placed pen with the saved one (+ milk)
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.

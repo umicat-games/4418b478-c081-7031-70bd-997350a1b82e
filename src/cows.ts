@@ -29,8 +29,8 @@ export interface CowNav {
   gateBlocks(wx: number, wy: number): boolean;
 }
 
-/** Save shape for one cow — just its position (cows have no growth stages). */
-export interface SavedCow { x: number; y: number; }
+/** Save shape for one cow — position + its milk colour (cows have no growth stages). */
+export interface SavedCow { x: number; y: number; color?: string; }
 
 type CowState = 'idle' | 'walk' | 'eat' | 'sleep';
 
@@ -39,6 +39,7 @@ const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
 
 export class Cow {
   readonly sprite: Phaser.GameObjects.Sprite;
+  readonly color: string; // which milk colour this cow gives (blue/brown/purple/red/green)
   private scene: Phaser.Scene;
   private nav: CowNav;
   private state: CowState = 'idle';
@@ -48,9 +49,10 @@ export class Cow {
   private goingToSleep = false; // the current walk is a night return-to-pen
   private gateWaitStart = 0; // when the cow began waiting at a closed gate (0 = not waiting)
 
-  constructor(scene: Phaser.Scene, opts: { x: number; y: number; nav: CowNav }) {
+  constructor(scene: Phaser.Scene, opts: { x: number; y: number; nav: CowNav; color?: string }) {
     this.scene = scene;
     this.nav = opts.nav;
+    this.color = opts.color ?? 'brown';
     this.sprite = scene.add.sprite(opts.x, opts.y, 'pink_cow_animation_sprites', 0).setOrigin(0.5, 1);
     this.enterIdle(scene.time.now);
   }
@@ -151,6 +153,6 @@ export class Cow {
     return Math.hypot(this.sprite.x - wx, this.sprite.y - wy);
   }
 
-  serialize(): SavedCow { return { x: Math.round(this.sprite.x), y: Math.round(this.sprite.y) }; }
+  serialize(): SavedCow { return { x: Math.round(this.sprite.x), y: Math.round(this.sprite.y), color: this.color }; }
   destroy(): void { this.sprite.destroy(); }
 }
