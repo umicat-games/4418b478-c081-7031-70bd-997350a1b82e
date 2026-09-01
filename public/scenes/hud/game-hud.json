@@ -59,7 +59,7 @@
       "borderColor": "#8ab4ff", "borderWidth": 2, "borderRadius": 20,
       "role": "pause-dialog", "visible": false },
     { "id": "pause-title", "kind": "text", "anchor": { "side": "center", "offsetY": -170 }, "layer": "modal", "z": 2,
-      "source": { "mode": "static", "text": "Paused" }, "fontSize": 36, "color": "#ffffff", "align": "center",
+      "source": { "mode": "static", "text": "Game Paused" }, "fontSize": 36, "color": "#ffffff", "align": "center",
       "role": "pause-dialog", "visible": false },
     { "id": "resume-button", "kind": "icon-button", "anchor": { "side": "center", "offsetY": -70 }, "layer": "modal", "z": 2,
       "label": "Resume", "shape": "rounded-rect", "width": 260, "height": 60,
