@@ -82,7 +82,7 @@
       "borderColor": "#ff8fa3", "borderWidth": 2, "borderRadius": 20,
       "role": "gameover-dialog", "visible": false },
     { "id": "gameover-title", "kind": "text", "anchor": { "side": "center", "offsetY": -220 }, "layer": "modal", "z": 2,
-      "source": { "mode": "static", "text": "Game Over" }, "fontSize": 38, "color": "#ff8fa3", "align": "center",
+      "source": { "mode": "static", "text": "Game Over!" }, "fontSize": 38, "color": "#ff8fa3", "align": "center",
       "role": "gameover-dialog", "visible": false },
     { "id": "gameover-score", "kind": "text", "anchor": { "side": "center", "offsetY": -140 }, "layer": "modal", "z": 2,
       "source": { "mode": "dynamic", "binding": "score", "prefix": "Score: ", "fallback": "0" },
