@@ -76,15 +76,42 @@ user before building).
 - `src/main.ts` now also exports `umicatReady = Umicat.init(...).catch(() => null)`
   (non-blocking); `src/scenes/BootScene.ts` additionally calls `preloadRules(this)`.
 
+## Mobile performance (object pooling)
+`GameScene.ts` recycles instead of allocating on the two hottest per-event
+paths (per the mobile-performance guidance: text allocation is the #1 phone
+stutter cause, per-shot object churn is the #2):
+- **Score popups**: a fixed ring of 10 pre-created `Text` objects
+  (`popupPool`/`popupNext`), reused via `setText`/`setPosition` in
+  `spawnScorePopup` instead of a fresh `this.add.text(...)` per kill (each
+  `add.text` call rasterizes glyphs + uploads a new GPU texture — the
+  single biggest phone-stutter cause when done every kill).
+- **Bullets** (`player_bullet` / `enemy_bullet`): `acquireBullet(...)` /
+  `recycleBullet(...)` maintain a per-type free-list
+  (`playerBulletPool` / `enemyBulletPool`). Recycling reuses the existing
+  Graphics + Arcade body (`body.reset()` + `setVelocity()` +
+  `setEnable(true)`) instead of `destroy()` + `spawnPrefab()` on every
+  shot/impact/off-screen despawn. `handleBulletHitEnemy`,
+  `handleEnemyBulletHitPlayer`, and `cleanupOffscreen` all recycle instead
+  of destroying bullets now (enemies still `destroy()` as before — they
+  carry varied hp/behavior per type so pooling them wasn't worth the
+  added risk). Pools are cleared in `init()` on `scene.restart()` since the
+  Graphics objects they reference are torn down with the rest of the scene.
+
 ## Known environment note
 The sandbox's Bash tool was unavailable this session (no POSIX shell), so
-`npx tsc --noEmit` could not be run to verify this turn's TypeScript. Every
-SDK/Phaser API used was cross-checked directly against the installed
-`.d.ts` files instead. Worth running `npx tsc --noEmit` next session if the
-shell is back, just to be safe.
+`npx tsc --noEmit` could not be run to verify this turn's TypeScript (same
+issue as a previous session). Every SDK/Phaser API used (`Body.reset`,
+`Body.setEnable`, `getPrefab(...).physics?.velocityY`) was cross-checked
+directly against the installed `.d.ts` files and against the exact patterns
+already used elsewhere in this file. Worth running `npx tsc --noEmit` next
+session if the shell is back, just to be safe.
 
 ## What changed this turn
 Built the whole game from the fresh scaffold: design doc, data-driven
 world/HUD/prefabs/rules/waves, all render-script art, and the full
 `GameScene.ts` gameplay (movement, auto-fire, endless escalating waves,
 scoring, lives, pause/restart/exit, persisted high score).
+
+Follow-up turn: optimized for mobile stutter — pooled score-popup text and
+bullet objects (see "Mobile performance" above) instead of allocating a new
+one on every kill/shot/impact.

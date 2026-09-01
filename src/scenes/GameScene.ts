@@ -54,6 +54,17 @@ export class GameScene extends Phaser.Scene {
   private enemyBulletList: Phaser.GameObjects.GameObject[] = [];
   private sparkEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
 
+  // Mobile perf: recycle bullets instead of destroy()+spawnPrefab() every
+  // shot (avoids per-shot object churn), and reuse a fixed ring of Text
+  // objects for score popups instead of allocating a new one per kill
+  // (this.add.text() rasterizes + uploads a texture — the #1 stutter cause
+  // on phones if done on every kill).
+  private playerBulletPool: Phaser.GameObjects.GameObject[] = [];
+  private enemyBulletPool: Phaser.GameObjects.GameObject[] = [];
+  private playerBulletVelocityY = -620;
+  private popupPool: Phaser.GameObjects.Text[] = [];
+  private popupNext = 0;
+
   private score = 0;
   private highScore = 0;
   private lives = 3;
@@ -98,6 +109,12 @@ export class GameScene extends Phaser.Scene {
     this.enemyList = [];
     this.playerBulletList = [];
     this.enemyBulletList = [];
+    // Pools reference GameObjects that scene.restart() already tore down —
+    // drop the stale references; create() below repopulates them fresh.
+    this.playerBulletPool = [];
+    this.enemyBulletPool = [];
+    this.popupPool = [];
+    this.popupNext = 0;
     this.score = 0;
     this.difficultyMultiplier = 1;
     this.loopStarted = false;
@@ -201,6 +218,21 @@ export class GameScene extends Phaser.Scene {
     });
     this.sparkEmitter.setDepth(4);
 
+    // Cache the player bullet's authored velocity so recycled bullets don't
+    // need a fresh spawnPrefab() call to know their speed.
+    this.playerBulletVelocityY = getPrefab(this, 'player_bullet').physics?.velocityY ?? -620;
+
+    // Fixed ring of reusable score-popup labels — see field comment above.
+    this.popupPool = Array.from({ length: 10 }, () =>
+      this.add
+        .text(0, 0, '', { fontSize: '20px', color: '#ffe066', fontFamily: 'sans-serif' })
+        .setOrigin(0.5)
+        .setDepth(5)
+        .setActive(false)
+        .setVisible(false),
+    );
+    this.popupNext = 0;
+
     // --- Collisions. Lists are plain arrays mutated in place (push/splice)
     // so the collider keeps seeing new spawns / removed entries via the
     // same array reference. -----------------------------------------------
@@ -262,9 +294,51 @@ export class GameScene extends Phaser.Scene {
   private updatePlayerFire(time: number): void {
     if (time < this.nextPlayerFireAt) return;
     this.nextPlayerFireAt = time + this.shootCooldownMs;
-    const bullet = spawnPrefab(this, 'player_bullet', this.player.x, this.player.y - 40);
+    const bullet = this.acquireBullet(
+      'player_bullet',
+      this.playerBulletPool,
+      this.player.x,
+      this.player.y - 40,
+      0,
+      this.playerBulletVelocityY,
+    );
     this.playerBulletList.push(bullet);
     this.sparkEmitter.explode(3, this.player.x, this.player.y - 44);
+  }
+
+  // --- Bullet pooling -----------------------------------------------------
+  // Recycling avoids a destroy()+spawnPrefab() churn cycle on every shot,
+  // which is the second-biggest mobile stutter source after per-kill text
+  // allocation (see game-mobile-performance skill).
+
+  private acquireBullet(
+    prefabId: string,
+    pool: Phaser.GameObjects.GameObject[],
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+  ): Phaser.GameObjects.GameObject {
+    const recycled = pool.pop();
+    if (recycled) {
+      const graphic = recycled as Phaser.GameObjects.Graphics;
+      const body = graphic.body as Phaser.Physics.Arcade.Body;
+      body.reset(x, y);
+      body.setEnable(true);
+      body.setVelocity(vx, vy);
+      graphic.setActive(true).setVisible(true);
+      return recycled;
+    }
+    return spawnPrefab(this, prefabId, x, y, { physics: { velocityX: vx, velocityY: vy } });
+  }
+
+  private recycleBullet(bullet: Phaser.GameObjects.GameObject, pool: Phaser.GameObjects.GameObject[]): void {
+    const graphic = bullet as Phaser.GameObjects.Graphics;
+    const body = graphic.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.setEnable(false);
+    graphic.setActive(false).setVisible(false);
+    pool.push(bullet);
   }
 
   // --- Enemies --------------------------------------------------------------
@@ -336,9 +410,7 @@ export class GameScene extends Phaser.Scene {
       vx = (dx / dist) * speed;
       vy = (dy / dist) * speed;
     }
-    const bullet = spawnPrefab(this, 'enemy_bullet', enemy.x, enemy.y + 24, {
-      physics: { velocityX: vx, velocityY: vy },
-    });
+    const bullet = this.acquireBullet('enemy_bullet', this.enemyBulletPool, enemy.x, enemy.y + 24, vx, vy);
     this.enemyBulletList.push(bullet);
 
     // Quick telegraph pop so a fire event is readable amid the chaos.
@@ -347,16 +419,28 @@ export class GameScene extends Phaser.Scene {
 
   private cleanupOffscreen(): void {
     const margin = 100;
-    for (const list of [this.enemyList, this.playerBulletList, this.enemyBulletList]) {
-      for (const go of list) {
-        if (!go.active) continue;
-        const g = go as Phaser.GameObjects.Graphics;
-        if (g.y < -margin || g.y > GAME_HEIGHT + margin || g.x < -margin || g.x > GAME_WIDTH + margin) {
-          go.destroy();
-        }
-      }
-      this.pruneInPlace(list);
+    const isOffscreen = (go: Phaser.GameObjects.GameObject): boolean => {
+      const g = go as Phaser.GameObjects.Graphics;
+      return g.y < -margin || g.y > GAME_HEIGHT + margin || g.x < -margin || g.x > GAME_WIDTH + margin;
+    };
+
+    // Enemies aren't pooled (varied hp/behavior per type) — destroy as before.
+    for (const go of this.enemyList) {
+      if (go.active && isOffscreen(go)) go.destroy();
     }
+    this.pruneInPlace(this.enemyList);
+
+    // Bullets ARE pooled — recycle instead of destroy so the next shot
+    // reuses the object instead of allocating a new one.
+    for (const go of this.playerBulletList) {
+      if (go.active && isOffscreen(go)) this.recycleBullet(go, this.playerBulletPool);
+    }
+    this.pruneInPlace(this.playerBulletList);
+
+    for (const go of this.enemyBulletList) {
+      if (go.active && isOffscreen(go)) this.recycleBullet(go, this.enemyBulletPool);
+    }
+    this.pruneInPlace(this.enemyBulletList);
   }
 
   private pruneInPlace(arr: Phaser.GameObjects.GameObject[]): void {
@@ -371,7 +455,7 @@ export class GameScene extends Phaser.Scene {
     const bullet = bulletObj as unknown as Phaser.GameObjects.GameObject;
     const enemy = enemyObj as unknown as Phaser.GameObjects.Graphics;
     if (!bullet.active || !enemy.active) return;
-    bullet.destroy();
+    this.recycleBullet(bullet, this.playerBulletPool);
 
     const props = enemy.getData('entityProperties') as EnemyProps;
     props.hp -= 1;
@@ -390,7 +474,7 @@ export class GameScene extends Phaser.Scene {
   private handleEnemyBulletHitPlayer: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (bulletObj) => {
     const bullet = bulletObj as unknown as Phaser.GameObjects.GameObject;
     if (!bullet.active) return;
-    bullet.destroy();
+    this.recycleBullet(bullet, this.enemyBulletPool);
     this.damagePlayer();
   };
 
@@ -403,17 +487,20 @@ export class GameScene extends Phaser.Scene {
   };
 
   private spawnScorePopup(x: number, y: number, value: number): void {
-    const label = this.add
-      .text(x, y, `+${value}`, { fontSize: '20px', color: '#ffe066', fontFamily: 'sans-serif' })
-      .setOrigin(0.5)
-      .setDepth(5);
+    // Reuse a Text object from the fixed pool instead of this.add.text()
+    // per kill — allocating a new Text rasterizes glyphs + uploads a fresh
+    // GPU texture, which is the single biggest cause of phone stutter.
+    const label = this.popupPool[this.popupNext];
+    this.popupNext = (this.popupNext + 1) % this.popupPool.length;
+    this.tweens.killTweensOf(label);
+    label.setText(`+${value}`).setPosition(x, y).setAlpha(1).setActive(true).setVisible(true);
     this.tweens.add({
       targets: label,
       y: y - 46,
       alpha: 0,
       duration: 550,
       ease: 'Quad.easeOut',
-      onComplete: () => label.destroy(),
+      onComplete: () => label.setActive(false).setVisible(false),
     });
   }
 
