@@ -4130,6 +4130,10 @@ export class GameScene extends Phaser.Scene {
         // The gate plays its UNFOLD (open) / fold (close) animation as a cow nears — the art is a
         // swing-open gate, so use its frames rather than moving the sprite. Rest = closed (frame 0).
         const g = this.add.sprite(wx, wy, 'fence_gates_animation_sprites', 'gate-v-0').setOrigin(0.5, 0.5);
+        // Depth: a cow/Cato passes THROUGH the gate (foot at the gate's MIDDLE, above its base), so
+        // plain foot-sort would draw the gate OVER them. Sort the gate by its TOP edge (ysortBias =
+        // -height, the "stand-on furniture" trick) so anything at/south of the opening draws in FRONT.
+        g.setData('ysortBias', -g.displayHeight);
         gateSprites.push(g); structures.push(g); this.ySortSprites.push(g);
         continue;
       }
