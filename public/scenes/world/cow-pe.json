@@ -90,20 +90,6 @@
       "frame": "top-center"
     },
     {
-      "id": "e-mthlucdv-onia",
-      "kind": "sprite",
-      "transform": {
-        "x": 96,
-        "y": 16,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "fences",
-      "frame": "top-center"
-    },
-    {
       "id": "e-mthlujq3-3vja",
       "kind": "sprite",
       "transform": {
@@ -356,24 +342,10 @@
       "frame": "bottom-center"
     },
     {
-      "id": "e-mthlyv40-z4q2",
-      "kind": "sprite",
-      "transform": {
-        "x": 96,
-        "y": 128,
-        "rotation": 0,
-        "scaleX": 1,
-        "scaleY": 1,
-        "depth": 10
-      },
-      "assetId": "fences",
-      "frame": "bottom-center"
-    },
-    {
       "id": "e-mthlzazz-iu8k",
       "kind": "sprite",
       "transform": {
-        "x": 112,
+        "x": 96,
         "y": 16,
         "rotation": 0,
         "scaleX": 1,
@@ -387,7 +359,7 @@
       "id": "e-mthlzhdu-ud3v",
       "kind": "sprite",
       "transform": {
-        "x": 112,
+        "x": 96,
         "y": 32,
         "rotation": 0,
         "scaleX": 1,
@@ -401,7 +373,7 @@
       "id": "e-mthlzi1q-vql8",
       "kind": "sprite",
       "transform": {
-        "x": 112,
+        "x": 96,
         "y": 48,
         "rotation": 0,
         "scaleX": 1,
@@ -415,7 +387,7 @@
       "id": "e-mthm00n5-ux85",
       "kind": "sprite",
       "transform": {
-        "x": 112,
+        "x": 96,
         "y": 128,
         "rotation": 0,
         "scaleX": 1,
@@ -429,7 +401,7 @@
       "id": "e-mthm04mv-rqpl",
       "kind": "sprite",
       "transform": {
-        "x": 112,
+        "x": 96,
         "y": 112,
         "rotation": 0,
         "scaleX": 1,
@@ -443,7 +415,7 @@
       "id": "e-mthm05iu-lsad",
       "kind": "sprite",
       "transform": {
-        "x": 112,
+        "x": 96,
         "y": 96,
         "rotation": 0,
         "scaleX": 1,
@@ -457,7 +429,7 @@
       "id": "e-mthm0bq6-j3qq",
       "kind": "sprite",
       "transform": {
-        "x": 120,
+        "x": 104,
         "y": 72,
         "rotation": 0,
         "scaleX": 1,
