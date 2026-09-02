@@ -123,3 +123,6 @@ rebuild/redeploy something to ship; the actual dependency re-resolution
 happens in that external build step since no shell was available here to
 run `npm install` directly (installed SDK at session start was `1.0.86`
 against the `^1.0.0` range already in `package.json`).
+
+Follow-up turn: user just wanted to trigger another build — tweaked the
+pause dialog's title text from "Game Paused" to "Paused".
