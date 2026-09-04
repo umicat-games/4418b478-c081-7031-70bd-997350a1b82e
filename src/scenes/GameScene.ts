@@ -2968,6 +2968,13 @@ export class GameScene extends Phaser.Scene {
     if (cell?.place === 'bush' && cell.variant) this.activeBushType = cell.variant as BerryType;
     if (cell?.place === 'coop' && cell.variant) this.activeCoopVariant = cell.variant;
     if (this.activePlace !== 'cowpen') this.penTouchCell = null; // dropped out of pen placement → clear the armed touch preview
+    // ONE pen per island: a cow-pen item is unplaceable once a pen exists (canPlaceCowPen is
+    // false everywhere), so DON'T sit in a dead placement ghost. On DESKTOP updatePlacePreview
+    // glues that ghost to the cursor continuously → a red footprint box stuck on-screen with no
+    // valid target and no obvious cancel (touch hid it: its ghost only shows while penTouchCell is
+    // armed). Fires after placing a pen while still holding another (e.g. two were ordered) and
+    // whenever a leftover cow-pen item is re-selected. Leaves the item held, just not in ghost mode.
+    if (this.activePlace === 'cowpen' && this.cowPen) { this.activePlace = undefined; this.penTouchCell = null; }
   }
 
   /** Is the virtual cursor over a hotbar slot? Returns the slot index or null. */
@@ -6344,7 +6351,8 @@ export class GameScene extends Phaser.Scene {
     playSfx(this); // buy-button click
     const id = this.menuShopSel;
     if (!id) return;
-    const n = this.menuBuyQty, cost = this.priceOf(id) * n;
+    const n = id === 'cowpen' ? 1 : this.menuBuyQty, cost = this.priceOf(id) * n; // one pen per island → never order >1
+    if (id === 'cowpen' && (this.cowPen || this.orders.some((o) => o.id === 'cowpen'))) return; // already owned / on the way (belt-and-suspenders; catalog hides it)
     if (cost > this.money) { this.flashShopMsg(t('shop_no_coins')); return; }
     this.addMoney(-cost);                                        // pay at order time
     this.orders.push({ id, count: n, deliverDay: this.dayCount + 1 }); // arrives tomorrow morning
@@ -7099,7 +7107,11 @@ export class GameScene extends Phaser.Scene {
     // Cow pen = buy → deliver → PLACE on cleared open grass (one pen only, hidden once owned).
     // Cows = buy → deliver → PLACE inside the owned pen (offered only once a pen exists).
     const cows: OrderCatalogEntry[] = [];
-    if (!this.cowPen) cows.push({ id: 'cowpen', label: itemFromId('cowpen', 1).label ?? '', iconKey: 'cow-pen-shop-item', iconFrame: 0, price: COW_PEN_PRICE });
+    // One pen per island: offer it only when NONE is owned AND none is already on the way — else
+    // you'd order a 2nd unplaceable pen (canPlaceCowPen is false everywhere once one exists) and
+    // get stuck holding it. Once ordered or owned, the row switches to buying cows.
+    const penPending = this.orders.some((o) => o.id === 'cowpen');
+    if (!this.cowPen && !penPending) cows.push({ id: 'cowpen', label: itemFromId('cowpen', 1).label ?? '', iconKey: 'cow-pen-shop-item', iconFrame: 0, price: COW_PEN_PRICE });
     else cows.push({ id: 'cow', label: itemFromId('cow', 1).label ?? '', iconKey: 'pink_cow_animation_sprites', iconFrame: 0, price: COW_PRICE });
     return [...coops, ...cows];
   }
