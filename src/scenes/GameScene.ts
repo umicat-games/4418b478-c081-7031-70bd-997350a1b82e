@@ -3718,7 +3718,7 @@ export class GameScene extends Phaser.Scene {
     }
     return this.placePreview;
   }
-  private hidePlacePreview(): void { this.placePreview?.setVisible(false); this.penPreview?.setVisible(false); this.placeCell = null; }
+  private hidePlacePreview(): void { this.placePreview?.setVisible(false); this.hidePenGhost(); this.placeCell = null; }
 
   /** Texture + frame for a placeable of `kind` — now only trees + berry bushes (the
    *  house-building materials were removed; the house is a fixed facade). */
@@ -3748,7 +3748,7 @@ export class GameScene extends Phaser.Scene {
       this.showPenGhostAt(cx, cy);
       return;
     }
-    this.penPreview?.setVisible(false);
+    this.hidePenGhost();
     const isCoop = this.activePlace === 'coop';
     const valid = isCoop ? this.canPlaceCoop(cx, cy) : this.activePlace === 'cow' ? this.canPlaceCow(cx, cy) : this.activePlace === 'bush' ? this.canPlaceBush(cx, cy) : this.canPlaceTree(cx, cy);
     // The rounded tile bracket (圆角框), snapped to the cell centre — same as the tools.
@@ -4326,7 +4326,7 @@ export class GameScene extends Phaser.Scene {
     if (!cell || cell.count <= 0) return;
     const { anchor } = this.cowPenFootprint(cx, cy);
     this.placeCowPen(anchor, 0); // empty pen; buying cows populates it
-    this.penPreview?.setVisible(false);
+    this.hidePenGhost();
     this.consumeHeldMaterial();
   }
 
@@ -4362,24 +4362,42 @@ export class GameScene extends Phaser.Scene {
     this.ySortSprites.push(c.sprite);
   }
 
-  private penPreview?: Phaser.GameObjects.Rectangle; // translucent footprint ghost while placing a pen
   private penTouchCell: { cx: number; cy: number } | null = null; // TOUCH two-step: 1st tap arms the footprint here, 2nd tap on the same valid cell confirms
-  private ensurePenPreview(): Phaser.GameObjects.Rectangle {
-    if (!this.penPreview) this.penPreview = this.add.rectangle(0, 0, TILE, TILE, 0x66dd66, 0.28).setOrigin(0, 0).setDepth(1e6 - 3);
-    return this.penPreview;
-  }
 
-  /** Draw the pen footprint ghost with its top-left at tile (cx,cy): green when the whole plot is
-   *  clear grass, red when blocked. Sets placeCell to the anchor when valid. Shared by the desktop
-   *  hover preview and the touch tap-to-arm preview. */
+  private penGhostSprites: Phaser.GameObjects.Sprite[] = []; // pooled semi-transparent ghost of the real pen
+
+  /** Draw a semi-transparent ghost of the REAL pen with its footprint top-left at tile (cx,cy) —
+   *  every authored piece (fences / barn / trough / gate), tinted white when the plot is clear and
+   *  red when blocked, exactly like the coop's ghost (not a plain rectangle). Sets placeCell to the
+   *  anchor when valid. Shared by the desktop hover preview and the touch tap-to-arm preview. */
   private showPenGhostAt(cx: number, cy: number): void {
     if (!this.islandLayer) return;
-    const fp = this.cowPenFootprint(cx, cy);
+    const { anchor } = this.cowPenFootprint(cx, cy);
     const valid = this.canPlaceCowPen(cx, cy);
-    const wpx = this.islandLayer.tileToWorldXY(fp.tx0, fp.ty0)!;
-    this.ensurePenPreview().setPosition(wpx.x, wpx.y).setSize(fp.cols * TILE, fp.rows * TILE).setVisible(true)
-      .setFillStyle(valid ? 0x66dd66 : 0xff6666, 0.28).setStrokeStyle(2, valid ? 0x2f8f2f : 0xcc3333, 0.9);
+    const tpl = this.cache.json.get('cowpen-template') as
+      | { entities?: Array<{ assetId?: string; frame?: string | null; transform: { x: number; y: number } }> }
+      | undefined;
+    const ents = (tpl?.entities ?? []).filter((e) => e.assetId);
+    const tint = valid ? 0xffffff : 0xff6666; // the old green box is gone — the ghost pen shows validity by tint
+    for (let i = 0; i < ents.length; i++) {
+      const e = ents[i]!;
+      // Gate rests on its CLOSED frame; the flat dry-grass decor draws under the structures. (Mirrors placeCowPen.)
+      const frame = e.assetId === 'fence_gates_animation_sprites' ? 'gate-v-0' : (e.frame ?? 0);
+      const decor = e.assetId === 'barn_structures' && (e.frame === 'dry-grass' || e.frame === 'dry-grass-small');
+      let g = this.penGhostSprites[i];
+      if (!g) { g = this.add.sprite(0, 0, e.assetId!, frame).setOrigin(0.5, 0.5); this.penGhostSprites.push(g); }
+      g.setTexture(e.assetId!, frame)
+        .setPosition(anchor.x + e.transform.x, anchor.y + e.transform.y)
+        .setDepth(decor ? 1e6 - 3 : 1e6 - 2)
+        .setAlpha(0.5).setTint(tint).setVisible(true);
+    }
+    for (let i = ents.length; i < this.penGhostSprites.length; i++) this.penGhostSprites[i]!.setVisible(false);
     this.placeCell = valid ? { cx, cy } : null;
+  }
+
+  /** Hide the pen placement ghost (all pooled sprites). */
+  private hidePenGhost(): void {
+    for (const g of this.penGhostSprites) g.setVisible(false);
   }
 
   /** Instantiate the `cow_pen` template as a GROUP at `anchor`: spawn each authored piece
@@ -5191,7 +5209,7 @@ export class GameScene extends Phaser.Scene {
     this.movingPen = undefined;
     this.activePlace = undefined;
     this.penTouchCell = null;
-    this.penPreview?.setVisible(false);
+    this.hidePenGhost();
   }
 
   /** Re-place a pen being moved at (cx,cy): the stashed cows shift rigidly with the pen (keeping
@@ -5205,7 +5223,7 @@ export class GameScene extends Phaser.Scene {
     this.placeCowPen(anchor, cows, m.milk);
     this.movingPen = undefined;
     this.activePlace = undefined;
-    this.penPreview?.setVisible(false);
+    this.hidePenGhost();
     this.scheduleSave();
   }
 
