@@ -4,6 +4,9 @@ import Phaser from 'phaser';
  *  across the title/game scene switch. Default 0.4 (the old hardcoded level). */
 const VOL_KEY = 'catopia:bgmVolume';
 const BGM_KEYS = ['bgm', 'bgm-title'];
+// The FIRST playback is gated behind the user's unlock gesture; ramp it in over this long
+// (min) so the very first music the player hears eases up gently instead of popping on.
+const UNLOCK_FADE_MS = 1400;
 
 function readVolume(): number {
   try {
@@ -56,24 +59,34 @@ export function setBgmVolume(scene: Phaser.Scene, v: number): void {
 export function crossToBgm(scene: Phaser.Scene, key: string, stopKeys: string[] = [], fadeInMs = 0): void {
   const mgr = scene.sound;
   if (!scene.cache.audio.exists(key)) return;
-  const go = (): void => {
+  const go = (fade: number): void => {
     for (const k of stopKeys) for (const s of mgr.getAll(k)) if (s.isPlaying) s.stop();
     let snd = mgr.getAll(key)[0];
-    if (!snd) snd = mgr.add(key, { loop: true, volume: bgmVolume });
-    if (!snd.isPlaying) snd.play();
+    // Create SILENT when fading (config volume 0) so the source starts at 0 — no risk of a
+    // single loud sample slipping out before the fade takes hold ("pop" on the first note).
+    if (!snd) snd = mgr.add(key, { loop: true, volume: fade > 0 ? 0 : bgmVolume });
     const sw = snd as Phaser.Sound.WebAudioSound;
-    if (fadeInMs > 0) {
-      // Swell in from silence (paired with the scene-transition duck-out) → the new
-      // scene's music rises as the wipe reveals it. Tween on `scene` (persists).
-      scene.tweens.killTweensOf(snd);
+    if (fade > 0) {
+      // Swell in from silence: set 0 BEFORE play (belt-and-suspenders for a reused instance),
+      // then ease the volume up to the target. Sine.easeIn ramps slowly at first for a soft,
+      // gradual entry rather than a linear jump. Tween on `scene` (alive while its music plays).
       sw.setVolume?.(0);
-      scene.tweens.add({ targets: snd, volume: bgmVolume, duration: fadeInMs });
+      if (!snd.isPlaying) snd.play();
+      scene.tweens.killTweensOf(snd);
+      scene.tweens.add({ targets: snd, volume: bgmVolume, duration: fade, ease: 'Sine.easeIn' });
     } else {
+      if (!snd.isPlaying) snd.play();
       sw.setVolume?.(bgmVolume);
     }
   };
-  if (mgr.locked) mgr.once(Phaser.Sound.Events.UNLOCKED, go);
-  else go();
+  if (mgr.locked) {
+    // Phaser (browser policy) can't start audio until the first user gesture. When the context
+    // unlocks on that tap/click, swell the first track in from silence over a GENTLE ramp — this
+    // is the moment the player first hears music, so make the entry smooth, not an abrupt pop.
+    mgr.once(Phaser.Sound.Events.UNLOCKED, () => go(Math.max(fadeInMs, UNLOCK_FADE_MS)));
+  } else {
+    go(fadeInMs);
+  }
 }
 
 /**
