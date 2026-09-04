@@ -65,18 +65,20 @@ export function crossToBgm(scene: Phaser.Scene, key: string, stopKeys: string[] 
   const go = (fade: number): void => {
     for (const k of stopKeys) for (const s of mgr.getAll(k)) if (s.isPlaying) s.stop();
     let snd = mgr.getAll(key)[0];
-    // Create SILENT when fading (config volume 0) so the source starts at 0 — no risk of a
-    // single loud sample slipping out before the fade takes hold ("pop" on the first note).
     if (!snd) snd = mgr.add(key, { loop: true, volume: fade > 0 ? 0 : bgmVolume });
     const sw = snd as Phaser.Sound.WebAudioSound;
     if (fade > 0) {
-      // Swell in from silence: set 0 BEFORE play (belt-and-suspenders for a reused instance),
-      // then ease the volume up to the target. Sine.easeIn ramps slowly at first for a soft,
-      // gradual entry rather than a linear jump. Tween on `scene` (alive while its music plays).
-      sw.setVolume?.(0);
+      // Swell in from silence with an EXPLICIT `from: 0` tween — do NOT let Phaser read the
+      // current volume as the start. On the locked→unlock path the gain is STUCK at its 1.0
+      // default and a SYNCHRONOUS set (`mgr.add({volume:0})` / `setVolume(0)` / `.volume = 0`)
+      // is ignored by the just-resumed context until a later frame — so a plain
+      // `volume: bgmVolume` tween captured 1.0 as its start and faded DOWNWARD: the music
+      // popped in at full volume then quietly dropped ("instant full volume", user-reported).
+      // `{ from: 0 }` forces volume to 0 on the tween's first update (when the setter DOES
+      // apply) and ramps up. Sine.easeIn eases slowly at first for a soft entry.
       if (!snd.isPlaying) snd.play();
       scene.tweens.killTweensOf(snd);
-      scene.tweens.add({ targets: snd, volume: bgmVolume, duration: fade, ease: 'Sine.easeIn' });
+      scene.tweens.add({ targets: snd, volume: { from: 0, to: bgmVolume }, duration: fade, ease: 'Sine.easeIn' });
     } else {
       if (!snd.isPlaying) snd.play();
       sw.setVolume?.(bgmVolume);
