@@ -4467,6 +4467,14 @@ export class GameScene extends Phaser.Scene {
     const ftA = this.islandLayer.worldToTileXY(fx0, fy0), ftB = this.islandLayer.worldToTileXY(fx1, fy1);
     if (ftA && ftB) for (let x = Math.floor(ftA.x); x <= Math.floor(ftB.x); x++) for (let y = Math.floor(ftA.y); y <= Math.floor(ftB.y); y++) footprint.add(`${x},${y}`);
     this.cowPen = { anchor, structures, bodies, cells, footprint, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [], geom, barn, milkReady: savedMilk ?? {}, milkBubble: undefined };
+    // Clear any wild growth already on this ground — weeds/stones that spawned before the pen was
+    // placed here, or an older save's pen that predates the no-spawn-in-pen rule. (Restore order:
+    // foragables/big-stones load before placeCowPen, so they exist by now.) The ground is a pen now.
+    for (const k of footprint) {
+      const [fx, fy] = k.split(',').map(Number);
+      if (this.foragables.has(k)) this.removeForagable(fx!, fy!);
+      if (this.bigStones.has(k)) this.removeBigStone(fx!, fy!);
+    }
     this.spawnCows(occupants);
     this.refreshCowMilkBubble();
     this.scheduleSave();
@@ -5610,6 +5618,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     if (this.crops.has(key) || this.trees.has(key) || this.bushes.has(key) || this.placed.has(key) ||
         this.floors.has(key) || this.tilledCells.has(key) || this.foragables.has(key) || this.bigStones.has(key) || this.coopCells.has(key)) return false;
+    if (this.cowPen?.footprint.has(key)) return false; // no wild weeds/stones inside (or on the fence of) the cow pen
     if (this.child) {
       const ct = this.islandLayer.worldToTileXY(this.child.x, this.child.y);
       if (ct && Math.floor(ct.x) === cx && Math.floor(ct.y) === cy) return false; // not on Cato
