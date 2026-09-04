@@ -24,7 +24,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume } from '../bgm';
-import { playSfx, setSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB } from '../sfx';
+import { playSfx, setSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB } from '../sfx';
 import { coverAndReload, coverAndHandoff, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -4079,6 +4079,7 @@ export class GameScene extends Phaser.Scene {
     // The fall sheet is 64px wide (standing trees are 48) with the trunk at x≈39.5,
     // so re-anchor the origin to keep the trunk base pinned to the same spot.
     tree.sprite.setOrigin(39.5 / 64, 1).setTexture('tree-fall', 0).play('tree-fall');
+    playSfx(this, SFX_TREE_FALL); // the tree topples over as the fall anim plays
     tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.removeTree(cx, cy));
   }
 

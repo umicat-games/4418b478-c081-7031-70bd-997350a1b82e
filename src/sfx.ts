@@ -34,6 +34,8 @@ export const SFX_GETITEM = 'sfx-getitem';
 export const SFX_DOOR = 'sfx-door';
 /** Switching a tab in the unified menu (chest / shop / mail / …). */
 export const SFX_TAB = 'sfx-tab';
+/** A tree toppling over — plays with the `tree-fall` animation when a tree is felled. */
+export const SFX_TREE_FALL = 'sfx-tree-fall';
 
 function readVolume(): number {
   try {

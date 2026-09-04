@@ -83,6 +83,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('sfx-scroll', 'uploaded/scroll_short.mp3');
     this.load.audio('sfx-hoe', 'uploaded/shovle.mp3'); // dig thunk on the player's hoe strike
     this.load.audio('sfx-chop', 'uploaded/chop-wood-new.mp3'); // short axe thunk on each tree strike
+    this.load.audio('sfx-tree-fall', 'uploaded/tree_falls_down.mp3'); // tree toppling over, with the tree-fall anim
     this.load.audio('sfx-hover', 'uploaded/click_003.ogg'); // soft blip when the mouse highlights an item cell
     this.load.audio('sfx-confirm', 'uploaded/confirmation_001.ogg'); // laptop "new message" chime
     this.load.audio('sfx-drop', 'uploaded/drop_002.ogg'); // laptop: player sends a message
