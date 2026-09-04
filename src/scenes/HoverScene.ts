@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hudDpr } from '../dpi';
 
 /** Model published by GameScene to the `hover` registry key each frame. Screen-space px. */
 export interface HoverModel {
@@ -66,8 +67,13 @@ export class HoverScene extends Phaser.Scene {
     }
     this.pill = this.add.graphics();
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+    // High-DPI: this scene renders in DEVICE-px screen space (positions come from the
+    // world camera, whose zoom scales with dpr — so the bracket auto-sizes). The name
+    // label is the one ABSOLUTE-px element, so size it ×dpr to keep the same apparent
+    // size (and its `resolution` keeps it crisp). `hudDpr` is 1 when not highDpi.
+    const hd = hudDpr(this);
     this.label = this.add.text(0, 0, '', {
-      fontFamily: 'zpix, sans-serif', fontSize: '15px', color: LABEL_TXT,
+      fontFamily: 'zpix, sans-serif', fontSize: `${Math.round(15 * hd)}px`, color: LABEL_TXT,
     }).setOrigin(0.5, 1).setResolution(Math.min(4, Math.max(2, Math.round(dpr * 2)))).setVisible(false);
     this.scene.bringToTop();
   }
@@ -95,7 +101,7 @@ export class HoverScene extends Phaser.Scene {
 
     if (!m.name) { label.setVisible(false); return; } // name blanked (e.g. while the wheel is open)
     label.setText(m.name).setVisible(true).setPosition(m.nameX, m.nameY);
-    const pad = 6, bw = label.width + pad * 2, bh = label.height + pad;
+    const pad = 6 * hudDpr(this), bw = label.width + pad * 2, bh = label.height + pad;
     pill.fillStyle(LABEL_BG, 0.78).fillRoundedRect(m.nameX - bw / 2, m.nameY - bh, bw, bh, 5);
     label.setPosition(m.nameX, m.nameY - pad / 2); // sit inside the pill
     this.children.bringToTop(label); // text above its pill

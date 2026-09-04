@@ -23,6 +23,7 @@ import { LetterboxScene } from './scenes/LetterboxScene';
 import { TransitionScene } from './scenes/TransitionScene';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from './config';
 import { renderScripts } from './visuals';
+import { isDebug } from './debug';
 
 function startGame(): void {
   createUmicatGame({
@@ -39,6 +40,16 @@ function startGame(): void {
     // GameScene reflows on scale 'resize' (adaptive integer zoom + re-centre).
     // width/height stay the DESIGN reference for the zoom baseline.
     scaleMode: 'resize',
+    // Render at the device's real resolution (backing store = CSS×dpr, capped 3),
+    // so Catopia is CRISP on high-DPI phones/tablets/Retina instead of a CSS-px
+    // canvas the browser upscales ×dpr (blurry text worst-hit). This makes
+    // `scale.width/height` DEVICE px — the world (adaptive computeZoom) + the
+    // fraction-based MenuScene are already resolution-independent; every
+    // fixed-pixel HUD scene calls `applyHudDpr(this)` to render in logical space
+    // through a dpr-zoomed camera (see the HUD scenes + ADR-023 / the reverted
+    // SDK 1.0.75→1.0.76 note). Input coords are device px → world/HUD math uses
+    // logical dims where it assumed CSS px.
+    highDpi: isDebug('highDpi'),
     // The adaptive-zoom reference (GameScene.computeZoom targets it). Tells the
     // editor's "Camera screen" rect to show the DESIGN view (1280/3 × 720/3 =
     // 427×240) instead of the arbitrary editor-canvas size at the drifted zoom.

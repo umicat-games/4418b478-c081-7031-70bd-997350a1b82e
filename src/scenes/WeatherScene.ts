@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHudDpr } from '../dpi';
 
 /**
  * Top-left weather / time-of-day / money HUD, rendered in its OWN scene (like
@@ -54,10 +55,11 @@ export class WeatherScene extends Phaser.Scene {
   }
 
   create(): void {
+    applyHudDpr(this); // high-DPI: render this fixed-pixel HUD in logical space (crisp on retina/phone)
     this.container = this.add.container(0, 0);
     this.render();
     this.registry.events.on('changedata-weatherHud', () => this.render());
-    this.scale.on('resize', () => this.render());
+    this.scale.on('resize', () => { applyHudDpr(this); this.render(); });
   }
 
   private render(): void {

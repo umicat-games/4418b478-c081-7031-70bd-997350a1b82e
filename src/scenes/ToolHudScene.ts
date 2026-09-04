@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHudDpr } from '../dpi';
 
 /** Tool-HUD model published by GameScene to the `toolHud` registry key each frame (screen px). */
 export interface ToolHudModel {
@@ -32,6 +33,8 @@ export class ToolHudScene extends Phaser.Scene {
   constructor() { super({ key: 'ToolHudScene' }); }
 
   create(): void {
+    applyHudDpr(this); // high-DPI: fixed-pixel HUD → logical space via dpr camera
+    this.scale.on('resize', () => applyHudDpr(this));
     this.slotBg = this.add.nineslice(0, 0, SLOT_ATLAS, SLOT_FRAME, 42, 42, ...NINE).setVisible(false);
     this.slotIcon = this.add.image(0, 0, 'cursor').setVisible(false);
     this.scene.bringToTop();

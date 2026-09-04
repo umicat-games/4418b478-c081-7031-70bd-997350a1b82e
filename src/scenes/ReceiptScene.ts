@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { dialogFont } from '../i18n';
+import { hudDpr } from '../dpi';
 
 // The RECEIPT modal — opens when you tap a mail in the mailbox's Mail tab. The
 // first mail kind is a SALES RECEIPT (sender "Market Manager"): a wooden panel
@@ -61,7 +62,8 @@ export class ReceiptScene extends Phaser.Scene {
     const box = this.add.container(cx, cy);
     this.box = box;
     c.add(box);
-    const pw = Math.min(W * 0.66, 980), ph = Math.min(H * 0.72, 780);
+    const dpr = hudDpr(this); // highDpi: caps are CSS-px ×dpr
+    const pw = Math.min(W * 0.66, 980 * dpr), ph = Math.min(H * 0.72, 780 * dpr);
     const panel = this.add.nineslice(0, 0, PANEL, PANEL_FRAME, pw / PANEL_SCALE, ph / PANEL_SCALE, 10, 10, 11, 11).setScale(PANEL_SCALE);
     box.add(panel);
     this.registry.set('receiptPanel', { x: cx - pw / 2, y: cy - ph / 2, w: pw, h: ph }); // tap-outside → close

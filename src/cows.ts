@@ -19,10 +19,12 @@ export interface CowNav {
   isNight(): boolean;
   /** A spot INSIDE the pen (near the barn) where cows gather to sleep. */
   sleepSpot(): { x: number; y: number };
-  /** The safe INSIDE grazing area for a cow's CENTRE — inset half a body from every fence so a
-   *  grazing cow never overlaps the pen walls/gate. */
+  /** The safe INSIDE grazing area for a cow's CENTRE — inset half a body from every fence. Used to
+   *  seed/place cows; cows now spend the DAY outside (see roamRect). */
   grazeRect(): { x0: number; y0: number; x1: number; y1: number };
-  /** A graze point clearly OUTSIDE the gate — cows occasionally trek out here and back. */
+  /** The OUTDOOR pasture past the gate — cows graze here all day and only go back inside to sleep. */
+  roamRect(): { x0: number; y0: number; x1: number; y1: number };
+  /** A graze point clearly OUTSIDE the gate — the pasture centre. */
   outsideSpot(): { x: number; y: number };
   /** True when a world point is a gate-opening cell AND the gate is currently CLOSED — a cow must
    *  wait (not step onto it) until the gate swings open. */
@@ -85,19 +87,18 @@ export class Cow {
     this.path = p; this.state = 'walk'; this.goingToSleep = toSleep; this.gateWaitStart = 0; this.play('walk');
   }
 
-  /** A random graze point in the safe INSIDE rect (a cow's centre, inset from the fences). */
-  private pickGraze(): { x: number; y: number } | null {
-    const r = this.nav.grazeRect();
+  /** A random walkable point in a rect (a cow's centre), or null if 8 tries all hit an obstacle. */
+  private pickIn(r: { x0: number; y0: number; x1: number; y1: number }): { x: number; y: number } | null {
     for (let i = 0; i < 8; i++) {
       const t = { x: rnd(r.x0, r.x1), y: rnd(r.y0, r.y1) };
       if (!this.nav.blocked(t.x, t.y)) return t;
     }
     return null;
   }
-  /** The next graze target — usually inside the pen, occasionally an excursion out the gate. */
+  /** The next DAY target — cows graze OUT in the pasture past the gate (they only head back inside
+   *  to sleep at night). Falls back to the inside rect if the pasture is all blocked. */
   private pickTarget(): { x: number; y: number } | null {
-    if (Math.random() < 0.2) { const o = this.nav.outsideSpot(); if (o && !this.nav.blocked(o.x, o.y)) return o; }
-    return this.pickGraze();
+    return this.pickIn(this.nav.roamRect()) ?? this.pickIn(this.nav.grazeRect());
   }
 
   /** Per-frame tick. `now` = scene.time.now (wall clock); `dt` seconds. */

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hudDpr } from '../dpi';
 
 /**
  * Scripted-dialogue SPOTLIGHT overlay (native px). During a cutscene tutorial line
@@ -36,13 +37,17 @@ export class DialogueScene extends Phaser.Scene {
     if (!this.rect) return;
     this.phase = (this.phase + 0.06) % (Math.PI * 2);
     const s = Math.sin(this.phase);
-    const pad = 5 + 3 * s;
+    // The spotlight rect is DEVICE-px (projected from device-px hotbar bounds), and this scene
+    // draws at zoom 1 — so scale the ring's fixed screen-px widths/pad/radii ×dpr to keep the
+    // same apparent thickness/gap on retina (dpr is 1 when not highDpi).
+    const dpr = hudDpr(this);
+    const pad = (5 + 3 * s) * dpr;
     const { x, y, w, h } = this.rect;
     this.g.clear();
     // Soft outer glow + a crisp gold ring, both breathing.
-    this.g.lineStyle(7, 0xffe08a, 0.18 + 0.12 * s);
-    this.g.strokeRoundedRect(x - pad - 3, y - pad - 3, w + (pad + 3) * 2, h + (pad + 3) * 2, 12);
-    this.g.lineStyle(3, 0xffd24a, 0.7 + 0.3 * s);
-    this.g.strokeRoundedRect(x - pad, y - pad, w + pad * 2, h + pad * 2, 9);
+    this.g.lineStyle(7 * dpr, 0xffe08a, 0.18 + 0.12 * s);
+    this.g.strokeRoundedRect(x - pad - 3 * dpr, y - pad - 3 * dpr, w + (pad + 3 * dpr) * 2, h + (pad + 3 * dpr) * 2, 12 * dpr);
+    this.g.lineStyle(3 * dpr, 0xffd24a, 0.7 + 0.3 * s);
+    this.g.strokeRoundedRect(x - pad, y - pad, w + pad * 2, h + pad * 2, 9 * dpr);
   }
 }

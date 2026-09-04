@@ -25,6 +25,7 @@ export const DEBUG_FLAGS: DebugFlagDef[] = [
   { key: 'replayIntro',  labelKey: 'dbg_replay_intro',  def: false, reloadOnly: true },
   { key: 'coinFloor',    labelKey: 'dbg_coin_floor',    def: true },
   { key: 'clearMailbox', labelKey: 'dbg_clear_mailbox', def: true, reloadOnly: true },
+  { key: 'highDpi',      labelKey: 'dbg_high_dpi',      def: true, reloadOnly: true },
 ];
 
 /** Master switch for whether the Debug section renders in Settings at all.

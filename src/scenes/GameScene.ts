@@ -9,6 +9,7 @@ import {
   Umicat,
   type Npc,
 } from '@umicat/phaser-sdk';
+import { hudDpr } from '../dpi';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import type { MailListEntry, OrderCatalogEntry } from './menu-types';
 import type { ReceiptLine } from './ReceiptScene';
@@ -140,7 +141,9 @@ const COOP_BUBBLE_DEPTH = 490000; // the coop "eggs ready" bubble — above worl
 // fence at template (16,16) lands near this + (16,16)). A single constant for now; a buy-to-place
 // flow will make this a player choice later. Chosen on an open-ish patch of grass SE of the house.
 const COW_PEN_ANCHOR = { x: 264, y: 232 };
-const COW_COUNT = 3; // cows spawned with a fresh pen (dynamic, like chickens)
+const COW_COUNT = 3; // cows spawned with a fresh pen (dynamic, like chickens) — DEBUG auto-place only
+const COW_PEN_PRICE = 800; // shop price to order a cow pen (placed empty; cows bought separately)
+const COW_PRICE = 250; // shop price per cow (placed inside an owned pen)
 const GROUND_DECOR_DEPTH = 2; // flat on-the-ground pen decor (dry-grass): above the grass tilemap (1), below every sprite
 // TEMP (restore to true): random wild spawning (grass/foragables + big-stones) is
 // OFF while the creator arranges the default layout, so it doesn't clutter the map.
@@ -254,7 +257,7 @@ interface FishingState {
 // removed — only tree + bush placement remains — but the kinds are kept in the union
 // because `PlacedObj` (the now-vestigial `placed`/`floors` occupancy Maps) + old-save
 // migration still reference them.
-type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture' | 'tree' | 'bush' | 'coop';
+type PlaceKind = 'wall' | 'floor' | 'window' | 'door' | 'furniture' | 'tree' | 'bush' | 'coop' | 'cowpen' | 'cow';
 // Wall orientation — retained for the (vestigial) `PlacedObj.orient` field only.
 type WallOrient = 'top' | 'bottom' | 'left' | 'right' | 'tl' | 'tr' | 'bl' | 'br' | 'window';
 const FLOOR_FRAME = 6;  // brick floor tile index (the editor-authored default-house floor)
@@ -399,6 +402,10 @@ function makeCrop(crop: CropName, count: number): ItemStack {
 /** A plantable inventory item — a tree seedling or a berry bush (the house-building
  *  materials were removed). Stackable so placing decrements the held stack. */
 function makePlaceable(kind: PlaceKind, count: number, variant?: string): ItemStack {
+  // A whole cow pen (placed as a group from the template) + individual cows (placed inside a
+  // pen). Cows have no colour variant here — the colour is assigned at placement by pen order.
+  if (kind === 'cowpen') return { id: 'cowpen', label: 'Cow pen', iconKey: 'cow-pen-shop-item', iconFrame: 0, count, stackable: true, place: 'cowpen' };
+  if (kind === 'cow') return { id: 'cow', label: 'Cow', iconKey: 'pink_cow_animation_sprites', iconFrame: 0, count, stackable: true, place: 'cow' };
   if (kind === 'coop') {
     const [s, c] = (variant ?? 'small-red').split('-');
     const size = (COOP_SIZES.includes(s as CoopSize) ? s : 'small') as CoopSize;
@@ -437,6 +444,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (tree && TREE_BY_ID.has(tree[1] as TreeType)) return makePlaceable('tree', count, tree[1]);
   const bush = /^bush-(\w+)$/.exec(id);
   if (bush && BERRY_TYPES.includes(bush[1] as BerryType)) return makePlaceable('bush', count, bush[1]);
+  if (id === 'cowpen') return makePlaceable('cowpen', count);
+  if (id === 'cow') return makePlaceable('cow', count);
   const coop = parseCoopId(id);
   if (coop) return makePlaceable('coop', count, `${coop.size}-${coop.color}`);
   const egg = /^egg-(red|brown|green|blue|yellow)$/.exec(id);
@@ -581,8 +590,15 @@ interface CowPenObj {
   structures: Phaser.GameObjects.Sprite[]; // fences / barn / haystacks / trough (y-sorted decor)
   bodies: Phaser.GameObjects.Sprite[]; // invisible fence colliders (Cato bumps them)
   cells: string[]; // fence cell keys (solid — pathfinding routes around; NOT the gate opening)
+  footprint: Set<string>; // EVERY tile the pen covers (interior + fences) — non-tillable ground
   gate: { sprites: Phaser.GameObjects.Sprite[]; at: { x: number; y: number }; cells: Set<string>; open: boolean; animating: boolean };
   cows: Cow[];
+  // Cow-behaviour geometry DERIVED from the authored template (so resizing the pen scene just works):
+  //  • graze  = the safe INTERIOR rect (used to validate where a bought cow may be placed)
+  //  • roam   = the OUTDOOR pasture past the gate — cows spend the DAY out here (they only go inside to sleep)
+  //  • sleep  = the spot below the barn cows return to at night
+  //  • outside = the pasture centre (also the excursion nudge point)
+  geom: { graze: { x0: number; y0: number; x1: number; y1: number }; roam: { x0: number; y0: number; x1: number; y1: number }; sleep: { x: number; y: number }; outside: { x: number; y: number } };
   barn?: Phaser.GameObjects.Sprite; // the `1-barn` sprite — milk bubble sits above it, tap it to collect
   milkReady: Record<string, number>; // colour → collectable bottles (cows produce their colour daily)
   milkBubble?: { bg: Phaser.GameObjects.Image; bottle: Phaser.GameObjects.Image }; // "milk ready" indicator over the barn
@@ -738,6 +754,14 @@ export class GameScene extends Phaser.Scene {
   // Camera lock: clicking Cato's portrait makes the camera FOLLOW him around;
   // clicking elsewhere on the map releases it (back to manual edge-scroll pan).
   private cameraFollow = false;
+  // Key-pan rounding residual (error diffusion). The camera has roundPixels=true, which
+  // SNAPS cam.scrollX to a whole pixel every frame; accumulating the pan step onto that
+  // snapped value drops the sub-pixel remainder EVERY frame, and the drop is sign-biased
+  // (negative directions out-travel positive) — visible as "up/left pan faster than
+  // down/right", worst at high zoom (highDpi). We carry the lost fraction forward so the
+  // rounding averages out symmetrically over time (Floyd–Steinberg-style dithering).
+  private panResidualX = 0;
+  private panResidualY = 0;
   // RUNTIME control mode (toggled by the on-screen TEST button): true = WASD/arrows
   // drive Cato + camera follows; false = arrows/drag pan the camera + Cato wanders.
   private playerControl = PLAYER_CONTROL_DEFAULT;
@@ -1443,6 +1467,7 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-K', () => { if (canAct()) this.startForageTask({}); });  // K = gather foragables
         this.input.keyboard?.on('keydown-Z', () => { if (canAct()) this.startFishingTask({}); });  // Z = go fishing
         this.input.keyboard?.on('keydown-X', () => this.debugReplayIntro());                       // X = replay the intro dialogue
+        this.input.keyboard?.on('keydown-Q', () => { if (!this.cowPen) this.placeCowPen(COW_PEN_ANCHOR, COW_COUNT); }); // Q = spawn a stocked cow pen (dev)
         // M = open the dialog with a long multi-page reply to exercise the RPG
         // typewriter + pagination + "more" icon without the AI.
         this.input.keyboard?.on('keydown-M', () => {
@@ -1509,8 +1534,14 @@ export class GameScene extends Phaser.Scene {
   private computeZoom(): number {
     const targetW = GAME_WIDTH / DESIGN_ZOOM;
     const targetH = GAME_HEIGHT / DESIGN_ZOOM;
-    const ideal = Math.min(this.scale.width / targetW, this.scale.height / targetH);
-    return Phaser.Math.Clamp(Math.round(ideal), MIN_ZOOM, MAX_ZOOM);
+    // High-DPI: scale.width/height are DEVICE px. Pick the integer zoom from the LOGICAL
+    // (CSS-px) size — identical to a non-highDpi build — then multiply by dpr so the world
+    // renders at device resolution (crisp) with EXACTLY the same framing, pan room and
+    // clamp behaviour. Rounding the device size directly (dpr×css, then round) drifted the
+    // zoom off the css value and broke camera panning on retina. dpr is 1 when not highDpi.
+    const dpr = hudDpr(this);
+    const ideal = Math.min((this.scale.width / dpr) / targetW, (this.scale.height / dpr) / targetH);
+    return Phaser.Math.Clamp(Math.round(ideal), MIN_ZOOM, MAX_ZOOM) * dpr;
   }
 
   /** Canvas resized (RESIZE mode) — re-pick the integer zoom, keep the same world
@@ -1756,8 +1787,10 @@ export class GameScene extends Phaser.Scene {
         const rwp = this.cameras.main.getWorldPoint(sx, sy);
         // A COOP under the cursor → its action wheel (same summon gesture as the tool wheel).
         if (this.coopWheel) { this.beginCloseCoopWheel(null); return; } // right-click again → animated dismiss
+        if (this.penWheel) { this.beginClosePenWheel(null); return; }
         const ck = this.coopAtPoint(rwp.x, rwp.y);
         if (ck) { this.openCoopWheel(ck); return; }
+        if (this.cowPenAtPoint(rwp.x, rwp.y)) { this.openPenWheel(); return; }
         if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // right-click again → animated dismiss
         this.openToolWheelAt(rwp.x, rwp.y, true);
         return;
@@ -1819,13 +1852,14 @@ export class GameScene extends Phaser.Scene {
       this.touchLongFired = false;
       this.touchStartX = pointer.x; this.touchStartY = pointer.y;
       this.touchPressTimer?.remove();
-      const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.inventoryOpen && !this.toolPaletteOpen && !this.coopWheel;
+      const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.inventoryOpen && !this.toolPaletteOpen && !this.coopWheel && !this.penWheel;
       this.touchPressTimer = canWheel
         ? this.time.delayedCall(GameScene.LONG_PRESS_MS, () => {
             const wp = this.cameras.main.getWorldPoint(this.touchStartX, this.touchStartY);
-            // A coop under the finger → its action wheel; else the tool wheel.
+            // A coop / cow pen under the finger → its action wheel; else the tool wheel.
             const ck = this.coopAtPoint(wp.x, wp.y);
             if (ck) { this.openCoopWheel(ck); this.touchLongFired = true; return; }
+            if (this.cowPenAtPoint(wp.x, wp.y)) { this.openPenWheel(); this.touchLongFired = true; return; }
             this.touchLongFired = this.openToolWheelAt(wp.x, wp.y, true); // false = nothing here → the release falls back to a normal tap
           })
         : undefined;
@@ -1864,6 +1898,7 @@ export class GameScene extends Phaser.Scene {
       if (this.confirmOpen) { this.closeConfirm(); return; } // Esc = cancel the confirm
       if (this.craftOpen) { this.closeCraft(); return; }     // Esc = close the crafting modal
       if (this.coopWheel) { this.beginCloseCoopWheel(null); return; } // Esc = dismiss the coop action wheel (animated)
+      if (this.penWheel) { this.beginClosePenWheel(null); return; } // Esc = dismiss the cow-pen action wheel
       if (this.dialogOpen && !this.cutscene) { this.closeDialog(); return; } // a cutscene can't be Esc'd out of
       // Esc with a placeable / tool held → empty hand (so you can tap the world to interact, e.g. collect coop eggs).
       if (this.activePlace || this.activeSeed || this.heldExternal || this.hotbarSelected >= 0) this.clearHeld();
@@ -1909,6 +1944,7 @@ export class GameScene extends Phaser.Scene {
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
     if (this.handleCoopWheelClick(x, y)) return; // coop action wheel (move / delete / upgrade)
+    if (this.handlePenWheelClick(x, y)) return; // cow-pen action wheel (move / delete)
     if (this.handleCraftClick(x, y)) return; // the crafting modal (work station)
     if (this.handleMenuClick(x, y)) return; // the unified menu (tabs / item detail)
     // Tool HUD (current-tool slot + fly-out switcher) — works even while holding a tool.
@@ -1991,6 +2027,22 @@ export class GameScene extends Phaser.Scene {
         if (this.activePlace === 'tree') { if (this.canPlaceTree(tile.x, tile.y)) this.placeTree(tile.x, tile.y, this.activeTreeType); }
         else if (this.activePlace === 'bush') { if (this.canPlaceBush(tile.x, tile.y)) this.plantBush(tile.x, tile.y, this.activeBushType); }
         else if (this.activePlace === 'coop') { if (this.canPlaceCoop(tile.x, tile.y)) { if (this.movingCoop) this.placeMovedCoop(tile.x, tile.y); else this.placeCoop(tile.x, tile.y, this.activeCoopVariant); } }
+        else if (this.activePlace === 'cowpen') {
+          // The pen footprint is big + anchors down-right from the tap. DESKTOP previews on hover, so a
+          // click places directly. TOUCH has no hover → a two-step flow: the 1st tap ARMS the ghost at
+          // that tile (you SEE the plot outline, green/red); a 2nd tap INSIDE the (valid) outline
+          // CONFIRMS, while a tap OUTSIDE re-positions it — so you can shuffle it around, then commit.
+          const doPlace = (ax: number, ay: number) => { if (this.movingPen) this.placeMovedCowPen(ax, ay); else this.placeCowPenAt(ax, ay); this.penTouchCell = null; };
+          if (this.locked) { if (this.canPlaceCowPen(tile.x, tile.y)) doPlace(tile.x, tile.y); }
+          else {
+            const a = this.penTouchCell;
+            const fp = a ? this.cowPenFootprint(a.cx, a.cy) : null;
+            const insideArmed = !!fp && tile.x >= fp.tx0 && tile.x <= fp.tx0 + fp.cols - 1 && tile.y >= fp.ty0 && tile.y <= fp.ty0 + fp.rows - 1;
+            if (a && insideArmed && this.canPlaceCowPen(a.cx, a.cy)) doPlace(a.cx, a.cy); // tap inside the valid outline → commit
+            else this.penTouchCell = { cx: tile.x, cy: tile.y }; // arm / re-position the preview
+          }
+        }
+        else if (this.activePlace === 'cow') { if (this.canPlaceCow(tile.x, tile.y)) this.placeCowAt(tile.x, tile.y); }
         return;
       }
       const crop = this.crops.get(key);
@@ -2915,6 +2967,7 @@ export class GameScene extends Phaser.Scene {
     if (cell?.place === 'tree' && cell.variant) this.activeTreeType = cell.variant as TreeType;
     if (cell?.place === 'bush' && cell.variant) this.activeBushType = cell.variant as BerryType;
     if (cell?.place === 'coop' && cell.variant) this.activeCoopVariant = cell.variant;
+    if (this.activePlace !== 'cowpen') this.penTouchCell = null; // dropped out of pen placement → clear the armed touch preview
   }
 
   /** Is the virtual cursor over a hotbar slot? Returns the slot index or null. */
@@ -3081,7 +3134,14 @@ export class GameScene extends Phaser.Scene {
       icon.setVisible(false); // the ghost IS the icon here
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
-      if (!this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar() || this.hoeSwing || this.waterCan) {
+      const blocked = this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen;
+      if (!this.locked) {
+        cursor.setVisible(false);
+        // TOUCH has no hover, so a placement can't preview by cursor. For the big cow-pen footprint
+        // we run a two-step tap-to-arm / tap-to-confirm flow: while armed, keep showing the ghost here.
+        if (!blocked && this.activePlace === 'cowpen' && this.penTouchCell) this.showPenGhostAt(this.penTouchCell.cx, this.penTouchCell.cy);
+        else this.hidePlacePreview();
+      } else if (blocked || this.pointerOverHotbar() || this.hoeSwing || this.waterCan) {
         cursor.setVisible(false);
         this.hidePlacePreview();
       } else {
@@ -3148,6 +3208,7 @@ export class GameScene extends Phaser.Scene {
         const foragMature = !!forag && forag.stage >= (FORAGABLES[forag.type]?.stages ?? 1);
         if (this.treeAtPoint(wp.x, wp.y) || this.stoneAtPoint(wp.x, wp.y)) valid = false; // over a tree/stone sprite
         else if (this.isDefaultHouseCell(key)) valid = false; // the fixed starter house — not tillable/diggable
+        else if (this.cowPen?.footprint.has(key)) valid = false; // cow-pen ground (interior + fences) — not farmland
         else if (this.treeOrStoneOverCell(tile.x, tile.y)) valid = false; // a tree/stone footprint covers this cell
         else if (this.trees.has(key) || this.bigStones.has(key)) valid = false;
         else if (bush) valid = bush.stage >= 2;
@@ -3251,7 +3312,7 @@ export class GameScene extends Phaser.Scene {
         y: (cy - cam.worldView.y) * cam.zoom,
         w: b.w * cam.zoom + pad * 2,
         h: b.h * cam.zoom + pad * 2,
-        name: this.toolPaletteOpen || this.coopWheel ? '' : target.name, // hide the name while a wheel (tool / coop) is open
+        name: this.toolPaletteOpen || this.coopWheel || this.penWheel ? '' : target.name, // hide the name while a wheel (tool / coop / pen) is open
         nameX: (cx - cam.worldView.x) * cam.zoom,
         nameY: (b.y - cam.worldView.y) * cam.zoom - pad - 3, // pill above the (now padded) bracket top
       };
@@ -3325,6 +3386,9 @@ export class GameScene extends Phaser.Scene {
     // tile). After the door objects (mailbox/chest sit INSIDE the footprint, so they win); before
     // trees / tiles. The bracket hugs the footprint rect via updateHoverInspect's rect branch.
     { const hr = this.houseFootprintRect(); if (hr && wx >= hr.x && wx <= hr.x + hr.w && wy >= hr.y && wy <= hr.y + hr.h) return { name: t('hover_house'), rect: hr }; }
+    // The COW PEN: hovering its fence / interior frames the WHOLE pen (a rect). Its footprint is
+    // clear grass (no props sit on it), so it can go before trees/tiles without stealing them.
+    if (this.cowPenAtPoint(wx, wy)) { const pr = this.penFootprintRect(); if (pr) return { name: t('hover_cowpen'), rect: pr }; }
     const tk = this.treeAtPoint(wx, wy);
     if (tk) { const o = this.trees.get(tk); if (o) return { name: t(`hover_tree_${o.type}`), sprite: o.sprite }; }
     const sk = this.stoneAtPoint(wx, wy);
@@ -3500,16 +3564,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     const cam = this.cameras.main, z = cam.zoom;
-    const D = GameScene.WHEEL_D * s; // animated circle diameter
-    const GAP = 10; // clearance BEYOND the focus bracket to the circle edge
+    // highDpi: HoverScene renders in DEVICE px at zoom 1, so world-projected extents (× z)
+    // already scale with dpr, but FIXED screen-px sizes (circle diameter, gap, the 18px reach
+    // floor) do NOT — they'd render at 1/dpr (tiny). Multiply those by dpr. (dpr is 1 otherwise.)
+    const dpr = hudDpr(this);
+    const D = GameScene.WHEEL_D * s * dpr; // animated circle diameter
+    const GAP = 10 * dpr; // clearance BEYOND the focus bracket to the circle edge
     const sl = (pal.bbox.wl - cam.worldView.x) * z, sr = (pal.bbox.wr - cam.worldView.x) * z;
     const st = (pal.bbox.wt - cam.worldView.y) * z, sb = (pal.bbox.wb - cam.worldView.y) * z;
     const cx = (sl + sr) / 2, cy = (st + sb) / 2;
     // The circles clear the FOCUS BRACKET, not just the raw bbox — the bracket now extends
     // HOVER_PAD_WORLD (world px) past the art, so small objects were leaving the ring cramped INSIDE
     // it. `reach` = object half-extent (18px screen floor) + that bracket pad; then + gap + radius.
-    const reach = Math.max((sr - sl) / 2, (sb - st) / 2, 18) + GameScene.HOVER_PAD_WORLD * z;
-    const RB = reach + GameScene.WHEEL_D / 2 + GAP; // resting ring radius (hit-boxes)
+    const reach = Math.max((sr - sl) / 2, (sb - st) / 2, 18 * dpr) + GameScene.HOVER_PAD_WORLD * z;
+    const RB = reach + (GameScene.WHEEL_D / 2) * dpr + GAP; // resting ring radius (hit-boxes)
     const R = RB * f; // animated ring radius
     const buttons: Array<{ x: number; y: number; size: number; iconKey: string; iconFrame: string | number; kind: string; hovered: boolean }> = [];
     const bounds: Array<{ x: number; y: number; r: number; idx: number }> = [];
@@ -3517,7 +3585,7 @@ export class GameScene extends Phaser.Scene {
     // rendered buttons use the animated R / D. Bounds are ignored anyway once `wheelClose` is set.
     // Cancel (mouse) at the TOP of the ring (12 o'clock); the tools sit around it, evenly spaced.
     buttons.push({ x: cx, y: cy - R, size: D, iconKey: 'cursor', iconFrame: 0, kind: 'close', hovered: this.toolPaletteHover === -1 });
-    bounds.push({ x: cx, y: cy - RB, r: GameScene.WHEEL_D / 2, idx: -1 });
+    bounds.push({ x: cx, y: cy - RB, r: (GameScene.WHEEL_D / 2) * dpr, idx: -1 });
     GameScene.WHEEL_RING.forEach((slot, i) => {
       const x = cx + slot.ux * R, y = cy + slot.uy * R;
       const owned = slot.toolId !== null && this.findOwnedTool(slot.toolId) !== null;
@@ -3529,7 +3597,7 @@ export class GameScene extends Phaser.Scene {
       const kind = active ? 'tool' : showIcon ? 'disabled' : 'empty'; // empty = reserved/unowned → just the circle base
       const ic = showIcon ? this.wheelToolIcon(slot.toolId!) : { key: '', frame: 0 };
       buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
-      if (active) bounds.push({ x: cx + slot.ux * RB, y: cy + slot.uy * RB, r: GameScene.WHEEL_D / 2, idx: i }); // only ENABLED circles are tappable
+      if (active) bounds.push({ x: cx + slot.ux * RB, y: cy + slot.uy * RB, r: (GameScene.WHEEL_D / 2) * dpr, idx: i }); // only ENABLED circles are tappable
     });
     this.registry.set('toolPalette', { visible: true, buttons });
     this.registry.set('toolPaletteBounds', bounds);
@@ -3614,11 +3682,13 @@ export class GameScene extends Phaser.Scene {
     }
     return this.placePreview;
   }
-  private hidePlacePreview(): void { this.placePreview?.setVisible(false); this.placeCell = null; }
+  private hidePlacePreview(): void { this.placePreview?.setVisible(false); this.penPreview?.setVisible(false); this.placeCell = null; }
 
   /** Texture + frame for a placeable of `kind` — now only trees + berry bushes (the
    *  house-building materials were removed; the house is a fixed facade). */
   private placeAppearance(kind: PlaceKind): { texture: string; frame: string | number } {
+    if (kind === 'cow') return { texture: 'pink_cow_animation_sprites', frame: 0 };
+    if (kind === 'cowpen') return { texture: 'barn_structures', frame: '1-barn' };
     if (kind === 'bush') return { texture: 'bushes', frame: 'empty-bush-small' };
     if (kind === 'coop') { const [s, c] = this.activeCoopVariant.split('-'); return { texture: 'coops', frame: coopFrame(s as CoopSize, c as CoopColor) }; }
     return { texture: `tree-${this.activeTreeType}`, frame: 0 };
@@ -3634,8 +3704,17 @@ export class GameScene extends Phaser.Scene {
     if (!tile) { cursor.setVisible(false); this.hidePlacePreview(); return; }
     const cx = tile.x, cy = tile.y;
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    // The COW PEN is a big multi-tile footprint → a translucent rectangle over the whole plot
+    // (green = clear open grass, red = blocked), not a single-cell bracket + ghost.
+    if (this.activePlace === 'cowpen') {
+      cursor.setVisible(false);
+      this.ensurePlacePreview().setVisible(false);
+      this.showPenGhostAt(cx, cy);
+      return;
+    }
+    this.penPreview?.setVisible(false);
     const isCoop = this.activePlace === 'coop';
-    const valid = isCoop ? this.canPlaceCoop(cx, cy) : this.activePlace === 'bush' ? this.canPlaceBush(cx, cy) : this.canPlaceTree(cx, cy);
+    const valid = isCoop ? this.canPlaceCoop(cx, cy) : this.activePlace === 'cow' ? this.canPlaceCow(cx, cy) : this.activePlace === 'bush' ? this.canPlaceBush(cx, cy) : this.canPlaceTree(cx, cy);
     // The rounded tile bracket (圆角框), snapped to the cell centre — same as the tools.
     cursor.setPosition(w.x + TILE / 2, w.y + TILE / 2).setVisible(true).setScale(GameScene.BRACKET_BR * this.bracketBreathe());
     if (valid) cursor.setAlpha(1).clearTint();
@@ -4122,11 +4201,141 @@ export class GameScene extends Phaser.Scene {
 
   // ── Cow pen (placed on the island; cows dynamically spawned) ─────────────────
 
-  /** Auto-place the cow pen at the default anchor if none exists yet. Runs in setupFarming (before
-   *  the save loads); a save with a pen then REPLACES this in applySave. Dev default — a buy-to-place
-   *  flow will gate the FIRST placement later ("game starts without a pen"). */
-  private wireCowPen(): void {
-    if (!this.cowPen) this.placeCowPen(COW_PEN_ANCHOR, COW_COUNT);
+  /** The cow pen is a BOUGHT + PLACED item now (shop 牧场 tab → footprint placement ghost): a fresh
+   *  game has NO pen, applySave restores a saved one. No auto-place — an auto-placed pen would both
+   *  block testing the buy flow and pollute the save (placeCowPen persists). Debug key **Q** places a
+   *  stocked pen at the default anchor for quick dev/headless testing (see the devTools keys). */
+  private wireCowPen(): void { /* no auto-place — pen is purchased + placed */ }
+
+  // Cow-pen footprint (tiles) for placement: computed from the template's entity extent, so the
+  // clear-ground check + ghost rectangle always match the actual pen the creator authored.
+  /** Placement footprint for a pen whose top-left tile is (cx,cy): the world anchor to pass to
+   *  placeCowPen + every tile the pen covers (validated as clear open grass). */
+  private cowPenFootprint(cx: number, cy: number): { anchor: { x: number; y: number }; cells: string[]; tx0: number; ty0: number; cols: number; rows: number } {
+    const tpl = this.cache.json.get('cowpen-template') as { entities?: Array<{ transform: { x: number; y: number } }> } | undefined;
+    const es = tpl?.entities ?? [];
+    let minx = Infinity, miny = Infinity;
+    for (const e of es) { minx = Math.min(minx, e.transform.x); miny = Math.min(miny, e.transform.y); }
+    if (!isFinite(minx)) { minx = TILE; miny = TILE; }
+    // Anchor so the min-transform entity (origin 0.5) centres in tile (cx,cy).
+    const anchor = { x: cx * TILE + TILE / 2 - minx, y: cy * TILE + TILE / 2 - miny };
+    let tx0 = Infinity, ty0 = Infinity, tx1 = -Infinity, ty1 = -Infinity;
+    for (const e of es) {
+      const t = this.islandLayer?.worldToTileXY(anchor.x + e.transform.x, anchor.y + e.transform.y);
+      if (!t) continue;
+      const kx = Math.floor(t.x), ky = Math.floor(t.y);
+      tx0 = Math.min(tx0, kx); ty0 = Math.min(ty0, ky); tx1 = Math.max(tx1, kx); ty1 = Math.max(ty1, ky);
+    }
+    if (!isFinite(tx0)) { tx0 = cx; ty0 = cy; tx1 = cx; ty1 = cy; }
+    const cells: string[] = [];
+    for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) cells.push(`${x},${y}`);
+    return { anchor, cells, tx0, ty0, cols: tx1 - tx0 + 1, rows: ty1 - ty0 + 1 };
+  }
+
+  /** Can a cow pen be placed with its top-left tile at (cx,cy)? One pen only; every footprint cell
+   *  must be on-island, empty (no prop/crop/soil/coop/other pen), off the starter house, not on Cato. */
+  private canPlaceCowPen(cx: number, cy: number): boolean {
+    if (this.cowPen) return false; // one pen per island
+    if (!this.islandLayer) return false;
+    const ct = this.child ? this.islandLayer.worldToTileXY(this.child.x, this.child.y) : null;
+    for (const key of this.cowPenFootprint(cx, cy).cells) {
+      const [kx, ky] = key.split(',').map(Number);
+      const w = this.islandLayer.tileToWorldXY(kx!, ky!);
+      if (!w || !this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
+      if (this.trees.has(key) || this.crops.has(key) || this.bushes.has(key) || this.bigStones.has(key) ||
+          this.foragables.has(key) || this.tilledCells.has(key) || this.placed.has(key) || this.coopCells.has(key) || this.cowPenBlocked.has(key)) return false;
+      if (this.isDefaultHouseCell(key)) return false;
+      if (ct && Math.floor(ct.x) === kx && Math.floor(ct.y) === ky) return false;
+    }
+    return true;
+  }
+
+  /** Is a world point on the placed cow pen (any footprint tile OR a structure sprite)? Returns the
+   *  pen's anchor-key marker ('cowpen') or null — mirrors coopAtPoint (there's only ever one pen). */
+  private cowPenAtPoint(wx: number, wy: number): boolean {
+    const pen = this.cowPen;
+    if (!pen || !this.islandLayer) return false;
+    const t = this.islandLayer.getTileAtWorldXY(wx, wy);
+    if (t && pen.footprint.has(`${t.x},${t.y}`)) return true;
+    // A tall structure (barn/gate) whose art rises above its foot tile.
+    for (const s of pen.structures) if (s.active && s.getBounds().contains(wx, wy)) return true;
+    return false;
+  }
+
+  /** World bbox of the whole pen (its footprint tiles) — the hover bracket + wheel anchor use it. */
+  private penFootprintRect(): { x: number; y: number; w: number; h: number } | null {
+    const pen = this.cowPen;
+    if (!pen || !this.islandLayer) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const k of pen.footprint) {
+      const [cx, cy] = k.split(',').map(Number);
+      const w = this.islandLayer.tileToWorldXY(cx!, cy!);
+      if (!w) continue;
+      x0 = Math.min(x0, w.x); y0 = Math.min(y0, w.y); x1 = Math.max(x1, w.x + TILE); y1 = Math.max(y1, w.y + TILE);
+    }
+    return isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+  }
+
+  /** Place the pen (empty — cows are bought + placed separately) from the held item at (cx,cy). */
+  private placeCowPenAt(cx: number, cy: number): void {
+    const cell = this.heldCell();
+    if (!cell || cell.count <= 0) return;
+    const { anchor } = this.cowPenFootprint(cx, cy);
+    this.placeCowPen(anchor, 0); // empty pen; buying cows populates it
+    this.penPreview?.setVisible(false);
+    this.consumeHeldMaterial();
+  }
+
+  /** Can a cow be placed at cell (cx,cy)? Needs an owned pen, and the cell must sit inside the pen's
+   *  safe grazing area on walkable ground (so a placed cow never lands on/through a fence). */
+  private canPlaceCow(cx: number, cy: number): boolean {
+    if (!this.cowPen || !this.islandLayer) return false;
+    const w = this.islandLayer.tileToWorldXY(cx, cy);
+    if (!w) return false;
+    const px = w.x + TILE / 2, py = w.y + TILE / 2;
+    const r = this.cowNav().grazeRect();
+    if (px < r.x0 || px > r.x1 || py < r.y0 || py > r.y1) return false; // inside the pen only
+    return !this.worldBlocked(px, py);
+  }
+
+  /** Place a cow from the held item at (cx,cy) + consume one. */
+  private placeCowAt(cx: number, cy: number): void {
+    const cell = this.heldCell();
+    if (!cell || cell.count <= 0 || !this.cowPen || !this.islandLayer) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    this.addCow(w.x + TILE / 2, w.y + TILE / 2);
+    this.consumeHeldMaterial();
+    this.scheduleSave();
+  }
+
+  /** Add one cow to the pen at a world point. Colour cycles the milk palette by pen order, so buying
+   *  cows one by one fills out the different milk colours (same rule as a fresh pen's spawn). */
+  private addCow(wx: number, wy: number): void {
+    if (!this.cowPen) return;
+    const color = MILK_COLORS[this.cowPen.cows.length % MILK_COLORS.length]!;
+    const c = new Cow(this, { x: wx, y: wy, nav: this.cowNav(), color });
+    this.cowPen.cows.push(c);
+    this.ySortSprites.push(c.sprite);
+  }
+
+  private penPreview?: Phaser.GameObjects.Rectangle; // translucent footprint ghost while placing a pen
+  private penTouchCell: { cx: number; cy: number } | null = null; // TOUCH two-step: 1st tap arms the footprint here, 2nd tap on the same valid cell confirms
+  private ensurePenPreview(): Phaser.GameObjects.Rectangle {
+    if (!this.penPreview) this.penPreview = this.add.rectangle(0, 0, TILE, TILE, 0x66dd66, 0.28).setOrigin(0, 0).setDepth(1e6 - 3);
+    return this.penPreview;
+  }
+
+  /** Draw the pen footprint ghost with its top-left at tile (cx,cy): green when the whole plot is
+   *  clear grass, red when blocked. Sets placeCell to the anchor when valid. Shared by the desktop
+   *  hover preview and the touch tap-to-arm preview. */
+  private showPenGhostAt(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const fp = this.cowPenFootprint(cx, cy);
+    const valid = this.canPlaceCowPen(cx, cy);
+    const wpx = this.islandLayer.tileToWorldXY(fp.tx0, fp.ty0)!;
+    this.ensurePenPreview().setPosition(wpx.x, wpx.y).setSize(fp.cols * TILE, fp.rows * TILE).setVisible(true)
+      .setFillStyle(valid ? 0x66dd66 : 0xff6666, 0.28).setStrokeStyle(2, valid ? 0x2f8f2f : 0xcc3333, 0.9);
+    this.placeCell = valid ? { cx, cy } : null;
   }
 
   /** Instantiate the `cow_pen` template as a GROUP at `anchor`: spawn each authored piece
@@ -4143,6 +4352,9 @@ export class GameScene extends Phaser.Scene {
     const cells: string[] = [];
     const gateSprites: Phaser.GameObjects.Sprite[] = [];
     let barn: Phaser.GameObjects.Sprite | undefined; // the `1-barn` — milk bubble sits above it + tap to collect
+    // Fence-wall world bbox — the cow-behaviour geometry (graze rect / sleep / excursion) is DERIVED
+    // from it, so resizing the pen in the scene editor just works (no hardcoded per-size offsets).
+    let fx0 = Infinity, fy0 = Infinity, fx1 = -Infinity, fy1 = -Infinity;
     for (const e of tpl.entities) {
       if (!e.assetId) continue;
       const wx = anchor.x + e.transform.x, wy = anchor.y + e.transform.y;
@@ -4172,6 +4384,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (e.assetId === 'barn_structures' && e.frame === '1-barn' && !barn) barn = s;
       if (e.assetId === 'fences') {
+        fx0 = Math.min(fx0, wx); fy0 = Math.min(fy0, wy); fx1 = Math.max(fx1, wx); fy1 = Math.max(fy1, wy);
         // Fences are SOLID: mark the cell blocked (pathfinding routes around) + an invisible
         // collider (Cato physically bumps it). The gate opening has no fence → cells stay walkable.
         const t = this.islandLayer.worldToTileXY(wx, wy);
@@ -4183,19 +4396,49 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    // Gate opening = the WALL-GAP cell(s) the gate sprite(s) cover — DERIVED from the gate sprite's
-    // row (snapped to the right-wall column at template x=128), so it follows however the creator
-    // placed the gate. Passable only once the gate has finished opening (a cow waits — gateBlocks);
-    // the surrounding wall fences are the posts. gateAt (proximity) = the gate sprite itself.
+    // Fence bbox → fall back to the placement footprint if the template has no fences (shouldn't happen).
+    if (!isFinite(fx0)) { fx0 = anchor.x + TILE; fy0 = anchor.y + TILE; fx1 = anchor.x + 128; fy1 = anchor.y + 144; }
+    const fcx = (fx0 + fx1) / 2, fcy = (fy0 + fy1) / 2;
+    // Gate opening = the WALL-GAP cell(s) the gate sprite(s) cover — DERIVED by snapping each gate to
+    // the NEAREST fence wall (x→fx0/fx1 or y→fy0/fy1), so it follows however the creator placed the
+    // gate on whatever-sized pen. Passable only once the gate finishes opening (a cow waits —
+    // gateBlocks); the surrounding wall fences are the posts. gateAt (proximity) = the gate sprite.
     const gateCells = new Set<string>();
     let gx = 0, gy = 0;
     for (const g of gateSprites) {
-      const t = this.islandLayer.worldToTileXY(anchor.x + 128, g.y);
+      // Snap onto the closest wall: pick whichever of the 4 walls the gate sits nearest.
+      const dL = Math.abs(g.x - fx0), dR = Math.abs(g.x - fx1), dT = Math.abs(g.y - fy0), dB = Math.abs(g.y - fy1);
+      const m = Math.min(dL, dR, dT, dB);
+      const cellW = m === dL ? fx0 : m === dR ? fx1 : g.x;
+      const cellH = m === dT ? fy0 : m === dB ? fy1 : g.y;
+      const t = this.islandLayer.worldToTileXY(cellW, cellH);
       if (t) gateCells.add(`${Math.floor(t.x)},${Math.floor(t.y)}`);
       gx += g.x; gy += g.y;
     }
-    const gateAt = gateSprites.length ? { x: gx / gateSprites.length, y: gy / gateSprites.length } : { x: anchor.x + 128, y: anchor.y + 64 };
-    this.cowPen = { anchor, structures, bodies, cells, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [], barn, milkReady: savedMilk ?? {}, milkBubble: undefined };
+    const gateAt = gateSprites.length ? { x: gx / gateSprites.length, y: gy / gateSprites.length } : { x: fx1, y: fcy };
+    // Cow-behaviour geometry, all derived from the fence bbox + barn + gate (see CowPenObj.geom):
+    //  • graze = interior inset ~half a cow from every wall (clamped to the centre for a tiny pen)
+    //  • sleep = just below the barn if there is one, else the pen centre
+    //  • outside = pushed out past the gate in its outward direction (excursion target)
+    const INSET = 24;
+    const gx0 = Math.min(fx0 + INSET, fcx), gy0 = Math.min(fy0 + INSET, fcy);
+    const gx1 = Math.max(fx1 - INSET, fcx), gy1 = Math.max(fy1 - INSET, fcy);
+    const sleep = barn
+      ? { x: Phaser.Math.Clamp(barn.x, gx0, gx1), y: Phaser.Math.Clamp(barn.y + TILE * 1.5, gy0, gy1) }
+      : { x: fcx, y: fcy };
+    // Outward direction from the gate (which wall it sits on). The pasture is centred a few tiles
+    // out that way; cows graze there all day and only cross back in to sleep.
+    const outX = Math.sign(gateAt.x - fcx || 1), outY = Math.sign(gateAt.y - fcy || 0);
+    const alongX = Math.abs(gateAt.x - fcx) >= Math.abs(gateAt.y - fcy); // gate on a left/right wall?
+    const outside = { x: gateAt.x + (alongX ? outX * TILE * 3 : 0), y: gateAt.y + (alongX ? 0 : outY * TILE * 3) };
+    const PAD = TILE * 3; // pasture half-extent → a ~6-tile-wide grazing patch outside the gate
+    const roam = { x0: outside.x - PAD, y0: outside.y - PAD, x1: outside.x + PAD, y1: outside.y + PAD };
+    const geom = { graze: { x0: gx0, y0: gy0, x1: gx1, y1: gy1 }, roam, sleep, outside };
+    // Whole footprint (interior + fence rows) in tiles — the ground here can't be hoed/tilled.
+    const footprint = new Set<string>();
+    const ftA = this.islandLayer.worldToTileXY(fx0, fy0), ftB = this.islandLayer.worldToTileXY(fx1, fy1);
+    if (ftA && ftB) for (let x = Math.floor(ftA.x); x <= Math.floor(ftB.x); x++) for (let y = Math.floor(ftA.y); y <= Math.floor(ftB.y); y++) footprint.add(`${x},${y}`);
+    this.cowPen = { anchor, structures, bodies, cells, footprint, gate: { sprites: gateSprites, at: gateAt, cells: gateCells, open: false, animating: false }, cows: [], geom, barn, milkReady: savedMilk ?? {}, milkBubble: undefined };
     this.spawnCows(occupants);
     this.refreshCowMilkBubble();
     this.scheduleSave();
@@ -4237,19 +4480,19 @@ export class GameScene extends Phaser.Scene {
     this.cowPen = undefined;
   }
 
-  /** The world/pen queries the Cow AI needs (A*-pathing routes cows through the gate opening). */
+  /** The world/pen queries the Cow AI needs (A*-pathing routes cows through the gate opening). All
+   *  the pen-geometry answers read `cowPen.geom`, DERIVED from the authored template (fence bbox +
+   *  barn + gate) in placeCowPen — so resizing the pen scene needs no code change. */
   private cowNav(): CowNav {
-    const A = this.cowPen?.anchor ?? COW_PEN_ANCHOR;
+    const g0 = () => this.cowPen?.geom;
     return {
       blocked: (wx, wy) => this.worldBlocked(wx, wy),
       planPath: (fx, fy, tx, ty) => this.cowPlanPath(fx, fy, tx, ty),
       isNight: () => this.bgIndex() === WEATHER_BGS.length - 1,
-      sleepSpot: () => ({ x: A.x + 56, y: A.y + 60 }), // inside, just below the barn
-      // Safe grazing rect = interior inset ~half a 32px cow from every fence (walls at template
-      // x=16/128, y=16/144) so a grazing cow never overlaps the pen. Right edge kept short of the
-      // gate too, so cows only reach the gate on a deliberate excursion.
-      grazeRect: () => ({ x0: A.x + 40, y0: A.y + 44, x1: A.x + 92, y1: A.y + 122 }),
-      outsideSpot: () => ({ x: A.x + 168 + Phaser.Math.Between(-10, 10), y: A.y + 80 + Phaser.Math.Between(-14, 14) }),
+      sleepSpot: () => g0()?.sleep ?? { x: COW_PEN_ANCHOR.x + 56, y: COW_PEN_ANCHOR.y + 60 },
+      grazeRect: () => g0()?.graze ?? { x0: COW_PEN_ANCHOR.x + 40, y0: COW_PEN_ANCHOR.y + 44, x1: COW_PEN_ANCHOR.x + 92, y1: COW_PEN_ANCHOR.y + 122 },
+      roamRect: () => g0()?.roam ?? { x0: COW_PEN_ANCHOR.x + 120, y0: COW_PEN_ANCHOR.y + 24, x1: COW_PEN_ANCHOR.x + 216, y1: COW_PEN_ANCHOR.y + 136 },
+      outsideSpot: () => { const o = g0()?.outside ?? { x: COW_PEN_ANCHOR.x + 168, y: COW_PEN_ANCHOR.y + 80 }; return { x: o.x + Phaser.Math.Between(-10, 10), y: o.y + Phaser.Math.Between(-14, 14) }; },
       gateBlocks: (wx, wy) => {
         const pen = this.cowPen;
         if (!pen || pen.gate.open) return false;
@@ -4636,9 +4879,10 @@ export class GameScene extends Phaser.Scene {
     acts.push({ kind: 'delete', frame: 45, enabled: true });
     // Project the coop centre to screen (centre-zoom) + fan the circles across an upper arc.
     const cam = this.cameras.main;
+    const dpr = hudDpr(this); // highDpi: device-px HoverScene @ zoom 1 — fixed screen-px sizes ×dpr
     const cx = (coop.sprite.x - cam.worldView.x) * cam.zoom;
     const cyC = (coop.sprite.y - (coop.sprite.displayHeight / 2) - cam.worldView.y) * cam.zoom;
-    const SIZE = 54, RB = (coop.sprite.displayHeight / 2) * cam.zoom + 46; // resting size + ring radius
+    const SIZE = 54 * dpr, RB = (coop.sprite.displayHeight / 2) * cam.zoom + 46 * dpr; // resting size + ring radius
     const D = SIZE * s, R = RB * f; // animated
     const A0 = (-150 * Math.PI) / 180, A1 = (-30 * Math.PI) / 180; // upper arc (screen y-down: -90 = straight up)
     const n = acts.length;
@@ -4754,6 +4998,133 @@ export class GameScene extends Phaser.Scene {
     this.restoreCoop(`${cx},${cy}`, m.size, m.color, m.chickens, m.eggsReady);
     this.movingCoop = undefined;
     this.activePlace = undefined;
+    this.scheduleSave();
+  }
+
+  // ── Cow-pen action wheel (move / delete the WHOLE pen) ───────────────────────
+  //  Right-click / long-press the pen → a radial wheel (same look + spring anim as the coop wheel).
+  //  Reuses the coopMenu/coopMenuBounds registry keys (only one object wheel is ever open) so
+  //  HoverScene renders it identically. One pen exists, so no anchor key is needed.
+  private penWheel?: Record<string, never>;
+  private penWheelOpenAt = 0;
+  private penWheelClose: { at: number; hitKind: string | null } | null = null;
+  private movingPen?: { cows: SavedCow[]; milk: Record<string, number>; oldAnchor: { x: number; y: number } };
+
+  private openPenWheel(): void {
+    if (!this.cowPen || this.coopWheel) return;
+    this.penWheel = {};
+    this.penWheelOpenAt = this.time.now;
+    this.penWheelClose = null;
+    this.publishPenWheel();
+    playSfx(this);
+  }
+
+  private beginClosePenWheel(hitKind: string | null): void {
+    if (!this.penWheel || this.penWheelClose) return;
+    this.penWheelClose = { at: this.time.now, hitKind };
+    if (hitKind) playSfx(this);
+  }
+
+  private closePenWheel(): void {
+    if (!this.penWheel) return;
+    this.penWheel = undefined;
+    this.penWheelClose = null;
+    this.registry.set('coopMenu', { visible: false, buttons: [] });
+    this.registry.set('coopMenuBounds', []);
+  }
+
+  /** Publish the pen wheel model (radial ring above the pen) — mirrors publishCoopWheel. */
+  private publishPenWheel(): void {
+    if (!this.penWheel) return;
+    const rect = this.penFootprintRect();
+    if (!this.cowPen || !rect) { this.closePenWheel(); return; }
+    const spring = (p: number) => Phaser.Math.Easing.Back.Out(Phaser.Math.Clamp(p, 0, 1), GameScene.WHEEL_OVERSHOOT);
+    let f = 1, s = 1;
+    const now = this.time.now;
+    if (this.penWheelClose) {
+      const HOLD = this.penWheelClose.hitKind ? GameScene.WHEEL_HOLD_MS : 0;
+      const e = now - this.penWheelClose.at;
+      if (e >= HOLD + GameScene.WHEEL_OPEN_MS) {
+        const kind = this.penWheelClose.hitKind;
+        this.closePenWheel();
+        if (kind) this.runPenAction(kind);
+        return;
+      }
+      if (e < HOLD) { f = 1; s = 1; } else { const be = spring(1 - (e - HOLD) / GameScene.WHEEL_OPEN_MS); f = be; s = be; }
+    } else {
+      const e = now - this.penWheelOpenAt;
+      if (e < GameScene.WHEEL_OPEN_MS) { const be = spring(e / GameScene.WHEEL_OPEN_MS); f = be; s = be; }
+    }
+    // Move ↵ (141) + remove ✗ (45) — no upgrade tier for the pen.
+    const acts: Array<{ kind: string; frame: number; enabled: boolean }> = [
+      { kind: 'move', frame: 141, enabled: true },
+      { kind: 'delete', frame: 45, enabled: true },
+    ];
+    const cam = this.cameras.main;
+    const dpr = hudDpr(this); // highDpi: device-px HoverScene @ zoom 1 — fixed screen-px sizes ×dpr
+    const cx = ((rect.x + rect.w / 2) - cam.worldView.x) * cam.zoom;
+    const cyC = (rect.y - cam.worldView.y) * cam.zoom; // top edge of the pen
+    const SIZE = 54 * dpr, RB = (rect.h / 2) * cam.zoom + 46 * dpr;
+    const D = SIZE * s, R = RB * f;
+    const A0 = (-150 * Math.PI) / 180, A1 = (-30 * Math.PI) / 180;
+    const n = acts.length;
+    const ang = (i: number) => A0 + (A1 - A0) * (n === 1 ? 0.5 : i / (n - 1));
+    const buttons = acts.map((a, i) => ({ kind: a.kind, iconFrame: a.frame, enabled: a.enabled, size: D, x: Math.round(cx + R * Math.cos(ang(i))), y: Math.round(cyC + R * Math.sin(ang(i))) }));
+    this.registry.set('coopMenu', { visible: true, buttons });
+    this.registry.set('coopMenuBounds', acts.map((a, i) => ({ kind: a.kind, x: cx + RB * Math.cos(ang(i)) - SIZE / 2, y: cyC + RB * Math.sin(ang(i)) - SIZE / 2, w: SIZE, h: SIZE, enabled: a.enabled })));
+  }
+
+  private handlePenWheelClick(x: number, y: number): boolean {
+    if (!this.penWheel) return false;
+    if (this.penWheelClose) return true;
+    const bounds = this.registry.get('coopMenuBounds') as Array<{ kind: string; x: number; y: number; w: number; h: number; enabled: boolean }> | null;
+    const hit = bounds?.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    this.beginClosePenWheel(hit && hit.enabled ? hit.kind : null);
+    return true;
+  }
+
+  private runPenAction(kind: string): void {
+    if (kind === 'delete') this.penDelete();
+    else if (kind === 'move') this.penMove();
+  }
+
+  /** Remove the whole pen (with a confirm) → refund the pen item + one cow item per cow. */
+  private penDelete(): void {
+    if (!this.cowPen) return;
+    const nCows = this.cowPen.cows.length;
+    this.promptConfirm(t('cowpen_remove_confirm'), () => {
+      if (!this.cowPen) return;
+      this.removeCowPen();
+      this.addToBackpack(makePlaceable('cowpen', 1));
+      if (nCows > 0) this.addToBackpack(makePlaceable('cow', nCows));
+      playSfx(this);
+      this.scheduleSave();
+    }, t('cowpen_remove_title'));
+  }
+
+  /** Pick up the whole pen (cows + milk stashed) and re-enter placement mode to set it down again. */
+  private penMove(): void {
+    if (!this.cowPen) return;
+    const cows = this.cowPen.cows.map((c) => c.serialize());
+    const milk = { ...this.cowPen.milkReady };
+    const oldAnchor = { ...this.cowPen.anchor };
+    this.removeCowPen();
+    this.movingPen = { cows, milk, oldAnchor };
+    this.activePlace = 'cowpen'; // placement ghost (no held item — placeMovedCowPen bypasses the item check)
+  }
+
+  /** Re-place a pen being moved at (cx,cy): the stashed cows shift rigidly with the pen (keeping
+   *  their colours + relative layout) and the milk carries over. */
+  private placeMovedCowPen(cx: number, cy: number): void {
+    const m = this.movingPen;
+    if (!m) return;
+    const { anchor } = this.cowPenFootprint(cx, cy);
+    const dx = anchor.x - m.oldAnchor.x, dy = anchor.y - m.oldAnchor.y;
+    const cows: SavedCow[] = m.cows.map((c) => ({ x: c.x + dx, y: c.y + dy, color: c.color }));
+    this.placeCowPen(anchor, cows, m.milk);
+    this.movingPen = undefined;
+    this.activePlace = undefined;
+    this.penPreview?.setVisible(false);
     this.scheduleSave();
   }
 
@@ -5170,6 +5541,7 @@ export class GameScene extends Phaser.Scene {
    *  stone, bush, or wild foragable). The hoe must not till under these. */
   private cellBlocksTill(key: string): boolean {
     if (this.trees.has(key) || this.bigStones.has(key) || this.bushes.has(key) || this.foragables.has(key) || this.coopCells.has(key)) return true;
+    if (this.cowPen?.footprint.has(key)) return true; // cow-pen ground (interior + fences) — not farmland
     if (this.isDefaultHouseCell(key)) return true; // the fixed starter house (painted walls/floor + solid furniture)
     const [cx, cy] = key.split(',').map(Number);
     return this.treeOrStoneOverCell(cx!, cy!); // footprint UNDER a tree/stone (editor trees may straddle cells)
@@ -6722,10 +7094,18 @@ export class GameScene extends Phaser.Scene {
 
   /** The 牧场 tab catalog: one SMALL coop per sellable colour (medium/big come from upgrading). */
   private coopCatalog(): OrderCatalogEntry[] {
-    return COOP_COLORS.map((c) => ({ id: coopItemId('small', c), label: itemFromId(coopItemId('small', c), 1).label ?? '', iconKey: 'coops', iconFrame: coopFrame('small', c), price: this.priceOf(coopItemId('small', c)) }));
+    const coops: OrderCatalogEntry[] = COOP_COLORS.map((c) => ({ id: coopItemId('small', c), label: itemFromId(coopItemId('small', c), 1).label ?? '', iconKey: 'coops', iconFrame: coopFrame('small', c), price: this.priceOf(coopItemId('small', c)) }));
+    // Cow pen = buy → deliver → PLACE on cleared open grass (one pen only, hidden once owned).
+    // Cows = buy → deliver → PLACE inside the owned pen (offered only once a pen exists).
+    const cows: OrderCatalogEntry[] = [];
+    if (!this.cowPen) cows.push({ id: 'cowpen', label: itemFromId('cowpen', 1).label ?? '', iconKey: 'cow-pen-shop-item', iconFrame: 0, price: COW_PEN_PRICE });
+    else cows.push({ id: 'cow', label: itemFromId('cow', 1).label ?? '', iconKey: 'pink_cow_animation_sprites', iconFrame: 0, price: COW_PRICE });
+    return [...coops, ...cows];
   }
 
   private priceOf(id: string): number {
+    if (id === 'cowpen') return COW_PEN_PRICE;
+    if (id === 'cow') return COW_PRICE;
     const coop = parseCoopId(id);
     if (coop) return COOP_TIERS[coop.size].price; // coops price from the coop data table
     return buyPrice(id) ?? 0;
@@ -8841,7 +9221,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The cinematic zoom = 1.7× the gameplay zoom (clamped). */
-  private cineZoom(): number { return Math.min(MAX_ZOOM, this.preCineZoom * 1.7); }
+  private cineZoom(): number { return Math.min(MAX_ZOOM * hudDpr(this), this.preCineZoom * 1.7); }
 
   /** A camera target that frames `sprite` at screen ratio (rx,ry) at `zoom` (rx>0.5 =
    *  right-of-centre, ry<0.5 = higher). Phaser zooms around the screen centre, so the
@@ -9793,13 +10173,25 @@ export class GameScene extends Phaser.Scene {
     if (k.right.isDown || k.d.isDown) dx += 1;
     if (k.up.isDown || k.w.isDown) dy -= 1;
     if (k.down.isDown || k.s.isDown) dy += 1;
-    if (dx === 0 && dy === 0) return;
+    if (dx === 0 && dy === 0) { this.panResidualX = 0; this.panResidualY = 0; return; }
     this.cameraFollow = false; // manual pan wins over follow-Cato
     const cam = this.cameras.main;
-    const step = (KEY_PAN_SPEED * delta) / 1000 / cam.zoom;
+    // KEY_PAN_SPEED is CSS-px/s. With highDpi, cam.zoom = cssZoom×dpr and scroll is in
+    // world units, so dividing by the (dpr-inflated) zoom would pan at 1/dpr the intended
+    // on-screen speed. Multiply by dpr so the world moves the SAME apparent distance/sec
+    // as a non-highDpi build (dpr is 1 when not highDpi). Net: step == KEY_PAN_SPEED/cssZoom.
+    const step = (KEY_PAN_SPEED * hudDpr(this) * delta) / 1000 / cam.zoom;
     const len = Math.hypot(dx, dy);
-    cam.scrollX += (dx / len) * step;
-    cam.scrollY += (dy / len) * step;
+    // Add the carried residual, snap to a whole pixel to match roundPixels, and carry the
+    // new remainder forward — so the per-frame rounding is unbiased (no direction pans
+    // faster). cam.scrollX is already the clamped+snapped value, so this still respects the
+    // camera bounds and has no dead travel at the edges.
+    const targetX = cam.scrollX + (dx / len) * step + this.panResidualX;
+    const targetY = cam.scrollY + (dy / len) * step + this.panResidualY;
+    const snappedX = Math.round(targetX), snappedY = Math.round(targetY);
+    this.panResidualX = targetX - snappedX;
+    this.panResidualY = targetY - snappedY;
+    cam.setScroll(snappedX, snappedY);
     // Camera bounds (set by loadWorldScene) auto-clamp on preRender.
   }
 
@@ -9972,6 +10364,10 @@ export class GameScene extends Phaser.Scene {
       // Keep the coop wheel tracking the camera + advancing its spring anim; a modal forces it shut.
       if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen) this.closeCoopWheel();
       else this.publishCoopWheel();
+    }
+    if (this.penWheel) {
+      if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen) this.closePenWheel();
+      else this.publishPenWheel();
     }
     this.publishToolHud(); // keep the current-tool indicator + its visibility in sync each frame
     this.publishBackpackBtn(); // keep the sprout button's visibility in sync

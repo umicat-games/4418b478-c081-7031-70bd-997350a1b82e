@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHudDpr, hudDpr, hudLogicalW, hudLogicalH } from '../dpi';
 
 // Must match GameScene's CURSOR_KEY / CURSOR_HOTSPOT.
 const CURSOR_KEY = 'cursor';
@@ -21,6 +22,8 @@ export class CursorScene extends Phaser.Scene {
   }
 
   create(): void {
+    applyHudDpr(this); // high-DPI: draw the pixel cursor in logical space via a dpr camera
+    this.scale.on('resize', () => applyHudDpr(this));
     this.sprite = this.add
       .image(0, 0, this.cursorTexture())
       .setOrigin(CURSOR_HOTSPOT.x, CURSOR_HOTSPOT.y)
@@ -49,6 +52,10 @@ export class CursorScene extends Phaser.Scene {
       x = p.x; y = p.y;
       visible = !p.wasTouch && p.moveTime > 0;
     }
+    // Pointer coords are DEVICE px; the scene renders through a dpr camera in LOGICAL
+    // space, so map into it. dpr 1 when not highDpi.
+    const dpr = hudDpr(this);
+    x /= dpr; y /= dpr;
 
     // Re-assert the hidden OS cursor every frame while we're drawing our own triangle.
     // Interactive controls (e.g. the SDK HUD photo-frame button, or the title's Play
@@ -66,8 +73,8 @@ export class CursorScene extends Phaser.Scene {
     // difference at the extreme corner is imperceptible.
     const sw = this.sprite.displayWidth;
     const sh = this.sprite.displayHeight;
-    const w = this.scale.width;
-    const h = this.scale.height;
+    const w = hudLogicalW(this);
+    const h = hudLogicalH(this);
     const px = Phaser.Math.Clamp(x, CURSOR_HOTSPOT.x * sw, w - (1 - CURSOR_HOTSPOT.x) * sw);
     const py = Phaser.Math.Clamp(y, CURSOR_HOTSPOT.y * sh, h - (1 - CURSOR_HOTSPOT.y) * sh);
     this.sprite.setPosition(px, py);

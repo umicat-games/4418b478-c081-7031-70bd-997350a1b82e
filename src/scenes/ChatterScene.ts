@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHudDpr, hudDpr, hudLogicalW } from '../dpi';
 import { dialogFont } from '../i18n';
 
 // Cato's PROACTIVE small-talk chip — a little cream speech box that pops up at the
@@ -31,6 +32,11 @@ export class ChatterScene extends Phaser.Scene {
 
   constructor() { super({ key: 'ChatterScene' }); }
 
+  create(): void {
+    applyHudDpr(this); // high-DPI: render this fixed-pixel HUD in logical space
+    this.scale.on('resize', () => applyHudDpr(this));
+  }
+
   update(): void {
     this.updateMood();
     const m = this.registry.get('catoChatter') as ChatterModel | undefined;
@@ -45,7 +51,7 @@ export class ChatterScene extends Phaser.Scene {
   private updateMood(): void {
     const frame = this.registry.get('catoMoodFrame') as number | undefined;
     if (typeof frame !== 'number') return;
-    const W = this.scale.width;
+    const W = hudLogicalW(this);
     const x = W - PORTRAIT.inset - PORTRAIT.size / 2; // portrait frame centre
     const y = PORTRAIT.inset + PORTRAIT.size / 2;
     if (!this.moodBg) this.moodBg = this.add.rectangle(x, y, MOOD_INNER, MOOD_INNER, MOOD_BG).setDepth(39);
@@ -58,7 +64,7 @@ export class ChatterScene extends Phaser.Scene {
     this.root?.destroy();
     this.typeTimer?.remove(); this.typeTimer = undefined;
     this.tweens.killTweensOf(this.root ?? {});
-    const W = this.scale.width;
+    const W = hudLogicalW(this);
     // The box hugs the LEFT of the portrait, vertically centred on it.
     const portraitCx = W - PORTRAIT.inset - PORTRAIT.size / 2;
     const portraitLeft = W - PORTRAIT.inset - PORTRAIT.size;
@@ -86,8 +92,10 @@ export class ChatterScene extends Phaser.Scene {
     label.setPosition(boxCx - boxW / 2 + PAD_X, cy);
     c.add(label);
 
-    // Publish the tap hit-box (a touch of padding) for GameScene to route.
-    this.registry.set('catoChatterBounds', { x: boxCx - boxW / 2 - 4, y: cy - boxH / 2 - 4, w: boxW + 8, h: boxH + 8 });
+    // Publish the tap hit-box (a touch of padding) for GameScene to route. GameScene
+    // tests DEVICE-px pointer coords, so publish in device px (logical × dpr).
+    const d = hudDpr(this);
+    this.registry.set('catoChatterBounds', { x: (boxCx - boxW / 2 - 4) * d, y: (cy - boxH / 2 - 4) * d, w: (boxW + 8) * d, h: (boxH + 8) * d });
 
     // Pop in (fade + slight rise), anchored near the portrait.
     c.setAlpha(0); box.y = cy + 8; label.y = cy + 8;

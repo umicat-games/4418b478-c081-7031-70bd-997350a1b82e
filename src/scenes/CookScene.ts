@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
+import { hudDpr } from '../dpi';
 import { playSfx } from '../sfx';
 import type { GameScene } from './GameScene';
 
@@ -114,7 +115,8 @@ export class CookScene extends Phaser.Scene {
     const box = this.add.container(cx, cy);
     c.add(box);
 
-    const pw = Math.min(W * 0.82, 960), ph = Math.min(H * 0.8, 660);
+    const dpr = hudDpr(this); // highDpi: W/H are DEVICE px; the absolute caps are CSS-px, so ×dpr
+    const pw = Math.min(W * 0.82, 960 * dpr), ph = Math.min(H * 0.8, 660 * dpr);
     box.add(this.add.nineslice(0, 0, ATLAS, PANEL_FRAME, pw / PANEL_SCALE, ph / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE));
 
     const left = -pw / 2, top = -ph / 2;

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHudDpr, hudDpr, hudLogicalW, hudLogicalH } from '../dpi';
 
 /** Model published by GameScene to the `backpackBtn` registry key. */
 export interface BackpackBtnModel {
@@ -29,11 +30,12 @@ export class BackpackButtonScene extends Phaser.Scene {
   constructor() { super({ key: 'BackpackButtonScene' }); }
 
   create(): void {
+    applyHudDpr(this); // high-DPI: render in logical space via a dpr camera
     this.bag = this.add.image(0, 0, ATLAS, 'sprout-up').setVisible(false);
     this.settings = this.add.image(0, 0, ATLAS, 'paw').setVisible(false);
     this.shop = this.add.image(0, 0, ATLAS, 'order').setVisible(false); // the shop/order tablet
     this.layout();
-    this.scale.on('resize', () => this.layout());
+    this.scale.on('resize', () => { applyHudDpr(this); this.layout(); });
     this.scene.bringToTop();
   }
 
@@ -51,15 +53,21 @@ export class BackpackButtonScene extends Phaser.Scene {
    *  left) + publish each screen hit rect for GameScene routing. */
   private layout(): void {
     if (!this.bag || !this.settings || !this.shop) return;
-    const setCx = this.scale.width - MARGIN - SIZE / 2;         // paw menu = rightmost (corner)
-    const bagCx = setCx - SIZE - GAP;                            // backpack to its left
-    const shopCx = bagCx - SIZE - GAP;                          // shop tablet to the backpack's left
-    const cy = this.scale.height - MARGIN - SIZE / 2;
+    // Render in LOGICAL space (dpr camera); anchor to the logical viewport.
+    const LW = hudLogicalW(this), LH = hudLogicalH(this);
+    const setCx = LW - MARGIN - SIZE / 2;         // paw menu = rightmost (corner)
+    const bagCx = setCx - SIZE - GAP;             // backpack to its left
+    const shopCx = bagCx - SIZE - GAP;            // shop tablet to the backpack's left
+    const cy = LH - MARGIN - SIZE / 2;
     this.bag.setPosition(bagCx, cy).setScale(SIZE / Math.max(this.bag.width, this.bag.height));
     this.settings.setPosition(setCx, cy).setScale(SIZE / Math.max(this.settings.width, this.settings.height));
     this.shop.setPosition(shopCx, cy).setScale(SIZE / Math.max(this.shop.width, this.shop.height));
-    this.registry.set('backpackBtnBounds', { x: bagCx - SIZE / 2, y: cy - SIZE / 2, w: SIZE, h: SIZE });
-    this.registry.set('settingsBtnBounds', { x: setCx - SIZE / 2, y: cy - SIZE / 2, w: SIZE, h: SIZE });
-    this.registry.set('shopBtnBounds', { x: shopCx - SIZE / 2, y: cy - SIZE / 2, w: SIZE, h: SIZE });
+    // GameScene hit-tests DEVICE-px pointer coords against these rects, so publish in
+    // device px (logical × dpr) — the rendering stays logical, the routing stays device.
+    const d = hudDpr(this);
+    const rect = (cx: number) => ({ x: (cx - SIZE / 2) * d, y: (cy - SIZE / 2) * d, w: SIZE * d, h: SIZE * d });
+    this.registry.set('backpackBtnBounds', rect(bagCx));
+    this.registry.set('settingsBtnBounds', rect(setCx));
+    this.registry.set('shopBtnBounds', rect(shopCx));
   }
 }

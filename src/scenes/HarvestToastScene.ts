@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHudDpr, hudLogicalW, hudLogicalH } from '../dpi';
 import { dialogFont } from '../i18n';
 
 // Harvest toast — a cream pill at the bottom-centre naming what you just picked
@@ -29,8 +30,10 @@ export class HarvestToastScene extends Phaser.Scene {
   constructor() { super({ key: 'HarvestToastScene' }); }
 
   create(): void {
-    this.scale.on(Phaser.Scale.Events.RESIZE, this.reposition, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.reposition, this));
+    applyHudDpr(this); // high-DPI: render this fixed-pixel HUD in logical space
+    const onResize = () => { applyHudDpr(this); this.reposition(); };
+    this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, onResize));
   }
 
   update(): void {
@@ -44,7 +47,7 @@ export class HarvestToastScene extends Phaser.Scene {
   /** Recompute the pill centre (bottom-centre); called on RESIZE (not per frame, so it
    *  never fights the pop-in y-tween). */
   private reposition(): void {
-    if (this.root) this.root.setPosition(this.scale.width / 2, this.scale.height - BOTTOM);
+    if (this.root) this.root.setPosition(hudLogicalW(this) / 2, hudLogicalH(this) - BOTTOM);
   }
 
   /** Size the pill to fit `text` (9-slice stretches; corners keep native size × CORNER_SCALE). */
@@ -68,7 +71,7 @@ export class HarvestToastScene extends Phaser.Scene {
     }
     // Fresh pill.
     this.root?.destroy();
-    const cx = this.scale.width / 2, cy = this.scale.height - BOTTOM;
+    const cx = hudLogicalW(this) / 2, cy = hudLogicalH(this) - BOTTOM;
     const c = this.add.container(cx, cy).setDepth(60);
     this.root = c;
     const box = this.add.nineslice(0, 0, ATLAS, FRAME, 10, 10, SLICE.l, SLICE.r, SLICE.t, SLICE.b).setScale(CORNER_SCALE);

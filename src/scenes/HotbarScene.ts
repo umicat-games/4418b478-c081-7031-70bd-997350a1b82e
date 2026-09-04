@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHudDpr, hudDpr, hudLogicalW, hudLogicalH } from '../dpi';
 
 // The inventory atlas (region-tagged in the Asset Manager). `frame-medium` is the
 // outer panel (9-slice 10/10/11/11), `slot-light` is one item cell (9-slice
@@ -81,6 +82,8 @@ export class HotbarScene extends Phaser.Scene {
   }
 
   create(): void {
+    applyHudDpr(this); // high-DPI: render this fixed-pixel HUD in logical space
+    this.scale.on('resize', () => applyHudDpr(this));
     this.container = this.add.container(0, 0);
     this.render();
   }
@@ -128,12 +131,15 @@ export class HotbarScene extends Phaser.Scene {
       return;
     }
 
+    // High-DPI: the scene renders through a dpr-zoomed camera, so anchor to the
+    // LOGICAL (CSS-px) viewport, not the device-px scale.width.
+    const LW = hudLogicalW(this), LH = hudLogicalH(this);
     const n = model.slots.length;
     // Fit-to-canvas: prefer the crisp integer scale, shrink only if too wide. The
     // row holds the N tool slots PLUS a backpack cell on the far right (a gap + one
     // more slot), so budget the width for n+1 cells.
     let s = SLOT_SCALE;
-    const maxBarW = this.scale.width * 0.94 - PAD_X * 2;
+    const maxBarW = LW * 0.94 - PAD_X * 2;
     const wantBarW = (n + 1) * SLOT_W * s + n * GAP;
     if (wantBarW > maxBarW) {
       s = Math.max(1, (maxBarW - n * GAP) / ((n + 1) * SLOT_W));
@@ -142,13 +148,13 @@ export class HotbarScene extends Phaser.Scene {
     const slotH = SLOT_H * s;
     const barW = n * slotW + (n - 1) * GAP;         // just the tool slots
     const rowW = barW + GAP + slotW;                 // + the backpack cell on the right
-    const startX = Math.round((this.scale.width - rowW) / 2);
-    const rowY = Math.round(this.scale.height - slotH / 2 - MARGIN_BOTTOM);
+    const startX = Math.round((LW - rowW) / 2);
+    const rowY = Math.round(LH - slotH / 2 - MARGIN_BOTTOM);
 
     // --- Outer panel (frame-medium, 9-slice-stretched behind the whole row) ---
     const panelW = rowW + PAD_X * 2;
     const panelH = slotH + PAD_Y * 2;
-    const panel = this.add.nineslice(this.scale.width / 2, rowY, ATLAS, FRAME_PANEL, panelW / PANEL_SCALE, panelH / PANEL_SCALE, 10, 10, 11, 11);
+    const panel = this.add.nineslice(LW / 2, rowY, ATLAS, FRAME_PANEL, panelW / PANEL_SCALE, panelH / PANEL_SCALE, 10, 10, 11, 11);
     panel.setScale(PANEL_SCALE);
     c.add(panel);
 
@@ -224,18 +230,17 @@ export class HotbarScene extends Phaser.Scene {
     // (The bottom-right shop button was removed — the Shop opens from the in-world desk
     // pad now; see GameScene.openShopViaPad.)
 
-    // Publish hit-boxes (canvas px) for GameScene's click routing. The `bar` rect
-    // is the whole hotbar (used to suppress the hoe tile-cursor over the UI).
+    // Publish hit-boxes for GameScene's click routing. Rendering is LOGICAL (dpr camera),
+    // but GameScene tests DEVICE-px pointer coords, so publish rects in device px (×dpr).
     const barTop = Math.min(...bounds.map((b) => b.y)) - PAD_Y;
+    const d = hudDpr(this);
+    // Preserve every field on a slot (toolId/plants drive the tool-wheel spotlight),
+    // only remapping the geometry to device px.
+    const scaleRect = <T extends { x: number; y: number; w: number; h: number }>(r: T): T => ({ ...r, x: r.x * d, y: r.y * d, w: r.w * d, h: r.h * d });
     this.registry.set('hotbarBounds', {
-      slots: bounds,
-      backpack,
-      bar: {
-        x: startX - PAD_X,
-        y: barTop,
-        w: rowW + PAD_X * 2,
-        h: this.scale.height - barTop,
-      },
+      slots: bounds.map(scaleRect),
+      backpack: scaleRect(backpack),
+      bar: scaleRect({ x: startX - PAD_X, y: barTop, w: rowW + PAD_X * 2, h: LH - barTop }),
     });
   }
 }

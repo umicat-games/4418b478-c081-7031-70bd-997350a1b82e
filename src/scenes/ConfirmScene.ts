@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { dialogFont } from '../i18n';
+import { applyHudDpr, hudDpr, hudLogicalW, hudLogicalH } from '../dpi';
 
 // A small modal YES/NO dialog — a wooden panel with a title and two rounded pixel
 // buttons (✓ confirm, ⊘ cancel). Used to confirm demolishing a placed house piece
@@ -38,6 +39,20 @@ export class ConfirmScene extends Phaser.Scene {
     super({ key: 'ConfirmScene' });
   }
 
+  create(): void {
+    // highDpi: author this fixed-pixel modal in LOGICAL (CSS) px and render it through a
+    // dpr-zoomed camera so it stays the intended size AND crisp on retina. hit-boxes are
+    // published ×dpr (GameScene routes taps in device px). No-op (dpr 1) when not highDpi.
+    applyHudDpr(this);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
+  }
+
+  private onResize = (): void => {
+    applyHudDpr(this);
+    if (this.shown) { const m = this.model(); if (m?.visible) this.open(m); } // re-lay out at the new logical size
+  };
+
   update(): void {
     this.updatePressed(); // hold the pressed frame while GameScene reports a held button
     const m = this.model();
@@ -67,7 +82,7 @@ export class ConfirmScene extends Phaser.Scene {
     this.root?.destroy();
     this.tweens.killAll();
     this.shown = true;
-    const W = this.scale.width, H = this.scale.height;
+    const W = hudLogicalW(this), H = hudLogicalH(this);
     const cx = W / 2, cy = H / 2;
 
     const c = this.add.container(0, 0);
@@ -124,10 +139,12 @@ export class ConfirmScene extends Phaser.Scene {
     box.setScale(0.8);
     this.tweens.add({ targets: box, scale: 1, duration: 160, ease: 'Back.easeOut' });
 
-    // Hit-boxes in SCREEN space (GameScene routes the tap).
+    // Hit-boxes in DEVICE-px SCREEN space (GameScene routes the tap): the layout above is in
+    // LOGICAL px (dpr-zoomed camera), so scale the published bounds ×dpr.
+    const d = hudDpr(this);
     this.registry.set('confirmBounds', [
-      { action: 'ok', x: cx + okX - BTN / 2, y: cy + btnY - BTN / 2, w: BTN, h: BTN },
-      { action: 'cancel', x: cx + cancelX - BTN / 2, y: cy + btnY - BTN / 2, w: BTN, h: BTN },
+      { action: 'ok', x: (cx + okX - BTN / 2) * d, y: (cy + btnY - BTN / 2) * d, w: BTN * d, h: BTN * d },
+      { action: 'cancel', x: (cx + cancelX - BTN / 2) * d, y: (cy + btnY - BTN / 2) * d, w: BTN * d, h: BTN * d },
     ]);
   }
 
