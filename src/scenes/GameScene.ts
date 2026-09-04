@@ -1790,7 +1790,7 @@ export class GameScene extends Phaser.Scene {
         if (this.penWheel) { this.beginClosePenWheel(null); return; }
         const ck = this.coopAtPoint(rwp.x, rwp.y);
         if (ck) { this.openCoopWheel(ck); return; }
-        if (this.cowPenAtPoint(rwp.x, rwp.y)) { this.openPenWheel(); return; }
+        if (this.cowPenAtPoint(rwp.x, rwp.y)) { this.openPenWheel(sx, sy); return; }
         if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // right-click again → animated dismiss
         this.openToolWheelAt(rwp.x, rwp.y, true);
         return;
@@ -1859,7 +1859,7 @@ export class GameScene extends Phaser.Scene {
             // A coop / cow pen under the finger → its action wheel; else the tool wheel.
             const ck = this.coopAtPoint(wp.x, wp.y);
             if (ck) { this.openCoopWheel(ck); this.touchLongFired = true; return; }
-            if (this.cowPenAtPoint(wp.x, wp.y)) { this.openPenWheel(); this.touchLongFired = true; return; }
+            if (this.cowPenAtPoint(wp.x, wp.y)) { this.openPenWheel(this.touchStartX, this.touchStartY); this.touchLongFired = true; return; }
             this.touchLongFired = this.openToolWheelAt(wp.x, wp.y, true); // false = nothing here → the release falls back to a normal tap
           })
         : undefined;
@@ -3173,8 +3173,9 @@ export class GameScene extends Phaser.Scene {
     const mining = this.activeTool === 'pickaxe';
     const fishing = this.activeTool === 'fishing-rod';
     const holdingTool = tilling || planting || watering || chopping || mining || fishing;
-    // No tool held / not locked / over UI / dialog / menu / backpack → real mouse (no tile bracket).
-    if (!holdingTool || !this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar()) {
+    // No tool held / not locked / over UI / dialog / menu / backpack / a wheel button → real mouse
+    // (no tile bracket — the wheel circle is the highlight, don't draw one behind it).
+    if (!holdingTool || !this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar() || this.overWheelButtonAt(this.vcursor.x, this.vcursor.y)) {
       showMouse();
       return;
     }
@@ -3270,6 +3271,21 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Is the pointer (screen px) over an open radial-wheel button? Tool wheel = circle hit-tests
+   *  (`toolPaletteBounds` {x,y,r}); coop / pen wheel = box hit-tests (`coopMenuBounds` {x,y,w,h}).
+   *  Used to suppress the world hover bracket behind a wheel button (the wheel is the highlight). */
+  private overWheelButtonAt(sx: number, sy: number): boolean {
+    if (this.toolPaletteOpen) {
+      const b = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; r: number }> | undefined;
+      if (b?.some((c) => Math.hypot(sx - c.x, sy - c.y) <= c.r)) return true;
+    }
+    if (this.coopWheel || this.penWheel) {
+      const b = this.registry.get('coopMenuBounds') as Array<{ x: number; y: number; w: number; h: number }> | undefined;
+      if (b?.some((r) => sx >= r.x && sx <= r.x + r.w && sy >= r.y && sy <= r.y + r.h)) return true;
+    }
+    return false;
+  }
+
   /** Empty-hand "inspect" hover (HoverScene): with NO tool held and the mouse over an object,
    *  show a corner-bracket hugging it + the object's NAME above it. It ADDS to the normal
    *  triangle mouse cursor (never hides it); over empty ground there's no bracket, just the
@@ -3301,6 +3317,10 @@ export class GameScene extends Phaser.Scene {
       || this.overSettingsButton(sx, sy) || Phaser.Geom.Rectangle.Contains(this.findCatBounds, sx, sy)) {
       this.setHover(false); return;
     }
+    // Over a radial-wheel button (tool / coop / pen) → don't frame the world object behind it. The
+    // wheel circle is the highlight now (same as hovering a HUD button — the world bracket shouldn't
+    // show through underneath it).
+    if (this.overWheelButtonAt(sx, sy)) { this.setHover(false); return; }
 
     const cam = this.cameras.main;
     const wp = cam.getWorldPoint(sx, sy);
@@ -5016,11 +5036,14 @@ export class GameScene extends Phaser.Scene {
   private penWheel?: Record<string, never>;
   private penWheelOpenAt = 0;
   private penWheelClose: { at: number; hitKind: string | null } | null = null;
+  private penWheelAt = { x: 0, y: 0 }; // SCREEN-px summon point (cursor / finger) — the pen is huge, so
+                                       // the wheel anchors to where you clicked it, not the whole footprint.
   private movingPen?: { cows: SavedCow[]; milk: Record<string, number>; oldAnchor: { x: number; y: number } };
 
-  private openPenWheel(): void {
+  private openPenWheel(sx: number, sy: number): void {
     if (!this.cowPen || this.coopWheel) return;
     this.penWheel = {};
+    this.penWheelAt = { x: sx, y: sy };
     this.penWheelOpenAt = this.time.now;
     this.penWheelClose = null;
     this.publishPenWheel();
@@ -5068,13 +5091,18 @@ export class GameScene extends Phaser.Scene {
       { kind: 'move', frame: 141, enabled: true },
       { kind: 'delete', frame: 45, enabled: true },
     ];
-    const cam = this.cameras.main;
     const dpr = hudDpr(this); // highDpi: device-px HoverScene @ zoom 1 — fixed screen-px sizes ×dpr
-    const cx = ((rect.x + rect.w / 2) - cam.worldView.x) * cam.zoom;
-    const cyC = (rect.y - cam.worldView.y) * cam.zoom; // top edge of the pen
-    const SIZE = 54 * dpr, RB = (rect.h / 2) * cam.zoom + 46 * dpr;
+    const SIZE = 54 * dpr, RB = 84 * dpr; // resting button size + a FIXED ring radius. The pen is huge, so
+    // the wheel hugs the SUMMON POINT (where you clicked/tapped the pen), NOT the whole footprint — the old
+    // radius `(rect.h/2)*zoom + 46` fanned the buttons hundreds of px above a big plot, straight off-camera.
+    const A0 = (-150 * Math.PI) / 180, A1 = (-30 * Math.PI) / 180; // upper arc (screen y-down: -90 = straight up)
+    // Anchor at the summon point, then CLAMP so the whole upper-arc wheel stays on-screen.
+    const W = this.scale.width, H = this.scale.height, MARGIN = 8 * dpr;
+    const extentX = 0.87 * RB + SIZE / 2 + MARGIN;  // widest button offset (|cos30°|≈0.87) + half a button
+    const topExtent = 0.5 * RB + SIZE / 2 + MARGIN; // buttons rise up to 0.5·RB above the anchor (|sin|≤0.5)
+    const cx = Phaser.Math.Clamp(this.penWheelAt.x, extentX, W - extentX);
+    const cyC = Phaser.Math.Clamp(this.penWheelAt.y, topExtent, H - MARGIN);
     const D = SIZE * s, R = RB * f;
-    const A0 = (-150 * Math.PI) / 180, A1 = (-30 * Math.PI) / 180;
     const n = acts.length;
     const ang = (i: number) => A0 + (A1 - A0) * (n === 1 ? 0.5 : i / (n - 1));
     const buttons = acts.map((a, i) => ({ kind: a.kind, iconFrame: a.frame, enabled: a.enabled, size: D, x: Math.round(cx + R * Math.cos(ang(i))), y: Math.round(cyC + R * Math.sin(ang(i))) }));
