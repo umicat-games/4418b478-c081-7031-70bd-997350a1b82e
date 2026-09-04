@@ -1785,6 +1785,9 @@ export class GameScene extends Phaser.Scene {
       if (pointer.rightButtonDown()) {
         if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.confirmOpen || this.inventoryOpen) return;
         const rwp = this.cameras.main.getWorldPoint(sx, sy);
+        // Mid-move (pen / coop still standing on its old spot) → right-click CANCELS the move.
+        if (this.movingPen) { this.cancelPenMove(); return; }
+        if (this.movingCoop) { this.cancelCoopMove(); return; }
         // A COOP under the cursor → its action wheel (same summon gesture as the tool wheel).
         if (this.coopWheel) { this.beginCloseCoopWheel(null); return; } // right-click again → animated dismiss
         if (this.penWheel) { this.beginClosePenWheel(null); return; }
@@ -1855,6 +1858,10 @@ export class GameScene extends Phaser.Scene {
       const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.inventoryOpen && !this.toolPaletteOpen && !this.coopWheel && !this.penWheel;
       this.touchPressTimer = canWheel
         ? this.time.delayedCall(GameScene.LONG_PRESS_MS, () => {
+            // Mid-move → a long-press CANCELS it (the touch analogue of the desktop right-click), so a
+            // pen/coop with nowhere valid to go can always be put back down. The building never left.
+            if (this.movingPen) { this.cancelPenMove(); this.touchLongFired = true; return; }
+            if (this.movingCoop) { this.cancelCoopMove(); this.touchLongFired = true; return; }
             const wp = this.cameras.main.getWorldPoint(this.touchStartX, this.touchStartY);
             // A coop / cow pen under the finger → its action wheel; else the tool wheel.
             const ck = this.coopAtPoint(wp.x, wp.y);
@@ -1900,6 +1907,8 @@ export class GameScene extends Phaser.Scene {
       if (this.coopWheel) { this.beginCloseCoopWheel(null); return; } // Esc = dismiss the coop action wheel (animated)
       if (this.penWheel) { this.beginClosePenWheel(null); return; } // Esc = dismiss the cow-pen action wheel
       if (this.dialogOpen && !this.cutscene) { this.closeDialog(); return; } // a cutscene can't be Esc'd out of
+      if (this.movingPen) { this.cancelPenMove(); return; }   // Esc mid-move → the pen stays put
+      if (this.movingCoop) { this.cancelCoopMove(); return; } // Esc mid-move → the coop stays put
       // Esc with a placeable / tool held → empty hand (so you can tap the world to interact, e.g. collect coop eggs).
       if (this.activePlace || this.activeSeed || this.heldExternal || this.hotbarSelected >= 0) this.clearHeld();
     });
@@ -2974,7 +2983,7 @@ export class GameScene extends Phaser.Scene {
     // valid target and no obvious cancel (touch hid it: its ghost only shows while penTouchCell is
     // armed). Fires after placing a pen while still holding another (e.g. two were ordered) and
     // whenever a leftover cow-pen item is re-selected. Leaves the item held, just not in ghost mode.
-    if (this.activePlace === 'cowpen' && this.cowPen) { this.activePlace = undefined; this.penTouchCell = null; }
+    if (this.activePlace === 'cowpen' && this.cowPen && !this.movingPen) { this.activePlace = undefined; this.penTouchCell = null; }
   }
 
   /** Is the virtual cursor over a hotbar slot? Returns the slot index or null. */
@@ -4143,8 +4152,11 @@ export class GameScene extends Phaser.Scene {
       const [kx, ky] = key.split(',').map(Number);
       const w = this.islandLayer.tileToWorldXY(kx!, ky!);
       if (!w || !this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
+      // Moving a coop: its own footprint cells count as free (it vacates them on confirm).
+      const occupant = this.coopCells.get(key);
+      if (occupant && occupant !== this.movingCoop?.anchor) return false; // a DIFFERENT coop is here
       if (this.trees.has(key) || this.crops.has(key) || this.bushes.has(key) || this.bigStones.has(key) ||
-          this.foragables.has(key) || this.tilledCells.has(key) || this.placed.has(key) || this.coopCells.has(key)) return false;
+          this.foragables.has(key) || this.tilledCells.has(key) || this.placed.has(key)) return false;
       if (this.isDefaultHouseCell(key)) return false; // not on the fixed starter house
       if (ct && Math.floor(ct.x) === kx && Math.floor(ct.y) === ky) return false; // not on Cato
     }
@@ -4263,10 +4275,14 @@ export class GameScene extends Phaser.Scene {
   /** Can a cow pen be placed with its top-left tile at (cx,cy)? One pen only; every footprint cell
    *  must be on-island, empty (no prop/crop/soil/coop/other pen), off the starter house, not on Cato. */
   private canPlaceCowPen(cx: number, cy: number): boolean {
-    if (this.cowPen) return false; // one pen per island
+    if (this.cowPen && !this.movingPen) return false; // one pen per island (a move re-places the SAME pen)
     if (!this.islandLayer) return false;
+    // Moving: the pen is still standing on its current tiles — treat those as FREE so the new spot may
+    // overlap the old one (it vacates them on confirm), and its own fences don't block it.
+    const own = this.movingPen ? this.cowPen?.footprint : null;
     const ct = this.child ? this.islandLayer.worldToTileXY(this.child.x, this.child.y) : null;
     for (const key of this.cowPenFootprint(cx, cy).cells) {
+      if (own?.has(key)) continue; // the pen's own ground — valid by definition, it's already there
       const [kx, ky] = key.split(',').map(Number);
       const w = this.islandLayer.tileToWorldXY(kx!, ky!);
       if (!w || !this.islandLayer.getTileAtWorldXY(w.x + TILE / 2, w.y + TILE / 2)) return false; // water / off-island
@@ -4849,7 +4865,7 @@ export class GameScene extends Phaser.Scene {
   private coopWheel?: { anchorKey: string };
   private coopWheelOpenAt = 0; // time the wheel opened (drives the spring-out)
   private coopWheelClose: { at: number; hitKind: string | null } | null = null; // closing anim (hitKind = picked action, or null = dismiss)
-  private movingCoop?: { size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady: number };
+  private movingCoop?: { anchor: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady: number };
 
   /** Open the action wheel for a coop (right-click / long-press on the coop). */
   private openCoopWheel(anchorKey: string): void {
@@ -5016,25 +5032,35 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** Pick up a coop to relocate: stash its state + enter placement mode; the next valid tap
-   *  re-places it (see placeMovedCoop) keeping its chickens + eggs. */
+  /** Enter "move the coop" mode: show the placement ghost but LEAVE the coop standing until a valid
+   *  new spot is CONFIRMED (placeMovedCoop removes the old one + rebuilds it there). Cancelling just
+   *  exits — the coop never moved. (Same fix as the cow pen: don't strand the player with a vanished
+   *  building + nowhere to put it.) canPlaceCoop treats the coop's own cells as free. */
   private coopMove(anchorKey: string): void {
     const coop = this.coops.get(anchorKey);
     if (!coop) return;
-    this.movingCoop = { size: coop.size, color: coop.color, chickens: coop.chickens.map((c) => c.serialize(this.nowMs())), eggsReady: coop.eggsReady };
-    this.removeCoop(anchorKey);
+    this.movingCoop = { anchor: anchorKey, size: coop.size, color: coop.color, chickens: coop.chickens.map((c) => c.serialize(this.nowMs())), eggsReady: coop.eggsReady };
     this.activePlace = 'coop'; // enter placement (no held item — placeMovedCoop bypasses the item check)
     this.activeCoopVariant = `${coop.size}-${coop.color}`;
   }
 
-  /** Re-place a coop being moved at (cx,cy), restoring its stashed occupants + eggs. */
+  /** Re-place a coop being moved at (cx,cy): remove the old one, then rebuild it here with its
+   *  stashed occupants + eggs. */
   private placeMovedCoop(cx: number, cy: number): void {
     const m = this.movingCoop;
     if (!m) return;
+    this.removeCoop(m.anchor); // the coop stayed live during the move — retire the old one now
     this.restoreCoop(`${cx},${cy}`, m.size, m.color, m.chickens, m.eggsReady);
     this.movingCoop = undefined;
     this.activePlace = undefined;
     this.scheduleSave();
+  }
+
+  /** Cancel an in-progress coop move: the coop never left, so just drop out of placement mode. */
+  private cancelCoopMove(): void {
+    this.movingCoop = undefined;
+    this.activePlace = undefined;
+    this.hidePlacePreview();
   }
 
   // ── Cow-pen action wheel (move / delete the WHOLE pen) ───────────────────────
@@ -5146,15 +5172,26 @@ export class GameScene extends Phaser.Scene {
     }, t('cowpen_remove_title'));
   }
 
-  /** Pick up the whole pen (cows + milk stashed) and re-enter placement mode to set it down again. */
+  /** Enter "move the pen" mode: show the placement ghost, but LEAVE the pen where it is until a
+   *  valid new spot is CONFIRMED (placeMovedCowPen removes + rebuilds it). Cancelling (Esc /
+   *  right-click / tap-away with no armed cell) just exits — the pen never moved. Previously the pen
+   *  vanished the instant you picked "move", so if nowhere valid was reachable you were stranded with
+   *  no pen and no way to cancel. */
   private penMove(): void {
     if (!this.cowPen) return;
     const cows = this.cowPen.cows.map((c) => c.serialize());
     const milk = { ...this.cowPen.milkReady };
     const oldAnchor = { ...this.cowPen.anchor };
-    this.removeCowPen();
-    this.movingPen = { cows, milk, oldAnchor };
+    this.movingPen = { cows, milk, oldAnchor }; // NB: pen stays live — canPlaceCowPen treats its own tiles as free
     this.activePlace = 'cowpen'; // placement ghost (no held item — placeMovedCowPen bypasses the item check)
+  }
+
+  /** Cancel an in-progress pen move: the pen never left, so just drop out of placement mode. */
+  private cancelPenMove(): void {
+    this.movingPen = undefined;
+    this.activePlace = undefined;
+    this.penTouchCell = null;
+    this.penPreview?.setVisible(false);
   }
 
   /** Re-place a pen being moved at (cx,cy): the stashed cows shift rigidly with the pen (keeping
