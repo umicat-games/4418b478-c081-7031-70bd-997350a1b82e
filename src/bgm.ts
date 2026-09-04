@@ -9,7 +9,7 @@ const BGM_KEYS = ['bgm', 'bgm-title'];
 // the unlock-path floor AND passed explicitly at the game-start call site — the platform
 // often unlocks audio (an earlier click in the editor chrome) BEFORE the game boots, so the
 // locked-path floor alone would miss it and start the in-game track at a short fade.
-export const BGM_START_FADE_MS = 1400;
+export const BGM_START_FADE_MS = 5000;
 
 function readVolume(): number {
   try {
