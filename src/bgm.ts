@@ -4,9 +4,12 @@ import Phaser from 'phaser';
  *  across the title/game scene switch. Default 0.4 (the old hardcoded level). */
 const VOL_KEY = 'catopia:bgmVolume';
 const BGM_KEYS = ['bgm', 'bgm-title'];
-// The FIRST playback is gated behind the user's unlock gesture; ramp it in over this long
-// (min) so the very first music the player hears eases up gently instead of popping on.
-const UNLOCK_FADE_MS = 1400;
+// A BGM track starting fresh eases in over at least this long, so the music the player
+// hears when a screen/the game begins swells up gently instead of popping on. Used both as
+// the unlock-path floor AND passed explicitly at the game-start call site — the platform
+// often unlocks audio (an earlier click in the editor chrome) BEFORE the game boots, so the
+// locked-path floor alone would miss it and start the in-game track at a short fade.
+export const BGM_START_FADE_MS = 1400;
 
 function readVolume(): number {
   try {
@@ -83,7 +86,7 @@ export function crossToBgm(scene: Phaser.Scene, key: string, stopKeys: string[] 
     // Phaser (browser policy) can't start audio until the first user gesture. When the context
     // unlocks on that tap/click, swell the first track in from silence over a GENTLE ramp — this
     // is the moment the player first hears music, so make the entry smooth, not an abrupt pop.
-    mgr.once(Phaser.Sound.Events.UNLOCKED, () => go(Math.max(fadeInMs, UNLOCK_FADE_MS)));
+    mgr.once(Phaser.Sound.Events.UNLOCKED, () => go(Math.max(fadeInMs, BGM_START_FADE_MS)));
   } else {
     go(fadeInMs);
   }
