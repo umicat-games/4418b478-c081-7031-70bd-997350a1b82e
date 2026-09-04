@@ -640,6 +640,7 @@ interface SaveBlob {
   crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
   cato: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
+  removedSceneTrees?: string[]; // v27: editor-placed trees the player chopped — stay gone (no auto-regrow)
   coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number; pendingUpgrade?: { size: CoopSize; applyDay: number } }>; // v23: placed chicken coops + occupants + laid eggs; v24: pending overnight upgrade
   cowPen?: { anchor: { x: number; y: number }; cows: SavedCow[]; milkReady?: Record<string, number> }; // v25: placed cow pen; v26: milk
   bushes?: Array<{ key: string; type: BerryType; stage: number }>; // v4: berry bushes
@@ -798,6 +799,7 @@ export class GameScene extends Phaser.Scene {
   private activePlace?: PlaceKind; // a plantable (tree/bush) is selected → placement mode
   private activeTreeType: TreeType = 'apple'; // current tree kind to plant (from the held item)
   private trees = new Map<string, TreeObj>(); // "cx,cy" → a placed tree (chop with the axe)
+  private removedSceneTrees = new Set<string>(); // "cx,cy" of editor-placed trees the player chopped — never re-wire them (chopped trees stay gone; replant by buying a seedling)
   private coops = new Map<string, CoopObj>(); // anchor "cx,cy" (bottom-left of footprint) → a placed coop
   private coopCells = new Map<string, string>(); // any footprint cell "cx,cy" → its coop's anchor key (occupancy)
   private cowPen?: CowPenObj; // the placed cow pen (one, for now — a buy-to-place flow comes later)
@@ -3940,6 +3942,7 @@ export class GameScene extends Phaser.Scene {
       if (!foot) continue;
       const key = `${Math.floor(foot.x)},${Math.floor(foot.y)}`;
       if (this.trees.has(key)) continue; // one tree per cell — keep the first
+      if (this.removedSceneTrees.has(key)) continue; // player chopped this editor tree — it stays gone
       this.restoreTree(key, type, TREE_BY_ID.get(type)?.fruit ?? false);
       const t = this.trees.get(key);
       if (t) t.sceneWired = true; // mark: comes from the scene, not the save
@@ -4123,6 +4126,9 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const tree = this.trees.get(key);
     if (!tree) return;
+    // An editor-placed tree that's chopped down must STAY gone — record its cell so wireSceneTrees
+    // never re-derives it on the next load (chopped trees don't auto-regrow; replant by buying a seedling).
+    if (tree.sceneWired) this.removedSceneTrees.add(key);
     const i = this.ySortSprites.indexOf(tree.sprite);
     if (i >= 0) this.ySortSprites.splice(i, 1);
     tree.sprite.destroy();
@@ -4508,6 +4514,7 @@ export class GameScene extends Phaser.Scene {
       const [fx, fy] = k.split(',').map(Number);
       if (this.foragables.has(k)) this.removeForagable(fx!, fy!);
       if (this.bigStones.has(k)) this.removeBigStone(fx!, fy!);
+      if (this.trees.has(k)) this.removeTree(fx!, fy!); // no trees inside the pen (a chopped scene tree is recorded, so it stays gone)
     }
     this.spawnCows(occupants);
     this.refreshCowMilkBubble();
@@ -9733,7 +9740,7 @@ export class GameScene extends Phaser.Scene {
   /** Serialize the whole game state into the save blob. */
   private buildSave(): SaveBlob {
     return {
-      v: 26,
+      v: 27,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
@@ -9741,6 +9748,8 @@ export class GameScene extends Phaser.Scene {
       crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
+      removedSceneTrees: [...this.removedSceneTrees], // v27: chopped editor trees stay gone
+
       coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady, pendingUpgrade: c.pendingUpgrade })), // v23; v24 pendingUpgrade
       cowPen: this.cowPen ? { anchor: this.cowPen.anchor, cows: this.cowPen.cows.map((c) => c.serialize()), milkReady: this.cowPen.milkReady } : undefined, // v25; v26 milk
 
@@ -9868,6 +9877,14 @@ export class GameScene extends Phaser.Scene {
         t.body?.destroy();
         t.timer?.remove();
         this.trees.delete(key);
+      }
+      // v27: editor trees the player already chopped stay gone — wireSceneTrees (run in create,
+      // before this) re-derived them, so remove those cells now. A seedling planted on the same
+      // cell is restored below (s.trees) and survives (it isn't sceneWired).
+      this.removedSceneTrees = new Set(s.removedSceneTrees ?? []);
+      for (const key of this.removedSceneTrees) {
+        const t = this.trees.get(key);
+        if (t?.sceneWired) { const [cx, cy] = key.split(',').map(Number); this.removeTree(cx!, cy!); }
       }
       // Coops: tear down all placed coops (re-created from the save below).
       for (const key of [...this.coops.keys()]) this.removeCoop(key);
