@@ -158,6 +158,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   shop_no_coins: { en: 'Not enough coins', 'zh-CN': '金币不够' },
   chest_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
   shop_ordered: { en: 'Ordered — arrives tomorrow', 'zh-CN': '已下单，明早送达' },
+  shop_on_order: { en: '{n} on the way — arrives tomorrow', 'zh-CN': '已订购 {n} 件，明早送达' }, // persistent line under the item detail; {n} = total on order
   sale_full: { en: 'For-sale bin is full', 'zh-CN': '待售格满了' },
   // House purchase (房子 tab)
   house_pick: { en: 'Pick a house', 'zh-CN': '选一间房子' },

@@ -6322,7 +6322,7 @@ export class GameScene extends Phaser.Scene {
   private publishMenu(_open = false): void {
     // Shop catalog (only built for the Shop tab — orderCatalog() isn't free).
     const catalog = (this.menuTab === TAB_SHOP || this.menuTab === TAB_COOP)
-      ? (this.menuTab === TAB_COOP ? this.coopCatalog() : this.orderCatalog()).map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id) }))
+      ? (this.menuTab === TAB_COOP ? this.coopCatalog() : this.orderCatalog()).map((e) => ({ id: e.id, iconKey: e.iconKey, iconFrame: e.iconFrame, label: this.itemName(e.id), price: e.price, desc: this.itemDesc(e.id), ordered: e.ordered }))
       : undefined;
     // 房子 tab: the purchasable house tiers (starter excluded — price 0).
     const houses = this.menuTab === TAB_HOUSE
@@ -6456,7 +6456,8 @@ export class GameScene extends Phaser.Scene {
     this.addMoney(-cost);                                        // pay at order time
     this.orders.push({ id, count: n, deliverDay: this.dayCount + 1 }); // arrives tomorrow morning
     this.menuBuyQty = 1;
-    this.flashShopMsg(t('shop_ordered'));                        // "已下单，明早送达" (also re-publishes the menu)
+    this.shopMsg = '';
+    this.publishMenu(); // the persistent "N on the way" line (in the detail) now reflects the new order — no transient red flash
     this.scheduleSave();
   }
 
@@ -7190,8 +7191,14 @@ export class GameScene extends Phaser.Scene {
   private orderCatalog(): OrderCatalogEntry[] {
     return ORDERABLE_IDS.map((id) => {
       const it = itemFromId(id, 1);
-      return { id, label: this.orderLabel(id, it), iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, price: buyPrice(id) ?? 0 };
+      return { id, label: this.orderLabel(id, it), iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, price: buyPrice(id) ?? 0, ordered: this.orderedCount(id) };
     });
+  }
+
+  /** Total quantity of `id` currently ON ORDER (placed, not yet delivered) — surfaced as a
+   *  persistent "N on the way — arrives tomorrow" line under the item's shop detail. */
+  private orderedCount(id: string): number {
+    return this.orders.reduce((sum, o) => sum + (o.id === id ? o.count : 0), 0);
   }
 
   /** Nicer catalog label: tree items read "<name> seedling". */
@@ -7202,7 +7209,7 @@ export class GameScene extends Phaser.Scene {
 
   /** The 牧场 tab catalog: one SMALL coop per sellable colour (medium/big come from upgrading). */
   private coopCatalog(): OrderCatalogEntry[] {
-    const coops: OrderCatalogEntry[] = COOP_COLORS.map((c) => ({ id: coopItemId('small', c), label: itemFromId(coopItemId('small', c), 1).label ?? '', iconKey: 'coops', iconFrame: coopFrame('small', c), price: this.priceOf(coopItemId('small', c)) }));
+    const coops: OrderCatalogEntry[] = COOP_COLORS.map((c) => ({ id: coopItemId('small', c), label: itemFromId(coopItemId('small', c), 1).label ?? '', iconKey: 'coops', iconFrame: coopFrame('small', c), price: this.priceOf(coopItemId('small', c)), ordered: this.orderedCount(coopItemId('small', c)) }));
     // Cow pen = buy → deliver → PLACE on cleared open grass (one pen only, hidden once owned).
     // Cows = buy → deliver → PLACE inside the owned pen (offered only once a pen exists).
     const cows: OrderCatalogEntry[] = [];
@@ -7210,8 +7217,8 @@ export class GameScene extends Phaser.Scene {
     // you'd order a 2nd unplaceable pen (canPlaceCowPen is false everywhere once one exists) and
     // get stuck holding it. Once ordered or owned, the row switches to buying cows.
     const penPending = this.orders.some((o) => o.id === 'cowpen');
-    if (!this.cowPen && !penPending) cows.push({ id: 'cowpen', label: itemFromId('cowpen', 1).label ?? '', iconKey: 'cow-pen-shop-item', iconFrame: 0, price: COW_PEN_PRICE });
-    else cows.push({ id: 'cow', label: itemFromId('cow', 1).label ?? '', iconKey: 'pink_cow_animation_sprites', iconFrame: 0, price: COW_PRICE });
+    if (!this.cowPen && !penPending) cows.push({ id: 'cowpen', label: itemFromId('cowpen', 1).label ?? '', iconKey: 'cow-pen-shop-item', iconFrame: 0, price: COW_PEN_PRICE, ordered: this.orderedCount('cowpen') });
+    else cows.push({ id: 'cow', label: itemFromId('cow', 1).label ?? '', iconKey: 'pink_cow_animation_sprites', iconFrame: 0, price: COW_PRICE, ordered: this.orderedCount('cow') });
     return [...coops, ...cows];
   }
 

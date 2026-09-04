@@ -6,4 +6,4 @@
 export interface MailListEntry { id: string; sender: string; title: string; iconFrame: number; read: boolean; }
 
 /** A Shop-tab catalog entry (an orderable item with its buy price). */
-export interface OrderCatalogEntry { id: string; label: string; iconKey: string; iconFrame: string | number; price: number; }
+export interface OrderCatalogEntry { id: string; label: string; iconKey: string; iconFrame: string | number; price: number; ordered?: number; }

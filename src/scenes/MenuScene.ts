@@ -78,7 +78,7 @@ const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.81, footY: 0.85 };
 const STEP = { y: 0.72, btn: 0.052, gap: 0.05, buyY: 0.82, msgY: 0.87 }; // right-side qty stepper + buy button (kept clear of the desc above + the frame border below)
 
 export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
-export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; }
+export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; ordered?: number; }
 export interface MenuModel {
   visible: boolean; rev: number;
   noTabs?: boolean;          // standalone backpack view → hide the tab bar
@@ -834,6 +834,12 @@ export class MenuScene extends Phaser.Scene {
     const desc = this.add.text(cx, 0.60 * H, e.desc, {
       fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: regionW * 0.84 },
     }).setOrigin(0.5, 0); c.add(desc);
+    // PERSISTENT "on the way" line right under the detail — how many of THIS item are already on
+    // order (delivered next morning). Never disappears while an order stands; amber (matches the
+    // house "pending" badge), NOT red — the old red order flash felt jarring.
+    if (e.ordered && e.ordered > 0) {
+      c.add(this.T(cx, desc.y + desc.height + H * 0.018, t('shop_on_order').replace('{n}', String(e.ordered)), H * 0.022, '#a9791f'));
+    }
     // Quantity stepper: [−]  N  [+]
     const cy = STEP.y * H, btn = STEP.btn * H, dx = STEP.gap * W;
     const cxN = cx, cxMinus = cxN - dx, cxPlus = cxN + dx;
