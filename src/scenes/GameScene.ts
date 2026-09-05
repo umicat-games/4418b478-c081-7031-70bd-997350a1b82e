@@ -9979,13 +9979,13 @@ export class GameScene extends Phaser.Scene {
       // Mailbox + chest contents (v7). Older saves (no field) keep the seeded test
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
-      if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count));
+      if (s.chest) this.chestStore = s.chest.map((it) => itemFromId(it.id, it.count)).filter((it) => !it.toolId); // strip tools (old saves stocked axe/pickaxe here)
       // Overnight economy (v16): pending orders + the pickup grid + the shipping bin.
       if (s.orders) this.orders = s.orders.map((o) => ({ id: o.id, count: o.count, deliverDay: o.deliverDay }));
       if (s.pickup) this.pickupStore = s.pickup.map((it) => itemFromId(it.id, it.count));
       if (s.sale) this.saleStore = s.sale.map((it) => itemFromId(it.id, it.count));
       // Cato shares the player's backpack now — fold any old Cato-bag items into it, then drop it.
-      if (s.catoBag) for (const it of s.catoBag) this.addToStore(this.backpackStore, itemFromId(it.id, it.count));
+      if (s.catoBag) for (const it of s.catoBag) { const item = itemFromId(it.id, it.count); if (!item.toolId) this.addToStore(this.backpackStore, item); } // fold into the bag, minus any tools
       this.catoBagStore = [];
       // Tools are a default always-owned kit now (findOwnedTool), never in the bag — strip any that
       // an OLD save persisted into the backpack so they no longer show up / can't be dropped.
