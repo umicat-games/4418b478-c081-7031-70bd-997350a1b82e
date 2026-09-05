@@ -242,6 +242,15 @@ export class MenuScene extends Phaser.Scene {
     return this.add.text(x, y, s, { fontFamily: dialogFont(), fontSize: Math.round(size) + 'px', color, resolution: RES }).setOrigin(origin, 0.5);
   }
 
+  /** A frame header: WHITE BOLD text with a dark outline so it reads on the tan frame (matches the
+   *  white item-names). Shared by the tab titles + the calendar's month header. */
+  private titleText(x: number, y: number, s: string, size: number): Phaser.GameObjects.Text {
+    const H = this.scale.height;
+    const txt = this.add.text(x, y, s, { fontFamily: dialogFont(), fontSize: Math.round(size) + 'px', color: '#ffffff', fontStyle: 'bold', resolution: RES }).setOrigin(0.5);
+    txt.setStroke('#5b4327', Math.max(2, H * 0.006)); // warm-brown outline for contrast on the tan frame
+    return txt;
+  }
+
   /** The header underline: title-bar.png (7×4) as a horizontal 9-slice — stretch WIDTH only, fixed
    *  height (native 4px scaled to a constant on-screen height). Runs well past the title text so it
    *  reads as a full underline. Adds to `c`, centred at (cx,y); returns it (for bringToTop). */
@@ -358,7 +367,7 @@ export class MenuScene extends Phaser.Scene {
       : (tkey && SCREEN_TITLE[tkey]) ? SCREEN_TITLE[tkey]
       : tkey ? t('tab_' + tkey) : '';
     const titleCx = lx + lw / 2; // centred over the WHOLE frame — the title + bar sit ABOVE the left/right split
-    const titleObj = this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK);
+    const titleObj = this.titleText(titleCx, TITLE_Y * H, title, H * 0.03);
     panel.add(titleObj);
     // Decorative bar under the title (kept for bringToTop below so content can't cover the header).
     const barObj = title ? this.addTitleBar(panel, titleCx, TITLE_Y * H + H * 0.03, titleObj.width) : undefined;
@@ -651,7 +660,7 @@ export class MenuScene extends Phaser.Scene {
     const cal = m.calendar;
     if (!cal) { c.add(this.T(cx, H * 0.46, t('menu_coming_soon'), H * 0.03, INK).setAlpha(0.65)); return; }
 
-    const monthHdr = this.T(cx, 0.24 * H, cal.title, H * 0.036, INK); c.add(monthHdr); // "August 2026" / "2026年8月"
+    const monthHdr = this.titleText(cx, 0.24 * H, cal.title, H * 0.036); c.add(monthHdr); // "August 2026" / "2026年8月"
     this.addTitleBar(c, cx, 0.24 * H + H * 0.036, monthHdr.width); // bar under the date (the date IS the title)
 
     // 7-column grid centred on cx.
