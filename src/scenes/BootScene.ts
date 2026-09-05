@@ -57,6 +57,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('square-buttons', 'uploaded/square_buttons_26x26.png');
     this.load.image('home-with-kitchen', 'uploaded/home-with-kitchen.png'); // shop 房子 tab house preview (user-processed)
     this.load.image('cow-pen-shop-item', 'uploaded/cow-pen-shop-item.png'); // shop 牧场 tab cow-pen thumbnail
+    this.load.image('title-bar', 'uploaded/title-bar.png'); // 7×4 horizontal 9-slice under a menu-frame title (stretch width, fixed height)
     // (ui-icons — the 16×16 grid used by the confirm dialog / build palette / HUD — is
     //  loaded FIRST, above, so the cozy loading screen can use it.)
     // Title-screen SETTINGS menu: the rounded panel (SETTINGS baked in) + the volume

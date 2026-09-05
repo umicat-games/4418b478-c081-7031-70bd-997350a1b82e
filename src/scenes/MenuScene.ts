@@ -68,6 +68,15 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
 const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_COOP = 10, TAB_BACKPACK = 11;
 
+// Stylized header shown centred at the top of each frame (title text + the title-bar underneath),
+// keyed by TAB_DEFS key. "<CATEGORY> • <SECTION>" so the shop/mail sub-tabs read as one family.
+// Cato + Calendar draw their own header, so they're omitted here. Edit these strings freely.
+const SCREEN_TITLE: Record<string, string> = {
+  shop: 'SHOP • ITEMS', coop: 'SHOP • RANCH', house: 'SHOP • HOUSE',
+  mail: 'MAIL • LETTERS', pickup: 'MAIL • INBOX', forsale: 'MAIL • OUTBOX',
+  chest: 'CHEST', catobag: "CATO'S BAG", settings: 'SETTINGS',
+};
+
 // Shop catalog: a scrollable LIST on the LEFT (icon + name + buy price); the RIGHT shows
 // the selected item's detail + a quantity stepper (− N +) + a BUY button. Buying is
 // INSTANT — coins out, item into the chest (if it has room), else a warning. A footer
@@ -327,12 +336,24 @@ export class MenuScene extends Phaser.Scene {
     if (hasDetail) this.drawDivider(panel, DIVIDER_X); // dashed line between the left content + the right detail
     tabIcons.forEach((ic) => panel.add(ic)); // icons back on top of the frame border
 
-    // Title (no underline rule — the user didn't want it). Localized via i18n `tab_<key>`.
+    // Title = a stylized centred header (SCREEN_TITLE) + a title-bar underneath it.
     const tkey = TAB_DEFS[m.tab]?.key;
     // Cato + Calendar tabs draw their own header (name / month), so suppress the auto panel title.
-    const title = (m.tab === TAB_CATO || m.tab === TAB_CALENDAR) ? '' : tkey ? t('tab_' + tkey) : m.tab === TAB_BACKPACK ? t('tab_backpack') : '';
+    const title = (m.tab === TAB_CATO || m.tab === TAB_CALENDAR) ? ''
+      : m.tab === TAB_BACKPACK ? 'BACKPACK'
+      : (tkey && SCREEN_TITLE[tkey]) ? SCREEN_TITLE[tkey]
+      : tkey ? t('tab_' + tkey) : '';
     const titleCx = hasDetail ? ((L.x + DIVIDER_X) / 2) * W : lx + lw / 2; // over the LEFT content for split tabs
-    panel.add(this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK));
+    const titleObj = this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK);
+    panel.add(titleObj);
+    // Decorative bar under the title (title-bar.png = 7×4 horizontal 9-slice → stretch WIDTH only,
+    // fixed height). Width tracks the title text so it reads as its underline. Native height is 4px.
+    if (title && this.textures.exists('title-bar')) {
+      const barH = H * 0.011, s = barH / 4;                          // scale the 4px-tall texture to a fixed on-screen height
+      const barW = Math.max(titleObj.width * 0.9, H * 0.16);         // ~title width (min for very short titles)
+      const barY = TITLE_Y * H + H * 0.03;                           // just below the title
+      panel.add(this.add.nineslice(titleCx, barY, 'title-bar', undefined, barW / s, 4, 2, 2, 1, 1).setScale(s));
+    }
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
