@@ -347,12 +347,15 @@ export class MenuScene extends Phaser.Scene {
     const titleObj = this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK);
     panel.add(titleObj);
     // Decorative bar under the title (title-bar.png = 7×4 horizontal 9-slice → stretch WIDTH only,
-    // fixed height). Width tracks the title text so it reads as its underline. Native height is 4px.
+    // fixed height). Runs a bit WIDER than the title text so it reads as a full underline. Native
+    // height is 4px. Kept for bringToTop below so content can never cover the header.
+    let barObj: Phaser.GameObjects.NineSlice | undefined;
     if (title && this.textures.exists('title-bar')) {
       const barH = H * 0.011, s = barH / 4;                          // scale the 4px-tall texture to a fixed on-screen height
-      const barW = Math.max(titleObj.width * 0.9, H * 0.16);         // ~title width (min for very short titles)
+      const barW = titleObj.width + H * 0.14;                        // title width + generous padding each side (was too short at 0.9×)
       const barY = TITLE_Y * H + H * 0.03;                           // just below the title
-      panel.add(this.add.nineslice(titleCx, barY, 'title-bar', undefined, barW / s, 4, 2, 2, 1, 1).setScale(s));
+      barObj = this.add.nineslice(titleCx, barY, 'title-bar', undefined, barW / s, 4, 2, 2, 1, 1).setScale(s);
+      panel.add(barObj);
     }
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
@@ -376,6 +379,11 @@ export class MenuScene extends Phaser.Scene {
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);
     }
+    // Keep the header ABOVE the content — the content container is added before the panes draw, so
+    // a tab whose content reaches the top band (grids/lists/detail) would otherwise cover the title.
+    // Single-pane Settings drew low, which is why ONLY it looked titled. bringToTop fixes every tab.
+    panel.bringToTop(titleObj);
+    if (barObj) panel.bringToTop(barObj);
 
     // Close button — INSIDE the left frame's top-right corner, with the gap to the RIGHT
     // border equal (in px) to the gap above (a symmetric corner). CLOSE.y fixes the vertical
@@ -673,7 +681,7 @@ export class MenuScene extends Phaser.Scene {
     // sliders/buttons stay their size even though the Settings frame now spans full width).
 
     // ── Volume sliders: Music (BGM) + SFX ────────────────────────────────────
-    this.renderVolumeSlider(c, cx, lw, 0.26 * H, 0.335 * H, t('settings_music'), getBgmVolume(), 'menuSettingsTrack');
+    this.renderVolumeSlider(c, cx, lw, 0.295 * H, 0.36 * H, t('settings_music'), getBgmVolume(), 'menuSettingsTrack'); // pushed below the title-bar (was 0.26 → collided)
     this.renderVolumeSlider(c, cx, lw, 0.43 * H, 0.505 * H, t('settings_sfx'), getSfxVolume(), 'menuSfxTrack');
 
     // ── "Title screen" button (styled like the title buttons) ────────────────
