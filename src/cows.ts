@@ -74,7 +74,15 @@ export class Cow {
     this.play('idle'); this.until = now + rnd(1400, 3600);
   }
   private enterEat(now: number): void {
-    this.state = 'eat'; this.play('chew_grass'); this.until = now + rnd(2600, 5200);
+    this.state = 'eat'; this.until = now + rnd(2600, 5200);
+    // The cow first plays the one-shot `start_eating` (lower its head), then LOOPS `chew_grass` for
+    // the rest of the graze — the two anims are split so the lead-in plays once before chewing repeats.
+    const startKey = 'cow-start_eating', chewKey = 'cow-chew_grass';
+    if (this.scene.anims.exists(startKey) && this.scene.anims.exists(chewKey)) {
+      this.sprite.play(startKey, true).chain(chewKey); // chew_grass loops (repeat:-1) after start_eating finishes
+    } else {
+      this.play('chew_grass'); // fallback if the lead-in anim is missing
+    }
   }
   private enterSleep(): void {
     this.state = 'sleep'; this.path = []; this.goingToSleep = false; this.gateWaitStart = 0; this.play('sleep');
