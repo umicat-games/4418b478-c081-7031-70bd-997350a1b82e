@@ -4336,16 +4336,19 @@ export class GameScene extends Phaser.Scene {
     this.consumeHeldMaterial();
   }
 
-  /** Can a cow be placed at cell (cx,cy)? Needs an owned pen, and the cell must sit inside the pen's
-   *  safe grazing area on walkable ground (so a placed cow never lands on/through a fence). */
+  /** Can a cow be placed at cell (cx,cy)? Needs an owned pen; the cell must be walkable (never
+   *  on/through a fence) and sit EITHER inside the pen's grazing area OR out in the pasture past the
+   *  gate. The pasture is where cows roam all day, so a cow dropped there A*-paths back in through
+   *  the gate on its own (it heads inside to sleep at night — see Cow.update). */
   private canPlaceCow(cx: number, cy: number): boolean {
     if (!this.cowPen || !this.islandLayer) return false;
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (!w) return false;
     const px = w.x + TILE / 2, py = w.y + TILE / 2;
-    const r = this.cowNav().grazeRect();
-    if (px < r.x0 || px > r.x1 || py < r.y0 || py > r.y1) return false; // inside the pen only
-    return !this.worldBlocked(px, py);
+    if (this.worldBlocked(px, py)) return false; // walkable ground only (no fence / prop / water)
+    const inRect = (r: { x0: number; y0: number; x1: number; y1: number }) => px >= r.x0 && px <= r.x1 && py >= r.y0 && py <= r.y1;
+    const nav = this.cowNav();
+    return inRect(nav.grazeRect()) || inRect(nav.roamRect()); // inside the pen OR the pasture outside the gate
   }
 
   /** Place a cow from the held item at (cx,cy) + consume one. */
