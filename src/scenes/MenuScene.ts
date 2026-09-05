@@ -343,7 +343,7 @@ export class MenuScene extends Phaser.Scene {
       : m.tab === TAB_BACKPACK ? 'BACKPACK'
       : (tkey && SCREEN_TITLE[tkey]) ? SCREEN_TITLE[tkey]
       : tkey ? t('tab_' + tkey) : '';
-    const titleCx = hasDetail ? ((L.x + DIVIDER_X) / 2) * W : lx + lw / 2; // over the LEFT content for split tabs
+    const titleCx = lx + lw / 2; // centred over the WHOLE frame — the title + bar sit ABOVE the left/right split
     const titleObj = this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK);
     panel.add(titleObj);
     // Decorative bar under the title (title-bar.png = 7×4 horizontal 9-slice → stretch WIDTH only,
@@ -513,7 +513,7 @@ export class MenuScene extends Phaser.Scene {
   private drawDivider(c: Phaser.GameObjects.Container, xFrac: number): void {
     const W = this.scale.width, H = this.scale.height;
     const x = xFrac * W;
-    const y0 = (L.y + 0.055) * H, y1 = (L.y + L.h - 0.05) * H;
+    const y0 = GRID.y * H, y1 = (L.y + L.h - 0.05) * H; // start at the content top so it sits BELOW the centred title + bar
     const hasDot = this.textures.exists('ui-sheet') && this.textures.get('ui-sheet').has('brown-dot');
     const size = Math.max(9, H * 0.03);   // on-screen dot size (bigger)
     const step = size * 1.2;              // centre-to-centre spacing (tighter)
