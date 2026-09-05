@@ -242,6 +242,19 @@ export class MenuScene extends Phaser.Scene {
     return this.add.text(x, y, s, { fontFamily: dialogFont(), fontSize: Math.round(size) + 'px', color, resolution: RES }).setOrigin(origin, 0.5);
   }
 
+  /** The header underline: title-bar.png (7×4) as a horizontal 9-slice — stretch WIDTH only, fixed
+   *  height (native 4px scaled to a constant on-screen height). Runs well past the title text so it
+   *  reads as a full underline. Adds to `c`, centred at (cx,y); returns it (for bringToTop). */
+  private addTitleBar(c: Phaser.GameObjects.Container, cx: number, y: number, textWidth: number): Phaser.GameObjects.NineSlice | undefined {
+    if (!this.textures.exists('title-bar')) return undefined;
+    const H = this.scale.height;
+    const s = (H * 0.011) / 4;                 // 4px-tall texture → fixed on-screen height
+    const barW = textWidth + H * 0.26;         // text width + generous padding each side (longer underline)
+    const bar = this.add.nineslice(cx, y, 'title-bar', undefined, barW / s, 4, 2, 2, 1, 1).setScale(s);
+    c.add(bar);
+    return bar;
+  }
+
   private build(m: MenuModel, slide: boolean): void {
     if (this.root) { this.tweens.killTweensOf(this.root); if (this.panel) this.tweens.killTweensOf(this.panel); if (this.dim) this.tweens.killTweensOf(this.dim); }
     this.root?.destroy();
@@ -338,7 +351,8 @@ export class MenuScene extends Phaser.Scene {
 
     // Title = a stylized centred header (SCREEN_TITLE) + a title-bar underneath it.
     const tkey = TAB_DEFS[m.tab]?.key;
-    // Cato + Calendar tabs draw their own header (name / month), so suppress the auto panel title.
+    // Cato + Calendar draw their OWN header (name / month), so suppress the auto panel title — the
+    // Calendar adds its own title-bar under the month (the date already reads as the title).
     const title = (m.tab === TAB_CATO || m.tab === TAB_CALENDAR) ? ''
       : m.tab === TAB_BACKPACK ? 'BACKPACK'
       : (tkey && SCREEN_TITLE[tkey]) ? SCREEN_TITLE[tkey]
@@ -346,17 +360,8 @@ export class MenuScene extends Phaser.Scene {
     const titleCx = lx + lw / 2; // centred over the WHOLE frame — the title + bar sit ABOVE the left/right split
     const titleObj = this.T(titleCx, TITLE_Y * H, title, H * 0.03, INK);
     panel.add(titleObj);
-    // Decorative bar under the title (title-bar.png = 7×4 horizontal 9-slice → stretch WIDTH only,
-    // fixed height). Runs a bit WIDER than the title text so it reads as a full underline. Native
-    // height is 4px. Kept for bringToTop below so content can never cover the header.
-    let barObj: Phaser.GameObjects.NineSlice | undefined;
-    if (title && this.textures.exists('title-bar')) {
-      const barH = H * 0.011, s = barH / 4;                          // scale the 4px-tall texture to a fixed on-screen height
-      const barW = titleObj.width + H * 0.14;                        // title width + generous padding each side (was too short at 0.9×)
-      const barY = TITLE_Y * H + H * 0.03;                           // just below the title
-      barObj = this.add.nineslice(titleCx, barY, 'title-bar', undefined, barW / s, 4, 2, 2, 1, 1).setScale(s);
-      panel.add(barObj);
-    }
+    // Decorative bar under the title (kept for bringToTop below so content can't cover the header).
+    const barObj = title ? this.addTitleBar(panel, titleCx, TITLE_Y * H + H * 0.03, titleObj.width) : undefined;
 
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
@@ -646,7 +651,8 @@ export class MenuScene extends Phaser.Scene {
     const cal = m.calendar;
     if (!cal) { c.add(this.T(cx, H * 0.46, t('menu_coming_soon'), H * 0.03, INK).setAlpha(0.65)); return; }
 
-    c.add(this.T(cx, 0.24 * H, cal.title, H * 0.036, INK)); // "August 2026" / "2026年8月"
+    const monthHdr = this.T(cx, 0.24 * H, cal.title, H * 0.036, INK); c.add(monthHdr); // "August 2026" / "2026年8月"
+    this.addTitleBar(c, cx, 0.24 * H + H * 0.036, monthHdr.width); // bar under the date (the date IS the title)
 
     // 7-column grid centred on cx.
     const cols = 7, gridW = 0.7 * W, cellW = gridW / cols, cellH = 0.088 * H;
