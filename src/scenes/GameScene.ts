@@ -2550,9 +2550,10 @@ export class GameScene extends Phaser.Scene {
    *  You start bare-handed (nothing selected). */
   private setupInventory(): void {
     this.inventory = new Array<ItemStack | null>(INV_ROWS * INV_COLS).fill(null); // vestigial (no hotbar) — save compat
-    // The BACKPACK is the portable store you carry + Use things from: everyday tools + seeds.
+    // The BACKPACK is the portable store you carry + Use things from: seeds + gathered goods. The
+    // everyday tools (hoe/watering-can/axe/pickaxe/fishing-rod) are NOT here — they're a default,
+    // always-owned kit summoned from the tool wheel (see findOwnedTool), never shown/removable.
     this.backpackStore = [
-      itemFromId('hoe', 1), itemFromId('watering-can', 1), itemFromId('axe', 1), itemFromId('pickaxe', 1), itemFromId('fishing-rod', 1),
       ...CROP_NAMES.map((c) => makeSeed(c, 10)),
       // DEBUG: a coop of each colour to test placement before the shop flow lands (devTools only).
       ...(CATO_DEBUG_TILL ? COOP_COLORS.map((c) => makePlaceable('coop', 1, `small-${c}`)) : []),
@@ -3469,7 +3470,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Where the player owns a tool: a hotbar slot (row 0) → select it; else a backpack / chest /
    *  Cato-bag stack → hold it as an external item. null = not owned anywhere. */
+  private static DEFAULT_TOOLS: ToolId[] = ['hoe', 'watering-can', 'axe', 'pickaxe', 'fishing-rod'];
   private findOwnedTool(toolId: ToolId): { hotbar: number } | { store: ItemStack[]; item: ItemStack } | null {
+    // The everyday tools are a DEFAULT kit — always owned, never in the bag (so they don't clutter it
+    // and can't be dropped). Hand back a throwaway single-item store so the equip path (holdExternal)
+    // works unchanged; tools are non-consumable, so that store is never mutated.
+    if (GameScene.DEFAULT_TOOLS.includes(toolId)) { const item = itemFromId(toolId, 1); return { store: [item], item }; }
     for (const store of [this.backpackStore, this.chestStore, this.catoBagStore]) {
       const it = store.find((s) => s.toolId === toolId);
       if (it) return { store, item: it };
@@ -9981,14 +9987,9 @@ export class GameScene extends Phaser.Scene {
       // Cato shares the player's backpack now — fold any old Cato-bag items into it, then drop it.
       if (s.catoBag) for (const it of s.catoBag) this.addToStore(this.backpackStore, itemFromId(it.id, it.count));
       this.catoBagStore = [];
-      if (s.backpack) this.backpackStore = s.backpack.map((it) => itemFromId(it.id, it.count));
-      // Ensure the everyday tools live in the backpack. Recovers mid-rework saves where the
-      // hoe/watering-can/axe/pickaxe ended up on the old hotbar / vestigial `inventory` (never
-      // persisted in SaveBlob) → `findOwnedTool` returned null → the tool wheel wouldn't open on
-      // grass/stone/berries. Idempotent (skips a tool already present).
-      for (const t of ['hoe', 'watering-can', 'axe', 'pickaxe', 'fishing-rod'] as ToolId[]) {
-        if (!this.backpackStore.some((s2) => s2.toolId === t)) this.addToStore(this.backpackStore, itemFromId(t, 1));
-      }
+      // Tools are a default always-owned kit now (findOwnedTool), never in the bag — strip any that
+      // an OLD save persisted into the backpack so they no longer show up / can't be dropped.
+      if (s.backpack) this.backpackStore = s.backpack.map((it) => itemFromId(it.id, it.count)).filter((it) => !it.toolId);
       // Grant missing starter items INTO THE CHEST — AFTER it's restored (else the
       // restore above would wipe the grants). Building materials are idempotent; the
       // spare seeds are one-time (chestSeeded flag) so they don't refill after use.
@@ -10049,8 +10050,7 @@ export class GameScene extends Phaser.Scene {
    *  hotbar AND the chest so it only adds what's genuinely missing. (House-building
    *  materials were removed; the house is a fixed facade now.) */
   private ensureBuildingMaterials(): void {
-    if (!this.hasMaterial('axe')) this.addToChest(itemFromId('axe', 1));
-    if (!this.hasMaterial('pickaxe')) this.addToChest(itemFromId('pickaxe', 1));
+    // (axe/pickaxe removed — tools are a default always-owned kit now, never stocked in the chest.)
     for (const t of TREE_TYPES) {
       if (!this.hasMaterial(`tree-${t.id}`)) this.addToChest(makePlaceable('tree', 10, t.id));
     }
