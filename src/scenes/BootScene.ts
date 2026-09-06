@@ -59,6 +59,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('cow-pen-shop-item', 'uploaded/cow-pen-shop-item.png'); // shop 牧场 tab cow-pen thumbnail
     this.load.image('title-bar', 'uploaded/title-bar.png'); // 7×4 horizontal 9-slice under a menu-frame title (stretch width, fixed height)
     this.load.image('light-beam', 'uploaded/light-beam.png'); // 32×32 soft radial glow — layered/tinted for the room lamp light
+    this.load.image('cloud-1', 'uploaded/cloud-1.png'); // drifting weather clouds (rain / fog days)
+    this.load.image('cloud-2', 'uploaded/cloud-2.png');
+    this.load.image('cloud-3', 'uploaded/cloud-3.png');
     // (ui-icons — the 16×16 grid used by the confirm dialog / build palette / HUD — is
     //  loaded FIRST, above, so the cozy loading screen can use it.)
     // Title-screen SETTINGS menu: the rounded panel (SETTINGS baked in) + the volume

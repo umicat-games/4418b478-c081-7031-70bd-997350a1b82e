@@ -1027,6 +1027,10 @@ export class GameScene extends Phaser.Scene {
   // Shared by rain (a misty day) and a future fog weather.
   private fogOverlay?: Phaser.GameObjects.Rectangle;
   private fogBlobs?: Array<{ img: Phaser.GameObjects.Image; vx: number; vy: number; sizeFrac: number }>;
+  // Drifting clouds (cloud-1/2/3) on rain + fog days: random spot/size, slowly crossing the screen.
+  // Position is stored as fractions of the current camera VIEW so they track it (never stranded when
+  // the camera pans) and read the same at any zoom.
+  private clouds?: Array<{ img: Phaser.GameObjects.Image; fracX: number; fracY: number; speedFrac: number; sizeFrac: number }>;
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -2974,6 +2978,41 @@ export class GameScene extends Phaser.Scene {
       b.img.x += b.vx * dt; b.img.y += b.vy * dt;
       if (b.img.x < view.x - M) b.img.x = view.right + M; else if (b.img.x > view.right + M) b.img.x = view.x - M;
       if (b.img.y < view.y - M) b.img.y = view.bottom + M; else if (b.img.y > view.bottom + M) b.img.y = view.y - M;
+    }
+  }
+
+  /** Drifting clouds on rain / fog days: a handful of cloud-1/2/3 sprites at random size + height,
+   *  slowly crossing the screen from right to left; when one exits the left it wraps back to the
+   *  right with a fresh look/size/height. Sized as a fraction of the screen (zoom-independent), above
+   *  the fog but below the rain streaks. */
+  private static CLOUD_COUNT = 6;
+  private respawnCloud(c: { fracX: number; fracY: number; speedFrac: number; sizeFrac: number; img: Phaser.GameObjects.Image }, atRight: boolean): void {
+    const tex = ['cloud-1', 'cloud-2', 'cloud-3'][Phaser.Math.Between(0, 2)]!;
+    if (this.textures.exists(tex)) c.img.setTexture(tex);
+    c.sizeFrac = 0.16 + Math.random() * 0.24;   // 16–40% of the screen wide
+    c.speedFrac = 0.018 + Math.random() * 0.03; // view-widths / sec → crosses the screen in ~20–55s
+    c.fracX = atRight ? 1.15 + Math.random() * 0.2 : Math.random(); // start just off the right, or scattered
+    c.fracY = 0.05 + Math.random() * 0.78;      // random height within the view
+  }
+  private updateClouds(delta: number): void {
+    if (!this.gameReady || !this.islandLayer || !this.textures.exists('cloud-1')) return;
+    const on = isDebug('rain') || isDebug('lightRain') || isDebug('fog') || isDebug('heavyFog');
+    if (!on) { if (this.clouds) for (const c of this.clouds) c.img.setVisible(false); return; }
+    const view = this.cameras.main.worldView, dt = delta / 1000;
+    if (!this.clouds) {
+      this.clouds = [];
+      for (let i = 0; i < GameScene.CLOUD_COUNT; i++) {
+        const c = { img: this.add.image(0, 0, 'cloud-1').setAlpha(0.75).setDepth(NIGHT_MASK_DEPTH + 4), fracX: 0, fracY: 0, speedFrac: 0, sizeFrac: 0 };
+        this.respawnCloud(c, false); // scatter across the screen initially
+        this.clouds.push(c);
+      }
+    }
+    for (const c of this.clouds) {
+      c.fracX -= c.speedFrac * dt; // drift LEFT (in view-fraction space)
+      if (c.fracX < -0.35) this.respawnCloud(c, true); // exited the left → re-enter from the right, fresh
+      const w = c.sizeFrac * view.width;
+      c.img.setVisible(true).setDisplaySize(w, w) // fraction-of-view position → tracks the camera at any zoom/pan
+        .setPosition(view.x + c.fracX * view.width, view.y + c.fracY * view.height);
     }
   }
 
@@ -10664,6 +10703,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFireflies(delta); // warm blinking motes drifting over the world at night
     this.updateRain(delta); // rain weather: grey overlay + diagonal streaks + ground splashes
     this.updateFog(delta); // fog / mist: light haze + drifting soft patches (misty rain, later fog weather)
+    this.updateClouds(delta); // drifting clouds on rain / fog days
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
