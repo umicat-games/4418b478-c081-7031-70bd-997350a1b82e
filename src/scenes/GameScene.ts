@@ -137,6 +137,8 @@ const NIGHT_KEYS: Array<[number, number, number]> = [
 const NIGHT_MASK_DEPTH = 500000; // above every world sprite, below the loading cover (1e7) + HUD scenes
 // One firefly: a soft glowing mote living a short life near a tree/bush (see updateFireflies).
 type Firefly = { halo: Phaser.GameObjects.Image; core: Phaser.GameObjects.Image; age: number; life: number; pause: number; heading: number; breathT: number; breathHz: number; base: number };
+// One raindrop: a thin white streak falling to its ground point, where it splashes (see updateRain).
+type Raindrop = { img: Phaser.GameObjects.Image; groundY: number; speed: number };
 const COOP_BUBBLE_DEPTH = 490000; // the coop "eggs ready" bubble — above world sprites, below the night mask
 
 // Cow pen — the world anchor the `cow_pen` template's local coords are added to (its top-left
@@ -1014,6 +1016,12 @@ export class GameScene extends Phaser.Scene {
   // fades in, drifts a little while its glow breathes, fades out, vanishes — then after a pause a new
   // one lights up at another foliage spot. So they twinkle on & off in the bushes, not hover forever.
   private fireflies?: Firefly[];
+  // Rain weather: a grey overlay + white diagonal streaks (top-right → bottom-left) + a splash where
+  // each drop lands. Toggled by `raining` (debug key B for now; the weather system drives it later).
+  private raining = false;
+  private rainOverlay?: Phaser.GameObjects.Rectangle;
+  private raindrops?: Raindrop[];
+  private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -1496,6 +1504,7 @@ export class GameScene extends Phaser.Scene {
         // exercise the weather/time/money HUD without waiting / an economy.
         this.input.keyboard?.on('keydown-Y', () => this.addMoney(12345));
         this.input.keyboard?.on('keydown-U', () => this.fastForwardTime());
+        this.input.keyboard?.on('keydown-B', () => { this.raining = !this.raining; this.publishWeatherHud(); }); // B = toggle rain (test)
         // L = stuff the CHEST with a pile of varied test items + open the menu on the
         // Chest tab, so the SCROLL bar has enough to scroll (real saves rarely have 35+
         // items). Debug only — Take/Delete them, or Restart workspace, to clear.
@@ -2683,7 +2692,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('weatherHud', {
       visible: this.gameReady && !this.inventoryOpen,
       bgFrame: WEATHER_BGS[this.bgIndex()], // time-tinted window background
-      weatherFrame: WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
+      weatherFrame: this.raining ? 'rain-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
       pointerStep: this.pointerStep(),
       money: this.money,
       timeLabel: this.timeLabel(),
@@ -2847,6 +2856,61 @@ export class GameScene extends Phaser.Scene {
       f.halo.setAlpha(a * 0.5).setVisible(a > 0.01);
       f.core.setAlpha(a).setVisible(a > 0.01);
       if (p >= 1) { f.pause = 0.4 + Math.random() * 2.4; f.halo.setVisible(false); f.core.setVisible(false); } // faded out → dark pause, then relight elsewhere
+    }
+  }
+
+  /** Rain weather: a translucent grey overlay + white streaks slanting from top-right to bottom-left,
+   *  each splashing where it lands. Streaks are world-space at high depth (above the night mask, so
+   *  they read at night too), respawned within the camera view so they follow a pan. Lazily built on
+   *  the first rain; hidden when `raining` is off. */
+  private static RAIN_COUNT = 90;
+  private static RAIN_VX = -70; // fall velocity x (world px/s): leftward
+  private static RAIN_VY = 220; // fall velocity y: downward
+  private resetRaindrop(d: Raindrop, view: Phaser.Geom.Rectangle, initial: boolean): void {
+    const M = 60;
+    d.img.x = Phaser.Math.Between(Math.round(view.x - M), Math.round(view.right + M));
+    d.img.y = initial ? Phaser.Math.Between(Math.round(view.y - M), Math.round(view.bottom)) : Math.round(view.y) - Phaser.Math.Between(4, M);
+    d.groundY = Phaser.Math.Between(Math.round(view.y + view.height * 0.12), Math.round(view.bottom));
+    if (d.groundY < d.img.y) d.groundY = d.img.y + 24;
+    d.speed = 0.8 + Math.random() * 0.6; // per-drop speed multiplier
+  }
+  private updateRain(delta: number): void {
+    if (!this.gameReady || !this.islandLayer) return;
+    if (!this.raining) {
+      this.rainOverlay?.setVisible(false);
+      if (this.raindrops) for (const d of this.raindrops) d.img.setVisible(false);
+      return;
+    }
+    const view = this.cameras.main.worldView, dt = delta / 1000;
+    if (!this.rainOverlay) {
+      // Grey wash over the world (screen-space, like the night mask; above it so it reads at night).
+      this.rainOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0x556270, 0.22)
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH + 1);
+      const rot = Math.atan2(GameScene.RAIN_VY, GameScene.RAIN_VX) - Math.PI / 2; // align the streak with the fall
+      this.raindrops = [];
+      for (let i = 0; i < GameScene.RAIN_COUNT; i++) {
+        const img = this.add.image(0, 0, '__WHITE').setTint(0xe3edfa).setAlpha(0.4)
+          .setDisplaySize(0.9, 8).setRotation(rot).setDepth(NIGHT_MASK_DEPTH + 10);
+        const d: Raindrop = { img, groundY: 0, speed: 1 };
+        this.resetRaindrop(d, view, true);
+        this.raindrops.push(d);
+      }
+      // Tiny white splash droplets where a drop lands (bounce up + out, brief).
+      this.rainSplash = this.add.particles(0, 0, 'white-particle', {
+        lifespan: 260, speed: { min: 16, max: 40 }, angle: { min: -150, max: -30 }, gravityY: 170,
+        scale: { start: 0.4, end: 0 }, alpha: { start: 0.7, end: 0 }, emitting: false,
+      });
+      this.rainSplash.setDepth(NIGHT_MASK_DEPTH + 11);
+    }
+    this.rainOverlay.setVisible(true);
+    for (const d of this.raindrops!) {
+      d.img.setVisible(true);
+      d.img.x += GameScene.RAIN_VX * d.speed * dt;
+      d.img.y += GameScene.RAIN_VY * d.speed * dt;
+      if (d.img.y >= d.groundY) {
+        this.rainSplash!.emitParticleAt(d.img.x, d.groundY, Phaser.Math.Between(2, 3));
+        this.resetRaindrop(d, view, false);
+      }
     }
   }
 
@@ -10526,6 +10590,7 @@ export class GameScene extends Phaser.Scene {
     this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
     this.updateNightMask(); // tint the world toward evening / night
     this.updateFireflies(delta); // warm blinking motes drifting over the world at night
+    this.updateRain(delta); // rain weather: grey overlay + diagonal streaks + ground splashes
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
