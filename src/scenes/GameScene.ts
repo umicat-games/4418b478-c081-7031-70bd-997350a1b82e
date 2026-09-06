@@ -2989,10 +2989,10 @@ export class GameScene extends Phaser.Scene {
   private respawnCloud(c: { fracX: number; fracY: number; speedFrac: number; sizeFrac: number; img: Phaser.GameObjects.Image }, atRight: boolean): void {
     const tex = ['cloud-1', 'cloud-2', 'cloud-3'][Phaser.Math.Between(0, 2)]!;
     if (this.textures.exists(tex)) c.img.setTexture(tex);
-    c.sizeFrac = 0.16 + Math.random() * 0.24;   // 16–40% of the screen wide
-    c.speedFrac = 0.018 + Math.random() * 0.03; // view-widths / sec → crosses the screen in ~20–55s
-    c.fracX = atRight ? 1.15 + Math.random() * 0.2 : Math.random(); // start just off the right, or scattered
-    c.fracY = 0.05 + Math.random() * 0.78;      // random height within the view
+    c.sizeFrac = 0.09 + Math.random() * 0.13;   // 9–22% of the screen wide (smaller)
+    c.speedFrac = 0.005 + Math.random() * 0.014; // view-widths / sec — SLOW drift, wide spread so they don't move in lockstep (~50–200s to cross)
+    c.fracX = atRight ? 1.1 + Math.random() * 0.5 : Math.random(); // re-enter from off the right (staggered by the gap)
+    c.fracY = 0.03 + Math.random() * 0.82;      // random height within the view
   }
   private updateClouds(delta: number): void {
     if (!this.gameReady || !this.islandLayer || !this.textures.exists('cloud-1')) return;
@@ -3002,8 +3002,11 @@ export class GameScene extends Phaser.Scene {
     if (!this.clouds) {
       this.clouds = [];
       for (let i = 0; i < GameScene.CLOUD_COUNT; i++) {
-        const c = { img: this.add.image(0, 0, 'cloud-1').setAlpha(0.75).setDepth(NIGHT_MASK_DEPTH + 4), fracX: 0, fracY: 0, speedFrac: 0, sizeFrac: 0 };
-        this.respawnCloud(c, false); // scatter across the screen initially
+        const c = { img: this.add.image(0, 0, 'cloud-1').setAlpha(0.7).setDepth(NIGHT_MASK_DEPTH + 4), fracX: 0, fracY: 0, speedFrac: 0, sizeFrac: 0 };
+        this.respawnCloud(c, false);
+        // SPREAD the initial batch across a wide band (some already off the right → they enter later,
+        // so clouds don't all appear at once, clustered).
+        c.fracX = -0.35 + (i + Math.random() * 0.7) / GameScene.CLOUD_COUNT * 1.8;
         this.clouds.push(c);
       }
     }
