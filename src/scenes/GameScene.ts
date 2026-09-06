@@ -1006,6 +1006,10 @@ export class GameScene extends Phaser.Scene {
   private lastBgIndex = -1; // last published time-of-day background (0..2)
   private lastClockMinute = -1; // last published wall-clock minute-of-day → the HUD time updates each minute
   private nightMask?: Phaser.GameObjects.Rectangle; // full-screen day/night colour tint
+  // Fireflies: warm blinking motes that drift over the world at NIGHT (glow through the mask). TEST:
+  // they show every night; later this becomes a per-night chance. Lazily created on the first night.
+  // Each = a tiny bright CORE + a small soft HALO (both ADD-blended, blinking together).
+  private fireflies?: Array<{ halo: Phaser.GameObjects.Image; core: Phaser.GameObjects.Image; heading: number; blinkT: number; period: number; base: number }>;
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -2772,6 +2776,48 @@ export class GameScene extends Phaser.Scene {
    *  house interior (HouseScene, running over this PAUSED scene) can darken the room in lockstep
    *  with the island. Also exposes the darkness fraction so the lamp glow can fade in at night. */
   currentNightTint(): { color: number; alpha: number } { return this.nightTint(this.dayFrac()); }
+
+  /** Fireflies: ~20 warm motes drifting over the visible world that BLINK (a brief flash, a long
+   *  dark pause) and fade in with the night darkness — created lazily on the first night, hidden by
+   *  day. Each is a soft light-beam blob (ADD blend) above the night mask so it glows through the
+   *  dark. When one drifts off-screen (while dark, so no pop) it respawns inside the view, so they
+   *  follow wherever you pan. TEST: shown every night; a per-night chance can gate this later. */
+  private static FIREFLY_COUNT = 26;
+  private updateFireflies(delta: number): void {
+    if (!this.gameReady || !this.islandLayer || !this.textures.exists('light-beam')) return;
+    const darkness = Phaser.Math.Clamp(this.nightTint(this.dayFrac()).alpha / 0.5, 0, 1); // 0 = day → ~1 deep night
+    if (darkness <= 0.02) { if (this.fireflies) for (const f of this.fireflies) { f.halo.setVisible(false); f.core.setVisible(false); } return; }
+    const view = this.cameras.main.worldView;
+    if (!this.fireflies) {
+      this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth soft halo
+      this.fireflies = [];
+      for (let i = 0; i < GameScene.FIREFLY_COUNT; i++) {
+        const x = Phaser.Math.Between(view.x, view.right), y = Phaser.Math.Between(view.y, view.bottom);
+        const halo = this.add.image(x, y, 'light-beam') // small soft glow
+          .setTint(0xfff29a).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 5).setScale(0.2).setVisible(false);
+        const core = this.add.image(x, y, '__WHITE') // ~2px crisp bright point
+          .setTint(0xffffcf).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 6).setDisplaySize(2, 2).setVisible(false);
+        this.fireflies.push({ halo, core, heading: Math.random() * Math.PI * 2, blinkT: Math.random() * 4, period: 1.7 + Math.random() * 2.3, base: 0.7 + Math.random() * 0.4 });
+      }
+    }
+    const dt = delta / 1000;
+    for (const f of this.fireflies) {
+      f.heading += (Math.random() - 0.5) * 1.6 * dt;   // gentle meander
+      const dx = Math.cos(f.heading) * 13 * dt, dy = Math.sin(f.heading) * 13 * dt; // slow drift (~13 px/s)
+      f.halo.x += dx; f.halo.y += dy; f.core.x += dx; f.core.y += dy;
+      f.blinkT += dt;
+      const pulse = Math.pow(Math.max(0, Math.sin((f.blinkT / f.period) * Math.PI * 2)), 2); // flash then dim (softer than ^3 → more lit at once)
+      const a = pulse * f.base * darkness;
+      f.halo.setAlpha(a * 0.6).setVisible(a > 0.01);   // halo is the softer, fainter part
+      f.core.setAlpha(a).setVisible(a > 0.01);
+      const m = 48; // drifted out of view while dark → respawn inside it (follow the camera; no pop)
+      if (a < 0.02 && (f.core.x < view.x - m || f.core.x > view.right + m || f.core.y < view.y - m || f.core.y > view.bottom + m)) {
+        const nx = Phaser.Math.Between(view.x, view.right), ny = Phaser.Math.Between(view.y, view.bottom);
+        f.halo.setPosition(nx, ny); f.core.setPosition(nx, ny);
+        f.heading = Math.random() * Math.PI * 2;
+      }
+    }
+  }
 
   /** Interpolate the NIGHT_KEYS keyframes for day-fraction `t` → {colour, alpha}. */
   private nightTint(t: number): { color: number; alpha: number } {
@@ -10448,6 +10494,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHouseDoor(); // the editor-authored default-house door
     this.updateDayClock(delta); // advance the time-of-day clock → HUD sun-arc pointer
     this.updateNightMask(); // tint the world toward evening / night
+    this.updateFireflies(delta); // warm blinking motes drifting over the world at night
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
