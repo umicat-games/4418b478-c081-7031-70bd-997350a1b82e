@@ -41,6 +41,9 @@ export class HouseScene extends Phaser.Scene {
   private exiting = false;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
+  private nightMask?: Phaser.GameObjects.Rectangle;      // full-screen day/night tint (darkens the room like the island)
+  private lampGlow: Phaser.GameObjects.Image[] = [];     // the table lamp's layered warm glow (fades in at night)
+  private lampGlowBaseAlpha: number[] = [];              // each glow layer's full-night alpha (scaled by darkness)
 
   constructor() { super({ key: 'HouseScene' }); }
 
@@ -131,6 +134,9 @@ export class HouseScene extends Phaser.Scene {
       this.input.keyboard?.on('keydown-R', () => this.tryRenovate('home_2'));
     }
 
+    // Day/night: darken the room in lockstep with the island + light the table lamp at night.
+    this.setupRoomLighting(reg);
+
     // Keep the pixel cursor on top (it self-drives from the real pointer when GameScene
     // isn't publishing the cursor model).
     if (this.scene.isActive('CursorScene')) this.scene.bringToTop('CursorScene');
@@ -141,6 +147,51 @@ export class HouseScene extends Phaser.Scene {
     crossToBgm(this, 'bgm', [], 700);
 
     finishTransition(this); // room is ready → uncover
+  }
+
+  private static ROOM_MASK_DEPTH = 500000; // above every room sprite, below the hover bracket (1e6) + cursor
+
+  /** Room day/night: a full-screen tint that darkens toward night (same NIGHT_KEYS the island uses,
+   *  read from the PAUSED GameScene's wall clock), plus a layered, breathing warm GLOW on the table
+   *  lamp that FADES IN with the darkness — so at night the room dims and the lamp lights it. */
+  private setupRoomLighting(reg: ReturnType<typeof getEntityRegistry>): void {
+    // Screen-space oversized rect (mirrors the island's night mask) → covers the room at any camera
+    // scroll / canvas size. Starts clear; update() drives its colour + alpha from the clock.
+    this.nightMask = this.add.rectangle(-4000, -4000, 16000, 16000, 0x0c1636, 0)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(HouseScene.ROOM_MASK_DEPTH);
+
+    // The table lamp → a 3-layer warm glow that cuts through the night tint. Find the lamp sprite
+    // (basic_furniture, a `lamp-*` frame); no lamp / no texture → no glow.
+    if (!this.textures.exists('light-beam')) return;
+    // The glow is a 32px blob scaled up — sample it LINEAR (not the game's global nearest) so the
+    // halo stays SMOOTH instead of turning into blocky rings when enlarged.
+    this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR);
+    const lamp = reg?.all().find((go) => {
+      if (go.getData('entityAssetId') !== 'basic_furniture') return false;
+      const fn = (go as Phaser.GameObjects.Sprite).frame?.name;
+      return typeof fn === 'string' && fn.startsWith('lamp');
+    }) as Phaser.GameObjects.Sprite | undefined;
+    if (!lamp) return;
+    const lx = lamp.x, ly = lamp.y - lamp.displayHeight * 0.18; // nudge up toward the shade / bulb
+    // Soft wide halo → warm mid → bright core. Warm tints + ADD blend so they BRIGHTEN the darkened
+    // room (kept modest so it lights the lamp's corner, not the whole room). Alpha is set per-frame
+    // from the darkness (update); the scale gently BREATHES here. (No clip mask: additive draws
+    // ignore Phaser's geometry/bitmap masks, so we just keep the halo small enough that its faint
+    // edge barely reaches past the wall.)
+    const layers: Array<{ scale: number; tint: number; alpha: number; ms: number }> = [
+      { scale: 2.4, tint: 0xffca7a, alpha: 0.13, ms: 2200 },
+      { scale: 1.6, tint: 0xffda92, alpha: 0.20, ms: 1900 },
+      { scale: 1.0, tint: 0xffe6b0, alpha: 0.30, ms: 1600 },
+    ];
+    layers.forEach((L, i) => {
+      const g = this.add.image(lx, ly, 'light-beam')
+        .setTint(L.tint).setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(HouseScene.ROOM_MASK_DEPTH + 1 + i).setScale(L.scale).setAlpha(0);
+      this.lampGlow.push(g);
+      this.lampGlowBaseAlpha.push(L.alpha);
+      // Breathing: pulse the scale in/out forever; each layer a slightly different period → organic.
+      this.tweens.add({ targets: g, scale: { from: L.scale * 0.94, to: L.scale * 1.06 }, duration: L.ms, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    });
   }
 
   private frameCamera = (): void => {
@@ -258,6 +309,16 @@ export class HouseScene extends Phaser.Scene {
   }
 
   update(_t: number, delta: number): void {
+    // Day/night: darken the room + fade the lamp glow in with the darkness, both read live from the
+    // PAUSED island's wall clock so inside and outside stay in sync.
+    const gs = this.scene.get('GameScene') as GameScene | undefined;
+    if (this.nightMask && gs?.currentNightTint) {
+      const { color, alpha } = gs.currentNightTint();
+      this.nightMask.setFillStyle(color, alpha);
+      const darkness = Phaser.Math.Clamp(alpha / 0.5, 0, 1); // 0 = day (glow off) → ~1 = deep night (glow full)
+      for (let i = 0; i < this.lampGlow.length; i++) this.lampGlow[i]!.setAlpha(this.lampGlowBaseAlpha[i]! * darkness);
+    }
+
     // Keyboard pan (WASD / arrows) — the camera bounds clamp it, so a fits-on-screen
     // room stays put (centred) and a bigger one pans within its edges.
     const c = this.cursors, w = this.wasd;

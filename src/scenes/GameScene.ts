@@ -2768,6 +2768,11 @@ export class GameScene extends Phaser.Scene {
     this.nightMask.setFillStyle(color, alpha);
   }
 
+  /** The CURRENT day/night mask tint (colour + alpha) from the real wall clock. Public so the
+   *  house interior (HouseScene, running over this PAUSED scene) can darken the room in lockstep
+   *  with the island. Also exposes the darkness fraction so the lamp glow can fade in at night. */
+  currentNightTint(): { color: number; alpha: number } { return this.nightTint(this.dayFrac()); }
+
   /** Interpolate the NIGHT_KEYS keyframes for day-fraction `t` → {colour, alpha}. */
   private nightTint(t: number): { color: number; alpha: number } {
     const keys = NIGHT_KEYS;
