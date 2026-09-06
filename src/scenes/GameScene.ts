@@ -130,11 +130,13 @@ const NIGHT_KEYS: Array<[number, number, number]> = [
   [0.52, 0x0c1636, 0.00], // full day — clear
   [0.62, 0xe8763c, 0.16], // early evening — warm orange
   [0.72, 0x8a4e74, 0.30], // dusk — purple
-  [0.82, 0x24306a, 0.44], // nightfall — blue
-  [0.93, 0x0c1636, 0.54], // deep night — navy
+  [0.82, 0x1c2550, 0.60], // nightfall — blue, dimmer
+  [0.93, 0x070d24, 0.78], // deep night — deep navy, much darker
   [1.00, 0x0c1636, 0.00], // dawn breaking — back to clear (wraps to t=0)
 ];
 const NIGHT_MASK_DEPTH = 500000; // above every world sprite, below the loading cover (1e7) + HUD scenes
+// One firefly: a soft glowing mote living a short life near a tree/bush (see updateFireflies).
+type Firefly = { halo: Phaser.GameObjects.Image; core: Phaser.GameObjects.Image; age: number; life: number; pause: number; heading: number; breathT: number; breathHz: number; base: number };
 const COOP_BUBBLE_DEPTH = 490000; // the coop "eggs ready" bubble — above world sprites, below the night mask
 
 // Cow pen — the world anchor the `cow_pen` template's local coords are added to (its top-left
@@ -1008,9 +1010,10 @@ export class GameScene extends Phaser.Scene {
   private nightMask?: Phaser.GameObjects.Rectangle; // full-screen day/night colour tint
   // Fireflies: warm blinking motes that drift over the world at NIGHT (glow through the mask). TEST:
   // they show every night; later this becomes a per-night chance. Lazily created on the first night.
-  // Each = a tiny bright CORE + a small soft HALO (both ADD-blended, blinking together), tethered to
-  // a foliage ANCHOR (a tree/bush) it gently hovers around — fireflies gather in the bushes & trees.
-  private fireflies?: Array<{ halo: Phaser.GameObjects.Image; core: Phaser.GameObjects.Image; ax: number; ay: number; heading: number; blinkT: number; period: number; base: number }>;
+  // Each = a tiny bright CORE + a soft HALO (ADD-blended). It LIVES a short life near a tree/bush:
+  // fades in, drifts a little while its glow breathes, fades out, vanishes — then after a pause a new
+  // one lights up at another foliage spot. So they twinkle on & off in the bushes, not hover forever.
+  private fireflies?: Firefly[];
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -2778,63 +2781,66 @@ export class GameScene extends Phaser.Scene {
    *  with the island. Also exposes the darkness fraction so the lamp glow can fade in at night. */
   currentNightTint(): { color: number; alpha: number } { return this.nightTint(this.dayFrac()); }
 
-  /** Fireflies: ~20 warm motes drifting over the visible world that BLINK (a brief flash, a long
-   *  dark pause) and fade in with the night darkness — created lazily on the first night, hidden by
-   *  day. Each is a soft light-beam blob (ADD blend) above the night mask so it glows through the
-   *  dark. When one drifts off-screen (while dark, so no pop) it respawns inside the view, so they
-   *  follow wherever you pan. TEST: shown every night; a per-night chance can gate this later. */
-  private static FIREFLY_COUNT = 26;
-  /** A random foliage point (tree canopy / bush) in or near the camera view for a firefly to hover
-   *  around — so they gather in the bushes & trees, not over open water/grass. Null if none in view. */
+  /** Fireflies: warm motes that TWINKLE ON & OFF in the trees/bushes at night. Each lives a SHORT
+   *  life — lights up at a foliage spot, drifts a little while its glow BREATHES, fades out and
+   *  vanishes; after a random pause a new one relights at another in-view tree/bush. Two soft
+   *  light-beam layers (small bright centre + softer halo, ADD blend, LINEAR-sampled so the falloff
+   *  is smooth) above the night mask. Created lazily on the first night, hidden by day. TEST: shown
+   *  every night; a per-night chance can gate this later. */
+  private static FIREFLY_COUNT = 22;
+  /** A random point in a tree canopy / bush (with a little scatter) in/near the camera view — where a
+   *  firefly next lights up. Null if no foliage is on screen. */
   private foliageAnchor(view: Phaser.Geom.Rectangle): { x: number; y: number } | null {
-    const pad = 40, pts: Array<{ x: number; y: number }> = [];
+    const pad = 30, pts: Array<{ x: number; y: number }> = [];
     const near = (x: number, y: number) => x >= view.x - pad && x <= view.right + pad && y >= view.y - pad && y <= view.bottom + pad;
-    for (const t of this.trees.values()) if (near(t.sprite.x, t.sprite.y)) pts.push({ x: t.sprite.x, y: t.sprite.y - t.sprite.displayHeight * 0.55 }); // around the canopy
-    for (const b of this.bushes.values()) if (near(b.base.x, b.base.y)) pts.push({ x: b.base.x, y: b.base.y - b.base.displayHeight * 0.4 });
+    for (const t of this.trees.values()) if (near(t.sprite.x, t.sprite.y)) pts.push({ x: t.sprite.x + Phaser.Math.Between(-14, 14), y: t.sprite.y - t.sprite.displayHeight * 0.55 + Phaser.Math.Between(-14, 10) });
+    for (const b of this.bushes.values()) if (near(b.base.x, b.base.y)) pts.push({ x: b.base.x + Phaser.Math.Between(-10, 10), y: b.base.y - b.base.displayHeight * 0.4 + Phaser.Math.Between(-8, 6) });
     return pts.length ? pts[Math.floor(Math.random() * pts.length)]! : null;
+  }
+  /** Light a firefly up at a fresh foliage spot + start a new life (or, if no foliage is in view, keep
+   *  it dark and try again shortly). */
+  private relightFirefly(f: Firefly, view: Phaser.Geom.Rectangle): void {
+    const a = this.foliageAnchor(view);
+    if (!a) { f.pause = 0.6; f.halo.setVisible(false); f.core.setVisible(false); return; }
+    f.halo.setPosition(a.x, a.y); f.core.setPosition(a.x, a.y);
+    f.age = 0; f.life = 2.6 + Math.random() * 3.6; f.pause = 0;
+    f.heading = Math.random() * Math.PI * 2; f.breathT = Math.random() * 6.28;
   }
   private updateFireflies(delta: number): void {
     if (!this.gameReady || !this.islandLayer || !this.textures.exists('light-beam')) return;
-    const darkness = Phaser.Math.Clamp(this.nightTint(this.dayFrac()).alpha / 0.5, 0, 1); // 0 = day → ~1 deep night
+    const darkness = Phaser.Math.Clamp(this.nightTint(this.dayFrac()).alpha / 0.55, 0, 1); // 0 = day → ~1 deep night
     if (darkness <= 0.02) { if (this.fireflies) for (const f of this.fireflies) { f.halo.setVisible(false); f.core.setVisible(false); } return; }
     const view = this.cameras.main.worldView;
+    const dt = delta / 1000;
     if (!this.fireflies) {
-      this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth soft halo
+      this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth soft falloff (no blocky square)
       this.fireflies = [];
       for (let i = 0; i < GameScene.FIREFLY_COUNT; i++) {
         const halo = this.add.image(0, 0, 'light-beam') // small soft glow
-          .setTint(0xfff29a).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 5).setScale(0.2).setVisible(false);
-        const core = this.add.image(0, 0, '__WHITE') // ~2px crisp bright point
-          .setTint(0xffffcf).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 6).setDisplaySize(2, 2).setVisible(false);
-        const a = this.foliageAnchor(view);
-        const ax = a?.x ?? view.centerX, ay = a?.y ?? view.centerY;
-        halo.setPosition(ax, ay); core.setPosition(ax, ay); // START on the anchor (not world 0,0)
-        this.fireflies.push({ halo, core, ax, ay, heading: Math.random() * Math.PI * 2, blinkT: Math.random() * 4, period: 1.7 + Math.random() * 2.3, base: 0.7 + Math.random() * 0.4 });
-        if (!a) core.setData('noAnchor', true);
+          .setTint(0xfff2a0).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 5).setScale(0.13).setVisible(false);
+        const core = this.add.image(0, 0, 'light-beam') // tiny bright centre (soft → natural, not a hard pixel)
+          .setTint(0xfffbe0).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 6).setScale(0.06).setVisible(false);
+        this.fireflies.push({ halo, core, age: 0, life: 0, pause: Math.random() * 4, heading: 0, breathT: 0, breathHz: 3 + Math.random() * 3, base: 0.85 + Math.random() * 0.4 });
       }
     }
-    const dt = delta / 1000;
     for (const f of this.fireflies) {
-      // Hover around the foliage anchor: a gentle meander + a spring pulling it back (stronger the
-      // farther it strays), so it lingers in the bush/tree instead of drifting off over the water.
-      f.heading += (Math.random() - 0.5) * 1.8 * dt;
-      let vx = Math.cos(f.heading) * 10, vy = Math.sin(f.heading) * 10;
-      const rx = f.ax - f.core.x, ry = f.ay - f.core.y, dist = Math.hypot(rx, ry) || 1;
-      if (dist > 6) { const pull = Math.min(dist, 26) * 0.9; vx += (rx / dist) * pull; vy += (ry / dist) * pull; }
-      f.halo.x += vx * dt; f.halo.y += vy * dt; f.core.x += vx * dt; f.core.y += vy * dt;
-      f.blinkT += dt;
-      const pulse = Math.pow(Math.max(0, Math.sin((f.blinkT / f.period) * Math.PI * 2)), 2); // flash then dim
-      const a = pulse * f.base * darkness;
-      f.halo.setAlpha(a * 0.6).setVisible(a > 0.01);   // halo is the softer, fainter part
-      f.core.setAlpha(a).setVisible(a > 0.01);
-      // When dark (no pop), re-anchor to a fresh in-view tree/bush if this one scrolled away — keeps
-      // them following the camera AND always tied to foliage.
-      const m = 48, off = f.ax < view.x - m || f.ax > view.right + m || f.ay < view.y - m || f.ay > view.bottom + m;
-      if (a < 0.02 && (off || f.core.getData('noAnchor'))) {
-        const na = this.foliageAnchor(view);
-        if (na) { f.ax = na.x; f.ay = na.y; f.core.setData('noAnchor', false); f.halo.setPosition(na.x, na.y); f.core.setPosition(na.x, na.y); f.heading = Math.random() * Math.PI * 2; }
-        else f.core.setData('noAnchor', true);
+      if (f.pause > 0) { // dark between lives
+        f.pause -= dt; f.halo.setVisible(false); f.core.setVisible(false);
+        if (f.pause <= 0) this.relightFirefly(f, view);
+        continue;
       }
+      f.age += dt; f.breathT += dt;
+      // Drift a little as it flies: a gentle meander + a slight upward rise (like a real firefly).
+      f.heading += (Math.random() - 0.5) * 2.4 * dt;
+      const dx = Math.cos(f.heading) * 9 * dt, dy = (Math.sin(f.heading) * 9 - 4) * dt;
+      f.halo.x += dx; f.halo.y += dy; f.core.x += dx; f.core.y += dy;
+      // Life envelope: fade in → peak → fade out (a sine arch), with a faster BREATH shimmering on top.
+      const p = f.age / f.life;
+      const env = Math.sin(Phaser.Math.Clamp(p, 0, 1) * Math.PI);
+      const a = env * (0.72 + 0.28 * Math.sin(f.breathT * f.breathHz)) * f.base * darkness;
+      f.halo.setAlpha(a * 0.5).setVisible(a > 0.01);
+      f.core.setAlpha(a).setVisible(a > 0.01);
+      if (p >= 1) { f.pause = 0.4 + Math.random() * 2.4; f.halo.setVisible(false); f.core.setVisible(false); } // faded out → dark pause, then relight elsewhere
     }
   }
 
