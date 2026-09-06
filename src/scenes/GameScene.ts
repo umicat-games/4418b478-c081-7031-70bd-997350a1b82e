@@ -2884,7 +2884,7 @@ export class GameScene extends Phaser.Scene {
     const view = this.cameras.main.worldView, dt = delta / 1000;
     if (!this.rainOverlay) {
       // Grey wash over the world (screen-space, like the night mask; above it so it reads at night).
-      this.rainOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0x556270, 0.22)
+      this.rainOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0x5a626e, 0.36)
         .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH + 1);
       const rot = Math.atan2(GameScene.RAIN_VY, GameScene.RAIN_VX) - Math.PI / 2; // align the streak with the fall
       this.raindrops = [];
