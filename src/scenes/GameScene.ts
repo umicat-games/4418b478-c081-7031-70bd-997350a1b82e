@@ -2781,13 +2781,16 @@ export class GameScene extends Phaser.Scene {
    *  with the island. Also exposes the darkness fraction so the lamp glow can fade in at night. */
   currentNightTint(): { color: number; alpha: number } { return this.nightTint(this.dayFrac()); }
 
-  /** Fireflies: warm motes that TWINKLE ON & OFF in the trees/bushes at night. Each lives a SHORT
-   *  life — lights up at a foliage spot, drifts a little while its glow BREATHES, fades out and
-   *  vanishes; after a random pause a new one relights at another in-view tree/bush. Two soft
-   *  light-beam layers (small bright centre + softer halo, ADD blend, LINEAR-sampled so the falloff
-   *  is smooth) above the night mask. Created lazily on the first night, hidden by day. TEST: shown
-   *  every night; a per-night chance can gate this later. */
+  /** Fireflies: warm yellow-green motes that TWINKLE ON & OFF in the trees/bushes on SOME nights.
+   *  Each lives a SHORT life — lights up at a foliage spot, drifts a little while its glow BREATHES,
+   *  fades out and vanishes; after a random pause a new one relights at another in-view tree/bush.
+   *  Two soft light-beam layers (small bright centre + softer halo, ADD blend, LINEAR-sampled so the
+   *  falloff is smooth) above the night mask. Whether they come out is rolled ONCE per night (when
+   *  dusk first darkens the world) at FIREFLY_NIGHT_CHANCE, and held until dawn. Sprites are created
+   *  lazily on the first firefly night. */
   private static FIREFLY_COUNT = 22;
+  private static FIREFLY_NIGHT_CHANCE = 0.5; // fraction of nights the fireflies appear
+  private firefliesTonight: boolean | null = null; // this night's roll (null = daytime / not yet decided)
   /** A random point in a tree canopy / bush (with a little scatter) in/near the camera view — where a
    *  firefly next lights up. Null if no foliage is on screen. */
   private foliageAnchor(view: Phaser.Geom.Rectangle): { x: number; y: number } | null {
@@ -2809,7 +2812,10 @@ export class GameScene extends Phaser.Scene {
   private updateFireflies(delta: number): void {
     if (!this.gameReady || !this.islandLayer || !this.textures.exists('light-beam')) return;
     const darkness = Phaser.Math.Clamp(this.nightTint(this.dayFrac()).alpha / 0.55, 0, 1); // 0 = day → ~1 deep night
-    if (darkness <= 0.02) { if (this.fireflies) for (const f of this.fireflies) { f.halo.setVisible(false); f.core.setVisible(false); } return; }
+    const hideAll = () => { if (this.fireflies) for (const f of this.fireflies) { f.halo.setVisible(false); f.core.setVisible(false); } };
+    if (darkness <= 0.02) { this.firefliesTonight = null; hideAll(); return; } // daytime → reset the nightly roll
+    if (this.firefliesTonight === null) this.firefliesTonight = Math.random() < GameScene.FIREFLY_NIGHT_CHANCE; // dusk → roll ONCE for tonight
+    if (!this.firefliesTonight) { hideAll(); return; } // a no-firefly night
     const view = this.cameras.main.worldView;
     const dt = delta / 1000;
     if (!this.fireflies) {

@@ -375,7 +375,14 @@ Cato remembers the player across sessions as a **layered memory** — a determin
 
 ## Real-world time + calendar (ADR-029, 2026-08)
 
-The gameplay clock is tied to the **player's real local time**, not an internal loop. `nowMs()` = `Date.now() + debugTimeOffsetMs` (the debug time-skip is an OFFSET, not a separate clock). `dayFrac()` = the time-of-day fraction from the real wall-clock (drives the night mask + weather + the 5-step weather pointer + `bgIndex`). The gameplay **"day" = the real LOCAL calendar day** (days-since-epoch in the player's timezone) — so overnight orders/coops/cows/bond settle on the real next calendar day, and a returning player is on the right day. `settleDay` fires on a calendar-day rollover (or a debug skip crossing one).
+The gameplay clock is tied to the **player's real local time**, not an internal loop. `nowMs()` = `Date.now() + debugTimeOffsetMs` (the debug time-skip is an OFFSET, not a separate clock; `fastForwardTime` / U key / the ⏩ button jump **+2h** each). `dayFrac()` = the time-of-day fraction from the real wall-clock (drives the night mask + weather + the 5-step weather pointer + `bgIndex`). The gameplay **"day" = the real LOCAL calendar day** (days-since-epoch in the player's timezone) — so overnight orders/coops/cows/bond settle on the real next calendar day, and a returning player is on the right day. `settleDay` fires on a calendar-day rollover (or a debug skip crossing one).
+
+## Night ambiance — day/night mask · lamp glow · fireflies (2026-09)
+
+Evening→night darkening + light sources, all driven by the real wall-clock `dayFrac()`.
+- **Day/night mask.** `NIGHT_KEYS` = keyframes `[dayFraction, hexColour, alpha]` lerped cyclically; `updateNightMask()` tints a full-screen scrollFactor-0 rect at `NIGHT_MASK_DEPTH` (500000 — above world sprites, below the HUD scenes). Deep night is **~0.78 alpha** (dark navy). `currentNightTint()` is PUBLIC so **HouseScene** (running over the PAUSED GameScene) darkens the room in lockstep.
+- **House lamp glow (HouseScene).** A placed lamp sprite (`basic_furniture`, a `lamp-*` frame) gets a **3-layer warm glow** (`light-beam.png`, ADD blend, LINEAR-sampled) that FADES IN with the room's darkness and BREATHES — all three layers pulse on ONE shared counter tween so they swell together. (No clip mask: ADD-blended objects ignore Phaser geometry/bitmap masks, so the halo is just kept small enough to barely reach the walls.)
+- **Fireflies (island, `updateFireflies`).** Warm **yellow-green** motes that appear on **SOME nights** — rolled ONCE per night at `FIREFLY_NIGHT_CHANCE` (0.5) when dusk first darkens the world, held until dawn. Each has a LIFECYCLE: lights up at a tree/bush (`foliageAnchor` — so they gather in foliage, not open water), drifts a little while its glow BREATHES on a sine life-envelope, fades out, vanishes, then after a pause a new one relights elsewhere. Two tiny soft `light-beam` layers (bright centre + halo, ADD), above the night mask. `light-beam.png` (32px soft radial) is pulled from the Asset Manager into `public/uploaded/`.
 
 ## High-DPI rendering — crisp on retina (2026-09-04, ADR-023 shipped)
 
