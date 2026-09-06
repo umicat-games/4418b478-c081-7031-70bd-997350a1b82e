@@ -1017,8 +1017,8 @@ export class GameScene extends Phaser.Scene {
   // one lights up at another foliage spot. So they twinkle on & off in the bushes, not hover forever.
   private fireflies?: Firefly[];
   // Rain weather: a grey overlay + white diagonal streaks (top-right → bottom-left) + a splash where
-  // each drop lands. Toggled by `raining` (debug key B for now; the weather system drives it later).
-  private raining = false;
+  // each drop lands. Driven by the `rain` debug flag (Settings toggle, or key B) for now; the weather
+  // system will drive it later.
   private rainOverlay?: Phaser.GameObjects.Rectangle;
   private raindrops?: Raindrop[];
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -1504,7 +1504,7 @@ export class GameScene extends Phaser.Scene {
         // exercise the weather/time/money HUD without waiting / an economy.
         this.input.keyboard?.on('keydown-Y', () => this.addMoney(12345));
         this.input.keyboard?.on('keydown-U', () => this.fastForwardTime());
-        this.input.keyboard?.on('keydown-B', () => { this.raining = !this.raining; this.publishWeatherHud(); }); // B = toggle rain (test)
+        this.input.keyboard?.on('keydown-B', () => { toggleDebug('rain'); this.publishWeatherHud(); }); // B = toggle rain (test)
         // L = stuff the CHEST with a pile of varied test items + open the menu on the
         // Chest tab, so the SCROLL bar has enough to scroll (real saves rarely have 35+
         // items). Debug only — Take/Delete them, or Restart workspace, to clear.
@@ -2692,7 +2692,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('weatherHud', {
       visible: this.gameReady && !this.inventoryOpen,
       bgFrame: WEATHER_BGS[this.bgIndex()], // time-tinted window background
-      weatherFrame: this.raining ? 'rain-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
+      weatherFrame: isDebug('rain') ? 'rain-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
       pointerStep: this.pointerStep(),
       money: this.money,
       timeLabel: this.timeLabel(),
@@ -2862,7 +2862,7 @@ export class GameScene extends Phaser.Scene {
   /** Rain weather: a translucent grey overlay + white streaks slanting from top-right to bottom-left,
    *  each splashing where it lands. Streaks are world-space at high depth (above the night mask, so
    *  they read at night too), respawned within the camera view so they follow a pan. Lazily built on
-   *  the first rain; hidden when `raining` is off. */
+   *  the first rain; hidden when the `rain` flag is off. */
   private static RAIN_COUNT = 90;
   private static RAIN_VX = -70; // fall velocity x (world px/s): leftward
   private static RAIN_VY = 220; // fall velocity y: downward
@@ -2876,7 +2876,7 @@ export class GameScene extends Phaser.Scene {
   }
   private updateRain(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
-    if (!this.raining) {
+    if (!isDebug('rain')) {
       this.rainOverlay?.setVisible(false);
       if (this.raindrops) for (const d of this.raindrops) d.img.setVisible(false);
       return;
@@ -7075,7 +7075,7 @@ export class GameScene extends Phaser.Scene {
       // Debug toggles: flip the flag (persists to localStorage) + re-render the checkbox.
       const dbg = this.registry.get('menuDebugRows') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
       const row = dbg?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-      if (row) { toggleDebug(row.key); this.publishMenu(); return true; }
+      if (row) { toggleDebug(row.key); if (row.key === 'rain') this.publishWeatherHud(); this.publishMenu(); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();

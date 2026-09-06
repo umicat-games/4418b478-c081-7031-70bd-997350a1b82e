@@ -690,17 +690,30 @@ export class MenuScene extends Phaser.Scene {
    *  screen's slider, same `settings-buttons` tick/knob art) + a "Title screen" button
    *  (empty `button-idle` + text, like the title buttons) that returns to the menu.
    *  GameScene routes taps via the published `menuSettingsTrack` / `menuSettingsBack`. */
+  private settingsMask?: Phaser.Display.Masks.GeometryMask; // clips the (scrollable) Settings content to the frame band
+  private settingsMaskG?: Phaser.GameObjects.Graphics;      // the mask's shape (redrawn each render for resize)
   private renderSettings(c: Phaser.GameObjects.Container, cx: number, lw: number): void {
     const W = this.scale.width, H = this.scale.height;
     // cx = frame centre (passed in); lw = content sizing width (kept at the original L.w so the
     // sliders/buttons stay their size even though the Settings frame now spans full width).
+    // The content is TALLER than the frame → it SCROLLS: `this.scroll` is a PIXEL offset here (the
+    // rail sets it via setScroll, same as the grids' row offset), applied to every element + its
+    // hit-rect, with a mask clipping to the visible band. Compute the extent first so we can clamp.
+    const rowH = H * 0.033, gap = H * 0.009, step = rowH + gap, box = H * 0.022;
+    const nFlags = DEBUG_PANEL ? DEBUG_FLAGS.length : 0;
+    const contentTop = 0.282 * H, contentBottom = 0.905 * H, visibleH = contentBottom - contentTop;
+    const lastBottom = nFlags > 0 ? 0.803 * H + (nFlags - 1) * step + rowH : 0.685 * H + H * 0.048 / 2;
+    const totalH = lastBottom - contentTop;
+    this.maxScrollRows = Math.max(0, Math.round(totalH - visibleH)); // repurposed as PIXELS for Settings
+    if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
+    const off = this.scroll; // pixel scroll offset (0 on open; the rail drives it)
 
     // ── Volume sliders: Music (BGM) + SFX ────────────────────────────────────
-    this.renderVolumeSlider(c, cx, lw, 0.295 * H, 0.36 * H, t('settings_music'), getBgmVolume(), 'menuSettingsTrack'); // pushed below the title-bar (was 0.26 → collided)
-    this.renderVolumeSlider(c, cx, lw, 0.43 * H, 0.505 * H, t('settings_sfx'), getSfxVolume(), 'menuSfxTrack');
+    this.renderVolumeSlider(c, cx, lw, 0.295 * H - off, 0.36 * H - off, t('settings_music'), getBgmVolume(), 'menuSettingsTrack');
+    this.renderVolumeSlider(c, cx, lw, 0.43 * H - off, 0.505 * H - off, t('settings_sfx'), getSfxVolume(), 'menuSfxTrack');
 
     // ── "Title screen" button (styled like the title buttons) ────────────────
-    const bw = lw * 0.42, bh = bw * (32 / 96), by = 0.595 * H;
+    const bw = lw * 0.42, bh = bw * (32 / 96), by = 0.595 * H - off;
     if (this.textures.exists('ui_big_play_button')) {
       c.add(this.add.image(cx, by, 'ui_big_play_button', 'button-idle').setDisplaySize(bw, bh));
     }
@@ -709,7 +722,7 @@ export class MenuScene extends Phaser.Scene {
 
     // ── "Clear data & new game" — wipes THIS user's save + returns to title so the
     //    opening flow replays (red = destructive). ────────────────────────────
-    const cbw = lw * 0.52, cbh = H * 0.048, cby = 0.685 * H;
+    const cbw = lw * 0.52, cbh = H * 0.048, cby = 0.685 * H - off;
     const cg = this.add.graphics();
     cg.fillStyle(0xc85a54, 1); cg.fillRoundedRect(cx - cbw / 2, cby - cbh / 2, cbw, cbh, 8);
     cg.lineStyle(2, 0xa2433f, 1); cg.strokeRoundedRect(cx - cbw / 2, cby - cbh / 2, cbw, cbh, 8);
@@ -718,27 +731,34 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuClearData', { x: cx - cbw / 2, y: cby - cbh / 2, w: cbw, h: cbh });
 
     // ── Debug toggles (dev-only; DEBUG_PANEL=false hides before release) ──────
-    if (!DEBUG_PANEL) { this.registry.set('menuDebugRows', []); return; }
-    c.add(this.T(cx, 0.755 * H, t('settings_debug'), H * 0.024, INK));
-    c.add(this.T(cx, 0.782 * H, t('settings_debug_note'), H * 0.015, SUB));
-    const rowW = lw * 0.66, rowLeft = cx - rowW / 2, rowH = H * 0.033, gap = H * 0.009;
-    const box = H * 0.022;
     const rows: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
-    DEBUG_FLAGS.forEach((f, i) => {
-      const ry = 0.803 * H + i * (rowH + gap), on = isDebug(f.key);
-      const g = this.add.graphics();
-      g.fillStyle(0x000000, 0.05); g.fillRoundedRect(rowLeft, ry, rowW, rowH, 6); c.add(g);
-      const label = (f.reloadOnly ? '★ ' : '') + t(f.labelKey);
-      c.add(this.T(rowLeft + box * 0.6, ry + rowH / 2, label, H * 0.02, INK, 0));
-      const bx = rowLeft + rowW - box * 1.1, by2 = ry + (rowH - box) / 2;
-      const cb = this.add.graphics();
-      cb.fillStyle(on ? 0x6bbf59 : 0xd8cbb0, 1); cb.fillRoundedRect(bx, by2, box, box, 4);
-      cb.lineStyle(2, on ? 0x4f9a41 : 0xb8a678, 1); cb.strokeRoundedRect(bx, by2, box, box, 4);
-      if (on) { cb.lineStyle(Math.max(2, box * 0.14), 0xffffff, 1); cb.beginPath(); cb.moveTo(bx + box * 0.24, by2 + box * 0.52); cb.lineTo(bx + box * 0.44, by2 + box * 0.72); cb.lineTo(bx + box * 0.78, by2 + box * 0.28); cb.strokePath(); }
-      c.add(cb);
-      rows.push({ x: rowLeft, y: ry, w: rowW, h: rowH, key: f.key });
-    });
+    if (DEBUG_PANEL) {
+      c.add(this.T(cx, 0.755 * H - off, t('settings_debug'), H * 0.024, INK));
+      c.add(this.T(cx, 0.782 * H - off, t('settings_debug_note'), H * 0.015, SUB));
+      const rowW = lw * 0.66, rowLeft = cx - rowW / 2;
+      DEBUG_FLAGS.forEach((f, i) => {
+        const ry = 0.803 * H + i * step - off, on = isDebug(f.key);
+        const g = this.add.graphics();
+        g.fillStyle(0x000000, 0.05); g.fillRoundedRect(rowLeft, ry, rowW, rowH, 6); c.add(g);
+        const label = (f.reloadOnly ? '★ ' : '') + t(f.labelKey);
+        c.add(this.T(rowLeft + box * 0.6, ry + rowH / 2, label, H * 0.02, INK, 0));
+        const bx = rowLeft + rowW - box * 1.1, by2 = ry + (rowH - box) / 2;
+        const cb = this.add.graphics();
+        cb.fillStyle(on ? 0x6bbf59 : 0xd8cbb0, 1); cb.fillRoundedRect(bx, by2, box, box, 4);
+        cb.lineStyle(2, on ? 0x4f9a41 : 0xb8a678, 1); cb.strokeRoundedRect(bx, by2, box, box, 4);
+        if (on) { cb.lineStyle(Math.max(2, box * 0.14), 0xffffff, 1); cb.beginPath(); cb.moveTo(bx + box * 0.24, by2 + box * 0.52); cb.lineTo(bx + box * 0.44, by2 + box * 0.72); cb.lineTo(bx + box * 0.78, by2 + box * 0.28); cb.strokePath(); }
+        c.add(cb);
+        rows.push({ x: rowLeft, y: ry, w: rowW, h: rowH, key: f.key });
+      });
+    }
     this.registry.set('menuDebugRows', rows);
+
+    // Clip the scrolling content to the frame band + draw the scrollbar rail (pixel units).
+    if (!this.settingsMaskG) this.settingsMaskG = this.make.graphics({}, false);
+    this.settingsMaskG.clear().fillStyle(0xffffff).fillRect(0, contentTop, W, visibleH);
+    if (!this.settingsMask) this.settingsMask = this.settingsMaskG.createGeometryMask();
+    c.setMask(this.settingsMask);
+    this.drawScrollbar(c, (1 - 0.055) * W, contentTop, contentBottom, visibleH, totalH);
   }
 
   /** One labelled tick-and-knob volume slider centred on the left panel. Publishes
