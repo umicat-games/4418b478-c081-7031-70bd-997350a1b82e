@@ -1022,6 +1022,10 @@ export class GameScene extends Phaser.Scene {
   private rainOverlay?: Phaser.GameObjects.Rectangle;
   private raindrops?: Raindrop[];
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
+  // Fog / mist: a light haze + big soft white patches slowly drifting (rolling mist). Shared by rain
+  // (a misty rainy day) and a future fog weather.
+  private fogOverlay?: Phaser.GameObjects.Rectangle;
+  private fogBlobs?: Array<{ img: Phaser.GameObjects.Image; vx: number; vy: number }>;
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -2911,6 +2915,41 @@ export class GameScene extends Phaser.Scene {
         this.rainSplash!.emitParticleAt(d.img.x, d.groundY, Phaser.Math.Between(2, 3));
         this.resetRaindrop(d, view, false);
       }
+    }
+  }
+
+  /** Fog / mist: a light haze wash + a few BIG soft white patches drifting slowly across the view
+   *  (rolling mist), for a dreamy "雾蒙蒙" feel. On during rain now; a fog weather can reuse it. Blobs
+   *  are white light-beam sprites (normal blend → they lighten toward white) above the rain overlay
+   *  but below the streaks. Lazily built; wraps within the camera view so mist rolls wherever you pan. */
+  private static FOG_COUNT = 8;
+  private updateFog(delta: number): void {
+    if (!this.gameReady || !this.islandLayer) return;
+    const foggy = isDebug('rain'); // TODO: || isDebug('fog') once a fog weather lands
+    if (!foggy) {
+      this.fogOverlay?.setVisible(false);
+      if (this.fogBlobs) for (const b of this.fogBlobs) b.img.setVisible(false);
+      return;
+    }
+    const view = this.cameras.main.worldView, dt = delta / 1000;
+    if (!this.fogOverlay) {
+      this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xe7edf1, 0.13) // pale haze wash
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH + 2);
+      if (this.textures.exists('light-beam')) this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR);
+      this.fogBlobs = [];
+      for (let i = 0; i < GameScene.FOG_COUNT; i++) {
+        const img = this.add.image(Phaser.Math.Between(view.x, view.right), Phaser.Math.Between(view.y, view.bottom), 'light-beam')
+          .setTint(0xeef3f7).setAlpha(0.09).setDepth(NIGHT_MASK_DEPTH + 3).setScale(6 + Math.random() * 5);
+        this.fogBlobs.push({ img, vx: (7 + Math.random() * 10) * (Math.random() < 0.5 ? -1 : 1), vy: (Math.random() - 0.5) * 4 });
+      }
+    }
+    this.fogOverlay.setVisible(true);
+    const M = 240; // wrap margin (patches are big + soft)
+    for (const b of this.fogBlobs!) {
+      b.img.setVisible(true);
+      b.img.x += b.vx * dt; b.img.y += b.vy * dt;
+      if (b.img.x < view.x - M) b.img.x = view.right + M; else if (b.img.x > view.right + M) b.img.x = view.x - M;
+      if (b.img.y < view.y - M) b.img.y = view.bottom + M; else if (b.img.y > view.bottom + M) b.img.y = view.y - M;
     }
   }
 
@@ -10591,6 +10630,7 @@ export class GameScene extends Phaser.Scene {
     this.updateNightMask(); // tint the world toward evening / night
     this.updateFireflies(delta); // warm blinking motes drifting over the world at night
     this.updateRain(delta); // rain weather: grey overlay + diagonal streaks + ground splashes
+    this.updateFog(delta); // fog / mist: light haze + drifting soft patches (misty rain, later fog weather)
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
