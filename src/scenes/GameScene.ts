@@ -2816,10 +2816,10 @@ export class GameScene extends Phaser.Scene {
       this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth soft falloff (no blocky square)
       this.fireflies = [];
       for (let i = 0; i < GameScene.FIREFLY_COUNT; i++) {
-        const halo = this.add.image(0, 0, 'light-beam') // small soft glow
-          .setTint(0xfff2a0).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 5).setScale(0.13).setVisible(false);
+        const halo = this.add.image(0, 0, 'light-beam') // small soft glow — bright yellow-green
+          .setTint(0xc8f84a).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 5).setScale(0.13).setVisible(false);
         const core = this.add.image(0, 0, 'light-beam') // tiny bright centre (soft → natural, not a hard pixel)
-          .setTint(0xfffbe0).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 6).setScale(0.06).setVisible(false);
+          .setTint(0xeaff78).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 6).setScale(0.06).setVisible(false);
         this.fireflies.push({ halo, core, age: 0, life: 0, pause: Math.random() * 4, heading: 0, breathT: 0, breathHz: 3 + Math.random() * 3, base: 0.85 + Math.random() * 0.4 });
       }
     }
