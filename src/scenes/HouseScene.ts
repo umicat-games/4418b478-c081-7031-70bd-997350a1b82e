@@ -196,7 +196,7 @@ export class HouseScene extends Phaser.Scene {
     // its own base, so they stay proportional.
     this.tweens.addCounter({
       from: 0.94, to: 1.06, duration: BREATHE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      onUpdate: (tw) => { const f = tw.getValue(); this.lampGlow.forEach((g, i) => g.setScale(layers[i]!.scale * f)); },
+      onUpdate: (tw) => { const f = tw.getValue() ?? 1; this.lampGlow.forEach((g, i) => g.setScale(layers[i]!.scale * f)); },
     });
   }
 
