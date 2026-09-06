@@ -1025,7 +1025,7 @@ export class GameScene extends Phaser.Scene {
   // Fog / mist: a light haze + big soft white patches slowly drifting (rolling mist). Shared by rain
   // (a misty rainy day) and a future fog weather.
   private fogOverlay?: Phaser.GameObjects.Rectangle;
-  private fogBlobs?: Array<{ img: Phaser.GameObjects.Image; vx: number; vy: number }>;
+  private fogBlobs?: Array<{ img: Phaser.GameObjects.Image; vx: number; vy: number; sizeFrac: number }>;
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -2922,7 +2922,7 @@ export class GameScene extends Phaser.Scene {
    *  (rolling mist), for a dreamy "雾蒙蒙" feel. On during rain now; a fog weather can reuse it. Blobs
    *  are white light-beam sprites (normal blend → they lighten toward white) above the rain overlay
    *  but below the streaks. Lazily built; wraps within the camera view so mist rolls wherever you pan. */
-  private static FOG_COUNT = 8;
+  private static FOG_COUNT = 11;
   private updateFog(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
     const foggy = isDebug('rain'); // TODO: || isDebug('fog') once a fog weather lands
@@ -2933,20 +2933,22 @@ export class GameScene extends Phaser.Scene {
     }
     const view = this.cameras.main.worldView, dt = delta / 1000;
     if (!this.fogOverlay) {
-      this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xe7edf1, 0.13) // pale haze wash
+      this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xe7edf1, 0.10) // light base haze — the clumps sit on top
         .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH + 2);
       if (this.textures.exists('light-beam')) this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.fogBlobs = [];
       for (let i = 0; i < GameScene.FOG_COUNT; i++) {
         const img = this.add.image(Phaser.Math.Between(view.x, view.right), Phaser.Math.Between(view.y, view.bottom), 'light-beam')
-          .setTint(0xeef3f7).setAlpha(0.09).setDepth(NIGHT_MASK_DEPTH + 3).setScale(6 + Math.random() * 5);
-        this.fogBlobs.push({ img, vx: (7 + Math.random() * 10) * (Math.random() < 0.5 ? -1 : 1), vy: (Math.random() - 0.5) * 4 });
+          .setTint(0xf4f8fb).setAlpha(0.28).setDepth(NIGHT_MASK_DEPTH + 3);
+        this.fogBlobs.push({ img, vx: (7 + Math.random() * 10) * (Math.random() < 0.5 ? -1 : 1), vy: (Math.random() - 0.5) * 4, sizeFrac: 0.22 + Math.random() * 0.2 });
       }
     }
     this.fogOverlay.setVisible(true);
-    const M = 240; // wrap margin (patches are big + soft)
+    const M = view.width * 0.55; // wrap margin > a patch's radius
     for (const b of this.fogBlobs!) {
-      b.img.setVisible(true);
+      // Size each patch as a fraction of the SCREEN (via the world view width) so clumps read the
+      // same on any zoom/device — a fixed world scale looked huge (one flat wash) on mobile's zoom.
+      b.img.setVisible(true).setDisplaySize(b.sizeFrac * view.width, b.sizeFrac * view.width);
       b.img.x += b.vx * dt; b.img.y += b.vy * dt;
       if (b.img.x < view.x - M) b.img.x = view.right + M; else if (b.img.x > view.right + M) b.img.x = view.x - M;
       if (b.img.y < view.y - M) b.img.y = view.bottom + M; else if (b.img.y > view.bottom + M) b.img.y = view.y - M;
