@@ -224,6 +224,20 @@
       },
       "assetId": "basic_furniture",
       "frame": "chair-front"
+    },
+    {
+      "id": "e-mtpuhy8l-syke",
+      "kind": "sprite",
+      "transform": {
+        "x": 36,
+        "y": 73.33333333333331,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "basic_furniture",
+      "frame": "lamp-3"
     }
   ]
 }
