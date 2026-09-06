@@ -1008,8 +1008,9 @@ export class GameScene extends Phaser.Scene {
   private nightMask?: Phaser.GameObjects.Rectangle; // full-screen day/night colour tint
   // Fireflies: warm blinking motes that drift over the world at NIGHT (glow through the mask). TEST:
   // they show every night; later this becomes a per-night chance. Lazily created on the first night.
-  // Each = a tiny bright CORE + a small soft HALO (both ADD-blended, blinking together).
-  private fireflies?: Array<{ halo: Phaser.GameObjects.Image; core: Phaser.GameObjects.Image; heading: number; blinkT: number; period: number; base: number }>;
+  // Each = a tiny bright CORE + a small soft HALO (both ADD-blended, blinking together), tethered to
+  // a foliage ANCHOR (a tree/bush) it gently hovers around — fireflies gather in the bushes & trees.
+  private fireflies?: Array<{ halo: Phaser.GameObjects.Image; core: Phaser.GameObjects.Image; ax: number; ay: number; heading: number; blinkT: number; period: number; base: number }>;
 
   // ── Save data (umicat.saves, per (game, user)) ──────────────────────────
   // Auto-save the whole game state (farm + backpack) so it restores next login.
@@ -2749,10 +2750,10 @@ export class GameScene extends Phaser.Scene {
     if (this.menuOpen) this.publishMenu();
   }
 
-  /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 6h so real-time features
-   *  (night, a day rollover) are testable without waiting. Session-only. */
+  /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 2h so real-time features
+   *  (evening dimming, night, a day rollover) are testable in finer steps. Session-only. */
   private fastForwardTime(): void {
-    this.debugTimeOffsetMs += 6 * 3600 * 1000; // +6h
+    this.debugTimeOffsetMs += 2 * 3600 * 1000; // +2h
     this.syncRealDay();
     this.publishWeatherHud();
     this.updateNightMask();
@@ -2783,6 +2784,15 @@ export class GameScene extends Phaser.Scene {
    *  dark. When one drifts off-screen (while dark, so no pop) it respawns inside the view, so they
    *  follow wherever you pan. TEST: shown every night; a per-night chance can gate this later. */
   private static FIREFLY_COUNT = 26;
+  /** A random foliage point (tree canopy / bush) in or near the camera view for a firefly to hover
+   *  around — so they gather in the bushes & trees, not over open water/grass. Null if none in view. */
+  private foliageAnchor(view: Phaser.Geom.Rectangle): { x: number; y: number } | null {
+    const pad = 40, pts: Array<{ x: number; y: number }> = [];
+    const near = (x: number, y: number) => x >= view.x - pad && x <= view.right + pad && y >= view.y - pad && y <= view.bottom + pad;
+    for (const t of this.trees.values()) if (near(t.sprite.x, t.sprite.y)) pts.push({ x: t.sprite.x, y: t.sprite.y - t.sprite.displayHeight * 0.55 }); // around the canopy
+    for (const b of this.bushes.values()) if (near(b.base.x, b.base.y)) pts.push({ x: b.base.x, y: b.base.y - b.base.displayHeight * 0.4 });
+    return pts.length ? pts[Math.floor(Math.random() * pts.length)]! : null;
+  }
   private updateFireflies(delta: number): void {
     if (!this.gameReady || !this.islandLayer || !this.textures.exists('light-beam')) return;
     const darkness = Phaser.Math.Clamp(this.nightTint(this.dayFrac()).alpha / 0.5, 0, 1); // 0 = day → ~1 deep night
@@ -2792,29 +2802,38 @@ export class GameScene extends Phaser.Scene {
       this.textures.get('light-beam').setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth soft halo
       this.fireflies = [];
       for (let i = 0; i < GameScene.FIREFLY_COUNT; i++) {
-        const x = Phaser.Math.Between(view.x, view.right), y = Phaser.Math.Between(view.y, view.bottom);
-        const halo = this.add.image(x, y, 'light-beam') // small soft glow
+        const halo = this.add.image(0, 0, 'light-beam') // small soft glow
           .setTint(0xfff29a).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 5).setScale(0.2).setVisible(false);
-        const core = this.add.image(x, y, '__WHITE') // ~2px crisp bright point
+        const core = this.add.image(0, 0, '__WHITE') // ~2px crisp bright point
           .setTint(0xffffcf).setBlendMode(Phaser.BlendModes.ADD).setDepth(NIGHT_MASK_DEPTH + 6).setDisplaySize(2, 2).setVisible(false);
-        this.fireflies.push({ halo, core, heading: Math.random() * Math.PI * 2, blinkT: Math.random() * 4, period: 1.7 + Math.random() * 2.3, base: 0.7 + Math.random() * 0.4 });
+        const a = this.foliageAnchor(view);
+        const ax = a?.x ?? view.centerX, ay = a?.y ?? view.centerY;
+        halo.setPosition(ax, ay); core.setPosition(ax, ay); // START on the anchor (not world 0,0)
+        this.fireflies.push({ halo, core, ax, ay, heading: Math.random() * Math.PI * 2, blinkT: Math.random() * 4, period: 1.7 + Math.random() * 2.3, base: 0.7 + Math.random() * 0.4 });
+        if (!a) core.setData('noAnchor', true);
       }
     }
     const dt = delta / 1000;
     for (const f of this.fireflies) {
-      f.heading += (Math.random() - 0.5) * 1.6 * dt;   // gentle meander
-      const dx = Math.cos(f.heading) * 13 * dt, dy = Math.sin(f.heading) * 13 * dt; // slow drift (~13 px/s)
-      f.halo.x += dx; f.halo.y += dy; f.core.x += dx; f.core.y += dy;
+      // Hover around the foliage anchor: a gentle meander + a spring pulling it back (stronger the
+      // farther it strays), so it lingers in the bush/tree instead of drifting off over the water.
+      f.heading += (Math.random() - 0.5) * 1.8 * dt;
+      let vx = Math.cos(f.heading) * 10, vy = Math.sin(f.heading) * 10;
+      const rx = f.ax - f.core.x, ry = f.ay - f.core.y, dist = Math.hypot(rx, ry) || 1;
+      if (dist > 6) { const pull = Math.min(dist, 26) * 0.9; vx += (rx / dist) * pull; vy += (ry / dist) * pull; }
+      f.halo.x += vx * dt; f.halo.y += vy * dt; f.core.x += vx * dt; f.core.y += vy * dt;
       f.blinkT += dt;
-      const pulse = Math.pow(Math.max(0, Math.sin((f.blinkT / f.period) * Math.PI * 2)), 2); // flash then dim (softer than ^3 → more lit at once)
+      const pulse = Math.pow(Math.max(0, Math.sin((f.blinkT / f.period) * Math.PI * 2)), 2); // flash then dim
       const a = pulse * f.base * darkness;
       f.halo.setAlpha(a * 0.6).setVisible(a > 0.01);   // halo is the softer, fainter part
       f.core.setAlpha(a).setVisible(a > 0.01);
-      const m = 48; // drifted out of view while dark → respawn inside it (follow the camera; no pop)
-      if (a < 0.02 && (f.core.x < view.x - m || f.core.x > view.right + m || f.core.y < view.y - m || f.core.y > view.bottom + m)) {
-        const nx = Phaser.Math.Between(view.x, view.right), ny = Phaser.Math.Between(view.y, view.bottom);
-        f.halo.setPosition(nx, ny); f.core.setPosition(nx, ny);
-        f.heading = Math.random() * Math.PI * 2;
+      // When dark (no pop), re-anchor to a fresh in-view tree/bush if this one scrolled away — keeps
+      // them following the camera AND always tied to foliage.
+      const m = 48, off = f.ax < view.x - m || f.ax > view.right + m || f.ay < view.y - m || f.ay > view.bottom + m;
+      if (a < 0.02 && (off || f.core.getData('noAnchor'))) {
+        const na = this.foliageAnchor(view);
+        if (na) { f.ax = na.x; f.ay = na.y; f.core.setData('noAnchor', false); f.halo.setPosition(na.x, na.y); f.core.setPosition(na.x, na.y); f.heading = Math.random() * Math.PI * 2; }
+        else f.core.setData('noAnchor', true);
       }
     }
   }
