@@ -2697,7 +2697,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('weatherHud', {
       visible: this.gameReady && !this.inventoryOpen,
       bgFrame: WEATHER_BGS[this.bgIndex()], // time-tinted window background
-      weatherFrame: isDebug('rain') ? 'heavy-rain-no-bg' : isDebug('lightRain') ? 'rain-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
+      weatherFrame: isDebug('rain') ? 'heavy-rain-no-bg' : isDebug('lightRain') ? 'rain-no-bg' : isDebug('fog') ? 'windy-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top (windy swirl = closest to fog)
       pointerStep: this.pointerStep(),
       money: this.money,
       timeLabel: this.timeLabel(),
@@ -2944,13 +2944,14 @@ export class GameScene extends Phaser.Scene {
   private static FOG_COUNT = 34;
   private updateFog(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
-    const heavy = isDebug('rain'), light = isDebug('lightRain'); // TODO: || isDebug('fog') once a fog weather lands
-    if (!heavy && !light) {
+    const rainHeavy = isDebug('rain'), rainLight = isDebug('lightRain'), fog = isDebug('fog');
+    if (!rainHeavy && !rainLight && !fog) {
       this.fogOverlay?.setVisible(false);
       if (this.fogBlobs) for (const b of this.fogBlobs) b.img.setVisible(false);
       return;
     }
-    const baseHaze = heavy ? 0.13 : 0.07; // light rain → a fainter full-screen white fog base
+    // Fog DAY → a denser white base (fog is the whole point); heavy rain → mid; light rain → faint.
+    const baseHaze = fog ? 0.16 : rainHeavy ? 0.13 : 0.07;
     const view = this.cameras.main.worldView, dt = delta / 1000;
     if (!this.fogOverlay) {
       this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xeef2f6, baseHaze) // cool-white base haze
@@ -7136,7 +7137,7 @@ export class GameScene extends Phaser.Scene {
       // Debug toggles: flip the flag (persists to localStorage) + re-render the checkbox.
       const dbg = this.registry.get('menuDebugRows') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
       const row = dbg?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-      if (row) { toggleDebug(row.key); if (row.key === 'rain' || row.key === 'lightRain') this.publishWeatherHud(); this.publishMenu(); return true; }
+      if (row) { toggleDebug(row.key); if (row.key === 'rain' || row.key === 'lightRain' || row.key === 'fog') this.publishWeatherHud(); this.publishMenu(); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
