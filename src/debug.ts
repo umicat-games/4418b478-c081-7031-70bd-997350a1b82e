@@ -26,7 +26,8 @@ export const DEBUG_FLAGS: DebugFlagDef[] = [
   { key: 'coinFloor',    labelKey: 'dbg_coin_floor',    def: true },
   { key: 'clearMailbox', labelKey: 'dbg_clear_mailbox', def: true, reloadOnly: true },
   { key: 'highDpi',      labelKey: 'dbg_high_dpi',      def: true, reloadOnly: true },
-  { key: 'rain',         labelKey: 'dbg_rain',          def: false }, // live: toggles the rain weather effect
+  { key: 'rain',         labelKey: 'dbg_rain',          def: false }, // live: heavy rain weather
+  { key: 'lightRain',    labelKey: 'dbg_light_rain',     def: false }, // live: light drizzle (fewer/slower drops, fainter fog)
 ];
 
 /** Master switch for whether the Debug section renders in Settings at all.

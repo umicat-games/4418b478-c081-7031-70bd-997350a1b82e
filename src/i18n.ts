@@ -144,6 +144,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   dbg_clear_mailbox: { en: 'Clear mailbox on load', 'zh-CN': '载入时清空邮箱' },
   dbg_high_dpi: { en: 'High-DPI (crisp) ★', 'zh-CN': '高清渲染 (锐利) ★' },
   dbg_rain: { en: 'Rain weather', 'zh-CN': '下雨天气' },
+  dbg_light_rain: { en: 'Light rain', 'zh-CN': '小雨天气' },
   action_give_cato: { en: 'Give to Cato', 'zh-CN': '给 Cato' },
   action_feed: { en: 'Feed now', 'zh-CN': '喂食' },
   action_to_chest: { en: 'To Chest', 'zh-CN': '放回箱子' },

@@ -2697,7 +2697,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('weatherHud', {
       visible: this.gameReady && !this.inventoryOpen,
       bgFrame: WEATHER_BGS[this.bgIndex()], // time-tinted window background
-      weatherFrame: isDebug('rain') ? 'rain-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
+      weatherFrame: isDebug('rain') ? 'heavy-rain-no-bg' : isDebug('lightRain') ? 'rain-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // transparent icon on top
       pointerStep: this.pointerStep(),
       money: this.money,
       timeLabel: this.timeLabel(),
@@ -2881,15 +2881,20 @@ export class GameScene extends Phaser.Scene {
   }
   private updateRain(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
-    if (!isDebug('rain')) {
+    const heavy = isDebug('rain'), light = isDebug('lightRain'); // heavy wins if both on
+    if (!heavy && !light) {
       this.rainOverlay?.setVisible(false);
       if (this.raindrops) for (const d of this.raindrops) d.img.setVisible(false);
       return;
     }
+    // Light drizzle: fewer + slower drops, a fainter grey wash.
+    const activeCount = heavy ? GameScene.RAIN_COUNT : Math.round(GameScene.RAIN_COUNT * 0.4);
+    const speedMul = heavy ? 1 : 0.55;
+    const overlayAlpha = heavy ? 0.36 : 0.2;
     const view = this.cameras.main.worldView, dt = delta / 1000;
     if (!this.rainOverlay) {
       // Grey wash over the world (screen-space, like the night mask; above it so it reads at night).
-      this.rainOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0x5a626e, 0.36)
+      this.rainOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0x5a626e, overlayAlpha)
         .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH + 1);
       const rot = Math.atan2(GameScene.RAIN_VY, GameScene.RAIN_VX) - Math.PI / 2; // align the streak with the fall
       this.raindrops = [];
@@ -2907,11 +2912,13 @@ export class GameScene extends Phaser.Scene {
       });
       this.rainSplash.setDepth(NIGHT_MASK_DEPTH + 11);
     }
-    this.rainOverlay.setVisible(true);
-    for (const d of this.raindrops!) {
+    this.rainOverlay.setFillStyle(0x5a626e, overlayAlpha).setVisible(true); // intensity drives the wash
+    for (let i = 0; i < this.raindrops!.length; i++) {
+      const d = this.raindrops![i]!;
+      if (i >= activeCount) { d.img.setVisible(false); continue; } // light rain uses fewer drops
       d.img.setVisible(true);
-      d.img.x += GameScene.RAIN_VX * d.speed * dt;
-      d.img.y += GameScene.RAIN_VY * d.speed * dt;
+      d.img.x += GameScene.RAIN_VX * d.speed * speedMul * dt;
+      d.img.y += GameScene.RAIN_VY * d.speed * speedMul * dt;
       if (d.img.y >= d.groundY) {
         this.rainSplash!.emitParticleAt(d.img.x, d.groundY, Phaser.Math.Between(2, 3));
         this.resetRaindrop(d, view, false);
@@ -2937,15 +2944,16 @@ export class GameScene extends Phaser.Scene {
   private static FOG_COUNT = 34;
   private updateFog(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
-    const foggy = isDebug('rain'); // TODO: || isDebug('fog') once a fog weather lands
-    if (!foggy) {
+    const heavy = isDebug('rain'), light = isDebug('lightRain'); // TODO: || isDebug('fog') once a fog weather lands
+    if (!heavy && !light) {
       this.fogOverlay?.setVisible(false);
       if (this.fogBlobs) for (const b of this.fogBlobs) b.img.setVisible(false);
       return;
     }
+    const baseHaze = heavy ? 0.13 : 0.07; // light rain → a fainter full-screen white fog base
     const view = this.cameras.main.worldView, dt = delta / 1000;
     if (!this.fogOverlay) {
-      this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xeef2f6, 0.13) // cool-white base haze
+      this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xeef2f6, baseHaze) // cool-white base haze
         .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH + 2);
       this.ensureFogDot();
       this.fogBlobs = [];
@@ -2957,7 +2965,7 @@ export class GameScene extends Phaser.Scene {
         this.fogBlobs.push({ img, vx: (6 + Math.random() * 10) * (Math.random() < 0.5 ? -1 : 1), vy: (Math.random() - 0.5) * 4, sizeFrac: 0.1 + Math.random() * 0.34 });
       }
     }
-    this.fogOverlay.setVisible(true);
+    this.fogOverlay.setFillStyle(0xeef2f6, baseHaze).setVisible(true); // intensity drives the base haze
     const M = view.width * 0.5;
     for (const b of this.fogBlobs!) {
       b.img.setVisible(true).setDisplaySize(b.sizeFrac * view.width, b.sizeFrac * view.width); // size as a screen fraction (zoom-independent)
@@ -7128,7 +7136,7 @@ export class GameScene extends Phaser.Scene {
       // Debug toggles: flip the flag (persists to localStorage) + re-render the checkbox.
       const dbg = this.registry.get('menuDebugRows') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
       const row = dbg?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-      if (row) { toggleDebug(row.key); if (row.key === 'rain') this.publishWeatherHud(); this.publishMenu(); return true; }
+      if (row) { toggleDebug(row.key); if (row.key === 'rain' || row.key === 'lightRain') this.publishWeatherHud(); this.publishMenu(); return true; }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
