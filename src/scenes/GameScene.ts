@@ -2934,7 +2934,7 @@ export class GameScene extends Phaser.Scene {
     g.destroy();
     this.textures.get('fog-dot').setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
-  private static FOG_COUNT = 28;
+  private static FOG_COUNT = 34;
   private updateFog(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
     const foggy = isDebug('rain'); // TODO: || isDebug('fog') once a fog weather lands
@@ -2945,13 +2945,13 @@ export class GameScene extends Phaser.Scene {
     }
     const view = this.cameras.main.worldView, dt = delta / 1000;
     if (!this.fogOverlay) {
-      this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xeef2f6, 0.09) // faint cool-white base haze
+      this.fogOverlay = this.add.rectangle(-4000, -4000, 16000, 16000, 0xeef2f6, 0.13) // cool-white base haze
         .setOrigin(0, 0).setScrollFactor(0).setDepth(NIGHT_MASK_DEPTH + 2);
       this.ensureFogDot();
       this.fogBlobs = [];
       for (let i = 0; i < GameScene.FOG_COUNT; i++) {
         const img = this.add.image(Phaser.Math.Between(view.x, view.right), Phaser.Math.Between(view.y, view.bottom), 'fog-dot')
-          .setAlpha(0.06 + Math.random() * 0.06).setDepth(NIGHT_MASK_DEPTH + 3);
+          .setAlpha(0.1 + Math.random() * 0.1).setDepth(NIGHT_MASK_DEPTH + 3);
         // WIDE size variety (small wisps → big banks) so no single circle stands out; overlaps blur
         // the edges into an amorphous field.
         this.fogBlobs.push({ img, vx: (6 + Math.random() * 10) * (Math.random() < 0.5 ? -1 : 1), vy: (Math.random() - 0.5) * 4, sizeFrac: 0.1 + Math.random() * 0.34 });
