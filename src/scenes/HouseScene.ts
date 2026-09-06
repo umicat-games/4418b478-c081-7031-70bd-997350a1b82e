@@ -178,19 +178,25 @@ export class HouseScene extends Phaser.Scene {
     // from the darkness (update); the scale gently BREATHES here. (No clip mask: additive draws
     // ignore Phaser's geometry/bitmap masks, so we just keep the halo small enough that its faint
     // edge barely reaches past the wall.)
-    const layers: Array<{ scale: number; tint: number; alpha: number; ms: number }> = [
-      { scale: 2.4, tint: 0xffca7a, alpha: 0.13, ms: 2200 },
-      { scale: 1.6, tint: 0xffda92, alpha: 0.20, ms: 1900 },
-      { scale: 1.0, tint: 0xffe6b0, alpha: 0.30, ms: 1600 },
+    const layers: Array<{ scale: number; tint: number; alpha: number }> = [
+      { scale: 2.4, tint: 0xffca7a, alpha: 0.13 },
+      { scale: 1.6, tint: 0xffda92, alpha: 0.20 },
+      { scale: 1.0, tint: 0xffe6b0, alpha: 0.30 },
     ];
+    const BREATHE_MS = 2000;
     layers.forEach((L, i) => {
       const g = this.add.image(lx, ly, 'light-beam')
         .setTint(L.tint).setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(HouseScene.ROOM_MASK_DEPTH + 1 + i).setScale(L.scale).setAlpha(0);
       this.lampGlow.push(g);
       this.lampGlowBaseAlpha.push(L.alpha);
-      // Breathing: pulse the scale in/out forever; each layer a slightly different period → organic.
-      this.tweens.add({ targets: g, scale: { from: L.scale * 0.94, to: L.scale * 1.06 }, duration: L.ms, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    });
+    // Breathing: pulse ALL three layers together (one shared period + phase) so the whole glow
+    // swells/settles as ONE coherent light — each layer scales by the same 0.94→1.06 factor around
+    // its own base, so they stay proportional.
+    this.tweens.addCounter({
+      from: 0.94, to: 1.06, duration: BREATHE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      onUpdate: (tw) => { const f = tw.getValue(); this.lampGlow.forEach((g, i) => g.setScale(layers[i]!.scale * f)); },
     });
   }
 
