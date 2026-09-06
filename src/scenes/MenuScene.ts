@@ -704,9 +704,15 @@ export class MenuScene extends Phaser.Scene {
     const contentTop = 0.282 * H, contentBottom = 0.905 * H, visibleH = contentBottom - contentTop;
     const lastBottom = nFlags > 0 ? 0.803 * H + (nFlags - 1) * step + rowH : 0.685 * H + H * 0.048 / 2;
     const totalH = lastBottom - contentTop;
-    this.maxScrollRows = Math.max(0, Math.round(totalH - visibleH)); // repurposed as PIXELS for Settings
+    // Scroll in STEP-px "rows" so the touch SWIPE (which scrolls 1 row per `scrollStepPx` of finger
+    // travel, min 24px) and the wheel move a sensible amount — matching scrollStepPx=STEP gives a 1:1
+    // swipe feel (dragging N px scrolls N px). `off` = the clamped pixel offset applied to everything.
+    const overflow = Math.max(0, totalH - visibleH);
+    const STEP = Math.max(24, Math.round(H * 0.05));
+    this.scrollStepPx = STEP;
+    this.maxScrollRows = Math.ceil(overflow / STEP);
     if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
-    const off = this.scroll; // pixel scroll offset (0 on open; the rail drives it)
+    const off = Math.min(this.scroll * STEP, overflow);
 
     // ── Volume sliders: Music (BGM) + SFX ────────────────────────────────────
     this.renderVolumeSlider(c, cx, lw, 0.295 * H - off, 0.36 * H - off, t('settings_music'), getBgmVolume(), 'menuSettingsTrack');
