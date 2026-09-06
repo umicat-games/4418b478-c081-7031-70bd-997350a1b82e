@@ -7919,6 +7919,15 @@ export class GameScene extends Phaser.Scene {
 
   /** Count down soil wetness; when a cell dries, un-tint it. */
   private updateSoil(delta: number): void {
+    // Rain (either intensity) wets ALL tilled soil like watering it — keep the timer topped up so it
+    // stays damp while it rains, then dries naturally once the rain stops. (Fog doesn't wet — no rain.)
+    if (isDebug('rain') || isDebug('lightRain')) {
+      for (const key of this.tilledCells) {
+        if ((this.soilWet.get(key) ?? 0) <= 0) this.setSoilWet(key, true); // just became wet → damp look
+        this.soilWet.set(key, WET_DURATION_MS);
+      }
+      return;
+    }
     for (const [key, ms] of this.soilWet) {
       const left = ms - delta;
       if (left <= 0) { this.soilWet.delete(key); this.setSoilWet(key, false); }
