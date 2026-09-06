@@ -28,7 +28,8 @@ export const DEBUG_FLAGS: DebugFlagDef[] = [
   { key: 'highDpi',      labelKey: 'dbg_high_dpi',      def: true, reloadOnly: true },
   { key: 'rain',         labelKey: 'dbg_rain',          def: false }, // live: heavy rain weather
   { key: 'lightRain',    labelKey: 'dbg_light_rain',     def: false }, // live: light drizzle (fewer/slower drops, fainter fog)
-  { key: 'fog',          labelKey: 'dbg_fog',            def: false }, // live: fog weather (mist only, no rain)
+  { key: 'fog',          labelKey: 'dbg_fog',            def: false }, // live: light fog (one-cloud icon)
+  { key: 'heavyFog',     labelKey: 'dbg_heavy_fog',      def: false }, // live: heavy fog (two-cloud icon, denser)
 ];
 
 /** Master switch for whether the Debug section renders in Settings at all.
