@@ -181,6 +181,9 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   mail_sender_market: { en: 'Market Manager', 'zh-CN': '集市管理员' },
   mail_sales_receipt: { en: 'Sales Receipt', 'zh-CN': '销售回执' },
   mail_delivery_title: { en: 'Order Delivered', 'zh-CN': '订单送达' },
+  mail_reminder_goods: { en: "Your order arrived! Let's go grab it from the mailbox.", 'zh-CN': '有新货物送到啦！我们去邮箱那儿取一下吧～' },
+  mail_reminder_mail: { en: "You've got new mail! Want to go check the mailbox?", 'zh-CN': '你有新邮件哦！去邮箱看看吧～' },
+  mail_reminder_both: { en: "New mail AND a delivery came in! Let's check the mailbox.", 'zh-CN': '有新邮件，还有新货物送到啦！我们去邮箱看看吧～' },
   // Crafting (work station modal)
   craft_title: { en: 'CRAFTING', 'zh-CN': '合成' },
   craft_pick: { en: 'Pick something to craft', 'zh-CN': '选一个要合成的东西' },

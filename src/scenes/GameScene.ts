@@ -665,6 +665,7 @@ interface SaveBlob {
   money?: number; // v6: coin balance (HUD)
   dayTimeMs?: number; // v6: vestigial (ambient now reads the real clock — ADR-029)
   dayCount?: number; // v6: real local day index (recomputed on load)
+  lastMailReminderDay?: number; // day of Cato's last "you've got mail" reminder (once/day, first open)
   lastRealDay?: number; // v21: last-settled local day index (login catch-up — ADR-029)
   lastSeen?: number;    // v21: last-seen wall-clock ms
   mailbox?: Array<{ id: string; count: number }>; // v7: mailbox contents (vestigial)
@@ -903,6 +904,8 @@ export class GameScene extends Phaser.Scene {
   private mailbox?: Phaser.GameObjects.Sprite;
   private mailboxHasMail = false; // drives which mailbox open anim plays (mail vs empty)
   private mailboxAlertSeen = false; // the player has OPENED the mailbox since the last new arrival (suppresses the alert anim until something new comes). NOT persisted.
+  private lastMailReminderDay = -1; // day index of Cato's last cinematic "you've got mail" reminder — once per real day, on the first open (persisted)
+  private mailReminderActive = false; // the cinematic mail reminder is showing → a tap dismisses it
   private chest?: Phaser.GameObjects.Sprite;
   // The editor-placed desk PAD (iPad). Clicking it plays `pad-open` then opens the Shop
   // tab — it replaces the old bottom-right shop button. Resting on the animation sheet's
@@ -1857,7 +1860,7 @@ export class GameScene extends Phaser.Scene {
       // Dialog open: a canvas click (outside the HTML input, which sits on top
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
-      if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
       // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (acts on release); a tap OUTSIDE is
       // swallowed (the dialog only closes via a button).
       if (this.confirmOpen) { const cb = this.confirmButtonAt(sx, sy); if (cb) this.beginConfirmPress(cb); return; }
@@ -1951,7 +1954,7 @@ export class GameScene extends Phaser.Scene {
       if (this.touchLongFired) { this.touchLongFired = false; return; } // long-press opened the wheel — the release doesn't act
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
-      if (this.dialogOpen) { if (this.cutscene) { this.advanceCutscene(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
       if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; }
       this.actAt(pointer.x, pointer.y);
     });
@@ -1982,7 +1985,7 @@ export class GameScene extends Phaser.Scene {
       const el = document.activeElement;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
       e.preventDefault?.();
-      if (this.cutscene) this.advanceCutscene(); else this.advanceDialog();
+      if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else this.advanceDialog();
     });
 
     // A mouse move (re)enters desktop-cursor mode; update() drives vcursor from the live pointer
@@ -9758,6 +9761,38 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(700, () => { if (!this.menuOpen) this.startDialogue('intro'); });
   }
 
+  /** Cato's once-a-day "you've got mail" reminder: on the FIRST open of a real day when a delivery
+   *  or unread letter is waiting (and the new-game intro isn't playing). */
+  private shouldPlayMailReminder(): boolean {
+    return !!this.mailbox && !!this.child && this.mailboxHasWaiting() && this.lastMailReminderDay !== this.dayCount;
+  }
+
+  /** Begin the mail-reminder cinematic: letterbox in + snap to Cato (via enterCinematic), then glide
+   *  the camera onto the door MAILBOX. Marks the day so it plays only once per day. */
+  private enterMailReminderCinematic(): void {
+    this.lastMailReminderDay = this.dayCount; // once per real day (persisted)
+    this.scheduleSave();
+    this.mailReminderActive = true;
+    this.enterCinematic();
+    if (this.mailbox) this.cineCamTarget = this.cineFrame(this.mailbox, 0.5, 0.42, this.cineZoom()); // glide from Cato to the mailbox
+  }
+
+  /** After the reveal settles, Cato pipes up (cutscene message) that mail / goods arrived. */
+  private playMailReminderDialogue(): void {
+    const hasGoods = this.pickupStore.some(Boolean);
+    const hasMail = this.mailList.some((m) => !m.read);
+    const key = hasGoods && hasMail ? 'mail_reminder_both' : hasGoods ? 'mail_reminder_goods' : 'mail_reminder_mail';
+    this.time.delayedCall(900, () => { if (this.mailReminderActive && !this.menuOpen) this.openDialog(t(key), true); });
+  }
+
+  /** A tap dismisses the mail reminder: close Cato's message + glide the camera back to normal play. */
+  private endMailReminder(): void {
+    if (!this.mailReminderActive) return;
+    this.mailReminderActive = false;
+    this.closeDialog();
+    this.exitCinematic();
+  }
+
   /** Begin the cinematic intro: remember the gameplay framing (the zoom-OUT target),
    *  slide the letterbox bars in, hide the hotbar, and SNAP the camera onto Cato. We snap
    *  (not pan/zoom-in) because the game is meant to OPEN already on Cato — the movie's end
@@ -10126,10 +10161,15 @@ export class GameScene extends Phaser.Scene {
     // paw opens onto the already-composed shot — but HOLD Cato's dialogue box until the paw has
     // FULLY opened (finishTransition's onRevealed), so the box doesn't rush in mid-transition.
     const playIntro = this.shouldPlayIntro();
+    const playMail = !playIntro && this.shouldPlayMailReminder(); // returning player, first open today, mail/goods waiting
     if (playIntro) this.enterCinematic();
+    else if (playMail) this.enterMailReminderCinematic();
     // World + save are ready and the camera is framed → NOW uncover: the paw (which held
     // closed showing "Loading") reveals the ready game directly (no reveal-time overlay).
-    finishTransition(this, () => { if (playIntro) this.playIntroDialogue(); });
+    finishTransition(this, () => {
+      if (playIntro) this.playIntroDialogue();
+      else if (playMail) this.playMailReminderDialogue();
+    });
   }
 
   /** New-game opening: put Cato at the doorway OUTSIDE the house (so he doesn't get
@@ -10309,6 +10349,7 @@ export class GameScene extends Phaser.Scene {
       lastRealDay: this.lastRealDay, // v21: real-time day sync (ADR-029)
       lastSeen: this.lastSeen,
       dayCount: this.dayCount,
+      lastMailReminderDay: this.lastMailReminderDay,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
       orders: this.orders.map((o) => ({ ...o })),
@@ -10497,6 +10538,7 @@ export class GameScene extends Phaser.Scene {
       this.money = s.money ?? 0;
       this.dayTimeMs = s.dayTimeMs ?? 0;
       this.dayCount = s.dayCount ?? 0;
+      this.lastMailReminderDay = s.lastMailReminderDay ?? -1;
       // v21 (ADR-029): real-time day sync. A returning save carries the last-settled day index →
       // the first syncRealDay() catches up the missed real days. A pre-v21 save (no lastRealDay)
       // starts fresh at today (no spurious catch-up). dayCount is recomputed to the real day index.
