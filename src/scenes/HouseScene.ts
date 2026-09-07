@@ -12,6 +12,7 @@ const DOOR_CLOSED_FRAME = 5; // `door` sheet: frame 5 = shut (matches GameScene'
 const PAN_SPEED = 260; // world px/sec for keyboard camera panning (a bigger-than-screen room)
 const BRACKET_BR = 0.625; // corner-bracket scale — matches the island's white-corner-bracket (~5×zoom)
 const HOVER_PAD = 6;      // world-px gap around the framed object (== GameScene.HOVER_PAD_WORLD)
+const SLEEPY_EMOJI_FRAME = 38; // `emoji` sheet (row*10+col): the sleepy cat face for the sleep bubble
 
 /**
  * House INTERIOR scene (Animal Crossing / Stardew style). The island house is a
@@ -44,6 +45,10 @@ export class HouseScene extends Phaser.Scene {
   private nightMask?: Phaser.GameObjects.Rectangle;      // full-screen day/night tint (darkens the room like the island)
   private lampGlow: Phaser.GameObjects.Image[] = [];     // the table lamp's layered warm glow (fades in at night)
   private lampGlowBaseAlpha: number[] = [];              // each glow layer's full-night alpha (scaled by darkness)
+  private bed?: Phaser.GameObjects.Sprite;               // the room's bed — swapped to a sleeping-Cato sprite at night
+  private sleepCato?: Phaser.GameObjects.Sprite;         // the "Cato asleep in bed" sprite shown over the bed at night
+  private sleepBubble?: Phaser.GameObjects.Container;     // the drowsy Zzz bubble above the sleeping Cato
+  private catoAsleep = false;                            // is the room currently showing sleeping Cato?
 
   constructor() { super({ key: 'HouseScene' }); }
 
@@ -136,6 +141,11 @@ export class HouseScene extends Phaser.Scene {
 
     // Day/night: darken the room in lockstep with the island + light the table lamp at night.
     this.setupRoomLighting(reg);
+
+    // Nightly sleep: at bedtime the room's bed is swapped for a "Cato asleep in bed" sprite
+    // (he's come home to sleep — the island shows him gone) with a drowsy Zzz bubble.
+    this.setupSleepBed(reg);
+    this.refreshSleep(); // apply immediately (entering the house at night shows him already asleep)
 
     // Keep the pixel cursor on top (it self-drives from the real pointer when GameScene
     // isn't publishing the cursor model).
@@ -314,6 +324,49 @@ export class HouseScene extends Phaser.Scene {
     }
   }
 
+  /** Find the room's bed + build the (hidden) "Cato asleep in bed" sprite that replaces it at
+   *  night, plus a drowsy Zzz bubble above it. */
+  private setupSleepBed(reg: ReturnType<typeof getEntityRegistry>): void {
+    const bed = reg?.all().find(
+      (go) => go.getData('entityAssetId') === 'basic_furniture'
+        && String((go as Phaser.GameObjects.Sprite).frame?.name ?? '').startsWith('bed'),
+    ) as Phaser.GameObjects.Sprite | undefined;
+    if (!bed || !this.textures.exists('cato-sleep')) return;
+    this.bed = bed;
+    const b = bed.getBounds();
+    const cx = b.centerX, bottom = b.bottom;
+    // The sleep sprite (16×32) sits where the bed was, matched to its footprint width so it
+    // replaces the bed cleanly. Origin bottom-centre → it stands on the bed's floor line.
+    const scale = Math.max(0.5, b.width / 16);
+    this.sleepCato = this.add.sprite(cx, bottom, 'cato-sleep', 0)
+      .setOrigin(0.5, 1).setScale(scale).setDepth(bed.depth + 1).setVisible(false);
+
+    // Drowsy Zzz bubble above the bed (mirrors the island emote bubble: speech-bubble + the
+    // sleepy emoji frame). Only built if those textures exist.
+    if (this.textures.exists('speech-bubble') && this.textures.exists('emoji')) {
+      const bubble = this.add.image(0, 0, 'speech-bubble').setOrigin(0.5, 1);
+      const face = this.add.image(0, Math.round(-bubble.height * 0.62), 'emoji', SLEEPY_EMOJI_FRAME).setOrigin(0.5, 0.5);
+      const by = bottom - this.sleepCato.displayHeight - 2;
+      this.sleepBubble = this.add.container(cx, by, [bubble, face])
+        .setScale(scale * 0.5).setDepth(bed.depth + 2).setVisible(false);
+      // Gentle breathing bob so the bubble reads as "sleeping", not a static decal.
+      this.tweens.add({ targets: this.sleepBubble, y: by - 3, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+  }
+
+  /** Toggle the room between its normal bed (day) and the sleeping-Cato sprite + bubble (night),
+   *  reading the paused island's wall clock so inside/outside stay in sync. */
+  private refreshSleep(): void {
+    if (!this.bed || !this.sleepCato) return;
+    const gs = this.scene.get('GameScene') as GameScene | undefined;
+    const asleep = !!gs?.isSleepTime?.();
+    if (asleep === this.catoAsleep) return;
+    this.catoAsleep = asleep;
+    this.bed.setVisible(!asleep);
+    this.sleepCato.setVisible(asleep);
+    this.sleepBubble?.setVisible(asleep);
+  }
+
   update(_t: number, delta: number): void {
     // Day/night: darken the room + fade the lamp glow in with the darkness, both read live from the
     // PAUSED island's wall clock so inside and outside stay in sync.
@@ -324,6 +377,7 @@ export class HouseScene extends Phaser.Scene {
       const darkness = Phaser.Math.Clamp(alpha / 0.5, 0, 1); // 0 = day (glow off) → ~1 = deep night (glow full)
       for (let i = 0; i < this.lampGlow.length; i++) this.lampGlow[i]!.setAlpha(this.lampGlowBaseAlpha[i]! * darkness);
     }
+    this.refreshSleep(); // show/hide the sleeping Cato as bedtime starts/ends while inside
 
     // Keyboard pan (WASD / arrows) — the camera bounds clamp it, so a fits-on-screen
     // room stays put (centred) and a bigger one pans within its edges.

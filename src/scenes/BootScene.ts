@@ -279,6 +279,9 @@ export class BootScene extends Phaser.Scene {
     // + swing-back (reel in). Same frame size as his character sheet so his foot-origin carries over.
     this.load.spritesheet('cato-fish-cast', 'uploaded/cato-fishing-all-directions.png', { frameWidth: 48, frameHeight: 48 });
     this.load.spritesheet('cato-fish-reel', 'uploaded/cato-fishing-swing-back-fishing-rod.png', { frameWidth: 48, frameHeight: 48 });
+    // Cato's nightly SLEEP pose — a self-contained 16×32 image of Cato lying in his little
+    // red bed (no placed bed on the island; the sprite carries its own). Swapped in at 11pm.
+    this.load.image('cato-sleep', 'uploaded/cato-sleep-red-bed.png');
     // Tool-WHEEL icons: bordered 16×16 art (item-*-with-border), one per wheel tool. Used only
     // in the contextual wheel (not the held-tool bracket / HUD indicator). fishing-rod is loaded
     // for the reserved 6-o'clock slot (no fishing mechanic yet).
