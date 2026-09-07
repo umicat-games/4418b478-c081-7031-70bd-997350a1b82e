@@ -907,6 +907,8 @@ export class GameScene extends Phaser.Scene {
   private mailboxAlertSeen = false; // the player has OPENED the mailbox since the last new arrival (suppresses the alert anim until something new comes). NOT persisted.
   private lastMailReminderDay = -1; // day index of Cato's last cinematic "you've got mail" reminder — once per real day, on the first open (persisted)
   private mailReminderActive = false; // the cinematic mail reminder is showing → a tap dismisses it
+  private mailReminderPending = false; // a reminder is scheduled (in its settle-in delay) but not yet showing
+  private mailReminderLiveArmed = false; // true once markReady is done → a mid-session day-rollover (skip-day / real midnight) can trigger a reminder too
   private chest?: Phaser.GameObjects.Sprite;
   // The editor-placed desk PAD (iPad). Clicking it plays `pad-open` then opens the Shop
   // tab — it replaces the old bottom-right shop button. Resting on the animation sheet's
@@ -2805,6 +2807,11 @@ export class GameScene extends Phaser.Scene {
     this.settleRealDayBond(days);
     this.scheduleSave();
     if (this.menuOpen) this.publishMenu();
+    // A day rolled over WHILE playing (⏭ skip-day, or crossing real midnight in a long session) and
+    // may have just delivered goods / mail → Cato gives the same cinematic reminder. Gated to after
+    // markReady (mailReminderLiveArmed) so the load-time settle above doesn't double-fire it; the
+    // once-per-day `lastMailReminderDay` guard inside scheduleMailReminder still applies.
+    if (this.mailReminderLiveArmed) this.scheduleMailReminder();
   }
 
   /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 2h so real-time features
@@ -9772,8 +9779,12 @@ export class GameScene extends Phaser.Scene {
    *  a gentle transition instead of jumping straight into the letterbox on open. Bails if the player
    *  already acted (opened a menu/dialog, or claimed the waiting mail) during the beat. */
   private scheduleMailReminder(): void {
+    if (this.mailReminderActive || this.mailReminderPending || !this.shouldPlayMailReminder()) return;
+    this.mailReminderPending = true;
     this.time.delayedCall(MAIL_REMINDER_DELAY_MS, () => {
-      if (!this.shouldPlayMailReminder() || this.menuOpen || this.dialogOpen || this.inventoryOpen) return;
+      this.mailReminderPending = false;
+      // Re-check after the beat: the player may have opened something or claimed the mail in the meantime.
+      if (!this.shouldPlayMailReminder() || this.menuOpen || this.dialogOpen || this.inventoryOpen || this.cutscene) return;
       this.enterMailReminderCinematic();
       this.playMailReminderDialogue();
     });
@@ -10159,6 +10170,11 @@ export class GameScene extends Phaser.Scene {
   private markReady(): void {
     if (this.gameReady) return;
     this.gameReady = true;
+    // Settle the real-calendar day NOW (deliver any orders due since the save was written) BEFORE we
+    // decide on the mail reminder — otherwise the first update()-loop settle lands a frame LATER, so
+    // shouldPlayMailReminder() would see an empty pickupStore and skip. (mailReminderLiveArmed is still
+    // false here, so this settle can't itself fire a reminder — markReady owns that decision below.)
+    this.syncRealDay();
     this.publishInventory(); // hotbar was suppressed until now
     this.publishWeatherHud(); // reveal the weather HUD now that gameReady is true
     this.emote?.setAmbient(this.bgIndex() === WEATHER_BGS.length - 1 ? 'sleepy' : 'idle'); // seed his mood (handles load-at-night)
@@ -10182,6 +10198,9 @@ export class GameScene extends Phaser.Scene {
       // The mail reminder does NOT compose upfront like the intro — the game reveals into
       // NORMAL play, then after a calm beat the reminder cinematic takes over (a gentle transition).
       else if (playMail) this.scheduleMailReminder();
+      // From now on a mid-session day rollover (⏭ skip-day / real midnight while playing) that
+      // delivers goods can trigger the same reminder — see advanceRealDays.
+      this.mailReminderLiveArmed = true;
     });
   }
 
