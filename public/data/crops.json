@@ -1,9 +1,18 @@
 {
   "crops": [
-    { "name": "corn",     "label": "Corn",     "stages": 5, "tall": true,  "growWateredSec": 3.5, "growDrySec": 12 },
-    { "name": "carrot",   "label": "Carrot",   "stages": 4, "tall": false, "growWateredSec": 2.5, "growDrySec": 9 },
-    { "name": "tomato",   "label": "Tomato",   "stages": 4, "tall": false, "growWateredSec": 3,   "growDrySec": 10 },
-    { "name": "eggplant", "label": "Eggplant", "stages": 4, "tall": false, "growWateredSec": 4,   "growDrySec": 14 },
-    { "name": "pumpkin",  "label": "Pumpkin",  "stages": 4, "tall": false, "growWateredSec": 6,   "growDrySec": 20 }
+    { "name": "corn",        "label": "Corn",        "stages": 5, "tall": true,  "growWateredSec": 3.5, "growDrySec": 12 },
+    { "name": "carrot",      "label": "Carrot",      "stages": 4, "tall": false, "growWateredSec": 2.5, "growDrySec": 9 },
+    { "name": "tomato",      "label": "Tomato",      "stages": 4, "tall": false, "growWateredSec": 3,   "growDrySec": 10 },
+    { "name": "eggplant",    "label": "Eggplant",    "stages": 4, "tall": false, "growWateredSec": 4,   "growDrySec": 14 },
+    { "name": "pumpkin",     "label": "Pumpkin",     "stages": 4, "tall": false, "growWateredSec": 6,   "growDrySec": 20 },
+    { "name": "cauliflower", "label": "Cauliflower", "stages": 4, "tall": false, "growWateredSec": 4.5, "growDrySec": 15 },
+    { "name": "lettuce",     "label": "Lettuce",     "stages": 4, "tall": false, "growWateredSec": 2,   "growDrySec": 8 },
+    { "name": "wheat",       "label": "Wheat",       "stages": 4, "tall": false, "growWateredSec": 2.5, "growDrySec": 9 },
+    { "name": "parsnip",     "label": "Parsnip",     "stages": 4, "tall": false, "growWateredSec": 3,   "growDrySec": 10 },
+    { "name": "beet",        "label": "Beet",        "stages": 4, "tall": false, "growWateredSec": 3.5, "growDrySec": 12 },
+    { "name": "cucumber",    "label": "Cucumber",    "stages": 4, "tall": false, "growWateredSec": 2.5, "growDrySec": 9 },
+    { "name": "starfruit",   "label": "Star Fruit",  "stages": 4, "tall": false, "growWateredSec": 6.5, "growDrySec": 22 },
+    { "name": "bluetulip",   "label": "Blue Tulip",  "stages": 4, "tall": false, "growWateredSec": 5,   "growDrySec": 16 },
+    { "name": "redflower",   "label": "Red Flower",  "stages": 4, "tall": false, "growWateredSec": 4.5, "growDrySec": 15 }
   ]
 }

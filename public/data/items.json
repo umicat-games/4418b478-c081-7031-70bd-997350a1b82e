@@ -26,6 +26,51 @@
       "sell": 16
     },
     {
+      "id": "cauliflower-seed",
+      "buy": 35,
+      "sell": 14
+    },
+    {
+      "id": "lettuce-seed",
+      "buy": 12,
+      "sell": 5
+    },
+    {
+      "id": "wheat-seed",
+      "buy": 10,
+      "sell": 4
+    },
+    {
+      "id": "parsnip-seed",
+      "buy": 18,
+      "sell": 7
+    },
+    {
+      "id": "beet-seed",
+      "buy": 22,
+      "sell": 9
+    },
+    {
+      "id": "cucumber-seed",
+      "buy": 16,
+      "sell": 6
+    },
+    {
+      "id": "starfruit-seed",
+      "buy": 55,
+      "sell": 22
+    },
+    {
+      "id": "bluetulip-seed",
+      "buy": 45,
+      "sell": 18
+    },
+    {
+      "id": "redflower-seed",
+      "buy": 40,
+      "sell": 16
+    },
+    {
       "id": "tree-apple",
       "buy": 260,
       "sell": 100
@@ -79,6 +124,49 @@
       "id": "crop-pumpkin",
       "sell": 90,
       "food": 45
+    },
+    {
+      "id": "crop-cauliflower",
+      "sell": 70,
+      "food": 35
+    },
+    {
+      "id": "crop-lettuce",
+      "sell": 25,
+      "food": 20
+    },
+    {
+      "id": "crop-wheat",
+      "sell": 22,
+      "food": 15
+    },
+    {
+      "id": "crop-parsnip",
+      "sell": 35,
+      "food": 25
+    },
+    {
+      "id": "crop-beet",
+      "sell": 42,
+      "food": 28
+    },
+    {
+      "id": "crop-cucumber",
+      "sell": 32,
+      "food": 22
+    },
+    {
+      "id": "crop-starfruit",
+      "sell": 120,
+      "food": 40
+    },
+    {
+      "id": "crop-bluetulip",
+      "sell": 80
+    },
+    {
+      "id": "crop-redflower",
+      "sell": 70
     },
     {
       "id": "fruit-apple",
