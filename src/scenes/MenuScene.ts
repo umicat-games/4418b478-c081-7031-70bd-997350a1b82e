@@ -372,6 +372,15 @@ export class MenuScene extends Phaser.Scene {
     // Decorative bar under the title (kept for bringToTop below so content can't cover the header).
     const barObj = title ? this.addTitleBar(panel, titleCx, TITLE_Y * H + H * 0.03, titleObj.width) : undefined;
 
+    // A transient warning (e.g. "背包满了") centred just below the title. The shop/house/coop tabs
+    // already show `shopMsg` in their detail pane; render it here for the OTHER tabs (mailbox 取货 /
+    // 待售, chest, backpack, Cato-bag) so a full-backpack Take decline there is actually VISIBLE
+    // (it used to flash only in the shop tab → looked like "nothing happened").
+    if (m.shopMsg && !['shop', 'house', 'coop'].includes(tkey ?? '')) {
+      const notice = this.T(titleCx, TITLE_Y * H + H * 0.062, m.shopMsg, H * 0.024, '#b5533a');
+      panel.add(notice); panel.bringToTop(notice);
+    }
+
     // Content per tab — in its OWN container so a tab SWITCH can animate it independently
     // of the frame/tabs (which stay put).
     const content = this.add.container(0, 0); panel.add(content);

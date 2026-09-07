@@ -214,7 +214,7 @@ const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
-const BACKPACK_SLOTS = 36; // the player's carried backpack (distinct stacks) — full → can't harvest/buy. Bumped 24→36 (2026-09-07) for headroom now that there are 14 crops.
+const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks) — full → can't harvest/buy. = the menu grid's 5 rows × 7 cols (GRID.rows×cols), so the VISIBLE grid == the real cap: empty cells are genuinely free, "full" shows no empty cell. Bumped 24→35 (2026-09-07) — 24 didn't match the 35-cell grid, so it read "full" while empty-looking cells showed.
 // Only these crops' seeds are GIVEN at the start (backpack + chest); the rest (cauliflower, lettuce,
 // wheat, parsnip, beet, cucumber, star fruit, blue tulip, red flower) are earned by BUYING them in
 // the shop. Keeps the starter backpack from being pre-stuffed (was seeding all 14 → nearly full).
@@ -6821,11 +6821,13 @@ export class GameScene extends Phaser.Scene {
     this.scheduleSave();
   }
 
-  /** Show a transient Shop warning, then clear it. */
+  /** Show a transient menu warning ("背包满了" / "金币不够"), then clear it. Rendered in the shop/
+   *  house/coop detail pane AND (via MenuScene) below the title on the other tabs — so a Take
+   *  decline in the mailbox 取货 tab is visible, not just in the shop. */
   private flashShopMsg(msg: string): void {
     this.shopMsg = msg;
     this.publishMenu();
-    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen && (this.menuTab === TAB_SHOP || this.menuTab === TAB_HOUSE || this.menuTab === TAB_COOP)) this.publishMenu(); } });
+    this.time.delayedCall(1600, () => { if (this.shopMsg === msg) { this.shopMsg = ''; if (this.menuOpen) this.publishMenu(); } });
   }
 
   /** Does the chest have room for `id`? A stackable item that already has a stack merges
