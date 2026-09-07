@@ -214,7 +214,11 @@ const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
-const BACKPACK_SLOTS = 24; // the player's carried backpack (distinct stacks) — full → can't harvest/buy
+const BACKPACK_SLOTS = 36; // the player's carried backpack (distinct stacks) — full → can't harvest/buy. Bumped 24→36 (2026-09-07) for headroom now that there are 14 crops.
+// Only these crops' seeds are GIVEN at the start (backpack + chest); the rest (cauliflower, lettuce,
+// wheat, parsnip, beet, cucumber, star fruit, blue tulip, red flower) are earned by BUYING them in
+// the shop. Keeps the starter backpack from being pre-stuffed (was seeding all 14 → nearly full).
+const STARTER_CROPS = ['corn', 'carrot', 'tomato', 'eggplant', 'pumpkin'];
 const PICKUP_SLOTS = 24; // mailbox 取货 grid — delivered orders land here; full → the delivery waits as a claim letter
 const SALE_SLOTS = 24; // mailbox 待售 shipping bin — items here auto-sell at the next day-settle
 const MAX_STACK = 99;
@@ -2605,8 +2609,9 @@ export class GameScene extends Phaser.Scene {
     // The BACKPACK is the portable store you carry + Use things from: seeds + gathered goods. The
     // everyday tools (hoe/watering-can/axe/pickaxe/fishing-rod) are NOT here — they're a default,
     // always-owned kit summoned from the tool wheel (see findOwnedTool), never shown/removable.
+    const starterCrops = STARTER_CROPS.filter((c) => c in CROPS) as CropName[];
     this.backpackStore = [
-      ...CROP_NAMES.map((c) => makeSeed(c, 10)),
+      ...starterCrops.map((c) => makeSeed(c, 10)),
       // DEBUG: a coop of each colour to test placement before the shop flow lands (devTools only).
       ...(CATO_DEBUG_TILL ? COOP_COLORS.map((c) => makePlaceable('coop', 1, `small-${c}`)) : []),
     ];
@@ -2614,7 +2619,7 @@ export class GameScene extends Phaser.Scene {
     // spare seed stacks + plantables (trees/bushes).
     this.mailboxStore = [];
     this.chestStore = [
-      ...CROP_NAMES.map((c) => makeSeed(c, 20)),
+      ...starterCrops.map((c) => makeSeed(c, 20)),
       ...TREE_TYPES.map((t) => makePlaceable('tree', 10, t.id)),
       ...BERRY_TYPES.map((b) => makePlaceable('bush', 10, b)),
     ];
