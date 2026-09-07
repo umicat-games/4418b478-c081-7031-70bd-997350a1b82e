@@ -74,6 +74,7 @@ const SLEEP_END_HOUR = 7;     // 7am — Cato wakes up
 const SLEEP_ARRIVE_MS = 6000; // fallback: go inside even if he can't reach the door in time
 const SLEEPY_MOOD_FRAME = 39; // the sleeping-with-Z emoji (top-right portrait) shown while Cato is asleep
 const MAIL_STAYS_FPS = 2;     // the door mailbox "mail waiting" idle loop — a gentle blink (the asset's authored 8fps read as flickery)
+const MAIL_REMINDER_DELAY_MS = 1600; // let the player settle into the world for a beat before the reminder cinematic takes over
 const RAIN_BGM_DUCK = 0.55;   // while it's raining, drop the music to 55% so the rain ambience comes through
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
@@ -9767,6 +9768,17 @@ export class GameScene extends Phaser.Scene {
     return !!this.mailbox && !!this.child && this.mailboxHasWaiting() && this.lastMailReminderDay !== this.dayCount;
   }
 
+  /** Wait a calm beat after the game reveals into normal play, THEN start the reminder cinematic —
+   *  a gentle transition instead of jumping straight into the letterbox on open. Bails if the player
+   *  already acted (opened a menu/dialog, or claimed the waiting mail) during the beat. */
+  private scheduleMailReminder(): void {
+    this.time.delayedCall(MAIL_REMINDER_DELAY_MS, () => {
+      if (!this.shouldPlayMailReminder() || this.menuOpen || this.dialogOpen || this.inventoryOpen) return;
+      this.enterMailReminderCinematic();
+      this.playMailReminderDialogue();
+    });
+  }
+
   /** Begin the mail-reminder cinematic: letterbox in + snap to Cato (via enterCinematic), then glide
    *  the camera onto the door MAILBOX. Marks the day so it plays only once per day. */
   private enterMailReminderCinematic(): void {
@@ -10163,12 +10175,13 @@ export class GameScene extends Phaser.Scene {
     const playIntro = this.shouldPlayIntro();
     const playMail = !playIntro && this.shouldPlayMailReminder(); // returning player, first open today, mail/goods waiting
     if (playIntro) this.enterCinematic();
-    else if (playMail) this.enterMailReminderCinematic();
     // World + save are ready and the camera is framed → NOW uncover: the paw (which held
     // closed showing "Loading") reveals the ready game directly (no reveal-time overlay).
     finishTransition(this, () => {
       if (playIntro) this.playIntroDialogue();
-      else if (playMail) this.playMailReminderDialogue();
+      // The mail reminder does NOT compose upfront like the intro — the game reveals into
+      // NORMAL play, then after a calm beat the reminder cinematic takes over (a gentle transition).
+      else if (playMail) this.scheduleMailReminder();
     });
   }
 
