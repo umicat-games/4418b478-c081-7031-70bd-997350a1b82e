@@ -2811,6 +2811,7 @@ export class GameScene extends Phaser.Scene {
    *  ⏩ button only advances +2h (time-of-day); deliveries are keyed to the real CALENDAR day
    *  (`dayIndex()`), so testing "arrives tomorrow" needs a whole-day jump, not a couple of +2h taps. */
   private skipToNextDay(): void {
+    const ordersBefore = this.orders.length;
     const d = new Date(this.nowMs());
     const next = new Date(d);
     next.setHours(24, 0, 5, 0); // 00:00:05 tomorrow, local → dayIndex()+1
@@ -2818,6 +2819,13 @@ export class GameScene extends Phaser.Scene {
     this.syncRealDay(); // roll the day + settle orders/sales/coops/cows/home NOW
     this.publishWeatherHud();
     this.updateNightMask();
+    // Visible confirmation on the button — a debug tool should make its effect obvious, and it
+    // answers "did skip-day actually deliver?" (deliveries go to the mailbox 取货 tab).
+    const delivered = ordersBefore - this.orders.length;
+    if (this.daySkipBtn) {
+      this.daySkipBtn.textContent = delivered > 0 ? `✓ 送达${delivered}(取货)` : `⏭ 第${this.dayCount % 1000}天`;
+      this.time.delayedCall(1600, () => { if (this.daySkipBtn) this.daySkipBtn.textContent = '⏭ 一天'; });
+    }
   }
 
   /** Drive the full-screen day/night mask from the clock (created lazily). A single
