@@ -786,7 +786,8 @@ export class GameScene extends Phaser.Scene {
   // drive Cato + camera follows; false = arrows/drag pan the camera + Cato wanders.
   private playerControl = PLAYER_CONTROL_DEFAULT;
   private controlToggleBtn?: HTMLButtonElement; // the test-only DOM toggle button
-  private timeSkipBtn?: HTMLButtonElement; // the test-only DOM fast-forward-time button
+  private timeSkipBtn?: HTMLButtonElement; // the test-only DOM fast-forward-time button (+2h)
+  private daySkipBtn?: HTMLButtonElement;  // the test-only DOM skip-a-whole-day button (settles orders)
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
   // Empty-hand inspect overlay (HoverScene) — a white ring hugging the hovered object + its name.
@@ -2800,6 +2801,20 @@ export class GameScene extends Phaser.Scene {
   private fastForwardTime(): void {
     this.debugTimeOffsetMs += 2 * 3600 * 1000; // +2h
     this.syncRealDay();
+    this.publishWeatherHud();
+    this.updateNightMask();
+  }
+
+  /** DEBUG: jump to just after the NEXT local midnight so the gameplay day rolls over ONCE — the
+   *  economy settles (orders delivered, bin sold, coops/cows produce, home upgrade applies). The
+   *  ⏩ button only advances +2h (time-of-day); deliveries are keyed to the real CALENDAR day
+   *  (`dayIndex()`), so testing "arrives tomorrow" needs a whole-day jump, not a couple of +2h taps. */
+  private skipToNextDay(): void {
+    const d = new Date(this.nowMs());
+    const next = new Date(d);
+    next.setHours(24, 0, 5, 0); // 00:00:05 tomorrow, local → dayIndex()+1
+    this.debugTimeOffsetMs += next.getTime() - d.getTime();
+    this.syncRealDay(); // roll the day + settle orders/sales/coops/cows/home NOW
     this.publishWeatherHud();
     this.updateNightMask();
   }
@@ -10674,7 +10689,24 @@ export class GameScene extends Phaser.Scene {
     btn.addEventListener('click', onClick);
     (this.game.canvas?.parentElement ?? document.body).appendChild(btn);
     this.timeSkipBtn = btn;
-    const cleanup = () => { btn.remove(); this.timeSkipBtn = undefined; };
+
+    // A second button that jumps a WHOLE day (crosses local midnight → settles orders/sales/coops/
+    // cows/home). The ⏩ +2h button can't easily reach "arrives tomorrow" — deliveries key off the
+    // real calendar day. Test-only, sits just right of the time button.
+    const dayBtn = document.createElement('button');
+    dayBtn.textContent = '⏭ 一天';
+    Object.assign(dayBtn.style, {
+      position: 'fixed', bottom: '92px', left: '128px',
+      zIndex: '2147483647', padding: '9px 15px', font: '600 15px system-ui, sans-serif',
+      color: '#3f2c18', background: 'rgba(242,226,196,0.95)', border: '2px solid #5b3a1e',
+      borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+      userSelect: 'none', touchAction: 'manipulation',
+    } as Partial<CSSStyleDeclaration>);
+    dayBtn.addEventListener('click', (e: Event) => { e.preventDefault(); e.stopPropagation(); this.skipToNextDay(); });
+    (this.game.canvas?.parentElement ?? document.body).appendChild(dayBtn);
+    this.daySkipBtn = dayBtn;
+
+    const cleanup = () => { btn.remove(); dayBtn.remove(); this.timeSkipBtn = undefined; this.daySkipBtn = undefined; };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
   }
