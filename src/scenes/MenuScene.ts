@@ -59,7 +59,7 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'settings', frame: 164, title: '设置' },
   { key: 'calendar', frame: 294, title: '日历' }, // all_icons calendar-page glyph (row18 col6). Placeholder tab.
   { key: 'pickup', frame: 293, title: '取货' },   // mailbox: delivered orders (icon tunable like paw)
-  { key: 'forsale', frame: 261, title: '待售' },  // mailbox: shipping bin ($ glyph, tunable)
+  { key: 'forsale', frame: 294, title: '待售' },  // mailbox: shipping bin — `whilte-out` outbox glyph (all_icons x96,y288)
   { key: 'house', frame: 278, title: '房子' },    // shop 房子 sub-tab (white-home = all_icons row17 col6, under white-cart 262)
   { key: 'cato', frame: 310, title: 'Cato' },     // Cato-info tab (white-cat-claw placeholder icon; retag later)
   { key: 'coop', frame: 261, title: '牧场' },     // shop 牧场 sub-tab: placeable buildings (coops). Placeholder icon; retag later.
