@@ -160,6 +160,10 @@ export class HouseScene extends Phaser.Scene {
   }
 
   private static ROOM_MASK_DEPTH = 500000; // above every room sprite, below the hover bracket (1e6) + cursor
+  // Extra flat darkening applied to the room tint ONLY while Cato is asleep in bed (on top of the
+  // normal night alpha) — the lamp glow's own alpha is computed from the un-boosted night alpha
+  // (see update()), so it stays exactly as bright as it always was at that time of night.
+  private static SLEEP_EXTRA_DARK_ALPHA = 0.22;
 
   /** Room day/night: a full-screen tint that darkens toward night (same NIGHT_KEYS the island uses,
    *  read from the PAUSED GameScene's wall clock), plus a layered, breathing warm GLOW on the table
@@ -375,7 +379,11 @@ export class HouseScene extends Phaser.Scene {
     const gs = this.scene.get('GameScene') as GameScene | undefined;
     if (this.nightMask && gs?.currentNightTint) {
       const { color, alpha } = gs.currentNightTint();
-      this.nightMask.setFillStyle(color, alpha);
+      // While Cato is asleep, the room reads darker than the plain night tint — but the lamp's
+      // glow brightness is driven from the UNBOOSTED alpha below, so the lamp doesn't dim/brighten
+      // with this extra darkening (only the ambient room tint deepens).
+      const maskAlpha = this.catoAsleep ? Math.min(1, alpha + HouseScene.SLEEP_EXTRA_DARK_ALPHA) : alpha;
+      this.nightMask.setFillStyle(color, maskAlpha);
       const darkness = Phaser.Math.Clamp(alpha / 0.5, 0, 1); // 0 = day (glow off) → ~1 = deep night (glow full)
       for (let i = 0; i < this.lampGlow.length; i++) this.lampGlow[i]!.setAlpha(this.lampGlowBaseAlpha[i]! * darkness);
     }
