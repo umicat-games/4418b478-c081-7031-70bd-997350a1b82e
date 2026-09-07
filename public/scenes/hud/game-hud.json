@@ -127,9 +127,9 @@
       "id": "e-mr263q1l-h080",
       "kind": "image",
       "anchor": {
-        "side": "top-right",
-        "offsetX": -12,
-        "offsetY": 12
+        "side": "bottom-left",
+        "offsetX": 12,
+        "offsetY": -12
       },
       "layer": "base",
       "assetId": "teemo_premium_emote_animations_sprite_sheet-export",

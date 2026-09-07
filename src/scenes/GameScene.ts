@@ -10621,15 +10621,15 @@ export class GameScene extends Phaser.Scene {
     this.createTimeSkipButton();
   }
 
-  /** On-screen ⏩ button (bottom-left) that fast-forwards the day clock a step per tap
-   *  — the touch equivalent of the U key (tablets have no keyboard). Test-only DOM
-   *  button, removed on scene shutdown. */
+  /** On-screen ⏩ button that fast-forwards the day clock a step per tap — the touch
+   *  equivalent of the U key (tablets have no keyboard). Sits ABOVE Cato's bottom-left
+   *  portrait (which occupies the very corner). Test-only DOM button, removed on shutdown. */
   private createTimeSkipButton(): void {
     if (typeof document === 'undefined' || this.timeSkipBtn) return;
     const btn = document.createElement('button');
     btn.textContent = '⏩ 时间';
     Object.assign(btn.style, {
-      position: 'fixed', bottom: '14px', left: '14px',
+      position: 'fixed', bottom: '92px', left: '14px', // clears the ~80px-tall portrait in the corner
       zIndex: '2147483647', padding: '9px 15px', font: '600 15px system-ui, sans-serif',
       color: '#3f2c18', background: 'rgba(242,226,196,0.95)', border: '2px solid #5b3a1e',
       borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
