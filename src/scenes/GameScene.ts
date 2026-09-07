@@ -897,6 +897,7 @@ export class GameScene extends Phaser.Scene {
   // open animation, THEN opens the unified menu (openMenuViaObject); closing plays close.
   private mailbox?: Phaser.GameObjects.Sprite;
   private mailboxHasMail = false; // drives which mailbox open anim plays (mail vs empty)
+  private mailboxAlertSeen = false; // the player has OPENED the mailbox since the last new arrival (suppresses the alert anim until something new comes). NOT persisted.
   private chest?: Phaser.GameObjects.Sprite;
   // The editor-placed desk PAD (iPad). Clicking it plays `pad-open` then opens the Shop
   // tab — it replaces the old bottom-right shop button. Resting on the animation sheet's
@@ -6555,7 +6556,8 @@ export class GameScene extends Phaser.Scene {
   /** Door mailbox clicked → play its open swing, THEN open the menu on Mail; closing the
    *  menu plays its close swing. (mailbox-mail-open vs -empty-open per mail state.) */
   private openMailboxViaDoor(): void {
-    this.mailboxHasMail = this.mailList.length > 0;
+    this.mailboxAlertSeen = true; // opening it acknowledges the current waiting mail → stop the alert anim (won't re-arm until something NEW arrives)
+    this.mailboxHasMail = this.mailboxHasWaiting(); // mail OR an unclaimed delivery → the "has mail" open swing
     this.openMenuViaObject(this.mailbox, this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open', 'mailbox-close', TAB_MAIL, MAILBOX_TABS);
   }
 
@@ -6640,7 +6642,11 @@ export class GameScene extends Phaser.Scene {
     // slide-out so it reads as "menu closes, then the box shuts".
     const sprite = this.menuSourceSprite, closeAnim = this.menuCloseAnim;
     this.menuSourceSprite = undefined; this.menuCloseAnim = undefined;
-    if (sprite && closeAnim) this.time.delayedCall(180, () => sprite.play({ key: closeAnim, repeat: 0 }));
+    if (sprite && closeAnim) this.time.delayedCall(180, () => {
+      sprite.play({ key: closeAnim, repeat: 0 });
+      // After the mailbox shuts, settle it back to idle (it was just opened → alert suppressed).
+      if (sprite === this.mailbox) sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.refreshMailboxAlert(false));
+    });
   }
 
   /** The item grid backing the active tab (chest / cato-bag / backpack / mailbox 取货 + 待售). */
@@ -7583,6 +7589,7 @@ export class GameScene extends Phaser.Scene {
       if (this.pickupHasSpaceFor(o.id)) this.addToStore(this.pickupStore, itemFromId(o.id, o.count));
       else this.addMail({ kind: 'delivery', sender: t('mail_sender_market'), title: t('mail_delivery_title'), iconFrame: 245, lines: this.itemsToLines([{ id: o.id, count: o.count }]), total: 0, items: [{ id: o.id, count: o.count }] });
     }
+    if (due.length) { this.mailboxAlertSeen = false; this.refreshMailboxAlert(true); } // deliveries landed → "new mail" animation (addMail already re-arms for the claim-letter path)
   }
 
   /** Sell everything in the 待售 bin at once → coins in + a "Sales Receipt" letter; clear the bin. */
@@ -7626,6 +7633,44 @@ export class GameScene extends Phaser.Scene {
   private addMail(mail: Omit<MailEntry, 'id' | 'read'>): void {
     this.mailList.unshift({ ...mail, id: `mail-${++this.mailIdSeq}`, read: false });
     if (this.menuOpen) this.publishMenu();
+    this.mailboxAlertSeen = false; // something new → re-arm the "you've got mail" animation
+    this.refreshMailboxAlert(true);
+  }
+
+  /** Is anything WAITING in the mailbox? — an unclaimed delivery in the 取货 grid, or an unread
+   *  letter. Drives the door-mailbox "new mail" animation. */
+  private mailboxHasWaiting(): boolean {
+    return this.pickupStore.some(Boolean) || this.mailList.some((m) => !m.read);
+  }
+
+  /** Animate the door mailbox sprite for waiting mail: `fresh` plays `mailbox-new-mail` ONCE then
+   *  loops `mailbox-mail-stays`; else it goes straight to the `mailbox-mail-stays` loop (e.g. on
+   *  load). Nothing waiting (or already opened since the last arrival) → idle (frame 0). Idempotent:
+   *  if the alert is already showing, it's left running (no restart). Skipped while the mailbox menu
+   *  is open — the open/close swing owns the sprite then. */
+  private refreshMailboxAlert(fresh: boolean): void {
+    const mb = this.mailbox;
+    if (!mb || this.menuOpen) return;
+    const A = Phaser.Animations.Events.ANIMATION_COMPLETE;
+    const cur = mb.anims?.currentAnim?.key;
+    const want = this.mailboxHasWaiting() && !this.mailboxAlertSeen;
+    if (!want) {
+      if (cur !== 'mailbox-idle') {
+        mb.off(A); mb.anims?.stop();
+        if (this.anims.exists('mailbox-idle')) mb.play('mailbox-idle'); else mb.setFrame(0);
+      }
+      return;
+    }
+    if (cur === 'mailbox-new-mail' || cur === 'mailbox-mail-stays') return; // already alerting
+    mb.off(A);
+    if (fresh && this.anims.exists('mailbox-new-mail')) {
+      mb.play({ key: 'mailbox-new-mail', repeat: 0 }); // the "a letter just arrived" flourish, once
+      mb.once(A, () => { // …then settle into the gentle "mail is waiting" loop
+        if (!this.menuOpen && this.mailboxHasWaiting() && !this.mailboxAlertSeen && this.anims.exists('mailbox-mail-stays')) mb.play({ key: 'mailbox-mail-stays', repeat: -1 });
+      });
+    } else if (this.anims.exists('mailbox-mail-stays')) {
+      mb.play({ key: 'mailbox-mail-stays', repeat: -1 });
+    }
   }
 
   /** The Mail-tab list model (icon + sender + read state) for the unified menu. */
@@ -10025,6 +10070,7 @@ export class GameScene extends Phaser.Scene {
     this.publishInventory(); // hotbar was suppressed until now
     this.publishWeatherHud(); // reveal the weather HUD now that gameReady is true
     this.emote?.setAmbient(this.bgIndex() === WEATHER_BGS.length - 1 ? 'sleepy' : 'idle'); // seed his mood (handles load-at-night)
+    this.refreshMailboxAlert(false); // returning with unclaimed deliveries / unread mail → the "mail waiting" loop (no intro on load)
     this.loadingOverlay?.fadeOut();
     this.loadingOverlay = undefined;
     // Framing: a brand-new game opens on the house (Cato at the door); a returning
