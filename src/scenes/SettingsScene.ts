@@ -305,8 +305,16 @@ export class SettingsScene extends Phaser.Scene {
       const cam = boot.cameras.main;
       const z = cam.zoom;
       s = z * boot.playBaseScale;
-      cx = (play.x - cam.worldView.x) * z;
-      playCY = (play.y - cam.worldView.y) * z;
+      // `cam.worldView` is only recomputed in the camera's `preRender`, so during
+      // layout it still holds the value from BEFORE this resize — and at scene
+      // start it holds the zoom-1 value, which is not even in world units.
+      // Measured at a 3600px canvas: `worldView.x = 0, width = 3600` while the
+      // real view was `x = -152.5, width = 733`, which put Play at 1049 instead
+      // of 1800. Deriving the view from scroll/zoom has no such timing hole.
+      const wvx = cam.scrollX + cam.width / 2 - cam.width / (2 * z);
+      const wvy = cam.scrollY + cam.height / 2 - cam.height / (2 * z);
+      cx = (play.x - wvx) * z;
+      playCY = (play.y - wvy) * z;
     } else {
       s = Math.min((W * 0.26) / 96, (H * 0.1) / 32);
       playCY = H * 0.62;
