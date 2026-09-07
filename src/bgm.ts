@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 /** Persisted BGM volume (0..1). localStorage so it survives reloads AND is shared
- *  across the title/game scene switch. Default 0.4 (the old hardcoded level). */
+ *  across the title/game scene switch. Default 0.3 (a touch quieter than the old 0.4). */
 const VOL_KEY = 'catopia:bgmVolume';
 const BGM_KEYS = ['bgm', 'bgm-title'];
 // A BGM track starting fresh eases in over at least this long, so the music the player
@@ -18,7 +18,7 @@ function readVolume(): number {
   } catch {
     /* private mode / no storage — fall through to default */
   }
-  return 0.4;
+  return 0.3;
 }
 
 let bgmVolume = readVolume();
@@ -31,9 +31,12 @@ export function getBgmVolume(): number {
   return bgmVolume;
 }
 
-/** The actual volume playing tracks should sit at (slider × duck). */
-function liveBgmTarget(): number {
-  return bgmVolume * bgmDuck;
+// Per-track loudness scale (some tracks are mastered hotter than others). The TITLE-screen music
+// sits GENTLER than the in-game track at the same slider level — it was too loud otherwise.
+const TRACK_SCALE: Record<string, number> = { 'bgm-title': 0.55 };
+/** The live volume a given track should play at: slider × rain-duck × its per-track scale. */
+function keyLiveVolume(key: string): number {
+  return bgmVolume * bgmDuck * (TRACK_SCALE[key] ?? 1);
 }
 
 /**
@@ -44,13 +47,15 @@ function liveBgmTarget(): number {
 export function setBgmDuck(scene: Phaser.Scene, duck: number, ms = 700): void {
   bgmDuck = Phaser.Math.Clamp(duck, 0, 1);
   const mgr = scene.sound;
-  const target = liveBgmTarget();
-  const sounds: Phaser.Sound.BaseSound[] = [];
-  for (const k of BGM_KEYS) for (const s of mgr.getAll(k)) if (s.isPlaying) sounds.push(s);
-  if (!sounds.length) return;
-  scene.tweens.killTweensOf(sounds); // don't let the game-start swell-in tween fight the duck
-  if (ms <= 0) { for (const s of sounds) (s as Phaser.Sound.WebAudioSound).setVolume?.(target); return; }
-  scene.tweens.add({ targets: sounds, volume: target, duration: ms, ease: 'Linear' });
+  for (const k of BGM_KEYS) {
+    const target = keyLiveVolume(k); // per-track (the title track is scaled quieter)
+    for (const s of mgr.getAll(k)) {
+      if (!s.isPlaying) continue;
+      scene.tweens.killTweensOf(s); // don't let the game-start swell-in tween fight the duck
+      if (ms <= 0) (s as Phaser.Sound.WebAudioSound).setVolume?.(target);
+      else scene.tweens.add({ targets: s, volume: target, duration: ms, ease: 'Linear' });
+    }
+  }
 }
 
 /**
@@ -66,8 +71,8 @@ export function setBgmVolume(scene: Phaser.Scene, v: number): void {
     /* ignore */
   }
   const mgr = scene.sound;
-  const target = liveBgmTarget(); // respect any active duck (e.g. while it's raining)
   for (const k of BGM_KEYS) {
+    const target = keyLiveVolume(k); // per-track (title scaled quieter) × any active rain duck
     for (const s of mgr.getAll(k)) {
       (s as Phaser.Sound.WebAudioSound).setVolume?.(target);
     }
@@ -91,8 +96,9 @@ export function crossToBgm(scene: Phaser.Scene, key: string, stopKeys: string[] 
   if (!scene.cache.audio.exists(key)) return;
   const go = (fade: number): void => {
     for (const k of stopKeys) for (const s of mgr.getAll(k)) if (s.isPlaying) s.stop();
+    const target = keyLiveVolume(key); // per-track scale (title quieter) × slider × duck
     let snd = mgr.getAll(key)[0];
-    if (!snd) snd = mgr.add(key, { loop: true, volume: fade > 0 ? 0 : bgmVolume });
+    if (!snd) snd = mgr.add(key, { loop: true, volume: fade > 0 ? 0 : target });
     const sw = snd as Phaser.Sound.WebAudioSound;
     if (fade > 0) {
       // Swell in from silence with an EXPLICIT `from: 0` tween — do NOT let Phaser read the
@@ -105,10 +111,10 @@ export function crossToBgm(scene: Phaser.Scene, key: string, stopKeys: string[] 
       // apply) and ramps up. Sine.easeIn eases slowly at first for a soft entry.
       if (!snd.isPlaying) snd.play();
       scene.tweens.killTweensOf(snd);
-      scene.tweens.add({ targets: snd, volume: { from: 0, to: bgmVolume }, duration: fade, ease: 'Sine.easeIn' });
+      scene.tweens.add({ targets: snd, volume: { from: 0, to: target }, duration: fade, ease: 'Sine.easeIn' });
     } else {
       if (!snd.isPlaying) snd.play();
-      sw.setVolume?.(bgmVolume);
+      sw.setVolume?.(target);
     }
   };
   if (mgr.locked) {
