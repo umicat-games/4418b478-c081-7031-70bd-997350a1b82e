@@ -23,7 +23,7 @@ import type { CookModel, CookRowView } from './CookScene';
 import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
-import { crossToBgm, setBgmVolume, BGM_START_FADE_MS } from '../bgm';
+import { crossToBgm, setBgmVolume, setBgmDuck, BGM_START_FADE_MS } from '../bgm';
 import { playSfx, setSfxVolume, getSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB } from '../sfx';
 import { coverAndReload, coverAndHandoff, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
@@ -73,6 +73,7 @@ const SLEEP_START_HOUR = 23;  // 11pm — Cato heads home to bed
 const SLEEP_END_HOUR = 7;     // 7am — Cato wakes up
 const SLEEP_ARRIVE_MS = 6000; // fallback: go inside even if he can't reach the door in time
 const SLEEPY_MOOD_FRAME = 39; // the sleeping-with-Z emoji (top-right portrait) shown while Cato is asleep
+const RAIN_BGM_DUCK = 0.55;   // while it's raining, drop the music to 55% so the rain ambience comes through
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
 // Cato roams on his own (CHILD_WANDER); the PLAYER pans the camera with WASD /
@@ -1037,6 +1038,7 @@ export class GameScene extends Phaser.Scene {
   private raindrops?: Raindrop[];
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
   private rainSound?: Phaser.Sound.BaseSound; // looping rain ambience, playing while it's raining
+  private rainDucking = false; // is the BGM currently ducked for rain? (so we duck/restore once, not every frame)
   // Fog / mist: a light haze + MANY small soft patches of widely varied size at low opacity — their
   // overlaps dissolve into an irregular, boundary-less field (no distinct circles). Drifts slowly.
   // Shared by rain (a misty day) and a future fog weather.
@@ -1202,6 +1204,7 @@ export class GameScene extends Phaser.Scene {
       // The rain loop lives on the GLOBAL sound manager (survives the scene), so stop + drop it on
       // shutdown or it keeps raining on the title screen after returnToTitle.
       this.rainSound?.stop(); this.rainSound?.destroy(); this.rainSound = undefined;
+      if (this.rainDucking) { this.rainDucking = false; setBgmDuck(this, 1, 0); } // clear the rain duck so the title music isn't left quiet
     });
     // Pin the world origin (0,0) to the screen's TOP-LEFT corner. Phaser zooms
     // around the camera CENTER (default origin 0.5), so a raw setScroll(0,0) at
@@ -2974,6 +2977,13 @@ export class GameScene extends Phaser.Scene {
    *  `0` → stop. Lazily created; skipped while the audio context is still locked (starts once a
    *  gesture unlocks it — by then rain is usually still on). Volume tracks the SFX slider live. */
   private updateRainAudio(volume: number): void {
+    // Duck the background music while the rain ambience is audible so the rain isn't buried under
+    // the music, then restore it when the rain clears (a smooth fade each way). Toggle once.
+    const raining = volume > 0;
+    if (raining !== this.rainDucking) {
+      this.rainDucking = raining;
+      setBgmDuck(this, raining ? RAIN_BGM_DUCK : 1);
+    }
     if (volume > 0 && !this.sound.locked) {
       if (!this.rainSound && this.cache.audio.exists('rain-loop')) {
         this.rainSound = this.sound.add('rain-loop', { loop: true, volume: 0 });

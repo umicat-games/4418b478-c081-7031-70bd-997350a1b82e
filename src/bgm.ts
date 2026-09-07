@@ -22,9 +22,35 @@ function readVolume(): number {
 }
 
 let bgmVolume = readVolume();
+// Transient multiplier (NOT persisted) that steps the music DOWN under the slider level while
+// something louder wants the foreground — currently the rain ambience ducks it so the rain isn't
+// buried under the music. 1 = no duck. The live BGM level is always `bgmVolume × bgmDuck`.
+let bgmDuck = 1;
 
 export function getBgmVolume(): number {
   return bgmVolume;
+}
+
+/** The actual volume playing tracks should sit at (slider × duck). */
+function liveBgmTarget(): number {
+  return bgmVolume * bgmDuck;
+}
+
+/**
+ * Duck the music by a transient multiplier (e.g. 0.55 while it's raining) so an ambience layer
+ * comes through, then `setBgmDuck(scene, 1)` to restore. NOT persisted — it multiplies the
+ * slider's `bgmVolume`, so the slider still reflects the player's chosen level. Fades over `ms`.
+ */
+export function setBgmDuck(scene: Phaser.Scene, duck: number, ms = 700): void {
+  bgmDuck = Phaser.Math.Clamp(duck, 0, 1);
+  const mgr = scene.sound;
+  const target = liveBgmTarget();
+  const sounds: Phaser.Sound.BaseSound[] = [];
+  for (const k of BGM_KEYS) for (const s of mgr.getAll(k)) if (s.isPlaying) sounds.push(s);
+  if (!sounds.length) return;
+  scene.tweens.killTweensOf(sounds); // don't let the game-start swell-in tween fight the duck
+  if (ms <= 0) { for (const s of sounds) (s as Phaser.Sound.WebAudioSound).setVolume?.(target); return; }
+  scene.tweens.add({ targets: sounds, volume: target, duration: ms, ease: 'Linear' });
 }
 
 /**
@@ -40,9 +66,10 @@ export function setBgmVolume(scene: Phaser.Scene, v: number): void {
     /* ignore */
   }
   const mgr = scene.sound;
+  const target = liveBgmTarget(); // respect any active duck (e.g. while it's raining)
   for (const k of BGM_KEYS) {
     for (const s of mgr.getAll(k)) {
-      (s as Phaser.Sound.WebAudioSound).setVolume?.(bgmVolume);
+      (s as Phaser.Sound.WebAudioSound).setVolume?.(target);
     }
   }
 }
