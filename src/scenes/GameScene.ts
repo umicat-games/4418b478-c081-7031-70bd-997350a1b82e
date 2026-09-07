@@ -1180,9 +1180,8 @@ export class GameScene extends Phaser.Scene {
     // position for the frame (doing it in update(), before the sync, left the camera
     // a physics-step behind → extra jitter). See updateCameraFollow for the lerp.
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.updateCameraFollow, this);
-    // Coming back from the house interior: HouseScene resumes this (paused) scene — put
-    // Cato back at the doorway, wake the island HUD, and reveal.
-    this.events.on(Phaser.Scenes.Events.RESUME, this.onResumeFromHouse, this);
+    // Coming back from the house interior: HouseScene calls onExitHouse() directly (GameScene is
+    // never paused now), which repositions Cato at the doorway, wakes the tool HUD, and reveals.
     // Advance physics by the REAL frame time each frame (not Phaser's default fixed
     // 1/60 accumulator). The accumulator does 0/1/2 steps per render frame → Cato's
     // per-frame movement is uneven → a visible micro-stutter while walking that no
@@ -1615,6 +1614,7 @@ export class GameScene extends Phaser.Scene {
    *  (portrait double-tap) is the one-shot snapToChild() tween — skip the follow while
    *  it runs so it isn't fought. Bounds clamp this on preRender. */
   private updateCameraFollow(): void {
+    if (this.inHouse) return; // island camera is frozen while inside the house
     if (this.cinematic) { this.stepCinematicCamera(); return; } // cutscene owns the camera
     if (!this.cameraFollow || !this.child) return;
     if (this.tweens.getTweensOf(this.cameras.main).length) return;
@@ -1678,14 +1678,12 @@ export class GameScene extends Phaser.Scene {
    *  lerp (update) slides onto the now-frozen Cato; openDialog is guarded so a
    *  re-click while already chatting is a no-op. */
   private focusCato(): void {
-    // Inside the house GameScene is PAUSED (and Cato is hidden), so its `openDialog` HUD tweens
-    // can't run — the chat box/portrait never slide in and only the bound text widgets show
-    // (the "just Cato + Mm? on black" bug). In-house chat is deferred, so ignore the portrait
-    // tap while in the house (the SDK HUD is above HouseScene and still emits `hud:press`).
-    if (this.inHouse) return;
-    if (this.catoIndoors && this.catoIndoorsReason === 'sleep') return; // asleep — no chat until 7am (rain keeps chat on, so you can ask him to go out)
+    // Cato is asleep (11pm–7am) → no chat until he wakes. Rain keeps chat ON (ask him to go out →
+    // he refuses). Works both on the island AND inside the house now that GameScene stays active
+    // (its openDialog HUD tweens run), so you can chat with Cato inside on a rainy day.
+    if (this.catoIndoors && this.catoIndoorsReason === 'sleep') return;
     this.closeOpenModal(); // close the unified menu first → chat replaces it
-    this.followCato();
+    if (!this.inHouse) this.followCato(); // in the house the island camera is frozen — don't move it
     this.openDialog();
   }
 
@@ -2008,6 +2006,9 @@ export class GameScene extends Phaser.Scene {
     if (this.overShopButton(x, y)) { this.pressShopThenOpen(); return; }
     if (this.overBackpackButton(x, y)) { this.pressBackpackThenOpen(); return; }
     if (this.overSettingsButton(x, y)) { this.pressSettingsThenOpen(); return; }
+    // Inside the house: only the HUD above (chat / backpack / shop / paw menu + open modals) is
+    // interactive — the frozen island underneath (hotbar tools, world tiles, Cato, objects) is not.
+    if (this.inHouse) return;
     // Hotbar slot → select that tool; elsewhere over the bar → swallow.
     const slot = this.hotbarSlotAt(x, y);
     if (slot !== null) { this.selectHotbarSlot(slot); return; }
@@ -6152,7 +6153,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Tap the house → play the door-open swing, then cover, PAUSE this scene and launch
    *  HouseScene OVER it (island stays in memory paused → clean re-entry). HouseScene
-   *  reveals when the interior is loaded; exiting resumes us (onResumeFromHouse). */
+   *  reveals when the interior is loaded; exiting hands back via onExitHouse. */
   private enterHouse(): void {
     if (this.houseEntering || this.inHouse) return;
     // Ignore the tap if a transition is mid-flight (coverHandoff no-ops while busy — we
@@ -6165,17 +6166,21 @@ export class GameScene extends Phaser.Scene {
       // Simple, quick fade to BLACK (no iris, no "Loading") — the house bg is black too, so it's
       // seamless. Holds black until HouseScene is ready, then fades in. (Door SFX added later.)
       coverAndHandoff(this, () => {
-        this.inHouse = true; // set only when the handoff actually runs (pause + launch)
-        this.sleepIslandHud();
-        this.scene.pause('GameScene');
+        this.inHouse = true; // set only when the handoff actually runs (launch)
+        this.sleepIslandHud(); // sleep the island tool HUD only
+        // GameScene is NOT paused — it stays active so its input drives the in-house HUD (chat via
+        // the portrait, backpack / shop / paw menu). update() freezes the world while inHouse, and
+        // HouseScene paints a black backdrop over the frozen island.
         this.scene.launch('HouseScene', { sceneId: this.homeSceneId() });
+        this.bringHudAboveHouse(); // portrait / backpack / money / modals render OVER the room
       }, { effect: 'dissolve', color: 0x000000, ms: 220 });
     });
   }
 
-  /** HouseScene resumed us (exited the interior). Put Cato back at the doorway, wake the
-   *  island HUD, and reveal. Guarded so an unrelated resume can't misfire. */
-  private onResumeFromHouse(): void {
+  /** HouseScene exited the interior (it calls this, then stops itself — GameScene was never
+   *  paused). Put Cato back at the doorway, wake the island tool HUD, and reveal. Public + guarded
+   *  so a stray call can't misfire. */
+  onExitHouse(): void {
     if (!this.inHouse) return;
     this.inHouse = false;
     this.houseEntering = false;
@@ -6409,13 +6414,12 @@ export class GameScene extends Phaser.Scene {
     return { story: (story || this.storySummary).slice(0, 600), impression: (impression || this.impressionSketch).slice(0, 300) };
   }
 
-  // Slept while inside the house. Includes the Cato-bound HUD — `UmicatHud` (the top-right
-  // portrait + chat widgets) and `ChatterScene` (the mood emoji / chatter bubble drawn IN the
-  // portrait) — because Cato isn't in the interior scene, and the RULE is: show his portrait/chat
-  // only where Cato is. (Also stops the portrait tap from opening the frozen-tween dialog.) The
-  // money HUD (WeatherScene) stays. Kept in GameScene so a HouseScene restart on renovate doesn't
-  // disturb them.
-  private static readonly ISLAND_HUD = ['HotbarScene', 'ToolHudScene', 'BackpackButtonScene', 'HoverScene', 'UmicatHud', 'ChatterScene'];
+  // Slept while inside the house: only the ISLAND-specific TOOL HUD (hotbar tools, tool indicator,
+  // world hover-inspect) — those have no meaning in the room. The Cato portrait/chat (`UmicatHud`
+  // + `ChatterScene`), the bottom-right menu buttons (`BackpackButtonScene`) and the money HUD
+  // (`WeatherScene`) STAY awake so you can chat with Cato, open the backpack/shop/menu, and see
+  // coins inside — GameScene stays ACTIVE (not paused) in the house so its input drives them.
+  private static readonly ISLAND_HUD = ['HotbarScene', 'ToolHudScene', 'HoverScene'];
   private sleepIslandHud(): void {
     for (const k of GameScene.ISLAND_HUD) if (this.scene.isActive(k)) this.scene.sleep(k);
   }
@@ -6423,6 +6427,17 @@ export class GameScene extends Phaser.Scene {
     for (const k of GameScene.ISLAND_HUD) if (this.scene.isSleeping(k)) this.scene.wake(k);
     // Re-assert the ChatterScene order (mood emoji must sit ABOVE UmicatHud → in the portrait).
     if (this.scene.isActive('ChatterScene')) this.scene.bringToTop('ChatterScene');
+  }
+
+  // Brought ABOVE the HouseScene room (which paints a black backdrop over the frozen island) so the
+  // kept HUD + any modal renders on top of the interior. CursorScene stays last (topmost).
+  private static readonly HOUSE_HUD_ONTOP = [
+    'WeatherScene', 'UmicatHud', 'ChatterScene', 'BackpackButtonScene',
+    'MenuScene', 'CraftScene', 'ConfirmScene', 'ReceiptScene', 'HarvestToastScene',
+    'DialogueScene', 'LetterboxScene', 'CursorScene',
+  ];
+  private bringHudAboveHouse(): void {
+    for (const k of GameScene.HOUSE_HUD_ONTOP) if (this.scene.isActive(k)) this.scene.bringToTop(k);
   }
 
   /** Find the editor-placed mailbox sprite so clicking it opens the mail modal. */
@@ -10805,6 +10820,10 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.loadingOverlay?.update(delta); // drift the loading-screen wallpaper while it's up
+    // Inside the house the island is FROZEN (HouseScene paints black over it + drives its own
+    // room). GameScene stays active only so its input drives the kept HUD (chat / backpack / shop /
+    // menu); the whole world sim is skipped. HUD scenes have their own update loops.
+    if (this.inHouse) return;
     this.updateEdgeScroll(delta);
     this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages

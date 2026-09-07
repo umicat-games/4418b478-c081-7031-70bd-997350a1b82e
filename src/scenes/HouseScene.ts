@@ -425,8 +425,8 @@ export class HouseScene extends Phaser.Scene {
     coverAndHandoff(this, () => this.scene.restart({ sceneId: nextId }), { effect: 'dissolve', color: 0x000000, ms: 220 });
   }
 
-  /** Tap the exit door → cover, resume the island (GameScene), stop this scene.
-   *  GameScene's RESUME handler repositions Cato at the door + reveals. */
+  /** Tap the exit door → cover, hand control back to the island (GameScene was never paused —
+   *  onExitHouse repositions Cato at the door + reveals), stop this scene. */
   private exitHouse(): void {
     if (this.exiting) return;
     this.exiting = true;
@@ -438,7 +438,8 @@ export class HouseScene extends Phaser.Scene {
       if (started) return;
       started = true;
       coverAndHandoff(this, () => {
-        this.scene.resume('GameScene');
+        const gs = this.scene.get('GameScene') as GameScene | undefined;
+        gs?.onExitHouse(); // wake the tool HUD, reposition Cato at the door, reveal (GameScene stays active)
         this.scene.stop('HouseScene');
       }, { effect: 'dissolve', color: 0x000000, ms: 220 });
     };
