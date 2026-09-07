@@ -1162,7 +1162,7 @@ export class GameScene extends Phaser.Scene {
    *  so a scene-instance reuse (title→game→title→game) doesn't re-queue it. */
   preload(): void {
     if (!this.cache.audio.exists('bgm')) {
-      this.load.audio('bgm', 'uploaded/catopia-background-music-1.mp3');
+      this.load.audio('bgm', 'uploaded/catopia-backgound-music-1.mp3'); // new main-scene track (filename carries the uploader's typo)
     }
   }
 
