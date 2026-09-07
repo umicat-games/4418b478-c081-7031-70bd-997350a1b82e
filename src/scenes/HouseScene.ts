@@ -48,7 +48,8 @@ export class HouseScene extends Phaser.Scene {
   private bed?: Phaser.GameObjects.Sprite;               // the room's bed — swapped to a sleeping-Cato sprite at night
   private sleepCato?: Phaser.GameObjects.Sprite;         // the "Cato asleep in bed" sprite shown over the bed at night
   private sleepBubble?: Phaser.GameObjects.Container;     // the drowsy Zzz bubble above the sleeping Cato
-  private catoAsleep = false;                            // is the room currently showing sleeping Cato?
+  private interiorCato?: Phaser.GameObjects.Sprite;       // the authored in-room Cato — shown idle when he's sheltering from rain
+  private catoState: 'out' | 'sleep' | 'rain' = 'out';   // what the room currently shows (bed / sleeping Cato / idle Cato)
 
   constructor() { super({ key: 'HouseScene' }); }
 
@@ -90,6 +91,7 @@ export class HouseScene extends Phaser.Scene {
     // in-house behaviours) here later.
     const cato = reg?.byRole('child')[0] as Phaser.GameObjects.Sprite | undefined;
     cato?.setVisible(false);
+    this.interiorCato = cato; // shown idle when Cato is home sheltering from rain (see refreshCatoState)
 
     // Exit door — force onto the anim sheet at closed; tap to leave.
     const exit = reg?.all().find(
@@ -145,7 +147,7 @@ export class HouseScene extends Phaser.Scene {
     // Nightly sleep: at bedtime the room's bed is swapped for a "Cato asleep in bed" sprite
     // (he's come home to sleep — the island shows him gone) with a drowsy Zzz bubble.
     this.setupSleepBed(reg);
-    this.refreshSleep(); // apply immediately (entering the house at night shows him already asleep)
+    this.refreshCatoState(); // apply immediately (entering at night = asleep; in rain = idle inside)
 
     // Keep the pixel cursor on top (it self-drives from the real pointer when GameScene
     // isn't publishing the cursor model).
@@ -360,18 +362,27 @@ export class HouseScene extends Phaser.Scene {
     }
   }
 
-  /** Toggle the room between its normal bed (day) and the sleeping-Cato sprite + bubble (night),
-   *  reading the paused island's wall clock so inside/outside stay in sync. */
-  private refreshSleep(): void {
+  /** Show the room in one of three states, read from the paused island so inside/outside stay in
+   *  sync: `sleep` (night) → the sleeping-Cato sprite + Zzz bubble replace the bed; `rain` → Cato
+   *  is home sheltering, standing idle in the room (normal bed); `out` → he's outside on the island
+   *  (bed only, no Cato). Also exposed as `catoAsleep` for the extra-dark night tint. */
+  private refreshCatoState(): void {
     if (!this.bed || !this.sleepCato) return;
     const gs = this.scene.get('GameScene') as GameScene | undefined;
-    const asleep = !!gs?.isSleepTime?.();
-    if (asleep === this.catoAsleep) return;
-    this.catoAsleep = asleep;
-    this.bed.setVisible(!asleep);
-    this.sleepCato.setVisible(asleep);
-    this.sleepBubble?.setVisible(asleep);
+    const next: 'out' | 'sleep' | 'rain' = gs?.isSleepTime?.() ? 'sleep' : gs?.isRaining?.() ? 'rain' : 'out';
+    if (next === this.catoState) return;
+    this.catoState = next;
+    this.bed.setVisible(next !== 'sleep');
+    this.sleepCato.setVisible(next === 'sleep');
+    this.sleepBubble?.setVisible(next === 'sleep');
+    if (this.interiorCato) {
+      this.interiorCato.setVisible(next === 'rain');
+      if (next === 'rain' && this.anims.exists('idle-down')) this.interiorCato.play('idle-down', true);
+    }
   }
+
+  /** True while the room is showing sleeping Cato (drives the extra-dark night tint in update()). */
+  private get catoAsleep(): boolean { return this.catoState === 'sleep'; }
 
   update(_t: number, delta: number): void {
     // Day/night: darken the room + fade the lamp glow in with the darkness, both read live from the
@@ -387,7 +398,7 @@ export class HouseScene extends Phaser.Scene {
       const darkness = Phaser.Math.Clamp(alpha / 0.5, 0, 1); // 0 = day (glow off) → ~1 = deep night (glow full)
       for (let i = 0; i < this.lampGlow.length; i++) this.lampGlow[i]!.setAlpha(this.lampGlowBaseAlpha[i]! * darkness);
     }
-    this.refreshSleep(); // show/hide the sleeping Cato as bedtime starts/ends while inside
+    this.refreshCatoState(); // update as bedtime/rain starts/ends while inside
 
     // Keyboard pan (WASD / arrows) — the camera bounds clamp it, so a fits-on-screen
     // room stays put (centred) and a bigger one pans within its edges.

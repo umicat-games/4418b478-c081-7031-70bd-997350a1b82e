@@ -707,11 +707,13 @@ export class GameScene extends Phaser.Scene {
   // Curiosity: the player harvested something → Cato ambles OVER to look at it
   // (overrides wander/leash until he arrives or the deadline lapses).
   private catoCurious: { x: number; y: number; deadline: number } | null = null;
-  // Nightly sleep (11pm–7am): Cato beds down by the house in his little red bed (the
-  // self-contained `cato-sleep` sprite) with a drowsy Zzz bubble, then wakes at 7am. All
-  // derived from the real wall-clock (`nowMs`) — nothing persisted (re-evaluated on load).
-  private catoSleeping = false;                       // away in the house sleeping (hidden on the island)
-  private catoSleepSpot?: { x: number; y: number };   // cached wake spot just outside the house door
+  // Cato goes HOME (hidden on the island) when he's SLEEPING (11pm–7am, from the wall clock)
+  // OR SHELTERING from rain — both send him inside the house. `catoIndoorsReason` distinguishes
+  // them: `sleep` blocks chat + shows the Z portrait; `rain` keeps chat on (so you can ask him to
+  // go out — he refuses, hating to get wet). All derived from live state; nothing persisted.
+  private catoIndoors = false;                        // away in the house (hidden on the island)
+  private catoIndoorsReason: 'sleep' | 'rain' | null = null;
+  private catoSleepSpot?: { x: number; y: number };   // cached come-out spot just outside the house door
   private sleepArriveAt = 0;                           // deadline to go inside even if the door is unreachable
   // Cato's STANDING autonomous behaviour — he tends the farm on his own (harvest ripe
   // crops, water dry ones) instead of just wandering. This is NOT a settings toggle:
@@ -1346,6 +1348,7 @@ export class GameScene extends Phaser.Scene {
             rules: [
               ...(playerName ? [`Address the player by their name, "${playerName}", when it feels natural — they are your friend.`] : []),
               'You have LIMITED ENERGY (see observation.cato.energyPct). If observation.cato.exhausted is true you are TOO TIRED to do any chore — warmly tell your friend you need to rest and get your energy back first, and do NOT call any task action (till/plant/water/harvest/chop/mine/forage). When your energy is low but not empty you can still work, though you may mention you\'re getting a bit tired.',
+              'When observation.weather is "raining" you are staying INSIDE your cosy house because you really don\'t like getting wet. If your friend asks you to come out / go outside / go do something outdoors, warmly REFUSE — tell them you\'d rather stay in where it\'s dry and not get soaked, and maybe suggest waiting for the rain to pass. Do NOT call any outdoor task action (till/plant/water/harvest/chop/mine/forage/fish) while it is raining.',
             ],
             // The vocabulary of things Cato can DO in the world. The AI picks one
             // when the friend's request fits; GameScene validates + executes it.
@@ -1680,7 +1683,7 @@ export class GameScene extends Phaser.Scene {
     // (the "just Cato + Mm? on black" bug). In-house chat is deferred, so ignore the portrait
     // tap while in the house (the SDK HUD is above HouseScene and still emits `hud:press`).
     if (this.inHouse) return;
-    if (this.catoSleeping) return; // he's away sleeping — no chat until he wakes at 7am
+    if (this.catoIndoors && this.catoIndoorsReason === 'sleep') return; // asleep — no chat until 7am (rain keeps chat on, so you can ask him to go out)
     this.closeOpenModal(); // close the unified menu first → chat replaces it
     this.followCato();
     this.openDialog();
@@ -2123,7 +2126,7 @@ export class GameScene extends Phaser.Scene {
     // Cato's portrait (top-right) → aim camera at him + open chat; Cato himself →
     // talk; else release follow.
     if (Phaser.Geom.Rectangle.Contains(this.findCatBounds, x, y)) { this.focusCato(); return; }
-    if (!this.catoSleeping && this.catContains(wp.x, wp.y)) this.openDialog();
+    if (!this.catoIndoors && this.catContains(wp.x, wp.y)) this.openDialog(); // while he's inside, chat is via the portrait only
     else if (this.cameraFollow) this.unfollowCato();
   }
 
@@ -9899,6 +9902,7 @@ export class GameScene extends Phaser.Scene {
     return {
       island: 'home',
       timeOfDay: ['morning', 'morning', 'midday', 'afternoon', 'evening'][this.pointerStep() - 1],
+      weather: this.isRaining() ? 'raining' : (isDebug('fog') || isDebug('heavyFog')) ? 'foggy' : 'clear',
       daysTogether: this.dayCount,
       relationship: {
         bondTier: this.bondTier(), // stranger / acquaintance / friend / close / bonded
@@ -9913,6 +9917,7 @@ export class GameScene extends Phaser.Scene {
         // Cato's own energy. exhausted → he CAN'T do chores; see the energy rule.
         energyPct: Math.round((this.stamina / this.staminaMax) * 100),
         exhausted: this.exhausted,
+        sheltering: this.catoIndoors && this.catoIndoorsReason === 'rain', // inside, out of the rain
         autoFarming: { harvest: this.autonomy.harvest, water: this.autonomy.water },
         // The last little thing Cato said on his own (the friend may be replying to it).
         ...(this.lastChatter ? { lastRemark: this.lastChatter } : {}),
@@ -9979,6 +9984,18 @@ export class GameScene extends Phaser.Scene {
     return h >= SLEEP_START_HOUR || h < SLEEP_END_HOUR;
   }
 
+  /** Is it raining? (heavy or light). Cato shelters indoors — he doesn't like getting wet. */
+  public isRaining(): boolean {
+    return isDebug('rain') || isDebug('lightRain');
+  }
+
+  /** Why Cato is (or should be) indoors right now: bedtime wins over rain; null = he's out. */
+  private indoorsReason(): 'sleep' | 'rain' | null {
+    if (this.isSleepTime()) return 'sleep';
+    if (this.isRaining()) return 'rain';
+    return null;
+  }
+
   /** Where Cato reappears when he WAKES — just OUTSIDE the house door on walkable grass.
    *  Computed once + cached; mirrors `frameNewGameStart`'s "step south past the house
    *  footprint to grass" logic. */
@@ -10005,31 +10022,32 @@ export class GameScene extends Phaser.Scene {
     return this.catoSleepSpot;
   }
 
-  /** Cato's nightly sleep behaviour. At 11pm he heads HOME — walks to the house door and goes
-   *  INSIDE (vanishes from the island; the interior HouseScene shows him asleep in his bed). At
-   *  7am he wakes and reappears OUTSIDE the door. Returns TRUE while it owns Cato (skip
-   *  tasks/wander/leash); the top-right portrait mood is forced sleepy while he's away. */
-  private updateCatoSleep(): boolean {
+  /** Cato heads HOME when it's bedtime OR raining — he walks to the house door and goes INSIDE
+   *  (vanishes from the island; the interior HouseScene shows him asleep in bed at night, or just
+   *  cosy indoors when sheltering from rain). When it clears (morning / rain stops) he reappears
+   *  OUTSIDE the door. Returns TRUE while it owns Cato (skip tasks/wander/leash). */
+  private updateCatoIndoors(): boolean {
     const child = this.child;
     if (!child) return false;
     const body = child.body as Phaser.Physics.Arcade.Body;
+    const reason = this.indoorsReason();
 
-    if (this.isSleepTime()) {
-      if (this.catoTask) this.catoTask = null; // bedtime overrides any chore in progress
+    if (reason) {
+      if (this.catoTask) this.catoTask = null; // going home overrides any chore in progress
 
-      if (this.catoSleeping) { body.setVelocity(0, 0); return true; } // asleep inside
+      if (this.catoIndoors) { this.catoIndoorsReason = reason; body.setVelocity(0, 0); return true; } // already inside
 
-      // Not yet in bed → walk to the house door, then step inside (hide). A fallback deadline
-      // sends him to bed even if the door can't be reached, so he never gets stuck.
+      // Not inside yet → walk to the house door, then step in (hide). A fallback deadline sends
+      // him in even if the door can't be reached, so he never gets stuck.
       const door = this.houseDoor;
       if (this.sleepArriveAt === 0) this.sleepArriveAt = this.time.now + SLEEP_ARRIVE_MS;
       const d = door ? Math.hypot(door.x - child.x, door.y - child.y) : 0;
       if (!door || d <= TILE || this.time.now >= this.sleepArriveAt) {
-        // Go inside: hide Cato + park his physics body.
         body.setVelocity(0, 0);
         body.enable = false;
         child.setVisible(false);
-        this.catoSleeping = true;
+        this.catoIndoors = true;
+        this.catoIndoorsReason = reason;
         this.sleepArriveAt = 0;
         this.cameraFollow = false; // don't leave the camera locked on the empty doorway
         return true;
@@ -10039,9 +10057,11 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    // Morning — wake up OUTSIDE the house and resume island life.
-    if (this.catoSleeping) {
-      this.catoSleeping = false;
+    // Clear again (morning / rain stopped) — come back OUTSIDE the house and resume island life.
+    if (this.catoIndoors) {
+      const wasSleeping = this.catoIndoorsReason === 'sleep';
+      this.catoIndoors = false;
+      this.catoIndoorsReason = null;
       this.sleepArriveAt = 0;
       const spot = this.catoWakeWorldSpot();
       if (spot) child.setPosition(spot.x, spot.y);
@@ -10051,7 +10071,7 @@ export class GameScene extends Phaser.Scene {
       this.faceDir = 'down';
       child.play('idle-down', true); // restores the character-sheet texture too
       this.startWanderIdle();
-      this.catoReact('wake', { duration: 2600, force: true });
+      this.catoReact(wasSleeping ? 'wake' : 'happy', { duration: 2600, force: true });
     }
     return false;
   }
@@ -10805,7 +10825,7 @@ export class GameScene extends Phaser.Scene {
     this.updateClouds(delta); // drifting clouds on rain / fog days
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
-    if (this.catoSleeping) this.registry.set('catoMoodFrame', SLEEPY_MOOD_FRAME); // sleepy face in the top-right portrait while he's away
+    if (this.catoIndoors && this.catoIndoorsReason === 'sleep') this.registry.set('catoMoodFrame', SLEEPY_MOOD_FRAME); // sleepy Z face in the portrait while he's asleep
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
     // Pin the roof layer's depth every frame: the SDK's tilemap layer-sync mirrors each layer's
     // depth back to its tilemap-ref transform.depth (1) every frame, which would otherwise clobber
@@ -10883,9 +10903,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Nightly sleep (23:00–07:00): Cato heads to his bed by the house and lies down; wakes
-    // at 7am. Owns him fully (overrides tasks/wander/leash) while it's bedtime.
-    if (this.updateCatoSleep()) return;
+    // Cato goes home (hidden inside): at night (23:00–07:00) to sleep, or whenever it's raining
+    // to shelter. Owns him fully (overrides tasks/wander/leash) while he's indoors.
+    if (this.updateCatoIndoors()) return;
 
     // A commanded behaviour (e.g. Cato tilling a plot via chat) takes over.
     if (this.catoTask) {
