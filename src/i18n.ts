@@ -147,6 +147,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   dbg_light_rain: { en: 'Light rain', 'zh-CN': '小雨天气' },
   dbg_fog: { en: 'Fog (light)', 'zh-CN': '雾天 (小)' },
   dbg_heavy_fog: { en: 'Fog (heavy)', 'zh-CN': '雾天 (大)' },
+  dbg_small_bag: { en: 'Small backpack (12)', 'zh-CN': '小背包 (12格·测满仓)' },
   action_give_cato: { en: 'Give to Cato', 'zh-CN': '给 Cato' },
   action_feed: { en: 'Feed now', 'zh-CN': '喂食' },
   action_to_chest: { en: 'To Chest', 'zh-CN': '放回箱子' },

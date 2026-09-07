@@ -30,6 +30,7 @@ export const DEBUG_FLAGS: DebugFlagDef[] = [
   { key: 'lightRain',    labelKey: 'dbg_light_rain',     def: false }, // live: light drizzle (fewer/slower drops, fainter fog)
   { key: 'fog',          labelKey: 'dbg_fog',            def: false }, // live: light fog (one-cloud icon)
   { key: 'heavyFog',     labelKey: 'dbg_heavy_fog',      def: false }, // live: heavy fog (two-cloud icon, denser)
+  { key: 'smallBag',     labelKey: 'dbg_small_bag',      def: false }, // live: shrink the backpack to 12 slots (test the "背包满了" / can't-take flow fast)
 ];
 
 /** Master switch for whether the Debug section renders in Settings at all.

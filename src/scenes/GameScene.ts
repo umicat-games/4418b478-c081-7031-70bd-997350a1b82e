@@ -214,7 +214,7 @@ const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
-const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks). The menu grid renders exactly this many cells (gridCap→renderGrid), so empty cells == real free slots and "full" shows no empty cell.
+const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks). The menu grid renders exactly this many cells (gridCap→renderGrid) so empty cells == real free slots. Debug 'smallBag' shrinks it to 12 for testing the full-bag flow.
 // Only these crops' seeds are GIVEN at the start (backpack + chest); the rest (cauliflower, lettuce,
 // wheat, parsnip, beet, cucumber, star fruit, blue tulip, red flower) are earned by BUYING them in
 // the shop. Keeps the starter backpack from being pre-stuffed (was seeding all 14 → nearly full).
@@ -6686,7 +6686,7 @@ export class GameScene extends Phaser.Scene {
   /** The distinct-stack CAPACITY of the active tab's store — so the grid shows empty cells ONLY up
    *  to the cap (not padding out the whole rectangle), making "full" read as a full grid. */
   private menuStoreCap(): number {
-    return this.menuTab === TAB_BACKPACK ? BACKPACK_SLOTS
+    return this.menuTab === TAB_BACKPACK ? this.backpackCap()
       : this.menuTab === TAB_CHEST ? CHEST_SLOTS
       : this.menuTab === 2 ? CATO_BAG_SLOTS
       : this.menuTab === TAB_PICKUP ? PICKUP_SLOTS
@@ -6867,11 +6867,17 @@ export class GameScene extends Phaser.Scene {
     return this.catoBagStore.length < CATO_BAG_SLOTS;
   }
 
+  /** The backpack's distinct-stack capacity — normally `BACKPACK_SLOTS` (35), but the `smallBag`
+   *  debug toggle shrinks it to 12 so the full-bag / can't-take flow is easy to test. */
+  private backpackCap(): number {
+    return isDebug('smallBag') ? 12 : BACKPACK_SLOTS;
+  }
+
   /** Does the player's backpack have room for `id`? Merges into an existing stack, else a free
-   *  slot (capped at BACKPACK_SLOTS). */
+   *  slot (capped at `backpackCap()`). */
   private backpackHasSpaceFor(id: string): boolean {
     if (this.backpackStore.some((s) => s.id === id)) return true;
-    return this.backpackStore.length < BACKPACK_SLOTS;
+    return this.backpackStore.length < this.backpackCap();
   }
 
   /** Room in the mailbox 取货 grid / 待售 bin for `id`? (merge-into-stack always fits; a new id
@@ -8501,7 +8507,7 @@ export class GameScene extends Phaser.Scene {
     });
     // Backpack full → Cato STOPS auto-harvesting (nowhere to put what he'd gather); he says so
     // ONCE (until it has room again) so you know why he paused. Watering yields no items → still ok.
-    const bagFull = this.backpackStore.length >= BACKPACK_SLOTS;
+    const bagFull = this.backpackStore.length >= this.backpackCap();
     if (!bagFull) this.bagFullNotified = false;
     else if (this.autonomy.harvest && !this.bagFullNotified) { this.bagFullNotified = true; this.catoSay('chatter_pack_full'); }
     if (this.autonomy.harvest && !bagFull) {
