@@ -24,7 +24,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume, BGM_START_FADE_MS } from '../bgm';
-import { playSfx, setSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB } from '../sfx';
+import { playSfx, setSfxVolume, getSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB } from '../sfx';
 import { coverAndReload, coverAndHandoff, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -1036,6 +1036,7 @@ export class GameScene extends Phaser.Scene {
   private rainOverlay?: Phaser.GameObjects.Rectangle;
   private raindrops?: Raindrop[];
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private rainSound?: Phaser.Sound.BaseSound; // looping rain ambience, playing while it's raining
   // Fog / mist: a light haze + MANY small soft patches of widely varied size at low opacity — their
   // overlaps dissolve into an irregular, boundary-less field (no distinct circles). Drifts slowly.
   // Shared by rain (a misty day) and a future fog weather.
@@ -1196,9 +1197,12 @@ export class GameScene extends Phaser.Scene {
     // RESIZE mode: recompute zoom + re-centre + re-layout screen UI on any
     // canvas resize (device rotation, window change, phone vs desktop).
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
-      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this),
-    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
+      // The rain loop lives on the GLOBAL sound manager (survives the scene), so stop + drop it on
+      // shutdown or it keeps raining on the title screen after returnToTitle.
+      this.rainSound?.stop(); this.rainSound?.destroy(); this.rainSound = undefined;
+    });
     // Pin the world origin (0,0) to the screen's TOP-LEFT corner. Phaser zooms
     // around the camera CENTER (default origin 0.5), so a raw setScroll(0,0) at
     // zoom>1 would start the view at +426/+240, not the origin. We offset the
@@ -2903,6 +2907,9 @@ export class GameScene extends Phaser.Scene {
   private updateRain(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
     const heavy = isDebug('rain'), light = isDebug('lightRain'); // heavy wins if both on
+    // Rain ambience: loop `rain-loop` while it's raining (heavier = louder), on the SFX bus so the
+    // SFX slider controls + mutes it. 0 volume = stop.
+    this.updateRainAudio((heavy || light) ? getSfxVolume() * (heavy ? 0.85 : 0.5) : 0);
     if (!heavy && !light) {
       this.rainOverlay?.setVisible(false);
       if (this.raindrops) for (const d of this.raindrops) d.img.setVisible(false);
@@ -2963,6 +2970,24 @@ export class GameScene extends Phaser.Scene {
     this.textures.get('fog-dot').setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
   private static FOG_COUNT = 34;
+  /** Start / stop / volume the looping rain ambience. `volume > 0` → play the loop at that level;
+   *  `0` → stop. Lazily created; skipped while the audio context is still locked (starts once a
+   *  gesture unlocks it — by then rain is usually still on). Volume tracks the SFX slider live. */
+  private updateRainAudio(volume: number): void {
+    if (volume > 0 && !this.sound.locked) {
+      if (!this.rainSound && this.cache.audio.exists('rain-loop')) {
+        this.rainSound = this.sound.add('rain-loop', { loop: true, volume: 0 });
+      }
+      const s = this.rainSound as (Phaser.Sound.BaseSound & { setVolume?: (v: number) => void }) | undefined;
+      if (s) {
+        if (!s.isPlaying) s.play({ loop: true, volume });
+        else s.setVolume?.(volume); // follow the SFX slider (and mute → stop next frame)
+      }
+    } else if (this.rainSound?.isPlaying) {
+      this.rainSound.stop();
+    }
+  }
+
   private updateFog(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
     const rainHeavy = isDebug('rain'), rainLight = isDebug('lightRain'), heavyFog = isDebug('heavyFog'), lightFog = isDebug('fog');
