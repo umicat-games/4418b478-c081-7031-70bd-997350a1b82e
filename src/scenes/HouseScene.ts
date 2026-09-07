@@ -341,16 +341,18 @@ export class HouseScene extends Phaser.Scene {
     this.sleepCato = this.add.sprite(cx, bottom, 'cato-sleep', 0)
       .setOrigin(0.5, 1).setScale(scale).setDepth(bed.depth + 1).setVisible(false);
 
-    // Drowsy Zzz bubble above the bed (mirrors the island emote bubble: speech-bubble + the
-    // sleepy emoji frame). Only built if those textures exist.
+    // Drowsy Zzz bubble just above Cato's HEAD (mirrors the island emote bubble: speech-bubble +
+    // the sleepy emoji frame). Small + close — the tail sits right over his head (~0.7 up the
+    // sprite), NOT above the whole bed (which floated it into the money HUD). Built only if the
+    // textures exist.
     if (this.textures.exists('speech-bubble') && this.textures.exists('emoji')) {
       const bubble = this.add.image(0, 0, 'speech-bubble').setOrigin(0.5, 1);
       const face = this.add.image(0, Math.round(-bubble.height * 0.62), 'emoji', SLEEPY_EMOJI_FRAME).setOrigin(0.5, 0.5);
-      const by = bottom - this.sleepCato.displayHeight - 2;
+      const by = bottom - this.sleepCato.displayHeight * 0.7; // tail hovers over his head
       this.sleepBubble = this.add.container(cx, by, [bubble, face])
-        .setScale(scale * 0.5).setDepth(bed.depth + 2).setVisible(false);
+        .setScale(scale * 0.3).setDepth(bed.depth + 2).setVisible(false);
       // Gentle breathing bob so the bubble reads as "sleeping", not a static decal.
-      this.tweens.add({ targets: this.sleepBubble, y: by - 3, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.tweens.add({ targets: this.sleepBubble, y: by - 2, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
   }
 
