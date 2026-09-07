@@ -214,7 +214,7 @@ const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
-const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks) — full → can't harvest/buy. = the menu grid's 5 rows × 7 cols (GRID.rows×cols), so the VISIBLE grid == the real cap: empty cells are genuinely free, "full" shows no empty cell. Bumped 24→35 (2026-09-07) — 24 didn't match the 35-cell grid, so it read "full" while empty-looking cells showed.
+const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks). The menu grid now renders exactly this many cells (see gridCap/menuStoreCap → MenuScene renderGrid), so empty cells == real free slots and "full" shows no empty cell. (35 = a clean 5×7; the cap can be ANY number now — the grid shows items + free slots up to it, no padding beyond.)
 // Only these crops' seeds are GIVEN at the start (backpack + chest); the rest (cauliflower, lettuce,
 // wheat, parsnip, beet, cucumber, star fruit, blue tulip, red flower) are earned by BUYING them in
 // the shop. Keeps the starter backpack from being pre-stuffed (was seeding all 14 → nearly full).
@@ -6672,6 +6672,17 @@ export class GameScene extends Phaser.Scene {
       : [];
   }
 
+  /** The distinct-stack CAPACITY of the active tab's store — so the grid shows empty cells ONLY up
+   *  to the cap (not padding out the whole rectangle), making "full" read as a full grid. */
+  private menuStoreCap(): number {
+    return this.menuTab === TAB_BACKPACK ? BACKPACK_SLOTS
+      : this.menuTab === TAB_CHEST ? CHEST_SLOTS
+      : this.menuTab === 2 ? CATO_BAG_SLOTS
+      : this.menuTab === TAB_PICKUP ? PICKUP_SLOTS
+      : this.menuTab === TAB_FORSALE ? SALE_SLOTS
+      : 0;
+  }
+
   /** Open the BACKPACK — a standalone MenuScene view (left grid / right detail) with NO tab bar,
    *  so it can't reach the chest (portable ≠ storage). Sprout-up button / a future key. */
   private openBackpack(): void {
@@ -6709,6 +6720,7 @@ export class GameScene extends Phaser.Scene {
         id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
         label: this.itemName(it.id), desc: this.itemDesc(it.id),
       })),
+      gridCap: this.menuStoreCap(), // cap the grid's empty cells at the store capacity
       mails: this.mailListModel(),
       selected: this.menuSelected,
       mailSelected: this.menuMailSel ?? undefined, mailDetail,

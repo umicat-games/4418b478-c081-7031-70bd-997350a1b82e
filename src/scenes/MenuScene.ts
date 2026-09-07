@@ -94,6 +94,7 @@ export interface MenuModel {
   tabSet?: number[];         // the paw menu: which TAB_DEFS indices to show in the bar (subset); absent = all
   tab: number;               // 0 mail · 1 chest · 2 cato-bag · 3 shop · 4 settings · 5 backpack
   items?: MenuItem[];        // grid (chest / cato-bag)
+  gridCap?: number;          // the store's distinct-stack capacity → the grid shows empty cells only up to this (no padding beyond)
   mails?: MailListEntry[];   // mail list
   selected?: number;         // selected grid index → right detail
   catalog?: MenuCatalogItem[];  // shop tab (物品 sub-tab)
@@ -396,7 +397,7 @@ export class MenuScene extends Phaser.Scene {
     }
     else if (m.tab === TAB_SHOP || m.tab === TAB_COOP) this.renderShop(content, m); // 牧场 reuses the shop 2-pane + buy UI
     else if (m.tab === TAB_HOUSE) this.renderHouse(content, m);
-    else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows); // chest / cato-bag / backpack / 取货 / 待售
+    else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows, m.gridCap); // chest / cato-bag / backpack / 取货 / 待售
     if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
@@ -469,7 +470,7 @@ export class MenuScene extends Phaser.Scene {
     this.time.delayedCall(110, () => { if (img.active) img.setFrame(CLOSE.frame); });
   }
 
-  private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number, rows: number = GRID.rows): void {
+  private renderGrid(c: Phaser.GameObjects.Container, items: MenuItem[], selected?: number, rows: number = GRID.rows, capacity?: number): void {
     const W = this.scale.width, H = this.scale.height;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W, gap = GRID.gap * W;
     const cols = GRID.cols;
@@ -481,14 +482,21 @@ export class MenuScene extends Phaser.Scene {
     const fitRows = Math.max(1, Math.floor((GRID.bottom * H - gy + gap) / (cell + gap)));
     const visRows = Math.min(rows, fitRows);
     this.scrollStepPx = cell + gap;
+    // The grid shows exactly the store CAPACITY worth of cells (items + free slots up to the cap),
+    // so empty cells == real free slots and there's no padding beyond the cap. An over-full store
+    // (more items than the cap) still shows all its items (no empties). No cap → the old bottomless
+    // rectangle (as many rows as there are items + page padding).
+    const cap = capacity ?? Number.POSITIVE_INFINITY;
+    const renderLimit = Number.isFinite(cap) ? Math.max(cap, items.length) : Number.POSITIVE_INFINITY;
     // Window by ROW: show `visRows` rows starting at `scroll`; overflow drives the bar.
-    const totalRows = Math.ceil(items.length / cols);
+    const totalRows = Number.isFinite(renderLimit) ? Math.ceil(renderLimit / cols) : Math.ceil(items.length / cols);
     this.maxScrollRows = Math.max(0, totalRows - visRows);
     if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
     const startIdx = this.scroll * cols;
     const bounds: Array<{ x: number; y: number; w: number; h: number; index: number }> = [];
     for (let j = 0; j < cols * visRows; j++) {
       const i = startIdx + j;                       // real store index
+      if (i >= renderLimit) continue;               // past the last item AND the cap → no cell (don't pad the rectangle)
       const col = j % cols, row = Math.floor(j / cols);
       const sx = gx + col * (cell + gap), sy = gy + row * (cell + gap);
       const bg = this.add.nineslice(sx + cell / 2, sy + cell / 2, ATLAS, SLOT_FRAME, cell / SLOT_SCALE, cell / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
