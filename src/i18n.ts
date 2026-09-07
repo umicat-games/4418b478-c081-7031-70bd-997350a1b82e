@@ -181,6 +181,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   mail_sender_market: { en: 'Market Manager', 'zh-CN': '集市管理员' },
   mail_sales_receipt: { en: 'Sales Receipt', 'zh-CN': '销售回执' },
   mail_delivery_title: { en: 'Order Delivered', 'zh-CN': '订单送达' },
+  mail_reminder_hi: { en: 'Hi, {name}!', 'zh-CN': '嗨，{name}！' },
   mail_reminder_goods: { en: "Our order arrived! Let's go grab it from the mailbox.", 'zh-CN': '我们的货物送到啦！一起去邮箱那儿取一下吧～' },
   mail_reminder_mail: { en: "We've got new mail! Let's go check the mailbox.", 'zh-CN': '我们有新邮件啦！一起去邮箱看看吧～' },
   mail_reminder_both: { en: "Our new mail AND a delivery came in! Let's check the mailbox.", 'zh-CN': '我们有新邮件，还有新货物送到啦！一起去邮箱看看吧～' },

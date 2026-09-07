@@ -9812,7 +9812,10 @@ export class GameScene extends Phaser.Scene {
     const hasGoods = this.pickupStore.some(Boolean);
     const hasMail = this.mailList.some((m) => !m.read);
     const key = hasGoods && hasMail ? 'mail_reminder_both' : hasGoods ? 'mail_reminder_goods' : 'mail_reminder_mail';
-    this.time.delayedCall(900, () => { if (this.mailReminderActive && !this.menuOpen) this.openDialog(t(key), true); });
+    // Cato greets the player by their name first ("Hi, <name>! …") — they live together.
+    const name = this.callName() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
+    const line = `${t('mail_reminder_hi').replace('{name}', name)} ${t(key)}`;
+    this.time.delayedCall(900, () => { if (this.mailReminderActive && !this.menuOpen) this.openDialog(line, true); });
   }
 
   /** A tap dismisses the mail reminder: close Cato's message + glide the camera back to normal play. */
