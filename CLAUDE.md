@@ -1,5 +1,48 @@
 # Catopia — Technical Session Notes
 
+## Title screen was off-centre on wide screens — TWO bugs, one symptom (2026-09-07)
+
+Once the native players stopped letterboxing a `scaleMode:'resize'` game (the
+frame now fills the screen), the title screen sat left of centre, drifting
+further out the wider the canvas. It was two independent faults that had been
+hiding inside the old fixed-aspect frame, and fixing either alone still looks
+wrong:
+
+**1. SDK — camera bounds smaller than the view PIN the world.** `loadWorldScene`
+sets the main camera's bounds to the world rect, and Phaser's `clampX` computes
+its lower limit as `bounds.x + (displayWidth - width) / 2`, mixing WORLD units
+(`displayWidth = width / zoom`) with SCREEN units. At zoom 1 they agree; at any
+other zoom the scroll is clamped somewhere unrelated to the middle of the
+screen. Boot's world is 427 units in a 733-unit view, so it clamped. **The
+scene's own centring was not approximate, it was INERT** — setting `scrollX` to
+-99999 moved the picture by zero pixels. Fixed in **SDK 1.0.89**, which widens
+undersized bounds about their own centre (a no-op when the world is bigger than
+the view, so scrolling scenes are unaffected). `HouseScene` had already worked
+around the same trap by hand — see its `setBounds` comment.
+
+**2. Catopia — `positionButtons` read `cam.worldView` during layout.** Phaser
+only recomputes `worldView` in the camera's `preRender`, so at layout time it
+holds the pre-resize value, and at scene start the zoom-1 value, which is not
+even in world units. Measured at a 3600px canvas: `worldView.x = 0, width =
+3600` while the real view was `x = -152.5, width = 733`, putting Play at 1049
+instead of 1800. It now derives the view origin from `scrollX/zoom/width`, which
+has no timing hole — better than deferring a frame, which would only make the
+window smaller.
+
+**This does NOT contradict the Shop entry's test gotcha below.** Projecting via
+`cam.worldView` is right in a TEST, where the camera has already rendered and
+`worldView` is live. It is wrong inside a layout/resize handler, which runs
+before the next `preRender`. Same property, opposite validity — the question is
+always "has the camera rendered since the last change?".
+
+Verified at 852x393, 1200x393, 1024x768 and 600x900: buttons centre to within a
+pixel at every one. Method worth reusing — a local harness page that answers the
+SDK's `umicat:hello` with a minimal `umicat:init` boots the game in headless
+Chromium with **no** platform bridge, so nothing is read or written and the real
+save is untouched; serve `dist/` next to it and Playwright can measure inside
+the cross-origin frame. Three earlier explanations were built and killed by that
+loop before the real ones surfaced.
+
 ## Shop = a bottom-right HUD tablet button (2026-08-18)
 Design call (the house is now a facade you enter): the **most common ops stay OUTSIDE** — mailbox + chest are world objects at the house door, and **shopping is a 3rd bottom-right HUD button** (`BackpackButtonScene`, right→left: paw menu · backpack · **shop tablet** using the `icon-buttons` `order` frame). The house INTERIOR is reserved for enter-only activities (cooking / minigames — the reason to upgrade). Tapping the tablet → `pressShopThenOpen` → `openMenu(TAB_SHOP)` — native + fully working because it's on the island (GameScene active), no paused-scene routing. `shopBtnBounds` + `overShopButton` mirror the backpack/settings buttons; `shopPressed` added to the `backpackBtn` model (the `order` frame has no pressed variant → a dim tint is the press feedback); all three hide together during modals/cutscenes. The old in-house desk-pad shop entry was REMOVED (`padContains`/`openShopViaPad` + the `actAt`/hover uses) so tapping the house is uniformly "enter"; the `ipad_qkzld` sprite stays as desk decor (`wirePad`/`sortPadOnDesk`). The intro tutorial's shopping line (`intro.json` `tool_pad`) no longer glides to the pad (`data.focus` dropped) — the text now points to the bottom-right tablet button. **Test gotcha:** to click a WORLD object headlessly, project via `cam.worldView` (`screen = (world − worldView.xy) × zoom`), NOT `(world − scrollX) × zoom` — the camera zooms around its centre (origin 0.5), so the naive formula lands on the wrong pixel (a false "tap did nothing"). `actAt` itself uses `cam.getWorldPoint` and is correct.
 
