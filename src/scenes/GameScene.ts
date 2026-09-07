@@ -214,7 +214,7 @@ const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
 const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
-const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks). The menu grid now renders exactly this many cells (see gridCap/menuStoreCap → MenuScene renderGrid), so empty cells == real free slots and "full" shows no empty cell. (35 = a clean 5×7; the cap can be ANY number now — the grid shows items + free slots up to it, no padding beyond.)
+const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks). The menu grid renders exactly this many cells (gridCap→renderGrid), so empty cells == real free slots and "full" shows no empty cell.
 // Only these crops' seeds are GIVEN at the start (backpack + chest); the rest (cauliflower, lettuce,
 // wheat, parsnip, beet, cucumber, star fruit, blue tulip, red flower) are earned by BUYING them in
 // the shop. Keeps the starter backpack from being pre-stuffed (was seeding all 14 → nearly full).
@@ -4121,6 +4121,17 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('confirm', { visible: true, title, heading, rev: ++this.confirmRev });
   }
 
+  /** Pop a modal one-button NOTICE (ConfirmScene, single centred ✓, no cancel) — for a message the
+   *  player just needs to acknowledge (e.g. "背包满了" when Taking from the mailbox with a full bag,
+   *  where the old inline flash was hidden behind the item grid). ✓ just dismisses. */
+  private promptAlert(body: string, heading?: string): void {
+    this.pendingConfirm = undefined; // ✓ only dismisses
+    this.confirmOpen = true;
+    this.registry.set('confirm', { visible: true, title: body, heading, alert: true, rev: ++this.confirmRev });
+    this.scene.bringToTop('ConfirmScene'); // above the open menu
+    this.scene.bringToTop('CursorScene');  // keep the pixel cursor topmost
+  }
+
   private closeConfirm(): void {
     if (!this.confirmOpen) return;
     this.confirmOpen = false;
@@ -7233,10 +7244,10 @@ export class GameScene extends Phaser.Scene {
       const opt = this.menuActionOptionAt(x, y);
       const it = this.menuStore()[this.menuItemMenu.index];
       if (opt === 'use') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuUse(idx); }
-      else if (opt === 'store' && it && !this.chestHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('bag_chest_full')); } // chest full → decline
-      else if (opt === 'take' && it && !this.backpackHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('bag_full')); } // backpack full → decline
+      else if (opt === 'store' && it && !this.chestHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.promptAlert(t('bag_chest_full')); } // chest full → decline
+      else if (opt === 'take' && it && !this.backpackHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.promptAlert(t('bag_full')); } // backpack full → decline
       else if (opt === 'give' && it && !this.catoBagHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.catoSay('chatter_bag_full'); } // Cato's bag is full → decline
-      else if (opt === 'sell' && it && !this.saleHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.flashShopMsg(t('sale_full')); } // 待售 bin full → decline
+      else if (opt === 'sell' && it && !this.saleHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.promptAlert(t('sale_full')); } // 待售 bin full → decline
       else if (opt === 'sell' || opt === 'give' || opt === 'tochest' || opt === 'store' || opt === 'take') this.openMenuKeypad(opt);
       else if (opt === 'feed') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuFeed(idx); }
       else if (opt === 'delete') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuPerformAction('delete', idx); }
@@ -7478,7 +7489,7 @@ export class GameScene extends Phaser.Scene {
     const n = Math.min(qty ?? it.count, it.count);
     if (n <= 0) return;
     if (action === 'sell') { // LIST for sale → the mailbox 待售 bin (auto-sold at the next day-settle)
-      if (!this.saleHasSpaceFor(it.id)) { this.flashShopMsg(t('sale_full')); return; }
+      if (!this.saleHasSpaceFor(it.id)) { this.promptAlert(t('sale_full')); return; }
       this.addToStore(this.saleStore, { ...it, count: n });
     }
     else if (action === 'give') {
@@ -7487,11 +7498,11 @@ export class GameScene extends Phaser.Scene {
     }
     else if (action === 'tochest') this.addToStore(this.chestStore, { ...it, count: n }); // Cato's bag → chest
     else if (action === 'store') { // backpack → chest
-      if (!this.chestHasSpaceFor(it.id)) { this.flashShopMsg(t('bag_chest_full')); return; }
+      if (!this.chestHasSpaceFor(it.id)) { this.promptAlert(t('bag_chest_full')); return; }
       this.addToStore(this.chestStore, { ...it, count: n });
     }
     else if (action === 'take') { // chest → backpack
-      if (!this.backpackHasSpaceFor(it.id)) { this.flashShopMsg(t('bag_full')); return; }
+      if (!this.backpackHasSpaceFor(it.id)) { this.promptAlert(t('bag_full')); return; }
       this.addToStore(this.backpackStore, { ...it, count: n });
     }
     it.count -= n;

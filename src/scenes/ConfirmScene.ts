@@ -25,6 +25,7 @@ export interface ConfirmModel {
   visible: boolean;
   title: string;   // body text (may contain \n\n paragraph breaks)
   heading?: string; // optional bold top-centred title
+  alert?: boolean;  // true = a one-button NOTICE (single centred ✓, no cancel) — e.g. "背包满了"
   rev: number;
 }
 
@@ -130,10 +131,11 @@ export class ConfirmScene extends Phaser.Scene {
     title.setPosition(0, y + title.height / 2);
     box.add(title);
 
-    // Two buttons, side by side below the body.
-    const okX = -58, cancelX = 58, btnY = panelH / 2 - BOT - BTN / 2;
+    // Buttons below the body. An ALERT has ONE centred ✓ (a notice to dismiss); a confirm has ✓/⊘.
+    const alert = !!model.alert;
+    const okX = alert ? 0 : -58, cancelX = 58, btnY = panelH / 2 - BOT - BTN / 2;
     box.add(this.button(okX, btnY, ICON_OK, 'ok'));
-    box.add(this.button(cancelX, btnY, ICON_CANCEL, 'cancel'));
+    if (!alert) box.add(this.button(cancelX, btnY, ICON_CANCEL, 'cancel'));
 
     // Pop-in.
     box.setScale(0.8);
@@ -144,7 +146,7 @@ export class ConfirmScene extends Phaser.Scene {
     const d = hudDpr(this);
     this.registry.set('confirmBounds', [
       { action: 'ok', x: (cx + okX - BTN / 2) * d, y: (cy + btnY - BTN / 2) * d, w: BTN * d, h: BTN * d },
-      { action: 'cancel', x: (cx + cancelX - BTN / 2) * d, y: (cy + btnY - BTN / 2) * d, w: BTN * d, h: BTN * d },
+      ...(alert ? [] : [{ action: 'cancel', x: (cx + cancelX - BTN / 2) * d, y: (cy + btnY - BTN / 2) * d, w: BTN * d, h: BTN * d }]),
     ]);
   }
 
