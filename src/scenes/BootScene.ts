@@ -329,6 +329,8 @@ export class BootScene extends Phaser.Scene {
     // Icon buttons atlas (region-tagged) — the mailbox + chest modals' close button
     // (`close-light-big`).
     this.load.atlas('icon-buttons', 'uploaded/icon_buttons_spritesheet.png', 'uploaded/icon_buttons_spritesheet.json');
+    // Bottom-right BACKPACK button art (64×32 = two 32×32 frames: 0 normal, 1 pressed).
+    this.load.spritesheet('bag-button', 'uploaded/bag-button.png', { frameWidth: 32, frameHeight: 32 });
     // Game DATA tables (config as data, not code) — crops: which crops exist + their
     // stats/grow-times. Applied in create(). See src/data/crops.ts.
     this.load.json('data-crops', 'data/crops.json');

@@ -31,7 +31,7 @@ export class BackpackButtonScene extends Phaser.Scene {
 
   create(): void {
     applyHudDpr(this); // high-DPI: render in logical space via a dpr camera
-    this.bag = this.add.image(0, 0, ATLAS, 'sprout-up').setVisible(false);
+    this.bag = this.add.image(0, 0, 'bag-button', 0).setVisible(false); // 0 = normal, 1 = pressed
     this.settings = this.add.image(0, 0, ATLAS, 'paw').setVisible(false);
     this.shop = this.add.image(0, 0, ATLAS, 'order').setVisible(false); // the shop/order tablet
     this.layout();
@@ -43,7 +43,7 @@ export class BackpackButtonScene extends Phaser.Scene {
     const m = this.registry.get(KEY) as BackpackBtnModel | undefined;
     if (!this.bag || !this.settings || !this.shop) return;
     if (!m || !m.visible) { this.bag.setVisible(false); this.settings.setVisible(false); this.shop.setVisible(false); return; }
-    this.bag.setVisible(true).setFrame(m.bagPressed ? 'sprout-up-pressed-down' : 'sprout-up');
+    this.bag.setVisible(true).setFrame(m.bagPressed ? 1 : 0);
     this.settings.setVisible(true).setFrame(m.settingsPressed ? 'paw-pressed' : 'paw');
     // `order` has no pressed frame → a brief dim tint is the press feedback.
     this.shop.setVisible(true).setTint(m.shopPressed ? 0xbbbbbb : 0xffffff);
