@@ -199,11 +199,29 @@ export class BootMenuScene extends Phaser.Scene {
     if (W !== this.bgW || H !== this.bgH) { this.bgW = W; this.bgH = H; this.bgPeriod = buildIconPattern(this, this.bgLayer, W, H); }
   }
 
+  /** How much of the view height to lift the whole title group by.
+   *
+   *  The zoom fits the world's HEIGHT, so the world sits edge-to-edge vertically
+   *  and anything authored near its bottom — the Play anchor, and Settings under
+   *  it — lands hard against the screen bottom. On a 2.17-aspect phone Settings
+   *  had ~20px of the 922 below it. There is plenty of empty wallpaper ABOVE the
+   *  logo, so this spends some of that instead. */
+  private static readonly LIFT = 0.06;
+
   private fitCamera = (): void => {
     const cam = this.cameras.main;
+    // A title screen never scrolls, so bounds only get in the way — and they do:
+    // the SDK (1.0.89) widens undersized bounds to exactly cover the view, which
+    // leaves the scroll no slack at all and silently clamps the lift below back
+    // to dead centre.
+    cam.useBounds = false;
     const zoom = Math.min(this.scale.width / this.worldW, this.scale.height / this.worldH);
     cam.setZoom(zoom);
     cam.centerOn(this.worldW / 2, this.worldH / 2);
+    // Then lift. `scrollY` is in UNZOOMED units — the view's top edge in world
+    // space is `scrollY + height/2 - height/(2*zoom)` — so shifting the picture
+    // up by `LIFT` of the view height costs `LIFT * height / zoom` of scroll.
+    cam.scrollY += (BootMenuScene.LIFT * cam.height) / zoom;
     this.layoutWallpaper(); // reflow the screen-fixed wallpaper on resize
   };
 

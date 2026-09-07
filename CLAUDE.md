@@ -1,5 +1,31 @@
 # Catopia — Technical Session Notes
 
+## Title group lifted off the bottom edge (2026-09-07)
+
+`BootMenuScene.LIFT` (6% of the view height). The zoom fits the world's HEIGHT,
+so on a wide-and-short screen the world is edge-to-edge vertically and the Play
+anchor — with Settings under it — lands hard against the bottom: measured 2.4%
+clearance on a 2.17-aspect phone, and Settings looked cut off. There is a lot of
+empty wallpaper above the logo, so the lift spends that instead. After: 7.8% on
+phone aspects, 19.8% on 4:3. The buttons follow for free, because
+`SettingsScene` derives their position from the camera's scroll and zoom.
+
+**`cam.useBounds = false` is required for the lift to survive**, and it is a
+consequence of SDK 1.0.89: that release widens undersized camera bounds to
+EXACTLY cover the view, which leaves the scroll zero slack, so any deliberate
+offset is clamped straight back to centre. A title screen never scrolls, so
+bounds buy it nothing anyway. Any scene that wants to offset its camera off
+dead-centre has to do the same.
+
+**`centerOn` is correct — do not "fix" it.** It was suspected twice and cleared
+twice. `scrollX = x - width/2` looks like it ignores zoom, but `scrollX` is in
+UNZOOMED units (the view's world-space left edge is
+`scrollX + width/2 - width/(2*zoom)`), so the plain form is right. A
+"zoom-aware" `setScroll(worldW/2 - width/(2*zoom), ...)` was written, shipped
+into a local build and measured: it put the title at x=331 instead of 1278. The
+lift is applied as `scrollY += LIFT * height / zoom` on top of `centerOn` —
+`/zoom` because scroll is unzoomed, and that factor IS needed.
+
 ## Title screen was off-centre on wide screens — TWO bugs, one symptom (2026-09-07)
 
 Once the native players stopped letterboxing a `scaleMode:'resize'` game (the
