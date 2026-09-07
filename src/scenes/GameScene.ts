@@ -73,6 +73,7 @@ const SLEEP_START_HOUR = 23;  // 11pm — Cato heads home to bed
 const SLEEP_END_HOUR = 7;     // 7am — Cato wakes up
 const SLEEP_ARRIVE_MS = 6000; // fallback: go inside even if he can't reach the door in time
 const SLEEPY_MOOD_FRAME = 39; // the sleeping-with-Z emoji (top-right portrait) shown while Cato is asleep
+const MAIL_STAYS_FPS = 2;     // the door mailbox "mail waiting" idle loop — a gentle blink (the asset's authored 8fps read as flickery)
 const RAIN_BGM_DUCK = 0.55;   // while it's raining, drop the music to 55% so the rain ambience comes through
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
@@ -7710,10 +7711,10 @@ export class GameScene extends Phaser.Scene {
     if (fresh && this.anims.exists('mailbox-new-mail')) {
       mb.play({ key: 'mailbox-new-mail', repeat: 0 }); // the "a letter just arrived" flourish, once
       mb.once(A, () => { // …then settle into the gentle "mail is waiting" loop
-        if (!this.menuOpen && this.mailboxHasWaiting() && !this.mailboxAlertSeen && this.anims.exists('mailbox-mail-stays')) mb.play({ key: 'mailbox-mail-stays', repeat: -1 });
+        if (!this.menuOpen && this.mailboxHasWaiting() && !this.mailboxAlertSeen && this.anims.exists('mailbox-mail-stays')) mb.play({ key: 'mailbox-mail-stays', repeat: -1, frameRate: MAIL_STAYS_FPS });
       });
     } else if (this.anims.exists('mailbox-mail-stays')) {
-      mb.play({ key: 'mailbox-mail-stays', repeat: -1 });
+      mb.play({ key: 'mailbox-mail-stays', repeat: -1, frameRate: MAIL_STAYS_FPS });
     }
   }
 
