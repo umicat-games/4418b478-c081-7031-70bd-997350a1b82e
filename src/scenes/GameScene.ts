@@ -75,6 +75,7 @@ const SLEEP_ARRIVE_MS = 6000; // fallback: go inside even if he can't reach the 
 const SLEEPY_MOOD_FRAME = 39; // the sleeping-with-Z emoji (top-right portrait) shown while Cato is asleep
 const MAIL_STAYS_FPS = 2;     // the door mailbox "mail waiting" idle loop — a gentle blink (the asset's authored 8fps read as flickery)
 const MAIL_REMINDER_DELAY_MS = 1600; // let the player settle into the world for a beat before the reminder cinematic takes over
+const CHAT_BOX_BOTTOM_INSET = 60; // chat-message HUD anchor offsetY (logical px the box bottom rests above the screen bottom)
 const RAIN_BGM_DUCK = 0.55;   // while it's raining, drop the music to 55% so the rain ambience comes through
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
@@ -9668,8 +9669,14 @@ export class GameScene extends Phaser.Scene {
     // ...and the cinematic intro hides the hotbar but adds a bottom LETTERBOX bar, so the
     // box must clear THAT instead (LetterboxScene BAR_FRAC = 0.11 of the screen height).
     const bar = this.registry.get('hotbarBounds') as { bar?: { h?: number } } | undefined;
+    // The dialog box coords (dialogY / go.y) live in LOGICAL px (UmicatHud is dpr-zoomed), so the lift
+    // must be logical too — using device-px `scale.height` here over-raised the box ~2× on retina.
+    // A cinematic has NO input field, so the box drops to just ABOVE the bottom letterbox bar (a small
+    // lift), instead of being pushed high like the old +barHeight formula did. The box already rests
+    // near the bottom (offsetY -60), so we only need to clear the bar's height minus that inset + a gap.
+    const logicalH = this.scale.height / hudDpr(this);
     this.cutsceneLift = this.cinematic
-      ? Math.round(this.scale.height * 0.11) + 16 // sit just above the bottom letterbox bar
+      ? Math.max(0, Math.round(logicalH * 0.11) - CHAT_BOX_BOTTOM_INSET + 14) // sit just above the bottom letterbox bar
       : cutscene ? (bar?.bar?.h ?? 90) + 10 : 0;
     for (const role of roles) {
       const go = getHudObject(this, role) as unknown as
