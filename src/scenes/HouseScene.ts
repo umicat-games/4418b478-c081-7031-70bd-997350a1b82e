@@ -12,7 +12,7 @@ const DOOR_CLOSED_FRAME = 5; // `door` sheet: frame 5 = shut (matches GameScene'
 const PAN_SPEED = 260; // world px/sec for keyboard camera panning (a bigger-than-screen room)
 const BRACKET_BR = 0.625; // corner-bracket scale — matches the island's white-corner-bracket (~5×zoom)
 const HOVER_PAD = 6;      // world-px gap around the framed object (== GameScene.HOVER_PAD_WORLD)
-const SLEEPY_EMOJI_FRAME = 38; // `emoji` sheet (row*10+col): the sleepy cat face for the sleep bubble
+const SLEEPY_EMOJI_FRAME = 39; // `emoji` sheet (row*10+col): the sleeping-with-Z cat face for the sleep bubble
 
 /**
  * House INTERIOR scene (Animal Crossing / Stardew style). The island house is a

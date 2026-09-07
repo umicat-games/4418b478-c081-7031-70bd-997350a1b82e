@@ -72,7 +72,7 @@ const WANDER_MIN_TRIP = 24;   // a POI must be at least this far to be worth wal
 const SLEEP_START_HOUR = 23;  // 11pm — Cato heads home to bed
 const SLEEP_END_HOUR = 7;     // 7am — Cato wakes up
 const SLEEP_ARRIVE_MS = 6000; // fallback: go inside even if he can't reach the door in time
-const SLEEPY_MOOD_FRAME = 38; // the sleepy emoji (top-right portrait) shown while Cato is asleep
+const SLEEPY_MOOD_FRAME = 39; // the sleeping-with-Z emoji (top-right portrait) shown while Cato is asleep
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
 // Cato roams on his own (CHILD_WANDER); the PLAYER pans the camera with WASD /
