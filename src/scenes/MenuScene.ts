@@ -41,7 +41,7 @@ const L = { x: 0.03, y: 0.18, w: 0.55, h: 0.74 };         // left content panel 
 const TABS = { y: 0.045, x: 0.05, w: 0.062, h: 0.05, gap: 0.012 }; // icon tab chips (top-left)
 const TITLE_Y = 0.238; // a bit lower — was cramped against the frame top
 // w leaves a strip on the right (grid ends at 0.52) for the scroll bar.
-const GRID = { x: 0.06, y: 0.30, w: 0.46, cols: 7, rows: 5, gap: 0.008 };
+const GRID = { x: 0.06, y: 0.30, w: 0.46, cols: 7, rows: 5, gap: 0.008, bottom: 0.885 }; // `bottom` = panel inner-content bottom; the cell also fits this so the grid never overflows on wide/short phones
 const CATOBAG_ROWS = 3; // Cato's bag is small — fewer rows than the chest
 const MAIL = { rowH: 0.09, gapPx: 6, bottom: 0.88 }; // mail-list row metrics + viewport bottom
 const RAIL_DX = 0.016; // scroll bar x-offset past the grid/list right edge
@@ -464,15 +464,21 @@ export class MenuScene extends Phaser.Scene {
     const W = this.scale.width, H = this.scale.height;
     const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W, gap = GRID.gap * W;
     const cols = GRID.cols;
-    const cell = (gw - gap * (cols - 1)) / cols;
+    const cell = (gw - gap * (cols - 1)) / cols; // natural cell — fills the allocated width
+    // Show only as many rows as FIT the panel's remaining height (scroll for the rest), so the grid
+    // never overflows the panel bottom on wide-but-short phones (landscape ~2.2:1) — where `rows`
+    // full-width cells used to run off the panel (the reported bug). Keeps the cells their natural
+    // touch-friendly size instead of shrinking them.
+    const fitRows = Math.max(1, Math.floor((GRID.bottom * H - gy + gap) / (cell + gap)));
+    const visRows = Math.min(rows, fitRows);
     this.scrollStepPx = cell + gap;
-    // Window by ROW: show `rows` rows starting at `scroll`; overflow drives the bar.
+    // Window by ROW: show `visRows` rows starting at `scroll`; overflow drives the bar.
     const totalRows = Math.ceil(items.length / cols);
-    this.maxScrollRows = Math.max(0, totalRows - rows);
+    this.maxScrollRows = Math.max(0, totalRows - visRows);
     if (this.scroll > this.maxScrollRows) this.scroll = this.maxScrollRows;
     const startIdx = this.scroll * cols;
     const bounds: Array<{ x: number; y: number; w: number; h: number; index: number }> = [];
-    for (let j = 0; j < cols * rows; j++) {
+    for (let j = 0; j < cols * visRows; j++) {
       const i = startIdx + j;                       // real store index
       const col = j % cols, row = Math.floor(j / cols);
       const sx = gx + col * (cell + gap), sy = gy + row * (cell + gap);
@@ -497,7 +503,7 @@ export class MenuScene extends Phaser.Scene {
     }
     this.registry.set('menuSlots', bounds);
     // Scroll bar just right of the grid, spanning the visible rows.
-    this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + rows * (cell + gap) - gap, rows, totalRows);
+    this.drawScrollbar(c, gx + gw + RAIL_DX * W, gy, gy + visRows * (cell + gap) - gap, visRows, totalRows);
   }
 
   /** Content-fit frame for an item icon. Many item images are drawn on a canvas BIGGER than the art
