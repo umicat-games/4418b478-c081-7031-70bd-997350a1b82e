@@ -1,16 +1,17 @@
 import Phaser from 'phaser';
-import { applyHudDpr, hudDpr, hudLogicalW } from '../dpi';
+import { applyHudDpr, hudDpr, hudLogicalH } from '../dpi';
 import { dialogFont } from '../i18n';
 
 // Cato's PROACTIVE small-talk chip — a little cream speech box that pops up at the
-// TOP-RIGHT, just LEFT of his portrait, with a short remark about what he's doing
+// BOTTOM-LEFT, just RIGHT of his portrait, with a short remark about what he's doing
 // ("something's ripe — going to pick it!"). NOT the main chat: it's ambient flavour.
 // Tapping it opens the real dialog seeded with this line (routed by GameScene); left
 // alone it auto-hides. GameScene owns the model (`catoChatter`); this scene renders it
-// + publishes the tap hit-box (`catoChatterBounds`).
+// + publishes the tap hit-box (`catoChatterBounds`). The portrait moved to the bottom-left
+// (the platform's exit capsule takes the top-right), so the bubble now opens to its RIGHT.
 const BOX = 'chatter-box';                 // 128×48 9-slice, insets L20/R20/T12/B12
 const SLICE = { l: 20, r: 20, t: 12, b: 12 };
-const PORTRAIT = { size: 64, inset: 16 };  // matches layoutFindCatButton (top-right)
+const PORTRAIT = { size: 64, inset: 16 };  // matches layoutFindCatButton (bottom-left)
 // The persistent MOOD emoji REPLACES the rabbit inside the portrait frame: an opaque
 // backing (the frame's interior colour) hides the rabbit, the emoji sits on top.
 const MOOD_SCALE = 1.15, MOOD_INNER = 40, MOOD_BG = 0x90625d;
@@ -51,9 +52,9 @@ export class ChatterScene extends Phaser.Scene {
   private updateMood(): void {
     const frame = this.registry.get('catoMoodFrame') as number | undefined;
     if (typeof frame !== 'number') return;
-    const W = hudLogicalW(this);
-    const x = W - PORTRAIT.inset - PORTRAIT.size / 2; // portrait frame centre
-    const y = PORTRAIT.inset + PORTRAIT.size / 2;
+    const H = hudLogicalH(this);
+    const x = PORTRAIT.inset + PORTRAIT.size / 2;      // portrait frame centre (bottom-left)
+    const y = H - PORTRAIT.inset - PORTRAIT.size / 2;
     if (!this.moodBg) this.moodBg = this.add.rectangle(x, y, MOOD_INNER, MOOD_INNER, MOOD_BG).setDepth(39);
     if (!this.moodImg) this.moodImg = this.add.image(x, y, 'emoji', frame).setScale(MOOD_SCALE).setDepth(40);
     this.moodBg.setPosition(x, y);
@@ -64,11 +65,10 @@ export class ChatterScene extends Phaser.Scene {
     this.root?.destroy();
     this.typeTimer?.remove(); this.typeTimer = undefined;
     this.tweens.killTweensOf(this.root ?? {});
-    const W = hudLogicalW(this);
-    // The box hugs the LEFT of the portrait, vertically centred on it.
-    const portraitCx = W - PORTRAIT.inset - PORTRAIT.size / 2;
-    const portraitLeft = W - PORTRAIT.inset - PORTRAIT.size;
-    const cy = PORTRAIT.inset + PORTRAIT.size / 2;
+    const H = hudLogicalH(this);
+    // The box hugs the RIGHT of the portrait (bottom-left corner), vertically centred on it.
+    const portraitRight = PORTRAIT.inset + PORTRAIT.size;
+    const cy = H - PORTRAIT.inset - PORTRAIT.size / 2;
 
     // Measure the text wrapped to the max inner width, then size the box to fit.
     const fs = 18;
@@ -79,15 +79,13 @@ export class ChatterScene extends Phaser.Scene {
     }).setOrigin(0, 0.5);
     const boxW = Phaser.Math.Clamp(Math.ceil(label.width) + PAD_X * 2, MINW, MAXW);
     const boxH = Math.max(48, Math.ceil(label.height) + PAD_Y * 2);
-    const boxRight = portraitLeft - GAP;
-    const boxCx = boxRight - boxW / 2;
+    const boxLeft = portraitRight + GAP;
+    const boxCx = boxLeft + boxW / 2;
 
     const c = this.add.container(0, 0).setDepth(50);
     this.root = c;
-    // Mirror (negative scaleX — NineSlice has no setFlipX) so the box's tail (native
-    // left) points RIGHT, toward the portrait.
+    // The box's tail is native-LEFT → points at the portrait sitting to its left (no mirror).
     const box = this.add.nineslice(boxCx, cy, BOX, undefined, boxW, boxH, SLICE.l, SLICE.r, SLICE.t, SLICE.b);
-    box.scaleX = -1;
     c.add(box);
     label.setPosition(boxCx - boxW / 2 + PAD_X, cy);
     c.add(label);

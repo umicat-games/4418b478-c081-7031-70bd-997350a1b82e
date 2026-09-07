@@ -1738,13 +1738,13 @@ export class GameScene extends Phaser.Scene {
     this.layoutFindCatButton();
   }
 
-  /** Position the find-cat hit-rect + bounds at the top-right, matching the HUD
-   *  photo-frame (top-right anchor, 64x64, 16px safe-area). Live screen dims so
+  /** Position the find-cat hit-rect + bounds at the bottom-left, matching the HUD
+   *  photo-frame (bottom-left anchor, 64x64, 16px safe-area). Live screen dims so
    *  it tracks the frame when the canvas resizes (RESIZE mode). */
   private layoutFindCatButton(): void {
     const BW = 64; const BH = 64;
-    const bx = this.scale.width - 16 - BW / 2;
-    const by = 16 + BH / 2;
+    const bx = 16 + BW / 2;
+    const by = this.scale.height - 16 - BH / 2;
     this.findCatBounds.setTo(bx - BW / 2, by - BH / 2, BW, BH);
     this.findCatHit?.setPosition(bx, by);
   }
