@@ -668,6 +668,13 @@ const HOME_TIERS: HomeTier[] = [
   { id: 'home_kitchen', sceneId: 'home_1-copy', price: 1200, nameKey: 'home_kitchen_name', descKey: 'home_kitchen_desc', preview: 'home-with-kitchen' }, // +kitchen (authored scene 'home_1-copy' / name home_with_kitchen)
 ];
 
+// The travellable islands (boat picker). `id` == the world scene id loaded on arrival. Add a row +
+// an `island_<id>` i18n name (+ the authored scene/tilemap) to introduce a new island.
+const ISLANDS: Array<{ id: string; nameKey: string }> = [
+  { id: 'main', nameKey: 'island_main' },
+  { id: 'jamin', nameKey: 'island_jamin' },
+];
+
 /** v28: the PER-ISLAND farm state. Each island (main / jamin / …) keeps its own slice keyed by
  *  scene id in `SaveBlob.islands`, so farming/building/ranching on jamin never collides with main
  *  (both use bare "cx,cy" cell keys). Everything NOT in here (money, bond, inventory, chest, economy,
@@ -967,6 +974,8 @@ export class GameScene extends Phaser.Scene {
   // The editor-placed work station (right side of the house). Clicking it opens the
   // crafting modal (CraftScene). Recipes come from the data table (src/data/recipes).
   private craftStation?: Phaser.GameObjects.Sprite;
+  private boat?: Phaser.GameObjects.Sprite; // the dock boat (present on every island) — click to sail elsewhere
+  private travelOpen = false;               // the island-picker modal is up
   private craftOpen = false;
   private craftSel = 0;   // selected recipe index
   private craftMsg = '';  // transient warning / "Crafted!" flash
@@ -1849,6 +1858,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('BackpackButtonScene')) this.scene.launch('BackpackButtonScene');
     if (!this.scene.isActive('WeatherScene')) this.scene.launch('WeatherScene');
     if (!this.scene.isActive('ConfirmScene')) this.scene.launch('ConfirmScene');
+    if (!this.scene.isActive('TravelScene')) this.scene.launch('TravelScene');
     if (!this.scene.isActive('ReceiptScene')) this.scene.launch('ReceiptScene');
     if (!this.scene.isActive('ChatterScene')) this.scene.launch('ChatterScene');
     if (!this.scene.isActive('HarvestToastScene')) this.scene.launch('HarvestToastScene');
@@ -1901,7 +1911,7 @@ export class GameScene extends Phaser.Scene {
       // RIGHT-CLICK = open (or close) the contextual tool wheel — the desktop use/switch split:
       // LEFT-click only points + uses the held tool, RIGHT-click summons the wheel.
       if (pointer.rightButtonDown()) {
-        if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.confirmOpen || this.inventoryOpen) return;
+        if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.confirmOpen || this.travelOpen || this.inventoryOpen) return;
         const rwp = this.cameras.main.getWorldPoint(sx, sy);
         // Mid-move (pen / coop still standing on its old spot) → right-click CANCELS the move.
         if (this.movingPen) { this.cancelPenMove(); return; }
@@ -1973,7 +1983,7 @@ export class GameScene extends Phaser.Scene {
       this.touchLongFired = false;
       this.touchStartX = pointer.x; this.touchStartY = pointer.y;
       this.touchPressTimer?.remove();
-      const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.inventoryOpen && !this.toolPaletteOpen && !this.coopWheel && !this.penWheel;
+      const canWheel = this.gameReady && !this.dialogOpen && !this.craftOpen && !this.confirmOpen && !this.travelOpen && !this.inventoryOpen && !this.toolPaletteOpen && !this.coopWheel && !this.penWheel;
       this.touchPressTimer = canWheel
         ? this.time.delayedCall(GameScene.LONG_PRESS_MS, () => {
             // Mid-move → a long-press CANCELS it (the touch analogue of the desktop right-click), so a
@@ -2070,6 +2080,7 @@ export class GameScene extends Phaser.Scene {
     if (this.chatterAt(x, y)) { this.openChatterDialog(); return; }
     // Modal confirm dialog (demolish, …) captures everything while open.
     if (this.handleConfirmClick(x, y)) return;
+    if (this.handleTravelClick(x, y)) return; // island-travel picker (modal): a row sails, else closes
     if (this.handleCoopWheelClick(x, y)) return; // coop action wheel (move / delete / upgrade)
     if (this.handlePenWheelClick(x, y)) return; // cow-pen action wheel (move / delete)
     if (this.handleCraftClick(x, y)) return; // the crafting modal (work station)
@@ -2134,6 +2145,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.activePlace && this.mailboxContains(wp.x, wp.y)) { this.openMailboxViaDoor(); return; }
     if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }
     if (!this.activePlace && this.craftStationContains(wp.x, wp.y)) { this.openCraft(); return; }
+    if (!this.activePlace && this.boatContains(wp.x, wp.y)) { this.openTravelMenu(); return; } // dock boat → island picker
     // Tap the house → enter its interior (a separate scene). Checked after the door
     // objects (mailbox/chest/pad/craft) so those win over the house footprint they sit on.
     if (!this.activePlace && this.houseDoorContains(wp.x, wp.y)) { this.enterHouse(); return; }
@@ -2608,6 +2620,7 @@ export class GameScene extends Phaser.Scene {
     this.wireChest();
     this.wirePad();
     this.wireCraftStation();
+    this.wireBoat(); // the dock boat → the island-travel picker
     this.wireCowPen(); // cow pen on the island (auto-place; applySave replaces it if a save has one)
     this.wireSceneTrees();
     this.wireSceneBushes();
@@ -2708,7 +2721,7 @@ export class GameScene extends Phaser.Scene {
   /** Tab / tool-HUD entry point: open the tool wheel at the cursor (forced — even with no applicable
    *  tool here, so you can always cancel), or close it if already open. */
   private toggleToolWheelAtCursor(): void {
-    if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen) return;
+    if (!this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.travelOpen) return;
     if (this.toolPaletteOpen) { this.beginCloseWheel(-2); return; } // Tab again → animate the dismiss
     const sx = this.locked ? this.vcursor.x : this.input.activePointer.x;
     const sy = this.locked ? this.vcursor.y : this.input.activePointer.y;
@@ -3552,7 +3565,7 @@ export class GameScene extends Phaser.Scene {
   private shopBtnPressed = false;
   /** Publish the bottom-right corner buttons (shop tablet + backpack sprout + paw menu) visibility + press. */
   private publishBackpackBtn(): void {
-    const hidden = !this.gameReady || this.cutscene || (this.dialogOpen && !this.cutscene) || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen;
+    const hidden = !this.gameReady || this.cutscene || (this.dialogOpen && !this.cutscene) || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.travelOpen;
     this.registry.set('backpackBtn', { visible: !hidden, bagPressed: this.bagBtnPressed, settingsPressed: this.settingsBtnPressed, shopPressed: this.shopBtnPressed });
   }
 
@@ -3674,7 +3687,7 @@ export class GameScene extends Phaser.Scene {
       icon.setVisible(false); // the ghost IS the icon here
       this.hoverCell = null;
       this.cursorState.visible = this.locked;
-      const blocked = this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen;
+      const blocked = this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.travelOpen;
       if (!this.locked) {
         cursor.setVisible(false);
         // TOUCH has no hover, so a placement can't preview by cursor. For the big cow-pen footprint
@@ -3708,7 +3721,7 @@ export class GameScene extends Phaser.Scene {
     const holdingTool = tilling || planting || watering || chopping || mining || fishing;
     // No tool held / not locked / over UI / dialog / menu / backpack / a wheel button → real mouse
     // (no tile bracket — the wheel circle is the highlight, don't draw one behind it).
-    if (!holdingTool || !this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.pointerOverHotbar() || this.overWheelButtonAt(this.vcursor.x, this.vcursor.y)) {
+    if (!holdingTool || !this.locked || this.dialogOpen || this.menuOpen || this.craftOpen || this.inventoryOpen || this.confirmOpen || this.travelOpen || this.pointerOverHotbar() || this.overWheelButtonAt(this.vcursor.x, this.vcursor.y)) {
       showMouse();
       return;
     }
@@ -3838,7 +3851,7 @@ export class GameScene extends Phaser.Scene {
     }
     const emptyHand = this.activeTool === 'hand' && !this.activeSeed && !this.activePlace;
     const blocked = !this.gameReady || this.dialogOpen || this.menuOpen || this.craftOpen
-      || this.inventoryOpen || this.confirmOpen || this.hoeSwing || this.waterCan;
+      || this.inventoryOpen || this.confirmOpen || this.travelOpen || this.hoeSwing || this.waterCan;
     if (!emptyHand || blocked) { this.setHover(false); return; }
 
     // Source point: the frozen virtual cursor under pointer-lock, else the real OS pointer.
@@ -7259,6 +7272,49 @@ export class GameScene extends Phaser.Scene {
     if (!this.craftStation) return false;
     const b = this.craftStation.getBounds();
     return wx >= b.x - 4 && wx <= b.right + 4 && wy >= b.y - 4 && wy <= b.bottom + 4;
+  }
+
+  /** Find the dock boat (present on every island, assetId `boats_spritesheet`) + y-sort it. Click → travel. */
+  private wireBoat(): void {
+    const reg = getEntityRegistry(this);
+    const boat = reg?.all().find((go) => go.getData('entityAssetId') === 'boats_spritesheet') as Phaser.GameObjects.Sprite | undefined;
+    if (!boat) return;
+    this.boat = boat;
+    if (!this.ySortSprites.includes(boat)) this.ySortSprites.push(boat);
+  }
+
+  private boatContains(wx: number, wy: number): boolean {
+    if (!this.boat) return false;
+    const b = this.boat.getBounds();
+    return wx >= b.x - 6 && wx <= b.right + 6 && wy >= b.y - 6 && wy <= b.bottom + 6;
+  }
+
+  /** Boat tapped → the island-travel picker (the OTHER islands; a row sails there). Modal. */
+  private openTravelMenu(): void {
+    if (this.travelOpen) return;
+    playSfx(this);
+    this.travelOpen = true;
+    const islands = ISLANDS.filter((i) => i.id !== this.sceneId).map((i) => ({ id: i.id, name: t(i.nameKey) }));
+    this.registry.set('travel', { visible: true, rev: (this.registry.get('travel')?.rev ?? 0) + 1, islands });
+    this.scene.bringToTop('TravelScene');
+  }
+
+  private closeTravelMenu(): void {
+    if (!this.travelOpen) return;
+    this.travelOpen = false;
+    this.registry.set('travel', { visible: false, rev: (this.registry.get('travel')?.rev ?? 0) + 1, islands: [] });
+  }
+
+  /** Route a tap while the travel picker is open (modal): a row sails there, outside closes. Returns
+   *  true if it consumed the tap. Device-px coords (matches the ×dpr bounds TravelScene publishes). */
+  private handleTravelClick(x: number, y: number): boolean {
+    if (!this.travelOpen) return false;
+    const bounds = (this.registry.get('travelBounds') ?? []) as Array<{ id: string; x: number; y: number; w: number; h: number }>;
+    for (const b of bounds) {
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { this.closeTravelMenu(); this.travelToIsland(b.id); return true; }
+    }
+    this.closeTravelMenu(); // tap anywhere else (incl. outside the panel) closes
+    return true;
   }
 
   private openCraft(): void {
@@ -11369,7 +11425,7 @@ export class GameScene extends Phaser.Scene {
       // else keep its buttons tracking the camera.
       // NB: don't auto-close just because a tool is held — Tab / the tool-HUD button open the wheel
       // WHILE holding a tool (to switch or cancel). It closes on a modal, or explicit pick/dismiss.
-      if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen) this.closeToolPalette();
+      if (this.menuOpen || this.craftOpen || this.dialogOpen || this.inventoryOpen || this.confirmOpen || this.travelOpen) this.closeToolPalette();
       else { if (!this.wheelClose) this.updateToolPaletteHover(); this.publishToolPalette(); } // freeze hover while the exit plays
     }
     if (this.coopWheel) {
