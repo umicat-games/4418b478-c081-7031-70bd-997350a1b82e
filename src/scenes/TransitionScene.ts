@@ -91,10 +91,24 @@ export class TransitionScene extends Phaser.Scene {
     this.dotsText = this.add.text(W / 2, H / 2, '', { fontFamily: 'zpix, sans-serif', color: LOADING_TEXT_COLOR })
       .setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
+    this.game.events.on(Phaser.Core.Events.PRE_RENDER, this.keepOnTop); // stay above the incoming HUD during a transition
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
+      this.game.events.off(Phaser.Core.Events.PRE_RENDER, this.keepOnTop);
+    });
   }
 
   private onResize = (): void => { this.curtain.setSize(this.scale.width, this.scale.height); };
+
+  /** While a transition is running, KEEP the curtain on top for every RENDER. The incoming scene
+   *  launches + re-tops its own HUD scenes across the reveal's ~800ms (title's Play/Settings buttons,
+   *  the game's Cato portrait / money HUD / bottom-right buttons), which would otherwise pop ABOVE the
+   *  curtain for a frame and flash on the covered area before the reveal finishes. Re-asserting
+   *  bringToTop on PRE_RENDER (fires AFTER every scene's update, right before the draw — unlike a
+   *  scene `update()`, which a later same-frame HUD bringToTop can still beat) guarantees the curtain
+   *  is topmost at draw time, so the HUD only shows through the iris hole (= part of the scene), never
+   *  on the covered part. */
+  private keepOnTop = (): void => { if (this.busy) this.scene.bringToTop(); };
 
   private maxRadius(fx: number, fy: number): number {
     const W = this.scale.width, H = this.scale.height;
