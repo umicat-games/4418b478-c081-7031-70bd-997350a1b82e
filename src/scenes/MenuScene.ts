@@ -112,7 +112,7 @@ export interface MenuModel {
 
 // Mail-tab RIGHT-side receipt panel (screen fractions) — the sales receipt / delivery
 // package renders here instead of a separate modal.
-const MAIL_DETAIL = { x: 0.61, y: 0.30, w: 0.36, h: 0.60 }; // starts BELOW the screen title (its receipt title used to sit level with "MAIL·LETTERS"); top 0.30 mirrors the left mail-list top (GRID.y), bottom 0.90
+const MAIL_DETAIL = { x: 0.57, y: 0.30, w: 0.38, h: 0.60 }; // BELOW the screen title (top 0.30 mirrors the left mail-list top); CENTRED in the right region (divider 0.555 → frame edge 0.97 → centre 0.76 = x+w/2); bottom 0.90
 
 export class MenuScene extends Phaser.Scene {
   private lastRev = -1;
@@ -634,11 +634,21 @@ export class MenuScene extends Phaser.Scene {
     c.add(this.T(rx + rw / 2, ry + rh * 0.08, d.title.toUpperCase(), Math.round(fs * 1.15), '#ffffff'));
     const rule = this.add.graphics(); rule.fillStyle(0xa98d63, 1); rule.fillRect(rx + rw * 0.16, ry + rh * 0.145, rw * 0.68, Math.max(2, rh * 0.006)); c.add(rule);
     c.add(this.T(rx + rw / 2, ry + rh * 0.205, d.sender, Math.round(fs * 0.8), SUB));
-    // Item rows: cream bars (icon + count subscript + name + subtotal / ×count).
+    // Item rows: cream bars (icon + count badge + name + subtotal / ×count). The list has NO scroll —
+    // rows shrink to fit, but never below a readable minimum: if there are more than fit, we show the
+    // first (maxRows−1) and a "+N more" line so nothing renders as an unreadable sliver.
     const listTop = ry + rh * 0.28, listBot = ry + rh * (isDelivery ? 0.80 : 0.85);
-    const rowH = Math.min(rh * 0.13, (listBot - listTop) / Math.max(1, d.lines.length));
+    const avail = listBot - listTop;
+    const MIN_ROW = Math.max(H * 0.036, rh * 0.09); // smallest still-legible row (step)
+    let rowH = Math.min(rh * 0.135, avail / Math.max(1, d.lines.length));
+    let shown = d.lines, moreN = 0;
+    if (rowH < MIN_ROW) {
+      rowH = MIN_ROW;
+      const maxRows = Math.max(1, Math.floor(avail / rowH));
+      if (d.lines.length > maxRows) { shown = d.lines.slice(0, maxRows - 1); moreN = d.lines.length - shown.length; }
+    }
     const barW = rw * 0.9, barX = rx + rw * 0.05;
-    d.lines.forEach((ln, i) => {
+    shown.forEach((ln, i) => {
       const yy = listTop + rowH * (i + 0.5);
       const bh = rowH * 0.82;
       const g = this.add.graphics();
@@ -649,11 +659,18 @@ export class MenuScene extends Phaser.Scene {
       if (this.textures.exists(ln.iconKey)) {
         const icon = this.add.image(iconCx, yy, ln.iconKey, this.fitFrame(ln.iconKey, ln.iconFrame));
         icon.setScale((bh * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
-        c.add(this.T(iconCx + bh * 0.24, yy + bh * 0.22, String(ln.count), Math.round(fs * 0.7), '#ffffff'));
+        // Count badge: DARK text with a light stroke so it reads on top of ANY icon colour (was plain
+        // white → invisible on the pale fruit sprites). A ×N prefix reads as a quantity, not a subtotal.
+        const badge = this.add.text(iconCx, yy + bh * 0.34, '×' + ln.count, {
+          fontFamily: dialogFont(), fontSize: Math.round(fs * 0.6) + 'px', color: '#3a2a12', resolution: RES,
+          stroke: '#f3ead1', strokeThickness: Math.max(2, fs * 0.12),
+        }).setOrigin(0.5, 0.5); // centred UNDER the icon (not spilling into the name)
+        c.add(badge);
       }
-      c.add(this.T(barX + bh * 1.2, yy, ln.label, fs, INK, 0));
+      c.add(this.T(barX + bh * 1.55, yy, ln.label, fs, INK, 0));
       c.add(this.T(barX + barW - bh * 0.35, yy, isDelivery ? '×' + ln.count : ln.subtotal.toLocaleString(), fs, INK, 1));
     });
+    if (moreN > 0) c.add(this.T(rx + rw / 2, listTop + rowH * (shown.length + 0.5), t('receipt_more').replace('{n}', String(moreN)), Math.round(fs * 0.85), SUB));
     // Total (sales receipt) OR a Claim button (delivery package).
     if (!isDelivery) {
       c.add(this.T(rx + rw * 0.07, ry + rh * 0.93, `${t('receipt_total')}: ${d.total.toLocaleString()}`, Math.round(fs * 1.05), '#ffffff', 0));

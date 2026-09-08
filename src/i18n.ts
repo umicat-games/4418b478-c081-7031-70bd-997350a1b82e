@@ -154,6 +154,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   menu_no_mail: { en: 'No mail yet', 'zh-CN': '还没有邮件' },
   menu_select_mail: { en: 'Select a mail to read', 'zh-CN': '点一封邮件查看' },
   receipt_total: { en: 'TOTAL', 'zh-CN': '总计' },
+  receipt_more: { en: '+{n} more…', 'zh-CN': '还有 {n} 项…' },
   mail_claim: { en: 'Claim', 'zh-CN': '领取' },
   menu_settings_todo: { en: 'Settings (coming soon)', 'zh-CN': '设置（待补充）' },
   shop_pick_item: { en: 'Pick an item to buy', 'zh-CN': '选一个要买的物品' },
