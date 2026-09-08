@@ -183,7 +183,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   mail_sales_receipt: { en: 'Sales Receipt', 'zh-CN': '销售回执' },
   mail_delivery_title: { en: 'Order Delivered', 'zh-CN': '订单送达' },
   mail_reminder_hi: { en: 'Hi, {name}!', 'zh-CN': '嗨，{name}！' },
-  travel_title: { en: 'Sail to…', 'zh-CN': '去哪座岛？' },
+  travel_title: { en: 'Sail to other islands', 'zh-CN': '去别的岛屿' },
   island_main: { en: 'Home Island', 'zh-CN': '家园岛' },
   island_jamin: { en: 'Jamin Island', 'zh-CN': 'Jamin 岛' },
   mail_reminder_goods: { en: "Our order arrived! Let's go grab it from the mailbox.", 'zh-CN': '我们的货物送到啦！一起去邮箱那儿取一下吧～' },

@@ -84,10 +84,11 @@ export class TravelScene extends Phaser.Scene {
     this.tweens.add({ targets: dim, alpha: 1, duration: 140 });
     c.add(dim);
 
-    const panelW = 360;
-    const TITLE_H = 34, ROW_H = 54, ROW_GAP = 10, TOP = 30, BOT = 26;
+    const panelW = 440; // a touch wider than a plain confirm
+    const TITLE_H = 30, BAR_GAP = 12, HEAD_BOT = 18, ROW_H = 54, ROW_GAP = 10, TOP = 26, BOT = 26;
     const rows = m.islands.length;
-    const panelH = Math.round(TOP + TITLE_H + rows * (ROW_H + ROW_GAP) + BOT);
+    const headH = TOP + TITLE_H + BAR_GAP + HEAD_BOT; // title + underline block
+    const panelH = Math.round(headH + rows * ROW_H + (rows - 1) * ROW_GAP + BOT);
     const box = this.add.container(cx, cy);
     c.add(box);
 
@@ -98,13 +99,21 @@ export class TravelScene extends Phaser.Scene {
     const d = hudDpr(this);
     const bounds: Array<{ id: string; x: number; y: number; w: number; h: number }> = [];
 
-    // Title.
-    let y = -panelH / 2 + TOP;
-    box.add(this.add.text(0, y + TITLE_H / 2, t('travel_title'), { fontFamily: dialogFont(), fontSize: '24px', color: '#4a2e12', fontStyle: 'bold' }).setOrigin(0.5));
+    // Title — white bold with a warm-brown stroke (the chest/mailbox header style) + a title-bar
+    // underline below it.
+    const titleY = -panelH / 2 + TOP + TITLE_H / 2;
+    const title = this.add.text(0, titleY, t('travel_title'), { fontFamily: dialogFont(), fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    title.setStroke('#5b4327', 4);
+    box.add(title);
+    if (this.textures.exists('title-bar')) {
+      const s = 6 / 4;                          // 4px-tall texture → ~6px on-screen
+      const barW = title.width + 64;            // text width + padding each side
+      box.add(this.add.nineslice(0, titleY + TITLE_H / 2 + BAR_GAP, 'title-bar', undefined, barW / s, 4, 2, 2, 1, 1).setScale(s));
+    }
 
-    // Close button (top-right corner of the panel).
-    const CLOSE = 44;
-    const closeX = panelW / 2 - CLOSE / 2 - 2, closeY = -panelH / 2 - 2;
+    // Close button — INSIDE the panel's top-right corner (like the other modals), press-swaps.
+    const CLOSE = 42, CM = 16;
+    const closeX = panelW / 2 - CLOSE / 2 - CM, closeY = -panelH / 2 + CLOSE / 2 + CM;
     const closeC = this.add.container(closeX, closeY);
     if (this.textures.exists(CLOSE_ATLAS) && this.textures.get(CLOSE_ATLAS).has(CLOSE_FRAME)) {
       this.closeBg = this.add.nineslice(0, 0, CLOSE_ATLAS, CLOSE_FRAME, CLOSE, CLOSE, 8, 8, 8, 8);
@@ -114,8 +123,8 @@ export class TravelScene extends Phaser.Scene {
     bounds.push({ id: TRAVEL_CLOSE, x: (cx + closeX - CLOSE / 2) * d, y: (cy + closeY - CLOSE / 2) * d, w: CLOSE * d, h: CLOSE * d });
 
     // Island rows — each a wide button (white-button 9-slice, press-swaps to the pressed frame).
-    y += TITLE_H + ROW_GAP;
-    const rowW = panelW - 40, rowX = 0;
+    let y = -panelH / 2 + headH;
+    const rowW = panelW - 44, rowX = 0;
     for (const isl of m.islands) {
       const ry = y + ROW_H / 2;
       const rc = this.add.container(rowX, ry);
