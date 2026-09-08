@@ -6733,7 +6733,11 @@ export class GameScene extends Phaser.Scene {
   private openMailboxViaDoor(): void {
     this.mailboxAlertSeen = true; // opening it acknowledges the current waiting mail → stop the alert anim (won't re-arm until something NEW arrives)
     this.mailboxHasMail = this.mailboxHasWaiting(); // mail OR an unclaimed delivery → the "has mail" open swing
-    this.openMenuViaObject(this.mailbox, this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open', 'mailbox-close', TAB_MAIL, MAILBOX_TABS);
+    // Open on the tab that has something NEW so a delivery is seen immediately: delivered goods land in
+    // the 取货 (pickup) grid, NOT the mail list — opening on 邮件 showed "No mail yet" and read as "my
+    // order never arrived" (the goods were one tab over). Prefer 取货 when goods wait, else 邮件.
+    const tab = this.pickupStore.some(Boolean) ? TAB_PICKUP : TAB_MAIL;
+    this.openMenuViaObject(this.mailbox, this.mailboxHasMail ? 'mailbox-mail-open' : 'mailbox-empty-open', 'mailbox-close', tab, MAILBOX_TABS);
   }
 
   /** Door chest clicked → play its open swing, THEN open the menu on Chest; closing plays close. */
