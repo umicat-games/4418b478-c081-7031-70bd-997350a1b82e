@@ -164,11 +164,10 @@ export class TransitionScene extends Phaser.Scene {
     this.curtain.clearMask();
     this.curtain.setFillStyle(opts.color ?? DEF_COLOR, 1).setSize(W, H).setPosition(0, 0).setAlpha(1).setVisible(true);
     fadeBgmTo(this, 0, this.ms);
-    // Show "Loading…" as the close BEGINS (fades in over ~240ms) so the covered screen never reads as
-    // a dead blank — e.g. an island-travel reload, whose pre-reload paw close would otherwise be a
-    // silent white gap before the boot side shows its own "Loading".
-    if (opts.loading) this.showLoadingText();
-    this.animateCover(onCovered);
+    // Show "Loading…" only at FULL cover (after the paw finishes closing) — matches the title→game
+    // transition, which reveals the text once the paw is shut, NOT during the close. (Used by the
+    // island-travel pre-reload cover so the covered beat before the reload carries the same text.)
+    this.animateCover(() => { if (opts.loading) this.showLoadingText(); onCovered(); });
   }
 
   /**
