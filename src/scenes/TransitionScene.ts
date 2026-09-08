@@ -39,6 +39,7 @@ interface BeginOpts {
   focus?: { x: number; y: number }; // circle-iris centre (default screen centre)
   onCovered?: () => void;           // run at full cover, BEFORE the scene switch
   loading?: boolean;                // HOLD closed (with "Loading") until the scene is ready + MIN_COVER_MS
+  instantCover?: boolean;           // SNAP to fully covered (no close animation) — the screen is already covered (e.g. a travel reload); only the reveal (open) animates
 }
 
 /**
@@ -57,6 +58,7 @@ export class TransitionScene extends Phaser.Scene {
   private busy = false;
   private effect: TransitionEffect = 'dissolve';
   private ms = DEF_MS;
+  private instantCover = false;      // begin(): snap covered (no close anim), reveal still animates
   private focus?: { x: number; y: number };
   private safety?: Phaser.Time.TimerEvent;
   // "Loading while covered" state
@@ -105,6 +107,7 @@ export class TransitionScene extends Phaser.Scene {
     this.busy = true;
     this.effect = opts.effect ?? 'dissolve';
     this.ms = opts.ms ?? DEF_MS;
+    this.instantCover = opts.instantCover ?? false;
     this.focus = opts.focus;
     this.loading = opts.loading ?? false;
     this.revealScheduled = false;
@@ -114,7 +117,7 @@ export class TransitionScene extends Phaser.Scene {
     this.curtain.setFillStyle(opts.color ?? DEF_COLOR, 1).setSize(W, H).setPosition(0, 0).setAlpha(1).setVisible(true);
     // Duck the outgoing music to silence as the screen covers (this scene persists,
     // so the fade survives the switch). The new scene's crossToBgm swells its track in.
-    fadeBgmTo(this, 0, this.ms);
+    fadeBgmTo(this, 0, this.instantCover ? 0 : this.ms);
 
     this.animateCover(() => {
       this.coverAt = performance.now();
@@ -229,6 +232,23 @@ export class TransitionScene extends Phaser.Scene {
   /** The `effect`-specific cover tween (curtain already set up). */
   private animateCover(onComplete: () => void): void {
     const W = this.scale.width, H = this.scale.height;
+    // instantCover: the screen is ALREADY covered (a travel reload closed the paw before reloading),
+    // so SNAP to fully covered with no close animation — only the later reveal (open) animates. This
+    // stops the paw closing a SECOND time after the reload.
+    if (this.instantCover) {
+      if (this.effect === 'circle' || this.effect === 'paw') {
+        const fx = this.focus?.x ?? W / 2, fy = this.focus?.y ?? H / 2;
+        const { g, mask } = this.iris();
+        g.setPosition(fx, fy).setRotation(0).setScale(0); // hole 0 = curtain covers everything
+        this.curtain.setMask(mask);
+      } else if (this.effect === 'slide') {
+        this.curtain.setX(0);
+      } else {
+        this.curtain.setAlpha(1);
+      }
+      onComplete();
+      return;
+    }
     if (this.effect === 'circle' || this.effect === 'paw') {
       this.irisScale(true, onComplete);
     } else if (this.effect === 'slide') {

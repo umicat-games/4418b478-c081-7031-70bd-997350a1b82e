@@ -719,7 +719,10 @@ export class BootScene extends Phaser.Scene {
       // Cream paw curtain (the DEF_COLOR default) — CONTRASTS the green scenes so the paw reads.
       // When going straight to the GAME, HOLD the closed paw (showing "Loading") until the world
       // is ready, so the game only reveals once it's loaded (no reveal-time overlay flash).
-      startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800, loading: next === 'GameScene' });
+      // On an ISLAND-TRAVEL reload the paw already closed BEFORE the reload (travelToIsland) and the
+      // screen is still covered by #boot — so SNAP the paw closed (instantCover) instead of animating a
+      // SECOND close; only the reveal (open) animates. Net across the trip: one close → loading → one open.
+      startTransition(this, next, { sceneId: sid }, { effect: 'paw', ms: 800, loading: next === 'GameScene', instantCover: !!travelTo });
     });
   }
 }

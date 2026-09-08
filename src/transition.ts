@@ -10,6 +10,7 @@ interface TransitionOpts {
   focus?: { x: number; y: number };       // circle-iris centre
   onCovered?: () => void;                 // runs at full cover, before the scene switch
   loading?: boolean;                      // HOLD the cover (with "Loading") until the incoming scene finishes
+  instantCover?: boolean;                 // SNAP to covered (no close anim) — screen already covered; only the reveal animates
 }
 
 /**
