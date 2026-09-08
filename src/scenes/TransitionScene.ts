@@ -152,7 +152,7 @@ export class TransitionScene extends Phaser.Scene {
   /** Cover the screen with `effect`, then run `onCovered` — and STOP (no scene
    *  switch / no reveal). For a caller that hard-reloads or navigates away
    *  (return-to-title reloads to guarantee a clean slate). */
-  coverAndHold(effect: TransitionEffect, onCovered: () => void, opts: { color?: number; ms?: number } = {}): void {
+  coverAndHold(effect: TransitionEffect, onCovered: () => void, opts: { color?: number; ms?: number; loading?: boolean } = {}): void {
     if (this.busy) return;
     this.busy = true;
     this.effect = effect;
@@ -164,6 +164,10 @@ export class TransitionScene extends Phaser.Scene {
     this.curtain.clearMask();
     this.curtain.setFillStyle(opts.color ?? DEF_COLOR, 1).setSize(W, H).setPosition(0, 0).setAlpha(1).setVisible(true);
     fadeBgmTo(this, 0, this.ms);
+    // Show "Loading…" as the close BEGINS (fades in over ~240ms) so the covered screen never reads as
+    // a dead blank — e.g. an island-travel reload, whose pre-reload paw close would otherwise be a
+    // silent white gap before the boot side shows its own "Loading".
+    if (opts.loading) this.showLoadingText();
     this.animateCover(onCovered);
   }
 
