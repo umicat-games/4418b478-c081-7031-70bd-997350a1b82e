@@ -77,6 +77,16 @@ const MAIL_STAYS_FPS = 2;     // the door mailbox "mail waiting" idle loop — a
 const MAIL_REMINDER_DELAY_MS = 1600; // let the player settle into the world for a beat before the reminder cinematic takes over
 const CHAT_BOX_BOTTOM_INSET = 60; // chat-message HUD anchor offsetY (logical px the box bottom rests above the screen bottom)
 const RAIN_BGM_DUCK = 0.55;   // while it's raining, drop the music to 55% so the rain ambience comes through
+// Grass decoration (grass_tiles_v2 tileset): plain grass = frame 12. We sprinkle subtle grass-detail /
+// flower variants onto random plain-grass cells — they behave EXACTLY like plain grass (all non-solid,
+// so still walkable / tillable / placeable — grass behaviour keys off "tile exists + not colliding",
+// never a specific frame). While it RAINS, many plain-grass cells swap to a puddle tile (restored after).
+const GRASS_PLAIN = 12;
+const GRASS_DECOR = [55, 56, 57, 66, 67, 68, 60, 71]; // grass blades + a couple of flower tiles
+const GRASS_DECOR_CHANCE = 0.16;                       // fraction of plain-grass cells that get a decoration (deterministic per cell)
+const GRASS_PUDDLE = [58, 59];                         // wet puddle tiles shown on grass while it rains
+const RAIN_PUDDLE_CHANCE = 0.34;                       // MANY plain-grass cells show a puddle while raining
+const GRASS_FRAMES = new Set([GRASS_PLAIN, ...GRASS_DECOR]); // any "plain-ish" grass cell (bare or decorated) a puddle may land on
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
 // Cato roams on his own (CHILD_WANDER); the PLAYER pans the camera with WASD /
@@ -1053,6 +1063,8 @@ export class GameScene extends Phaser.Scene {
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
   private rainSound?: Phaser.Sound.BaseSound; // looping rain ambience, playing while it's raining
   private rainDucking = false; // is the BGM currently ducked for rain? (so we duck/restore once, not every frame)
+  private rainPuddlesShown = false; // are the rain puddle tiles currently swapped in? (toggle once on rain start/stop)
+  private readonly rainPuddleSwaps = new Map<string, number>(); // "cx,cy" → the ground frame to restore when the rain stops
   // Fog / mist: a light haze + MANY small soft patches of widely varied size at low opacity — their
   // overlaps dissolve into an irregular, boundary-less field (no distinct circles). Drifts slowly.
   // Shared by rain (a misty day) and a future fog weather.
@@ -2558,6 +2570,7 @@ export class GameScene extends Phaser.Scene {
     this.wireSceneBushes();
     this.wireSceneForageAndStones();
     this.wireWaterObjects(); // lily pads bob up-down, water grass sways — a living water surface
+    this.decorateGrass(); // sprinkle grass-detail / flower variants onto random plain-grass tiles
     this.createControlToggle(); // on-screen TEST button: drive Cato ↔ pan camera
 
     // Bracket cursor (frames a 16px cell) + the held-tool icon inside it. Hidden until a tool is out
@@ -2949,9 +2962,64 @@ export class GameScene extends Phaser.Scene {
     if (d.groundY < d.img.y) d.groundY = d.img.y + 24;
     d.speed = 0.8 + Math.random() * 0.6; // per-drop speed multiplier
   }
+  /** Sprinkle subtle grass-detail / flower tiles onto random PLAIN-grass cells (deterministic per cell
+   *  via cellHash → stable across loads, no save). They're the SAME tileset, all non-solid, so the cell
+   *  stays ordinary grass (walkable / tillable / placeable). Skips cells covered by the house/roof
+   *  (hidden anyway). Run once at load, AFTER the house layers resolve. */
+  private decorateGrass(): void {
+    const layer = this.islandLayer;
+    if (!layer) return;
+    const W = layer.layer.width, H = layer.layer.height;
+    for (let cy = 0; cy < H; cy++) {
+      for (let cx = 0; cx < W; cx++) {
+        const t = layer.getTileAt(cx, cy);
+        if (!t || t.index !== GRASS_PLAIN) continue; // only plain grass gets decorated
+        const wt = this.wallLayer?.getTileAt(cx, cy);
+        if (wt && wt.index !== -1) continue; // under the house walls/floor — would be hidden
+        const rt = this.roofLayer?.getTileAt(cx, cy);
+        if (rt && rt.index !== -1) continue; // under the roof
+        if (this.cellHash(cx, cy, 731) >= GRASS_DECOR_CHANCE) continue;
+        const f = GRASS_DECOR[Math.floor(this.cellHash(cx, cy, 733) * GRASS_DECOR.length)]!;
+        layer.putTileAt(f, cx, cy);
+      }
+    }
+  }
+
+  /** While it rains, swap MANY plain/decorated grass cells to a puddle tile; restore them when it stops.
+   *  Toggles only on the rain start/stop EDGE (tracked by `rainPuddlesShown`). Skips tilled soil, crops
+   *  and object cells so a puddle never lands on a plot. */
+  private updateRainPuddles(raining: boolean): void {
+    const layer = this.islandLayer;
+    if (!layer || raining === this.rainPuddlesShown) return;
+    this.rainPuddlesShown = raining;
+    if (raining) {
+      const W = layer.layer.width, H = layer.layer.height;
+      for (let cy = 0; cy < H; cy++) {
+        for (let cx = 0; cx < W; cx++) {
+          const t = layer.getTileAt(cx, cy);
+          if (!t || !GRASS_FRAMES.has(t.index)) continue; // plain grass or a grass-detail variant
+          const wt = this.wallLayer?.getTileAt(cx, cy);
+          if (wt && wt.index !== -1) continue;
+          const key = `${cx},${cy}`;
+          if (this.tilledCells.has(key) || this.crops.has(key) || this.cellBlocksTill(key)) continue; // not on a plot / object
+          if (this.cellHash(cx, cy, 911) >= RAIN_PUDDLE_CHANCE) continue;
+          this.rainPuddleSwaps.set(key, t.index); // remember the grass frame to restore
+          layer.putTileAt(GRASS_PUDDLE[this.cellHash(cx, cy, 913) < 0.5 ? 0 : 1]!, cx, cy);
+        }
+      }
+    } else {
+      for (const [key, orig] of this.rainPuddleSwaps) {
+        const [cx, cy] = key.split(',').map(Number) as [number, number];
+        layer.putTileAt(orig, cx, cy);
+      }
+      this.rainPuddleSwaps.clear();
+    }
+  }
+
   private updateRain(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
     const heavy = isDebug('rain'), light = isDebug('lightRain'); // heavy wins if both on
+    this.updateRainPuddles(heavy || light); // puddle tiles appear on the grass while it rains (restored after)
     // Rain ambience: loop `rain-loop` while it's raining (heavier = louder), on the SFX bus so the
     // SFX slider controls + mutes it. 0 volume = stop.
     this.updateRainAudio((heavy || light) ? getSfxVolume() * (heavy ? 0.85 : 0.5) : 0);
