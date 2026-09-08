@@ -676,6 +676,7 @@ const ISLANDS: Array<{ id: string; nameKey: string }> = [
   { id: 'main', nameKey: 'island_main' },
   { id: 'jamin', nameKey: 'island_jamin' },
 ];
+const HOME_ISLAND = 'main'; // the player's home island — sailing back here is ALWAYS free (no travel-pass), so you can never get stranded
 
 /** v28: the PER-ISLAND farm state. Each island (main / jamin / …) keeps its own slice keyed by
  *  scene id in `SaveBlob.islands`, so farming/building/ranching on jamin never collides with main
@@ -7315,14 +7316,21 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
-  /** Boat tapped → the island-travel picker (the OTHER islands; a row sails there). Modal. Requires a
-   *  travel-pass — with none, a notice tells the player to buy one (no picker). */
+  /** Sailing TO the home island (main) is always FREE — otherwise a player stranded on another island
+   *  with no passes could never get back. Every OTHER destination costs one travel-pass. */
+  private travelCostsPass(destId: string): boolean { return destId !== HOME_ISLAND; }
+
+  /** Boat tapped → the island-travel picker (the OTHER islands; a row sails there). Modal. Opens if
+   *  ANY destination is reachable — a free one (home) exists, or the player has a pass for a paid one;
+   *  otherwise a notice tells them to buy a pass. */
   private openTravelMenu(): void {
     if (this.travelOpen) return;
-    if (this.travelPassCount() <= 0) { playSfx(this); this.promptAlert(t('travel_no_pass')); return; } // gate: no pass → can't travel
+    const dests = ISLANDS.filter((i) => i.id !== this.sceneId);
+    const canReach = dests.some((d) => !this.travelCostsPass(d.id)) || this.travelPassCount() > 0;
+    if (!canReach) { playSfx(this); this.promptAlert(t('travel_no_pass')); return; } // only paid destinations + no pass
     playSfx(this);
     this.travelOpen = true;
-    const islands = ISLANDS.filter((i) => i.id !== this.sceneId).map((i) => ({ id: i.id, name: t(i.nameKey) }));
+    const islands = dests.map((i) => ({ id: i.id, name: t(i.nameKey) }));
     this.registry.set('travel', { visible: true, rev: (this.registry.get('travel')?.rev ?? 0) + 1, islands });
     this.scene.bringToTop('TravelScene');
   }
@@ -7677,9 +7685,9 @@ export class GameScene extends Phaser.Scene {
    *  slice is restored on arrival (applySave reads islands[sceneId]). */
   private travelToIsland(targetSceneId: string): void {
     if (targetSceneId === this.sceneId) return;
-    // Spend a travel-pass (gated at openTravelMenu, re-checked here). Done BEFORE the save flush below
-    // so the decremented inventory persists across the reload.
-    if (!this.consumeTravelPass()) { this.promptAlert(t('travel_no_pass')); return; }
+    // Spend a travel-pass — EXCEPT returning to the home island, which is free (never get stranded).
+    // Done BEFORE the save flush below so the decremented inventory persists across the reload.
+    if (this.travelCostsPass(targetSceneId) && !this.consumeTravelPass()) { this.promptAlert(t('travel_no_pass')); return; }
     // PAW cover (same wipe BootScene reveals with) so click → paw-closes → reload → paw-opens reads
     // as ONE continuous transition. NO loading text on THIS (pre-reload) side — the boot side shows
     // the single "Loading…" AFTER the paw closes (like title→game). Showing it here too made it
