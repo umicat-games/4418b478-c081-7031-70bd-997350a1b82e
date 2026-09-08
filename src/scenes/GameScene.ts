@@ -7654,7 +7654,10 @@ export class GameScene extends Phaser.Scene {
    *  slice is restored on arrival (applySave reads islands[sceneId]). */
   private travelToIsland(targetSceneId: string): void {
     if (targetSceneId === this.sceneId) return;
-    coverAndReload(this, 'dissolve', async () => {
+    // PAW cover (same wipe BootScene reveals with) so click → paw-closes → reload → paw-opens reads
+    // as ONE continuous transition. The boot bar is hidden + not held on a travel reload (see
+    // index.html + BootScene) so there's no separate green loading step in the middle.
+    coverAndReload(this, 'paw', async () => {
       try {
         this.islandSaves[this.sceneId] = this.serializeIsland(); // snapshot where we are now
         if (this.umicat && this.saveArmed && !this.loadingSave) {

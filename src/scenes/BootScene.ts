@@ -710,8 +710,10 @@ export class BootScene extends Phaser.Scene {
     const next = sid === 'boot' ? 'BootMenuScene' : 'GameScene';
     // Keep the CSS loader up a MINIMUM beat from page-load (so a fast/cached boot doesn't
     // blink), THEN remove it + PAW-wipe into the first scene. performance.now() here ≈ time
-    // since navigation, and #boot has been showing that whole time.
-    const wait = Math.max(0, MIN_LOADER_MS - performance.now());
+    // since navigation, and #boot has been showing that whole time. On an ISLAND-TRAVEL reload the
+    // bundle+assets are cached and the boot bar is hidden (see index.html) → don't hold it, so the
+    // trip reads as one continuous cover (paw → brief plain cover → paw) instead of a loading step.
+    const wait = Math.max(0, (travelTo ? 0 : MIN_LOADER_MS) - performance.now());
     this.time.delayedCall(wait, () => {
       document.getElementById('boot')?.remove(); // hand off from the CSS loader to the paw wipe
       // Cream paw curtain (the DEF_COLOR default) — CONTRASTS the green scenes so the paw reads.
