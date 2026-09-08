@@ -1427,6 +1427,21 @@
       },
       "assetId": "wooden_house_roof_tilset",
       "frame": 1
+    },
+    {
+      "id": "e-jamin-cato",
+      "kind": "sprite",
+      "role": "child",
+      "transform": {
+        "x": 210,
+        "y": 140,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "premium_character_spritesheet",
+      "name": "cato"
     }
   ]
 }

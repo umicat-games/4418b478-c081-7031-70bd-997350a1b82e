@@ -668,14 +668,38 @@ const HOME_TIERS: HomeTier[] = [
   { id: 'home_kitchen', sceneId: 'home_1-copy', price: 1200, nameKey: 'home_kitchen_name', descKey: 'home_kitchen_desc', preview: 'home-with-kitchen' }, // +kitchen (authored scene 'home_1-copy' / name home_with_kitchen)
 ];
 
+/** v28: the PER-ISLAND farm state. Each island (main / jamin / …) keeps its own slice keyed by
+ *  scene id in `SaveBlob.islands`, so farming/building/ranching on jamin never collides with main
+ *  (both use bare "cx,cy" cell keys). Everything NOT in here (money, bond, inventory, chest, economy,
+ *  Cato's name) is GLOBAL — shared across islands. Pre-v28 flat saves migrate: their island fields
+ *  become `islands.main`. `this.sceneId` is the current island; `applySave` restores `islands[sceneId]`. */
+interface IslandSlice {
+  tilled?: string[]; // "cx,cy"
+  soilWet?: Array<[string, number]>; // [key, remaining ms]
+  crops?: Array<{ key: string; name: CropName; stage: number; timer: number }>;
+  cato?: { x: number; y: number } | null;
+  trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>;
+  removedSceneTrees?: string[];
+  coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number; pendingUpgrade?: { size: CoopSize; applyDay: number } }>;
+  cowPen?: { anchor: { x: number; y: number }; cows: SavedCow[]; milkReady?: Record<string, number> };
+  bushes?: Array<{ key: string; type: BerryType; stage: number }>;
+  foragables?: Array<{ key: string; type: ForagableName; stage: number; timer: number }>;
+  bigStones?: Array<{ key: string; tier: number; ready: number }>;
+  currentHome?: string; // the house tier on THIS island
+  pendingHome?: { id: string; applyDay: number };
+}
+
 interface SaveBlob {
   v: number;
   inventory: Array<{ id: string; count: number } | null>;
   selected: number;
-  tilled: string[]; // "cx,cy"
-  soilWet: Array<[string, number]>; // [key, remaining ms]
-  crops: Array<{ key: string; name: CropName; stage: number; timer: number }>;
-  cato: { x: number; y: number } | null;
+  currentIsland?: string; // v28: scene id of the island the player is currently on (cold-boot resume hint)
+  islands?: Record<string, IslandSlice>; // v28: per-island farm state (see IslandSlice)
+  // ── Pre-v28 FLAT island fields (still read for migration into islands.main) ──
+  tilled?: string[]; // "cx,cy"
+  soilWet?: Array<[string, number]>; // [key, remaining ms]
+  crops?: Array<{ key: string; name: CropName; stage: number; timer: number }>;
+  cato?: { x: number; y: number } | null;
   trees?: Array<{ key: string; type: TreeType; hasFruit: boolean }>; // v3: placed trees
   removedSceneTrees?: string[]; // v27: editor-placed trees the player chopped — stay gone (no auto-regrow)
   coops?: Array<{ key: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady?: number; pendingUpgrade?: { size: CoopSize; applyDay: number } }>; // v23: placed chicken coops + occupants + laid eggs; v24: pending overnight upgrade
@@ -724,7 +748,12 @@ interface SaveBlob {
 }
 
 export class GameScene extends Phaser.Scene {
-  private sceneId!: string;
+  private sceneId!: string; // the current island's scene id ('main' | 'jamin' | …) — set in init()
+  // v28: per-island farm state for EVERY island, keyed by scene id. The current island (this.sceneId)
+  // is snapshotted here on each save; the others carry the state from when we last left them. So
+  // travelling main↔jamin keeps each island's crops/house/animals separate. Global state (money,
+  // inventory, bond, …) lives on the flat SaveBlob, not here.
+  private islandSaves: Record<string, IslandSlice> = {};
 
   // Cato (your friend on the island)
   private child?: Phaser.GameObjects.Sprite;
@@ -7535,6 +7564,27 @@ export class GameScene extends Phaser.Scene {
     }, 800);
   }
 
+  /** Sail to another island. Uses the SAME hard-reload path as returnToTitle (the heavy GameScene
+   *  instance is reused across Phaser restarts and won't cleanly reset — a reload guarantees a fresh
+   *  world), but stamps a sessionStorage boot-hint so BootScene skips the title and drops straight onto
+   *  the target island. The current island's farm state is snapshotted into the save first; the target's
+   *  slice is restored on arrival (applySave reads islands[sceneId]). */
+  private travelToIsland(targetSceneId: string): void {
+    if (targetSceneId === this.sceneId) return;
+    coverAndReload(this, 'dissolve', async () => {
+      try {
+        this.islandSaves[this.sceneId] = this.serializeIsland(); // snapshot where we are now
+        if (this.umicat && this.saveArmed && !this.loadingSave) {
+          const blob = this.buildSave();
+          blob.currentIsland = targetSceneId; // a later cold boot resumes on the island we sailed to
+          await this.umicat.saves.set('state', blob);
+        }
+      } catch (e) { console.warn('[catopia] save flush before travel failed', e); }
+      try { sessionStorage.setItem('catopia:travelTo', targetSceneId); } catch { /* private mode */ }
+      if (typeof window !== 'undefined') window.location.reload();
+    }, 800);
+  }
+
   // ── Unified-menu item action menu + keypad (mirrors the mailbox/chest flow, but
   //    rendered by MenuScene via the `menuAction` registry key) ───────────────────
 
@@ -10519,24 +10569,35 @@ export class GameScene extends Phaser.Scene {
   // ── Save data (auto-save + restore) ───────────────────────────────────
 
   /** Serialize the whole game state into the save blob. */
-  private buildSave(): SaveBlob {
+  /** v28: serialize the CURRENT island's farm state (crops/soil/trees/bushes/forage/stones/coops/pen/
+   *  house + Cato's position) into an IslandSlice. Global state (money/inventory/bond/…) is NOT here. */
+  private serializeIsland(): IslandSlice {
     return {
-      v: 27,
-      inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
-      selected: this.hotbarSelected,
       tilled: [...this.tilledCells],
       soilWet: [...this.soilWet],
       crops: [...this.crops].map(([key, c]) => ({ key, name: c.name, stage: c.stage, timer: c.timer })),
       cato: this.child ? { x: Math.round(this.child.x), y: Math.round(this.child.y) } : null,
       trees: [...this.trees].filter(([, t]) => !t.sceneWired).map(([key, t]) => ({ key, type: t.type, hasFruit: t.hasFruit })),
-      removedSceneTrees: [...this.removedSceneTrees], // v27: chopped editor trees stay gone
-
-      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady, pendingUpgrade: c.pendingUpgrade })), // v23; v24 pendingUpgrade
-      cowPen: this.cowPen ? { anchor: this.cowPen.anchor, cows: this.cowPen.cows.map((c) => c.serialize()), milkReady: this.cowPen.milkReady } : undefined, // v25; v26 milk
-
+      removedSceneTrees: [...this.removedSceneTrees],
+      coops: [...this.coops].map(([key, c]) => ({ key, size: c.size, color: c.color, chickens: c.chickens.map((ch) => ch.serialize(this.nowMs())), eggsReady: c.eggsReady, pendingUpgrade: c.pendingUpgrade })),
+      cowPen: this.cowPen ? { anchor: this.cowPen.anchor, cows: this.cowPen.cows.map((c) => c.serialize()), milkReady: this.cowPen.milkReady } : undefined,
       bushes: [...this.bushes].filter(([, b]) => !b.sceneWired).map(([key, b]) => ({ key, type: b.type, stage: b.stage })),
       foragables: [...this.foragables].filter(([, f]) => !f.sceneWired).map(([key, f]) => ({ key, type: f.type, stage: f.stage, timer: f.timer })),
       bigStones: [...this.bigStones].filter(([, s]) => !s.sceneWired).map(([key, s]) => ({ key, tier: s.tier, ready: s.ready })),
+      currentHome: this.currentHome,
+      pendingHome: this.pendingHome ?? undefined,
+    };
+  }
+
+  private buildSave(): SaveBlob {
+    // Snapshot the island we're standing on into the per-island map (the others keep their last state).
+    this.islandSaves[this.sceneId] = this.serializeIsland();
+    return {
+      v: 28,
+      inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
+      selected: this.hotbarSelected,
+      currentIsland: this.sceneId, // cold-boot resumes on this island
+      islands: this.islandSaves,   // per-island farm state (all islands)
       money: this.money,
       dayTimeMs: Math.round(this.dayTimeMs),
       lastRealDay: this.lastRealDay, // v21: real-time day sync (ADR-029)
@@ -10558,8 +10619,7 @@ export class GameScene extends Phaser.Scene {
       backpack: this.backpackStore.map((it) => ({ id: it.id, count: it.count })),
       dialogueSeen: [...this.dialogueSeen],
       dialogueFlags: [...this.dialogueFlags],
-      currentHome: this.currentHome,
-      pendingHome: this.pendingHome ?? undefined, // v18: bought-but-not-moved-in
+      // currentHome / pendingHome are per-island now → in islands[sceneId] (serializeIsland), not here.
       bond: this.bond, // v19: affinity/bond + player-model memory
       playStreak: this.playStreak,
       bondDay: { gain: this.bondDayGain, interacted: this.bondInteractedToday, signals: { ...this.bondSignalToday } },
@@ -10632,6 +10692,20 @@ export class GameScene extends Phaser.Scene {
   private applySave(s: SaveBlob): void {
     this.loadingSave = true;
     try {
+      // v28: per-island farm state. Load the whole islands map, and pick the slice for the island
+      // we're loading (this.sceneId). MIGRATE a pre-v28 flat save: its top-level island fields become
+      // islands.main (older saves were always the main island). `isl` drives every island-field read
+      // below (crops/soil/trees/…/house), so global fields (money/inventory/bond/…) still read from `s`.
+      if (s.islands && typeof s.islands === 'object') {
+        this.islandSaves = s.islands;
+      } else {
+        this.islandSaves = { main: {
+          tilled: s.tilled, soilWet: s.soilWet, crops: s.crops, cato: s.cato, trees: s.trees,
+          removedSceneTrees: s.removedSceneTrees, coops: s.coops, cowPen: s.cowPen, bushes: s.bushes,
+          foragables: s.foragables, bigStones: s.bigStones, currentHome: s.currentHome, pendingHome: s.pendingHome,
+        } };
+      }
+      const isl: IslandSlice = this.islandSaves[this.sceneId] ?? {};
       // Farm: tear down the current soil/crops, then rebuild from the save.
       for (const soil of this.tilledSoil.values()) soil.destroy();
       this.tilledSoil.clear();
@@ -10664,7 +10738,7 @@ export class GameScene extends Phaser.Scene {
       // v27: editor trees the player already chopped stay gone — wireSceneTrees (run in create,
       // before this) re-derived them, so remove those cells now. A seedling planted on the same
       // cell is restored below (s.trees) and survives (it isn't sceneWired).
-      this.removedSceneTrees = new Set(s.removedSceneTrees ?? []);
+      this.removedSceneTrees = new Set(isl.removedSceneTrees ?? []);
       for (const key of this.removedSceneTrees) {
         const t = this.trees.get(key);
         if (t?.sceneWired) { const [cx, cy] = key.split(',').map(Number); this.removeTree(cx!, cy!); }
@@ -10697,25 +10771,25 @@ export class GameScene extends Phaser.Scene {
         this.bigStones.delete(key);
       }
       if (this.islandLayer) {
-        for (const key of s.tilled ?? []) this.tilledCells.add(key);
+        for (const key of isl.tilled ?? []) this.tilledCells.add(key);
         for (const key of this.tilledCells) {
           const [cx, cy] = key.split(',').map(Number);
           this.refreshSoil(cx, cy); // autotile now sees all neighbours
         }
-        for (const [key, ms] of s.soilWet ?? []) {
+        for (const [key, ms] of isl.soilWet ?? []) {
           this.soilWet.set(key, ms);
           this.setSoilWet(key, true);
         }
-        for (const c of s.crops ?? []) this.restoreCrop(c.key, c.name, c.stage, c.timer);
+        for (const c of isl.crops ?? []) this.restoreCrop(c.key, c.name, c.stage, c.timer);
         // NB: v16-and-earlier saves may carry `placed`/`floors` (the removed player-built
         // walls/floors) — they're intentionally NOT restored (the house is a fixed facade
         // now). The teardown loops above still clear any leftover state.
-        for (const t of s.trees ?? []) this.restoreTree(t.key, t.type, t.hasFruit);
-        for (const b of s.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
-        for (const f of s.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
-        for (const st of s.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
-        for (const c of s.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? [], c.eggsReady ?? 0, c.pendingUpgrade); // v23; v24 pendingUpgrade
-        if (s.cowPen) this.placeCowPen(s.cowPen.anchor, s.cowPen.cows, s.cowPen.milkReady); // v25/v26: replace the auto-placed pen with the saved one (+ milk)
+        for (const t of isl.trees ?? []) this.restoreTree(t.key, t.type, t.hasFruit);
+        for (const b of isl.bushes ?? []) this.restoreBush(b.key, b.type, b.stage);
+        for (const f of isl.foragables ?? []) this.restoreForagable(f.key, f.type, f.stage, f.timer);
+        for (const st of isl.bigStones ?? []) this.restoreBigStone(st.key, st.tier, st.ready);
+        for (const c of isl.coops ?? []) this.restoreCoop(c.key, c.size, c.color, c.chickens ?? [], c.eggsReady ?? 0, c.pendingUpgrade); // v23; v24 pendingUpgrade
+        if (isl.cowPen) this.placeCowPen(isl.cowPen.anchor, isl.cowPen.cows, isl.cowPen.milkReady); // v25/v26: replace the auto-placed pen with the saved one (+ milk)
       }
       // Backpack (rebuild full stacks from ids) + selection + Cato position. Build
       // a DENSE array (fill(null)) — a sparse array would have holes that .map skips.
@@ -10727,7 +10801,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.inventory = cells;
       this.hotbarSelected = s.selected ?? -1;
-      if (s.cato && this.child) this.child.setPosition(s.cato.x, s.cato.y);
+      if (isl.cato && this.child) this.child.setPosition(isl.cato.x, isl.cato.y);
       // Money + day clock (v6; older saves default to 0 = fresh morning, no coins).
       this.money = s.money ?? 0;
       this.dayTimeMs = s.dayTimeMs ?? 0;
@@ -10777,8 +10851,8 @@ export class GameScene extends Phaser.Scene {
       this.dialogueFlags = new Set(s.dialogueFlags ?? []);
       // v17→v18: currentHome is now a TIER id (home_1 / home_kitchen), decoupled from the scene id.
       // An unknown value (e.g. the retired placeholder 'home_2') → the starter tier.
-      this.currentHome = HOME_TIERS.some((h) => h.id === s.currentHome) ? (s.currentHome as string) : 'home_1';
-      this.pendingHome = s.pendingHome ?? null; // v18: bought-but-not-moved-in
+      this.currentHome = HOME_TIERS.some((h) => h.id === isl.currentHome) ? (isl.currentHome as string) : 'home_1';
+      this.pendingHome = isl.pendingHome ?? null; // v18: bought-but-not-moved-in (per-island)
       // v19: affinity/bond + player-model memory (older saves default → fresh relationship).
       this.bond = typeof s.bond === 'number' ? Math.max(0, s.bond) : 0;
       this.playStreak = s.playStreak ?? 0;

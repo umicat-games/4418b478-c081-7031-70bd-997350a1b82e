@@ -702,7 +702,11 @@ export class BootScene extends Phaser.Scene {
     // Route by initial scene: the `boot` data scene → BootMenuScene (renders the
     // boot screen + wires Play → game); any other scene (incl. a Play-Scene
     // `?umicatScene=` override, which skips the boot screen) → GameScene.
-    const sid = manifest.initialScene;
+    // Island-travel boot hint: travelToIsland() stamps sessionStorage before reloading, so we drop
+    // STRAIGHT onto the target island (skip the title screen). One-shot — clear it once consumed.
+    let travelTo: string | null = null;
+    try { travelTo = sessionStorage.getItem('catopia:travelTo'); if (travelTo) sessionStorage.removeItem('catopia:travelTo'); } catch { /* private mode */ }
+    const sid = travelTo || manifest.initialScene;
     const next = sid === 'boot' ? 'BootMenuScene' : 'GameScene';
     // Keep the CSS loader up a MINIMUM beat from page-load (so a fast/cached boot doesn't
     // blink), THEN remove it + PAW-wipe into the first scene. performance.now() here ≈ time
