@@ -56,6 +56,19 @@ export class HouseScene extends Phaser.Scene {
   init(data: { sceneId?: string }): void {
     this.homeSceneId = data?.sceneId ?? 'home_1';
     this.exiting = false;
+    // Phaser REUSES the scene instance across launches, so per-instance state survives a shutdown.
+    // Reset it here (init runs every launch, before create) so a RE-ENTRY rebuilds cleanly. CRITICAL:
+    // the lamp-glow arrays MUST be cleared — otherwise each re-entry appends 3 more entries while the
+    // breathing tween's local `layers` stays length 3, so its onUpdate reads `layers[i].scale` on
+    // undefined and THROWS EVERY FRAME, which aborts Phaser's tween update and stalls the enter
+    // transition's reveal tween → the room never uncovers (the "house won't load on re-entry" bug).
+    this.lampGlow = [];
+    this.lampGlowBaseAlpha = [];
+    this.catoState = 'out'; // re-apply bed/sleep/idle against the freshly-built sprites
+    this.bed = undefined; this.sleepCato = undefined; this.sleepBubble = undefined;
+    this.interiorCato = undefined; this.nightMask = undefined; this.exitDoor = undefined;
+    this.stove = undefined; this.stoveRect = undefined; this.cooking = false; this.stoveBusy = false;
+    this.hoverBracket = undefined; this.hoverPill = undefined; this.hoverLabel = undefined;
   }
 
   async create(): Promise<void> {
@@ -212,7 +225,7 @@ export class HouseScene extends Phaser.Scene {
     // its own base, so they stay proportional.
     this.tweens.addCounter({
       from: 0.94, to: 1.06, duration: BREATHE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      onUpdate: (tw) => { const f = tw.getValue() ?? 1; this.lampGlow.forEach((g, i) => g.setScale(layers[i]!.scale * f)); },
+      onUpdate: (tw) => { const f = tw.getValue() ?? 1; this.lampGlow.forEach((g, i) => { const L = layers[i]; if (L && g.active) g.setScale(L.scale * f); }); },
     });
   }
 
