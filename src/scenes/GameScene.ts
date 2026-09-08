@@ -7655,9 +7655,10 @@ export class GameScene extends Phaser.Scene {
   private travelToIsland(targetSceneId: string): void {
     if (targetSceneId === this.sceneId) return;
     // PAW cover (same wipe BootScene reveals with) so click → paw-closes → reload → paw-opens reads
-    // as ONE continuous transition. loading:true shows "Loading…" as the paw closes (else that
-    // pre-reload beat is a silent white gap). The boot bar is hidden + not held on a travel reload
-    // (see index.html + BootScene) so there's no separate green loading step in the middle.
+    // as ONE continuous transition. NO loading text on THIS (pre-reload) side — the boot side shows
+    // the single "Loading…" AFTER the paw closes (like title→game). Showing it here too made it
+    // flicker (appear → vanish across the reload → reappear). The #boot cover is cream + textless (see
+    // index.html) so it just bridges the reload.
     coverAndReload(this, 'paw', async () => {
       try {
         this.islandSaves[this.sceneId] = this.serializeIsland(); // snapshot where we are now
@@ -7669,7 +7670,7 @@ export class GameScene extends Phaser.Scene {
       } catch (e) { console.warn('[catopia] save flush before travel failed', e); }
       try { sessionStorage.setItem('catopia:travelTo', targetSceneId); } catch { /* private mode */ }
       if (typeof window !== 'undefined') window.location.reload();
-    }, 800, true); // loading:true → "Loading…" shows as the paw closes (no silent white gap)
+    }, 800); // no pre-reload loading text — the boot side shows the single "Loading…" after the close
   }
 
   // ── Unified-menu item action menu + keypad (mirrors the mailbox/chest flow, but
