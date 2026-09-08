@@ -2847,10 +2847,18 @@ export class GameScene extends Phaser.Scene {
   /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 1h so real-time features
    *  (evening dimming, night, the rain-puddle drying stages) are testable in fine steps. Session-only. */
   private fastForwardTime(): void {
+    const ordersBefore = this.orders.length;
     this.debugTimeOffsetMs += 1 * 3600 * 1000; // +1h
-    this.syncRealDay();
+    this.syncRealDay(); // if this +1h crossed local midnight, the day rolls + orders settle here
     this.publishWeatherHud();
     this.updateNightMask();
+    // Confirm on the button when an order settled (crossing midnight delivers silently otherwise) — so
+    // "I fast-forwarded to the next day but got nothing" is answerable: goods go to the mailbox 取货 tab.
+    const delivered = ordersBefore - this.orders.length;
+    if (this.timeSkipBtn) {
+      const label = delivered > 0 ? `✓ 送达${delivered}(取货)` : '⏩ 1小时';
+      if (delivered > 0) { this.timeSkipBtn.textContent = label; this.time.delayedCall(1600, () => { if (this.timeSkipBtn) this.timeSkipBtn.textContent = '⏩ 1小时'; }); }
+    }
   }
 
   /** DEBUG: jump to just after the NEXT local midnight so the gameplay day rolls over ONCE — the
