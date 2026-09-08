@@ -157,6 +157,7 @@ export class TransitionScene extends Phaser.Scene {
     this.busy = true;
     this.effect = effect;
     this.ms = opts.ms ?? DEF_MS;
+    this.instantCover = false; // this path always ANIMATES the close (reset any leftover from a prior begin())
     this.focus = undefined;
     const W = this.scale.width, H = this.scale.height;
     this.scene.bringToTop();
@@ -177,6 +178,7 @@ export class TransitionScene extends Phaser.Scene {
     this.busy = true;
     this.effect = opts.effect ?? 'dissolve';
     this.ms = opts.ms ?? DEF_MS;
+    this.instantCover = opts.instantCover ?? false;
     this.focus = opts.focus;
     this.loading = opts.loading ?? false;
     this.revealScheduled = false;

@@ -27,10 +27,11 @@
   </head>
   <body>
     <div id="boot"><div class="box"><div class="txt">Loading</div><div class="bar"><i></i></div></div></div>
-    <!-- Island travel reloads the page to swap the world. It's a fast, cached reload, so hide the
-         animated loading bar + "Loading" text — the boot screen is then just a brief plain cover
-         between the two paw wipes (no jarring separate loading step). -->
-    <script>try{if(sessionStorage.getItem('catopia:travelTo')){var b=document.getElementById('boot');if(b){var x=b.querySelector('.box');if(x)x.style.display='none';}}}catch(_){ }</script>
+    <!-- Island travel reloads the page to swap the world. It's a fast, cached reload — so make the
+         boot screen match the CREAM paw curtain (#f6f0e2, TransitionScene DEF_COLOR; NOT the green
+         title-boot bg) and hide the loading bar + "Loading" text, so the whole trip reads as one
+         continuous cream paw cover (close → cream → open) with no green flash in the middle. -->
+    <script>try{if(sessionStorage.getItem('catopia:travelTo')){var b=document.getElementById('boot');if(b){b.style.background='#f6f0e2';var x=b.querySelector('.box');if(x)x.style.display='none';}}}catch(_){ }</script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
