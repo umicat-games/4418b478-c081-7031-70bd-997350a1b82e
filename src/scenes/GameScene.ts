@@ -40,6 +40,7 @@ import {
   type CoopColor, type CoopSize,
 } from '../data/coops';
 import { Chicken, type SavedChicken } from '../chickens';
+import { TRAVEL_CLOSE } from './TravelScene';
 import { Cow, type CowNav, type SavedCow } from '../cows';
 // Rex gesture helpers — no plugin registration needed
 // @ts-ignore – rex has no bundled TS declarations for this path
@@ -976,6 +977,7 @@ export class GameScene extends Phaser.Scene {
   private craftStation?: Phaser.GameObjects.Sprite;
   private boat?: Phaser.GameObjects.Sprite; // the dock boat (present on every island) — click to sail elsewhere
   private travelOpen = false;               // the island-picker modal is up
+  private travelHeld: string | null = null; // which travel button (a row id / TRAVEL_CLOSE) is held (shown pressed; acts on release)
   private craftOpen = false;
   private craftSel = 0;   // selected recipe index
   private craftMsg = '';  // transient warning / "Crafted!" flash
@@ -1933,6 +1935,7 @@ export class GameScene extends Phaser.Scene {
       // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (acts on release); a tap OUTSIDE is
       // swallowed (the dialog only closes via a button).
       if (this.confirmOpen) { const cb = this.confirmButtonAt(sx, sy); if (cb) this.beginConfirmPress(cb); return; }
+      if (this.travelOpen) { const tb = this.travelButtonAt(sx, sy); if (tb) this.beginTravelPress(tb); return; } // island picker: hold a row/close, act on release
       if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal
       if (this.menuOpen) {
         // Press on a Settings volume slider → start a DRAG (held pointer scrubs it).
@@ -1977,6 +1980,7 @@ export class GameScene extends Phaser.Scene {
       }
       // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (same as mouse); tap outside swallowed.
       if (this.confirmOpen) { const cb = this.confirmButtonAt(pointer.x, pointer.y); if (cb) this.beginConfirmPress(cb); return; }
+      if (this.travelOpen) { const tb = this.travelButtonAt(pointer.x, pointer.y); if (tb) this.beginTravelPress(tb); return; } // island picker (touch)
       // LONG-PRESS anywhere in the world → open the tool wheel (the touch switch gesture; replaces
       // the old tool-HUD fly-out). A short tap still just uses the held tool / picks from an open
       // wheel. Cancelled on move (pan) or release before the timer.
@@ -2013,6 +2017,7 @@ export class GameScene extends Phaser.Scene {
       this.menuSliderDrag = null; // end a slider drag
       this.endStepperPress(pointer.x, pointer.y); // release a −/+/buy stepper → revert + act if still over it
       this.endConfirmPress(pointer.x, pointer.y); // release a ✓/⊘ confirm button → revert + act if still over it
+      this.endTravelPress(pointer.x, pointer.y); // release a travel row / close → revert + act if still over it
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch) return;
@@ -7302,19 +7307,41 @@ export class GameScene extends Phaser.Scene {
   private closeTravelMenu(): void {
     if (!this.travelOpen) return;
     this.travelOpen = false;
+    if (this.travelHeld) { this.travelHeld = null; this.registry.set('travelHeld', null); }
     this.registry.set('travel', { visible: false, rev: (this.registry.get('travel')?.rev ?? 0) + 1, islands: [] });
   }
 
-  /** Route a tap while the travel picker is open (modal): a row sails there, outside closes. Returns
-   *  true if it consumed the tap. Device-px coords (matches the ×dpr bounds TravelScene publishes). */
-  private handleTravelClick(x: number, y: number): boolean {
-    if (!this.travelOpen) return false;
-    const bounds = (this.registry.get('travelBounds') ?? []) as Array<{ id: string; x: number; y: number; w: number; h: number }>;
-    for (const b of bounds) {
-      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { this.closeTravelMenu(); this.travelToIsland(b.id); return true; }
+  /** Swallow every tap while the picker is open (it's modal) — the buttons are handled on press/
+   *  release (`beginTravelPress`/`endTravelPress`), and ONLY the close button closes (no tap-outside).
+   *  Mirrors handleConfirmClick. */
+  private handleTravelClick(_x: number, _y: number): boolean {
+    return this.travelOpen;
+  }
+
+  /** The travel button (a row id, or TRAVEL_CLOSE) under (x,y), or null. Device-px (matches bounds). */
+  private travelButtonAt(x: number, y: number): string | null {
+    if (!this.travelOpen) return null;
+    const b = this.registry.get('travelBounds') as Array<{ id: string; x: number; y: number; w: number; h: number }> | undefined;
+    return b?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)?.id ?? null;
+  }
+
+  private beginTravelPress(id: string): void {
+    this.travelHeld = id;
+    this.registry.set('travelHeld', id);
+    playSfx(this); // button click blip
+  }
+
+  /** Release a held travel button → un-press; if released still over the SAME button, act (close, or sail). */
+  private endTravelPress(x: number, y: number): void {
+    const held = this.travelHeld;
+    if (!held) return;
+    this.travelHeld = null;
+    this.registry.set('travelHeld', null);
+    if (this.travelOpen && this.travelButtonAt(x, y) === held) {
+      if (held === TRAVEL_CLOSE) { this.closeTravelMenu(); return; }
+      this.closeTravelMenu();
+      this.travelToIsland(held);
     }
-    this.closeTravelMenu(); // tap anywhere else (incl. outside the panel) closes
-    return true;
   }
 
   private openCraft(): void {

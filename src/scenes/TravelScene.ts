@@ -2,17 +2,20 @@ import Phaser from 'phaser';
 import { dialogFont, t } from '../i18n';
 import { applyHudDpr, hudDpr, hudLogicalW, hudLogicalH } from '../dpi';
 
-// The island-travel picker: click the boat → a small modal list of the OTHER islands (name + icon).
-// Tapping a row sails there; tapping outside closes. GameScene owns the model (`travel` registry key)
-// + routes taps (it's modal, checked first in actAt via `travelBounds`); this scene just renders +
-// publishes the row hit-boxes. Mirrors ConfirmScene's panel/dim/dpr conventions and the mail-list rows.
+// The island-travel picker: click the boat → a modal list of the OTHER islands (name + icon). It
+// matches the other popup dialogs — a top-right CLOSE button (only it closes; tapping around does
+// NOT), and press-down feedback on every button (the rows + the close). GameScene owns the model
+// (`travel` registry key) + routes taps via `travelBounds`, holding a button on press and acting on
+// release (mirrors ConfirmScene's `confirmHeld`/`confirmBounds`).
 const ATLAS = 'inventory';
 const FRAME_PANEL = 'frame-medium';
 const PANEL_SCALE = 2;
+const BTN = 'square-buttons', BTN_FRAME = 'white-button', BTN_PRESSED = 'white-button-pressed-down';
+const CLOSE_ATLAS = 'icon-buttons', CLOSE_FRAME = 'close-light-big', CLOSE_PRESSED = 'close-light-big-pressed-down';
 const ICONS = 'ui-icons';
 const ICON_ISLAND = 229; // green-sprout glyph as a placeholder island icon (swappable)
-const ROW_BG = 0xefe4c8, ROW_BORDER = 0xd8c69e;
 const INK = '#5b3a1e';
+export const TRAVEL_CLOSE = '__close';
 
 export interface TravelIsland { id: string; name: string; }
 export interface TravelModel {
@@ -25,6 +28,8 @@ export class TravelScene extends Phaser.Scene {
   private lastRev = -1;
   private shown = false;
   private root?: Phaser.GameObjects.Container;
+  private rowBgs = new Map<string, Phaser.GameObjects.NineSlice>(); // id → its button bg (frame-swapped while held)
+  private closeBg?: Phaser.GameObjects.NineSlice;
 
   constructor() { super({ key: 'TravelScene' }); }
 
@@ -40,11 +45,24 @@ export class TravelScene extends Phaser.Scene {
   };
 
   update(): void {
+    this.updatePressed(); // hold the pressed frame while GameScene reports a held button
     const m = this.model();
     if (!m || m.rev === this.lastRev) return;
     this.lastRev = m.rev;
     if (m.visible) this.open(m);
     else this.close();
+  }
+
+  /** Swap the held button (a row, or the close X) to its pressed frame; revert the rest. */
+  private updatePressed(): void {
+    const held = this.registry.get('travelHeld') as string | null | undefined;
+    const set = (bg: Phaser.GameObjects.NineSlice | undefined, on: boolean, base: string, pressed: string): void => {
+      if (!bg || !bg.active) return;
+      const f = on ? pressed : base;
+      if (bg.frame.name !== f) bg.setFrame(f);
+    };
+    for (const [id, bg] of this.rowBgs) set(bg, held === id, BTN_FRAME, BTN_PRESSED);
+    set(this.closeBg, held === TRAVEL_CLOSE, CLOSE_FRAME, CLOSE_PRESSED);
   }
 
   private model(): TravelModel | undefined {
@@ -54,20 +72,20 @@ export class TravelScene extends Phaser.Scene {
   private open(m: TravelModel): void {
     this.root?.destroy();
     this.tweens.killAll();
+    this.rowBgs.clear(); this.closeBg = undefined;
     this.shown = true;
     const W = hudLogicalW(this), H = hudLogicalH(this);
     const cx = W / 2, cy = H / 2;
     const c = this.add.container(0, 0);
     this.root = c;
 
-    // Dim backdrop (fades in) — blocks the world while the picker is up.
+    // Dim backdrop (blocks the world; tapping it does NOT close — only the X does).
     const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.5).setOrigin(0, 0).setAlpha(0);
     this.tweens.add({ targets: dim, alpha: 1, duration: 140 });
     c.add(dim);
 
-    // Panel sized to the row count.
     const panelW = 360;
-    const TITLE_H = 34, ROW_H = 52, ROW_GAP = 10, TOP = 26, BOT = 24;
+    const TITLE_H = 34, ROW_H = 54, ROW_GAP = 10, TOP = 30, BOT = 26;
     const rows = m.islands.length;
     const panelH = Math.round(TOP + TITLE_H + rows * (ROW_H + ROW_GAP) + BOT);
     const box = this.add.container(cx, cy);
@@ -77,31 +95,43 @@ export class TravelScene extends Phaser.Scene {
     panel.setScale(PANEL_SCALE);
     box.add(panel);
 
-    let y = -panelH / 2 + TOP;
-    box.add(this.add.text(0, y + TITLE_H / 2, t('travel_title'), { fontFamily: dialogFont(), fontSize: '24px', color: '#4a2e12', fontStyle: 'bold' }).setOrigin(0.5));
-    y += TITLE_H + ROW_GAP;
-
     const d = hudDpr(this);
     const bounds: Array<{ id: string; x: number; y: number; w: number; h: number }> = [];
-    const rowW = panelW - 40, rowX = -rowW / 2;
+
+    // Title.
+    let y = -panelH / 2 + TOP;
+    box.add(this.add.text(0, y + TITLE_H / 2, t('travel_title'), { fontFamily: dialogFont(), fontSize: '24px', color: '#4a2e12', fontStyle: 'bold' }).setOrigin(0.5));
+
+    // Close button (top-right corner of the panel).
+    const CLOSE = 44;
+    const closeX = panelW / 2 - CLOSE / 2 - 2, closeY = -panelH / 2 - 2;
+    const closeC = this.add.container(closeX, closeY);
+    if (this.textures.exists(CLOSE_ATLAS) && this.textures.get(CLOSE_ATLAS).has(CLOSE_FRAME)) {
+      this.closeBg = this.add.nineslice(0, 0, CLOSE_ATLAS, CLOSE_FRAME, CLOSE, CLOSE, 8, 8, 8, 8);
+      closeC.add(this.closeBg);
+    }
+    box.add(closeC);
+    bounds.push({ id: TRAVEL_CLOSE, x: (cx + closeX - CLOSE / 2) * d, y: (cy + closeY - CLOSE / 2) * d, w: CLOSE * d, h: CLOSE * d });
+
+    // Island rows — each a wide button (white-button 9-slice, press-swaps to the pressed frame).
+    y += TITLE_H + ROW_GAP;
+    const rowW = panelW - 40, rowX = 0;
     for (const isl of m.islands) {
-      const ry = y;
-      const g = this.add.graphics();
-      g.fillStyle(ROW_BG, 1); g.fillRoundedRect(rowX, ry, rowW, ROW_H, 10);
-      g.lineStyle(2, ROW_BORDER, 1); g.strokeRoundedRect(rowX, ry, rowW, ROW_H, 10);
-      box.add(g);
+      const ry = y + ROW_H / 2;
+      const rc = this.add.container(rowX, ry);
+      const bg = this.add.nineslice(0, 0, BTN, BTN_FRAME, rowW, ROW_H, 6, 6, 7, 7);
+      this.rowBgs.set(isl.id, bg);
+      rc.add(bg);
       if (this.textures.exists(ICONS)) {
-        const icon = this.add.image(rowX + ROW_H * 0.6, ry + ROW_H / 2, ICONS, ICON_ISLAND);
-        icon.setScale((ROW_H * 0.5) / 16); box.add(icon);
+        const icon = this.add.image(-rowW / 2 + ROW_H * 0.55, 0, ICONS, ICON_ISLAND);
+        icon.setScale((ROW_H * 0.46) / 16); rc.add(icon);
       }
-      box.add(this.add.text(rowX + ROW_H * 1.15, ry + ROW_H / 2, isl.name, { fontFamily: dialogFont(), fontSize: '21px', color: INK }).setOrigin(0, 0.5));
-      // Hit-box in DEVICE-px screen space (GameScene routes the tap).
-      bounds.push({ id: isl.id, x: (cx + rowX) * d, y: (cy + ry) * d, w: rowW * d, h: ROW_H * d });
+      rc.add(this.add.text(-rowW / 2 + ROW_H * 1.05, 0, isl.name, { fontFamily: dialogFont(), fontSize: '21px', color: INK }).setOrigin(0, 0.5));
+      box.add(rc);
+      bounds.push({ id: isl.id, x: (cx + rowX - rowW / 2) * d, y: (cy + ry - ROW_H / 2) * d, w: rowW * d, h: ROW_H * d });
       y += ROW_H + ROW_GAP;
     }
     this.registry.set('travelBounds', bounds);
-    // Panel screen rect (tap OUTSIDE closes) — device px.
-    this.registry.set('travelPanel', { x: (cx - panelW / 2) * d, y: (cy - panelH / 2) * d, w: panelW * d, h: panelH * d });
 
     box.setScale(0.85);
     this.tweens.add({ targets: box, scale: 1, duration: 160, ease: 'Back.easeOut' });
@@ -109,7 +139,7 @@ export class TravelScene extends Phaser.Scene {
 
   private close(): void {
     this.registry.set('travelBounds', []);
-    this.registry.set('travelPanel', null);
+    this.rowBgs.clear(); this.closeBg = undefined;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; return; }
     this.shown = false;
     const root = this.root; this.root = undefined;
