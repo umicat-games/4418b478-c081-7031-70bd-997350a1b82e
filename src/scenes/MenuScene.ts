@@ -112,7 +112,7 @@ export interface MenuModel {
 
 // Mail-tab RIGHT-side receipt panel (screen fractions) — the sales receipt / delivery
 // package renders here instead of a separate modal.
-const MAIL_DETAIL = { x: 0.61, y: 0.18, w: 0.36, h: 0.74 }; // SAME box as the left frame L (y 0.18–0.92), just to its RIGHT (past L's 0.58 edge → no overlap)
+const MAIL_DETAIL = { x: 0.61, y: 0.30, w: 0.36, h: 0.60 }; // starts BELOW the screen title (its receipt title used to sit level with "MAIL·LETTERS"); top 0.30 mirrors the left mail-list top (GRID.y), bottom 0.90
 
 export class MenuScene extends Phaser.Scene {
   private lastRev = -1;
