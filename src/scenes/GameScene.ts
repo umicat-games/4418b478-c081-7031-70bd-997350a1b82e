@@ -5453,6 +5453,25 @@ export class GameScene extends Phaser.Scene {
   private coopWheelOpenAt = 0; // time the wheel opened (drives the spring-out)
   private coopWheelClose: { at: number; hitKind: string | null } | null = null; // closing anim (hitKind = picked action, or null = dismiss)
   private movingCoop?: { anchor: string; size: CoopSize; color: CoopColor; chickens: SavedChicken[]; eggsReady: number };
+  private movingCoopTween?: Phaser.Tweens.Tween; // pulses the coop translucent while it's in move-mode
+
+  /** Move-mode has NO hover ghost on touch, so a tapped "move" looked like nothing happened. Pulse the
+   *  coop (+ its chickens) translucent to signal "picked up — tap a new spot". */
+  private beginMovingCoopVisual(anchorKey: string): void {
+    const coop = this.coops.get(anchorKey);
+    if (!coop) return;
+    const targets = [coop.sprite, ...coop.chickens.map((c) => c.sprite)];
+    this.movingCoopTween?.remove();
+    this.movingCoopTween = this.tweens.add({ targets, alpha: { from: 1, to: 0.4 }, duration: 480, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Stop the move-mode pulse + restore full opacity on the coop still being moved (if it's still around). */
+  private endMovingCoopVisual(): void {
+    this.movingCoopTween?.remove();
+    this.movingCoopTween = undefined;
+    const coop = this.movingCoop ? this.coops.get(this.movingCoop.anchor) : undefined;
+    if (coop) { coop.sprite.setAlpha(1); for (const c of coop.chickens) c.sprite.setAlpha(1); }
+  }
 
   /** Open the action wheel for a coop (right-click / long-press on the coop). */
   private openCoopWheel(anchorKey: string): void {
@@ -5629,6 +5648,7 @@ export class GameScene extends Phaser.Scene {
     this.movingCoop = { anchor: anchorKey, size: coop.size, color: coop.color, chickens: coop.chickens.map((c) => c.serialize(this.nowMs())), eggsReady: coop.eggsReady };
     this.activePlace = 'coop'; // enter placement (no held item — placeMovedCoop bypasses the item check)
     this.activeCoopVariant = `${coop.size}-${coop.color}`;
+    this.beginMovingCoopVisual(anchorKey); // translucent pulse → "picked up, tap a new spot"
   }
 
   /** Re-place a coop being moved at (cx,cy): remove the old one, then rebuild it here with its
@@ -5636,6 +5656,7 @@ export class GameScene extends Phaser.Scene {
   private placeMovedCoop(cx: number, cy: number): void {
     const m = this.movingCoop;
     if (!m) return;
+    this.movingCoopTween?.remove(); this.movingCoopTween = undefined; // stop the pulse before its target sprites are destroyed
     this.removeCoop(m.anchor); // the coop stayed live during the move — retire the old one now
     this.restoreCoop(`${cx},${cy}`, m.size, m.color, m.chickens, m.eggsReady);
     this.movingCoop = undefined;
@@ -5645,6 +5666,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Cancel an in-progress coop move: the coop never left, so just drop out of placement mode. */
   private cancelCoopMove(): void {
+    this.endMovingCoopVisual(); // restore the coop's opacity (it stayed put)
     this.movingCoop = undefined;
     this.activePlace = undefined;
     this.hidePlacePreview();
