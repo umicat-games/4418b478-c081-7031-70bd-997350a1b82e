@@ -85,7 +85,7 @@ export class TravelScene extends Phaser.Scene {
     c.add(dim);
 
     const panelW = 440; // a touch wider than a plain confirm
-    const TITLE_H = 30, BAR_GAP = 12, HEAD_BOT = 18, ROW_H = 54, ROW_GAP = 10, TOP = 26, BOT = 26;
+    const TITLE_H = 30, BAR_GAP = 12, HEAD_BOT = 32, ROW_H = 54, ROW_GAP = 10, TOP = 26, BOT = 26;
     const rows = m.islands.length;
     const headH = TOP + TITLE_H + BAR_GAP + HEAD_BOT; // title + underline block
     const panelH = Math.round(headH + rows * ROW_H + (rows - 1) * ROW_GAP + BOT);
