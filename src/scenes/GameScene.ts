@@ -470,6 +470,7 @@ function itemFromId(id: string, count: number): ItemStack {
   if (id === 'pickaxe') return { id, label: 'Pickaxe', iconKey: 'pickaxe', count: 1, stackable: false, toolId: 'pickaxe' };
   if (id === 'fishing-rod') return { id, label: 'Fishing rod', iconKey: 'wheel-fishing-rod', iconFrame: 0, count: 1, stackable: false, toolId: 'fishing-rod' };
   if (id === 'fish') return { id, label: 'Sea bream', iconKey: 'sea-bream', count, stackable: true }; // caught fish (icon = sea-bream)
+  if (id === 'travel-pass') return { id, label: 'Travel Pass', iconKey: 'travel-pass', count, stackable: true }; // consumed per island trip
   if (id === 'stone') return makeStone(count);
   // House-building materials (wall/floor/window/door-item/furn-*) were removed — they now
   // fall through to the generic-stack fallback below, so stale ids in old saves resolve
@@ -7294,9 +7295,31 @@ export class GameScene extends Phaser.Scene {
     return wx >= b.x - 6 && wx <= b.right + 6 && wy >= b.y - 6 && wy <= b.bottom + 6;
   }
 
-  /** Boat tapped → the island-travel picker (the OTHER islands; a row sails there). Modal. */
+  /** How many `travel-pass` the player is carrying (hotbar + backpack). Bought in the shop; one is
+   *  spent per island trip. */
+  private travelPassCount(): number {
+    let n = 0;
+    for (const c of this.inventory) if (c && c.id === 'travel-pass') n += c.count;
+    for (const s of this.backpackStore) if (s.id === 'travel-pass') n += s.count;
+    return n;
+  }
+
+  /** Spend one travel-pass (backpack first, then the hotbar). Returns false if none were carried. */
+  private consumeTravelPass(): boolean {
+    const i = this.backpackStore.findIndex((s) => s.id === 'travel-pass' && s.count > 0);
+    if (i >= 0) { const s = this.backpackStore[i]!; if (--s.count <= 0) this.backpackStore.splice(i, 1); return true; }
+    for (let j = 0; j < this.inventory.length; j++) {
+      const c = this.inventory[j];
+      if (c && c.id === 'travel-pass' && c.count > 0) { if (--c.count <= 0) this.inventory[j] = null; this.publishInventory(); return true; }
+    }
+    return false;
+  }
+
+  /** Boat tapped → the island-travel picker (the OTHER islands; a row sails there). Modal. Requires a
+   *  travel-pass — with none, a notice tells the player to buy one (no picker). */
   private openTravelMenu(): void {
     if (this.travelOpen) return;
+    if (this.travelPassCount() <= 0) { playSfx(this); this.promptAlert(t('travel_no_pass')); return; } // gate: no pass → can't travel
     playSfx(this);
     this.travelOpen = true;
     const islands = ISLANDS.filter((i) => i.id !== this.sceneId).map((i) => ({ id: i.id, name: t(i.nameKey) }));
@@ -7654,6 +7677,9 @@ export class GameScene extends Phaser.Scene {
    *  slice is restored on arrival (applySave reads islands[sceneId]). */
   private travelToIsland(targetSceneId: string): void {
     if (targetSceneId === this.sceneId) return;
+    // Spend a travel-pass (gated at openTravelMenu, re-checked here). Done BEFORE the save flush below
+    // so the decremented inventory persists across the reload.
+    if (!this.consumeTravelPass()) { this.promptAlert(t('travel_no_pass')); return; }
     // PAW cover (same wipe BootScene reveals with) so click → paw-closes → reload → paw-opens reads
     // as ONE continuous transition. NO loading text on THIS (pre-reload) side — the boot side shows
     // the single "Loading…" AFTER the paw closes (like title→game). Showing it here too made it

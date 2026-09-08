@@ -1,6 +1,10 @@
 {
   "items": [
     {
+      "id": "travel-pass",
+      "buy": 50
+    },
+    {
       "id": "corn-seed",
       "buy": 20,
       "sell": 8
