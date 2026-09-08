@@ -408,7 +408,9 @@ export class BootScene extends Phaser.Scene {
         // `start_eating` is a ONE-SHOT lead-in (the cow lowers its head) that hands off to the
         // looping `chew_grass` — see Cow.enterEat. Everything else loops.
         const repeat = name === 'start_eating' ? 0 : -1;
-        this.anims.create({ key: `cow-${name}`, frames: this.anims.generateFrameNumbers('pink_cow_animation_sprites', { start: a, end: b }), frameRate: 8, repeat });
+        // `sleep` is a slow, restful breathing loop (8fps read as a frantic twitch at night) → 2.5fps.
+        const frameRate = name === 'sleep' ? 2.5 : 8;
+        this.anims.create({ key: `cow-${name}`, frames: this.anims.generateFrameNumbers('pink_cow_animation_sprites', { start: a, end: b }), frameRate, repeat });
       }
     }
     // Cow-pen GATE (vertical) — the `vertical-open` anim is 2×2-spanned 32×32 frames on a

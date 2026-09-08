@@ -153,7 +153,7 @@ export class Chicken {
   // ── Per-frame update ─────────────────────────────────────────────────────────
   /** `timeNow` = wall clock (scene.time.now); `gameNow` = scene.nowMs() (game clock); `dt` seconds.
    *  Returns 'hatched' / 'grown' on a stage change so the caller can react (e.g. re-sort). */
-  update(timeNow: number, gameNow: number, dt: number): 'hatched' | 'grown' | null {
+  update(timeNow: number, gameNow: number, dt: number, night = false): 'hatched' | 'grown' | null {
     // Movement during walk / fly.
     if ((this.state === 'walk' || this.state === 'fly') && this.target) {
       const dx = this.target.x - this.sprite.x, dy = this.target.y - this.sprite.y;
@@ -199,7 +199,18 @@ export class Chicken {
       return null;
     }
 
-    // Chick / adult AI: when the current timed state expires (and no one-shot is mid-play), pick next.
+    // NIGHT: chicks/adults ROOST — lie down (sit) and stay put, no wandering (like the cows sleeping).
+    // Egg growth still ticks (handled above); a mid-transition (grow/hatch/sit-down) is left to finish.
+    if (night) {
+      if (!this.busyAnim && this.state !== 'sit-down' && this.state !== 'sit-idle' && this.state !== 'grow' && this.state !== 'hatch') {
+        this.target = undefined; // stop any walk/fly
+        this.enterSit();         // sit_down → sit_idle = the "lie down for the night" pose
+      }
+      return null; // no day wander/stand-up while it's night → they stay roosting
+    }
+
+    // Chick / adult DAY AI: when the current timed state expires (and no one-shot is mid-play), pick
+    // next — this also stands them UP from an overnight roost (sit-idle → standup) at dawn.
     if (!this.busyAnim && (this.state === 'idle' || this.state === 'sit-idle') && timeNow >= this.until) {
       if (this.state === 'sit-idle') this.enterStandUp();
       else this.wander(timeNow);

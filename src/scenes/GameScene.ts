@@ -5324,9 +5324,10 @@ export class GameScene extends Phaser.Scene {
   private updateCoops(dt: number): void {
     if (!this.coops.size) return;
     const timeNow = this.time.now, gameNow = this.nowMs();
+    const night = this.bgIndex() === WEATHER_BGS.length - 1; // roost at night (like the cows sleeping)
     for (const coop of this.coops.values()) {
-      for (const ch of coop.chickens) ch.update(timeNow, gameNow, dt);
-      this.separateChickens(coop.chickens, dt);
+      for (const ch of coop.chickens) ch.update(timeNow, gameNow, dt, night);
+      if (!night) this.separateChickens(coop.chickens, dt); // don't shove roosting chickens around at night
     }
   }
 
