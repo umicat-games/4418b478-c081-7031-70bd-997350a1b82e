@@ -24,7 +24,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume, setBgmDuck, BGM_START_FADE_MS } from '../bgm';
-import { playSfx, setSfxVolume, getSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB } from '../sfx';
+import { playSfx, setSfxVolume, getSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB, SFX_COW, SFX_CHICKEN } from '../sfx';
 import { coverAndReload, coverAndHandoff, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -77,6 +77,10 @@ const MAIL_STAYS_FPS = 2;     // the door mailbox "mail waiting" idle loop — a
 const MAIL_REMINDER_DELAY_MS = 1600; // let the player settle into the world for a beat before the reminder cinematic takes over
 const CHAT_BOX_BOTTOM_INSET = 60; // chat-message HUD anchor offsetY (logical px the box bottom rests above the screen bottom)
 const RAIN_BGM_DUCK = 0.55;   // while it's raining, drop the music to 55% so the rain ambience comes through
+// Occasional daytime farm-animal ambience (moo / cluck) when a coop / cow pen has animals — sparse + quiet.
+const ANIMAL_SFX_MIN_MS = 26000; // shortest gap between two animal calls
+const ANIMAL_SFX_MAX_MS = 62000; // longest gap
+const ANIMAL_SFX_VOL = 0.4;      // played quieter than the UI blips (scale on the SFX bus)
 // Grass decoration (grass_tiles_v2 tileset): plain grass = frame 12. We sprinkle subtle grass-detail /
 // flower variants onto random plain-grass cells — they behave EXACTLY like plain grass (all non-solid,
 // so still walkable / tillable / placeable — grass behaviour keys off "tile exists + not colliding",
@@ -1068,6 +1072,7 @@ export class GameScene extends Phaser.Scene {
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
   private rainSound?: Phaser.Sound.BaseSound; // looping rain ambience, playing while it's raining
   private rainDucking = false; // is the BGM currently ducked for rain? (so we duck/restore once, not every frame)
+  private animalSfxTimer = ANIMAL_SFX_MIN_MS; // ms until the next possible farm-animal ambient call (counts down each frame)
   private puddlePhase: 'none' | 'wet' | 'drying' = 'none'; // rain-puddle drying stage
   private rainStoppedMs = 0; // nowMs() when the rain last stopped (0 = raining, or no puddles) — drives the dry clock
   private readonly puddleCells = new Set<string>(); // "cx,cy" of the current puddle cells (all were plain grass → restore to 12)
@@ -3063,6 +3068,22 @@ export class GameScene extends Phaser.Scene {
       if (layer.getTileAt(cx, cy)) layer.putTileAt(GRASS_PLAIN, cx, cy);
     }
     this.puddleCells.clear();
+  }
+
+  /** Occasional DAYTIME farm-animal ambience: when a coop has chickens or the pen has cows, play a
+   *  quiet moo / cluck now and then. Sparse (26–62s apart), quiet (ANIMAL_SFX_VOL on the SFX bus),
+   *  daytime only (silent at night when the animals sleep), and never during a cinematic. */
+  private updateAnimalAmbience(delta: number): void {
+    if (!this.gameReady || this.cinematic) return;
+    this.animalSfxTimer -= delta;
+    if (this.animalSfxTimer > 0) return;
+    this.animalSfxTimer = ANIMAL_SFX_MIN_MS + Math.random() * (ANIMAL_SFX_MAX_MS - ANIMAL_SFX_MIN_MS); // reschedule regardless
+    if (this.bgIndex() === WEATHER_BGS.length - 1) return; // night → the animals are asleep, stay quiet
+    const options: string[] = [];
+    for (const coop of this.coops.values()) { if (coop.chickens.length > 0) { options.push(SFX_CHICKEN); break; } }
+    if (this.cowPen && this.cowPen.cows.length > 0) options.push(SFX_COW);
+    if (!options.length) return; // no animals around
+    playSfx(this, options[Math.floor(Math.random() * options.length)]!, ANIMAL_SFX_VOL);
   }
 
   private updateRain(delta: number): void {
@@ -11201,6 +11222,7 @@ export class GameScene extends Phaser.Scene {
     this.updateRain(delta); // rain weather: grey overlay + diagonal streaks + ground splashes
     this.updateFog(delta); // fog / mist: light haze + drifting soft patches (misty rain, later fog weather)
     this.updateClouds(delta); // drifting clouds on rain / fog days
+    this.updateAnimalAmbience(delta); // occasional daytime moo / cluck when a coop or cow pen has animals
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     if (this.catoIndoors && this.catoIndoorsReason === 'sleep') this.registry.set('catoMoodFrame', SLEEPY_MOOD_FRAME); // sleepy Z face in the portrait while he's asleep

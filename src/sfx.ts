@@ -36,6 +36,9 @@ export const SFX_DOOR = 'sfx-door';
 export const SFX_TAB = 'sfx-tab';
 /** A tree toppling over — plays with the `tree-fall` animation when a tree is felled. */
 export const SFX_TREE_FALL = 'sfx-tree-fall';
+/** Occasional daytime farm-animal ambience — a moo / cluck when a cow pen / coop has animals. */
+export const SFX_COW = 'sfx-cow';
+export const SFX_CHICKEN = 'sfx-chicken';
 
 function readVolume(): number {
   try {
@@ -64,14 +67,14 @@ const pool = new Map<string, Phaser.Sound.BaseSound>();
 /** Play a one-shot UI/game sound effect at the current SFX volume. No-op when
  *  muted, the clip isn't loaded, or the audio context is still locked (pre first
  *  gesture — we don't queue blips). Safe to call from any scene. */
-export function playSfx(scene: Phaser.Scene, key: string = SFX_CLICK): void {
+export function playSfx(scene: Phaser.Scene, key: string = SFX_CLICK, volumeScale = 1): void {
   if (sfxVolume <= 0) return;
   const mgr = scene.sound;
   if (mgr.locked || !scene.cache.audio.exists(key)) return;
   let s = pool.get(key);
   if (!s) { s = mgr.add(key); pool.set(key, s); }
   if (s.isPlaying) s.stop();               // cut the previous instance of THIS sound
-  s.play({ volume: sfxVolume });
+  s.play({ volume: sfxVolume * volumeScale }); // volumeScale keeps a sound quieter than the UI blips (e.g. ambient animals)
 }
 
 /** Set the SFX volume live: clamp 0..1 + persist. Audible feedback is the caller's
