@@ -17,6 +17,12 @@
       "hud": "game-hud"
     },
     {
+      "id": "jamin",
+      "name": "jamin_island",
+      "type": "world",
+      "file": "world/jamin.json"
+    },
+    {
       "id": "home_1",
       "type": "world",
       "file": "world/home_1.json"

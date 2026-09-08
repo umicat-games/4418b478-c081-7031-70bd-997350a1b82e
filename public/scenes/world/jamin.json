@@ -1,0 +1,1432 @@
+{
+  "schemaVersion": 1,
+  "id": "jamin",
+  "name": "jamin_island",
+  "type": "world",
+  "world": {
+    "width": 427,
+    "height": 240,
+    "background": {
+      "color": "#1a1a2e"
+    }
+  },
+  "camera": {
+    "follow": null
+  },
+  "entities": [
+    {
+      "id": "water-bg",
+      "kind": "tilemap-ref",
+      "tilemapId": "water",
+      "name": "water",
+      "transform": {
+        "x": 213.5,
+        "y": 120,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 0
+      }
+    },
+    {
+      "id": "boot-island",
+      "kind": "tilemap-ref",
+      "tilemapId": "jamin-island",
+      "name": "island",
+      "transform": {
+        "x": 259.77224897329415,
+        "y": 79.99999999999997,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 1
+      }
+    },
+    {
+      "id": "e-mscfnydy-0wzx",
+      "kind": "sprite",
+      "transform": {
+        "x": 51,
+        "y": 55,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "door_animation_sprites",
+      "animation": "door-open"
+    },
+    {
+      "id": "e-mscfqrdr-ikrw",
+      "kind": "sprite",
+      "transform": {
+        "x": 251.77224897329413,
+        "y": 172,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "empty-bush"
+    },
+    {
+      "id": "e-mscfrup8-dpiv",
+      "kind": "sprite",
+      "transform": {
+        "x": 291.50199999999995,
+        "y": 183.6914671168537,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "trees_stumps_and_bushes",
+      "frame": "bush-with-blueberry"
+    },
+    {
+      "id": "e-mscfs73r-szoi",
+      "kind": "sprite",
+      "transform": {
+        "x": 192,
+        "y": 40.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfs80v-r7qi",
+      "kind": "sprite",
+      "transform": {
+        "x": 251.77224897329413,
+        "y": 53.292761893484,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfsiwb-zifg",
+      "kind": "sprite",
+      "transform": {
+        "x": 363.021260380778,
+        "y": 88.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfskaa-jof8",
+      "kind": "sprite",
+      "transform": {
+        "x": 211.77224897329413,
+        "y": 88.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscfslrb-btzd",
+      "kind": "sprite",
+      "transform": {
+        "x": 291.50199999999995,
+        "y": 108,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "tree_pear_sprites",
+      "animation": "tree-idle"
+    },
+    {
+      "id": "e-mscftr1w-pqb1",
+      "kind": "sprite",
+      "transform": {
+        "x": 371.021260380778,
+        "y": 172,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-4"
+    },
+    {
+      "id": "e-mscfttdh-6vaf",
+      "kind": "sprite",
+      "transform": {
+        "x": -21.172432406878727,
+        "y": 53.292761893484,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "sunflower-4"
+    },
+    {
+      "id": "e-mscftxmf-0zki",
+      "kind": "sprite",
+      "transform": {
+        "x": 344,
+        "y": 212,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "wild-flower-3"
+    },
+    {
+      "id": "e-mscfu3dl-ypml",
+      "kind": "sprite",
+      "transform": {
+        "x": 168,
+        "y": 183.6914671168537,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-mscfu65d-66ga",
+      "kind": "sprite",
+      "transform": {
+        "x": 68.2918672997059,
+        "y": 148,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-mscfu82e-5c0d",
+      "kind": "sprite",
+      "transform": {
+        "x": 142.15616030234136,
+        "y": 132,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "grass-4"
+    },
+    {
+      "id": "e-mscfugk5-a5h3",
+      "kind": "sprite",
+      "transform": {
+        "x": 323.50199999999995,
+        "y": 45.292761893484,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mushrooms_flowers_stones",
+      "frame": "small-stone-6"
+    },
+    {
+      "id": "e-mschmeiy-ad6a",
+      "kind": "sprite",
+      "transform": {
+        "x": 80,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "horizontal-fence-3"
+    },
+    {
+      "id": "e-mschmke3-jvgc",
+      "kind": "sprite",
+      "transform": {
+        "x": -21.172432406878727,
+        "y": 164,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-fence-3"
+    },
+    {
+      "id": "e-mschmo51-80lc",
+      "kind": "sprite",
+      "transform": {
+        "x": 203.77224897329413,
+        "y": 240,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "horizontal-fence-3"
+    },
+    {
+      "id": "e-mschmsks-iajj",
+      "kind": "sprite",
+      "transform": {
+        "x": 443.93819195336675,
+        "y": 144,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "vertical-fence-3"
+    },
+    {
+      "id": "e-mschn4xo-yne7",
+      "kind": "sprite",
+      "transform": {
+        "x": 336,
+        "y": 256,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "fences",
+      "frame": "horizontal-fence-3"
+    },
+    {
+      "id": "e-mschy0s9-wb76",
+      "kind": "sprite",
+      "transform": {
+        "x": 134.15616030234136,
+        "y": 320,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy2d8-b5ht",
+      "kind": "sprite",
+      "transform": {
+        "x": -76.22775102670587,
+        "y": 152,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy4jg-0yuc",
+      "kind": "sprite",
+      "transform": {
+        "x": 264,
+        "y": -66.61871810414763,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy5xg-93q2",
+      "kind": "sprite",
+      "transform": {
+        "x": 344,
+        "y": -42.61871810414763,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy6vq-sfa2",
+      "kind": "sprite",
+      "transform": {
+        "x": 503.2070076284083,
+        "y": 199.6914671168537,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-2"
+    },
+    {
+      "id": "e-mschy8zn-tybj",
+      "kind": "sprite",
+      "transform": {
+        "x": 479.2070076284083,
+        "y": -42.61871810414763,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschy9xo-sn52",
+      "kind": "sprite",
+      "transform": {
+        "x": 479.2070076284083,
+        "y": 256,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyamg-5l2f",
+      "kind": "sprite",
+      "transform": {
+        "x": 387.021260380778,
+        "y": 300,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschybov-2ru0",
+      "kind": "sprite",
+      "transform": {
+        "x": 339.021260380778,
+        "y": 312,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschycu2-jzqq",
+      "kind": "sprite",
+      "transform": {
+        "x": 184,
+        "y": 328,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschydqh-w4u1",
+      "kind": "sprite",
+      "transform": {
+        "x": 112,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyeob-socb",
+      "kind": "sprite",
+      "transform": {
+        "x": -60.227751026705874,
+        "y": 264,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyfm2-bwnb",
+      "kind": "sprite",
+      "transform": {
+        "x": -60.227751026705874,
+        "y": -58.61871810414763,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschyi8z-2254",
+      "kind": "sprite",
+      "transform": {
+        "x": 160,
+        "y": -86.08944191479927,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-grass-1"
+    },
+    {
+      "id": "e-mschykcf-yj7m",
+      "kind": "sprite",
+      "transform": {
+        "x": 221.5,
+        "y": -58.61871810414763,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-4"
+    },
+    {
+      "id": "e-mschymcw-8yeq",
+      "kind": "sprite",
+      "transform": {
+        "x": -76.22775102670587,
+        "y": 100,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-4"
+    },
+    {
+      "id": "e-mschyo4s-4yly",
+      "kind": "sprite",
+      "transform": {
+        "x": 235.77224897329413,
+        "y": 324,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-lily-4"
+    },
+    {
+      "id": "e-mschyrkf-y6iv",
+      "kind": "sprite",
+      "transform": {
+        "x": 503.2070076284083,
+        "y": 21.292761893484,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschyt1m-nkgp",
+      "kind": "sprite",
+      "transform": {
+        "x": 168,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschyu8h-2xtp",
+      "kind": "sprite",
+      "transform": {
+        "x": -68.22775102670585,
+        "y": 120.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschywkh-ljv8",
+      "kind": "sprite",
+      "transform": {
+        "x": -84.22775102670587,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-3"
+    },
+    {
+      "id": "e-mschyy41-1mfp",
+      "kind": "sprite",
+      "transform": {
+        "x": 100.2918672997059,
+        "y": -102.08944191479927,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-3"
+    },
+    {
+      "id": "e-mschz2cl-fkgy",
+      "kind": "sprite",
+      "transform": {
+        "x": -68.22775102670587,
+        "y": 312,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mschz4mi-tg5n",
+      "kind": "sprite",
+      "transform": {
+        "x": 463.2070076284083,
+        "y": 296,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "water_objects",
+      "frame": "water-stone-5"
+    },
+    {
+      "id": "e-mtsnn4a0-dek8",
+      "kind": "sprite",
+      "transform": {
+        "x": 20.07941660113437,
+        "y": 290,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "boats_spritesheet",
+      "animation": "boat-idle-dock"
+    },
+    {
+      "id": "e-mtsno6tz-45iz",
+      "kind": "sprite",
+      "transform": {
+        "x": 12.079416601134369,
+        "y": -24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 1
+    },
+    {
+      "id": "e-mtsnobs8-9gi0",
+      "kind": "sprite",
+      "transform": {
+        "x": 12.079416601134369,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnofn5-9ovb",
+      "kind": "sprite",
+      "transform": {
+        "x": 28.07941660113437,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnohv9-zmyz",
+      "kind": "sprite",
+      "transform": {
+        "x": 44.07941660113437,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnokrw-ghj9",
+      "kind": "sprite",
+      "transform": {
+        "x": 60.07941660113437,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnomqp-6ebr",
+      "kind": "sprite",
+      "transform": {
+        "x": 76.2918672997059,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnotl1-outp",
+      "kind": "sprite",
+      "transform": {
+        "x": -3.920583398865631,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 7
+    },
+    {
+      "id": "e-mtsnoxc8-f032",
+      "kind": "sprite",
+      "transform": {
+        "x": 92.2918672997059,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnozb2-3hp9",
+      "kind": "sprite",
+      "transform": {
+        "x": 108.2918672997059,
+        "y": -8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnpnxq-4hy4",
+      "kind": "sprite",
+      "transform": {
+        "x": 12.079416601134369,
+        "y": 8.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnpqbb-jd8o",
+      "kind": "sprite",
+      "transform": {
+        "x": -3.920583398865631,
+        "y": 8.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 7
+    },
+    {
+      "id": "e-mtsnptbo-islv",
+      "kind": "sprite",
+      "transform": {
+        "x": 28.07941660113437,
+        "y": 8.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnpv8n-at7j",
+      "kind": "sprite",
+      "transform": {
+        "x": 44.07941660113437,
+        "y": 8.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnq0je-mjj6",
+      "kind": "sprite",
+      "transform": {
+        "x": 60.2918672997059,
+        "y": 8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnq502-5s0d",
+      "kind": "sprite",
+      "transform": {
+        "x": 76.2918672997059,
+        "y": 8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnq7n0-ggwp",
+      "kind": "sprite",
+      "transform": {
+        "x": 92.2918672997059,
+        "y": 8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnqakl-guaf",
+      "kind": "sprite",
+      "transform": {
+        "x": 108.2918672997059,
+        "y": 8,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 8
+    },
+    {
+      "id": "e-mtsnqddy-roea",
+      "kind": "sprite",
+      "transform": {
+        "x": 124.2918672997059,
+        "y": -7.55834632154918,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 9
+    },
+    {
+      "id": "e-mtsnqhh0-bqe1",
+      "kind": "sprite",
+      "transform": {
+        "x": -3.920583398865631,
+        "y": 24.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 14
+    },
+    {
+      "id": "e-mtsnqj9t-wk51",
+      "kind": "sprite",
+      "transform": {
+        "x": 124.2918672997059,
+        "y": 8.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 9
+    },
+    {
+      "id": "e-mtsnqywi-alwk",
+      "kind": "sprite",
+      "transform": {
+        "x": 12.291867299705899,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 24
+    },
+    {
+      "id": "e-mtsnr1h4-s27f",
+      "kind": "sprite",
+      "transform": {
+        "x": 28.07941660113437,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 24
+    },
+    {
+      "id": "e-mtsnr3ri-87a7",
+      "kind": "sprite",
+      "transform": {
+        "x": 44.2918672997059,
+        "y": 24.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 24
+    },
+    {
+      "id": "e-mtsnr7f0-hs0y",
+      "kind": "sprite",
+      "transform": {
+        "x": 60.07941660113437,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 24
+    },
+    {
+      "id": "e-mtsnr9wu-y3uh",
+      "kind": "sprite",
+      "transform": {
+        "x": 76.07941660113437,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 24
+    },
+    {
+      "id": "e-mtsnrcsm-pl9v",
+      "kind": "sprite",
+      "transform": {
+        "x": 92.2918672997059,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 24
+    },
+    {
+      "id": "e-mtsnrhch-nudm",
+      "kind": "sprite",
+      "transform": {
+        "x": 108.2918672997059,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 24
+    },
+    {
+      "id": "e-mtsnrmsc-j2y2",
+      "kind": "sprite",
+      "transform": {
+        "x": 124.2918672997059,
+        "y": 24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 16
+    },
+    {
+      "id": "e-mtsnrqcj-dhnr",
+      "kind": "sprite",
+      "transform": {
+        "x": 12.079416601134369,
+        "y": 40.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 22
+    },
+    {
+      "id": "e-mtsnrtif-qtyd",
+      "kind": "sprite",
+      "transform": {
+        "x": -3.920583398865631,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 21
+    },
+    {
+      "id": "e-mtsnrwoe-cu11",
+      "kind": "sprite",
+      "transform": {
+        "x": 28.2918672997059,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 22
+    },
+    {
+      "id": "e-mtsns1qs-hyeb",
+      "kind": "sprite",
+      "transform": {
+        "x": 44.07941660113437,
+        "y": 40.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 22
+    },
+    {
+      "id": "e-mtsns477-cfn5",
+      "kind": "sprite",
+      "transform": {
+        "x": 60.2918672997059,
+        "y": 40.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 22
+    },
+    {
+      "id": "e-mtsns7yu-fxft",
+      "kind": "sprite",
+      "transform": {
+        "x": 76.07941660113437,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 22
+    },
+    {
+      "id": "e-mtsns9zz-b9z7",
+      "kind": "sprite",
+      "transform": {
+        "x": 92.07941660113437,
+        "y": 40.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 22
+    },
+    {
+      "id": "e-mtsnstw8-0v8k",
+      "kind": "sprite",
+      "transform": {
+        "x": 108.2918672997059,
+        "y": 40,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 18
+    },
+    {
+      "id": "e-mtsnt8xx-42f4",
+      "kind": "sprite",
+      "transform": {
+        "x": 124.2918672997059,
+        "y": 40.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 23
+    },
+    {
+      "id": "e-mtsntgst-w5vx",
+      "kind": "sprite",
+      "transform": {
+        "x": 12.291867299705899,
+        "y": 56,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 29
+    },
+    {
+      "id": "e-mtsntjwg-boey",
+      "kind": "sprite",
+      "transform": {
+        "x": 28.2918672997059,
+        "y": 56,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 29
+    },
+    {
+      "id": "e-mtsntoxy-wm83",
+      "kind": "sprite",
+      "transform": {
+        "x": -3.708132700294101,
+        "y": 56.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 28
+    },
+    {
+      "id": "e-mtsntux6-toiw",
+      "kind": "sprite",
+      "transform": {
+        "x": -3.708132700294101,
+        "y": -23.55834632154918,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 0
+    },
+    {
+      "id": "e-mtsntvaz-o64l",
+      "kind": "sprite",
+      "transform": {
+        "x": 124.2918672997059,
+        "y": 56.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 30
+    },
+    {
+      "id": "e-mtsnu5cp-btio",
+      "kind": "sprite",
+      "transform": {
+        "x": 124.2918672997059,
+        "y": -23.55834632154918,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 2
+    },
+    {
+      "id": "e-mtsnubmm-hij7",
+      "kind": "sprite",
+      "transform": {
+        "x": 44.07941660113437,
+        "y": 56,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 29
+    },
+    {
+      "id": "e-mtsnuek9-tuge",
+      "kind": "sprite",
+      "transform": {
+        "x": 60.07941660113437,
+        "y": 56,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 29
+    },
+    {
+      "id": "e-mtsnui4g-wv78",
+      "kind": "sprite",
+      "transform": {
+        "x": 76.07941660113437,
+        "y": 56,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 29
+    },
+    {
+      "id": "e-mtsnunwr-fw0i",
+      "kind": "sprite",
+      "transform": {
+        "x": 92.07941660113437,
+        "y": 56.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 29
+    },
+    {
+      "id": "e-mtsnupym-rzsb",
+      "kind": "sprite",
+      "transform": {
+        "x": 108.2918672997059,
+        "y": 56.44165367845082,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 29
+    },
+    {
+      "id": "e-mtsnwp3p-gqy4",
+      "kind": "sprite",
+      "transform": {
+        "x": 28.2918672997059,
+        "y": -23.55834632154918,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 1
+    },
+    {
+      "id": "e-mtsnwr4t-oumb",
+      "kind": "sprite",
+      "transform": {
+        "x": 44.2918672997059,
+        "y": -23.55834632154918,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 1
+    },
+    {
+      "id": "e-mtsnwtkt-3mml",
+      "kind": "sprite",
+      "transform": {
+        "x": 60.2918672997059,
+        "y": -23.55834632154918,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 1
+    },
+    {
+      "id": "e-mtsnwvop-zdsn",
+      "kind": "sprite",
+      "transform": {
+        "x": 76.2918672997059,
+        "y": -24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 1
+    },
+    {
+      "id": "e-mtsnwy70-xnvg",
+      "kind": "sprite",
+      "transform": {
+        "x": 92.07941660113437,
+        "y": -23.55834632154918,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 1
+    },
+    {
+      "id": "e-mtsnx033-d0ly",
+      "kind": "sprite",
+      "transform": {
+        "x": 108.2918672997059,
+        "y": -24,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "wooden_house_roof_tilset",
+      "frame": 1
+    }
+  ]
+}
