@@ -84,9 +84,14 @@ const RAIN_BGM_DUCK = 0.55;   // while it's raining, drop the music to 55% so th
 const GRASS_PLAIN = 12;
 const GRASS_DECOR = [55, 56, 57, 66, 67, 68, 60, 71]; // grass blades + a couple of flower tiles
 const GRASS_DECOR_CHANCE = 0.16;                       // fraction of plain-grass cells that get a decoration (deterministic per cell)
-const GRASS_PUDDLE = [58, 59];                         // wet puddle tiles shown on grass while it rains
-const RAIN_PUDDLE_CHANCE = 0.34;                       // MANY plain-grass cells show a puddle while raining
-const GRASS_FRAMES = new Set([GRASS_PLAIN, ...GRASS_DECOR]); // any "plain-ish" grass cell (bare or decorated) a puddle may land on
+// Rain puddles land ONLY on plain grass (frame 12), never on a decorated cell, so decoration + puddles
+// are mutually exclusive per cell (no cross-interaction when either re-rolls). Drying lifecycle after the
+// rain stops: DARK puddle for the first hour → PALE puddle for the next two hours → gone (all real/game hours).
+const GRASS_PUDDLE_WET = [58, 59]; // dark wet puddle (while raining + the first hour after it stops)
+const GRASS_PUDDLE_DRY = [69, 70]; // pale drying puddle (hours 1–3 after the rain stops)
+const RAIN_PUDDLE_CHANCE = 0.34;   // MANY plain-grass cells show a puddle while raining
+const PUDDLE_WET_HOURS = 1;        // stay dark this many hours after the rain stops
+const PUDDLE_GONE_HOURS = 3;       // fully evaporated this many hours after the rain stops
 
 // --- Camera keys (WASD / arrow keys pan the camera) ---
 // Cato roams on his own (CHILD_WANDER); the PLAYER pans the camera with WASD /
@@ -1063,8 +1068,11 @@ export class GameScene extends Phaser.Scene {
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
   private rainSound?: Phaser.Sound.BaseSound; // looping rain ambience, playing while it's raining
   private rainDucking = false; // is the BGM currently ducked for rain? (so we duck/restore once, not every frame)
-  private rainPuddlesShown = false; // are the rain puddle tiles currently swapped in? (toggle once on rain start/stop)
-  private readonly rainPuddleSwaps = new Map<string, number>(); // "cx,cy" → the ground frame to restore when the rain stops
+  private puddlePhase: 'none' | 'wet' | 'drying' = 'none'; // rain-puddle drying stage
+  private rainStoppedMs = 0; // nowMs() when the rain last stopped (0 = raining, or no puddles) — drives the dry clock
+  private readonly puddleCells = new Set<string>(); // "cx,cy" of the current puddle cells (all were plain grass → restore to 12)
+  private lastDecorDay = -1; // dayCount the grass decoration was last rolled for (re-rolls each new day)
+  private readonly grassDecorCells = new Set<string>(); // "cx,cy" currently showing a decoration (restore to 12 before a re-roll)
   // Fog / mist: a light haze + MANY small soft patches of widely varied size at low opacity — their
   // overlaps dissolve into an irregular, boundary-less field (no distinct circles). Drifts slowly.
   // Shared by rain (a misty day) and a future fog weather.
@@ -2570,7 +2578,9 @@ export class GameScene extends Phaser.Scene {
     this.wireSceneBushes();
     this.wireSceneForageAndStones();
     this.wireWaterObjects(); // lily pads bob up-down, water grass sways — a living water surface
-    this.decorateGrass(); // sprinkle grass-detail / flower variants onto random plain-grass tiles
+    // Grass decoration is rolled per real day (see updateDayClock → decorateGrass); puddles are weather-driven.
+    this.puddlePhase = 'none'; this.rainStoppedMs = 0; this.puddleCells.clear();
+    this.lastDecorDay = -1; this.grassDecorCells.clear();
     this.createControlToggle(); // on-screen TEST button: drive Cato ↔ pan camera
 
     // Bracket cursor (frames a 16px cell) + the held-tool icon inside it. Hidden until a tool is out
@@ -2778,6 +2788,7 @@ export class GameScene extends Phaser.Scene {
    *  flips (cheap — the pointer changes ~5×/day, not every frame). */
   private updateDayClock(_delta: number): void {
     this.syncRealDay(); // roll the gameplay day over on a real local-midnight crossing
+    if (this.gameReady && this.dayCount !== this.lastDecorDay) { this.lastDecorDay = this.dayCount; this.decorateGrass(); } // fresh grass-detail layout each real day
     const bg = this.bgIndex();
     if (this.pointerStep() !== this.lastPointerStep || bg !== this.lastBgIndex || this.clockMinute() !== this.lastClockMinute) {
       // Cato reacts to the day turning: nightfall → sleepy, a new morning → cheerful.
@@ -2828,10 +2839,10 @@ export class GameScene extends Phaser.Scene {
     if (this.mailReminderLiveArmed) this.scheduleMailReminder();
   }
 
-  /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 2h so real-time features
-   *  (evening dimming, night, a day rollover) are testable in finer steps. Session-only. */
+  /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 1h so real-time features
+   *  (evening dimming, night, the rain-puddle drying stages) are testable in fine steps. Session-only. */
   private fastForwardTime(): void {
-    this.debugTimeOffsetMs += 2 * 3600 * 1000; // +2h
+    this.debugTimeOffsetMs += 1 * 3600 * 1000; // +1h
     this.syncRealDay();
     this.publishWeatherHud();
     this.updateNightMask();
@@ -2962,13 +2973,22 @@ export class GameScene extends Phaser.Scene {
     if (d.groundY < d.img.y) d.groundY = d.img.y + 24;
     d.speed = 0.8 + Math.random() * 0.6; // per-drop speed multiplier
   }
-  /** Sprinkle subtle grass-detail / flower tiles onto random PLAIN-grass cells (deterministic per cell
-   *  via cellHash → stable across loads, no save). They're the SAME tileset, all non-solid, so the cell
-   *  stays ordinary grass (walkable / tillable / placeable). Skips cells covered by the house/roof
-   *  (hidden anyway). Run once at load, AFTER the house layers resolve. */
+  /** Sprinkle subtle grass-detail / flower tiles onto random PLAIN-grass cells — re-rolled EACH real day
+   *  (salted by dayCount) so the meadow varies day to day, deterministic + stable WITHIN a day. They're the
+   *  SAME tileset, all non-solid, so a decorated cell stays ordinary grass (walkable / tillable / placeable).
+   *  Restores the previous day's decorations to plain grass first. Skips cells under the house/roof, plots,
+   *  and objects — and puddle cells (they're index 58/59/69/70, not 12), so decoration + puddles never share
+   *  a cell. Called from updateDayClock on a day change. */
   private decorateGrass(): void {
     const layer = this.islandLayer;
     if (!layer) return;
+    for (const key of this.grassDecorCells) { // undo yesterday's layout
+      const [cx, cy] = key.split(',').map(Number) as [number, number];
+      const idx = layer.getTileAt(cx, cy)?.index;
+      if (idx !== undefined && GRASS_DECOR.includes(idx)) layer.putTileAt(GRASS_PLAIN, cx, cy);
+    }
+    this.grassDecorCells.clear();
+    const salt = (731 + Math.imul(this.dayCount, 2654435761)) | 0; // a fresh layout per real day
     const W = layer.layer.width, H = layer.layer.height;
     for (let cy = 0; cy < H; cy++) {
       for (let cx = 0; cx < W; cx++) {
@@ -2978,48 +2998,77 @@ export class GameScene extends Phaser.Scene {
         if (wt && wt.index !== -1) continue; // under the house walls/floor — would be hidden
         const rt = this.roofLayer?.getTileAt(cx, cy);
         if (rt && rt.index !== -1) continue; // under the roof
-        if (this.cellHash(cx, cy, 731) >= GRASS_DECOR_CHANCE) continue;
-        const f = GRASS_DECOR[Math.floor(this.cellHash(cx, cy, 733) * GRASS_DECOR.length)]!;
+        const key = `${cx},${cy}`;
+        if (this.tilledCells.has(key) || this.cellBlocksTill(key)) continue; // not on a plot / object
+        if (this.cellHash(cx, cy, salt) >= GRASS_DECOR_CHANCE) continue;
+        const f = GRASS_DECOR[Math.floor(this.cellHash(cx, cy, (salt + 1) | 0) * GRASS_DECOR.length)]!;
         layer.putTileAt(f, cx, cy);
+        this.grassDecorCells.add(key);
       }
     }
   }
 
-  /** While it rains, swap MANY plain/decorated grass cells to a puddle tile; restore them when it stops.
-   *  Toggles only on the rain start/stop EDGE (tracked by `rainPuddlesShown`). Skips tilled soil, crops
-   *  and object cells so a puddle never lands on a plot. */
-  private updateRainPuddles(raining: boolean): void {
+  /** Rain puddles with a drying lifecycle. While it RAINS, MANY plain-grass cells (frame 12 only — never a
+   *  decorated cell, so the two never clash) show a DARK puddle. When the rain stops they don't vanish: they
+   *  stay dark for PUDDLE_WET_HOURS, fade to a PALE puddle until PUDDLE_GONE_HOURS, then evaporate. Hours are
+   *  real/game hours (nowMs, so the debug time-skip advances the drying). Called every frame from updateRain. */
+  private updateGrassPuddles(): void {
     const layer = this.islandLayer;
-    if (!layer || raining === this.rainPuddlesShown) return;
-    this.rainPuddlesShown = raining;
-    if (raining) {
-      const W = layer.layer.width, H = layer.layer.height;
-      for (let cy = 0; cy < H; cy++) {
-        for (let cx = 0; cx < W; cx++) {
-          const t = layer.getTileAt(cx, cy);
-          if (!t || !GRASS_FRAMES.has(t.index)) continue; // plain grass or a grass-detail variant
-          const wt = this.wallLayer?.getTileAt(cx, cy);
-          if (wt && wt.index !== -1) continue;
-          const key = `${cx},${cy}`;
-          if (this.tilledCells.has(key) || this.crops.has(key) || this.cellBlocksTill(key)) continue; // not on a plot / object
-          if (this.cellHash(cx, cy, 911) >= RAIN_PUDDLE_CHANCE) continue;
-          this.rainPuddleSwaps.set(key, t.index); // remember the grass frame to restore
-          layer.putTileAt(GRASS_PUDDLE[this.cellHash(cx, cy, 913) < 0.5 ? 0 : 1]!, cx, cy);
-        }
-      }
-    } else {
-      for (const [key, orig] of this.rainPuddleSwaps) {
-        const [cx, cy] = key.split(',').map(Number) as [number, number];
-        layer.putTileAt(orig, cx, cy);
-      }
-      this.rainPuddleSwaps.clear();
+    if (!layer) return;
+    if (this.isRaining()) {
+      if (this.puddleCells.size === 0) this.pickPuddleCells(); // first rain of this spell → choose cells
+      if (this.puddlePhase !== 'wet') { this.colorPuddles(GRASS_PUDDLE_WET); this.puddlePhase = 'wet'; }
+      this.rainStoppedMs = 0; // still raining
+      return;
     }
+    if (this.puddlePhase === 'none') return; // dry ground, nothing to age
+    if (this.rainStoppedMs === 0) this.rainStoppedMs = this.nowMs(); // rain just ended → start the dry clock
+    const hours = (this.nowMs() - this.rainStoppedMs) / 3_600_000;
+    if (hours >= PUDDLE_GONE_HOURS) { this.clearPuddles(); this.puddlePhase = 'none'; this.rainStoppedMs = 0; }
+    else if (hours >= PUDDLE_WET_HOURS && this.puddlePhase !== 'drying') { this.colorPuddles(GRASS_PUDDLE_DRY); this.puddlePhase = 'drying'; }
+  }
+
+  /** Choose which plain-grass cells get a puddle this rain spell (index 12 only, not house/plot/object). */
+  private pickPuddleCells(): void {
+    const layer = this.islandLayer!;
+    const W = layer.layer.width, H = layer.layer.height;
+    for (let cy = 0; cy < H; cy++) {
+      for (let cx = 0; cx < W; cx++) {
+        const t = layer.getTileAt(cx, cy);
+        if (!t || t.index !== GRASS_PLAIN) continue; // plain grass only (decorated cells are skipped)
+        const wt = this.wallLayer?.getTileAt(cx, cy);
+        if (wt && wt.index !== -1) continue;
+        const key = `${cx},${cy}`;
+        if (this.tilledCells.has(key) || this.crops.has(key) || this.cellBlocksTill(key)) continue;
+        if (this.cellHash(cx, cy, 911) >= RAIN_PUDDLE_CHANCE) continue;
+        this.puddleCells.add(key);
+      }
+    }
+  }
+
+  /** Paint the current puddle cells with a puddle frame set (wet=dark / dry=pale), picked per cell. */
+  private colorPuddles(frames: number[]): void {
+    const layer = this.islandLayer!;
+    for (const key of this.puddleCells) {
+      const [cx, cy] = key.split(',').map(Number) as [number, number];
+      layer.putTileAt(frames[this.cellHash(cx, cy, 913) < 0.5 ? 0 : 1]!, cx, cy);
+    }
+  }
+
+  /** Restore every puddle cell to plain grass (they were all frame 12) + forget them. */
+  private clearPuddles(): void {
+    const layer = this.islandLayer!;
+    for (const key of this.puddleCells) {
+      const [cx, cy] = key.split(',').map(Number) as [number, number];
+      if (layer.getTileAt(cx, cy)) layer.putTileAt(GRASS_PLAIN, cx, cy);
+    }
+    this.puddleCells.clear();
   }
 
   private updateRain(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
     const heavy = isDebug('rain'), light = isDebug('lightRain'); // heavy wins if both on
-    this.updateRainPuddles(heavy || light); // puddle tiles appear on the grass while it rains (restored after)
+    this.updateGrassPuddles(); // puddle tiles appear on the grass while it rains, then dry out over ~3h
     // Rain ambience: loop `rain-loop` while it's raining (heavier = louder), on the SFX bus so the
     // SFX slider controls + mutes it. 0 volume = stop.
     this.updateRainAudio((heavy || light) ? getSfxVolume() * (heavy ? 0.85 : 0.5) : 0);
@@ -10920,7 +10969,7 @@ export class GameScene extends Phaser.Scene {
   private createTimeSkipButton(): void {
     if (typeof document === 'undefined' || this.timeSkipBtn) return;
     const btn = document.createElement('button');
-    btn.textContent = '⏩ 时间';
+    btn.textContent = '⏩ 1小时';
     Object.assign(btn.style, {
       position: 'fixed', bottom: '92px', left: '14px', // clears the ~80px-tall portrait in the corner
       zIndex: '2147483647', padding: '9px 15px', font: '600 15px system-ui, sans-serif',
