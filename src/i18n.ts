@@ -202,6 +202,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   cook_done: { en: 'Cooked!', 'zh-CN': '做好啦！' },
   cook_empty: { en: 'No recipes yet', 'zh-CN': '还没有菜谱' },
   action_use: { en: 'Use', 'zh-CN': '使用' },
+  action_place: { en: 'Place', 'zh-CN': '摆放' },
   action_store: { en: 'Store', 'zh-CN': '存入箱子' },
   action_take: { en: 'Take', 'zh-CN': '取出' },
   bag_full: { en: 'Backpack full', 'zh-CN': '背包满了' },

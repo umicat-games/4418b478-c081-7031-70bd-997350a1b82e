@@ -7557,7 +7557,7 @@ export class GameScene extends Phaser.Scene {
       return opts;
     }
     // USE = hold this item straight from the store as the active tool / seed / material.
-    if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t('action_use') });
+    if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t(it.place ? 'action_place' : 'action_use') }); // placeables read "摆放/Place" (same use action → placement mode)
     if (this.menuTab === TAB_BACKPACK) { // Backpack: use / feed / 上架 / store→chest / delete
       if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed Cato from the shared bag
       if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_list') }); // list for sale → 待售 bin
