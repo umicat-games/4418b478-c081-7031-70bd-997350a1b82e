@@ -10138,7 +10138,15 @@ export class GameScene extends Phaser.Scene {
     // Cato greets the player by their name first ("Hi, <name>! …") — they live together.
     const name = this.callName() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
     const line = `${t('mail_reminder_hi').replace('{name}', name)} ${t(key)}`;
-    this.time.delayedCall(900, () => { if (this.mailReminderActive && !this.menuOpen) this.openDialog(line, true); });
+    this.time.delayedCall(900, () => {
+      if (!this.mailReminderActive) return;
+      // A menu/dialog opened during the camera glide (e.g. the reminder fired while the mailbox was
+      // mid-opening — menuOpen flips true only AFTER the open-swing) → the dialogue can't show, so BAIL
+      // the whole cinematic cleanly (letterbox retracts, camera restores). Otherwise the cinematic would
+      // strand with no dialogue and no way to dismiss (the "close mailbox → stuck in cinematic" bug).
+      if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen) { this.endMailReminder(); return; }
+      this.openDialog(line, true);
+    });
   }
 
   /** A tap dismisses the mail reminder: close Cato's message + glide the camera back to normal play. */
