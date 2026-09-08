@@ -11,7 +11,10 @@
     }
   },
   "camera": {
-    "follow": null
+    "follow": null,
+    "bounds": {
+      "fitTo": "boot-island"
+    }
   },
   "entities": [
     {
