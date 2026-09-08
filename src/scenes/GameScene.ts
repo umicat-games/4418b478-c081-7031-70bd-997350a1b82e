@@ -688,6 +688,7 @@ interface SaveBlob {
   dayCount?: number; // v6: real local day index (recomputed on load)
   lastMailReminderDay?: number; // day of Cato's last "you've got mail" reminder (once/day, first open)
   lastRealDay?: number; // v21: last-settled local day index (login catch-up — ADR-029)
+  debugTimeOffsetMs?: number; // DEBUG time-skip offset — persisted so a skipped-to day survives reload (else deliverDays outrun the reset clock)
   lastSeen?: number;    // v21: last-seen wall-clock ms
   mailbox?: Array<{ id: string; count: number }>; // v7: mailbox contents (vestigial)
   chest?: Array<{ id: string; count: number }>; // v7: chest contents
@@ -10539,6 +10540,7 @@ export class GameScene extends Phaser.Scene {
       money: this.money,
       dayTimeMs: Math.round(this.dayTimeMs),
       lastRealDay: this.lastRealDay, // v21: real-time day sync (ADR-029)
+      debugTimeOffsetMs: this.debugTimeOffsetMs, // DEBUG skip offset (0 for real players) — keeps a skipped-to day consistent across reloads
       lastSeen: this.lastSeen,
       dayCount: this.dayCount,
       lastMailReminderDay: this.lastMailReminderDay,
@@ -10735,6 +10737,17 @@ export class GameScene extends Phaser.Scene {
       // the first syncRealDay() catches up the missed real days. A pre-v21 save (no lastRealDay)
       // starts fresh at today (no spurious catch-up). dayCount is recomputed to the real day index.
       this.lastRealDay = typeof s.lastRealDay === 'number' ? s.lastRealDay : -1;
+      // DEBUG time-skip offset (session tool). It's persisted so a debug-advanced clock survives a
+      // reload — otherwise the day the player skipped TO (baked into lastRealDay + each order's
+      // deliverDay) would outrun the reset-to-real dayIndex(), so deliveries needed many skips to
+      // "catch up" (the "I skip a day but nothing arrives for X days" bug). For a real player who
+      // never touches the debug buttons this is always 0. Reconcile OLD saves (no offset field) too:
+      // if lastRealDay is ahead of the real day, a prior session's offset was lost → reconstruct it so
+      // the clock matches the saved day + deliverDays again.
+      this.debugTimeOffsetMs = typeof s.debugTimeOffsetMs === 'number' ? s.debugTimeOffsetMs : 0;
+      if (this.lastRealDay >= 0 && this.dayIndex() < this.lastRealDay) {
+        this.debugTimeOffsetMs += (this.lastRealDay - this.dayIndex()) * 86400000;
+      }
       this.lastSeen = s.lastSeen ?? 0;
       // v22: Cato's name (default "Cato") + how he addresses the player. Refresh the HUD label +
       // inform the live npc (note takes effect next turn).
