@@ -380,7 +380,7 @@ export class LaptopScene extends Phaser.Scene {
     const micR = inputH * 0.28, micX = this.sendBtn.x - btnR - micR - fs * 0.3;
     if (this.voiceReady && this.micG) {
       this.drawMic(this.micG, micX, cy, inputH * 0.5, SEND_TINT);
-      this.micHit?.setPosition(micX, cy).setSize(inputH * 0.7, inputH * 0.7);
+      this.sizeHitRect(this.micHit, micX, cy, inputH * 0.7, inputH * 0.7);
     }
     const inputRight = this.voiceReady ? inputH * 1.15 : btnR * 2; // reserve room for mic+send (or just send)
     if (this.inputEl) this.positionInput(px, iy, pw - inputRight, inputH);
@@ -388,7 +388,7 @@ export class LaptopScene extends Phaser.Scene {
     // Recording overlay (laid out even when hidden): ✕ cancel (left) · timer · pixel waveform · done=send.
     const cancR = inputH * 0.3, cancX = px + pad + cancR;
     this.drawCancel(this.cancelG!, cancX, cy, inputH * 0.34, 0xb26a6a);
-    this.cancelHit?.setPosition(cancX, cy).setSize(inputH * 0.8, inputH * 0.8);
+    this.sizeHitRect(this.cancelHit, cancX, cy, inputH * 0.8, inputH * 0.8);
     this.recTimer?.setFontSize(Math.round(fs * 0.95)).setPosition(cancX + cancR + fs * 0.5, cy);
     const waveX0 = cancX + cancR + fs * 0.5 + fs * 2.6, waveX1 = this.sendBtn.x - btnR - fs * 0.4;
     this.recWave = { x0: waveX0, y: cy, w: Math.max(fs, waveX1 - waveX0), h: inputH * 0.5 };
@@ -514,6 +514,17 @@ export class LaptopScene extends Phaser.Scene {
   }
 
   // ── Voice input (mic → browser speech-to-text) + pixel waveform ──────────────
+  /** Position + resize an invisible interactive hit rect, updating its INPUT hit area too.
+   *  Phaser captures a Rectangle's hit area at setInteractive() time; a later setSize()
+   *  changes the visual but NOT the tap target (it would stay the tiny creation size —
+   *  which made the ✕/mic nearly untappable on touch). */
+  private sizeHitRect(r: Phaser.GameObjects.Rectangle | undefined, x: number, y: number, w: number, h: number): void {
+    if (!r) return;
+    r.setPosition(x, y).setSize(w, h);
+    const ha = r.input?.hitArea;
+    if (ha instanceof Phaser.Geom.Rectangle) ha.setTo(0, 0, w, h);
+  }
+
   /** Draw a chunky pixel microphone (body capsule + U-stand + base) centred at (cx,cy). */
   private drawMic(g: Phaser.GameObjects.Graphics, cx: number, cy: number, s: number, color: number): void {
     g.clear();

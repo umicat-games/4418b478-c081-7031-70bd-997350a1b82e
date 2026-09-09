@@ -16,12 +16,20 @@ const CURSOR_SCALE = 2; // 16px art → 32px on screen (NEAREST keeps it crisp)
  */
 export class CursorScene extends Phaser.Scene {
   private sprite?: Phaser.GameObjects.Image;
+  // A pure-touch device (phone/tablet) has no mouse/trackpad → never draw a
+  // cursor. Per-pointer `wasTouch` is unreliable on iOS Safari, which fires a
+  // synthetic mouse-move after every touch (flipping wasTouch false and popping
+  // the arrow back). The device-level `(pointer: fine)` query is stable.
+  private hasFinePointer = true;
 
   constructor() {
     super({ key: 'CursorScene' });
   }
 
   create(): void {
+    this.hasFinePointer = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(pointer: fine)').matches
+      : true;
     applyHudDpr(this); // high-DPI: draw the pixel cursor in logical space via a dpr camera
     this.scale.on('resize', () => applyHudDpr(this));
     this.sprite = this.add
@@ -37,6 +45,10 @@ export class CursorScene extends Phaser.Scene {
     this.scene.bringToTop();
 
     if (!this.sprite) return;
+
+    // No mouse/trackpad (phone/tablet) → never draw the arrow, whatever the
+    // registry says. Touch input drives the game directly; a cursor is noise.
+    if (!this.hasFinePointer) { this.sprite.setVisible(false); return; }
 
     // Two drive modes:
     //  • GameScene publishes the `cursor` registry model (its virtual-cursor logic +
