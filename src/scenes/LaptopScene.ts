@@ -485,7 +485,7 @@ export class LaptopScene extends Phaser.Scene {
   }
 
   // ── Input ───────────────────────────────────────────────────────────────────
-  private makeInput(prefill = ''): void {
+  private makeInput(prefill = '', focus = true): void {
     if (this.inputEl || this.busy) return;
     const el = document.createElement('input');
     el.type = 'text'; el.maxLength = 120; el.value = prefill;
@@ -497,7 +497,11 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn.setVisible(true);
     this.micG?.setVisible(true); this.micHit?.setVisible(true); // mic available whenever the input is
     this.layout();
-    setTimeout(() => el.focus(), 50);
+    // Auto-focus for typing; but NOT after a voice transcript — on iOS the input is focused +
+    // keyboard up, and the FIRST tap on the Send button just dismisses the keyboard instead of
+    // sending (typing never hit this because you press Enter). Leaving it unfocused makes Send a
+    // single tap; the player can still tap the field to edit.
+    if (focus) setTimeout(() => el.focus(), 50);
   }
 
   // ── Voice input (mic → browser speech-to-text) + pixel waveform ──────────────
@@ -574,7 +578,7 @@ export class LaptopScene extends Phaser.Scene {
     this.voice = undefined;
     for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
     const t = this.pendingTranscript; this.pendingTranscript = '';
-    if (!this.busy) this.makeInput(t); // re-show input (mic shows with it), transcript prefilled
+    if (!this.busy) this.makeInput(t, !t); // re-show input; prefilled-from-voice → don't auto-focus (Send is one tap)
   }
 
   private positionInput(inX: number, inY: number, inW: number, inH: number): void {
