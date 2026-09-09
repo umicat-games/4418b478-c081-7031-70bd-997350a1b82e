@@ -382,7 +382,10 @@ export class HouseScene extends Phaser.Scene {
   private refreshCatoState(): void {
     if (!this.bed || !this.sleepCato) return;
     const gs = this.scene.get('GameScene') as GameScene | undefined;
-    const next: 'out' | 'sleep' | 'rain' = gs?.isSleepTime?.() ? 'sleep' : gs?.isRaining?.() ? 'rain' : 'out';
+    // Mirror where Cato ACTUALLY is (catoHomeState → real `catoIndoors` flag), not the weather/time
+    // proxies: if he walked into the house on his own (sleep at night / rain shelter by day), he's
+    // shown in here when the player enters; if he's still out on the island, the room is just the bed.
+    const next: 'out' | 'sleep' | 'rain' = gs?.catoHomeState?.() ?? 'out';
     if (next === this.catoState) return;
     this.catoState = next;
     this.bed.setVisible(next !== 'sleep');

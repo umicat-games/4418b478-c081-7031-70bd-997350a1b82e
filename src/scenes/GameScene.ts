@@ -10776,6 +10776,17 @@ export class GameScene extends Phaser.Scene {
     return isDebug('rain') || isDebug('lightRain');
   }
 
+  /** Where Cato ACTUALLY is right now, for HouseScene to mirror when the player steps inside: `out` =
+   *  he's out on the island (room shows just the bed), `sleep` = he walked in to sleep (sleeping-in-bed
+   *  Cato), `rain`/otherwise = he walked in for the day (rain shelter) → idle Cato standing in the room.
+   *  Keys off the real `catoIndoors` flag (is he inside?) + reason — NOT the isSleepTime/isRaining
+   *  proxies, so "Cato walked in on his own → he's THERE when you enter" holds even if the weather/time
+   *  check drifts (e.g. rain just stopped but he hasn't stepped back out yet). */
+  public catoHomeState(): 'out' | 'sleep' | 'rain' {
+    if (!this.catoIndoors) return 'out';
+    return this.catoIndoorsReason === 'sleep' ? 'sleep' : 'rain';
+  }
+
   /** Why Cato is (or should be) indoors right now: bedtime wins over rain; null = he's out. */
   private indoorsReason(): 'sleep' | 'rain' | null {
     if (this.isSleepTime()) return 'sleep';
