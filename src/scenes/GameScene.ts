@@ -10876,6 +10876,22 @@ export class GameScene extends Phaser.Scene {
     if (reason) {
       if (this.catoTask) this.catoTask = null; // going home overrides any chore in progress
 
+      // On a VISITED island Cato has no home of his own — at bedtime (or in rain) he's back on the
+      // HOME island, not here. So he isn't present: hide him (no local house to walk into). You can
+      // still sail here at night; you're just on your own while Cato sleeps at home. He reappears
+      // when it's day + clear (the clear branch below shows him again at his spot — no reposition).
+      if (this.sceneId !== HOME_ISLAND) {
+        if (!this.catoIndoors) {
+          body.setVelocity(0, 0);
+          body.enable = false;
+          child.setVisible(false);
+          this.catoIndoors = true;
+          this.cameraFollow = false;
+        }
+        this.catoIndoorsReason = reason;
+        return true;
+      }
+
       if (this.catoIndoors) { this.catoIndoorsReason = reason; body.setVelocity(0, 0); return true; } // already inside
 
       // Not inside yet → walk to the house door, then step in (hide). A fallback deadline sends
@@ -10904,7 +10920,9 @@ export class GameScene extends Phaser.Scene {
       this.catoIndoors = false;
       this.catoIndoorsReason = null;
       this.sleepArriveAt = 0;
-      const spot = this.catoWakeWorldSpot();
+      // Home island: he wakes/steps out at the door spot. Visited island: he was just hidden (went
+      // home), so reappear right where he was — there's no house door to step out of here.
+      const spot = this.sceneId === HOME_ISLAND ? this.catoWakeWorldSpot() : null;
       if (spot) child.setPosition(spot.x, spot.y);
       body.enable = true;
       body.reset(child.x, child.y);
