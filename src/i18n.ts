@@ -186,6 +186,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   travel_title: { en: 'Sail to other islands', 'zh-CN': '去别的岛屿' },
   travel_no_pass: { en: 'You need a Travel Pass to sail to another island. Buy one from the shop!', 'zh-CN': '去别的岛屿需要一张旅行券哦，可以在商店购买～' },
   door_locked: { en: 'The door is locked.', 'zh-CN': '门锁上了。' },
+  sign_jamin: { en: "Hi, I'm Jamin! I'm off traveling all around Catopia, exploring the whole world. It'd be wonderful if you could look after the little island while you're here — but please don't go into my house. See you around, and let's keep in touch by letter!", 'zh-CN': '你好，我是Jamin，我正在Catopia四处旅行，探索整个世界。如果你能够帮我顺便打理小岛那就再好不过啦，但请不要进我的屋子。回见，保持书信联络！' },
   item_travel_pass: { en: 'Travel Pass', 'zh-CN': '旅行券' },
   desc_travel_pass: { en: 'A ticket for the boat — spend one to sail to another island.', 'zh-CN': '坐船的船票，去别的岛屿时消耗一张。' },
   island_main: { en: 'Home Island', 'zh-CN': '家园岛' },

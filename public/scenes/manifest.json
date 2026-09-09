@@ -20,7 +20,8 @@
       "id": "jamin",
       "name": "jamin_island",
       "type": "world",
-      "file": "world/jamin.json"
+      "file": "world/jamin.json",
+      "hud": "game-hud"
     },
     {
       "id": "home_1",
