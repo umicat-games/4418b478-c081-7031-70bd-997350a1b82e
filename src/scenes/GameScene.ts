@@ -6657,6 +6657,9 @@ export class GameScene extends Phaser.Scene {
    *  HouseScene OVER it (island stays in memory paused → clean re-entry). HouseScene
    *  reveals when the interior is loaded; exiting hands back via onExitHouse. */
   private enterHouse(): void {
+    // Only the HOME island's house is the player's home (the HouseScene interior = `currentHome`).
+    // Houses on OTHER islands (e.g. jamin) are visit-only scenery — tapping shows a "locked" notice.
+    if (this.sceneId !== HOME_ISLAND) { playSfx(this); this.promptAlert(t('door_locked')); return; }
     if (this.houseEntering || this.inHouse) return;
     // Ignore the tap if a transition is mid-flight (coverHandoff no-ops while busy — we
     // must NOT leave the flags set or entering would stick). Real taps come well after any wipe.

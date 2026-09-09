@@ -185,6 +185,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   mail_reminder_hi: { en: 'Hi, {name}!', 'zh-CN': '嗨，{name}！' },
   travel_title: { en: 'Sail to other islands', 'zh-CN': '去别的岛屿' },
   travel_no_pass: { en: 'You need a Travel Pass to sail to another island. Buy one from the shop!', 'zh-CN': '去别的岛屿需要一张旅行券哦，可以在商店购买～' },
+  door_locked: { en: 'The door is locked.', 'zh-CN': '门锁上了。' },
   item_travel_pass: { en: 'Travel Pass', 'zh-CN': '旅行券' },
   desc_travel_pass: { en: 'A ticket for the boat — spend one to sail to another island.', 'zh-CN': '坐船的船票，去别的岛屿时消耗一张。' },
   island_main: { en: 'Home Island', 'zh-CN': '家园岛' },
