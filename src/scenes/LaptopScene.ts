@@ -191,8 +191,9 @@ export class LaptopScene extends Phaser.Scene {
 
     this.pillG = this.add.graphics();
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
-    // While recording, the send button = "done" (finish + transcribe); otherwise it sends the text.
-    this.sendBtn.on('pointerdown', () => { if (this.recording) this.voice?.stop(); else if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
+    // The send button is HIDDEN while recording (the ✕ takes its slot) — it only
+    // sends the text that's in the input box.
+    this.sendBtn.on('pointerdown', () => { if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
 
     // Voice input UI. The mic button is built UNCONDITIONALLY (kept hidden) and
     // gated on `voiceReady` — because native-app voice support is only known once
@@ -207,7 +208,7 @@ export class LaptopScene extends Phaser.Scene {
     this.recTimer = this.add.text(0, 0, '0:00', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0.5);
     this.cancelG = this.add.graphics();
     this.cancelHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
-    this.cancelHit.on('pointerdown', () => this.cancelRecording());
+    this.cancelHit.on('pointerdown', () => this.stopRecording());
     for (const o of [this.micG, this.micHit, this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
 
     // Hide the chat until the "new message" teaser is opened.
@@ -385,12 +386,17 @@ export class LaptopScene extends Phaser.Scene {
     const inputRight = this.voiceReady ? inputH * 1.15 : btnR * 2; // reserve room for mic+send (or just send)
     if (this.inputEl) this.positionInput(px, iy, pw - inputRight, inputH);
 
-    // Recording overlay (laid out even when hidden): ✕ cancel (left) · timer · pixel waveform · done=send.
-    const cancR = inputH * 0.3, cancX = px + pad + cancR;
+    // Recording overlay (laid out even when hidden): [timer] [waveform……] [✕ stop].
+    // The ✕ sits at the SEND button's slot (right) — send is hidden while recording
+    // and only returns once the recording is stopped + transcribed to text. Tapping
+    // ✕ stops + transcribes (see stopRecording). Placing it at the proven-tappable
+    // send slot also sidesteps the left-corner tap misses seen on touch.
+    const cancR = inputH * 0.3, cancX = this.sendBtn.x;
     this.drawCancel(this.cancelG!, cancX, cy, inputH * 0.34, 0xb26a6a);
-    this.sizeHitRect(this.cancelHit, cancX, cy, inputH * 0.8, inputH * 0.8);
-    this.recTimer?.setFontSize(Math.round(fs * 0.95)).setPosition(cancX + cancR + fs * 0.5, cy);
-    const waveX0 = cancX + cancR + fs * 0.5 + fs * 2.6, waveX1 = this.sendBtn.x - btnR - fs * 0.4;
+    this.sizeHitRect(this.cancelHit, cancX, cy, inputH * 0.9, inputH * 0.9);
+    const timerX = px + pad;
+    this.recTimer?.setFontSize(Math.round(fs * 0.95)).setPosition(timerX, cy);
+    const waveX0 = timerX + fs * 2.6, waveX1 = cancX - cancR - fs * 0.5;
     this.recWave = { x0: waveX0, y: cy, w: Math.max(fs, waveX1 - waveX0), h: inputH * 0.5 };
     if (this.recording) this.drawWave();
 
@@ -573,7 +579,7 @@ export class LaptopScene extends Phaser.Scene {
     this.micG?.setVisible(false); this.micHit?.setVisible(false);
     for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(true);
     this.recTimer?.setText('0:00');
-    this.sendBtn.setVisible(true);      // now acts as "done"
+    this.sendBtn.setVisible(false);     // hidden while recording; ✕ takes its slot
     this.layout();
     const s = await startVoice(voiceLang(), {
       onFinal: (t) => { this.pendingTranscript = t; },
@@ -584,11 +590,12 @@ export class LaptopScene extends Phaser.Scene {
     this.voice = s;
   }
 
-  /** ✕ tapped → abort with no transcript. */
-  private cancelRecording(): void {
+  /** ✕ tapped → stop recording + transcribe (send button returns with the text).
+   *  voice.stop() finalizes → onFinal fills pendingTranscript → onEnd → stopRecordingUI. */
+  private stopRecording(): void {
     if (!this.recording) return;
-    const v = this.voice; this.voice = undefined; this.pendingTranscript = '';
-    if (v) v.cancel(); else this.stopRecordingUI(); // cancel() fires onEnd → stopRecordingUI
+    if (this.voice) this.voice.stop();
+    else this.stopRecordingUI(); // start hadn't resolved a session yet → just close the overlay
   }
 
   /** Recording finished (done / cancel / error) → hide the overlay, restore the input (prefilled
