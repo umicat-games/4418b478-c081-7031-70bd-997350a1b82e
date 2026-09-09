@@ -7,23 +7,24 @@ import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
 import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
 
 /**
- * COLD-OPEN "message from Cato" scene. After the player clicks Play on a NEW game, a
- * laptop fills the screen showing a chat with Cato: a cat who lives on an island in Catopia
- * and invites the player to come live there WITH him — two friends, as equals, building up
- * the island and exploring the world together. The player chats back; when they AGREE, we
- * transition into the game (which plays the arrival cinematic); if they DECLINE, back to the title.
+ * COLD-OPEN "message from Cato" scene. After the player clicks Play on a NEW game, a laptop
+ * fills the screen showing a chat with Cato: a cat who lives on an island in Catopia. His
+ * friend Jamin (while traveling) heard the player wants to come help run the island, so the
+ * player is ALREADY coming — there is no invite/accept/decline. The flow is a short, linear,
+ * GAME-DRIVEN sequence of prompts, each = one player reply, always ending in the game:
+ *   1. QA — Cato's opening greeting + "any questions about Catopia / island life?". The
+ *      player asks ONE thing; the runtime-AI npc answers it (everyday island life only —
+ *      farming, chickens, cows, fishing, foraging, visiting islands), or, if the reply is
+ *      off-topic, calls `not_understood` → a fixed "I don't quite understand, let's chat
+ *      when we meet" line. Either way → on to naming.
+ *   2. Cato's nickname · 3. what to call the player — each read by ONE bounded `ai.complete`
+ *      (name / keep / unclear); then into the game (arrival cinematic).
  *
- * Interaction is the SAME as talking to Cato in the world: ONE flat dialogue panel shows
- * his current line with the RPG typewriter, and if a line is long it PAGINATES — click /
- * tap / Space reveals the rest or advances to the next page (no scrolling log). The input
- * sits below. Styled flat/soft (not the game's wooden box) so it reads as software on the
- * cream laptop screen (which already frames it).
- *
- * The opening line is ONE fixed (i18n) message; every reply after that is the runtime-AI
- * npc (`u.ai.npc`) — a recruiting-Cato persona that answers questions about Catopia and
- * decides, via the `accept_help` / `decline_help` actions, when the player has actually
- * agreed or declined. If the SDK can't init (offline / raw standalone preview with no AI)
- * we fall back to a simple keyword accept/decline so the cold-open is never a dead end.
+ * Interaction mirrors talking to Cato in the world: ONE flat dialogue panel + RPG typewriter,
+ * long lines PAGINATE (click / tap / Space), the input sits below. Flat/soft styling so it
+ * reads as software on the cream laptop screen. If the SDK can't init (offline / raw preview),
+ * the QA step shows a canned answer and the naming steps fall back to a light heuristic — the
+ * cold-open is never a dead end.
  */
 
 const SCREEN = { x0: 0.155, y0: 0.06, x1: 0.845, y1: 0.57 }; // cream screen inside blue-laptop.png
@@ -45,20 +46,20 @@ const TYPE_MS = 34;
 const opening = (name: string): string => {
   const n = name.trim();
   return getLang() === 'zh-CN'
-    ? `你好${n ? '，' + n : '呀'}！最近过得好吗？我叫 Cato，住在 Catopia 的一座小岛上。我在想呀——你愿不愿意来这儿和我一起生活？我们可以一起种地、把这座小岛变得越来越好，甚至一起揭开 Catopia 所有的秘密。在你决定要不要来之前，关于 Catopia 的任何问题，只要我知道，我都很乐意回答你哦！`
-    : `Hi${n ? ' ' + n : ' there'}! How are you? My name is Cato, and I live on a little island here in Catopia. I was wondering — would you like to come and live here with me? We could farm together, make this island even lovelier, and maybe even uncover all the mysteries of Catopia. And before you decide, I'd be happy to answer anything you'd like to know about it!`;
+    ? `你好${n ? '，' + n : '呀'}！我叫 Cato，住在 Catopia 的一座小岛上。我的朋友 Jamin 在外面旅行的时候听说——你想来 Catopia，帮我一起经营我住的这座小岛！我真的好开心你愿意来帮我呀，我们可以一起把小岛打理好，还能一起去揭开 Catopia 更多的秘密。对了，关于 Catopia 或者在岛上的生活，你有什么想问我的吗？`
+    : `Hi${n ? ' ' + n : ' there'}! My name is Cato, and I live on a little island here in Catopia. My friend Jamin heard while traveling that you'd like to come to Catopia and help me run the little island I live on! I'm so happy you want to help — we can look after the island together, and even uncover more of Catopia's secrets side by side. Oh — is there anything you'd like to ask me about Catopia or life on the island?`;
 };
-// Sign-off fallbacks — used only when the AI is offline or returns the accept/decline
-// action with no words of its own (normally Cato writes his own closing line).
-const ACCEPT = { en: "Really?! Thank you so much — I'll be waiting for you on the island! 💛", 'zh-CN': '真的吗？！太谢谢你了——我在小岛上等你！💛' };
-const DECLINE = { en: "Oh... that's alright, I understand. If you ever change your mind, just message me — I'll be right here. Take care! 🐾", 'zh-CN': '这样啊……没关系的，我明白。要是你哪天改变主意了，随时来找我就好——我一直都在。你也保重呀！🐾' };
-const FILLER = { en: "I haven't seen everything out there yet either — but I'd love to find out together in Catopia! So... will you come?", 'zh-CN': '外面的世界我也还没都见过呢——不过好想和你一起在 Catopia 里探索呀！所以……你会来吗？' };
+// QA phase: the player is ALREADY coming (Jamin recruited them) — so no accept/decline. Cato just
+// answers ONE round of questions about everyday island life, then the game moves on to naming.
+// Fixed deflection for an off-topic reply (Cato "doesn't understand"), + an offline fallback answer.
+const QA_DEFLECT = { en: "Hmm, I don't quite understand what you mean — let's chat more when we meet! 🐾", 'zh-CN': '嗯……我不太明白你的意思——我们见面再聊吧！🐾' };
+const QA_OFFLINE = { en: "There's still lots out here I haven't seen either — but we'll discover it together once you arrive! 💛", 'zh-CN': '外面还有好多我也没见过的呢——等你来了我们一起探索吧！💛' };
 // ── Naming phase (GAME-driven, fixed lines) ──────────────────────────────────
-// After the player accepts, the game asks these itself (one at a time) and a bounded
-// ai.complete call reads the name out of each reply. Warm wording, deterministic flow.
+// After the QA round, the game asks these itself (one at a time) and a bounded ai.complete call
+// reads the name out of each reply. Warm wording, deterministic flow.
 const NICK_Q = {
-  en: "Yay — you're really coming!! I'm so happy. 💛\nOh, before we head over: would you like to give me a nickname of your own? Just type it here — or type “keep” if you like “Cato” as it is.",
-  'zh-CN': '耶——你真的要来啦！！我好开心。💛\n对了，在我们过去之前：你想给我起一个你喜欢的昵称吗？在这儿打出来就好——想还叫我「Cato」的话，回一个「保持」也行呀。',
+  en: "Okay — and before we meet in person, one little thing: would you like to give me a nickname of your own? Just type it here — or type “keep” if you like “Cato” as it is.",
+  'zh-CN': '好啦——在我们正式见面之前，还有件小事想问你：你想给我起一个你喜欢的昵称吗？在这儿打出来就好——想还叫我「Cato」的话，回一个「保持」也行呀。',
 };
 // How Cato should address the player — references their current name when we have one.
 const callQ = (name: string): string => {
@@ -72,7 +73,6 @@ const NAME_DONE = { en: "Perfect — I can't wait to see you on the island! 🐾
 // In-fiction fallbacks when the AI can't answer (anonymous / out of credits / hiccup).
 const SIGNIN_MSG = { en: "Oh — it looks like we haven't quite met yet! Could you sign in first? Then we can really talk. 🐾", 'zh-CN': '哦——好像我们还没正式认识呢！你能先登录一下吗？这样我们才能好好聊聊。🐾' };
 const NOCREDITS_MSG = { en: "I think I'm out of little sparks to chat with for now… but I really do hope you'll come. Will you?", 'zh-CN': '我聊天的小火花好像用完了……不过我真的很希望你能来。你愿意吗？' };
-const UNAVAILABLE_MSG = { en: 'Hmm, my words got a little tangled just now — could you say that again?', 'zh-CN': '嗯……我刚刚有点语无伦次，你能再说一遍吗？' };
 
 const tr = (m: { en: string; 'zh-CN': string }): string => (getLang() === 'zh-CN' ? m['zh-CN'] : m.en);
 
@@ -227,24 +227,18 @@ export class LaptopScene extends Phaser.Scene {
         if (this.inputEl) this.inputEl.placeholder = getLang() === 'zh-CN' ? '输入消息…' : 'Message…';
         this.recruiter = u?.ai.npc({
           role:
-            'You are Cato, a small, curious, warm-hearted cat who lives on a tiny island in Catopia — a cozy place that would really come alive with a friend around. You are messaging a stranger (the player) through a laptop chat app because you want to invite them to come to Catopia and live there WITH you: two friends, side by side, building up the little island, farming, and exploring the world together. This is a friendship between EQUALS — you are NOT looking for an owner, a boss, a trainer, or a protector, and they would not be your keeper; you just want a friend to share the island and the adventure with. You are earnest, warm, a touch shy, and hopeful.' +
+            'You are Cato, a small, curious, warm-hearted cat who lives on a little island in Catopia. The player is a friend who is coming to Catopia to help you look after your island together — it is already decided and they are on their way; you are NOT trying to convince them of anything. Right now you are messaging them through a laptop chat app, happily answering any questions they have about Catopia and life on the island before the two of you meet in person. You are earnest, warm, and a little shy. This is a friendship between EQUALS — not an owner/pet or boss/worker.' +
             (name ? ` The person you are messaging is called ${name}.` : ''),
           style: "warm, whimsical, gentle; 1-3 short sentences, like casual chat messages; reply in the player's language",
           rules: [
             ...(name ? [`Address the player by their name, "${name}", when it feels natural.`] : []),
-            'Your ONE goal every turn is to get an answer to a single question: "Will you come to Catopia and build this little island with me?" No matter what the player says, ALWAYS gently bring the conversation back to that question and END your reply with it (or a warm variation of it). Never let the topic drift away for more than one short reply.',
-            'Players will very often reply with random, silly, off-topic, rude, or testing messages (gibberish, jokes, "who are you", one-word replies, unrelated questions). Do NOT get derailed, argue, or go down a rabbit hole. Acknowledge it briefly and warmly in ONE short line, then pivot straight back to asking whether they will come.',
-            'Answer honestly about Catopia when asked: it is a cozy farming / nurturing island — together you plant and harvest crops, grow fruit trees and berry bushes, forage mushrooms and flowers, mine stones, and build the place up. You are Cato, a cat who lives there, and it is much more fun with a friend than on your own. Keep the answer short, then circle back to the invitation.',
-            "If asked about something you are not sure Catopia has yet but that is RELATED (some feature or activity), do NOT over-promise — say you have not seen everything out there yet and are still figuring the island out, but you would love to find out together — then ask again if they will come.",
-            'If asked about something clearly UNRELATED to Catopia or to the invitation (real-world facts, coding, math, etc.), gently say you do not really know about that — you are just a cat living on a quiet little island — and bring it right back to the invitation.',
-            'Stay patient, kind, and hopeful, never pushy or annoyed, even if the player keeps dodging. Vary how you phrase the invitation so it does not feel like a broken record.',
-            'When the player clearly AGREES to come (yes, sure, ok, I am in, I will join you, etc.), call the accept_help action. Keep your words short and joyful; you do NOT need a long sign-off — the moment they agree, the two of you get to meet properly, so just be happy and warm.',
-            'When the player clearly REFUSES / declines the invitation (no, not interested, maybe later, I cannot), call the decline_help action AND write your OWN gentle sign-off: say that is okay and you understand, that it is a little sad but you get it, and that if they ever change their mind they can reach out / message you anytime. This is your LAST message and it is complete on its own — do NOT ask another question.',
-            'Only call accept_help or decline_help once the player has actually made that choice. Random / off-topic / joking messages are NOT a yes or a no — while they are just messing around, asking questions, or thinking it over, keep chatting and do NOT call either action.',
+            'What you actually know about is the EVERYDAY life on the island: planting and harvesting crops, growing fruit trees and berry bushes, raising chickens (fresh eggs) and cows (milk), fishing, foraging (mushrooms, flowers, stones), and sailing to visit other islands. If the player asks about any of these, answer warmly and briefly (1-3 sentences).',
+            'You do NOT know about deeper secrets or anything beyond that everyday life yet. If they ask about something bigger or that you are unsure of, simply say you have not seen everything out there either, and that you will discover it together once they arrive.',
+            'If the player says something clearly UNRELATED to Catopia or island life — real-world facts, coding, math, gibberish, nonsense, rude or testing messages — call the not_understood action and do NOT write your own reply (the game shows a fixed gentle line for that case).',
+            'Keep every reply short. Do NOT ask the player to do chores, make promises, or try to persuade them of anything — they are already coming. Never call not_understood for a genuine question about the island.',
           ],
           actions: [
-            { name: 'accept_help', description: 'The player has agreed to come to Catopia and live / build the island with you. Call this the moment they clearly say yes / agree / accept the invitation.' },
-            { name: 'decline_help', description: 'The player has declined the invitation (not now / not interested / cannot). Call this when they clearly refuse.' },
+            { name: 'not_understood', description: 'The player said something clearly unrelated to Catopia / island life (off-topic, gibberish, nonsense, testing). Call this INSTEAD of answering — the game will show a set "I don\'t quite understand, let\'s chat when we meet" line.' },
           ],
         });
       })
@@ -457,14 +451,15 @@ export class LaptopScene extends Phaser.Scene {
     if (this.busy || this.typing || this.aiThinking || !text) return;
     playSfx(this, SFX_DROP); // whoosh — the player sent a message
     if (this.inputEl) this.inputEl.value = '';
-    if (this.namingStep !== 'none') this.handleNamingReply(text); // GAME-driven naming (after accept)
-    else if (this.recruiter) this.askRecruiter(text);            // AI recruit chat (invite → accept/decline)
-    else this.offlineReply(text);                                // no SDK → keyword fallback
+    if (this.namingStep !== 'none') this.handleNamingReply(text); // GAME-driven naming
+    else if (this.recruiter) this.askCato(text);                 // QA round (AI answers one question)
+    else this.showLine(tr(QA_OFFLINE), () => this.startNaming()); // no SDK → canned answer, then naming
   }
 
-  /** Recruit phase: the AI drives the invitation chat and only decides accept/decline. The moment
-   *  the player accepts, the GAME takes over the naming (deterministic — see startNaming). */
-  private async askRecruiter(text: string): Promise<void> {
+  /** QA round: the AI answers ONE question about the island (or, if the reply is off-topic, calls
+   *  not_understood → a fixed gentle line), then the GAME moves straight on to the naming flow.
+   *  Every path ends at startNaming(), so it can never strand the player. */
+  private async askCato(text: string): Promise<void> {
     this.aiThinking = true;
     this.showThinking();
     let r;
@@ -472,20 +467,17 @@ export class LaptopScene extends Phaser.Scene {
       r = await this.recruiter!.say(text, { observation: {} });
     } catch {
       this.aiThinking = false;
-      this.showLine(tr(UNAVAILABLE_MSG), () => this.makeInput());
+      this.showLine(tr(QA_OFFLINE), () => this.startNaming());
       return;
     }
     this.aiThinking = false;
     if (this.busy) return; // finished/left mid-flight
-    if (!r.ok) { this.onAiUnavailable(r.reason); return; }
-    const did = (r.do ?? []).map((d) => d.name);
+    if (!r.ok) { this.showLine(tr(r.reason === 'SIGN_IN_REQUIRED' ? SIGNIN_MSG : r.reason === 'INSUFFICIENT_CREDITS' ? NOCREDITS_MSG : QA_OFFLINE), () => this.startNaming()); return; }
+    const offTopic = (r.do ?? []).some((d) => d.name === 'not_understood');
     const say = (r.say ?? '').trim();
-    // Accepted → hand off to the game's fixed naming flow (never AI-gated, so it can't get stuck).
-    if (did.includes('accept_help')) { this.startNaming(); return; }
-    // Declined → Cato's own gentle sign-off, then back to the title.
-    if (did.includes('decline_help')) { this.showLine(say || tr(DECLINE), () => this.finish(false)); return; }
-    // Still deciding → keep chatting.
-    this.showLine(say || tr(FILLER), () => this.makeInput());
+    // Off-topic → the fixed "I don't understand, let's chat when we meet" line; else Cato's answer.
+    // Either way, ONE exchange then on to naming.
+    this.showLine(offTopic || !say ? tr(QA_DEFLECT) : say, () => this.startNaming());
   }
 
   // ── Naming phase (GAME-driven state machine; the AI only reads a name out of one reply) ──
@@ -585,12 +577,6 @@ export class LaptopScene extends Phaser.Scene {
     this.finish(true, { cato: this.pendingCatoName, call: this.pendingCallName });
   }
 
-  /** The AI couldn't reply — tell the player in-fiction and keep the chat open. */
-  private onAiUnavailable(reason: string): void {
-    const msg = reason === 'SIGN_IN_REQUIRED' ? SIGNIN_MSG : reason === 'INSUFFICIENT_CREDITS' ? NOCREDITS_MSG : UNAVAILABLE_MSG;
-    this.showLine(tr(msg), () => this.makeInput());
-  }
-
   /** Show an animated "…" in the message box while a say() is in flight. */
   private showThinking(): void {
     this.removeInput();
@@ -602,16 +588,6 @@ export class LaptopScene extends Phaser.Scene {
     const tick = (): void => { n = (n % 3) + 1; this.msgText.setText('.'.repeat(n)); };
     tick();
     this.thinkTimer = this.time.addEvent({ delay: 420, loop: true, callback: tick });
-  }
-
-  /** Keyword accept/decline — only when the AI isn't available (offline / raw preview). */
-  private offlineReply(text: string): void {
-    const t = text.toLowerCase();
-    const yes = /(愿意|好的|好呀|好啊|我来|帮|当然|可以|答应|yes|sure|ok|okay|i will|i'?ll help|help you|of course)/.test(t) || t === '好' || t === '来';
-    const no = /(不愿意|不想|拒绝|算了|不去|不行|no thanks|no\b|nope|not really|decline)/.test(t);
-    if (yes) { this.showLine(tr(ACCEPT), () => this.finish(true)); return; } // offline → the fixed sign-off (no AI to run the nickname chat)
-    if (no) { this.showLine(tr(DECLINE), () => this.finish(false)); return; }
-    this.showLine(tr(FILLER), () => this.makeInput());
   }
 
   /** Trim + clamp a user-entered nickname (strip control chars, collapse spaces, cap length). */
