@@ -1388,6 +1388,7 @@ export class GameScene extends Phaser.Scene {
         if (!pointer.wasTouch) return; // mouse → edge-scroll, not drag
         if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen) return; // don't pan behind a modal
         if (this.movingCoop && this.coopDragCell) return; // dragging a coop → the finger moves the coop, not the camera
+        if (this.movingPen && this.penTouchCell) return;  // dragging the pen → the finger moves the pen, not the camera
         this.cameraFollow = false; // manual pan wins over follow-Cato
         // dx/dy are screen pixels → divide by zoom to get world delta
         cam.scrollX -= p.dx / cam.zoom;
@@ -1991,6 +1992,11 @@ export class GameScene extends Phaser.Scene {
         else { this.coopConfirmDown = false; this.dragCoopTo(pointer.x, pointer.y); }
         return;
       }
+      if (this.movingPen && this.penTouchCell) {
+        if (this.penConfirmAt(pointer.x, pointer.y)) this.penConfirmDown = true;
+        else { this.penConfirmDown = false; this.dragPenTo(pointer.x, pointer.y); }
+        return;
+      }
       // LONG-PRESS anywhere in the world → open the tool wheel (the touch switch gesture; replaces
       // the old tool-HUD fly-out). A short tap still just uses the held tool / picks from an open
       // wheel. Cancelled on move (pan) or release before the timer.
@@ -2018,6 +2024,7 @@ export class GameScene extends Phaser.Scene {
       if (this.menuDragging) { this.menuDragTo(pointer.y); return; } // drag the unified menu scroll rail
       // TOUCH coop-move: while the finger is down (and NOT on the ✓), drag the ghost to follow it.
       if (pointer.wasTouch && pointer.isDown && this.movingCoop && this.coopDragCell && !this.coopConfirmDown) { this.dragCoopTo(pointer.x, pointer.y); return; }
+      if (pointer.wasTouch && pointer.isDown && this.movingPen && this.penTouchCell && !this.penConfirmDown) { this.dragPenTo(pointer.x, pointer.y); return; }
       // Finger travelled → it's a pan/drag, not a long-press: cancel the pending wheel-open.
       if (pointer.wasTouch && this.touchPressTimer && !this.touchLongFired) {
         const dx = pointer.x - this.touchStartX, dy = pointer.y - this.touchStartY;
@@ -2043,6 +2050,11 @@ export class GameScene extends Phaser.Scene {
       if (this.movingCoop && this.coopDragCell) {
         if (this.coopConfirmDown && this.coopConfirmAt(pointer.x, pointer.y)) this.confirmCoopMove();
         this.coopConfirmDown = false;
+        return;
+      }
+      if (this.movingPen && this.penTouchCell) {
+        if (this.penConfirmDown && this.penConfirmAt(pointer.x, pointer.y)) this.confirmPenMove();
+        this.penConfirmDown = false;
         return;
       }
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
@@ -5770,6 +5782,8 @@ export class GameScene extends Phaser.Scene {
   private penWheelAt = { x: 0, y: 0 }; // SCREEN-px summon point (cursor / finger) — the pen is huge, so
                                        // the wheel anchors to where you clicked it, not the whole footprint.
   private movingPen?: { cows: SavedCow[]; milk: Record<string, number>; oldAnchor: { x: number; y: number } };
+  private movingPenTween?: Phaser.Tweens.Tween; // pulses the live pen translucent while it's in move-mode
+  private penConfirmDown = false;               // TOUCH move: the ✓ confirm button is held (act on release)
 
   private openPenWheel(sx: number, sy: number): void {
     if (!this.cowPen || this.coopWheel) return;
@@ -5881,13 +5895,18 @@ export class GameScene extends Phaser.Scene {
     const oldAnchor = { ...this.cowPen.anchor };
     this.movingPen = { cows, milk, oldAnchor }; // NB: pen stays live — canPlaceCowPen treats its own tiles as free
     this.activePlace = 'cowpen'; // placement ghost (no held item — placeMovedCowPen bypasses the item check)
+    this.beginMovingPenVisual(); // translucent pulse → "picked up" (same feedback as the coop)
+    // TOUCH: no hover ghost → DRAG the pen with a finger + tap a floating ✓ to confirm (desktop keeps
+    // the ghost-follows-cursor + left-click-to-place flow). Seed the ghost at the pen's current cell.
+    if (!this.locked) { const a = this.cowPen.anchor; const t = this.islandLayer?.worldToTileXY(a.x, a.y); if (t) { this.penTouchCell = { cx: Math.floor(t.x), cy: Math.floor(t.y) }; } this.penConfirmDown = false; this.publishPenConfirm(); }
   }
 
   /** Cancel an in-progress pen move: the pen never left, so just drop out of placement mode. */
   private cancelPenMove(): void {
+    this.endMovingPenVisual(); // restore the pen's opacity (it stayed put)
     this.movingPen = undefined;
     this.activePlace = undefined;
-    this.penTouchCell = null;
+    this.clearPenConfirm(); // drop the touch ✓ wheel + drag cell
     this.hidePenGhost();
   }
 
@@ -5896,14 +5915,81 @@ export class GameScene extends Phaser.Scene {
   private placeMovedCowPen(cx: number, cy: number): void {
     const m = this.movingPen;
     if (!m) return;
+    this.movingPenTween?.remove(); this.movingPenTween = undefined; // stop the pulse before its target sprites are destroyed
     const { anchor } = this.cowPenFootprint(cx, cy);
     const dx = anchor.x - m.oldAnchor.x, dy = anchor.y - m.oldAnchor.y;
     const cows: SavedCow[] = m.cows.map((c) => ({ x: c.x + dx, y: c.y + dy, color: c.color }));
-    this.placeCowPen(anchor, cows, m.milk);
+    this.placeCowPen(anchor, cows, m.milk); // placeCowPen removes the live pen first, then rebuilds it here
     this.movingPen = undefined;
     this.activePlace = undefined;
+    this.clearPenConfirm(); // drop the touch ✓ wheel + drag cell
     this.hidePenGhost();
     this.scheduleSave();
+  }
+
+  /** Move-mode has NO hover ghost on touch, so pulse the live pen (structures + gate + cows) translucent
+   *  to signal "picked up — drag me to a new spot". Mirrors beginMovingCoopVisual. */
+  private beginMovingPenVisual(): void {
+    if (!this.cowPen) return;
+    const targets = [...this.cowPen.structures, ...this.cowPen.gate.sprites, ...this.cowPen.cows.map((c) => c.sprite)];
+    this.movingPenTween?.remove();
+    this.movingPenTween = this.tweens.add({ targets, alpha: { from: 1, to: 0.4 }, duration: 480, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Stop the move-mode pulse + restore full opacity on the pen still being moved (if it's still around). */
+  private endMovingPenVisual(): void {
+    this.movingPenTween?.remove();
+    this.movingPenTween = undefined;
+    if (this.cowPen) { for (const s of this.cowPen.structures) s.setAlpha(1); for (const g of this.cowPen.gate.sprites) g.setAlpha(1); for (const c of this.cowPen.cows) c.sprite.setAlpha(1); }
+  }
+
+  /** Clear the TOUCH move state (the drag cell + the ✓ confirm wheel). Pen reuses the coopMenu keys. */
+  private clearPenConfirm(): void {
+    this.penTouchCell = null;
+    this.penConfirmDown = false;
+    this.registry.set('coopMenu', { visible: false, buttons: [] });
+    this.registry.set('coopMenuBounds', []);
+  }
+
+  /** TOUCH move: publish the single ✓ confirm button (a one-item wheel) floating above the pen ghost's
+   *  current footprint. Re-published as the ghost is dragged. Mirrors publishCoopConfirm. */
+  private publishPenConfirm(): void {
+    if (!this.movingPen || !this.penTouchCell || !this.islandLayer) return;
+    const fp = this.cowPenFootprint(this.penTouchCell.cx, this.penTouchCell.cy);
+    const cam = this.cameras.main, dpr = hudDpr(this);
+    const wx = (fp.tx0 + fp.cols / 2) * TILE;   // footprint centre X
+    const wy = fp.ty0 * TILE;                    // footprint TOP row
+    const sx = (wx - cam.worldView.x) * cam.zoom;
+    const sy = (wy - cam.worldView.y) * cam.zoom - 24 * dpr; // just above the plot
+    const SIZE = 54 * dpr;
+    const valid = this.canPlaceCowPen(this.penTouchCell.cx, this.penTouchCell.cy);
+    this.registry.set('coopMenu', { visible: true, buttons: [{ kind: 'confirm', iconFrame: 44, enabled: valid, size: SIZE, x: Math.round(sx), y: Math.round(sy) }] });
+    this.registry.set('coopMenuBounds', [{ kind: 'confirm', x: sx - SIZE / 2, y: sy - SIZE / 2, w: SIZE, h: SIZE, enabled: valid }]);
+  }
+
+  /** TOUCH move: is the ✓ confirm button under (device-px x,y)? Mirrors coopConfirmAt. */
+  private penConfirmAt(x: number, y: number): boolean {
+    if (!this.penTouchCell) return false;
+    const b = (this.registry.get('coopMenuBounds') ?? []) as Array<{ kind: string; x: number; y: number; w: number; h: number; enabled: boolean }>;
+    return b.some((r) => r.kind === 'confirm' && r.enabled && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+  }
+
+  /** TOUCH move: the finger moved → drag the pen ghost to that cell + reposition the ✓ button. */
+  private dragPenTo(screenX: number, screenY: number): void {
+    if (!this.movingPen || !this.islandLayer) return;
+    const wp = this.cameras.main.getWorldPoint(screenX, screenY);
+    const t = this.islandLayer.getTileAtWorldXY(wp.x, wp.y);
+    if (!t) return;
+    this.penTouchCell = { cx: t.x, cy: t.y };
+    this.publishPenConfirm();
+  }
+
+  /** TOUCH move: ✓ tapped → place at the ghost cell if it's a valid spot (else ignore — ghost is red). */
+  private confirmPenMove(): void {
+    if (!this.movingPen || !this.penTouchCell) return;
+    if (!this.canPlaceCowPen(this.penTouchCell.cx, this.penTouchCell.cy)) { playSfx(this); return; }
+    const { cx, cy } = this.penTouchCell;
+    this.placeMovedCowPen(cx, cy);
   }
 
   /** God-hand AXE chop: the axe rears UP, holds a beat, then swings DOWN onto the
