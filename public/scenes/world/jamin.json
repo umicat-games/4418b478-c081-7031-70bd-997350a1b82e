@@ -689,6 +689,20 @@
       },
       "assetId": "premium_character_spritesheet",
       "name": "cato"
+    },
+    {
+      "id": "e-mtti9qjg-0745",
+      "kind": "sprite",
+      "transform": {
+        "x": 24.898703796408995,
+        "y": 68,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "signs_sides",
+      "frame": "front-sign-with-text"
     }
   ]
 }

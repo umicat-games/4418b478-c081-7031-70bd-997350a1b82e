@@ -2388,6 +2388,16 @@
         }
       ],
       "fps": 4
+    },
+    {
+      "id": "signs_sides",
+      "textureKey": "signs_sides",
+      "path": "uploaded/signs_sides.png",
+      "loadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/signs_sides.png",
+      "kind": "atlas",
+      "atlasPath": "uploaded/signs_sides.json",
+      "atlasFormat": "json",
+      "atlasLoadUrl": "https://cdn.umicat.ai/uploads/20308f8c-cf63-499c-acbe-7ae59cfe1def/signs_sides.json"
     }
   ]
 }
