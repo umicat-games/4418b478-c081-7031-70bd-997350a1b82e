@@ -5,6 +5,11 @@ import { startTransition, finishTransition } from '../transition';
 import { crossToBgm } from '../bgm';
 import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
 import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
+import { voiceSupported, startVoice, type VoiceSession } from '../voice';
+
+/** Speech-recognition language, following the game locale (device decides if it can recognize it). */
+const voiceLang = (): string => (getLang() === 'zh-CN' ? 'zh-CN' : 'en-US');
+const WAVE_BARS = 22; // pixel waveform bar count
 
 /**
  * COLD-OPEN "message from Cato" scene. After the player clicks Play on a NEW game, a laptop
@@ -93,6 +98,22 @@ export class LaptopScene extends Phaser.Scene {
   private sendBtn!: Phaser.GameObjects.Image;
   private inputEl?: HTMLInputElement;
 
+  // Voice input: a mic button → the browser's OWN speech-to-text (see ../voice), with a live
+  // pixel WAVEFORM while recording. Only built when voiceSupported() (else the player just types).
+  private micG?: Phaser.GameObjects.Graphics;    // drawn pixel mic icon (normal mode, left of send)
+  private micHit?: Phaser.GameObjects.Rectangle; // invisible tap target for the mic
+  private waveG?: Phaser.GameObjects.Graphics;    // the scrolling pixel waveform (recording mode)
+  private cancelG?: Phaser.GameObjects.Graphics;  // drawn ✕ cancel button (recording mode)
+  private cancelHit?: Phaser.GameObjects.Rectangle;
+  private recTimer?: Phaser.GameObjects.Text;     // "0:03" elapsed
+  private recording = false;
+  private voice?: VoiceSession;
+  private waveBuf: number[] = [];                 // recent amplitudes (0..1), scrolls left
+  private waveSampleAt = 0;
+  private recStartMs = 0;
+  private pendingTranscript = '';
+  private recWave = { x0: 0, y: 0, w: 0, h: 0 }; // waveform rect (set in layout)
+
   // "You have a new message" teaser (shown first; click opens the chat)
   private notif?: Phaser.GameObjects.Container;
   private notifG!: Phaser.GameObjects.Graphics;
@@ -145,6 +166,7 @@ export class LaptopScene extends Phaser.Scene {
     this.namingStep = 'none';
     this.pendingCatoName = ''; this.pendingCallName = '';
     this.bgW = 0; this.bgH = 0; // force the (recreated, empty) wallpaper layer to rebuild
+    this.voice?.cancel(); this.voice = undefined; this.recording = false; this.waveBuf = []; this.pendingTranscript = '';
     this.removeInput();
 
     const W = this.scale.width, H = this.scale.height;
@@ -168,7 +190,22 @@ export class LaptopScene extends Phaser.Scene {
 
     this.pillG = this.add.graphics();
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
-    this.sendBtn.on('pointerdown', () => { if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
+    // While recording, the send button = "done" (finish + transcribe); otherwise it sends the text.
+    this.sendBtn.on('pointerdown', () => { if (this.recording) this.voice?.stop(); else if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
+
+    // Voice input UI (only if the browser can do speech-to-text + give us the mic).
+    this.recording = false; this.voice = undefined; this.waveBuf = []; this.pendingTranscript = '';
+    if (voiceSupported()) {
+      this.micG = this.add.graphics();
+      this.micHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
+      this.micHit.on('pointerdown', () => void this.startRecording());
+    }
+    this.waveG = this.add.graphics();
+    this.recTimer = this.add.text(0, 0, '0:00', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0.5);
+    this.cancelG = this.add.graphics();
+    this.cancelHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
+    this.cancelHit.on('pointerdown', () => this.cancelRecording());
+    for (const o of [this.micG, this.micHit, this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
 
     // Hide the chat until the "new message" teaser is opened.
     for (const o of [this.panelG, this.catoIcon, this.nameText, this.msgText, this.pillG, this.sendBtn]) o?.setVisible(false);
@@ -262,6 +299,17 @@ export class LaptopScene extends Phaser.Scene {
   /** Drift the wallpaper diagonally up-right, wrapping by one pattern period (seamless). */
   update(_time: number, delta: number): void {
     if (this.bgLayer) driftIconLayer(this.bgLayer, delta, this.bgPeriod);
+    // Recording: sample the mic loudness ~every 65ms → scroll a new bar in, redraw + tick the timer.
+    if (this.recording) {
+      if (this.voice && _time - this.waveSampleAt >= 65) {
+        this.waveSampleAt = _time;
+        this.waveBuf.push(this.voice.level());
+        if (this.waveBuf.length > WAVE_BARS * 2) this.waveBuf.splice(0, this.waveBuf.length - WAVE_BARS * 2);
+        this.drawWave();
+      }
+      const secs = Math.floor((this.time.now - this.recStartMs) / 1000);
+      this.recTimer?.setText(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
+    }
     // Drop shadow tracks the laptop (position/scale/alpha) with a down-right offset, so it
     // rises + fades in with the entrance and sits behind the laptop at rest.
     if (this.laptop && this.laptopShadow) {
@@ -317,8 +365,25 @@ export class LaptopScene extends Phaser.Scene {
     this.pillG.clear();
     this.pillG.fillStyle(PANEL_FILL, 0.94).fillRoundedRect(px, iy, pw, inputH, fs * 0.6);
     this.pillG.lineStyle(Math.max(1, fs * 0.08), PANEL_LINE, 1).strokeRoundedRect(px, iy, pw, inputH, fs * 0.6);
-    this.sendBtn.setDisplaySize(inputH * 0.5, inputH * 0.5).setPosition(sx0 + sw - pad - btnR, iy + inputH / 2);
-    if (this.inputEl) this.positionInput(px, iy, pw - btnR * 2, inputH);
+    const cy = iy + inputH / 2;
+    this.sendBtn.setDisplaySize(inputH * 0.5, inputH * 0.5).setPosition(sx0 + sw - pad - btnR, cy);
+    // Mic button (if voice is supported): sits just LEFT of send; the DOM input leaves room for both.
+    const micR = inputH * 0.28, micX = this.sendBtn.x - btnR - micR - fs * 0.3;
+    if (this.micG) {
+      this.drawMic(this.micG, micX, cy, inputH * 0.5, SEND_TINT);
+      this.micHit?.setPosition(micX, cy).setSize(inputH * 0.7, inputH * 0.7);
+    }
+    const inputRight = this.micG ? inputH * 1.15 : btnR * 2; // reserve room for mic+send (or just send)
+    if (this.inputEl) this.positionInput(px, iy, pw - inputRight, inputH);
+
+    // Recording overlay (laid out even when hidden): ✕ cancel (left) · timer · pixel waveform · done=send.
+    const cancR = inputH * 0.3, cancX = px + pad + cancR;
+    this.drawCancel(this.cancelG!, cancX, cy, inputH * 0.34, 0xb26a6a);
+    this.cancelHit?.setPosition(cancX, cy).setSize(inputH * 0.8, inputH * 0.8);
+    this.recTimer?.setFontSize(Math.round(fs * 0.95)).setPosition(cancX + cancR + fs * 0.5, cy);
+    const waveX0 = cancX + cancR + fs * 0.5 + fs * 2.6, waveX1 = this.sendBtn.x - btnR - fs * 0.4;
+    this.recWave = { x0: waveX0, y: cy, w: Math.max(fs, waveX1 - waveX0), h: inputH * 0.5 };
+    if (this.recording) this.drawWave();
 
     // "New message" teaser — a centred pill (icon + text), drawn about its own centre.
     if (this.notif) {
@@ -420,17 +485,96 @@ export class LaptopScene extends Phaser.Scene {
   }
 
   // ── Input ───────────────────────────────────────────────────────────────────
-  private makeInput(): void {
+  private makeInput(prefill = ''): void {
     if (this.inputEl || this.busy) return;
     const el = document.createElement('input');
-    el.type = 'text'; el.maxLength = 120;
+    el.type = 'text'; el.maxLength = 120; el.value = prefill;
     el.placeholder = getLang() === 'zh-CN' ? '输入消息…' : 'Message…';
     el.style.cssText = 'position:fixed;z-index:30;border:none;outline:none;background:transparent;color:#26384a;font-family:zpix, sans-serif;';
     (this.game.canvas.parentElement ?? document.body).appendChild(el);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.onSend(el.value.trim()); } });
     this.inputEl = el;
+    this.sendBtn.setVisible(true);
+    this.micG?.setVisible(true); this.micHit?.setVisible(true); // mic available whenever the input is
     this.layout();
     setTimeout(() => el.focus(), 50);
+  }
+
+  // ── Voice input (mic → browser speech-to-text) + pixel waveform ──────────────
+  /** Draw a chunky pixel microphone (body capsule + U-stand + base) centred at (cx,cy). */
+  private drawMic(g: Phaser.GameObjects.Graphics, cx: number, cy: number, s: number, color: number): void {
+    g.clear();
+    g.fillStyle(color, 1);
+    const bw = s * 0.42, bh = s * 0.6, by = cy - s * 0.36;
+    g.fillRoundedRect(cx - bw / 2, by, bw, bh, bw / 2); // mic body
+    g.lineStyle(Math.max(2, s * 0.1), color, 1);
+    const ar = s * 0.34;
+    g.beginPath(); g.arc(cx, cy - s * 0.02, ar, Phaser.Math.DegToRad(20), Phaser.Math.DegToRad(160)); g.strokePath(); // stand U
+    g.beginPath(); g.moveTo(cx, cy + ar - s * 0.02); g.lineTo(cx, cy + s * 0.44); g.strokePath();       // stem
+    g.beginPath(); g.moveTo(cx - s * 0.24, cy + s * 0.44); g.lineTo(cx + s * 0.24, cy + s * 0.44); g.strokePath(); // base
+  }
+
+  /** Draw an ✕ cancel glyph centred at (cx,cy). */
+  private drawCancel(g: Phaser.GameObjects.Graphics, cx: number, cy: number, s: number, color: number): void {
+    g.clear();
+    g.lineStyle(Math.max(2, s * 0.22), color, 1);
+    g.beginPath(); g.moveTo(cx - s, cy - s); g.lineTo(cx + s, cy + s); g.strokePath();
+    g.beginPath(); g.moveTo(cx + s, cy - s); g.lineTo(cx - s, cy + s); g.strokePath();
+  }
+
+  /** Draw the scrolling pixel waveform from `waveBuf` into the `recWave` rect. */
+  private drawWave(): void {
+    const g = this.waveG; if (!g) return;
+    g.clear();
+    const { x0, y, w, h } = this.recWave;
+    const n = WAVE_BARS;
+    const gap = Math.max(1, w * 0.012);
+    const bw = Math.max(1, (w - gap * (n - 1)) / n);
+    g.fillStyle(SEND_TINT, 1);
+    for (let i = 0; i < n; i++) {
+      const amp = this.waveBuf[this.waveBuf.length - n + i] ?? 0; // last n samples (newest at right)
+      const bh = Math.max(bw, amp * h);
+      const bx = x0 + i * (bw + gap);
+      g.fillRoundedRect(bx, y - bh / 2, bw, bh, Math.min(bw / 2, 2));
+    }
+  }
+
+  /** Mic tapped → start a voice session, show the waveform overlay. */
+  private async startRecording(): Promise<void> {
+    if (this.recording || this.busy || this.aiThinking || this.typing || !this.inputEl) return;
+    this.recording = true;
+    this.recStartMs = this.time.now;
+    this.waveBuf = [];
+    this.removeInput();                 // hide the DOM input while recording
+    this.micG?.setVisible(false); this.micHit?.setVisible(false);
+    for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(true);
+    this.recTimer?.setText('0:00');
+    this.sendBtn.setVisible(true);      // now acts as "done"
+    this.layout();
+    const s = await startVoice(voiceLang(), {
+      onFinal: (t) => { this.pendingTranscript = t; },
+      onEnd: () => this.stopRecordingUI(),
+      onError: () => this.stopRecordingUI(),
+    });
+    if (!s) { this.stopRecordingUI(); return; } // unsupported / mic denied → back to typing
+    this.voice = s;
+  }
+
+  /** ✕ tapped → abort with no transcript. */
+  private cancelRecording(): void {
+    if (!this.recording) return;
+    const v = this.voice; this.voice = undefined; this.pendingTranscript = '';
+    if (v) v.cancel(); else this.stopRecordingUI(); // cancel() fires onEnd → stopRecordingUI
+  }
+
+  /** Recording finished (done / cancel / error) → hide the overlay, restore the input (prefilled
+   *  with any transcript so the player can edit before sending). */
+  private stopRecordingUI(): void {
+    this.recording = false;
+    this.voice = undefined;
+    for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
+    const t = this.pendingTranscript; this.pendingTranscript = '';
+    if (!this.busy) this.makeInput(t); // re-show input (mic shows with it), transcript prefilled
   }
 
   private positionInput(inX: number, inY: number, inW: number, inH: number): void {
@@ -445,7 +589,10 @@ export class LaptopScene extends Phaser.Scene {
     el.style.fontSize = `${Math.round(this.fs * scaleY)}px`;
   }
 
-  private removeInput(): void { this.inputEl?.remove(); this.inputEl = undefined; }
+  private removeInput(): void {
+    this.inputEl?.remove(); this.inputEl = undefined;
+    if (!this.recording) { this.micG?.setVisible(false); this.micHit?.setVisible(false); } // mic rides with the input
+  }
 
   private onSend(text: string): void {
     if (this.busy || this.typing || this.aiThinking || !text) return;
