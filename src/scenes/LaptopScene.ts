@@ -526,7 +526,13 @@ export class LaptopScene extends Phaser.Scene {
    *  which made the ✕/mic nearly untappable on touch). */
   private sizeHitRect(r: Phaser.GameObjects.Rectangle | undefined, x: number, y: number, w: number, h: number): void {
     if (!r) return;
-    r.setPosition(x, y).setSize(w, h);
+    // setOrigin(0.5) AFTER setSize is load-bearing: a Rectangle keeps the
+    // displayOrigin from its creation size (10×10 → 5), and setSize doesn't
+    // recompute it — so the input transform anchors the (resized) hit area as if
+    // the object were still 10 wide, shifting the tappable zone ~w/2 off the drawn
+    // glyph. setOrigin recomputes displayOrigin from the new width; then the hit
+    // area (0,0,w,h) lines up with the centered visual.
+    r.setPosition(x, y).setSize(w, h).setOrigin(0.5, 0.5);
     const ha = r.input?.hitArea;
     if (ha instanceof Phaser.Geom.Rectangle) ha.setTo(0, 0, w, h);
   }
