@@ -910,7 +910,8 @@ export class GameScene extends Phaser.Scene {
   // sprites. Both feed pathfinding (isWalkableCell) so Cato routes around the house
   // interior, and the furniture also gets real colliders in wallGroup.
   private wallLayer?: Phaser.Tilemaps.TilemapLayer;
-  private roofLayer?: Phaser.Tilemaps.TilemapLayer; // the roof painted over the house (depth-sorted, ROOF_DEPTH)
+  private roofLayer?: Phaser.Tilemaps.TilemapLayer; // the roof painted over the house (depth-sorted)
+  private roofDepth = ROOF_DEPTH; // per-scene: derived from the roof's own bottom edge (fallback = const)
   private houseRect?: { x: number; y: number; w: number; h: number }; // cached world bbox of the house footprint
   private houseBlocked = new Set<string>(); // "cx,cy" of solid furniture (pathfinding)
   // The editor-placed door sprite (door_animation_sprites). Swings open as Cato
@@ -2647,7 +2648,18 @@ export class GameScene extends Phaser.Scene {
     this.roofLayer =
       layers?.find((l) => l.getData('tilemapTilesetId') === 'wooden_house_roof_tilset') ??
       layers?.find((l) => l.layer?.name === 'roof');
-    this.roofLayer?.setDepth(ROOF_DEPTH);
+    // Depth is derived from the roof's OWN bottom edge — NOT a hardcoded 287, which only matched the
+    // main island's house (bottom y≈288). A house placed elsewhere (e.g. jamin's, near the top of the
+    // map, bottom y≈68) needs its roof pinned to ITS bottom so the foot-Y sort is right: the roof draws
+    // over the door + its walls, Cato SOUTH of the house passes in front, and it doesn't occlude the
+    // whole map. (main computes ≈287, so its look is unchanged.)
+    this.roofDepth = ROOF_DEPTH;
+    if (this.roofLayer) {
+      let bottom = -Infinity;
+      this.roofLayer.forEachTile((t) => { if (t && t.index !== -1) bottom = Math.max(bottom, t.getBottom()); });
+      if (Number.isFinite(bottom)) this.roofDepth = Math.round(bottom) - 1;
+      this.roofLayer.setDepth(this.roofDepth);
+    }
     this.stripFloorColliders();
     this.wireHouseFurniture();
     this.wireHouseDoor();
@@ -6572,7 +6584,7 @@ export class GameScene extends Phaser.Scene {
     // it would cover the eaves) and fix it just UNDER the roof — still well above the wall tilemap
     // so it fills the doorway. Cato (foot Y > 287 when south of the house) still draws in front.
     this.ySortSprites = this.ySortSprites.filter((s) => s !== door);
-    door.setDepth(ROOF_DEPTH - 2);
+    door.setDepth(this.roofDepth - 2); // just under the roof (per-scene roof depth, set in setupFarming)
   }
 
   /** Swing the editor door open as Cato approaches, close when he leaves
@@ -11658,7 +11670,7 @@ export class GameScene extends Phaser.Scene {
     // depth back to its tilemap-ref transform.depth (1) every frame, which would otherwise clobber
     // the ROOF_DEPTH we set at load — so Cato would always draw in front of the roof (north-side
     // occlusion lost). Re-asserting here keeps the foot-Y sort against the static roof correct.
-    if (this.roofLayer && this.roofLayer.depth !== ROOF_DEPTH) this.roofLayer.setDepth(ROOF_DEPTH);
+    if (this.roofLayer && this.roofLayer.depth !== this.roofDepth) this.roofLayer.setDepth(this.roofDepth);
 
     // Camera follow runs in POST_UPDATE (updateCameraFollow) so it sees Cato's
     // FINAL position for the frame — see the note where it's registered in create().
