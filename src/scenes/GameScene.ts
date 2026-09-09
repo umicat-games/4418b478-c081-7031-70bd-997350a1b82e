@@ -6597,6 +6597,10 @@ export class GameScene extends Phaser.Scene {
   private updateHouseDoor(): void {
     const door = this.houseDoor;
     if (!door || !this.child || this.houseDoorAnimating) return;
+    // Cato is INSIDE (asleep at night / sheltering from rain): the door shuts behind him. His hidden
+    // sprite is parked AT the doorway, so the proximity check below would otherwise hold it open the
+    // whole time he's in there. Force it closed and skip proximity until he steps back out.
+    if (this.catoIndoors) { if (this.houseDoorOpen) this.setHouseDoorOpen(false); return; }
     const OPEN_R = TILE * 1.5;
     const CLOSE_R = TILE * 2.2;
     const d = Math.hypot(door.x - this.child.x, door.y - this.child.y);
