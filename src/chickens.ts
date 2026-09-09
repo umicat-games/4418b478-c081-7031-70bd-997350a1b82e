@@ -40,6 +40,8 @@ export class Chicken {
   private facing: 1 | -1 = 1;
   private busyAnim = false; // a one-shot transition anim is playing (don't interrupt)
   private blocked?: (wx: number, wy: number) => boolean; // world-point collision test (trees/coops/stones/walls)
+  private dead = false; // destroyed — a pending safety timer must NOT touch the (gone) sprite
+  private safety?: Phaser.Time.TimerEvent; // playOnce's fallback timer (cancelled on destroy)
 
   constructor(scene: Phaser.Scene, opts: { stage: ChickenStage; color: CoopColor; x: number; y: number; home: { x: number; y: number }; gameNow: number; stageEndsAt?: number; blocked?: (wx: number, wy: number) => boolean }) {
     this.scene = scene;
@@ -61,22 +63,27 @@ export class Chicken {
     return this.stage === 'egg' ? `egg-${name}` : `${this.tex()}-${name}`;
   }
   private playLoop(key: string): void {
+    if (this.dead) return; // sprite already destroyed (e.g. its coop was moved) — nothing to play
     if (this.scene.anims.exists(key)) this.sprite.play(key, true);
   }
   /** Play a one-shot anim; when it finishes, run `then` EXACTLY once. A safety timer force-completes
    *  if ANIMATION_COMPLETE never fires (e.g. an interrupted/short anim), so `busyAnim` can't stick
-   *  and freeze the chicken. */
+   *  and freeze the chicken. Both the listener AND the timer bail if the chicken was destroyed in the
+   *  meantime — the scene-level timer OUTLIVES the sprite (destroy() doesn't cancel it), so without the
+   *  `dead` guard a mid-anim chicken whose coop is moved would fire `then` → playLoop on a gone sprite
+   *  (`sprite.anims` undefined) and throw inside the game step, freezing the whole scene. */
   private playOnce(key: string, then: () => void): void {
     const anim = this.scene.anims.get(key);
     if (!anim) { then(); return; }
     this.busyAnim = true;
     let done = false;
-    const finish = (): void => { if (done) return; done = true; this.busyAnim = false; then(); };
+    const finish = (): void => { if (done || this.dead) return; done = true; this.busyAnim = false; then(); };
     this.sprite.play(key, true);
     this.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE_KEY + key, finish);
     // Fallback: the anim's own duration + a small buffer (frames × ms/frame).
     const ms = (anim.frames.length || 8) * (1000 / (anim.frameRate || 10)) + 400;
-    this.scene.time.delayedCall(ms, finish);
+    this.safety?.remove();
+    this.safety = this.scene.time.delayedCall(ms, finish);
   }
 
   // ── AI states ──────────────────────────────────────────────────────────────
@@ -239,6 +246,9 @@ export class Chicken {
   }
 
   destroy(): void {
+    this.dead = true;
+    this.safety?.remove(); // cancel the pending playOnce fallback so it can't fire on the gone sprite
+    this.safety = undefined;
     this.sprite.destroy();
   }
 }
