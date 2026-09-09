@@ -6579,12 +6579,16 @@ export class GameScene extends Phaser.Scene {
     this.houseDoor = door;
     door.stop();
     door.setTexture('door', DOOR_CLOSED_FRAME); // start closed, on the anim-bearing sheet
-    // The door is part of the fixed facade — the ROOF (its eaves row) must draw OVER the door's
-    // top. Pull it out of the foot-Y y-sort (which pins it at ~288, one above ROOF_DEPTH 287, so
-    // it would cover the eaves) and fix it just UNDER the roof — still well above the wall tilemap
-    // so it fills the doorway. Cato (foot Y > 287 when south of the house) still draws in front.
+    // The door is part of the fixed facade. Pull it out of the foot-Y y-sort (it carries an explicit
+    // transform.depth, so applyYSort would leave it at that low depth = buried under the roof) and pin
+    // it just ABOVE the roof so it SHOWS in the doorway. The roof is painted over the whole house
+    // footprint including the doorway cell, so a door UNDER the roof is fully hidden by that opaque
+    // tile — which is why "play" showed no door while the editor (sprites always over tilemaps) did.
+    // The door is one tile at the bottom row, so sitting above the roof only covers its own doorway
+    // cell, not the surrounding eaves. Cato (foot Y > the door's depth when south of the house) still
+    // draws in front. (Per-scene roof depth is set in setupFarming.)
     this.ySortSprites = this.ySortSprites.filter((s) => s !== door);
-    door.setDepth(this.roofDepth - 2); // just under the roof (per-scene roof depth, set in setupFarming)
+    door.setDepth(this.roofDepth + 2);
   }
 
   /** Swing the editor door open as Cato approaches, close when he leaves
