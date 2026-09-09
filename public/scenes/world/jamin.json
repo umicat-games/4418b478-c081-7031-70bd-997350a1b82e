@@ -38,7 +38,7 @@
       "name": "island",
       "transform": {
         "x": 259.77224897329415,
-        "y": 79.99999999999997,
+        "y": 84,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -50,7 +50,7 @@
       "kind": "sprite",
       "transform": {
         "x": 51,
-        "y": 55,
+        "y": 60,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
