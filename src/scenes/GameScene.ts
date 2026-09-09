@@ -6597,6 +6597,9 @@ export class GameScene extends Phaser.Scene {
   private updateHouseDoor(): void {
     const door = this.houseDoor;
     if (!door || !this.child || this.houseDoorAnimating) return;
+    // Non-home islands (jamin): the house is LOCKED (tap → "door is locked"), so the door never opens
+    // on approach — it stays shut. Keep it closed and skip the proximity swing entirely.
+    if (this.sceneId !== HOME_ISLAND) { if (this.houseDoorOpen) this.setHouseDoorOpen(false); return; }
     // Cato is INSIDE (asleep at night / sheltering from rain): the door shuts behind him. His hidden
     // sprite is parked AT the doorway, so the proximity check below would otherwise hold it open the
     // whole time he's in there. Force it closed and skip proximity until he steps back out.
