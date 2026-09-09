@@ -5781,7 +5781,7 @@ export class GameScene extends Phaser.Scene {
   private penWheelClose: { at: number; hitKind: string | null } | null = null;
   private penWheelAt = { x: 0, y: 0 }; // SCREEN-px summon point (cursor / finger) — the pen is huge, so
                                        // the wheel anchors to where you clicked it, not the whole footprint.
-  private movingPen?: { cows: SavedCow[]; milk: Record<string, number>; oldAnchor: { x: number; y: number } };
+  private movingPen?: { cows: SavedCow[]; milk: Record<string, number> };
   private movingPenTween?: Phaser.Tweens.Tween; // pulses the live pen translucent while it's in move-mode
   private penConfirmDown = false;               // TOUCH move: the ✓ confirm button is held (act on release)
 
@@ -5892,8 +5892,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.cowPen) return;
     const cows = this.cowPen.cows.map((c) => c.serialize());
     const milk = { ...this.cowPen.milkReady };
-    const oldAnchor = { ...this.cowPen.anchor };
-    this.movingPen = { cows, milk, oldAnchor }; // NB: pen stays live — canPlaceCowPen treats its own tiles as free
+    this.movingPen = { cows, milk }; // NB: pen stays live — canPlaceCowPen treats its own tiles as free
     this.activePlace = 'cowpen'; // placement ghost (no held item — placeMovedCowPen bypasses the item check)
     this.beginMovingPenVisual(); // translucent pulse → "picked up" (same feedback as the coop)
     // TOUCH: no hover ghost → DRAG the pen with a finger + tap a floating ✓ to confirm (desktop keeps
@@ -5910,16 +5909,18 @@ export class GameScene extends Phaser.Scene {
     this.hidePenGhost();
   }
 
-  /** Re-place a pen being moved at (cx,cy): the stashed cows shift rigidly with the pen (keeping
-   *  their colours + relative layout) and the milk carries over. */
+  /** Re-place a pen being moved at (cx,cy): the cows STAY where they were standing and amble over to
+   *  the relocated pen on their own (A* paths them back in through the new gate) — the same feel as
+   *  chickens after a coop move, rather than teleporting rigidly with the pen. The milk carries over. */
   private placeMovedCowPen(cx: number, cy: number): void {
     const m = this.movingPen;
     if (!m) return;
     this.movingPenTween?.remove(); this.movingPenTween = undefined; // stop the pulse before its target sprites are destroyed
     const { anchor } = this.cowPenFootprint(cx, cy);
-    const dx = anchor.x - m.oldAnchor.x, dy = anchor.y - m.oldAnchor.y;
-    const cows: SavedCow[] = m.cows.map((c) => ({ x: c.x + dx, y: c.y + dy, color: c.color }));
-    this.placeCowPen(anchor, cows, m.milk); // placeCowPen removes the live pen first, then rebuilds it here
+    // Keep the cows' ABSOLUTE positions (no rigid shift). placeCowPen rebuilds the pen + a nav bound to
+    // `this.cowPen.geom` (the new location), so each cow's next graze target sits in the NEW pasture and
+    // it walks there — cows left far from the pen just take a bit to wander home, like the chickens.
+    this.placeCowPen(anchor, m.cows, m.milk); // placeCowPen removes the live pen first, then rebuilds it here
     this.movingPen = undefined;
     this.activePlace = undefined;
     this.clearPenConfirm(); // drop the touch ✓ wheel + drag cell
