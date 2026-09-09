@@ -5,7 +5,7 @@ import { startTransition, finishTransition } from '../transition';
 import { crossToBgm } from '../bgm';
 import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
 import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
-import { voiceSupported, startVoice, type VoiceSession } from '../voice';
+import { voiceSupported, startVoice, setVoiceHost, type VoiceSession } from '../voice';
 
 /** Speech-recognition language, following the game locale (device decides if it can recognize it). */
 const voiceLang = (): string => (getLang() === 'zh-CN' ? 'zh-CN' : 'en-US');
@@ -102,6 +102,7 @@ export class LaptopScene extends Phaser.Scene {
   // pixel WAVEFORM while recording. Only built when voiceSupported() (else the player just types).
   private micG?: Phaser.GameObjects.Graphics;    // drawn pixel mic icon (normal mode, left of send)
   private micHit?: Phaser.GameObjects.Rectangle; // invisible tap target for the mic
+  private voiceReady = false;                    // is voice input available? (may flip true after Umicat.init on native)
   private waveG?: Phaser.GameObjects.Graphics;    // the scrolling pixel waveform (recording mode)
   private cancelG?: Phaser.GameObjects.Graphics;  // drawn ✕ cancel button (recording mode)
   private cancelHit?: Phaser.GameObjects.Rectangle;
@@ -193,13 +194,15 @@ export class LaptopScene extends Phaser.Scene {
     // While recording, the send button = "done" (finish + transcribe); otherwise it sends the text.
     this.sendBtn.on('pointerdown', () => { if (this.recording) this.voice?.stop(); else if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
 
-    // Voice input UI (only if the browser can do speech-to-text + give us the mic).
+    // Voice input UI. The mic button is built UNCONDITIONALLY (kept hidden) and
+    // gated on `voiceReady` — because native-app voice support is only known once
+    // Umicat.init resolves (WKWebView has no web SpeechRecognition; the SDK routes
+    // to the platform recognizer via the host bridge). `initRecruiter` re-checks.
     this.recording = false; this.voice = undefined; this.waveBuf = []; this.pendingTranscript = '';
-    if (voiceSupported()) {
-      this.micG = this.add.graphics();
-      this.micHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
-      this.micHit.on('pointerdown', () => void this.startRecording());
-    }
+    this.voiceReady = voiceSupported(); // best-effort now (browser); refreshed after init
+    this.micG = this.add.graphics();
+    this.micHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
+    this.micHit.on('pointerdown', () => void this.startRecording());
     this.waveG = this.add.graphics();
     this.recTimer = this.add.text(0, 0, '0:00', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0.5);
     this.cancelG = this.add.graphics();
@@ -257,6 +260,12 @@ export class LaptopScene extends Phaser.Scene {
     void Umicat.init({})
       .then((u) => {
         this.uref = u; // kept for the one-shot ai.complete name reads in the naming phase
+        // Hand the voice helpers the resolved handle, then re-check support — on
+        // the native app this is where voice flips available (host 'voice' capability).
+        setVoiceHost(u);
+        this.voiceReady = voiceSupported();
+        this.layout();
+        if (this.voiceReady && this.inputEl && !this.recording) { this.micG?.setVisible(true); this.micHit?.setVisible(true); }
         initLang(u?.locale); // match the platform-provided player language
         const name = u?.user?.name?.trim();
         this.playerName = name ?? ''; // greet the player by name in the opening line
@@ -369,11 +378,11 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn.setDisplaySize(inputH * 0.5, inputH * 0.5).setPosition(sx0 + sw - pad - btnR, cy);
     // Mic button (if voice is supported): sits just LEFT of send; the DOM input leaves room for both.
     const micR = inputH * 0.28, micX = this.sendBtn.x - btnR - micR - fs * 0.3;
-    if (this.micG) {
+    if (this.voiceReady && this.micG) {
       this.drawMic(this.micG, micX, cy, inputH * 0.5, SEND_TINT);
       this.micHit?.setPosition(micX, cy).setSize(inputH * 0.7, inputH * 0.7);
     }
-    const inputRight = this.micG ? inputH * 1.15 : btnR * 2; // reserve room for mic+send (or just send)
+    const inputRight = this.voiceReady ? inputH * 1.15 : btnR * 2; // reserve room for mic+send (or just send)
     if (this.inputEl) this.positionInput(px, iy, pw - inputRight, inputH);
 
     // Recording overlay (laid out even when hidden): ✕ cancel (left) · timer · pixel waveform · done=send.
@@ -495,7 +504,7 @@ export class LaptopScene extends Phaser.Scene {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.onSend(el.value.trim()); } });
     this.inputEl = el;
     this.sendBtn.setVisible(true);
-    this.micG?.setVisible(true); this.micHit?.setVisible(true); // mic available whenever the input is
+    if (this.voiceReady) { this.micG?.setVisible(true); this.micHit?.setVisible(true); } // mic available whenever the input is
     this.layout();
     // Auto-focus for typing; but NOT after a voice transcript — on iOS the input is focused +
     // keyboard up, and the FIRST tap on the Send button just dismisses the keyboard instead of
