@@ -694,8 +694,8 @@
       "id": "e-mtti9qjg-0745",
       "kind": "sprite",
       "transform": {
-        "x": 24.898703796408995,
-        "y": 68,
+        "x": 96,
+        "y": 69.292761893484,
         "rotation": 0,
         "scaleX": 1,
         "scaleY": 1,
@@ -703,6 +703,20 @@
       },
       "assetId": "signs_sides",
       "frame": "front-sign-with-text"
+    },
+    {
+      "id": "e-mttib23m-2xhk",
+      "kind": "sprite",
+      "transform": {
+        "x": 23.860616286579216,
+        "y": 60,
+        "rotation": 0,
+        "scaleX": 1,
+        "scaleY": 1,
+        "depth": 10
+      },
+      "assetId": "mailbox_animation_frames",
+      "animation": "mailbox-idle"
     }
   ]
 }
