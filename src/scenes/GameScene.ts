@@ -74,7 +74,6 @@ const SLEEP_START_HOUR = 23;  // 11pm — Cato heads home to bed
 const SLEEP_END_HOUR = 7;     // 7am — Cato wakes up
 const SLEEP_ARRIVE_MS = 6000; // fallback: go inside even if he can't reach the door in time
 const SLEEPY_MOOD_FRAME = 39; // the sleeping-with-Z emoji (top-right portrait) shown while Cato is asleep
-const QUESTION_MARK_EMOJI = 86; // emoji_spritesheet `question-mark` region (row 8, col 6 — right of the `!` at 85); Jamin's sign avatar
 const MAIL_STAYS_FPS = 2;     // the door mailbox "mail waiting" idle loop — a gentle blink (the asset's authored 8fps read as flickery)
 const MAIL_REMINDER_DELAY_MS = 1600; // let the player settle into the world for a beat before the reminder cinematic takes over
 const CHAT_BOX_BOTTOM_INSET = 60; // chat-message HUD anchor offsetY (logical px the box bottom rests above the screen bottom)
@@ -1159,7 +1158,6 @@ export class GameScene extends Phaser.Scene {
   private dialogOpen = false;
   private signDialog = false; // the open dialog is a read-only NPC note (sign), not the Cato chat
   private signObj?: Phaser.GameObjects.Sprite; // the dockside sign entity (jamin) — tap → Jamin's note
-  private portraitRestore?: { texture: string; frame: string | number; dw: number; dh: number }; // restore cato-portrait after a sign note
   private cato?: Npc;
   private aiBusy = false;
   // Cato's proactive small-talk chip (top-right, left of the portrait) — see ChatterScene.
@@ -2187,7 +2185,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.activePlace && this.chestContains(wp.x, wp.y)) { this.openChestViaDoor(); return; }
     if (!this.activePlace && this.craftStationContains(wp.x, wp.y)) { this.openCraft(); return; }
     if (!this.activePlace && this.boatContains(wp.x, wp.y)) { this.openTravelMenu(); return; } // dock boat → island picker
-    if (!this.activePlace && this.signContains(wp.x, wp.y)) { this.openSignDialog(t('sign_jamin'), QUESTION_MARK_EMOJI, 'Jamin'); return; } // Jamin's dockside note
+    if (!this.activePlace && this.signContains(wp.x, wp.y)) { this.openSignDialog(t('sign_jamin'), 'Jamin'); return; } // Jamin's dockside note
     // Tap the house → enter its interior (a separate scene). Checked after the door
     // objects (mailbox/chest/pad/craft) so those win over the house footprint they sit on.
     if (!this.activePlace && this.houseDoorContains(wp.x, wp.y)) { this.enterHouse(); return; }
@@ -10212,9 +10210,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Reveal the chat HUD widgets (slide UP from the bottom) + a typing input.
    *  `sign` = a READ-ONLY NPC note (e.g. Jamin's sign): the SAME box UI but no input field, no Cato
-   *  facing/emote, a custom avatar (an `emoji` frame) + name, and paginated body text. Tap advances
+   *  facing/emote, NO avatar (the portrait is hidden), just a name + paginated body text. Tap advances
    *  the pages then closes (no cinematic focus). */
-  private openDialog(seed?: string, cutscene = false, sign?: { text: string; avatarFrame: number; name: string }): void {
+  private openDialog(seed?: string, cutscene = false, sign?: { text: string; name: string }): void {
     if (this.dialogOpen || (!this.child && !sign)) return;
     this.dialogOpen = true;
     this.cutscene = cutscene; // scripted cutscene: keeps the hotbar VISIBLE (for spotlights), no input field
@@ -10235,7 +10233,9 @@ export class GameScene extends Phaser.Scene {
     // Cutscene: hide only the text-INPUT widgets (`chat-input` panel + `chat-input-field`
     // DOM input) — Cato is speaking, the player just taps to continue. KEEP `chat-text`
     // (the text-area that shows Cato's spoken line) + `chat-message` + portrait + name.
-    const roles = (cutscene || sign) ? GameScene.DIALOG_ROLES.filter((r) => !r.startsWith('chat-input')) : GameScene.DIALOG_ROLES;
+    let roles = GameScene.DIALOG_ROLES;
+    if (cutscene || sign) roles = roles.filter((r) => !r.startsWith('chat-input')); // no input widgets
+    if (sign) { roles = roles.filter((r) => r !== 'cato-portrait'); (getHudObject(this, 'cato-portrait') as unknown as { setVisible?: (v: boolean) => void } | undefined)?.setVisible?.(false); } // no avatar on a note
     // Cutscene keeps the hotbar visible (for spotlights), so LIFT the box group up to
     // clear it (both are bottom-anchored → they'd overlap). Lift = the hotbar's occupied
     // height + a gap (from hotbarBounds.bar), fallback ~96.
@@ -10268,41 +10268,17 @@ export class GameScene extends Phaser.Scene {
     // (SDK 1.0.28) the moment it goes visible above — no manual input to create.
     this.catoEmote = 'blink-eye'; // reset the resting expression
     if (sign) {
-      this.setPortraitEmoji(sign.avatarFrame); // swap the Cato avatar → the note's emoji face
-      this.showDialogText(sign.text);          // paginated typewriter reveal of the note body
+      this.showDialogText(sign.text); // paginated typewriter reveal of the note body (no avatar/emote)
     } else {
       this.setCatoEmote('blink-eye'); // idle until Cato replies
     }
     this.makeDialogTextClickThrough();
   }
 
-  /** Read-only NPC note (Jamin's dockside sign): the Cato dialogue box, no input, no focus, a custom
-   *  `emoji` avatar + name. Tap advances/closes it (via advanceDialog → closeDialog). */
-  private openSignDialog(text: string, avatarFrame: number, name: string): void {
-    this.openDialog(undefined, false, { text, avatarFrame, name });
-  }
-
-  /** Swap the dialogue box's `cato-portrait` sprite to an `emoji` frame (for a sign note), remembering
-   *  the original texture/frame/size so closeDialog can restore it. Stops any portrait anim so the
-   *  blink/talk loop can't advance frames on the emoji sheet. */
-  private setPortraitEmoji(frame: number): void {
-    const p = getHudObject(this, 'cato-portrait') as unknown as Phaser.GameObjects.Sprite | undefined;
-    if (!p || !this.textures.exists('emoji')) return;
-    this.portraitRestore = { texture: p.texture.key, frame: p.frame.name, dw: p.displayWidth, dh: p.displayHeight };
-    p.anims?.stop();
-    p.setTexture('emoji', frame);
-    p.setDisplaySize(this.portraitRestore.dw, this.portraitRestore.dh); // keep the portrait footprint
-  }
-
-  /** Restore the Cato portrait + name after a sign note closes. */
-  private restorePortraitFromEmoji(): void {
-    const r = this.portraitRestore;
-    this.portraitRestore = undefined;
-    if (r) {
-      const p = getHudObject(this, 'cato-portrait') as unknown as Phaser.GameObjects.Sprite | undefined;
-      if (p) { p.setTexture(r.texture, r.frame); p.setDisplaySize(r.dw, r.dh); }
-    }
-    this.publishCatoName(); // put Cato's name back in the box's name label
+  /** Read-only NPC note (Jamin's dockside sign): the Cato dialogue box, no input, no focus, no avatar,
+   *  just a name + body. Tap advances/closes it (via advanceDialog → closeDialog). */
+  private openSignDialog(text: string, name: string): void {
+    this.openDialog(undefined, false, { text, name });
   }
 
   /** The SDK renders `text-area` widgets (Cato's dialogue text + name) as DOM
@@ -10324,7 +10300,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
     this.cutscene = false;
-    if (this.signDialog) { this.restorePortraitFromEmoji(); this.signDialog = false; } // sign note → put Cato's face + name back
+    if (this.signDialog) { this.publishCatoName(); this.signDialog = false; } // sign note → put Cato's name back in the box
     this.catoTalkTimer?.remove(); // stop the talk→blink settle timer
     this.stopTyping(); // stop any in-progress typewriter
     this.setMoreIcon(false); // hide the pagination "more" icon
