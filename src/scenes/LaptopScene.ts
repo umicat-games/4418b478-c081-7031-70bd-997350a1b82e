@@ -531,7 +531,9 @@ export class LaptopScene extends Phaser.Scene {
     (this.game.canvas.parentElement ?? document.body).appendChild(el);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.onSend(el.value.trim()); } });
     this.inputEl = el;
-    this.sendBtn.setVisible(true);
+    // Always the send arrow when the input is up — recording swaps it to the ✕
+    // (STOP) frame, and the transcribing path doesn't otherwise reset it.
+    this.sendBtn.setFrame(SEND_ICON).setTint(SEND_TINT).setVisible(true);
     if (this.voiceReady) { this.micG?.setVisible(true); this.micHit?.setVisible(true); } // mic available whenever the input is
     this.layout();
     // Auto-focus for typing; but NOT after a voice transcript — on iOS the input is focused +
