@@ -591,7 +591,9 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn.setVisible(true).setFrame(STOP_ICON).setTint(STOP_TINT);
     this.layout();
     const s = await startVoice(voiceLang(), {
-      onFinal: (t) => { this.pendingTranscript = t; },
+      // The overlay may already be closed (user tapped ✕) — drop the text straight
+      // into the input box if it's there; else stash it for stopRecordingUI.
+      onFinal: (t) => { this.pendingTranscript = t; if (this.inputEl) this.inputEl.value = t; },
       onEnd: () => this.stopRecordingUI(),
       onError: () => this.stopRecordingUI(),
     });
@@ -599,12 +601,13 @@ export class LaptopScene extends Phaser.Scene {
     this.voice = s;
   }
 
-  /** ✕ tapped → stop recording + transcribe (send button returns with the text).
-   *  voice.stop() finalizes → onFinal fills pendingTranscript → onEnd → stopRecordingUI. */
+  /** ✕ tapped → stop recording + transcribe. Close the overlay IMMEDIATELY (instant
+   *  feedback) rather than waiting on the async native stop→onEnd round-trip; the
+   *  transcript (if any) drops into the input box when onFinal arrives. */
   private stopRecording(): void {
     if (!this.recording) return;
-    if (this.voice) this.voice.stop();
-    else this.stopRecordingUI(); // start hadn't resolved a session yet → just close the overlay
+    this.voice?.stop();       // request the transcript — onFinal fills the input when it lands
+    this.stopRecordingUI();   // don't wait on the native stop chain to close the UI
   }
 
   /** Recording finished (done / cancel / error) → hide the overlay, restore the input (prefilled
@@ -615,7 +618,7 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn.setFrame(SEND_ICON).setTint(SEND_TINT); // ✕ → send arrow again
     for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
     const t = this.pendingTranscript; this.pendingTranscript = '';
-    if (!this.busy) this.makeInput(t, !t); // re-show input; prefilled-from-voice → don't auto-focus (Send is one tap)
+    if (!this.busy) this.makeInput(t, false); // re-show input; never auto-focus from voice (Send stays one tap; transcript may still be arriving)
   }
 
   private positionInput(inX: number, inY: number, inW: number, inH: number): void {
