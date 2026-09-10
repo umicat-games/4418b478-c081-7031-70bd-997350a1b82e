@@ -46,6 +46,7 @@ const STOP_TINT = 0xc0706a; // ✕ stop colour (muted red)
 const MSG_ICON = 245; // all_icons `white-message-with-border` (80,240) → frame 15*16+5
 const NOTIF_TINT = 0x4a90c8; // "new message" bell/icon colour
 const NEW_MSG = { en: 'You have a new message', 'zh-CN': '你有一条新消息' };
+const TRANSCRIBING = { en: 'Transcribing', 'zh-CN': '识别中' }; // shown (with animated dots) while STT finalizes
 const TYPE_MS = 34;
 
 /** Cato's fixed opening line. Greets the player BY NAME when the host provides one
@@ -105,6 +106,7 @@ export class LaptopScene extends Phaser.Scene {
   private micG?: Phaser.GameObjects.Graphics;    // drawn pixel mic icon (normal mode, left of send)
   private micHit?: Phaser.GameObjects.Rectangle; // invisible tap target for the mic
   private voiceReady = false;                    // is voice input available? (may flip true after Umicat.init on native)
+  private transcribing = false;                  // stopped recording, waiting for the STT result (shows a loading label)
   private waveG?: Phaser.GameObjects.Graphics;    // the scrolling pixel waveform (recording mode)
   private cancelG?: Phaser.GameObjects.Graphics;  // drawn ✕ cancel button (recording mode)
   private cancelHit?: Phaser.GameObjects.Rectangle;
@@ -335,6 +337,11 @@ export class LaptopScene extends Phaser.Scene {
       }
       const secs = Math.floor((this.time.now - this.recStartMs) / 1000);
       this.recTimer?.setText(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
+    }
+    // "Transcribing…" hint (animated dots) while STT finalizes after a ✕ stop.
+    if (this.transcribing) {
+      const dots = 1 + (Math.floor(this.time.now / 350) % 3);
+      this.recTimer?.setText(tr(TRANSCRIBING) + '.'.repeat(dots));
     }
     // Drop shadow tracks the laptop (position/scale/alpha) with a down-right offset, so it
     // rises + fades in with the entrance and sits behind the laptop at rest.
@@ -606,23 +613,39 @@ export class LaptopScene extends Phaser.Scene {
     this.sendBtn.setVisible(true).setFrame(STOP_ICON).setTint(STOP_TINT);
     this.layout();
     const s = await startVoice(voiceLang(), {
-      // The overlay may already be closed (user tapped ✕) — drop the text straight
-      // into the input box if it's there; else stash it for stopRecordingUI.
       onFinal: (t) => { this.pendingTranscript = t; if (this.inputEl) this.inputEl.value = t; },
-      onEnd: () => this.stopRecordingUI(),
-      onError: () => this.stopRecordingUI(),
+      // onEnd fires when recognition is fully done (after any final, or on
+      // error/no-speech). If we're waiting on it post-✕, close the "transcribing…"
+      // hint; otherwise (auto-finished while recording) close the recording overlay.
+      onEnd: () => { if (this.transcribing) this.finishTranscribing(); else this.stopRecordingUI(); },
     });
     if (!s) { this.stopRecordingUI(); return; } // unsupported / mic denied → back to typing
     this.voice = s;
   }
 
-  /** ✕ tapped → stop recording + transcribe. Close the overlay IMMEDIATELY (instant
-   *  feedback) rather than waiting on the async native stop→onEnd round-trip; the
-   *  transcript (if any) drops into the input box when onFinal arrives. */
+  /** ✕ tapped → stop recording, then show a "transcribing…" loading hint until the
+   *  STT result lands (recognition finalization can take a couple seconds, notably on
+   *  Android). Without it the input just sat empty and looked broken. */
   private stopRecording(): void {
     if (!this.recording) return;
-    this.voice?.stop();       // request the transcript — onFinal fills the input when it lands
-    this.stopRecordingUI();   // don't wait on the native stop chain to close the UI
+    this.recording = false;
+    const v = this.voice; this.voice = undefined;
+    if (!v) { this.stopRecordingUI(); return; } // no live session → just restore the input
+    this.transcribing = true;
+    this.sendBtn.setVisible(false);
+    this.waveG?.setVisible(false);
+    this.recTimer?.setVisible(true); // reused as the "transcribing…" label
+    this.layout();
+    v.stop(); // → onFinal (pendingTranscript) → onEnd (finishTranscribing)
+  }
+
+  /** STT finished after a ✕ stop → drop the loading hint, show the input with the text. */
+  private finishTranscribing(): void {
+    if (!this.transcribing) return;
+    this.transcribing = false;
+    this.recTimer?.setVisible(false);
+    const t = this.pendingTranscript; this.pendingTranscript = '';
+    if (!this.busy) this.makeInput(t, false);
   }
 
   /** Recording finished (done / cancel / error) → hide the overlay, restore the input (prefilled
