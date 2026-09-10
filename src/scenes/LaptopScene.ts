@@ -105,7 +105,6 @@ export class LaptopScene extends Phaser.Scene {
   private micG?: Phaser.GameObjects.Graphics;    // drawn pixel mic icon (normal mode, left of send)
   private micHit?: Phaser.GameObjects.Rectangle; // invisible tap target for the mic
   private voiceReady = false;                    // is voice input available? (may flip true after Umicat.init on native)
-  private recStopTap?: (e: Event) => void;       // raw-DOM ✕ tap handler (Phaser canvas input is stuck while recording on iOS)
   private waveG?: Phaser.GameObjects.Graphics;    // the scrolling pixel waveform (recording mode)
   private cancelG?: Phaser.GameObjects.Graphics;  // drawn ✕ cancel button (recording mode)
   private cancelHit?: Phaser.GameObjects.Rectangle;
@@ -233,31 +232,17 @@ export class LaptopScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
       this.thinkTimer?.remove();
       this.removeInput();
-      if (this.recStopTap) { window.removeEventListener('pointerdown', this.recStopTap, true); window.removeEventListener('touchstart', this.recStopTap, true); }
     });
 
     // While the teaser is up, a click opens it; afterwards a click advances the text.
     this.input.on('pointerdown', () => (this.notifying ? this.dismissNotification() : this.advance()));
     this.input.keyboard?.on('keydown-SPACE', () => (this.notifying ? this.dismissNotification() : this.advance()));
 
-    // While recording on iOS, Phaser's own canvas input is stuck (confirmed: a raw
-    // DOM touch still reaches JS, but the in-canvas ✕ never fires — the mic-tap that
-    // starts recording loses its pointer-release when the DOM input is torn down
-    // mid-gesture). So the ✕ tap is handled by a RAW DOM listener that bypasses
-    // Phaser: capture-phase, region-checked against the ✕ (send-button slot), mapped
-    // to canvas coords exactly like positionInput. Only active while recording.
-    this.recStopTap = (e: Event) => {
-      if (!this.recording) return;
-      const t = ((e as TouchEvent).touches?.[0] ?? (e as unknown as PointerEvent)) as { clientX: number; clientY: number };
-      if (t.clientX === undefined) return;
-      const rect = this.game.canvas.getBoundingClientRect();
-      const sx = rect.width / this.scale.width, sy = rect.height / this.scale.height;
-      const bx = rect.left + this.sendBtn.x * sx, by = rect.top + this.sendBtn.y * sy;
-      const r = this.sendBtn.displayHeight * 1.4 * sy; // generous ✕ hit radius (screen px)
-      if (Math.hypot(t.clientX - bx, t.clientY - by) <= r) this.stopRecording();
-    };
-    window.addEventListener('pointerdown', this.recStopTap, true);
-    window.addEventListener('touchstart', this.recStopTap, true);
+    // Phaser defaults to a SINGLE touch pointer. If it gets wedged busy while the
+    // native voice recording spins up (iOS), there's no free pointer and every later
+    // tap is dropped — which is why the in-canvas ✕ went dead mid-recording. Spare
+    // touch pointers mean a fresh tap always gets a free pointer + normal hit-testing.
+    this.input.addPointer(2);
 
     this.laptop.setVisible(false); // the wipe reveals the empty desk; the laptop rises in next
     this.initRecruiter(); // spin up the AI while the teaser + opening line play out
