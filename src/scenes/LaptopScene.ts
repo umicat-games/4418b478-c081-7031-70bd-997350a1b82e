@@ -196,7 +196,11 @@ export class LaptopScene extends Phaser.Scene {
     // The send button IS the recording control: while recording it shows a ✕ and
     // stops+transcribes; otherwise it sends the text. Reusing this one Image (a
     // proven-tappable object) avoids the invisible-hit-rect tap misses on touch.
-    this.sendBtn.on('pointerdown', () => {
+    // pointer-UP, not down: running the recording start/stop (native mic grab + DOM
+    // teardown) while the finger is still down loses the tap's pointer-release, wedging
+    // Phaser's touch pointer — after a few records the pool is exhausted and taps die.
+    // Acting on release keeps every pointer clean.
+    this.sendBtn.on('pointerup', () => {
       if (this.recording) this.stopRecording();
       else if (this.inputEl) this.onSend(this.inputEl.value.trim());
     });
@@ -209,7 +213,7 @@ export class LaptopScene extends Phaser.Scene {
     this.voiceReady = voiceSupported(); // best-effort now (browser); refreshed after init
     this.micG = this.add.graphics();
     this.micHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
-    this.micHit.on('pointerdown', () => void this.startRecording());
+    this.micHit.on('pointerup', () => void this.startRecording()); // pointer-UP: see sendBtn note (avoids wedging the touch pointer)
     this.waveG = this.add.graphics();
     this.recTimer = this.add.text(0, 0, '0:00', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0.5);
     this.cancelG = this.add.graphics();
