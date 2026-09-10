@@ -105,6 +105,7 @@ export class LaptopScene extends Phaser.Scene {
   private micG?: Phaser.GameObjects.Graphics;    // drawn pixel mic icon (normal mode, left of send)
   private micHit?: Phaser.GameObjects.Rectangle; // invisible tap target for the mic
   private voiceReady = false;                    // is voice input available? (may flip true after Umicat.init on native)
+  private recDiag?: (e: Event) => void;          // TEMP: raw-DOM touch probe for the "can't tap ✕ while recording" bug
   private waveG?: Phaser.GameObjects.Graphics;    // the scrolling pixel waveform (recording mode)
   private cancelG?: Phaser.GameObjects.Graphics;  // drawn ✕ cancel button (recording mode)
   private cancelHit?: Phaser.GameObjects.Rectangle;
@@ -232,11 +233,22 @@ export class LaptopScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
       this.thinkTimer?.remove();
       this.removeInput();
+      if (this.recDiag) { window.removeEventListener('pointerdown', this.recDiag, true); window.removeEventListener('touchstart', this.recDiag, true); }
     });
 
     // While the teaser is up, a click opens it; afterwards a click advances the text.
     this.input.on('pointerdown', () => (this.notifying ? this.dismissNotification() : this.advance()));
     this.input.keyboard?.on('keydown-SPACE', () => (this.notifying ? this.dismissNotification() : this.advance()));
+
+    // TEMP DIAGNOSTIC: a RAW DOM touch listener (bypasses Phaser's input entirely).
+    // While recording, a tap ANYWHERE stops the recording. If this works but the
+    // in-canvas ✕ doesn't, the WebView is delivering touches and Phaser's own input
+    // is what's stuck while recording (→ fix in the game). If even THIS does nothing,
+    // the WebView isn't getting touches at all (→ native side). Capture phase so it
+    // fires before anything can swallow it.
+    this.recDiag = () => { if (this.recording) this.stopRecording(); };
+    window.addEventListener('pointerdown', this.recDiag, true);
+    window.addEventListener('touchstart', this.recDiag, true);
 
     this.laptop.setVisible(false); // the wipe reveals the empty desk; the laptop rises in next
     this.initRecruiter(); // spin up the AI while the teaser + opening line play out
