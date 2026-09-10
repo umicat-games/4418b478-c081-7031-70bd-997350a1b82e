@@ -41,6 +41,8 @@ const CATO_ICON = 20; // emoji_spritesheet `cato-idle` (0,64) → 32px-grid fram
 // loading screen) — see WP_FILL / buildIconPattern / driftIconLayer.
 const SEND_ICON = 49; // all_icons `play-white` (16,48) → 16px-grid frame 3*16+1
 const SEND_TINT = 0x5a8a6a; // send-arrow colour (tint the white icon)
+const STOP_ICON = 46; // all_icons close/✕ (same frame CraftScene uses for its close button)
+const STOP_TINT = 0xc0706a; // ✕ stop colour (muted red)
 const MSG_ICON = 245; // all_icons `white-message-with-border` (80,240) → frame 15*16+5
 const NOTIF_TINT = 0x4a90c8; // "new message" bell/icon colour
 const NEW_MSG = { en: 'You have a new message', 'zh-CN': '你有一条新消息' };
@@ -191,9 +193,13 @@ export class LaptopScene extends Phaser.Scene {
 
     this.pillG = this.add.graphics();
     this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
-    // The send button is HIDDEN while recording (the ✕ takes its slot) — it only
-    // sends the text that's in the input box.
-    this.sendBtn.on('pointerdown', () => { if (this.inputEl) this.onSend(this.inputEl.value.trim()); });
+    // The send button IS the recording control: while recording it shows a ✕ and
+    // stops+transcribes; otherwise it sends the text. Reusing this one Image (a
+    // proven-tappable object) avoids the invisible-hit-rect tap misses on touch.
+    this.sendBtn.on('pointerdown', () => {
+      if (this.recording) this.stopRecording();
+      else if (this.inputEl) this.onSend(this.inputEl.value.trim());
+    });
 
     // Voice input UI. The mic button is built UNCONDITIONALLY (kept hidden) and
     // gated on `voiceReady` — because native-app voice support is only known once
@@ -386,17 +392,13 @@ export class LaptopScene extends Phaser.Scene {
     const inputRight = this.voiceReady ? inputH * 1.15 : btnR * 2; // reserve room for mic+send (or just send)
     if (this.inputEl) this.positionInput(px, iy, pw - inputRight, inputH);
 
-    // Recording overlay (laid out even when hidden): [timer] [waveform……] [✕ stop].
-    // The ✕ sits at the SEND button's slot (right) — send is hidden while recording
-    // and only returns once the recording is stopped + transcribed to text. Tapping
-    // ✕ stops + transcribes (see stopRecording). Placing it at the proven-tappable
-    // send slot also sidesteps the left-corner tap misses seen on touch.
-    const cancR = inputH * 0.3, cancX = this.sendBtn.x;
-    this.drawCancel(this.cancelG!, cancX, cy, inputH * 0.34, 0xb26a6a);
-    this.sizeHitRect(this.cancelHit, cancX, cy, inputH * 0.9, inputH * 0.9);
+    // Recording overlay (laid out even when hidden): [timer] [waveform……]. The ✕
+    // stop control is the SEND button itself (frame-swapped), so there's no separate
+    // hit target — it stays at its slot and stays tappable (a proven Image, unlike a
+    // resized invisible rect). Waveform runs up to just left of it.
     const timerX = px + pad;
     this.recTimer?.setFontSize(Math.round(fs * 0.95)).setPosition(timerX, cy);
-    const waveX0 = timerX + fs * 2.6, waveX1 = cancX - cancR - fs * 0.5;
+    const waveX0 = timerX + fs * 2.6, waveX1 = this.sendBtn.x - btnR - fs * 0.5;
     this.recWave = { x0: waveX0, y: cy, w: Math.max(fs, waveX1 - waveX0), h: inputH * 0.5 };
     if (this.recording) this.drawWave();
 
@@ -583,9 +585,10 @@ export class LaptopScene extends Phaser.Scene {
     this.waveBuf = [];
     this.removeInput();                 // hide the DOM input while recording
     this.micG?.setVisible(false); this.micHit?.setVisible(false);
-    for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(true);
+    for (const o of [this.waveG, this.recTimer]) o?.setVisible(true);
     this.recTimer?.setText('0:00');
-    this.sendBtn.setVisible(false);     // hidden while recording; ✕ takes its slot
+    // The send button becomes the ✕ stop button (frame + colour swap) — same tappable Image.
+    this.sendBtn.setVisible(true).setFrame(STOP_ICON).setTint(STOP_TINT);
     this.layout();
     const s = await startVoice(voiceLang(), {
       onFinal: (t) => { this.pendingTranscript = t; },
@@ -609,6 +612,7 @@ export class LaptopScene extends Phaser.Scene {
   private stopRecordingUI(): void {
     this.recording = false;
     this.voice = undefined;
+    this.sendBtn.setFrame(SEND_ICON).setTint(SEND_TINT); // ✕ → send arrow again
     for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
     const t = this.pendingTranscript; this.pendingTranscript = '';
     if (!this.busy) this.makeInput(t, !t); // re-show input; prefilled-from-voice → don't auto-focus (Send is one tap)
