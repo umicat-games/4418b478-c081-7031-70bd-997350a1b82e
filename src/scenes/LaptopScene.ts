@@ -399,7 +399,10 @@ export class LaptopScene extends Phaser.Scene {
       this.drawMic(this.micG, micX, cy, inputH * 0.5, SEND_TINT);
       this.sizeHitRect(this.micHit, micX, cy, inputH * 0.7, inputH * 0.7);
     }
-    const inputRight = this.voiceReady ? inputH * 1.15 : btnR * 2; // reserve room for mic+send (or just send)
+    // End the input box just LEFT of the mic so long/transcribed text never runs
+    // under the mic + send icons — computed from the mic's real position, not a
+    // fixed guess (which was too small and let text overlap the mic).
+    const inputRight = this.voiceReady ? (px + pw) - (micX - micR - fs * 0.5) : btnR * 2;
     if (this.inputEl) this.positionInput(px, iy, pw - inputRight, inputH);
 
     // Recording overlay (laid out even when hidden): [timer] [waveform……]. The ✕
@@ -581,7 +584,9 @@ export class LaptopScene extends Phaser.Scene {
     g.fillStyle(SEND_TINT, 1);
     for (let i = 0; i < n; i++) {
       const amp = this.waveBuf[this.waveBuf.length - n + i] ?? 0; // last n samples (newest at right)
-      const bh = Math.max(bw, amp * h);
+      // Speech level lands ~0.2–0.5, so scale ×1.8 (0.5 ≈ full height) with a thin
+      // 2px baseline — NOT a `bw` floor, which swallowed those levels into a flat bar.
+      const bh = Math.max(2, Math.min(h, amp * h * 1.8));
       const bx = x0 + i * (bw + gap);
       g.fillRoundedRect(bx, y - bh / 2, bw, bh, Math.min(bw / 2, 2));
     }
