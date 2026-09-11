@@ -4006,6 +4006,7 @@ export class GameScene extends Phaser.Scene {
     if (this.mailbox && this.mailboxContains(wx, wy)) return { name: t('hover_mailbox'), sprite: this.mailbox };
     if (this.chest && this.chestContains(wx, wy)) return { name: t('hover_chest'), sprite: this.chest };
     if (this.craftStation && this.craftStationContains(wx, wy)) return { name: t('hover_workstation'), sprite: this.craftStation };
+    if (this.boat && this.boatContains(wx, wy)) return { name: t('hover_boat'), sprite: this.boat }; // dock boat → travel picker
     // Chicken coops (placed objects, taller than their footprint) — frame the WHOLE coop by its
     // opaque-pixel bbox. Checked before trees/tiles so hovering the roof/body frames the coop, not
     // a single grass tile under the cursor (the "only part of the coop" bug).

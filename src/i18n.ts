@@ -371,6 +371,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   hover_house: { en: 'House', 'zh-CN': '房子' },
   hover_coop: { en: 'Coop', 'zh-CN': '鸡舍' },
   hover_cowpen: { en: 'Cow pen', 'zh-CN': '牛圈' },
+  hover_boat: { en: 'Boat', 'zh-CN': '小船' },
   cowpen_remove_title: { en: 'Remove', 'zh-CN': '移除' },
   cowpen_remove_confirm: { en: 'Remove the whole cow pen? The pen and any cows go back into your backpack.', 'zh-CN': '拆除整个牛圈吗？牛圈和里面的牛都会退回你的背包。' },
   hover_stove: { en: 'Stove', 'zh-CN': '灶台' },
