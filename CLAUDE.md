@@ -95,6 +95,11 @@ clear, and that reads as "the platform up there is unreachable", not as a bug.
 Leave headroom on top: both numbers are ballistics, and a real jump is stepped
 at frame rate.
 
+**The thumbstick is invisible until a thumb lands on the left half of the
+screen, and then it is exactly there.** That is the default; `stick: 'fixed'`
+brings back an always-drawn pad at the bottom left. Nothing in a game changes
+either way — `direction()` reads the same.
+
 **Declare action buttons; never mount your own.**
 `new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] })`, then
 `input.consume('attack')` for one-press-one-action or `input.held('attack')` for
@@ -124,6 +129,12 @@ what it catches: before the animator existed, the character slid around playing
 its idle clip, and a test asking "are bones moving?" said yes, because idle moves
 bones too. If you ever drive the mixer yourself, the question to ask is *which*
 clip is playing, never *whether* something is.
+
+**Feedback beats numbers.** `flashTint(object, { color, ms })` plus
+`updateTints(objects)` once a frame is the hit flash. It is in the SDK for one
+reason worth knowing even if you never call it: `gltf.scene.clone(true)` SHARES
+MATERIALS, so tinting one of five cloned enemies turns all five red — a
+graphics bug wearing a gameplay bug's clothes. `flashTint` clones per object.
 
 **UI is DOM.** There is no reason to draw a score with triangles on the web;
 `index.html` has a `#hud` div for exactly this.
