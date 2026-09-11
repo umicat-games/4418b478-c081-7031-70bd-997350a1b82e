@@ -39,6 +39,11 @@ export class BootScene extends Phaser.Scene {
     // The icon sheet (16×16 grid) — used by the confirm dialog / build palette / HUD and
     // the in-game loading overlay (NOT the boot loader anymore, but still preloaded early).
     this.load.spritesheet('ui-icons', 'uploaded/all_icons.png', { frameWidth: 16, frameHeight: 16 });
+    // Voice-input round buttons (mic / send / stop), each an atlas with `idle` +
+    // `pressed` frames — shared by the laptop + in-game chat.
+    this.load.atlas('round-mic', 'uploaded/round-mic-button.png', 'uploaded/round-mic-button.json');
+    this.load.atlas('round-send', 'uploaded/round-send-button.png', 'uploaded/round-send-button.json');
+    this.load.atlas('round-stop', 'uploaded/round-stop-recording-button.png', 'uploaded/round-stop-recording-button.json');
     // Custom pointer-lock cursor — key must match CURSOR_KEY in GameScene.
     this.load.image('cursor', 'uploaded/triangle_mouse_icon_1.png');
     // Radial tool-wheel circle backgrounds (24×24) — one per tool button in the

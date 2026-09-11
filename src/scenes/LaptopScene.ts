@@ -3,7 +3,7 @@ import { Umicat, type Npc } from '@umicat/phaser-sdk';
 import { dialogFont, getLang, initLang } from '../i18n';
 import { startTransition, finishTransition } from '../transition';
 import { crossToBgm } from '../bgm';
-import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE } from '../sfx';
+import { playSfx, SFX_CONFIRM, SFX_DROP, SFX_TYPE, SFX_CLICK } from '../sfx';
 import { WP_FILL, buildIconPattern, driftIconLayer } from '../iconWallpaper';
 import { voiceSupported, startVoice, setVoiceHost, type VoiceSession } from '../voice';
 
@@ -103,7 +103,7 @@ export class LaptopScene extends Phaser.Scene {
 
   // Voice input: a mic button → the browser's OWN speech-to-text (see ../voice), with a live
   // pixel WAVEFORM while recording. Only built when voiceSupported() (else the player just types).
-  private micG?: Phaser.GameObjects.Graphics;    // drawn pixel mic icon (normal mode, left of send)
+  private micImg?: Phaser.GameObjects.Image;     // mic icon image (normal mode, left of send)
   private micHit?: Phaser.GameObjects.Rectangle; // invisible tap target for the mic
   private voiceReady = false;                    // is voice input available? (may flip true after Umicat.init on native)
   private transcribing = false;                  // stopped recording, waiting for the STT result (shows a loading label)
@@ -194,15 +194,18 @@ export class LaptopScene extends Phaser.Scene {
     if (this.anims.exists('dialog-continue')) this.more.play('dialog-continue');
 
     this.pillG = this.add.graphics();
-    this.sendBtn = this.add.image(0, 0, 'ui-icons', SEND_ICON).setOrigin(0.5).setTint(SEND_TINT).setInteractive({ useHandCursor: true });
-    // The send button IS the recording control: while recording it shows a ✕ and
-    // stops+transcribes; otherwise it sends the text. Reusing this one Image (a
+    this.sendBtn = this.add.image(0, 0, 'round-send', 'idle').setOrigin(0.5).setInteractive({ useHandCursor: true });
+    // The send button IS the recording control: while recording it's the stop button
+    // and stops+transcribes; otherwise it sends the text. Reusing this one Image (a
     // proven-tappable object) avoids the invisible-hit-rect tap misses on touch.
-    // pointer-UP, not down: running the recording start/stop (native mic grab + DOM
-    // teardown) while the finger is still down loses the tap's pointer-release, wedging
-    // Phaser's touch pointer — after a few records the pool is exhausted and taps die.
-    // Acting on release keeps every pointer clean.
+    // pointer-UP, not down for the ACTION: running the recording start/stop (native mic
+    // grab + DOM teardown) while the finger is still down loses the tap's pointer-release,
+    // wedging Phaser's touch pointer — after a few records the pool is exhausted and taps
+    // die. Press feedback (idle→pressed frame) is on pointer-down (cheap, no wedge).
+    this.sendBtn.on('pointerdown', () => { this.sendBtn.setFrame('pressed'); playSfx(this, SFX_CLICK); });
+    this.sendBtn.on('pointerout', () => this.sendBtn.setFrame('idle'));
     this.sendBtn.on('pointerup', () => {
+      this.sendBtn.setFrame('idle');
       if (this.recording) this.stopRecording();
       else if (this.inputEl) this.onSend(this.inputEl.value.trim());
     });
@@ -213,15 +216,17 @@ export class LaptopScene extends Phaser.Scene {
     // to the platform recognizer via the host bridge). `initRecruiter` re-checks.
     this.recording = false; this.voice = undefined; this.waveBuf = []; this.pendingTranscript = '';
     this.voiceReady = voiceSupported(); // best-effort now (browser); refreshed after init
-    this.micG = this.add.graphics();
+    this.micImg = this.add.image(0, 0, 'round-mic', 'idle').setOrigin(0.5);
     this.micHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
-    this.micHit.on('pointerup', () => void this.startRecording()); // pointer-UP: see sendBtn note (avoids wedging the touch pointer)
+    this.micHit.on('pointerdown', () => { this.micImg?.setFrame('pressed'); playSfx(this, SFX_CLICK); });
+    this.micHit.on('pointerout', () => this.micImg?.setFrame('idle'));
+    this.micHit.on('pointerup', () => { this.micImg?.setFrame('idle'); void this.startRecording(); }); // pointer-UP: see sendBtn note
     this.waveG = this.add.graphics();
     this.recTimer = this.add.text(0, 0, '0:00', { fontFamily: dialogFont(), color: PANEL_TEXT }).setOrigin(0, 0.5);
     this.cancelG = this.add.graphics();
     this.cancelHit = this.add.rectangle(0, 0, 10, 10, 0, 0).setInteractive({ useHandCursor: true });
     this.cancelHit.on('pointerdown', () => this.stopRecording());
-    for (const o of [this.micG, this.micHit, this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
+    for (const o of [this.micImg, this.micHit, this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
 
     // Hide the chat until the "new message" teaser is opened.
     for (const o of [this.panelG, this.catoIcon, this.nameText, this.msgText, this.pillG, this.sendBtn]) o?.setVisible(false);
@@ -284,7 +289,7 @@ export class LaptopScene extends Phaser.Scene {
         setVoiceHost(u);
         this.voiceReady = voiceSupported();
         this.layout();
-        if (this.voiceReady && this.inputEl && !this.recording) { this.micG?.setVisible(true); this.micHit?.setVisible(true); }
+        if (this.voiceReady && this.inputEl && !this.recording) { this.micImg?.setVisible(true); this.micHit?.setVisible(true); }
         initLang(u?.locale); // match the platform-provided player language
         const name = u?.user?.name?.trim();
         this.playerName = name ?? ''; // greet the player by name in the opening line
@@ -394,17 +399,17 @@ export class LaptopScene extends Phaser.Scene {
     this.more.setDisplaySize(moreS, moreS).setPosition(px + pw / 2, py + ph - tpad * 0.5);
 
     // Input box + send button — SAME rounded panel style as Cato's message box.
-    const iy = sy0 + sh - inputH, btnR = inputH * 0.44;
+    const iy = sy0 + sh - inputH, btnR = inputH * 0.56, BTN = inputH * 1.1; // round-button footprint + display size
     this.pillG.clear();
     this.pillG.fillStyle(PANEL_FILL, 0.94).fillRoundedRect(px, iy, pw, inputH, fs * 0.6);
     this.pillG.lineStyle(Math.max(1, fs * 0.08), PANEL_LINE, 1).strokeRoundedRect(px, iy, pw, inputH, fs * 0.6);
     const cy = iy + inputH / 2;
-    this.sendBtn.setDisplaySize(inputH * 0.5, inputH * 0.5).setPosition(sx0 + sw - pad - btnR, cy);
+    this.sendBtn.setDisplaySize(BTN, BTN).setPosition(sx0 + sw - pad - btnR, cy);
     // Mic button (if voice is supported): sits just LEFT of send; the DOM input leaves room for both.
-    const micR = inputH * 0.28, micX = this.sendBtn.x - btnR - micR - fs * 0.3;
-    if (this.voiceReady && this.micG) {
-      this.drawMic(this.micG, micX, cy, inputH * 0.5, SEND_TINT);
-      this.sizeHitRect(this.micHit, micX, cy, inputH * 0.7, inputH * 0.7);
+    const micR = inputH * 0.56, micX = this.sendBtn.x - btnR - micR - fs * 0.4;
+    if (this.voiceReady && this.micImg) {
+      this.micImg.setPosition(micX, cy).setDisplaySize(BTN, BTN);
+      this.sizeHitRect(this.micHit, micX, cy, BTN, BTN);
     }
     // End the input box just LEFT of the mic so long/transcribed text never runs
     // under the mic + send icons — computed from the mic's real position, not a
@@ -533,8 +538,8 @@ export class LaptopScene extends Phaser.Scene {
     this.inputEl = el;
     // Always the send arrow when the input is up — recording swaps it to the ✕
     // (STOP) frame, and the transcribing path doesn't otherwise reset it.
-    this.sendBtn.setFrame(SEND_ICON).setTint(SEND_TINT).setVisible(true);
-    if (this.voiceReady) { this.micG?.setVisible(true); this.micHit?.setVisible(true); } // mic available whenever the input is
+    this.sendBtn.setTexture('round-send', 'idle').setVisible(true);
+    if (this.voiceReady) { this.micImg?.setVisible(true); this.micHit?.setVisible(true); } // mic available whenever the input is
     this.layout();
     // Auto-focus for typing; but NOT after a voice transcript — on iOS the input is focused +
     // keyboard up, and the FIRST tap on the Send button just dismisses the keyboard instead of
@@ -588,16 +593,15 @@ export class LaptopScene extends Phaser.Scene {
     g.clear();
     const { x0, y, w, h } = this.recWave;
     const n = WAVE_BARS;
-    const gap = Math.max(1, w * 0.012);
-    const bw = Math.max(1, (w - gap * (n - 1)) / n);
-    g.fillStyle(SEND_TINT, 1);
+    const gap = Math.max(1, Math.round(w * 0.012));
+    const bw = Math.max(1, Math.floor((w - gap * (n - 1)) / n));
+    g.fillStyle(SEND_TINT, 1); // green pixel bars — the laptop's input bar is white, so white bars are invisible there
     for (let i = 0; i < n; i++) {
       const amp = this.waveBuf[this.waveBuf.length - n + i] ?? 0; // last n samples (newest at right)
-      // Speech level lands ~0.2–0.5, so scale ×1.8 (0.5 ≈ full height) with a thin
-      // 2px baseline — NOT a `bw` floor, which swallowed those levels into a flat bar.
-      const bh = Math.max(2, Math.min(h, amp * h * 1.8));
-      const bx = x0 + i * (bw + gap);
-      g.fillRoundedRect(bx, y - bh / 2, bw, bh, Math.min(bw / 2, 2));
+      // Speech level lands ~0.2–0.5, so scale ×1.8 (0.5 ≈ full height), 2px baseline.
+      const bh = Math.max(2, Math.round(Math.min(h, amp * h * 1.8)));
+      const bx = Math.round(x0 + i * (bw + gap));
+      g.fillRect(bx, Math.round(y - bh / 2), bw, bh);
     }
   }
 
@@ -608,11 +612,11 @@ export class LaptopScene extends Phaser.Scene {
     this.recStartMs = this.time.now;
     this.waveBuf = [];
     this.removeInput();                 // hide the DOM input while recording
-    this.micG?.setVisible(false); this.micHit?.setVisible(false);
+    this.micImg?.setVisible(false); this.micHit?.setVisible(false);
     for (const o of [this.waveG, this.recTimer]) o?.setVisible(true);
     this.recTimer?.setText('0:00');
     // The send button becomes the ✕ stop button (frame + colour swap) — same tappable Image.
-    this.sendBtn.setVisible(true).setFrame(STOP_ICON).setTint(STOP_TINT);
+    this.sendBtn.setVisible(true).setTexture('round-stop', 'idle');
     this.layout();
     const s = await startVoice(voiceLang(), {
       onFinal: (t) => { this.pendingTranscript = t; if (this.inputEl) this.inputEl.value = t; },
@@ -655,7 +659,7 @@ export class LaptopScene extends Phaser.Scene {
   private stopRecordingUI(): void {
     this.recording = false;
     this.voice = undefined;
-    this.sendBtn.setFrame(SEND_ICON).setTint(SEND_TINT); // ✕ → send arrow again
+    this.sendBtn.setTexture('round-send', 'idle'); // stop → send arrow again
     for (const o of [this.waveG, this.recTimer, this.cancelG, this.cancelHit]) o?.setVisible(false);
     const t = this.pendingTranscript; this.pendingTranscript = '';
     if (!this.busy) this.makeInput(t, false); // re-show input; never auto-focus from voice (Send stays one tap; transcript may still be arriving)
@@ -675,7 +679,7 @@ export class LaptopScene extends Phaser.Scene {
 
   private removeInput(): void {
     this.inputEl?.remove(); this.inputEl = undefined;
-    if (!this.recording) { this.micG?.setVisible(false); this.micHit?.setVisible(false); } // mic rides with the input
+    if (!this.recording) { this.micImg?.setVisible(false); this.micHit?.setVisible(false); } // mic rides with the input
   }
 
   private onSend(text: string): void {

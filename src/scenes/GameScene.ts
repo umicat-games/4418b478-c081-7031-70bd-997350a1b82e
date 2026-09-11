@@ -10,6 +10,8 @@ import {
   type Npc,
 } from '@umicat/phaser-sdk';
 import { hudDpr } from '../dpi';
+import { voiceSupported, setVoiceHost } from '../voice';
+import { VoiceControls } from '../voiceControls';
 import { GAME_WIDTH, GAME_HEIGHT, DESIGN_ZOOM } from '../config';
 import type { MailListEntry, OrderCatalogEntry } from './menu-types';
 import type { ReceiptLine } from './ReceiptScene';
@@ -1156,6 +1158,8 @@ export class GameScene extends Phaser.Scene {
   // (authored visible:false) slide up on cat-click; an HTML <input> overlays the
   // chat-input box for typing; replies come from Cato (umicat.ai + playbook).
   private dialogOpen = false;
+  private chatVoice?: VoiceControls; // mic + waveform for the chat (drawn in the HUD scene)
+  private chatVoiceReady = false;    // is voice input available? (set after Umicat.init)
   private signDialog = false; // the open dialog is a read-only NPC note (sign), not the Cato chat
   private signObj?: Phaser.GameObjects.Sprite; // the dockside sign entity (jamin) — tap → Jamin's note
   private cato?: Npc;
@@ -1425,6 +1429,8 @@ export class GameScene extends Phaser.Scene {
       void Umicat.init({})
         .then(async (u) => {
           this.umicat = u;
+          setVoiceHost(u); // route the chat voice input through umicat.voice (native app / browser)
+          this.chatVoiceReady = voiceSupported();
           initLang(u?.locale); // default game UI text to the player's language
           // Cato's NAME + how he addresses the player are player-chosen in the laptop cold-open
           // (new game → init data); a returning player's are restored by applySave (below), which
@@ -10212,6 +10218,59 @@ export class GameScene extends Phaser.Scene {
    *  `sign` = a READ-ONLY NPC note (e.g. Jamin's sign): the SAME box UI but no input field, no Cato
    *  facing/emote, NO avatar (the portrait is hidden), just a name + paginated body text. Tap advances
    *  the pages then closes (no cinematic focus). */
+  // ── Chat voice input (mic + waveform, drawn in the HUD scene) ────────────────
+  /** Create the voice controls lazily (the HUD scene exists once the world loads). */
+  private ensureChatVoice(): void {
+    if (this.chatVoice || !this.chatVoiceReady) return;
+    const hud = this.game.scene.getScene('UmicatHud');
+    if (!hud) return;
+    this.chatVoice = new VoiceControls(hud, {
+      lang: () => (getLang() === 'zh-CN' ? 'zh-CN' : 'en-US'),
+      isZh: () => getLang() === 'zh-CN',
+      fontFamily: 'zpix',
+      onTranscript: (text) => this.onChatTranscript(text),
+      hasText: () => !!this.chatInputEl()?.value.trim(), // send glyph when the input has content
+      onSend: () => {
+        const el = this.chatInputEl();
+        const v = el?.value.trim() ?? '';
+        if (el) el.value = '';
+        if (v) void this.submitDialog(v);
+      },
+      onRecordingChange: (active) => {
+        // Hide the DOM input while recording/transcribing so the waveform shows;
+        // it comes back after (prefilled with the transcript).
+        const field = getHudObject(this, 'chat-input-field') as unknown as { setVisible?: (v: boolean) => void } | undefined;
+        field?.setVisible?.(!active && this.dialogOpen);
+      },
+    });
+  }
+
+  /** Position the mic + waveform over the chat-input bar (logical HUD coords). */
+  private layoutChatVoice(): void {
+    if (!this.chatVoice) return;
+    const bar = getHudObject(this, 'chat-input') as unknown as { x: number; y: number } | undefined;
+    if (!bar) return;
+    const cx = bar.x, cy = bar.y; // the 700-wide panel, centred on (cx,cy)
+    this.chatVoice.place({
+      micX: cx + 296, micY: cy, micS: 42, // ~2× the first pass
+      waveX0: cx - 250, waveY: cy, waveW: 500, waveH: 32, // starts RIGHT of the timer, ends before the button
+      timerX: cx - 320, fs: 20,
+    });
+  }
+
+  /** Voice transcript → prefill the chat input for review (player edits + Enter to send). */
+  private onChatTranscript(text: string): void {
+    const field = getHudObject(this, 'chat-input-field') as unknown as { setVisible?: (v: boolean) => void } | undefined;
+    field?.setVisible?.(this.dialogOpen);
+    const el = this.chatInputEl();
+    if (el && text) el.value = text;
+  }
+
+  /** The SDK text-input's DOM element (the only z-index-99990 input on the page). */
+  private chatInputEl(): HTMLInputElement | undefined {
+    return Array.from(document.querySelectorAll<HTMLInputElement>('input')).find((i) => i.style.zIndex === '99990');
+  }
+
   private openDialog(seed?: string, cutscene = false, sign?: { text: string; name: string }): void {
     if (this.dialogOpen || (!this.child && !sign)) return;
     this.dialogOpen = true;
@@ -10272,6 +10331,12 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.setCatoEmote('blink-eye'); // idle until Cato replies
     }
+    // Voice input: only when the text INPUT is shown (not a cutscene / read-only sign).
+    if (!cutscene && !sign && this.chatVoiceReady) {
+      this.ensureChatVoice();
+      this.layoutChatVoice();
+      this.chatVoice?.showMic(true);
+    }
     this.makeDialogTextClickThrough();
   }
 
@@ -10300,6 +10365,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
     this.cutscene = false;
+    this.chatVoice?.showMic(false); // hide the mic + cancel any in-progress recording
     if (this.signDialog) { this.publishCatoName(); this.signDialog = false; } // sign note → put Cato's name back in the box
     this.catoTalkTimer?.remove(); // stop the talk→blink settle timer
     this.stopTyping(); // stop any in-progress typewriter
@@ -11719,6 +11785,7 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.loadingOverlay?.update(delta); // drift the loading-screen wallpaper while it's up
+    if (this.dialogOpen && this.chatVoice) this.layoutChatVoice(); // keep the mic glued to the bar (open tween + resize)
     // Inside the house the island is FROZEN (HouseScene paints black over it + drives its own
     // room). GameScene stays active only so its input drives the kept HUD (chat / backpack / shop /
     // menu); the whole world sim is skipped. HUD scenes have their own update loops.
