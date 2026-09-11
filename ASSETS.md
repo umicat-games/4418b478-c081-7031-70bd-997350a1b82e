@@ -101,8 +101,13 @@ changing one path, with no retargeting — which is the one thing that does NOT
 work here (a cross-rig retarget was measured returning zero matched bones and
 zero tracks, silently).
 
-32 clips ship, including `jump` and `fall` **separately**, `crouch`, `sit`,
-`drive`, `pick-up`, `interact-*`, `holding-*` and a full wheelchair set. The
-manifest maps the ones a game reaches for by semantic name; **`run` is called
-`sprint` inside the file** — which is why clips are mapped by meaning and never
-guessed.
+32 clips ship, and they come in two kinds. **Locomotion** — `idle`, `walk`,
+`sprint`, `jump`, `fall` (separate clips), `crouch`, `sit`, `drive` — loops, and
+`CharacterAnimator` picks it from `character.state`. **Actions** — `attack`,
+`attack-melee-left`, `kick`, `pick-up`, `interact-*`, `holding-*` (including the
+shooting poses), `die`, `emote-yes/no`, and a full wheelchair set — play once
+via `animator.play(name)` and hand control back.
+
+The manifest maps the ones a game reaches for by semantic name; the rest are
+reachable by their raw clip name. **`run` is called `sprint` inside the file** —
+which is why clips are mapped by meaning and never guessed.
