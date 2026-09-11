@@ -219,8 +219,10 @@ type FaceDir = 'down' | 'up' | 'left' | 'right';
 type ToolId = 'hand' | 'hoe' | 'watering-can' | 'axe' | 'pickaxe' | 'fishing-rod';
 // Actions on an item in the backpack / chest / Cato-bag menu. `use` = hold it; `store` = backpack→
 // chest; `take` = chest→backpack.
-type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete';
-const TAB_BACKPACK = 11; // the standalone backpack view (no tab bar) — kept ABOVE the TAB_DEFS range so appended tabs don't collide
+type MenuItemAction = 'use' | 'store' | 'take' | 'hotbar' | 'sell' | 'give' | 'feed' | 'tochest' | 'delete' | 'equip';
+const TAB_BACKPACK = 11; // 物品 tab (real TAB_DEFS entry) — the backpack now opens as a 2-tab view (物品 + 工具)
+const TAB_TOOLS = 12;    // 工具 tab: owned tools (undeletable); 使用 = hold now, 放进轮盘 = equip to the wheel
+const BACKPACK_TABS = [TAB_BACKPACK, TAB_TOOLS]; // the backpack opens with this 2-tab bar
 const TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_CATO = 9, TAB_COOP = 10; // TAB_COOP = the appended `coop` (牧场) entry in TAB_DEFS (position 10)
 // The paw (bottom-right) opens a TABBED "menu" — the TAB_DEFS indices it shows. Chest / mail / shop
 // stay SEPARATE (their own in-world objects open them standalone), so they're NOT here. Append
@@ -761,6 +763,8 @@ interface SaveBlob {
   pendingSummary?: string[]; // un-compacted material (the watermark)
   catoName?: string; // v22: Cato's player-chosen name (default "Cato")
   callName?: string; // v22: how Cato addresses the player ('' / absent = account name)
+  ownedTools?: ToolId[];              // v29: tools in the 工具 tab (undeletable; workbench-crafted append here)
+  equippedTools?: (ToolId | null)[];  // v29: the 5 wheel ring slots (null = unequipped)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -1037,6 +1041,12 @@ export class GameScene extends Phaser.Scene {
   private menuItemMenu: { index: number; x: number; y: number } | null = null;
   private menuItemQty: { action: 'sell' | 'give' | 'tochest' | 'store' | 'take'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
   private menuSlotPick: { index: number; x: number; y: number } | null = null; // chest → "进 Hotbar" slot picker
+  private toolReplace: { newTool: ToolId; x: number; y: number } | null = null; // 工具 tab: wheel full → pick which of the 5 to replace
+  // Tools the player owns (the 工具 tab list — undeletable; future workbench-crafted tools append here).
+  private ownedTools: ToolId[] = ['hoe', 'watering-can', 'axe', 'pickaxe', 'fishing-rod'];
+  // The 5 tool slots equipped in the radial wheel (indexed by WHEEL_RING position). Seeded to match
+  // the wheel's historical layout so muscle memory is unchanged. A slot may be null (unequipped).
+  private equippedTools: (ToolId | null)[] = ['pickaxe', 'axe', 'fishing-rod', 'hoe', 'watering-can'];
   // The MAIL list (Mail tab of the unified menu). Future: AI-notification / narrative
   // inbox; a receipt opens the ReceiptScene. Saved (v9).
   private mailList: MailEntry[] = [];
@@ -4089,7 +4099,7 @@ export class GameScene extends Phaser.Scene {
     // The everyday tools are a DEFAULT kit — always owned, never in the bag (so they don't clutter it
     // and can't be dropped). Hand back a throwaway single-item store so the equip path (holdExternal)
     // works unchanged; tools are non-consumable, so that store is never mutated.
-    if (GameScene.DEFAULT_TOOLS.includes(toolId)) { const item = itemFromId(toolId, 1); return { store: [item], item }; }
+    if (this.ownedTools.includes(toolId)) { const item = itemFromId(toolId, 1); return { store: [item], item }; }
     for (const store of [this.backpackStore, this.chestStore, this.catoBagStore]) {
       const it = store.find((s) => s.toolId === toolId);
       if (it) return { store, item: it };
@@ -4246,14 +4256,13 @@ export class GameScene extends Phaser.Scene {
     bounds.push({ x: cx, y: cy - RB, r: (GameScene.WHEEL_D / 2) * dpr, idx: -1 });
     GameScene.WHEEL_RING.forEach((slot, i) => {
       const x = cx + slot.ux * R, y = cy + slot.uy * R;
-      const owned = slot.toolId !== null && this.findOwnedTool(slot.toolId) !== null;
-      // The fishing-rod slot always PREVIEWS its icon (its mechanic is coming) — shown disabled
-      // (faded, not tappable) like any not-applicable tool, until fishing lands + a rod is owned.
-      const preview = slot.toolId === 'fishing-rod';
-      const showIcon = owned || preview;
-      const active = owned && pal.applicable.has(slot.toolId!);
-      const kind = active ? 'tool' : showIcon ? 'disabled' : 'empty'; // empty = reserved/unowned → just the circle base
-      const ic = showIcon ? this.wheelToolIcon(slot.toolId!) : { key: '', frame: 0 };
+      // The tool in THIS ring slot is the player's equipped loadout (chosen in the 工具 tab),
+      // not a fixed assignment. A null slot shows just the empty circle base.
+      const tid = this.equippedTools[i] ?? null;
+      const owned = tid !== null && this.findOwnedTool(tid) !== null;
+      const active = owned && pal.applicable.has(tid!);
+      const kind = active ? 'tool' : owned ? 'disabled' : 'empty'; // empty = unequipped slot → just the circle base
+      const ic = owned ? this.wheelToolIcon(tid!) : { key: '', frame: 0 };
       buttons.push({ x, y, size: D, iconKey: ic.key, iconFrame: ic.frame, kind, hovered: active && this.toolPaletteHover === i });
       if (active) bounds.push({ x: cx + slot.ux * RB, y: cy + slot.uy * RB, r: (GameScene.WHEEL_D / 2) * dpr, idx: i }); // only ENABLED circles are tappable
     });
@@ -4281,7 +4290,9 @@ export class GameScene extends Phaser.Scene {
     const bounds = this.registry.get('toolPaletteBounds') as Array<{ x: number; y: number; r: number; idx: number }> | undefined;
     const hit = bounds?.find((b) => (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r);
     if (hit && hit.idx >= 0) {
-      const loc = this.findOwnedTool(GameScene.WHEEL_RING[hit.idx]!.toolId!)!;
+      const tid = this.equippedTools[hit.idx];
+      if (!tid) { this.beginCloseWheel(-2); return true; }
+      const loc = this.findOwnedTool(tid)!;
       if ('hotbar' in loc) { this.heldExternal = null; this.hotbarSelected = loc.hotbar; this.equipSelected(); this.publishInventory(); }
       else this.holdExternal(loc.store, loc.item);
       // Snap the cursor back onto the ITEM the wheel opened on, so the newly-picked tool is ready
@@ -7175,6 +7186,7 @@ export class GameScene extends Phaser.Scene {
   /** The item grid backing the active tab (chest / cato-bag / backpack / mailbox 取货 + 待售). */
   private menuStore(): ItemStack[] {
     return this.menuTab === TAB_BACKPACK ? this.backpackStore
+      : this.menuTab === TAB_TOOLS ? this.toolItems()
       : this.menuTab === TAB_CHEST ? this.chestStore
       : this.menuTab === 2 ? this.catoBagStore
       : this.menuTab === TAB_PICKUP ? this.pickupStore
@@ -7186,6 +7198,7 @@ export class GameScene extends Phaser.Scene {
    *  to the cap (not padding out the whole rectangle), making "full" read as a full grid. */
   private menuStoreCap(): number {
     return this.menuTab === TAB_BACKPACK ? this.backpackCap()
+      : this.menuTab === TAB_TOOLS ? this.ownedTools.length
       : this.menuTab === TAB_CHEST ? CHEST_SLOTS
       : this.menuTab === 2 ? CATO_BAG_SLOTS
       : this.menuTab === TAB_PICKUP ? PICKUP_SLOTS
@@ -7197,7 +7210,13 @@ export class GameScene extends Phaser.Scene {
    *  so it can't reach the chest (portable ≠ storage). Sprout-up button / a future key. */
   private openBackpack(): void {
     if (this.menuOpen) { this.closeMenu(); return; }
-    this.openMenu(TAB_BACKPACK);
+    this.openMenu(TAB_BACKPACK, BACKPACK_TABS); // 物品 + 工具 tab bar
+  }
+
+  /** The 工具 tab's items = the owned tools (synthesized stacks; never mutated — tools are
+   *  non-consumable). `equipToolToWheel` / 使用 read them by index. */
+  private toolItems(): ItemStack[] {
+    return this.ownedTools.map((tid) => itemFromId(tid, 1));
   }
 
   private publishMenu(_open = false): void {
@@ -7229,6 +7248,10 @@ export class GameScene extends Phaser.Scene {
       items: this.menuStore().map((it) => ({
         id: it.id, iconKey: it.iconKey ?? 'fruit-items', iconFrame: it.iconFrame ?? 0, count: it.count,
         label: this.itemName(it.id), desc: this.itemDesc(it.id),
+        // 工具 tab: mark tools already IN the wheel so the slot gets a highlight border; hide the "1"
+        // count badge (tools are single, non-stackable).
+        equipped: this.menuTab === TAB_TOOLS && !!it.toolId && this.equippedTools.includes(it.toolId),
+        hideCount: this.menuTab === TAB_TOOLS,
       })),
       gridCap: this.menuStoreCap(), // cap the grid's empty cells at the store capacity
       mails: this.mailListModel(),
@@ -7846,6 +7869,13 @@ export class GameScene extends Phaser.Scene {
     }
     // "Sell how many?" keypad.
     if (this.menuItemQty) { const k = this.menuKeypadKeyAt(x, y); if (k) this.handleMenuKeypadKey(k); else this.closeMenuItemMenu(); return true; }
+    // 工具 tab: "wheel full" → pick which of the 5 equipped tools to replace (slot picker buttons 'slot<i>').
+    if (this.toolReplace) {
+      const key = this.menuKeypadKeyAt(x, y);
+      if (key && key.startsWith('slot')) this.confirmToolReplace(parseInt(key.slice(4), 10));
+      else this.closeMenuItemMenu();
+      return true;
+    }
     // Hotbar slot picker ("进 Hotbar" → pick a slot).
     if (this.menuSlotPick) {
       const key = this.menuKeypadKeyAt(x, y); // slot picker buttons are tagged 'slot<i>'
@@ -7864,6 +7894,7 @@ export class GameScene extends Phaser.Scene {
       else if (opt === 'sell' && it && !this.saleHasSpaceFor(it.id)) { this.closeMenuItemMenu(); this.promptAlert(t('sale_full')); } // 待售 bin full → decline
       else if (opt === 'sell' || opt === 'give' || opt === 'tochest' || opt === 'store' || opt === 'take') this.openMenuKeypad(opt);
       else if (opt === 'feed') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuFeed(idx); }
+      else if (opt === 'equip') { const tid = it?.toolId; const mx = this.menuItemMenu.x, my = this.menuItemMenu.y; this.closeMenuItemMenu(); if (tid) this.equipToolToWheel(tid as ToolId, mx, my); }
       else if (opt === 'delete') { const idx = this.menuItemMenu.index; this.closeMenuItemMenu(); this.menuPerformAction('delete', idx); }
       else this.closeMenuItemMenu();
       return true;
@@ -7877,7 +7908,7 @@ export class GameScene extends Phaser.Scene {
     if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet, SFX_TAB); return true; } // tab switch → the tab-select sound, keep the tab bar
     // Any item grid (Chest / Cato-bag / Backpack / mailbox 取货 + 待售): tap an item → select it
     // (right detail) AND open its action menu.
-    if (this.menuTab === TAB_BACKPACK || this.menuTab === TAB_CHEST || this.menuTab === 2 || this.menuTab === TAB_PICKUP || this.menuTab === TAB_FORSALE) {
+    if (this.menuTab === TAB_BACKPACK || this.menuTab === TAB_TOOLS || this.menuTab === TAB_CHEST || this.menuTab === 2 || this.menuTab === TAB_PICKUP || this.menuTab === TAB_FORSALE) {
       const idx = this.itemSlotAt('menuSlots', x, y);
       if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); this.openMenuItemMenu(idx, x, y); return true; }
     } else if (this.menuTab === TAB_MAIL) {
@@ -8029,6 +8060,13 @@ export class GameScene extends Phaser.Scene {
       opts.push({ action: 'delete', label: t('action_delete') });
       return opts;
     }
+    // 工具 tab: 使用 (hold it now) + 放进轮盘 (equip to the wheel, if not already in it). NO delete —
+    // tools are permanent (workbench-crafted ones later live here too).
+    if (this.menuTab === TAB_TOOLS) {
+      opts.push({ action: 'use', label: t('action_use') });
+      if (it?.toolId && !this.equippedTools.includes(it.toolId)) opts.push({ action: 'equip', label: t('action_to_wheel') });
+      return opts;
+    }
     // USE = hold this item straight from the store as the active tool / seed / material.
     if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t(it.place ? 'action_place' : 'action_use') }); // placeables read "摆放/Place" (same use action → placement mode)
     if (this.menuTab === TAB_BACKPACK) { // Backpack: use / feed / 上架 / store→chest / delete
@@ -8054,8 +8092,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private closeMenuItemMenu(): void {
-    if (!this.menuItemMenu && !this.menuItemQty && !this.menuSlotPick) return;
-    this.menuItemMenu = null; this.menuItemQty = null; this.menuSlotPick = null;
+    if (!this.menuItemMenu && !this.menuItemQty && !this.menuSlotPick && !this.toolReplace) return;
+    this.menuItemMenu = null; this.menuItemQty = null; this.menuSlotPick = null; this.toolReplace = null;
     this.registry.set('menuAction', { visible: false, rev: ++this.menuActionRev });
   }
 
@@ -8068,6 +8106,42 @@ export class GameScene extends Phaser.Scene {
     this.menuItemMenu = null;
     this.menuItemQty = { action, index: m.index, x: m.x, y: m.y, value: it.count, max: it.count, entering: false };
     this.publishMenuKeypad();
+  }
+
+  /** 放进轮盘: put a tool into the wheel. Fills a free ring slot; if all 5 are taken, opens the
+   *  replace picker so the player chooses which equipped tool to swap out. */
+  private equipToolToWheel(toolId: ToolId, sx: number, sy: number): void {
+    if (this.equippedTools.includes(toolId)) return; // already in the wheel
+    const freeIdx = this.equippedTools.indexOf(null);
+    if (freeIdx >= 0) { this.equippedTools[freeIdx] = toolId; this.afterWheelChange(); return; }
+    this.openToolReplacePick(toolId, sx, sy); // wheel full → pick which to replace
+  }
+
+  /** Wheel-full replace picker: the 5 equipped tools as a slot grid; tap one → it's replaced by the
+   *  incoming tool. Reuses the slot-picker chrome (menuAction.slotpick), routed via `toolReplace`. */
+  private openToolReplacePick(toolId: ToolId, sx: number, sy: number): void {
+    this.toolReplace = { newTool: toolId, x: sx, y: sy };
+    const slots = this.equippedTools.map((tid) => {
+      const ic = tid ? this.wheelToolIcon(tid) : { key: undefined as string | undefined, frame: 0 as string | number };
+      return { label: '', iconKey: ic.key, iconFrame: ic.frame };
+    });
+    this.registry.set('menuAction', { visible: true, rev: ++this.menuActionRev, x: sx, y: sy, slotpick: { slots, title: t('tool_replace_title') } });
+  }
+
+  private confirmToolReplace(slot: number): void {
+    const r = this.toolReplace;
+    if (!r || slot < 0 || slot >= this.equippedTools.length) { this.closeMenuItemMenu(); return; }
+    this.equippedTools[slot] = r.newTool;
+    this.closeMenuItemMenu();
+    this.afterWheelChange();
+  }
+
+  /** After the wheel loadout changes: blip, refresh the 工具 tab highlight + any open wheel, save. */
+  private afterWheelChange(): void {
+    playSfx(this);
+    if (this.menuOpen) this.publishMenu();
+    if (this.toolPaletteOpen) this.publishToolPalette();
+    this.scheduleSave();
   }
 
   /** "进 Hotbar" → show the 8 hotbar slots (number + current icon) to pick a target. */
@@ -11147,9 +11221,11 @@ export class GameScene extends Phaser.Scene {
     // Snapshot the island we're standing on into the per-island map (the others keep their last state).
     this.islandSaves[this.sceneId] = this.serializeIsland();
     return {
-      v: 28,
+      v: 29,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
+      ownedTools: [...this.ownedTools],           // v29: 工具 tab list
+      equippedTools: [...this.equippedTools],     // v29: wheel loadout
       currentIsland: this.sceneId, // cold-boot resumes on this island
       islands: this.islandSaves,   // per-island farm state (all islands)
       money: this.money,
@@ -11383,6 +11459,18 @@ export class GameScene extends Phaser.Scene {
       this.playerCallName = typeof s.callName === 'string' ? this.sanitizeName(s.callName) : '';
       this.publishCatoName();
       this.notifyCatoOfNames();
+      // v29: tool loadout. Old saves (no fields) keep the seeded defaults. Filter to valid ToolIds
+      // (never 'hand'); dedupe owned; equipped keeps exactly 5 ring slots (null = empty).
+      const validTool = (x: unknown): x is ToolId => typeof x === 'string' && x !== 'hand' && GameScene.DEFAULT_TOOLS.includes(x as ToolId);
+      if (Array.isArray(s.ownedTools)) {
+        const owned = s.ownedTools.filter(validTool);
+        if (owned.length) this.ownedTools = [...new Set(owned)];
+      }
+      if (Array.isArray(s.equippedTools)) {
+        const eq = s.equippedTools.map((x) => (validTool(x) && this.ownedTools.includes(x) ? x : null)).slice(0, 5);
+        while (eq.length < 5) eq.push(null);
+        this.equippedTools = eq;
+      }
       // Mailbox + chest contents (v7). Older saves (no field) keep the seeded test
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));

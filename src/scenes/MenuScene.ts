@@ -63,10 +63,12 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'house', frame: 278, title: '房子' },    // shop 房子 sub-tab (white-home = all_icons row17 col6, under white-cart 262)
   { key: 'cato', frame: 310, title: 'Cato' },     // Cato-info tab (white-cat-claw placeholder icon; retag later)
   { key: 'coop', frame: 261, title: '牧场' },     // shop 牧场 sub-tab: placeable buildings (coops). Placeholder icon; retag later.
+  { key: 'backpack', frame: 229, title: '物品' }, // 11 = TAB_BACKPACK: the backpack items tab (white-sprout placeholder)
+  { key: 'tools', iconKey: 'toolbox-icon', frame: 0, title: '工具' }, // 12 = TAB_TOOLS: owned tools (toolbox icon)
 ];
 // NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_COOP = 10, TAB_BACKPACK = 11;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_COOP = 10, TAB_BACKPACK = 11, TAB_TOOLS = 12;
 
 // Stylized header shown centred at the top of each frame (title text + the title-bar underneath),
 // keyed by TAB_DEFS key. "<CATEGORY> • <SECTION>" so the shop/mail sub-tabs read as one family.
@@ -86,7 +88,7 @@ const SCREEN_TITLE: Record<string, string> = {
 const SHOP = { rowH: 0.078, gapPx: 5, bottom: 0.81, footY: 0.85 };
 const STEP = { y: 0.72, btn: 0.052, gap: 0.05, buyY: 0.82, msgY: 0.87 }; // right-side qty stepper + buy button (kept clear of the desc above + the frame border below)
 
-export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; }
+export interface MenuItem { id?: string; iconKey: string; iconFrame: number | string; count: number; label?: string; desc?: string; equipped?: boolean; hideCount?: boolean; }
 export interface MenuCatalogItem { id: string; iconKey: string; iconFrame: number | string; label: string; desc: string; price: number; ordered?: number; }
 export interface MenuModel {
   visible: boolean; rev: number;
@@ -301,7 +303,7 @@ export class MenuScene extends Phaser.Scene {
     // Tabs with a left content grid/list AND a right detail (chest / mailbox / bags / pickup /
     // for-sale / SHOP) share ONE full-width frame, split by a dashed divider — instead of two
     // frames. Settings / Calendar are full-width too (no right detail).
-    const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK
+    const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_TOOLS
       || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP || m.tab === TAB_HOUSE || m.tab === TAB_COOP;
     const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR || m.tab === TAB_CATO;
     const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
@@ -391,7 +393,7 @@ export class MenuScene extends Phaser.Scene {
     else if (m.tab === TAB_SHOP || m.tab === TAB_COOP) this.renderShop(content, m); // 牧场 reuses the shop 2-pane + buy UI
     else if (m.tab === TAB_HOUSE) this.renderHouse(content, m);
     else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows, m.gridCap); // chest / cato-bag / backpack / 取货 / 待售
-    if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {
+    if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_TOOLS || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
       const detail = this.add.container(0, 0); content.add(detail); this.detailBox = detail;
       this.renderDetail(detail, (m.items ?? [])[m.selected ?? -1]);
@@ -503,10 +505,20 @@ export class MenuScene extends Phaser.Scene {
         const icon = this.add.image(sx + cell / 2, sy + cell / 2, it.iconKey, this.fitFrame(it.iconKey, it.iconFrame));
         icon.setScale((cell * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
       }
+      // 工具 tab: a tool already IN the wheel gets a green highlight border ("装备中"), distinct from
+      // the tan hover/selected tint.
+      if (it.equipped) {
+        const bw = Math.max(2, cell * 0.055), inset = bw / 2 + 1;
+        const g = this.add.graphics(); g.lineStyle(bw, 0x7bd65a, 1);
+        g.strokeRoundedRect(sx + inset, sy + inset, cell - inset * 2, cell - inset * 2, Math.max(4, cell * 0.14));
+        c.add(g);
+      }
       // Count: white with a dark outline so it reads on the light-tan slot (plain white was too low-contrast).
-      const cnt = this.T(sx + cell * 0.82, sy + cell * 0.8, String(it.count), cell * 0.28, '#ffffff', 1);
-      cnt.setStroke('#2b1d0e', Math.max(3, cell * 0.06));
-      c.add(cnt);
+      if (!it.hideCount) {
+        const cnt = this.T(sx + cell * 0.82, sy + cell * 0.8, String(it.count), cell * 0.28, '#ffffff', 1);
+        cnt.setStroke('#2b1d0e', Math.max(3, cell * 0.06));
+        c.add(cnt);
+      }
       const sb = { x: sx, y: sy, w: cell, h: cell };
       bounds.push({ ...sb, index: i });
       if (i !== selected) this.slotTargets.push({ ...sb, bg, index: i }); // selected stays tinted; others hover-tint + drive detail
@@ -1063,7 +1075,7 @@ export class MenuScene extends Phaser.Scene {
     const root = this.add.container(0, 0).setDepth(1000);
     this.menuRoot = root;
     const bounds = m.slotpick
-      ? renderSlotPicker(this, root, { x: m.x, y: m.y, slots: m.slotpick.slots })
+      ? renderSlotPicker(this, root, { x: m.x, y: m.y, slots: m.slotpick.slots, title: m.slotpick.title })
       : m.keypad
         ? renderKeypad(this, root, { x: m.x, y: m.y, value: m.keypad.value, max: m.keypad.max })
         : renderActionMenu(this, root, m);

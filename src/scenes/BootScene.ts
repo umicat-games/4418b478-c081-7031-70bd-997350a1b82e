@@ -274,6 +274,7 @@ export class BootScene extends Phaser.Scene {
     for (const c of ['yellow', 'purple', 'pink', 'green', 'blue', 'grey']) this.load.image(`bubble-${c}`, `uploaded/bubble-${c}.png`);
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
+    this.load.image('toolbox-icon', 'uploaded/toolbox-icon.png'); // 工具 tab icon (16×16)
     // Decorative fish (16×16, 15-frame top-down swim/turn) — swim in circles in the water.
     this.load.spritesheet('fish', 'uploaded/fish-spritesheet.png', { frameWidth: 16, frameHeight: 16 });
     // Fishing: rod segment + float bobber (16×16 each) + the 2-frame fish-bite (nibble) sheet.

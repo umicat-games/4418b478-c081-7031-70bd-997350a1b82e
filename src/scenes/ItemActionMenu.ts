@@ -23,7 +23,7 @@ export interface ActionMenuModel {
   y: number; // SCREEN y
   options?: MenuOption[];
   keypad?: { value: number; max: number }; // when set, render the "How Many?" keypad instead
-  slotpick?: { slots: SlotPickSlot[] };    // when set, render the hotbar slot picker instead
+  slotpick?: { slots: SlotPickSlot[]; title?: string }; // when set, render the slot picker (title defaults to 进 Hotbar)
 }
 export interface SlotPickSlot { label: string; iconKey?: string; iconFrame?: string | number }
 export interface MenuBound {
@@ -179,7 +179,7 @@ export function renderKeypad(
 export function renderSlotPicker(
   scene: Phaser.Scene,
   parent: Phaser.GameObjects.Container,
-  m: { x: number; y: number; slots: SlotPickSlot[] },
+  m: { x: number; y: number; slots: SlotPickSlot[]; title?: string },
 ): MenuBound[] {
   const W = scene.scale.width, H = scene.scale.height;
   // highDpi: device-px, zoom-1 space (fraction-based modal) → fixed screen-px sizes ×dpr.
@@ -202,7 +202,7 @@ export function renderSlotPicker(
   } else {
     parent.add(scene.add.rectangle(left + panelW / 2, top + panelH / 2, panelW, panelH, 0xf2e2c4).setStrokeStyle(3 * dpr, 0x5b3a1e));
   }
-  parent.add(scene.add.text(left + panelW / 2, top + PAD + TITLE_H / 2, t('action_hotbar'), { fontFamily: dialogFont(), fontSize: FS + 'px', color: '#5b4327', resolution: 3 }).setOrigin(0.5));
+  parent.add(scene.add.text(left + panelW / 2, top + PAD + TITLE_H / 2, m.title ?? t('action_hotbar'), { fontFamily: dialogFont(), fontSize: FS + 'px', color: '#5b4327', resolution: 3 }).setOrigin(0.5));
 
   const bounds: MenuBound[] = [];
   const gx0 = left + PAD + BW / 2;
