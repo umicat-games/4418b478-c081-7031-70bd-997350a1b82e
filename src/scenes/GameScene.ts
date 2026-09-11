@@ -477,6 +477,7 @@ function itemFromId(id: string, count: number): ItemStack {
   if (id === 'travel-pass') return { id, label: 'Travel Pass', iconKey: 'travel-pass', count, stackable: true }; // consumed per island trip
   if (id === 'wood') return { id, label: 'Wood', iconKey: 'tools_and_meterials', iconFrame: 'wood', count, stackable: true }; // 3 per felled tree
   if (id === 'branch') return { id, label: 'Branch', iconKey: 'tools_and_meterials', iconFrame: 'branch', count, stackable: true }; // first 3 chops/tree/day
+  if (id === 'fiber') return { id, label: 'Fiber', iconKey: 'tools_and_meterials', iconFrame: 'fiber', count, stackable: true }; // from chopping down a bush
   if (id === 'stone') return makeStone(count);
   // House-building materials (wall/floor/window/door-item/furn-*) were removed — they now
   // fall through to the generic-stack fallback below, so stale ids in old saves resolve
@@ -597,6 +598,9 @@ interface BushObj {
   berries: Phaser.GameObjects.Image[];
   swayUntil?: number; // this.time.now until which a sway is playing (debounce re-triggers)
   sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
+  chopStage?: number; // axe combo count (0-3, resets if you don't strike again within the window)
+  chopTimer?: Phaser.Time.TimerEvent; // the combo-window timer
+  chopBusy?: boolean; // locked while the final removal resolves
 }
 
 /** A placed tree at a cell. Fruit trees carry `hasFruit`; `stage` is the current
@@ -2181,6 +2185,8 @@ export class GameScene extends Phaser.Scene {
     if (this.activeTool === 'axe' && !this.activePlace) {
       const treeKey = this.treeAtPoint(wp.x, wp.y);
       if (treeKey) { const [tx, ty] = treeKey.split(',').map(Number); this.chopTree(tx!, ty!); return; }
+      const bushKey = this.bushAtPoint(wp.x, wp.y); // the axe also chops a whole bush DOWN → fiber + branch
+      if (bushKey) { const [bx, by] = bushKey.split(',').map(Number); this.chopBush(bx!, by!); return; }
     }
     // PICKAXE knocks any big-stone the click lands on (sprite bounds — the rock is
     // ~2 tiles, taller than its foot cell).
@@ -3834,7 +3840,7 @@ export class GameScene extends Phaser.Scene {
 
     // Is this spot a valid target for the held tool?
     let valid = false;
-    if (chopping) valid = !!treeKey;
+    if (chopping) valid = !!treeKey || !!this.bushAtPoint(wp.x, wp.y); // axe fells trees AND bushes
     else if (mining) valid = !!stoneKey;
     else if (fishing) valid = this.isWaterAt(wp.x, wp.y); // cast onto open water
     else if (tile) {
@@ -4155,7 +4161,7 @@ export class GameScene extends Phaser.Scene {
         const key = `${tile.x},${tile.y}`;
         const bush = this.bushes.get(key);
         const crop = this.crops.get(key);
-        if (bush) { if (bush.stage >= 2) applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(bush.base)); } // ripe bush → pick with the hoe
+        if (bush) { applicable.add('axe'); if (bush.stage >= 2) applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(bush.base)); } // axe → chop the bush down; hoe → pick a ripe bush
         else if (crop) { if (crop.stage >= CROPS[crop.name].stages - 1) applicable.add('hoe'); else applicable.add('watering-can'); bbox = boxOf(this.spriteWorldSolidRect(crop.sprite)); } // mature → harvest, growing → water
         else if (this.tilledCells.has(key)) { applicable.add('hoe'); applicable.add('watering-can'); const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; } // un-till, and water
         else { if (!this.cellBlocksTill(key) && !this.isDefaultHouseCell(key)) applicable.add('hoe'); const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; } // bare grass → till (any walkable tile anchors a wheel so Tab can cancel)
@@ -6247,10 +6253,52 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const bush = this.bushes.get(key);
     if (!bush) return;
+    bush.chopTimer?.remove();
     this.tweens.killTweensOf([bush.base, ...bush.berries]); // stop any in-flight sway
     bush.base.destroy();
     for (const b of bush.berries) b.destroy();
     this.bushes.delete(key);
+  }
+
+  /** Which bush (if any) is under a world point — opaque-pixel hit on its base, frontmost first. */
+  private bushAtPoint(x: number, y: number): string | null {
+    let best: string | null = null, bestFoot = -Infinity;
+    for (const [key, b] of this.bushes) {
+      if (b.base.active && this.spritePixelHit(b.base, x, y) && b.base.y > bestFoot) { best = key; bestFoot = b.base.y; }
+    }
+    return best;
+  }
+
+  /** Chop a bush DOWN with the axe: an axe swing, then advance the 3-strike combo. */
+  private chopBush(cx: number, cy: number): void {
+    if (!this.islandLayer) return;
+    const bush = this.bushes.get(`${cx},${cy}`);
+    if (!bush || bush.chopBusy) return;
+    const w = this.islandLayer.tileToWorldXY(cx, cy)!;
+    this.axeSwingAt(w.x + TILE / 2, w.y + TILE / 2, () => this.onBushChopStrike(cx, cy));
+  }
+
+  /** One landed axe strike on a bush: rustle for feedback + advance the combo. The 3rd CONSECUTIVE
+   *  strike drops 1 fiber + 1 branch out of the bush (bounce → fly to the collector), then it's gone. */
+  private onBushChopStrike(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const bush = this.bushes.get(key);
+    if (!bush || bush.chopBusy) return;
+    playSfx(this, SFX_CHOP);
+    this.swayBush(bush);
+    bush.chopStage = bush.chopTimer ? Math.min((bush.chopStage ?? 0) + 1, 3) : 1; // advance within the window, else restart
+    bush.chopTimer?.remove();
+    bush.chopTimer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { bush.chopStage = 0; bush.chopTimer = undefined; });
+    if ((bush.chopStage ?? 0) >= 3) {
+      bush.chopBusy = true;
+      const bx = bush.base.x, by = bush.base.y - bush.base.displayHeight * 0.4;
+      this.playChopDrop(bx - 6, by, 'tools_and_meterials', 'fiber');
+      this.playChopDrop(bx + 6, by, 'tools_and_meterials', 'branch');
+      this.collect(itemFromId('fiber', 1));
+      this.collect(itemFromId('branch', 1));
+      this.removeBush(cx, cy); // clears chopTimer + destroys the sprites
+      this.scheduleSave();
+    }
   }
 
   // ── Wild foragables: auto-spawn → grow → harvest at max ────────────────────

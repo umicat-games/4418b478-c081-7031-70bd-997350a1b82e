@@ -235,6 +235,10 @@
     {
       "id": "branch",
       "sell": 4
+    },
+    {
+      "id": "fiber",
+      "sell": 3
     }
   ]
 }
