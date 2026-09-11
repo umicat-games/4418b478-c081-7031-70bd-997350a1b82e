@@ -592,10 +592,10 @@ export class MenuScene extends Phaser.Scene {
       }).setOrigin(0.5, 0);
       c.add(desc);
     }
-    // "正在使用" status — a small pill at the bottom when this tool is equipped in the wheel.
+    // "已在轮盘" status — a small pill at the bottom when this tool is equipped in the wheel.
     if (it.equipped) {
       const py = 0.85 * H;
-      const label = this.add.text(cx, py, t('tool_in_use'), { fontFamily: dialogFont(), fontSize: Math.round(H * 0.024) + 'px', color: '#f2e2c4', resolution: RES }).setOrigin(0.5);
+      const label = this.add.text(cx, py, t('tool_on_wheel'), { fontFamily: dialogFont(), fontSize: Math.round(H * 0.024) + 'px', color: '#f2e2c4', resolution: RES }).setOrigin(0.5);
       const padX = H * 0.024, padY = H * 0.012;
       const pill = this.add.graphics();
       pill.fillStyle(0x5b4327, 1);

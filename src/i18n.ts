@@ -311,7 +311,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   desc_axe: { en: 'Chops trees for branches and wood, and shakes fruit from fruit trees.', 'zh-CN': '砍树获得树枝和木头，也能摇下果树上的水果。' },
   desc_pickaxe: { en: 'Mines big stones for stone.', 'zh-CN': '开采大石头获得石料。' },
   desc_fishing_rod: { en: 'Cast into open water to catch fish.', 'zh-CN': '向开阔水面抛竿钓鱼。' },
-  tool_in_use: { en: 'In use', 'zh-CN': '正在使用' },
+  tool_on_wheel: { en: 'On the wheel', 'zh-CN': '已在轮盘' },
   item_fish: { en: 'Fish', 'zh-CN': '鱼' },
   item_tree_apple: { en: 'Apple tree seedling', 'zh-CN': '苹果树苗' },
   item_tree_pear: { en: 'Pear tree seedling', 'zh-CN': '梨树苗' },
