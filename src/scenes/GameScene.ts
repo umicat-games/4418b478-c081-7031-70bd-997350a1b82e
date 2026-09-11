@@ -4694,7 +4694,13 @@ export class GameScene extends Phaser.Scene {
     // no more branches until the count resets at the next calendar day.
     const chopDay = this.dayIndex();
     if (tree.branchDay !== chopDay) { tree.branchDay = chopDay; tree.branchStrikes = 0; }
-    if ((tree.branchStrikes ?? 0) < 3) { tree.branchStrikes = (tree.branchStrikes ?? 0) + 1; this.collect(itemFromId('branch', 1)); }
+    if ((tree.branchStrikes ?? 0) < 3) {
+      tree.branchStrikes = (tree.branchStrikes ?? 0) + 1;
+      // Pop the branch OUT of the tree + fly it to whoever chopped (player cursor / Cato),
+      // same as fruit/berries (playPopOut → flyItemToCollector → SFX_COLLECT).
+      this.playPopOut(tree.sprite.x, tree.sprite.y - tree.sprite.displayHeight * 0.5, 'tools_and_meterials', 'branch');
+      this.collect(itemFromId('branch', 1));
+    }
     tree.stage = tree.timer ? Math.min(tree.stage + 1, 3) : 1; // advance within the window, else restart
     tree.timer?.remove();
     tree.timer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { tree.stage = 0; tree.timer = undefined; });
@@ -4750,7 +4756,11 @@ export class GameScene extends Phaser.Scene {
   private fellTree(cx: number, cy: number): void {
     const tree = this.trees.get(`${cx},${cy}`);
     if (!tree) return;
-    this.collect(itemFromId('wood', 3)); // a felled tree yields 3 wood
+    // A felled tree yields 3 wood — pop each out of the trunk base + fly to the collector.
+    const byCato = this.catoActing;
+    const wp = this.islandLayer?.tileToWorldXY(cx, cy);
+    if (wp) for (let i = 0; i < 3; i++) this.time.delayedCall(i * 90, () => this.playPopOut(wp.x + TILE / 2 + Phaser.Math.Between(-9, 9), wp.y + TILE / 2 - 6, 'tools_and_meterials', 'wood', byCato));
+    this.collect(itemFromId('wood', 3));
     tree.body?.destroy(); tree.body = undefined; // coming down → stop blocking Cato
     // The fall sheet is 64px wide (standing trees are 48) with the trunk at x≈39.5,
     // so re-anchor the origin to keep the trunk base pinned to the same spot.
