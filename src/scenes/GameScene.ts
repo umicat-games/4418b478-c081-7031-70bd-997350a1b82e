@@ -8704,6 +8704,22 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** A chop drop (branch / wood) is TOSSED out of the tree, ARCS down to the ground and
+   *  BOUNCES once, holds a beat so it reads as "landed", THEN flies to the collector — the
+   *  same land-then-collect feel as fruit, instead of flying the instant it appears. */
+  private playChopDrop(x: number, y: number, texture: string, frame: string | number, byCato = this.catoActing): void {
+    const item = this.add.image(x, y, texture, frame).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(0);
+    const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+    const landX = x + dir * Phaser.Math.Between(12, 22); // tossed a little to the side
+    const landY = y + 26;                                // down to the ground below the trunk
+    this.tweens.add({ targets: item, scale: 1, duration: 140, ease: 'Back.easeOut' });       // pop in as it leaves the tree
+    this.tweens.add({ targets: item, x: landX, duration: 460, ease: 'Sine.easeOut' });        // drift sideways at a steady pace
+    this.tweens.add({                                                                          // fall + bounce ONCE on the ground
+      targets: item, y: landY, duration: 460, ease: 'Bounce.easeOut',
+      onComplete: () => this.time.delayedCall(180, () => { if (item.active) this.flyItemToCollector(item, byCato); }),
+    });
+  }
+
   /** After the pop, the harvested item flies to whoever collected it — Cato's body (Cato harvest) or
    *  the world point under the player's pointer (player harvest) — and only "goes in" (shrink + fade)
    *  ONCE IT ARRIVES. It stays fully visible during the flight, and the flight time scales with the
