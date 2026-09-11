@@ -4690,34 +4690,49 @@ export class GameScene extends Phaser.Scene {
     if (!tree || tree.busy) return;
     playSfx(this, SFX_CHOP); // axe thunk (player + Cato) on each real tree strike
     this.markFirst('first_chop', 'Chopped a tree for the first time'); // ② (deduped)
-    // First 3 chops on THIS tree TODAY each drop a branch; beyond that (or on later days),
-    // no more branches until the count resets at the next calendar day.
+    const settle = () => tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (this.trees.get(key) === tree && !tree.busy) tree.sprite.setFrame(0); // back to idle, ready for the next strike
+    });
+
+    // The first 3 chops on THIS tree TODAY ONLY drop branches — the payoff (fruit harvest /
+    // felling) waits for a FURTHER chop, so branches and the payoff never share a strike.
+    // Branch count resets at the next calendar day.
     const chopDay = this.dayIndex();
-    if (tree.branchDay !== chopDay) { tree.branchDay = chopDay; tree.branchStrikes = 0; }
+    if (tree.branchDay !== chopDay) { tree.branchDay = chopDay; tree.branchStrikes = 0; tree.stage = 0; }
     if ((tree.branchStrikes ?? 0) < 3) {
       tree.branchStrikes = (tree.branchStrikes ?? 0) + 1;
-      // Pop the branch OUT of the tree + fly it to whoever chopped (player cursor / Cato),
-      // same as fruit/berries (playPopOut → flyItemToCollector → SFX_COLLECT).
-      this.playPopOut(tree.sprite.x, tree.sprite.y - tree.sprite.displayHeight * 0.5, 'tools_and_meterials', 'branch');
+      // Toss the branch out of the tree → bounce on the ground → fly to whoever chopped.
+      this.playChopDrop(tree.sprite.x, tree.sprite.y - tree.sprite.displayHeight * 0.5, 'tools_and_meterials', 'branch');
       this.collect(itemFromId('branch', 1));
+      tree.sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
+      tree.sprite.play(`tree-${tree.type}-shake${Math.min(tree.branchStrikes ?? 1, 3)}`); // escalating shake for feedback
+      settle();
+      return;
     }
-    tree.stage = tree.timer ? Math.min(tree.stage + 1, 3) : 1; // advance within the window, else restart
+
+    // Branches done for today → the payoff.
+    if (tree.hasFruit) {
+      // Fruit tree: the very next chop harvests the fruit (no extra combo).
+      tree.busy = true;
+      tree.timer?.remove(); tree.timer = undefined;
+      tree.sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
+      tree.sprite.play(`tree-${tree.type}-shake3`);
+      tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.harvestTree(cx, cy));
+      return;
+    }
+
+    // Plain tree: fell it — the first post-branch chop just shakes it, the next brings it down.
+    tree.stage = tree.timer ? Math.min(tree.stage + 1, 2) : 1;
     tree.timer?.remove();
     tree.timer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { tree.stage = 0; tree.timer = undefined; });
-    tree.sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE); // clear any prior settle/finish handler
-    tree.sprite.play(`tree-${tree.type}-shake${tree.stage}`);
-    if (tree.stage >= 3) {
+    tree.sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
+    tree.sprite.play(`tree-${tree.type}-shake${tree.stage === 1 ? 2 : 3}`);
+    if (tree.stage >= 2) {
       tree.busy = true;
       tree.timer.remove(); tree.timer = undefined;
-      tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-        if (tree.hasFruit) this.harvestTree(cx, cy);
-        else this.fellTree(cx, cy);
-      });
+      tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.fellTree(cx, cy));
     } else {
-      // Settle back to idle so the tree is ready for the next strike.
-      tree.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-        if (this.trees.get(key) === tree && !tree.busy) tree.sprite.setFrame(0);
-      });
+      settle();
     }
   }
 
@@ -4759,7 +4774,7 @@ export class GameScene extends Phaser.Scene {
     // A felled tree yields 3 wood — pop each out of the trunk base + fly to the collector.
     const byCato = this.catoActing;
     const wp = this.islandLayer?.tileToWorldXY(cx, cy);
-    if (wp) for (let i = 0; i < 3; i++) this.time.delayedCall(i * 90, () => this.playPopOut(wp.x + TILE / 2 + Phaser.Math.Between(-9, 9), wp.y + TILE / 2 - 6, 'tools_and_meterials', 'wood', byCato));
+    if (wp) for (let i = 0; i < 3; i++) this.time.delayedCall(i * 90, () => this.playChopDrop(wp.x + TILE / 2 + Phaser.Math.Between(-9, 9), wp.y + TILE / 2 - 20, 'tools_and_meterials', 'wood', byCato));
     this.collect(itemFromId('wood', 3));
     tree.body?.destroy(); tree.body = undefined; // coming down → stop blocking Cato
     // The fall sheet is 64px wide (standing trees are 48) with the trunk at x≈39.5,
