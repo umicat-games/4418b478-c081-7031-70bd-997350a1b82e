@@ -305,6 +305,13 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   item_axe: { en: 'Axe', 'zh-CN': '斧头' },
   item_pickaxe: { en: 'Pickaxe', 'zh-CN': '镐' },
   item_fishing_rod: { en: 'Fishing rod', 'zh-CN': '鱼竿' },
+  // Tool descriptions (工具 tab detail pane) + the "in use" status.
+  desc_hoe: { en: 'Tills soil into farm plots, and harvests ripe crops, bushes and forageables.', 'zh-CN': '把土地锄成田地，也能收获成熟的作物、灌木和野采物。' },
+  desc_watering_can: { en: 'Waters tilled soil so crops grow faster.', 'zh-CN': '给锄好的土地浇水，让作物长得更快。' },
+  desc_axe: { en: 'Chops trees for branches and wood, and shakes fruit from fruit trees.', 'zh-CN': '砍树获得树枝和木头，也能摇下果树上的水果。' },
+  desc_pickaxe: { en: 'Mines big stones for stone.', 'zh-CN': '开采大石头获得石料。' },
+  desc_fishing_rod: { en: 'Cast into open water to catch fish.', 'zh-CN': '向开阔水面抛竿钓鱼。' },
+  tool_in_use: { en: 'In use', 'zh-CN': '正在使用' },
   item_fish: { en: 'Fish', 'zh-CN': '鱼' },
   item_tree_apple: { en: 'Apple tree seedling', 'zh-CN': '苹果树苗' },
   item_tree_pear: { en: 'Pear tree seedling', 'zh-CN': '梨树苗' },

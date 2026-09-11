@@ -592,6 +592,16 @@ export class MenuScene extends Phaser.Scene {
       }).setOrigin(0.5, 0);
       c.add(desc);
     }
+    // "正在使用" status — a small pill at the bottom when this tool is equipped in the wheel.
+    if (it.equipped) {
+      const py = 0.85 * H;
+      const label = this.add.text(cx, py, t('tool_in_use'), { fontFamily: dialogFont(), fontSize: Math.round(H * 0.024) + 'px', color: '#f2e2c4', resolution: RES }).setOrigin(0.5);
+      const padX = H * 0.024, padY = H * 0.012;
+      const pill = this.add.graphics();
+      pill.fillStyle(0x5b4327, 1);
+      pill.fillRoundedRect(cx - label.width / 2 - padX, py - label.height / 2 - padY, label.width + padX * 2, label.height + padY * 2, H * 0.018);
+      c.add(pill); c.add(label); // pill under the text
+    }
   }
 
   private renderMailList(c: Phaser.GameObjects.Container, mails: MailListEntry[], selectedId?: string): void {
