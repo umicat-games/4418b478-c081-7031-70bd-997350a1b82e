@@ -70,7 +70,9 @@ following `character.state` underneath.
 **The world's unit is Kenney's, not the metre.** A character is 0.72 units tall,
 so ~4,700 CC0 props drop in at `importScale: 1`. Anything length-shaped you add —
 sizes, positions, collider extents, camera offsets, speeds, **and gravity** —
-lives in that unit. See ASSETS.md.
+lives in that unit. See ASSETS.md. The character takes its gravity from the
+world's, so there is one gravity in the scene and not two; the scene's own
+`gravity` in `main.json` is where it is set.
 
 **Rotate geometry, not objects, when orienting a primitive.** An object's
 rotation is overwritten by the entity's authored transform. Getting this wrong
@@ -83,6 +85,15 @@ input buffering and the release-cut live in `CharacterController3D` because
 every 3D game shares this character (ADR-034). `Input3D` adds a thumbstick and
 jump button on touch devices and merges them into the same `direction()` and
 `jump`, so nothing here branches on input source.
+
+**A jump is a range, not a number — author platforms against the SHORT one.**
+Releasing the button early cuts the jump deliberately, so this character clears
+`character.maxJumpRise` held and only `character.minJumpRise` tapped — roughly a
+fifth as far. Read those off the controller rather than deriving them; a course
+laid out against the held height has a first step that tapping players cannot
+clear, and that reads as "the platform up there is unreachable", not as a bug.
+Leave headroom on top: both numbers are ballistics, and a real jump is stepped
+at frame rate.
 
 **Never write `hud.textContent`.** It wipes every child the HUD has. Append a
 child element instead. The platform's touch controls mount to `<body>` for

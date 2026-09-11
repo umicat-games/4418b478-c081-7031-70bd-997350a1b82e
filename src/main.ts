@@ -56,9 +56,14 @@ async function start(): Promise<void> {
     radius: 0.16,
     speed: 1.9,        // ~2.6 character-heights per second
     stepHeight: 0.17,  // a quarter of the character's height
-    // ~0.9 units up, a bit over one character height. The SDK owns how a jump
-    // FEELS — coyote time, buffering, variable height — because every 3D game
-    // shares this character (ADR-034); this is just how high.
+    // ~0.94 units at full height, a bit over one character height. The SDK owns
+    // how a jump FEELS — coyote time, buffering, variable height — because
+    // every 3D game shares this character (ADR-034); this is just how high.
+    //
+    // Full height is not the number you build platforms against: releasing
+    // early cuts the jump on purpose, so a TAPPED jump rises about a fifth as
+    // far. Ask the controller (`character.minJumpRise`) instead of doing the
+    // algebra — see CLAUDE.md.
     jumpSpeed: 2.8,
   });
   const input = new Input3D();
