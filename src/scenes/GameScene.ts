@@ -473,6 +473,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (id === 'fishing-rod') return { id, label: 'Fishing rod', iconKey: 'wheel-fishing-rod', iconFrame: 0, count: 1, stackable: false, toolId: 'fishing-rod' };
   if (id === 'fish') return { id, label: 'Sea bream', iconKey: 'sea-bream', count, stackable: true }; // caught fish (icon = sea-bream)
   if (id === 'travel-pass') return { id, label: 'Travel Pass', iconKey: 'travel-pass', count, stackable: true }; // consumed per island trip
+  if (id === 'wood') return { id, label: 'Wood', iconKey: 'tools_and_meterials', iconFrame: 'wood', count, stackable: true }; // 3 per felled tree
+  if (id === 'branch') return { id, label: 'Branch', iconKey: 'tools_and_meterials', iconFrame: 'branch', count, stackable: true }; // first 3 chops/tree/day
   if (id === 'stone') return makeStone(count);
   // House-building materials (wall/floor/window/door-item/furn-*) were removed — they now
   // fall through to the generic-stack fallback below, so stale ids in old saves resolve
@@ -607,6 +609,8 @@ interface TreeObj {
   timer?: Phaser.Time.TimerEvent;
   busy: boolean;
   sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
+  branchDay?: number;   // dayIndex() the branch-drop count below was last reset
+  branchStrikes?: number; // chops on THIS tree today that have dropped a branch (cap 3/day)
 }
 
 /** A placed chicken coop (a multi-tile building; anchor = the bottom-left footprint cell). */
@@ -4686,6 +4690,11 @@ export class GameScene extends Phaser.Scene {
     if (!tree || tree.busy) return;
     playSfx(this, SFX_CHOP); // axe thunk (player + Cato) on each real tree strike
     this.markFirst('first_chop', 'Chopped a tree for the first time'); // ② (deduped)
+    // First 3 chops on THIS tree TODAY each drop a branch; beyond that (or on later days),
+    // no more branches until the count resets at the next calendar day.
+    const chopDay = this.dayIndex();
+    if (tree.branchDay !== chopDay) { tree.branchDay = chopDay; tree.branchStrikes = 0; }
+    if ((tree.branchStrikes ?? 0) < 3) { tree.branchStrikes = (tree.branchStrikes ?? 0) + 1; this.collect(itemFromId('branch', 1)); }
     tree.stage = tree.timer ? Math.min(tree.stage + 1, 3) : 1; // advance within the window, else restart
     tree.timer?.remove();
     tree.timer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { tree.stage = 0; tree.timer = undefined; });
@@ -4741,6 +4750,7 @@ export class GameScene extends Phaser.Scene {
   private fellTree(cx: number, cy: number): void {
     const tree = this.trees.get(`${cx},${cy}`);
     if (!tree) return;
+    this.collect(itemFromId('wood', 3)); // a felled tree yields 3 wood
     tree.body?.destroy(); tree.body = undefined; // coming down → stop blocking Cato
     // The fall sheet is 64px wide (standing trees are 48) with the trunk at x≈39.5,
     // so re-anchor the origin to keep the trunk base pinned to the same spot.

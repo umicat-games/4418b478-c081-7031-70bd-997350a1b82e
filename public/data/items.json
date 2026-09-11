@@ -227,6 +227,14 @@
     {
       "id": "stone",
       "sell": 6
+    },
+    {
+      "id": "wood",
+      "sell": 12
+    },
+    {
+      "id": "branch",
+      "sell": 4
     }
   ]
 }

@@ -291,6 +291,8 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   item_forage_sunflower: { en: 'Sunflower', 'zh-CN': '向日葵' },
   item_forage_grass: { en: 'Wild grass', 'zh-CN': '野草' },
   item_stone: { en: 'Stone', 'zh-CN': '石头' },
+  item_wood: { en: 'Wood', 'zh-CN': '木头' },
+  item_branch: { en: 'Branch', 'zh-CN': '树枝' },
   item_wall: { en: 'Wooden wall', 'zh-CN': '木墙' },
   item_floor: { en: 'Brick floor', 'zh-CN': '砖地板' },
   item_window: { en: 'Window', 'zh-CN': '窗户' },

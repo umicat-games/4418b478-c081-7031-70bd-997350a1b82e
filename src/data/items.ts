@@ -47,6 +47,8 @@ const FALLBACK: Record<string, ItemDef> = {
   'forage-red-mushroom': { sell: 18, food: 18 },
   'forage-purple-mushroom': { sell: 25, food: 28 },
   stone: { sell: 6 },
+  wood: { sell: 12 },   // 3 per felled tree
+  branch: { sell: 4 },  // first 3 chops/tree/day
 };
 
 // MUTABLE, populated by applyItemData() at boot. Seeded with the fallback so the game
