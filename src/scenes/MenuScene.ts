@@ -498,9 +498,8 @@ export class MenuScene extends Phaser.Scene {
       c.add(bg);
       const it = items[i];
       // Selected = the SAME tinted bg as a hover (no white frame). It's NOT added to the
-      // hover targets, so moving the mouse away doesn't clear its highlight. An EQUIPPED tool
-      // (工具 tab) reuses that same wash as its persistent "in the wheel" marker.
-      if (it && (i === selected || it.equipped)) bg.setTint(HOVER_TINT);
+      // hover targets, so moving the mouse away doesn't clear its highlight.
+      if (i === selected && it) bg.setTint(HOVER_TINT);
       if (!it) continue;
       if (this.textures.exists(it.iconKey)) {
         const icon = this.add.image(sx + cell / 2, sy + cell / 2, it.iconKey, this.fitFrame(it.iconKey, it.iconFrame));
@@ -514,7 +513,7 @@ export class MenuScene extends Phaser.Scene {
       }
       const sb = { x: sx, y: sy, w: cell, h: cell };
       bounds.push({ ...sb, index: i });
-      if (i !== selected && !it.equipped) this.slotTargets.push({ ...sb, bg, index: i }); // selected/equipped stay tinted; others hover-tint + drive detail
+      if (i !== selected) this.slotTargets.push({ ...sb, bg, index: i }); // selected stays tinted; others hover-tint + drive detail
     }
     this.registry.set('menuSlots', bounds);
     // Scroll bar just right of the grid, spanning the visible rows.
