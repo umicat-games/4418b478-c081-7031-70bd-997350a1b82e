@@ -498,20 +498,13 @@ export class MenuScene extends Phaser.Scene {
       c.add(bg);
       const it = items[i];
       // Selected = the SAME tinted bg as a hover (no white frame). It's NOT added to the
-      // hover targets, so moving the mouse away doesn't clear its highlight.
-      if (i === selected && it) bg.setTint(HOVER_TINT);
+      // hover targets, so moving the mouse away doesn't clear its highlight. An EQUIPPED tool
+      // (工具 tab) reuses that same wash as its persistent "in the wheel" marker.
+      if (it && (i === selected || it.equipped)) bg.setTint(HOVER_TINT);
       if (!it) continue;
       if (this.textures.exists(it.iconKey)) {
         const icon = this.add.image(sx + cell / 2, sy + cell / 2, it.iconKey, this.fitFrame(it.iconKey, it.iconFrame));
         icon.setScale((cell * 0.62) / Math.max(icon.width, icon.height)); c.add(icon);
-      }
-      // 工具 tab: a tool already IN the wheel gets a green highlight border ("装备中"), distinct from
-      // the tan hover/selected tint.
-      if (it.equipped) {
-        const bw = Math.max(2, cell * 0.055), inset = bw / 2 + 1;
-        const g = this.add.graphics(); g.lineStyle(bw, 0x7bd65a, 1);
-        g.strokeRoundedRect(sx + inset, sy + inset, cell - inset * 2, cell - inset * 2, Math.max(4, cell * 0.14));
-        c.add(g);
       }
       // Count: white with a dark outline so it reads on the light-tan slot (plain white was too low-contrast).
       if (!it.hideCount) {
@@ -521,7 +514,7 @@ export class MenuScene extends Phaser.Scene {
       }
       const sb = { x: sx, y: sy, w: cell, h: cell };
       bounds.push({ ...sb, index: i });
-      if (i !== selected) this.slotTargets.push({ ...sb, bg, index: i }); // selected stays tinted; others hover-tint + drive detail
+      if (i !== selected && !it.equipped) this.slotTargets.push({ ...sb, bg, index: i }); // selected/equipped stay tinted; others hover-tint + drive detail
     }
     this.registry.set('menuSlots', bounds);
     // Scroll bar just right of the grid, spanning the visible rows.
