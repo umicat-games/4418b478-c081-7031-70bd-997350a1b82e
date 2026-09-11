@@ -478,6 +478,7 @@ function itemFromId(id: string, count: number): ItemStack {
   if (id === 'wood') return { id, label: 'Wood', iconKey: 'tools_and_meterials', iconFrame: 'wood', count, stackable: true }; // 3 per felled tree
   if (id === 'branch') return { id, label: 'Branch', iconKey: 'tools_and_meterials', iconFrame: 'branch', count, stackable: true }; // first 3 chops/tree/day
   if (id === 'fiber') return { id, label: 'Fiber', iconKey: 'tools_and_meterials', iconFrame: 'fiber', count, stackable: true }; // from chopping down a bush
+  if (id === 'stick') return { id, label: 'Stick', iconKey: 'tools_and_meterials', iconFrame: 'stick', count, stackable: true }; // crafted from wood — used to craft tools
   if (id === 'stone') return makeStone(count);
   // House-building materials (wall/floor/window/door-item/furn-*) were removed — they now
   // fall through to the generic-stack fallback below, so stale ids in old saves resolve
@@ -1046,11 +1047,14 @@ export class GameScene extends Phaser.Scene {
   private menuItemQty: { action: 'sell' | 'give' | 'tochest' | 'store' | 'take'; index: number; x: number; y: number; value: number; max: number; entering: boolean } | null = null;
   private menuSlotPick: { index: number; x: number; y: number } | null = null; // chest → "进 Hotbar" slot picker
   private toolReplace: { newTool: ToolId; x: number; y: number } | null = null; // 工具 tab: wheel full → pick which of the 5 to replace
-  // Tools the player owns (the 工具 tab list — undeletable; future workbench-crafted tools append here).
-  private ownedTools: ToolId[] = ['hoe', 'watering-can', 'axe', 'pickaxe', 'fishing-rod'];
-  // The 5 tool slots equipped in the radial wheel (indexed by WHEEL_RING position). Seeded to match
-  // the wheel's historical layout so muscle memory is unchanged. A slot may be null (unequipped).
-  private equippedTools: (ToolId | null)[] = ['pickaxe', 'axe', 'fishing-rod', 'hoe', 'watering-can'];
+  private craftReplace: ItemStack | null = null; // a crafted item waiting for a full-backpack slot to replace
+  // Tools the player owns (the 工具 tab list — undeletable). The FISHING ROD is NOT here at start:
+  // it must be crafted at the workbench (stick + fiber + coins). Workbench-crafted tools append here.
+  private ownedTools: ToolId[] = ['hoe', 'watering-can', 'axe', 'pickaxe'];
+  // The 5 tool slots equipped in the radial wheel (indexed by WHEEL_RING position). The 6-o'clock
+  // slot (index 2) is EMPTY at start — it fills once the fishing rod is crafted + equipped. A slot
+  // may be null (unequipped).
+  private equippedTools: (ToolId | null)[] = ['pickaxe', 'axe', null, 'hoe', 'watering-can'];
   // The MAIL list (Mail tab of the unified menu). Future: AI-notification / narrative
   // inbox; a receipt opens the ReceiptScene. Saved (v9).
   private mailList: MailEntry[] = [];
@@ -2601,11 +2605,11 @@ export class GameScene extends Phaser.Scene {
   /** The catch reveal at (cx,cy): a starburst bg APPEARS (fast) → HOLDS (slow) with the caught fish
    *  shown on it → DISAPPEARS (fast, fish hidden) → then the fish bobs up/down and flies to the
    *  collector (Cato or the cursor) and vanishes. */
-  private playCatchReveal(cx: number, cy: number, toCato: boolean): void {
+  private playCatchReveal(cx: number, cy: number, toCato: boolean, texture = 'sea-bream', frame: string | number = 0): void {
     const AC = Phaser.Animations.Events.ANIMATION_COMPLETE;
     const BG_SCALE = 2.4, FISH_SCALE = 1;
     const bg = this.add.sprite(cx, cy, 'newitem-appear', 0).setDepth(1e6 + 1).setScale(BG_SCALE);
-    const bream = this.add.image(cx, cy, 'sea-bream').setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(FISH_SCALE).setVisible(false);
+    const bream = this.add.image(cx, cy, texture, frame).setOrigin(0.5, 0.5).setDepth(1e6 + 2).setScale(FISH_SCALE).setVisible(false);
     playSfx(this, SFX_GETITEM); // "new item!" jingle over the reveal
     bg.play('newitem-appear'); // FAST appear — burst grows, no fish yet
     bg.once(AC, () => {
@@ -7214,6 +7218,7 @@ export class GameScene extends Phaser.Scene {
   private closeMenu(): void {
     if (!this.menuOpen) return;
     playSfx(this); // close blip
+    this.craftReplace = null; // closing without picking a slot → the crafted item is discarded
     this.menuOpen = false;
     if (this.menuStepperHeld) { this.menuStepperHeld = null; this.registry.set('menuStepperHeld', null); } // don't leave a stepper stuck pressed
     this.closeMenuItemMenu();
@@ -7314,6 +7319,7 @@ export class GameScene extends Phaser.Scene {
       catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
       houses, houseSelected: this.menuHouseSel,
       catoInfo, calendar,
+      replaceHint: this.craftReplace && this.menuTab === TAB_BACKPACK ? t('craft_replace_hint') : undefined, // backpack-full craft replace
     });
   }
 
@@ -7566,6 +7572,38 @@ export class GameScene extends Phaser.Scene {
     return n;
   }
 
+  private backpackCountOf(id: string): number {
+    let n = 0;
+    for (const s of this.backpackStore) if (s.id === id) n += s.count;
+    return n;
+  }
+
+  /** How many of `id` the player HAS anywhere (backpack + chest + hotbar) — for workbench crafting. */
+  private haveCountAnywhere(id: string): number {
+    let n = this.backpackCountOf(id) + this.chestCountOf(id);
+    for (const c of this.inventory) if (c && c.id === id) n += c.count; // hotbar row
+    return n;
+  }
+
+  /** Consume `n` of `id` from the backpack first, then the chest, then the hotbar (workbench crafting). */
+  private consumeAnywhere(id: string, n: number): void {
+    let left = n;
+    const fromStore = (store: ItemStack[]): void => {
+      for (let i = store.length - 1; i >= 0 && left > 0; i--) {
+        const s = store[i]; if (s.id !== id) continue;
+        const take = Math.min(s.count, left); s.count -= take; left -= take;
+        if (s.count <= 0) store.splice(i, 1);
+      }
+    };
+    fromStore(this.backpackStore);
+    fromStore(this.chestStore);
+    for (let i = 0; i < this.inventory.length && left > 0; i++) {
+      const c = this.inventory[i]; if (!c || c.id !== id) continue;
+      const take = Math.min(c.count, left); c.count -= take; left -= take;
+      if (c.count <= 0) this.inventory[i] = null;
+    }
+  }
+
   // ── Backpack (inventory) counterparts of the chest helpers — used by COOKING, which pulls
   //    ingredients from + returns dishes to the player's backpack (not the chest, which sits
   //    outside at the island door). `inventory` is the whole grid; row 0 is the hotbar view. ──
@@ -7595,6 +7633,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Can every material of `r` be paid AND does the output have chest room? */
   private canCraftRecipe(r: Recipe): boolean {
+    if (r.price != null) { // workbench tool recipe: materials anywhere + coins (output → 工具 tab / backpack-with-replace, so no space gate)
+      return r.materials.every((m) => this.haveCountAnywhere(m.id) >= m.count) && this.money >= r.price;
+    }
     if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) return false;
     return this.chestHasSpaceFor(r.output);
   }
@@ -7786,16 +7827,20 @@ export class GameScene extends Phaser.Scene {
           iconKey: itemFromId(sel.output, 1).iconKey ?? 'fruit-items',
           iconFrame: itemFromId(sel.output, 1).iconFrame ?? 0,
           outCount: sel.count,
-          materials: sel.materials.map((m) => {
-            const have = this.chestCountOf(m.id);
-            return {
-              iconKey: itemFromId(m.id, 1).iconKey ?? 'fruit-items',
-              iconFrame: itemFromId(m.id, 1).iconFrame ?? 0,
-              need: m.count,
-              have,
-              ok: have >= m.count,
-            };
-          }),
+          materials: [
+            ...sel.materials.map((m) => {
+              const have = sel.price != null ? this.haveCountAnywhere(m.id) : this.chestCountOf(m.id); // workbench = anywhere; legacy = chest
+              return {
+                iconKey: itemFromId(m.id, 1).iconKey ?? 'fruit-items',
+                iconFrame: itemFromId(m.id, 1).iconFrame ?? 0,
+                need: m.count,
+                have,
+                ok: have >= m.count,
+              };
+            }),
+            // A workbench recipe also costs coins → show it as a coin "material" (have = money).
+            ...(sel.price != null ? [{ iconKey: 'coins', iconFrame: 'coin-white-border-shadow-below', need: sel.price, have: this.money, ok: this.money >= sel.price }] : []),
+          ],
           canCraft: this.canCraftRecipe(sel),
         }
       : undefined;
@@ -7807,6 +7852,7 @@ export class GameScene extends Phaser.Scene {
     playSfx(this); // craft-button click
     const r = RECIPES[this.craftSel];
     if (!r) return;
+    if (r.price != null) { this.doCraftTool(r); return; } // workbench: materials-anywhere + coins + cinematic
     if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) { this.flashCraftMsg(t('craft_need')); return; }
     if (!this.chestHasSpaceFor(r.output)) { this.flashCraftMsg(t('craft_full')); return; }
     for (const m of r.materials) this.takeFromChest(m.id, m.count);
@@ -7814,6 +7860,70 @@ export class GameScene extends Phaser.Scene {
     this.catoReact('happy', { duration: 1400 });
     this.bumpStat('crafts'); this.markFirst('first_craft', 'Crafted something for the first time');
     this.flashCraftMsg(t('craft_done'));
+    this.scheduleSave();
+  }
+
+  /** Workbench TOOL craft: spend materials (anywhere) + coins, close the modal, then play the making
+   *  cinematic (fade to black → making sound → fade in → the "new item!" reveal flies it to the cursor
+   *  → into the 工具 tab / backpack). */
+  private doCraftTool(r: Recipe): void {
+    if (!r.materials.every((m) => this.haveCountAnywhere(m.id) >= m.count)) { this.flashCraftMsg(t('craft_need')); return; }
+    if (this.money < (r.price ?? 0)) { this.flashCraftMsg(t('craft_no_coins')); return; }
+    for (const m of r.materials) this.consumeAnywhere(m.id, m.count);
+    this.addMoney(-(r.price ?? 0));
+    this.bumpStat('crafts'); this.markFirst('first_craft', 'Crafted something for the first time');
+    this.publishInventory();
+    this.closeCraft();
+    this.startCraftCinematic(r.output, r.count);
+  }
+
+  /** The making cinematic: cover the screen (fade to black), play the making sound, then reveal. */
+  private startCraftCinematic(output: string, count: number): void {
+    coverAndHandoff(this, () => {
+      playSfx(this, 'tools-making'); // the workbench "making" sound while the screen is black
+      const snd = this.sound.get('tools-making');
+      const wait = Phaser.Math.Clamp(((snd?.duration ?? 1.3) * 1000), 900, 2400);
+      this.time.delayedCall(wait, () => finishTransition(this, () => this.revealCraftedItem(output, count)));
+    }, { effect: 'dissolve', color: 0x000000, ms: 420 });
+  }
+
+  /** After the fade-in: the crafted item bursts in (same reveal + jingle as a fished catch), flies to
+   *  the cursor, and banks — a TOOL into the 工具 tab (unbounded), else into the backpack (replace if full). */
+  private revealCraftedItem(output: string, count: number): void {
+    const isTool = GameScene.DEFAULT_TOOLS.includes(output as ToolId);
+    const it = itemFromId(output, count);
+    const p = this.input.activePointer;
+    const wp = this.cameras.main.getWorldPoint(p.x || this.scale.width / 2, p.y || this.scale.height / 2);
+    this.playCatchReveal(wp.x, wp.y, false, it.iconKey ?? 'fruit-items', it.iconFrame ?? 0); // burst + SFX_GETITEM + fly to cursor
+    this.catoReact('happy', { duration: 1400 });
+    if (isTool) {
+      if (!this.ownedTools.includes(output as ToolId)) this.ownedTools.push(output as ToolId); // → 工具 tab
+      this.showHarvestToast(it);
+      this.scheduleSave();
+    } else if (this.addToBackpack(it)) {
+      this.showHarvestToast(it);
+      this.scheduleSave();
+    } else {
+      // Backpack full → let the player pick one to replace (discarded). Open a beat after the reveal.
+      this.time.delayedCall(520, () => this.openCraftReplace(it));
+    }
+  }
+
+  /** Backpack-full replace: open the backpack + arm replace mode; the next backpack-slot tap discards
+   *  that item and drops the crafted one in its place. */
+  private openCraftReplace(item: ItemStack): void {
+    this.craftReplace = item;
+    this.openMenu(TAB_BACKPACK, BACKPACK_TABS);
+  }
+
+  /** Replace backpack slot `idx` with the pending crafted item (the old one is discarded). */
+  private doCraftReplace(idx: number): void {
+    const item = this.craftReplace;
+    if (!item || idx < 0 || idx >= this.backpackStore.length) { this.craftReplace = null; this.publishMenu(); return; }
+    this.backpackStore[idx] = item; // overwrite → the old item is discarded
+    this.craftReplace = null;
+    this.showHarvestToast(item);
+    this.publishMenu();
     this.scheduleSave();
   }
 
@@ -7962,6 +8072,13 @@ export class GameScene extends Phaser.Scene {
     if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet, SFX_TAB); return true; } // tab switch → the tab-select sound, keep the tab bar
     // Any item grid (Chest / Cato-bag / Backpack / mailbox 取货 + 待售): tap an item → select it
     // (right detail) AND open its action menu.
+    // Craft-replace mode: a full backpack, waiting for the player to pick a slot to overwrite with a
+    // just-crafted item (the tapped item is discarded).
+    if (this.craftReplace && this.menuTab === TAB_BACKPACK) {
+      const idx = this.itemSlotAt('menuSlots', x, y);
+      if (idx !== null && idx < this.backpackStore.length) { this.doCraftReplace(idx); return true; }
+      return true; // swallow other taps while replacing
+    }
     if (this.menuTab === TAB_BACKPACK || this.menuTab === TAB_TOOLS || this.menuTab === TAB_CHEST || this.menuTab === 2 || this.menuTab === TAB_PICKUP || this.menuTab === TAB_FORSALE) {
       const idx = this.itemSlotAt('menuSlots', x, y);
       if (idx !== null && idx < this.menuStore().length) { this.menuSelected = idx; this.publishMenu(); this.openMenuItemMenu(idx, x, y); return true; }

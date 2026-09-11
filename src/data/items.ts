@@ -50,6 +50,7 @@ const FALLBACK: Record<string, ItemDef> = {
   wood: { sell: 12 },   // 3 per felled tree
   branch: { sell: 4 },  // first 3 chops/tree/day
   fiber: { sell: 3 },   // from chopping down a bush
+  stick: { sell: 5 },   // crafted from wood; a tool-crafting material
 };
 
 // MUTABLE, populated by applyItemData() at boot. Seeded with the fallback so the game

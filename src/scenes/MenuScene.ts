@@ -110,6 +110,7 @@ export interface MenuModel {
   mailDetail?: { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number }; // the selected mail's receipt
   catoInfo?: { name: string; stamina: number; staminaMax: number; bondTier: string; bondFrac: number }; // Cato-info tab
   calendar?: { title: string; today: number; daysInMonth: number; firstWeekdayMon: number }; // Calendar tab (ADR-029)
+  replaceHint?: string;         // craft-replace mode banner (backpack full → pick a slot to overwrite)
 }
 
 // Mail-tab RIGHT-side receipt panel (screen fractions) — the sales receipt / delivery
@@ -374,6 +375,11 @@ export class MenuScene extends Phaser.Scene {
     panel.add(titleObj);
     // Decorative bar under the title (kept for bringToTop below so content can't cover the header).
     const barObj = title ? this.addTitleBar(panel, titleCx, TITLE_Y * H + H * 0.03, titleObj.width) : undefined;
+    // Craft-replace mode: a banner telling the player to tap a backpack item to overwrite it.
+    if (m.replaceHint) {
+      const hint = this.add.text(titleCx, TITLE_Y * H + H * 0.055, m.replaceHint, { fontFamily: dialogFont(), fontSize: Math.round(H * 0.024) + 'px', color: '#b23b2e', resolution: RES, align: 'center', wordWrap: { width: W * 0.42 } }).setOrigin(0.5, 0);
+      panel.add(hint);
+    }
     // (A store-tab "full" decline — bag/chest/待售 — now pops the one-button ConfirmScene NOTICE
     // (`promptAlert`) instead of an inline flash that the item grid hid.)
 

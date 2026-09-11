@@ -7,7 +7,10 @@
 // platform Data Tables tool (ADR-020) edits.
 
 export interface RecipeMat { id: string; count: number }
-export interface Recipe { id: string; output: string; count: number; materials: RecipeMat[] }
+// `price` set → a WORKBENCH TOOL recipe: materials come from the backpack (+ chest), it also
+// costs coins, and crafting plays the making cinematic (output → the 工具 tab if it's a tool,
+// else the backpack). No `price` → a legacy chest recipe (materials + output both in the chest).
+export interface Recipe { id: string; output: string; count: number; materials: RecipeMat[]; price?: number }
 
 // Starter recipes, all using EXISTING items (turn harvested goods back into seeds /
 // saplings / bushes, and stone into building pieces). Tune freely in recipes.json.
@@ -29,13 +32,16 @@ const FALLBACK: Recipe[] = [
   { id: 'floor', output: 'floor', count: 2, materials: [{ id: 'stone', count: 1 }] },
   { id: 'wall', output: 'wall', count: 1, materials: [{ id: 'stone', count: 2 }] },
   { id: 'window', output: 'window', count: 1, materials: [{ id: 'stone', count: 2 }, { id: 'forage-grass', count: 1 }] },
+  // Workbench TOOL recipes (materials from the backpack + coins → the making cinematic).
+  { id: 'stick', output: 'stick', count: 1, materials: [{ id: 'wood', count: 1 }], price: 30 },
+  { id: 'fishing-rod', output: 'fishing-rod', count: 1, materials: [{ id: 'stick', count: 1 }, { id: 'fiber', count: 1 }], price: 100 },
 ];
 
 // MUTABLE, populated by applyRecipeData() at boot; seeded with the fallback so the game
 // works even if the data file never loads. Consumers import the live reference.
 export let RECIPES: Recipe[] = FALLBACK.slice();
 
-interface RecipeRow { id?: string; output?: string; count?: number; materials?: RecipeMat[] }
+interface RecipeRow { id?: string; output?: string; count?: number; materials?: RecipeMat[]; price?: number }
 
 /** Replace RECIPES with the loaded table (`public/data/recipes.json`, shape
  *  `{ recipes: RecipeRow[] }`). Tolerant: keeps the fallback if the payload is unusable. */
@@ -49,7 +55,8 @@ export function applyRecipeData(json: unknown): void {
       .filter((m) => m && typeof m.id === 'string' && typeof m.count === 'number' && m.count > 0)
       .map((m) => ({ id: m.id, count: Math.round(m.count) }));
     if (mats.length === 0) continue;
-    next.push({ id: r.id || r.output, output: r.output, count: Math.max(1, Math.round(r.count ?? 1)), materials: mats });
+    const price = typeof r.price === 'number' && r.price >= 0 ? Math.round(r.price) : undefined;
+    next.push({ id: r.id || r.output, output: r.output, count: Math.max(1, Math.round(r.count ?? 1)), materials: mats, price });
   }
   if (next.length === 0) return; // unusable → keep fallback
   RECIPES = next;

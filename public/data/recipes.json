@@ -157,6 +157,25 @@
           "count": 1
         }
       ]
+    },
+    {
+      "id": "stick",
+      "output": "stick",
+      "count": 1,
+      "price": 30,
+      "materials": [
+        { "id": "wood", "count": 1 }
+      ]
+    },
+    {
+      "id": "fishing-rod",
+      "output": "fishing-rod",
+      "count": 1,
+      "price": 100,
+      "materials": [
+        { "id": "stick", "count": 1 },
+        { "id": "fiber", "count": 1 }
+      ]
     }
   ]
 }
