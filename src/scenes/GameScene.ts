@@ -1117,6 +1117,7 @@ export class GameScene extends Phaser.Scene {
   private raindrops?: Raindrop[];
   private rainSplash?: Phaser.GameObjects.Particles.ParticleEmitter;
   private rainSound?: Phaser.Sound.BaseSound; // looping rain ambience, playing while it's raining
+  private nightCricketTimer?: Phaser.Time.TimerEvent; // self-rescheduling; chirps a cricket on clear nights
   private rainDucking = false; // is the BGM currently ducked for rain? (so we duck/restore once, not every frame)
   private animalSfxTimer = ANIMAL_SFX_MIN_MS; // ms until the next possible farm-animal ambient call (counts down each frame)
   private puddlePhase: 'none' | 'wet' | 'drying' = 'none'; // rain-puddle drying stage
@@ -1288,8 +1289,10 @@ export class GameScene extends Phaser.Scene {
     // RESIZE mode: recompute zoom + re-centre + re-layout screen UI on any
     // canvas resize (device rotation, window change, phone vs desktop).
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.scheduleNightCricket(); // occasional cricket chirps on clear nights
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
+      this.nightCricketTimer?.remove(); this.nightCricketTimer = undefined;
       // The rain loop lives on the GLOBAL sound manager (survives the scene), so stop + drop it on
       // shutdown or it keeps raining on the title screen after returnToTitle.
       this.rainSound?.stop(); this.rainSound?.destroy(); this.rainSound = undefined;
@@ -3002,6 +3005,19 @@ export class GameScene extends Phaser.Scene {
    *  house interior (HouseScene, running over this PAUSED scene) can darken the room in lockstep
    *  with the island. Also exposes the darkness fraction so the lamp glow can fade in at night. */
   currentNightTint(): { color: number; alpha: number } { return this.nightTint(this.dayFrac()); }
+
+  /** Occasional cricket chirp on a CLEAR NIGHT — the `background-night` phase, not raining, out on
+   *  the island (not indoors). Self-reschedules with a random gap so it's an ambient texture, not a
+   *  loop; each fire re-checks the conditions (so it goes quiet when it's day / raining / in the house). */
+  private scheduleNightCricket(): void {
+    const delay = Phaser.Math.Between(16000, 48000); // 16–48s between chirps
+    this.nightCricketTimer = this.time.delayedCall(delay, () => {
+      if (this.gameReady && !this.inHouse && this.bgIndex() === WEATHER_BGS.length - 1 && !this.isRaining()) {
+        playSfx(this, 'night-cricket', 0.5);
+      }
+      this.scheduleNightCricket();
+    });
+  }
 
   /** Fireflies: warm yellow-green motes that TWINKLE ON & OFF in the trees/bushes on SOME nights.
    *  Each lives a SHORT life — lights up at a foliage spot, drifts a little while its glow BREATHES,
