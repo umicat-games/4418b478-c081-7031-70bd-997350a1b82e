@@ -2268,7 +2268,8 @@ export class GameScene extends Phaser.Scene {
         this.harvestCrop(tile.x, tile.y); return;
       }
       const bush = this.bushes.get(key);
-      if (canHarvest && bush && bush.stage >= 2) { this.harvestBush(tile.x, tile.y); return; }
+      if (canHarvest && bush && bush.stage >= 2) { this.harvestBush(tile.x, tile.y); return; } // ripe → pick berries
+      if (canHarvest && bush) { this.chopBush(tile.x, tile.y); return; } // non-ripe bush + hoe → chop it DOWN (fiber + branch)
       if (this.activeTool === 'hoe' && !this.tilledCells.has(key) && !this.cellBlocksTill(key)
           && !this.treeAtPoint(wp.x, wp.y) && !this.stoneAtPoint(wp.x, wp.y)) {
         this.tillCell(tile.x, tile.y); return;
@@ -3864,7 +3865,7 @@ export class GameScene extends Phaser.Scene {
         else if (this.cowPen?.footprint.has(key)) valid = false; // cow-pen ground (interior + fences) — not farmland
         else if (this.treeOrStoneOverCell(tile.x, tile.y)) valid = false; // a tree/stone footprint covers this cell
         else if (this.trees.has(key) || this.bigStones.has(key)) valid = false;
-        else if (bush) valid = bush.stage >= 2;
+        else if (bush) valid = true; // hoe works on any bush: pick a ripe one / chop down an unripe one
         else if (forag) valid = foragMature;
         else if (!this.tilledCells.has(key)) valid = true;
         else valid = !crop || cropHarvest;
@@ -4165,7 +4166,7 @@ export class GameScene extends Phaser.Scene {
         const key = `${tile.x},${tile.y}`;
         const bush = this.bushes.get(key);
         const crop = this.crops.get(key);
-        if (bush) { applicable.add('axe'); if (bush.stage >= 2) applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(bush.base)); } // axe → chop the bush down; hoe → pick a ripe bush
+        if (bush) { applicable.add('axe'); applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(bush.base)); } // axe/hoe → chop the bush down; hoe on a ripe bush → pick berries
         else if (crop) { if (crop.stage >= CROPS[crop.name].stages - 1) applicable.add('hoe'); else applicable.add('watering-can'); bbox = boxOf(this.spriteWorldSolidRect(crop.sprite)); } // mature → harvest, growing → water
         else if (this.tilledCells.has(key)) { applicable.add('hoe'); applicable.add('watering-can'); const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; } // un-till, and water
         else { if (!this.cellBlocksTill(key) && !this.isDefaultHouseCell(key)) applicable.add('hoe'); const w = this.islandLayer!.tileToWorldXY(tile.x, tile.y)!; bbox = { wl: w.x, wt: w.y, wr: w.x + TILE, wb: w.y + TILE }; } // bare grass → till (any walkable tile anchors a wheel so Tab can cancel)
@@ -6273,13 +6274,15 @@ export class GameScene extends Phaser.Scene {
     return best;
   }
 
-  /** Chop a bush DOWN with the axe: an axe swing, then advance the 3-strike combo. */
+  /** Chop a bush DOWN (axe OR hoe): swing the held tool, then advance the 3-strike combo. */
   private chopBush(cx: number, cy: number): void {
     if (!this.islandLayer) return;
     const bush = this.bushes.get(`${cx},${cy}`);
     if (!bush || bush.chopBusy) return;
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
-    this.axeSwingAt(w.x + TILE / 2, w.y + TILE / 2, () => this.onBushChopStrike(cx, cy));
+    const strike = () => this.onBushChopStrike(cx, cy);
+    if (this.activeTool === 'hoe') this.hoeSwingAt(w.x + TILE / 2, w.y + TILE / 2, strike);
+    else this.axeSwingAt(w.x + TILE / 2, w.y + TILE / 2, strike);
   }
 
   /** One landed axe strike on a bush: rustle for feedback + advance the combo. The 3rd CONSECUTIVE
@@ -7880,7 +7883,7 @@ export class GameScene extends Phaser.Scene {
   /** The making cinematic: cover the screen (fade to black), play the making sound, then reveal. */
   private startCraftCinematic(output: string, count: number): void {
     coverAndHandoff(this, () => {
-      playSfx(this, 'tools-making'); // the workbench "making" sound while the screen is black
+      playSfx(this, 'tools-making', 0.45); // the workbench "making" sound while the screen is black (quieter)
       const snd = this.sound.get('tools-making');
       const wait = Phaser.Math.Clamp(((snd?.duration ?? 1.3) * 1000), 900, 2400);
       this.time.delayedCall(wait, () => finishTransition(this, () => this.revealCraftedItem(output, count)));
@@ -7892,9 +7895,10 @@ export class GameScene extends Phaser.Scene {
   private revealCraftedItem(output: string, count: number): void {
     const isTool = GameScene.DEFAULT_TOOLS.includes(output as ToolId);
     const it = itemFromId(output, count);
-    const p = this.input.activePointer;
-    const wp = this.cameras.main.getWorldPoint(p.x || this.scale.width / 2, p.y || this.scale.height / 2);
-    this.playCatchReveal(wp.x, wp.y, false, it.iconKey ?? 'fruit-items', it.iconFrame ?? 0); // burst + SFX_GETITEM + fly to cursor
+    // The new item bursts in ABOVE the work station (where it was made), then flies to the cursor.
+    const st = this.craftStation;
+    const vx = this.cameras.main.worldView, bx = st?.active ? st.x : vx.centerX, by = st?.active ? st.getBounds().top - TILE * 0.5 : vx.centerY;
+    this.playCatchReveal(bx, by, false, it.iconKey ?? 'fruit-items', it.iconFrame ?? 0); // burst + SFX_GETITEM + fly to cursor
     this.catoReact('happy', { duration: 1400 });
     if (isTool) {
       if (!this.ownedTools.includes(output as ToolId)) this.ownedTools.push(output as ToolId); // → 工具 tab

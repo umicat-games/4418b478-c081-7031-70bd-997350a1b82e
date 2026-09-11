@@ -15,24 +15,7 @@ export interface Recipe { id: string; output: string; count: number; materials: 
 // Starter recipes, all using EXISTING items (turn harvested goods back into seeds /
 // saplings / bushes, and stone into building pieces). Tune freely in recipes.json.
 const FALLBACK: Recipe[] = [
-  // Crops → their seeds (re-plant without buying).
-  { id: 'corn-seed', output: 'corn-seed', count: 1, materials: [{ id: 'crop-corn', count: 1 }] },
-  { id: 'carrot-seed', output: 'carrot-seed', count: 1, materials: [{ id: 'crop-carrot', count: 1 }] },
-  { id: 'tomato-seed', output: 'tomato-seed', count: 1, materials: [{ id: 'crop-tomato', count: 1 }] },
-  { id: 'eggplant-seed', output: 'eggplant-seed', count: 1, materials: [{ id: 'crop-eggplant', count: 1 }] },
-  { id: 'pumpkin-seed', output: 'pumpkin-seed', count: 1, materials: [{ id: 'crop-pumpkin', count: 1 }] },
-  // Fruit → tree seedlings; berries → bushes.
-  { id: 'tree-apple', output: 'tree-apple', count: 1, materials: [{ id: 'fruit-apple', count: 3 }] },
-  { id: 'tree-pear', output: 'tree-pear', count: 1, materials: [{ id: 'fruit-pear', count: 3 }] },
-  { id: 'tree-peach', output: 'tree-peach', count: 1, materials: [{ id: 'fruit-peach', count: 3 }] },
-  { id: 'bush-strawberry', output: 'bush-strawberry', count: 1, materials: [{ id: 'fruit-strawberry', count: 3 }] },
-  { id: 'bush-grape', output: 'bush-grape', count: 1, materials: [{ id: 'fruit-grape', count: 3 }] },
-  { id: 'bush-blueberry', output: 'bush-blueberry', count: 1, materials: [{ id: 'fruit-blueberry', count: 3 }] },
-  // Stone → building pieces.
-  { id: 'floor', output: 'floor', count: 2, materials: [{ id: 'stone', count: 1 }] },
-  { id: 'wall', output: 'wall', count: 1, materials: [{ id: 'stone', count: 2 }] },
-  { id: 'window', output: 'window', count: 1, materials: [{ id: 'stone', count: 2 }, { id: 'forage-grass', count: 1 }] },
-  // Workbench TOOL recipes (materials from the backpack + coins → the making cinematic).
+  // Workbench TOOL recipes only (materials from the backpack + coins → the making cinematic).
   { id: 'stick', output: 'stick', count: 1, materials: [{ id: 'wood', count: 1 }], price: 30 },
   { id: 'fishing-rod', output: 'fishing-rod', count: 1, materials: [{ id: 'stick', count: 1 }, { id: 'fiber', count: 1 }], price: 100 },
 ];
