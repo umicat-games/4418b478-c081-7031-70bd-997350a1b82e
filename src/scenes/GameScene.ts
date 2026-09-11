@@ -7216,7 +7216,13 @@ export class GameScene extends Phaser.Scene {
   /** The 工具 tab's items = the owned tools (synthesized stacks; never mutated — tools are
    *  non-consumable). `equipToolToWheel` / 使用 read them by index. */
   private toolItems(): ItemStack[] {
-    return this.ownedTools.map((tid) => itemFromId(tid, 1));
+    return this.ownedTools.map((tid) => {
+      const it = itemFromId(tid, 1);
+      // Use the bordered "item" art for the pickaxe in the 工具 tab (item-pixaxe-with-border,
+      // loaded as `wheel-pickaxe`) so it reads as a nicer inventory icon.
+      if (tid === 'pickaxe') { it.iconKey = 'wheel-pickaxe'; it.iconFrame = 0; }
+      return it;
+    });
   }
 
   private publishMenu(_open = false): void {
