@@ -66,7 +66,12 @@ async function start(): Promise<void> {
     // algebra — see CLAUDE.md.
     jumpSpeed: 2.8,
   });
-  const input = new Input3D();
+  // Action buttons are DECLARED, not built. Mounting your own is how one game
+  // put its attack button exactly on top of the jump button on a phone — same
+  // corner, platform layer on top, so the attack button could not be tapped at
+  // all and nothing errored. The SDK places every button, so they cannot
+  // collide, and the same declaration gives you the key binding.
+  const input = new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] });
 
   // Animation. The SDK owns both halves — locomotion follows the controller's
   // state, and an action is a one-shot that interrupts and returns. Neither is
@@ -112,7 +117,6 @@ async function start(): Promise<void> {
 
   // three.js deprecated Clock, and setAnimationLoop already hands us the
   // timestamp, so there is nothing to replace it with.
-  let attackWasDown = false;
   let last = performance.now();
   renderer.setAnimationLoop((now: number) => {
     // Clamped: a backgrounded tab returns with a multi-second delta and
@@ -137,9 +141,12 @@ async function start(): Promise<void> {
     // means holding the key does not chain swings (drop it and you get
     // hold-to-attack, which is a game's decision), and the animator's `busy`
     // means a second press mid-swing is ignored rather than restarting it.
-    const attackDown = input.isDown('KeyJ');
-    if (attackDown && !attackWasDown && animator && !animator.busy) animator.play('attack');
-    attackWasDown = attackDown;
+    // One press is one swing. `consume` latches at the event and clears on
+    // read, so holding does not chain — and, unlike comparing this frame's
+    // state to last frame's, it cannot miss a tap that began and ended between
+    // two frames. `busy` is the separate question of whether a swing is
+    // already playing.
+    if (input.consume('attack') && animator && !animator.busy) animator.play('attack');
     animator?.update(character.state);
     // Save only while STANDING on something. A position saved mid-air restores
     // you mid-air, which turns one fall into a permanently broken save.

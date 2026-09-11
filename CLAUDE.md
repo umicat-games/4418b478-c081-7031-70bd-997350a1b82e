@@ -95,6 +95,16 @@ clear, and that reads as "the platform up there is unreachable", not as a bug.
 Leave headroom on top: both numbers are ballistics, and a real jump is stepped
 at frame rate.
 
+**Declare action buttons; never mount your own.**
+`new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] })`, then
+`input.consume('attack')` for one-press-one-action or `input.held('attack')` for
+hold-to-act. A game that builds its own button cannot know where the platform's
+jump button is, and the first one to try landed exactly on top of it: same
+corner, platform layer above, so on a phone the attack button could not be
+pressed at all — and it mounted perfectly, with no error. `consume` also catches
+a tap that starts and ends between two frames, which a state comparison against
+last frame cannot see.
+
 **Never write `hud.textContent`.** It wipes every child the HUD has. Append a
 child element instead. The platform's touch controls mount to `<body>` for
 exactly this reason, but anything YOU put in the HUD is still yours to lose.
