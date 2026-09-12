@@ -100,6 +100,13 @@ screen, and then it is exactly there.** That is the default; `stick: 'fixed'`
 brings back an always-drawn pad at the bottom left. Nothing in a game changes
 either way — `direction()` reads the same.
 
+**The right half of the screen turns the camera, and the stick follows it.**
+`input.look()` returns a delta and clears on read; hand it to `world.orbit()`,
+then pass `world.cameraYaw` to `input.direction()`. Those two go together: a
+camera that turns while movement stays on world axes is worse than a camera
+that cannot turn, because the player looks at something, pushes towards it, and
+walks somewhere else. Read the look BEFORE moving, or every turn lags a frame.
+
 **Declare action buttons; never mount your own.**
 `new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] })`, then
 `input.consume('attack')` for one-press-one-action or `input.held('attack')` for
@@ -113,6 +120,12 @@ last frame cannot see.
 **Never write `hud.textContent`.** It wipes every child the HUD has. Append a
 child element instead. The platform's touch controls mount to `<body>` for
 exactly this reason, but anything YOU put in the HUD is still yours to lose.
+
+**A camera limit that is an angle is usually meant to be a distance.** The
+follow camera's pitch floor is expressed as "stay this far above what you are
+looking at", not as a number of radians — at an orbit radius of 5.4 a −0.25rad
+floor puts the camera almost a unit underground, because how low an angle takes
+you depends on how far out you are.
 
 **Animate from `character.state`, not from input.** `idle`/`walk`/`jump`/`fall`
 describe what the character is doing; a clip chosen from the key that is held

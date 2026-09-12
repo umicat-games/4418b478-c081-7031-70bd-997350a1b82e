@@ -123,7 +123,18 @@ async function start(): Promise<void> {
     // everything tunnels through the floor in one step.
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
-    const dir = input.direction();
+    // Turn the camera from the right half of the screen, then walk relative to
+    // where it now points. The order matters: reading `look` first means this
+    // frame's movement already accounts for this frame's turn, rather than
+    // lagging one frame behind every time you swing the camera round.
+    //
+    // Passing `cameraYaw` is not optional once the camera can turn. Without
+    // it, "up" on the stick always walks north — so the player looks at
+    // something, pushes towards it, and goes somewhere else. That is worse
+    // than a camera that does not turn at all.
+    const turn = input.look();
+    if (turn.x || turn.y) world.orbit(turn.x, turn.y);
+    const dir = input.direction(world.cameraYaw);
 
     character.update(dt, dir, { jump: input.jump });
 
