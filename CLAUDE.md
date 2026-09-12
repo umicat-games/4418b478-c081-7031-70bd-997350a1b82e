@@ -182,5 +182,21 @@ reason worth knowing even if you never call it: `gltf.scene.clone(true)` SHARES
 MATERIALS, so tinting one of five cloned enemies turns all five red — a
 graphics bug wearing a gameplay bug's clothes. `flashTint` clones per object.
 
+**Sound goes through `GameAudio`, never through `<audio>`.**
+```ts
+const audio = new GameAudio({
+  clips: { coin: { volume: 0.5, throttle: 40 }, hit: { volume: 0.4 } },
+  music: 'bgm',                       // public/audio/bgm.ogg
+});
+audio.play('coin');
+```
+`HTMLAudioElement` is the trap: iOS gives each one a real audio pipeline, caps
+how many may exist, and charges for every `play()`. A game pooling forty of them
+ran at **11fps on an iPhone and a locked 60 with sound muted** — and a desktop
+A/B showed no difference at all, which is why this belongs to the platform
+rather than to whoever is unlucky. The gesture unlock, the asynchronous
+`resume()`, and iOS suspending the context when the app goes away are all
+handled; `audio.play()` before the first tap is simply a no-op.
+
 **UI is DOM.** There is no reason to draw a score with triangles on the web;
 `index.html` has a `#hud` div for exactly this.
