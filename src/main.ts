@@ -100,16 +100,18 @@ interface Wave {
 }
 /** Eight waves, six kinds of thing to shoot at.
  *
- *  The armed hulls (`-weapon`) are the ones that shoot back, so a wave reads
- *  as "these are dangerous to stand near" before anything has happened — and
- *  the scouts are fast and fragile, which is a different problem from the
- *  heavies rather than a bigger one. */
+ *  Every one of them shoots back. The ramp is hit points, speed and count —
+ *  the scouts are fast and fragile, the heavies slow and thick, which is a
+ *  different problem each time rather than a larger one.
+ *
+ *  `armed` stays as a field because it is per-KIND, not a global: the moment
+ *  one enemy should be harmless, that is a data change and not a rewrite. */
 const WAVES: Wave[] = [
-  { count: 5, hp: 6, speed: 1.1, model: 'td-ufo-a', bounty: 8, armed: false, scale: 0.62 },
-  { count: 7, hp: 9, speed: 1.25, model: 'td-ufo-b', bounty: 10, armed: false, scale: 0.62 },
-  { count: 8, hp: 8, speed: 2.1, model: 'td-ufo-c', bounty: 11, armed: false, scale: 0.5 },
+  { count: 5, hp: 6, speed: 1.1, model: 'td-ufo-a', bounty: 8, armed: true, scale: 0.62 },
+  { count: 7, hp: 9, speed: 1.25, model: 'td-ufo-b', bounty: 10, armed: true, scale: 0.62 },
+  { count: 8, hp: 8, speed: 2.1, model: 'td-ufo-c', bounty: 11, armed: true, scale: 0.5 },
   { count: 9, hp: 16, speed: 1.2, model: 'td-ufo-a2', bounty: 14, armed: true, scale: 0.68 },
-  { count: 10, hp: 22, speed: 1.3, model: 'td-ufo-d', bounty: 16, armed: false, scale: 0.72 },
+  { count: 10, hp: 22, speed: 1.3, model: 'td-ufo-d', bounty: 16, armed: true, scale: 0.72 },
   { count: 12, hp: 20, speed: 1.9, model: 'td-ufo-b2', bounty: 18, armed: true, scale: 0.6 },
   { count: 14, hp: 34, speed: 1.2, model: 'td-ufo-c2', bounty: 22, armed: true, scale: 0.78 },
   { count: 16, hp: 48, speed: 1.45, model: 'td-ufo-d2', bounty: 28, armed: true, scale: 0.85 },
