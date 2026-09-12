@@ -109,6 +109,28 @@ camera that turns while movement stays on world axes is worse than a camera
 that cannot turn, because the player looks at something, pushes towards it, and
 walks somewhere else. Read the look BEFORE moving, or every turn lags a frame.
 
+**What the platform has already taken, and what is left for you.** The controls
+are shared between the SDK and your game, and the SDK went first — so before
+wiring an input, check it is still free:
+
+| | Taken by the platform | Yours |
+|---|---|---|
+| Touch | left half (thumbstick), right half (camera), the button cluster bottom-right | extra buttons, via `actions` |
+| Mouse | **right button + drag** (camera), and the context menu | **left button** |
+| Keys | `WASD` / arrows, `Space` | everything else |
+
+The one that bites: **do not wire an action to "the mouse went down."** The
+right button is the camera now, so a game that attacks on any pointerdown
+swings every time the player turns round to look at something — and it looks
+like a combat bug, not an input one. Check `e.button === 0`. Check
+`e.pointerType !== 'touch'` too, or a phone fires both your handler and the
+on-screen button and you get two swings per tap.
+
+Text selection and the iOS long-press callout are already suppressed page-wide,
+with form fields exempted — you do not need to repeat it, and you should not
+blanket `user-select: none` yourself, because that is what breaks typing in a
+name field.
+
 **Declare action buttons; never mount your own.**
 `new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] })`, then
 `input.consume('attack')` for one-press-one-action or `input.held('attack')` for
