@@ -29,7 +29,8 @@
         "attack": "attack-melee-right",
         "kick": "attack-kick-right",
         "yes": "emote-yes",
-        "no": "emote-no"
+        "no": "emote-no",
+        "holdBothShoot": "holding-both-shoot"
       },
       "sockets": {
         "hand-right": {
@@ -185,6 +186,26 @@
     {
       "id": "td-ufo-d2",
       "path": "kit/td/enemy-ufo-d-weapon.glb",
+      "importScale": 1
+    },
+    {
+      "id": "hub-sign",
+      "path": "kit/platformer/sign.glb",
+      "importScale": 1
+    },
+    {
+      "id": "hub-door",
+      "path": "kit/platformer/door-rotate-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "hub-crate",
+      "path": "kit/platformer/crate.glb",
+      "importScale": 1
+    },
+    {
+      "id": "hub-barrel",
+      "path": "kit/platformer/barrel.glb",
       "importScale": 1
     }
   ]

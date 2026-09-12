@@ -187,6 +187,20 @@ for (const [m, x, z] of decor) {
   });
 }
 
+// The way out. Hidden until the run ends: a door standing open the whole time
+// would read as somewhere you could go, and there is nothing behind it yet.
+add({
+  id: 'exit_door', name: 'exit_door', modelAssetId: 'hub-door',
+  transform: { position: { x: 0, y: GROUND_Y, z: -6.35 } },
+  visible: false,
+});
+add({
+  id: 'exit_frame', name: 'exit_frame',
+  primitive: { kind: 'box', size: { x: 1.9, y: 1.5, z: 0.25 }, color: '#6b4f2a' },
+  transform: { position: { x: 0, y: 0.55, z: -6.5 } },
+  visible: false,
+});
+
 // --- the hero ---
 add({
   id: 'hero', name: 'hero', modelAssetId: 'hero',
@@ -221,3 +235,181 @@ writeFileSync(new URL('../public/scenes3d/path.json', import.meta.url),
   JSON.stringify({ cells, spots }, null, 2) + '\n');
 
 console.log(`${entities.length} entities — ${cells.length} path tiles, ${spots.length} build spots`);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The hub: where a run starts.
+//
+// Smaller than the board, with a door at the far end, a sign that shows the
+// leaderboard, and the game's name built out of cubes. Same generator because
+// it is the same kind of data — a grid of tiles and a handful of props.
+
+/** A 5x7 blocky font, in the only letters "BALABOO" needs.
+ *
+ *  There is no text model anywhere in the asset library and three's
+ *  TextGeometry needs a typeface file we do not ship. Cubes are the house
+ *  style anyway: every other thing on screen is a low-poly block, and a
+ *  smooth extruded serif would look like it wandered in from another game. */
+const GLYPHS = {
+  B: ['1110', '1001', '1001', '1110', '1001', '1001', '1110'],
+  A: ['0110', '1001', '1001', '1111', '1001', '1001', '1001'],
+  L: ['1000', '1000', '1000', '1000', '1000', '1000', '1111'],
+  O: ['0110', '1001', '1001', '1001', '1001', '1001', '0110'],
+};
+const TITLE = 'BALABOO';
+
+function titleEntities(originX, originY, originZ, cell = 0.14) {
+  const out = [];
+  const gap = cell;                       // one blank column between letters
+  let width = 0;
+  for (const ch of TITLE) width += GLYPHS[ch][0].length * cell + gap;
+  let x = originX - (width - gap) / 2;
+  for (const [li, ch] of [...TITLE].entries()) {
+    const rows = GLYPHS[ch];
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        if (rows[r][c] !== '1') continue;
+        out.push({
+          id: `title_${li}_${r}_${c}`,
+          name: 'title',
+          primitive: { kind: 'box', size: { x: cell, y: cell, z: cell }, color: '#f4b942' },
+          transform: {
+            position: {
+              x: x + c * cell,
+              y: originY + (rows.length - 1 - r) * cell,
+              z: originZ,
+            },
+          },
+          castShadow: false,
+        });
+      }
+    }
+    x += rows[0].length * cell + gap;
+  }
+  return out;
+}
+
+function buildHub() {
+  const ents = [];
+  const HALF = 4.5;               // a 9x9 board
+
+  ents.push({
+    id: 'ground', name: 'ground',
+    primitive: { kind: 'box', size: { x: 2 * HALF + 1, y: 0.4, z: 2 * HALF + 1 }, color: '#3f6b38' },
+    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
+    collider: {
+      shape: { kind: 'box', halfExtents: { x: HALF + 0.5, y: 0.3, z: HALF + 0.5 } },
+      body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
+    },
+    castShadow: false,
+  });
+
+  for (let gx = -HALF + 0.5; gx <= HALF - 0.5; gx += 1) {
+    for (let gz = -HALF + 0.5; gz <= HALF - 0.5; gz += 1) {
+      ents.push({
+        id: `hgrass_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'grass', modelAssetId: 'td-tile',
+        transform: { position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz } },
+        castShadow: false,
+      });
+    }
+  }
+
+  // Walls, with a gap at the top where the door is.
+  for (const [id, x, z, sx, sz] of [
+    ['hwall_s', 0, HALF + 0.6, 2 * HALF + 1.4, 0.4],
+    ['hwall_w', -HALF - 0.6, 0, 0.4, 2 * HALF + 1.4],
+    ['hwall_e', HALF + 0.6, 0, 0.4, 2 * HALF + 1.4],
+    ['hwall_n1', -2.8, -HALF - 0.6, 3.8, 0.4],
+    ['hwall_n2', 2.8, -HALF - 0.6, 3.8, 0.4],
+  ]) {
+    ents.push({
+      id, name: id,
+      primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
+      transform: { position: { x, y: 0.4, z } },
+      collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
+    });
+  }
+
+  // The door, in the gap. No collider: walking INTO it is the whole point.
+  ents.push({
+    id: 'door', name: 'door', modelAssetId: 'hub-door',
+    transform: { position: { x: 0, y: GROUND_Y, z: -HALF - 0.55 } },
+  });
+  ents.push({
+    id: 'door_frame', name: 'door_frame',
+    primitive: { kind: 'box', size: { x: 1.9, y: 1.5, z: 0.25 }, color: '#6b4f2a' },
+    transform: { position: { x: 0, y: 0.55, z: -HALF - 0.75 } },
+  });
+
+  // The sign, and the ring that says you can do something here.
+  ents.push({
+    id: 'sign', name: 'sign', modelAssetId: 'hub-sign',
+    transform: { position: { x: -2.5, y: GROUND_Y, z: 1.5 } },
+  });
+  ents.push({
+    id: 'sign_marker', name: 'sign_marker', modelAssetId: 'td-selection',
+    transform: { position: { x: -2.5, y: GROUND_Y + 0.02, z: 2.5 } },
+    visible: false,
+  });
+
+  ents.push(...titleEntities(0, 1.35, -HALF - 0.3));
+
+  // Scenery, off the walking line between spawn and door.
+  const props = [
+    ['td-tree', -3.5, -2.5], ['td-tree', 3.5, -2.5], ['td-tree', -3.5, 3.5],
+    ['td-rocks', 3.5, 3.5], ['td-crystal', 2.5, -3.5], ['td-rocks', -2.5, -3.5],
+    ['hub-crate', 2.5, 1.5], ['hub-crate', 3.2, 1.5], ['hub-crate', 2.85, 1.5],
+    ['hub-barrel', 1.6, 2.6], ['hub-barrel', -1.6, -2.6],
+  ];
+  for (const [i, [m, x, z]] of props.entries()) {
+    ents.push({
+      id: `hprop_${i}`, name: 'prop', modelAssetId: m,
+      transform: { position: { x, y: m === 'hub-crate' ? (i === 8 ? 0.5 : 0) : 0, z } },
+    });
+  }
+
+  // Three weapons on the ground, each on its own pedestal. Standing at one and
+  // pressing the action button takes it — the same verb as building a tower
+  // and reading the sign, so the hub teaches the level's only interaction.
+  const PICKUPS = [
+    ['sword', -1.4, 0.2],
+    ['bow', 0, 0.2],
+    ['staff', 1.4, 0.2],
+  ];
+  for (const [id, x, z] of PICKUPS) {
+    ents.push({
+      id: `pedestal_${id}`, name: 'pedestal',
+      primitive: { kind: 'cylinder', size: { x: 0.46, y: 0.22, z: 0.46 }, color: '#6f6a5c' },
+      transform: { position: { x, y: GROUND_Y + 0.11, z } },
+    });
+    ents.push({
+      id: `pickup_marker_${id}`, name: 'pickup_marker', modelAssetId: 'td-selection',
+      transform: { position: { x, y: GROUND_Y + 0.02, z } },
+      visible: false,
+    });
+  }
+
+  ents.push({
+    id: 'hero', name: 'hero', modelAssetId: 'hero',
+    transform: { position: { x: 0, y: GROUND_Y, z: 3.0 } },
+    animation: { play: 'idle', loop: true },
+  });
+
+  return {
+    schemaVersion: 1,
+    id: 'hub',
+    name: 'Balaboo',
+    environment: { background: '#9fd4ef' },
+    gravity: { x: 0, y: -4.1692, z: 0 },
+    lights: [
+      { id: 'sky', kind: 'hemisphere', color: '#ffffff', groundColor: '#8fa08a', intensity: 2.1 },
+      { id: 'sun', kind: 'directional', color: '#fff6e0', intensity: 2.1,
+        position: { x: 3, y: 7, z: 4 }, castShadow: true },
+    ],
+    camera: { kind: 'follow', target: 'hero', fov: 55, offset: { x: 0, y: 3.6, z: 4.6 } },
+    entities: ents,
+  };
+}
+
+writeFileSync(new URL('../public/scenes3d/hub.json', import.meta.url),
+  JSON.stringify(buildHub(), null, 2) + '\n');
+console.log(`hub: ${buildHub().entities.length} entities`);

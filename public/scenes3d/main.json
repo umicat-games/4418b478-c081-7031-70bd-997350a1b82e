@@ -2376,6 +2376,40 @@
       }
     },
     {
+      "id": "exit_door",
+      "name": "exit_door",
+      "modelAssetId": "hub-door",
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": -6.35
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "exit_frame",
+      "name": "exit_frame",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 1.9,
+          "y": 1.5,
+          "z": 0.25
+        },
+        "color": "#6b4f2a"
+      },
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0.55,
+          "z": -6.5
+        }
+      },
+      "visible": false
+    },
+    {
       "id": "hero",
       "name": "hero",
       "modelAssetId": "hero",

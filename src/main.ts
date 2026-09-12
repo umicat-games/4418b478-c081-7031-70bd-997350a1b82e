@@ -8,6 +8,8 @@ import {
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { createAudio } from './audio';
+import { runHub, submitScore } from './hub';
+import type { GameAudio } from '@umicat/three-sdk';
 
 /**
  * Woodland Defense — a tower defense you can walk around in.
@@ -187,9 +189,25 @@ function segmentHitsSphere(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3,
   return _ac.addScaledVector(_ab, -t).lengthSq() <= r * r;
 }
 
-async function start(): Promise<void> {
-  const umicat = await ThreeUmicat.init();
-  await RAPIER.init();
+/** What the hub hands to the level: one platform connection, one WebGL context.
+ *
+ *  A second `WebGLRenderer` on the same canvas cannot be created — the context
+ *  is already taken — and a second `ThreeUmicat.init()` would open a second
+ *  connection to the host. Both are made once and passed along. */
+export interface Shared {
+  umicat: ThreeUmicat;
+  renderer: THREE.WebGLRenderer;
+  canvas: HTMLCanvasElement;
+  hudEl: HTMLElement;
+  audio: GameAudio;
+}
+
+export type Weapon = 'sword' | 'bow' | 'staff';
+
+/** Runs one level. Resolves when the player walks back out through the exit
+ *  door — so the caller can hand control to the hub and start the loop again. */
+export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'): Promise<void> {
+  const { umicat, renderer, canvas, hudEl, audio } = shared;
 
   const [manifest, scene3d, pathData] = await Promise.all([
     fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
@@ -197,7 +215,6 @@ async function start(): Promise<void> {
     fetch('scenes3d/path.json').then((r) => r.json() as Promise<{ cells: [number, number][]; spots: [number, number][] }>),
   ]);
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
-  const audio = createAudio();
 
   // --- Fold the board into a handful of draws ---
   //
@@ -291,13 +308,73 @@ async function start(): Promise<void> {
     (manifest.models?.find((m) => m.id === 'hero') as { animations?: Record<string, string> } | undefined)?.animations ?? {};
   const animator = new CharacterAnimator(heroMixer, world.clips.get('hero') ?? [], clipMap);
 
+  // --- Two weapons ---
+  //
+  // The bow is BUILT, not loaded: there is no bow anywhere in the asset
+  // library — I looked — and a torus arc with a string across it reads as one
+  // at this scale, in this art style, for nothing. The character already knows
+  // how to hold and fire one (`holding-both-shoot`), which is the part that
+  // would have been expensive.
   const heroAsset = manifest.models?.find((m) => m.id === 'hero');
   const handRight = heroAsset?.sockets?.['hand-right'];
+  let sword: THREE.Object3D | null = null;
+  let bow: THREE.Object3D | null = null;
+  let staff: THREE.Object3D | null = null;
+
+  /** A staff, also built rather than loaded — a shaft and the kit's own
+   *  crystal, which is already the right art for "this thing is magic". */
+  const makeStaff = (): THREE.Object3D => {
+    const g = new THREE.Object3D();
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.016, 0.02, 0.42, 6),
+      new THREE.MeshStandardMaterial({ color: 0x6d4a2f, roughness: 0.9 }));
+    const gem = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.055),
+      new THREE.MeshStandardMaterial({
+        color: 0x9b6cff, emissive: 0x6a3fd6, emissiveIntensity: 0.9, roughness: 0.3 }));
+    gem.position.y = 0.24;
+    g.add(shaft, gem);
+    g.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
+    return g;
+  };
+
+
+  const makeBow = (): THREE.Object3D => {
+    const g = new THREE.Object3D();
+    const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.8 });
+    const limb = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.018, 6, 16, Math.PI * 1.15), wood);
+    limb.rotation.z = Math.PI * 0.42;
+    const string = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.004, 0.004, 0.3, 4),
+      new THREE.MeshStandardMaterial({ color: 0xe8e2d0, roughness: 1 }));
+    string.position.x = 0.055;
+    g.add(limb, string);
+    g.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
+    return g;
+  };
+
   if (handRight) {
-    const { object: sword } = await loadModelAsset(manifest, 'sword', { assetBase: '' });
+    const loaded = await loadModelAsset(manifest, 'sword', { assetBase: '' });
+    sword = loaded.object;
     sword.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
     attachToSocket(hero, handRight, sword);
+    bow = makeBow();
+    attachToSocket(hero, handRight, bow);
+    staff = makeStaff();
+    attachToSocket(hero, handRight, staff);
   }
+
+  /** The hero carries all three and shows one. */
+  let weapon: Weapon = startWeapon;
+  const setWeapon = (w: Weapon): void => {
+    weapon = w;
+    if (sword) sword.visible = w === 'sword';
+    if (bow) bow.visible = w === 'bow';
+    if (staff) staff.visible = w === 'staff';
+    if (lockRing) lockRing.visible = false;
+    audio.play('build');
+    renderHud();
+  };
 
   // Prototypes, cloned per placement. Loading inside the build handler would
   // put a download in the middle of a button press.
@@ -316,9 +393,10 @@ async function start(): Promise<void> {
   };
 
   // --- render ---
-  const canvas = document.getElementById('game') as HTMLCanvasElement;
-  const hudEl = document.getElementById('hud')!;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  // The renderer and the canvas come from the boot, already in use by the hub.
+  // A second WebGLRenderer on the same canvas cannot be created at all.
+  renderer.shadowMap.enabled = true;
+  hudEl.textContent = '';
   // Render resolution, and the one graphics setting here that genuinely trades
   // picture for speed. A phone reports 3; 1.5 is the default because 2 is 1.8x
   // the fragments. `?dpr=2` to compare — the point is that this is decidable
@@ -412,6 +490,19 @@ async function start(): Promise<void> {
     renderer.render(world.scene, world.camera);   // and actually draw them, so textures upload
     for (const o of warm) o.removeFromParent();
     spark.geometry.dispose(); ring.geometry.dispose();
+  }
+
+  // The lock frame: the same corner bracket the board uses for a build spot,
+  // stood on its edge to face the camera. Reusing it is deliberate — in this
+  // game that shape already means "this is the thing the button acts on".
+  let lockRing: THREE.Object3D | null = null;
+  {
+    const { object } = await loadModelAsset(manifest, 'td-selection', { assetBase: '' });
+    object.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = false; });
+    object.visible = false;
+    object.scale.setScalar(0.9);
+    world.scene.add(object);
+    lockRing = object;
   }
 
   // --- state ---
@@ -545,6 +636,37 @@ async function start(): Promise<void> {
     }
   };
 
+  /** The staff's discharge: a ring that races out to the damage radius and a
+   *  scatter of sparks.
+   *
+   *  The ring's size is the RANGE, not a decoration — it ends exactly where
+   *  the damage does, so one cast teaches the radius better than any number
+   *  in the HUD could. */
+  const castBurst = (at: THREE.Vector3): void => {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.44, 40),
+      new THREE.MeshBasicMaterial({ color: 0xb58cff, transparent: true, opacity: 0.95,
+        side: THREE.DoubleSide, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(at.x, at.y + 0.06, at.z);
+    ring.userData.grow = STAFF_RADIUS / 0.37;
+    world.scene.add(ring);
+    updrafts.push({ obj: ring, t: 0, life: 0.42, spin: 0, rise: 0, r0: 0, a0: 0.95 });
+
+    for (let i = 0; i < 18; i++) {
+      const a0 = (i / 18) * Math.PI * 2;
+      const mote = new THREE.Mesh(moteGeom, new THREE.MeshBasicMaterial({
+        color: i % 2 ? 0xd9c2ff : 0x8b5cf6, transparent: true, opacity: 1, depthWrite: false }));
+      const r0 = 0.4 + Math.random() * 0.5;
+      mote.position.set(at.x + Math.cos(a0) * r0, at.y + 0.1, at.z + Math.sin(a0) * r0);
+      mote.userData.cx = at.x; mote.userData.cz = at.z;
+      mote.scale.setScalar(1.6);
+      world.scene.add(mote);
+      updrafts.push({ obj: mote, t: 0, life: 0.5 + Math.random() * 0.3,
+                      spin: 3.4 + Math.random() * 2, rise: 1.6 + Math.random(), r0, a0 });
+    }
+  };
+
   /** Motes lifting off an upgraded tower — the updraft.
    *
    *  In the scene rather than in the DOM, because it has to sit in the world
@@ -596,8 +718,10 @@ async function start(): Promise<void> {
       }
       const mat = u.obj.material as THREE.MeshBasicMaterial;
       if (u.spin === 0) {
-        // The ring: expands outward and thins away.
-        const g = 1 + k * 1.5;
+        // The ring: expands outward and thins away. A cast ring grows all the
+        // way to the spell's radius, so the effect and the rule are the same
+        // shape.
+        const g = 1 + k * ((u.obj.userData.grow as number) ?? 1.5);
         u.obj.scale.setScalar(g);
         mat.opacity = u.a0 * (1 - k);
       } else {
@@ -626,6 +750,36 @@ async function start(): Promise<void> {
   // element stops belonging to the scene the moment the camera moves, and a
   // handful of absolutely positioned emoji over a WebGL canvas is a shape this
   // game has already been burned by.
+  /** An arrow the HERO fired. Flies straight and hits the first thing it
+   *  crosses — same swept test as an enemy bullet, for the same reason. */
+  interface Arrow { obj: THREE.Object3D; vel: THREE.Vector3; life: number; }
+  const arrows: Arrow[] = [];
+  const ARROW_SPEED = 11;
+  const ARROW_DAMAGE = 3;
+  const ARROW_LIFE = 1.6;
+  const ARROW_HIT = 0.42;
+  /** How far the bow finds a target on its own. Auto-aim, because picking a
+   *  direction with a thumbstick while something circles you is not a skill
+   *  anyone wants to practise — and because the lock frame makes the range a
+   *  thing you can SEE rather than a number in a file. */
+  const BOW_RANGE = 4.6;
+  /** The staff hits everything around you at once, so it is on a real
+   *  cooldown rather than just the animation's length. */
+  const STAFF_RADIUS = 2.6;
+  const STAFF_DAMAGE = 4;
+  const STAFF_COOLDOWN = 1.7;
+  let staffCooldown = 0;
+  let lockTarget: Enemy | null = null;
+  /** Where the mouse is, in clip space, or null on a device without one.
+   *
+   *  Hovering picks the target on a desktop: the nearest enemy is a fine
+   *  default and a poor decision, and a mouse is already an aiming device.
+   *  Touch keeps the nearest-in-range default — cycling a lock with a thumb
+   *  needs a gesture that is not yet decided, and inventing one badly is worse
+   *  than the default. */
+  let pointerNdc: THREE.Vector2 | null = null;
+  const raycaster = new THREE.Raycaster();
+
   interface Coin { obj: THREE.Object3D; vel: THREE.Vector3; t: number; amount: number; paid: boolean; }
   const coins: Coin[] = [];
   const COIN_POP = 0.55;        // seconds of arc before it heads for the corner
@@ -739,6 +893,34 @@ async function start(): Promise<void> {
   // than hope the first answer still holds.
   window.addEventListener('orientationchange', () => setTimeout(placeHotbar, 250));
 
+  // Weapon picker, sharing the hotbar's row. The sword and the bow are not
+  // towers, so they are a separate little group rather than two more cells
+  // that would be selected by the same number keys.
+  const weaponBar = document.createElement('div');
+  weaponBar.style.cssText = 'display: flex; gap: 6px; margin-right: 14px; align-items: stretch;';
+  const weaponCells = ([['sword', '🗡', 'Q'], ['bow', '🏹', 'E'], ['staff', '🔮', 'R']] as const).map(([id, icon, key]) => {
+    const cell = document.createElement('button');
+    cell.style.cssText = `
+      width: 48px; padding: 6px 4px 5px; border-radius: 12px; border: 2px solid transparent;
+      background: rgba(0,0,0,.42); color: #fff; font: inherit; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      -webkit-tap-highlight-color: transparent;
+    `;
+    cell.innerHTML = `<span style="font-size:18px;line-height:1">${icon}</span>` +
+      `<span style="opacity:.45;font-size:10px">${key}</span>`;
+    cell.onclick = () => setWeapon(id);
+    weaponBar.appendChild(cell);
+    return [id, cell] as const;
+  });
+  hotbar.appendChild(weaponBar);
+
+  const refreshWeapons = (): void => {
+    for (const [id, cell] of weaponCells) {
+      cell.style.borderColor = weapon === id ? '#7fd4ff' : 'transparent';
+      cell.style.background = weapon === id ? 'rgba(0,0,0,.62)' : 'rgba(0,0,0,.42)';
+    }
+  };
+
   const cells = TOWERS.map((kind, i) => {
     const cell = document.createElement('button');
     cell.style.cssText = `
@@ -773,6 +955,9 @@ async function start(): Promise<void> {
   window.addEventListener('keydown', (e) => {
     const n = Number(e.key);
     if (n >= 1 && n <= TOWERS.length) { selected = n - 1; refreshHotbar(); renderHud(); }
+    if (e.code === 'KeyQ') setWeapon('sword');
+    if (e.code === 'KeyE') setWeapon('bow');
+    if (e.code === 'KeyR') setWeapon('staff');
   });
 
   const renderHud = (): void => {
@@ -790,9 +975,11 @@ async function start(): Promise<void> {
       const kind = TOWERS[selected];
       line3.textContent = buildCell
         ? `🔨 build ${kind.label} · ${kind.cost}g`
-        : 'walk to a spot beside the path to build';
+        : `walk to a spot beside the path to build · ${
+            weapon === 'bow' ? '🏹 bow' : weapon === 'staff' ? '🔮 staff' : '🗡 sword'}`;
     }
     refreshHotbar();
+    refreshWeapons();
   };
 
   const endRun = (didWin: boolean): void => {
@@ -801,28 +988,42 @@ async function start(): Promise<void> {
     // matter: the thumbstick would otherwise keep walking the character behind
     // the dialog, and its full-screen layer would swallow the taps meant for
     // the button on top of it.
-    input.setEnabled(false);
+    // Input stays ON. The run is over, but walking to the door is the last
+    // thing the player does, and taking the controls away would strand them.
     hotbar.style.display = 'none';
     // The ending gets the room to itself.
     audio.duck(10);
     audio.play(didWin ? 'win' : 'lose');
-    if (waveIndex + 1 > bestWave) {
-      bestWave = Math.min(waveIndex + 1, WAVES.length);
+    const reached = Math.min(waveIndex + 1, WAVES.length);
+    if (reached > bestWave) {
+      bestWave = reached;
       void umicat.saves.set(SAVE_KEY, { best: bestWave, quality });
     }
+    // The shared board. A guest run is not recorded — writing needs a signed-in
+    // player — and that is handled inside rather than being a caller's problem.
+    void submitScore(umicat, reached);
     banner.style.display = 'block';
     banner.innerHTML = didWin
       ? `<div>All waves cleared</div><div style="font:600 15px/1.6 system-ui;opacity:.85">The woods are safe.</div>`
       : `<div>${lives <= 0 ? 'The base fell' : 'You were knocked out'}</div>` +
         `<div style="font:600 15px/1.6 system-ui;opacity:.85">Reached wave ${Math.min(waveIndex + 1, WAVES.length)} of ${WAVES.length}.</div>`;
-    const again = document.createElement('button');
-    again.textContent = 'Play Again';
-    again.style.cssText = `
-      margin-top: 14px; padding: 10px 20px; border-radius: 999px; border: 0;
-      font: 700 15px system-ui; background: #fff; color: #222; cursor: pointer;
-    `;
-    again.onclick = () => location.reload();
-    banner.appendChild(again);
+    banner.innerHTML += `<div style="margin-top:12px;font:600 14px/1.6 system-ui;opacity:.8">
+      A door has opened at the far end — walk through it to go back.</div>`;
+
+    // The way out is a door in the world, not a button on top of it. The
+    // banner stops being a wall you have to dismiss and becomes a caption on
+    // something you are already standing in.
+    for (const id of ['exit_door', 'exit_frame']) {
+      const o = world.entities.get(id);
+      if (o) o.visible = true;
+    }
+    // And take the wall out of the way. A door you can see and cannot reach
+    // is worse than no door: the wall's collider is what stops you, and it
+    // does not care that something was drawn in front of it.
+    const wall = world.bodies.get('wall_n');
+    if (wall) world.world.removeRigidBody(wall);
+    const wallMesh = world.entities.get('wall_n');
+    if (wallMesh) wallMesh.visible = false;
   };
 
   // --- the path, as a position lookup -------------------------------------
@@ -902,6 +1103,56 @@ async function start(): Promise<void> {
   const _q = new THREE.Quaternion();
   const heroAttack = (): void => {
     if (!running || animator.busy) return;
+
+    if (weapon === 'staff') {
+      if (staffCooldown > 0) return;
+      staffCooldown = STAFF_COOLDOWN;
+      animator.play('interact');
+      audio.play('upgrade');
+      // Centred on what you have locked, not on yourself. A burst that always
+      // goes off underfoot makes the spell about walking into a crowd; one you
+      // can place makes it about choosing which crowd.
+      const at = lockTarget?.alive ? lockTarget.obj.position : hero.position;
+      castBurst(at);
+      if (lockTarget?.alive) {
+        hero.rotation.y = Math.atan2(at.x - hero.position.x, at.z - hero.position.z);
+      }
+      let struck = 0;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const d = Math.hypot(e.obj.position.x - at.x, e.obj.position.z - at.z);
+        if (d > STAFF_RADIUS) continue;
+        struck += 1;
+        damage(e, STAFF_DAMAGE);
+      }
+      if (struck) audio.play('enemy-die');
+      return;
+    }
+
+    if (weapon === 'bow') {
+      animator.play('holdBothShoot');
+      audio.play('enemy-shot');
+      const arrow = spawnFrom('td-ammo-arrow');
+      // Towards the lock if there is one, otherwise straight ahead. Auto-aim
+      // is what makes a bow usable with a thumb; the fallback keeps it from
+      // being a button that does nothing when the board is empty.
+      let dirX = Math.sin(hero.rotation.y), dirZ = Math.cos(hero.rotation.y);
+      if (lockTarget?.alive) {
+        const dx = lockTarget.obj.position.x - hero.position.x;
+        const dz = lockTarget.obj.position.z - hero.position.z;
+        const len = Math.hypot(dx, dz) || 1;
+        dirX = dx / len; dirZ = dz / len;
+        hero.rotation.y = Math.atan2(dirX, dirZ);
+      }
+      arrow.position.set(hero.position.x + dirX * 0.3, hero.position.y + 0.34, hero.position.z + dirZ * 0.3);
+      arrow.lookAt(arrow.position.x + dirX, arrow.position.y, arrow.position.z + dirZ);
+      arrows.push({
+        obj: arrow, life: ARROW_LIFE,
+        vel: new THREE.Vector3(dirX * ARROW_SPEED, 0, dirZ * ARROW_SPEED),
+      });
+      return;
+    }
+
     animator.play('attack');
     audio.play('swing');
     let connected = false;
@@ -944,7 +1195,18 @@ async function start(): Promise<void> {
     if (e.button !== 0 || e.pointerType === 'touch') return;
     heroAttack();
   });
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch') { pointerNdc = null; return; }
+    pointerNdc ??= new THREE.Vector2();
+    pointerNdc.set(
+      (e.clientX / window.innerWidth) * 2 - 1,
+      -(e.clientY / window.innerHeight) * 2 + 1);
+  });
+  canvas.addEventListener('pointerleave', () => { pointerNdc = null; });
 
+  // Whatever was picked up in the hub. Also the only thing that hides the
+  // other two: they are all attached, and all visible until told otherwise.
+  setWeapon(startWeapon);
   renderHud();
 
   // A frame counter, on the device that matters.
@@ -993,10 +1255,14 @@ async function start(): Promise<void> {
     return d ? `${d.shadow.mapSize.width}` : 'none';
   };
 
+  const EXIT_Z = -6.15;
   let last = performance.now();
   const dir = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
   const heroHit = new THREE.Vector3();
+  let leave: (() => void) | null = null;
+  const leaving = new Promise<void>((res) => { leave = res; });
+
   renderer.setAnimationLoop((now: number) => {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
@@ -1004,17 +1270,56 @@ async function start(): Promise<void> {
     const turn = input.look();
     if (turn.x || turn.y) world.orbit(turn.x, turn.y);
 
-    if (running) {
-      const move = input.direction(world.cameraYaw);
-      character.update(dt, move, { jump: input.jump });
-      if (character.position.y < RESPAWN_BELOW_Y) character.teleport(SPAWN);
-      character.syncTo(hero, HERO_SYNC_OFFSET);
-      character.faceTowards(hero, move, dt);
+    // Walking is not part of "the game is running" — it is how you leave.
+    const move = input.direction(world.cameraYaw);
+    character.update(dt, move, { jump: input.jump });
+    if (character.position.y < RESPAWN_BELOW_Y) character.teleport(SPAWN);
+    character.syncTo(hero, HERO_SYNC_OFFSET);
+    character.faceTowards(hero, move, dt);
+    animator.update(character.state);
 
+    if (running) {
       if (input.consume('attack')) heroAttack();
       if (input.consume('build')) tryBuild();
-      animator.update(character.state);
       if (invincible > 0) invincible -= dt;
+      if (staffCooldown > 0) staffCooldown -= dt;
+
+      // --- what the bow and the staff are pointed at ---
+      lockTarget = null;
+      if (weapon !== 'sword') {
+        const inRange = enemies.filter((e) => e.alive
+          && Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z) <= BOW_RANGE);
+        // A mouse hovering an enemy chooses it; otherwise the nearest one.
+        if (pointerNdc && inRange.length) {
+          raycaster.setFromCamera(pointerNdc, world.camera);
+          const hits = raycaster.intersectObjects(inRange.map((e) => e.obj), true);
+          if (hits.length) {
+            const root = hits[0].object;
+            lockTarget = inRange.find((e) => {
+              let n: THREE.Object3D | null = root;
+              while (n) { if (n === e.obj) return true; n = n.parent; }
+              return false;
+            }) ?? null;
+          }
+        }
+        if (!lockTarget) {
+          let best = Infinity;
+          for (const e of inRange) {
+            const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
+            if (d < best) { best = d; lockTarget = e; }
+          }
+        }
+      }
+      if (lockRing) {
+        lockRing.visible = !!lockTarget;
+        if (lockTarget) {
+          lockRing.position.set(
+            lockTarget.obj.position.x, lockTarget.obj.position.y + 0.1, lockTarget.obj.position.z);
+          // Stood on its edge to face the camera: on the ground it would read
+          // as a build spot, which is a different promise.
+          lockRing.quaternion.copy(world.camera.quaternion);
+        }
+      }
 
       // Where the player could build right now. Recomputed every frame because
       // it is a function of where they are standing — a cached answer is one
@@ -1171,6 +1476,25 @@ async function start(): Promise<void> {
         }
       }
 
+      // --- the hero's arrows fly ---
+      for (let i = arrows.length - 1; i >= 0; i--) {
+        const a = arrows[i];
+        a.life -= dt;
+        prevPos.copy(a.obj.position);
+        a.obj.position.addScaledVector(a.vel, dt);
+        let hit: Enemy | null = null;
+        for (const e of enemies) {
+          if (!e.alive) continue;
+          if (!segmentHitsSphere(prevPos, a.obj.position, e.obj.position, ARROW_HIT)) continue;
+          hit = e; break;
+        }
+        if (hit) damage(hit, ARROW_DAMAGE);
+        if (hit || a.life <= 0 || Math.abs(a.obj.position.x) > 7 || Math.abs(a.obj.position.z) > 7) {
+          world.scene.remove(a.obj);
+          arrows.splice(i, 1);
+        }
+      }
+
       // --- tower shots fly ---
       for (let i = shots.length - 1; i >= 0; i--) {
         const s = shots[i];
@@ -1204,6 +1528,26 @@ async function start(): Promise<void> {
       }
     }
 
+    // Out through the door, back to the hub. Only once the run is over — the
+    // wall is solid until then, and the door is not even drawn.
+    if (!running && hero.position.z < EXIT_Z && leave) {
+      const go = leave; leave = null;
+      audio.play('wave');
+      renderer.setAnimationLoop(null);
+      window.removeEventListener('resize', resize);
+      input.dispose();
+      banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
+      hudEl.textContent = '';
+      world.dispose();
+      world.scene.clear();
+      // The handle goes with it. A debug handle that outlives the thing it
+      // describes is worse than none: anything asking "am I in the level?" is
+      // told yes by the corpse of the last one.
+      delete (window as unknown as Record<string, unknown>).__game;
+      go();
+      return;
+    }
+
     updateCoins(dt);
     updateHealthBars();
     updateUpdrafts(dt);
@@ -1219,6 +1563,10 @@ async function start(): Promise<void> {
       get towers() { return towers; },
       get shots() { return shots; },
       get bullets() { return bullets; },
+      get arrows() { return arrows; },
+      weapon: () => weapon,
+      lock: () => (lockTarget ? { hp: lockTarget.hp, visible: lockRing?.visible ?? false } : null),
+      setWeapon: (w: Weapon) => setWeapon(w),
       get updrafts() { return updrafts; },
       get coins() { return coins; },
       quality: () => ({ level: quality, name: QUALITY[quality].name,
@@ -1231,9 +1579,30 @@ async function start(): Promise<void> {
     } as unknown,
   });
   void tmp;
+  await leaving;
 }
 
-void start().catch((err) => {
+async function boot(): Promise<void> {
+  const umicat = await ThreeUmicat.init();
+  await RAPIER.init();
+  const canvas = document.getElementById('game') as HTMLCanvasElement;
+  const hudEl = document.getElementById('hud')!;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const shared: Shared = { umicat, renderer, canvas, hudEl, audio: createAudio() };
+
+  // The hub, then the level. `runHub` resolves when the player walks through
+  // the door, and tears its own scene down first — one renderer, one context,
+  // handed over rather than rebuilt.
+  // The loop: hub, door, level, door, hub. Each half tears itself down and
+  // hands the renderer back, so this can run all evening without leaking a
+  // scene per run.
+  for (;;) {
+    const weapon = await runHub(shared);
+    await startLevel(shared, weapon);
+  }
+}
+
+void boot().catch((err) => {
   const hud = document.getElementById('hud');
   if (hud) hud.textContent = `Failed to start: ${String(err)}`;
   console.error('[umicat] game failed to start', err);
