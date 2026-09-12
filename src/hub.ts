@@ -7,6 +7,7 @@ import {
 } from '@umicat/three-sdk';
 import type { Shared, Weapon } from './main';
 import { MUSIC } from './audio';
+import { hideLoading } from './loading';
 
 /**
  * The hub — where a run starts, and where it is scored.
@@ -88,6 +89,11 @@ export async function runHub(shared: Shared): Promise<Weapon> {
   const hero = world.entities.get('hero')!;
   const marker = world.entities.get('sign_marker')!;
   shared.audio.setMusic(MUSIC.lobby);
+
+  // No prefetching the level here. It would mean naming, from the hub, which
+  // level the player is about to enter — and the moment there is progress to
+  // save and more than one of them, that name is a guess. A loading screen is
+  // the ordinary answer and it stays correct.
 
   renderer.shadowMap.enabled = true;
   const dpr = window.devicePixelRatio ?? 1;
@@ -219,6 +225,9 @@ export async function runHub(shared: Shared): Promise<Weapon> {
         font:700 14px system-ui;background:#fff;color:#222;cursor:pointer">Close</button>`;
     panel.querySelector('button')!.onclick = closePanel;
   };
+
+  // Built, placed and about to render: the next frame is a real one.
+  hideLoading();
 
   // --- the loop ---
   return await new Promise<Weapon>((resolve) => {

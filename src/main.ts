@@ -9,6 +9,7 @@ import {
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { createAudio, MUSIC } from './audio';
 import { runHub, submitScore } from './hub';
+import { showLoading, hideLoading } from './loading';
 import type { GameAudio } from '@umicat/three-sdk';
 
 /**
@@ -1209,6 +1210,8 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   // other two: they are all attached, and all visible until told otherwise.
   setWeapon(startWeapon);
   renderHud();
+  // Everything is loaded, warmed and placed; the next frame is a real one.
+  hideLoading();
 
   // A frame counter, on the device that matters.
   //
@@ -1584,6 +1587,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
 }
 
 async function boot(): Promise<void> {
+  showLoading('Waking up');
   const umicat = await ThreeUmicat.init();
   await RAPIER.init();
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -1598,7 +1602,9 @@ async function boot(): Promise<void> {
   // hands the renderer back, so this can run all evening without leaking a
   // scene per run.
   for (;;) {
+    showLoading('Entering the woods');
     const weapon = await runHub(shared);
+    showLoading('Raising the defences');
     await startLevel(shared, weapon);
   }
 }
