@@ -101,6 +101,8 @@ brings back an always-drawn pad at the bottom left. Nothing in a game changes
 either way — `direction()` reads the same.
 
 **The right half of the screen turns the camera, and the stick follows it.**
+On desktop the same `look()` is fed by holding the RIGHT mouse button and
+dragging — the left button stays the game's, for selecting and aiming.
 `input.look()` returns a delta and clears on read; hand it to `world.orbit()`,
 then pass `world.cameraYaw` to `input.direction()`. Those two go together: a
 camera that turns while movement stays on world axes is worse than a camera
