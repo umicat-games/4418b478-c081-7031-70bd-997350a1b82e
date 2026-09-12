@@ -6,6 +6,7 @@ import {
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
 import type { Shared, Weapon } from './main';
+import { MUSIC } from './audio';
 
 /**
  * The hub — where a run starts, and where it is scored.
@@ -86,6 +87,7 @@ export async function runHub(shared: Shared): Promise<Weapon> {
 
   const hero = world.entities.get('hero')!;
   const marker = world.entities.get('sign_marker')!;
+  shared.audio.setMusic(MUSIC.lobby);
 
   renderer.shadowMap.enabled = true;
   const dpr = window.devicePixelRatio ?? 1;

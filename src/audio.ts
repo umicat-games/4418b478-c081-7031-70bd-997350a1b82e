@@ -29,5 +29,10 @@ const CLIPS: Record<string, AudioClipSpec> = {
 };
 
 
+/** Each scene has its own track, uploaded through the Assets tool. They are
+ *  `.mp3` next to `.ogg` effects, which the SDK allows precisely so a game can
+ *  use whatever its assets came as. */
+export const MUSIC = { lobby: 'bgm-lobby.mp3', level: 'bgm-level.mp3' } as const;
+
 export const createAudio = (): GameAudio =>
-  new GameAudio({ clips: CLIPS, base: 'audio/', music: 'bgm', musicVolume: 0.28 });
+  new GameAudio({ clips: CLIPS, base: 'audio/', music: MUSIC.lobby, musicVolume: 0.3 });

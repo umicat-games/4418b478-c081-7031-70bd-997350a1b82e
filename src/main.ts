@@ -7,7 +7,7 @@ import {
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
-import { createAudio } from './audio';
+import { createAudio, MUSIC } from './audio';
 import { runHub, submitScore } from './hub';
 import type { GameAudio } from '@umicat/three-sdk';
 
@@ -215,6 +215,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     fetch('scenes3d/path.json').then((r) => r.json() as Promise<{ cells: [number, number][]; spots: [number, number][] }>),
   ]);
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
+  audio.setMusic(MUSIC.level);
 
   // --- Fold the board into a handful of draws ---
   //
