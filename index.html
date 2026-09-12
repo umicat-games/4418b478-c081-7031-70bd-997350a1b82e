@@ -11,6 +11,13 @@
       /* Simple text HUD. A 3D game's UI is DOM on the web — there is no reason
          to draw a score with triangles. */
       #hud {
+        /* Above the platform's on-screen controls, which are a full-screen
+           layer at z-index 10. A HUD is the game's own first-class UI, and a
+           button in it — a mute toggle, a shop tab — is otherwise unreachable
+           on a phone while looking perfectly normal. The SDK also keeps its
+           zones out of the top of the screen, but that is a default sized for
+           a short HUD, not a guarantee. */
+        z-index: 20;
         position: fixed; left: 16px; top: 14px; pointer-events: none;
         font: 600 16px/1.5 system-ui, sans-serif; color: #fff;
         text-shadow: 0 2px 6px rgba(0,0,0,.55); max-width: 80vw;

@@ -118,7 +118,7 @@ wiring an input, check it is still free:
 | Touch | left half (thumbstick), right half (camera), the button cluster bottom-right | extra buttons, via `actions` |
 | Mouse | **right button + drag** (camera), and the context menu | **left button** |
 | Keys | `WASD` / arrows, `Space` | everything else |
-| Layers | a full-screen control layer at **`z-index: 10`** | anything above or below it |
+| Layers | a full-screen control layer at **`z-index: 10`**, kept clear of the top `max(64px, 12%)` | anything above or below it; `#hud` is already at 20 |
 
 **Any dialog you put up must call `input.setEnabled(false)`.** The controls are
 a full-screen layer above your DOM, so a button in a modal renders perfectly
