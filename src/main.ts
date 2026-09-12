@@ -694,14 +694,48 @@ async function start(): Promise<void> {
     font: 600 12px/1.25 system-ui, sans-serif; color: #fff;
   `;
   document.body.appendChild(hotbar);
-  // On a touch device the bottom-right corner already belongs to the platform's
-  // jump and action buttons, and a bar centred at the bottom lands on top of
-  // them on a narrow screen. Sit above the cluster instead: 7vmin of margin
-  // plus two rows of 20vmin buttons. (Checked rather than assumed — this is
-  // the fifth thing this session to render perfectly on top of something.)
-  if (document.querySelector('[data-umicat-touch]')) {
-    hotbar.style.bottom = 'calc(50vmin + 12px)';
-  }
+
+  /** Keep the hotbar out of the platform's buttons, by MEASURING them.
+   *
+   *  The first attempt was `bottom: calc(50vmin + 12px)` on touch devices,
+   *  reasoned from the SDK's own vmin units. On a landscape phone vmin is the
+   *  HEIGHT, so that put the hotbar halfway up the screen — and the layout
+   *  probe ran in portrait, where the same expression is fine. The game is
+   *  played in landscape.
+   *
+   *  Arithmetic about someone else's CSS is a guess. Their rectangle is a
+   *  fact, so: sit at the bottom, and only climb if that actually collides. */
+  const placeHotbar = (): void => {
+    hotbar.style.bottom = '14px';
+    const layer = document.querySelector('[data-umicat-touch]');
+    if (!layer) return;
+    const controls = [...layer.querySelectorAll('div')]
+      .filter((d) => getComputedStyle(d).pointerEvents === 'auto')
+      .map((d) => d.getBoundingClientRect())
+      // The move and look zones are half the screen each; they are not what a
+      // hotbar can collide with in any useful sense.
+      .filter((r) => r.height < window.innerHeight * 0.5 && r.width > 10);
+    if (!controls.length) return;
+    // Climb until it is clear, re-measuring each time. One lift is not enough:
+    // clearing the bottom row of buttons lands the bar in the row above it,
+    // because the cluster wraps. Four passes is more than any layout needs and
+    // still terminates.
+    for (let pass = 0; pass < 4; pass++) {
+      const bar = hotbar.getBoundingClientRect();
+      const hits = controls.filter((r) =>
+        r.left < bar.right && r.right > bar.left && r.top < bar.bottom && r.bottom > bar.top);
+      if (!hits.length) return;
+      const highest = Math.min(...hits.map((r) => r.top));
+      hotbar.style.bottom = `${Math.round(window.innerHeight - highest) + 10}px`;
+    }
+  };
+  // Called after the cells exist, further down — an empty bar measures zero by
+  // zero and collides with nothing, which is why the first version of this
+  // silently did nothing at all.
+  window.addEventListener('resize', placeHotbar);
+  // Rotating the phone changes which dimension is which; re-measure rather
+  // than hope the first answer still holds.
+  window.addEventListener('orientationchange', () => setTimeout(placeHotbar, 250));
 
   const cells = TOWERS.map((kind, i) => {
     const cell = document.createElement('button');
@@ -731,6 +765,8 @@ async function start(): Promise<void> {
       cell.style.opacity = affordable ? '1' : '0.45';
     });
   }
+
+  placeHotbar();
 
   window.addEventListener('keydown', (e) => {
     const n = Number(e.key);
