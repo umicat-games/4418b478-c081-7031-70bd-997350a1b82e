@@ -118,6 +118,15 @@ wiring an input, check it is still free:
 | Touch | left half (thumbstick), right half (camera), the button cluster bottom-right | extra buttons, via `actions` |
 | Mouse | **right button + drag** (camera), and the context menu | **left button** |
 | Keys | `WASD` / arrows, `Space` | everything else |
+| Layers | a full-screen control layer at **`z-index: 10`** | anything above or below it |
+
+**Any dialog you put up must call `input.setEnabled(false)`.** The controls are
+a full-screen layer above your DOM, so a button in a modal renders perfectly
+and cannot be pressed — the taps go to the move zone behind it. Disabling also
+stops the character walking behind the dialog, and clears what was held so a
+thumb mid-push does not resume when it closes. Re-enable when the dialog goes.
+Give the dialog a `z-index` above 10 as well, so it is visible over the layer
+while it is still fading out.
 
 The one that bites: **do not wire an action to "the mouse went down."** The
 right button is the camera now, so a game that attacks on any pointerdown
