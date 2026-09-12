@@ -146,6 +146,46 @@
       "id": "td-bullet",
       "path": "kit/td/weapon-ammo-bullet.glb",
       "importScale": 1
+    },
+    {
+      "id": "td-catapult",
+      "path": "kit/td/weapon-catapult.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-turret",
+      "path": "kit/td/weapon-turret.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-ammo-boulder",
+      "path": "kit/td/weapon-ammo-boulder.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-coin",
+      "path": "kit/platformer/coin-gold.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-ufo-a2",
+      "path": "kit/td/enemy-ufo-a-weapon.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-ufo-b2",
+      "path": "kit/td/enemy-ufo-b-weapon.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-ufo-c2",
+      "path": "kit/td/enemy-ufo-c-weapon.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-ufo-d2",
+      "path": "kit/td/enemy-ufo-d-weapon.glb",
+      "importScale": 1
     }
   ]
 }

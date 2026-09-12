@@ -37,7 +37,6 @@ const HERO_INVINCIBLE_SECONDS = 1.4;
 // --- enemies --------------------------------------------------------------
 /** They fly, so they float above the path rather than walking it. */
 const ENEMY_FLY_HEIGHT = 0.38;
-const ENEMY_MODEL_SCALE = 0.62;      // the kit's UFOs are a full tile wide
 /** UFOs SHOOT. Nothing about touching one hurts you.
  *
  *  It used to be a wind-up and then a distance check, which is a hitscan with
@@ -64,6 +63,8 @@ const BULLET_MUZZLE = 0.15;
 interface TowerKind {
   id: string;
   label: string;
+  /** Shown in the hotbar. */
+  icon: string;
   model: string;
   ammo: string;
   cost: number;
@@ -74,19 +75,44 @@ interface TowerKind {
   /** How fast its shot travels, in units per second. */
   shotSpeed: number;
 }
+/** Four, and each one is a different answer to "what is walking past me".
+ *  Cheap-and-quick, slow-and-hard, long-and-lobbing, fast-and-weak. A second
+ *  tower that is just the first with bigger numbers is a longer menu, not a
+ *  decision. */
 const TOWERS: TowerKind[] = [
-  { id: 'ballista', label: 'Ballista', model: 'td-ballista', ammo: 'td-ammo-arrow',
+  { id: 'ballista', label: 'Ballista', icon: '🏹', model: 'td-ballista', ammo: 'td-ammo-arrow',
     cost: 25, range: 3.0, damage: 2, reload: 1.0, shotSpeed: 9 },
-  { id: 'cannon', label: 'Cannon', model: 'td-cannon', ammo: 'td-ammo-ball',
+  { id: 'cannon', label: 'Cannon', icon: '💣', model: 'td-cannon', ammo: 'td-ammo-ball',
     cost: 45, range: 2.2, damage: 5, reload: 2.0, shotSpeed: 7 },
+  { id: 'catapult', label: 'Catapult', icon: '🪨', model: 'td-catapult', ammo: 'td-ammo-boulder',
+    cost: 60, range: 4.2, damage: 7, reload: 3.0, shotSpeed: 5 },
+  { id: 'turret', label: 'Turret', icon: '⚙️', model: 'td-turret', ammo: 'td-ammo-arrow',
+    cost: 40, range: 2.6, damage: 1, reload: 0.28, shotSpeed: 12 },
 ];
 
-interface Wave { count: number; hp: number; speed: number; model: string; bounty: number; }
+interface Wave {
+  count: number; hp: number; speed: number; model: string; bounty: number;
+  /** Whether this kind shoots back. */
+  armed: boolean;
+  /** The kit's UFOs are a full tile wide; this is how big they read next to
+   *  a 0.72-tall hero. */
+  scale: number;
+}
+/** Eight waves, six kinds of thing to shoot at.
+ *
+ *  The armed hulls (`-weapon`) are the ones that shoot back, so a wave reads
+ *  as "these are dangerous to stand near" before anything has happened — and
+ *  the scouts are fast and fragile, which is a different problem from the
+ *  heavies rather than a bigger one. */
 const WAVES: Wave[] = [
-  { count: 5, hp: 6, speed: 1.1, model: 'td-ufo-a', bounty: 8 },
-  { count: 7, hp: 9, speed: 1.25, model: 'td-ufo-b', bounty: 10 },
-  { count: 9, hp: 14, speed: 1.35, model: 'td-ufo-c', bounty: 12 },
-  { count: 12, hp: 20, speed: 1.5, model: 'td-ufo-d', bounty: 16 },
+  { count: 5, hp: 6, speed: 1.1, model: 'td-ufo-a', bounty: 8, armed: false, scale: 0.62 },
+  { count: 7, hp: 9, speed: 1.25, model: 'td-ufo-b', bounty: 10, armed: false, scale: 0.62 },
+  { count: 8, hp: 8, speed: 2.1, model: 'td-ufo-c', bounty: 11, armed: false, scale: 0.5 },
+  { count: 9, hp: 16, speed: 1.2, model: 'td-ufo-a2', bounty: 14, armed: true, scale: 0.68 },
+  { count: 10, hp: 22, speed: 1.3, model: 'td-ufo-d', bounty: 16, armed: false, scale: 0.72 },
+  { count: 12, hp: 20, speed: 1.9, model: 'td-ufo-b2', bounty: 18, armed: true, scale: 0.6 },
+  { count: 14, hp: 34, speed: 1.2, model: 'td-ufo-c2', bounty: 22, armed: true, scale: 0.78 },
+  { count: 16, hp: 48, speed: 1.45, model: 'td-ufo-d2', bounty: 28, armed: true, scale: 0.85 },
 ];
 const SPAWN_GAP = 1.1;          // seconds between enemies in a wave
 const WAVE_GAP = 6;             // breathing room between waves
@@ -97,6 +123,13 @@ interface Enemy {
   obj: THREE.Object3D;
   hp: number;
   maxHp: number;
+  /** Only armed kinds shoot. */
+  armed: boolean;
+  /** Two quads over its head: a dark backing and a fill. Hidden at full
+   *  health — a board of full bars is noise, and the interesting information
+   *  is which things are nearly dead. */
+  bar: THREE.Object3D | null;
+  barFill: THREE.Mesh | null;
   speed: number;
   bounty: number;
   /** How far along the path, in cells. Fractional between waypoints. */
@@ -223,7 +256,9 @@ async function start(): Promise<void> {
   let bestWave = saved?.best ?? 0;
   /** 0 = smooth, 1 = sharp. Persisted, because a setting you have to find
    *  again every run is a setting nobody uses. */
-  let quality = saved?.quality ?? 0;
+  // Sharp by default: measured at a steady 60 on an iPhone 14 Pro, which is
+  // the machine that decides this. Smooth stays one tap away.
+  let quality = saved?.quality ?? 1;
 
   // The path the enemies walk is the same polyline the tiles were laid from,
   // so what you see and what they follow cannot drift apart.
@@ -238,7 +273,6 @@ async function start(): Promise<void> {
     actions: [
       { id: 'attack', label: '⚔', keys: ['KeyJ'] },
       { id: 'build', label: '🔨', keys: ['KeyB', 'KeyE'] },
-      { id: 'swap', label: '⇄', keys: ['KeyQ'] },
     ],
   });
 
@@ -267,7 +301,7 @@ async function start(): Promise<void> {
   // put a download in the middle of a button press.
   const protos = new Map<string, THREE.Object3D>();
   for (const id of [...TOWERS.map((t) => t.model), ...TOWERS.map((t) => t.ammo),
-                    ...WAVES.map((w) => w.model), 'td-bullet']) {
+                    ...WAVES.map((w) => w.model), 'td-bullet', 'td-coin']) {
     if (protos.has(id)) continue;
     const { object } = await loadModelAsset(manifest, id, { assetBase: '' });
     object.traverse((o) => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).castShadow = true; } });
@@ -299,10 +333,19 @@ async function start(): Promise<void> {
   const flags = new URLSearchParams(location.search);
   const dprFlag = Number(flags.get('dpr'));
   const shadowFlag = Number(flags.get('shadow'));
+  // The SDK picks a shadow size for the device at load; remember it, because
+  // "leave it alone" only works the first time. Going Sharp and back left the
+  // 2048 map in place and Smooth was Sharp with fewer pixels.
+  const defaultShadow = (() => {
+    const d = world.scene.children.find((c) => (c as THREE.DirectionalLight).isDirectionalLight) as THREE.DirectionalLight | undefined;
+    return d ? d.shadow.mapSize.width : 1024;
+  })();
   const QUALITY = [
-    { name: 'Smooth', dpr: 1.5, shadow: 0 },   // shadow 0 = leave the SDK's choice
+    { name: 'Smooth', dpr: 1.5, shadow: defaultShadow },
     { name: 'Sharp', dpr: 2, shadow: 2048 },
   ];
+  // Ordered cheapest-first for the label to make sense, but the DEFAULT is
+  // index 1. A default is a measurement, not a position in a list.
 
   const applyQuality = (): void => {
     const q = QUALITY[quality];
@@ -455,6 +498,51 @@ async function start(): Promise<void> {
     setTimeout(() => { hitFlash.style.background = 'rgba(220,30,30,0)'; }, 120);
   };
 
+  // --- Health bars ---
+  //
+  // Two unlit quads per enemy, billboarded, and shown only once something has
+  // been chipped off. In the scene rather than the DOM: forty absolutely
+  // positioned divs tracking projected world positions is the shape of problem
+  // this game has already paid for once.
+  const barBackGeom = new THREE.PlaneGeometry(0.46, 0.075);
+  const barFillGeom = new THREE.PlaneGeometry(0.44, 0.055);
+  const barBackMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.65, depthWrite: false });
+  const barFillMat = new THREE.MeshBasicMaterial({ color: 0x4ade5b, depthWrite: false });
+  const makeHealthBar = (): { group: THREE.Object3D; fill: THREE.Mesh } => {
+    const group = new THREE.Object3D();
+    group.visible = false;
+    const back = new THREE.Mesh(barBackGeom, barBackMat);
+    const fill = new THREE.Mesh(barFillGeom, barFillMat.clone());
+    // Anchored left so shrinking it empties from the right, like every health
+    // bar anyone has ever seen. A centred quad scales towards its middle and
+    // reads as "getting further away".
+    fill.geometry = barFillGeom.clone().translate(0.22, 0, 0);
+    fill.position.x = -0.22;
+    // 4mm of separation, not 1: a depth buffer spanning 0.1 to 500 has no
+    // precision to spare at range, and a fill that z-fights its own backing
+    // reads as a solid black bar.
+    fill.position.z = 0.004;
+    group.add(back, fill);
+    return { group, fill };
+  };
+
+  const updateHealthBars = (): void => {
+    for (const e of enemies) {
+      if (!e.alive || !e.bar || !e.barFill) continue;
+      const frac = Math.max(0, e.hp / e.maxHp);
+      if (frac >= 1) { e.bar.visible = false; continue; }
+      e.bar.visible = true;
+      e.barFill.scale.x = frac;
+      (e.barFill.material as THREE.MeshBasicMaterial).color.setHex(
+        frac > 0.5 ? 0x4ade5b : frac > 0.25 ? 0xf5c542 : 0xe8483a);
+      // Face the camera, cancelling whatever the parent is doing — a UFO spins,
+      // and a bar welded to it spins out of readability.
+      e.bar.quaternion.copy(world.camera.quaternion);
+      e.obj.getWorldQuaternion(_q).invert();
+      e.bar.quaternion.premultiply(_q);
+    }
+  };
+
   /** Motes lifting off an upgraded tower — the updraft.
    *
    *  In the scene rather than in the DOM, because it has to sit in the world
@@ -525,54 +613,129 @@ async function start(): Promise<void> {
     }
   };
 
-  /** A coin leaves the kill and lands on the counter.
-   *
-   *  Two small things carry it. It starts where the enemy DIED on screen, so
-   *  the reward is attached to the thing that earned it rather than appearing
-   *  in the corner; and the counter only goes up when the coin arrives, so the
-   *  number and the animation are telling the same story instead of two. */
+  // --- The coin ---
+  //
+  // A real coin model, not a glyph in a div. It pops out of the kill, spins,
+  // then flies to the counter in the corner — which it reaches by having the
+  // HUD's own rectangle unprojected into the world each frame, so it tracks
+  // the counter rather than a position guessed once at launch.
+  //
+  // Kept in 3D the whole way. The DOM version worked, but a coin that is an
+  // element stops belonging to the scene the moment the camera moves, and a
+  // handful of absolutely positioned emoji over a WebGL canvas is a shape this
+  // game has already been burned by.
+  interface Coin { obj: THREE.Object3D; vel: THREE.Vector3; t: number; amount: number; paid: boolean; }
+  const coins: Coin[] = [];
+  const COIN_POP = 0.55;        // seconds of arc before it heads for the corner
+  const COIN_FLY = 0.5;         // seconds to cross the screen
+
   const flyCoin = (from: THREE.Vector3, amount: number): void => {
-    const p0 = from.clone().project(world.camera);
-    const sx = (p0.x * 0.5 + 0.5) * window.innerWidth;
-    const sy = (-p0.y * 0.5 + 0.5) * window.innerHeight;
-    // Behind the camera projects to nonsense; pay out without the flourish.
-    if (!Number.isFinite(sx) || !Number.isFinite(sy) || p0.z > 1) { gold += amount; renderHud(); return; }
-
-    const target = goldEl.getBoundingClientRect();
-    const tx = target.left + target.width * 0.35;
-    const ty = target.top + target.height * 0.5;
-
-    const coin = document.createElement('div');
-    coin.textContent = '💰';
-    coin.style.cssText = `
-      position: fixed; left: 0; top: 0; font-size: 20px; pointer-events: none;
-      z-index: 35; will-change: transform, opacity;
-      transform: translate(${sx - 10}px, ${sy - 10}px) scale(1);
-    `;
-    document.body.appendChild(coin);
-
-    const t0 = performance.now();
-    const DURATION = 520;
-    const step = (t: number): void => {
-      const k = Math.min(1, (t - t0) / DURATION);
-      // Ease out, with a small arc — a coin that travels in a straight line
-      // reads as a UI element sliding, not as something thrown.
-      const e = 1 - Math.pow(1 - k, 3);
-      const x = sx + (tx - sx) * e;
-      const y = sy + (ty - sy) * e - Math.sin(k * Math.PI) * 46;
-      coin.style.transform = `translate(${x - 10}px, ${y - 10}px) scale(${1 - k * 0.35})`;
-      coin.style.opacity = String(k > 0.85 ? (1 - k) / 0.15 : 1);
-      if (k < 1) { requestAnimationFrame(step); return; }
-      coin.remove();
-      gold += amount;
-      audio.play('coin');
-      renderHud();
-      // A nudge on arrival, so the counter acknowledges being hit.
-      goldEl.style.transform = 'scale(1.22)';
-      setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
-    };
-    requestAnimationFrame(step);
+    const obj = spawnFrom('td-coin');
+    obj.position.copy(from);
+    obj.scale.setScalar(0.55);
+    coins.push({
+      obj, amount, t: 0, paid: false,
+      // Up and slightly outward, so several from one kill do not stack.
+      vel: new THREE.Vector3((Math.random() - 0.5) * 0.9, 2.2, (Math.random() - 0.5) * 0.9),
+    });
   };
+
+  const _coinTarget = new THREE.Vector3();
+  const counterInWorld = (out: THREE.Vector3): THREE.Vector3 => {
+    const r = goldEl.getBoundingClientRect();
+    const ndcX = ((r.left + r.width * 0.4) / window.innerWidth) * 2 - 1;
+    const ndcY = -((r.top + r.height * 0.5) / window.innerHeight) * 2 + 1;
+    // Just in front of the camera: far enough not to clip, near enough that
+    // the coin is still large when it arrives.
+    return out.set(ndcX, ndcY, 0.82).unproject(world.camera);
+  };
+
+  const updateCoins = (dt: number): void => {
+    for (let i = coins.length - 1; i >= 0; i--) {
+      const c = coins[i];
+      c.t += dt;
+      c.obj.rotation.y += dt * 7;
+      if (c.t < COIN_POP) {
+        // The pop: a real little arc, under the scene's own gravity.
+        c.vel.y -= 6 * dt;
+        c.obj.position.addScaledVector(c.vel, dt);
+        continue;
+      }
+      const k = Math.min(1, (c.t - COIN_POP) / COIN_FLY);
+      counterInWorld(_coinTarget);
+      // Ease in: it hangs for a moment and then goes, which reads as being
+      // pulled rather than sliding.
+      c.obj.position.lerp(_coinTarget, 1 - Math.pow(1 - k, 3) * 0.85);
+      c.obj.scale.setScalar(0.55 * (1 - k * 0.45));
+      if (k >= 1) {
+        if (!c.paid) { gold += c.amount; audio.play('coin'); renderHud(); c.paid = true; }
+        goldEl.style.transform = 'scale(1.22)';
+        setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
+        world.scene.remove(c.obj);
+        coins.splice(i, 1);
+      }
+    }
+  };
+
+  // --- The hotbar ---
+  //
+  // A cycle button worked on a phone and left desktop with no way to place
+  // anything at all: the on-screen controls only exist on touch devices, so
+  // `🔨` and `⇄` simply were not there, and the keyboard bindings were a
+  // secret. A row of cells you click is the same control for both, and it
+  // shows all four towers and their prices at once instead of one at a time.
+  //
+  // Number keys too, because on a desktop reaching for the mouse to change
+  // weapon is the thing hotbars exist to avoid.
+  const hotbar = document.createElement('div');
+  hotbar.style.cssText = `
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 30; pointer-events: auto;
+    font: 600 12px/1.25 system-ui, sans-serif; color: #fff;
+  `;
+  document.body.appendChild(hotbar);
+  // On a touch device the bottom-right corner already belongs to the platform's
+  // jump and action buttons, and a bar centred at the bottom lands on top of
+  // them on a narrow screen. Sit above the cluster instead: 7vmin of margin
+  // plus two rows of 20vmin buttons. (Checked rather than assumed — this is
+  // the fifth thing this session to render perfectly on top of something.)
+  if (document.querySelector('[data-umicat-touch]')) {
+    hotbar.style.bottom = 'calc(50vmin + 12px)';
+  }
+
+  const cells = TOWERS.map((kind, i) => {
+    const cell = document.createElement('button');
+    cell.style.cssText = `
+      width: 62px; padding: 6px 4px 5px; border-radius: 12px; border: 2px solid transparent;
+      background: rgba(0,0,0,.42); color: #fff; font: inherit; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      -webkit-tap-highlight-color: transparent;
+    `;
+    cell.innerHTML =
+      `<span style="font-size:19px;line-height:1">${kind.icon}</span>` +
+      `<span>${kind.label}</span>` +
+      `<span class="cost" style="opacity:.85">${kind.cost}g</span>` +
+      `<span style="opacity:.45;font-size:10px">${i + 1}</span>`;
+    cell.onclick = () => { selected = i; refreshHotbar(); audio.play('build'); renderHud(); };
+    hotbar.appendChild(cell);
+    return cell;
+  });
+
+  function refreshHotbar(): void {
+    cells.forEach((cell, i) => {
+      const affordable = gold >= TOWERS[i].cost;
+      cell.style.borderColor = i === selected ? '#ffd54a' : 'transparent';
+      cell.style.background = i === selected ? 'rgba(0,0,0,.62)' : 'rgba(0,0,0,.42)';
+      // Dimmed rather than disabled: you can still select what you are saving
+      // up for, and the price is the feedback.
+      cell.style.opacity = affordable ? '1' : '0.45';
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const n = Number(e.key);
+    if (n >= 1 && n <= TOWERS.length) { selected = n - 1; refreshHotbar(); renderHud(); }
+  });
 
   const renderHud = (): void => {
     line1.textContent = `${'❤️'.repeat(Math.max(heroHp, 0))}${'🤍'.repeat(Math.max(HERO_MAX_HP - heroHp, 0))}`;
@@ -588,9 +751,10 @@ async function start(): Promise<void> {
     } else {
       const kind = TOWERS[selected];
       line3.textContent = buildCell
-        ? `🔨 build ${kind.label} · ${kind.cost}g · ⇄ swap`
-        : `walk to a spot beside the path to build · ⇄ ${kind.label}`;
+        ? `🔨 build ${kind.label} · ${kind.cost}g`
+        : 'walk to a spot beside the path to build';
     }
+    refreshHotbar();
   };
 
   const endRun = (didWin: boolean): void => {
@@ -600,6 +764,7 @@ async function start(): Promise<void> {
     // the dialog, and its full-screen layer would swallow the taps meant for
     // the button on top of it.
     input.setEnabled(false);
+    hotbar.style.display = 'none';
     // The ending gets the room to itself.
     audio.duck(10);
     audio.play(didWin ? 'win' : 'lose');
@@ -696,6 +861,7 @@ async function start(): Promise<void> {
 
   // --- combat --------------------------------------------------------------
   const tmp = new THREE.Vector3();
+  const _q = new THREE.Quaternion();
   const heroAttack = (): void => {
     if (!running || animator.busy) return;
     animator.play('attack');
@@ -808,7 +974,6 @@ async function start(): Promise<void> {
       character.faceTowards(hero, move, dt);
 
       if (input.consume('attack')) heroAttack();
-      if (input.consume('swap')) { selected = (selected + 1) % TOWERS.length; audio.play('build'); renderHud(); }
       if (input.consume('build')) tryBuild();
       animator.update(character.state);
       if (invincible > 0) invincible -= dt;
@@ -837,9 +1002,14 @@ async function start(): Promise<void> {
           toSpawn -= 1;
           const w = WAVES[waveIndex];
           const obj = spawnFrom(w.model);
-          obj.scale.setScalar(ENEMY_MODEL_SCALE);
+          obj.scale.setScalar(w.scale);
+          const { group: bar, fill: barFill } = makeHealthBar();
+          obj.add(bar);
+          bar.position.y = 0.62 / w.scale;   // the bar is a child, so it inherits the scale
+          bar.scale.setScalar(1 / w.scale);
           const e: Enemy = {
             obj, hp: w.hp, maxHp: w.hp, speed: w.speed, bounty: w.bounty,
+            armed: w.armed, bar, barFill,
             t: 0, alive: true, shootCooldown: 1, windup: 0,
           };
           posAt(0, obj.position);
@@ -911,7 +1081,7 @@ async function start(): Promise<void> {
           }
         } else if (e.shootCooldown > 0) {
           e.shootCooldown -= dt;
-        } else if (dHero < ENEMY_SHOOT_RANGE) {
+        } else if (e.armed && dHero < ENEMY_SHOOT_RANGE) {
           e.windup = ENEMY_WINDUP_SECONDS;
           e.shootCooldown = ENEMY_SHOOT_COOLDOWN;
           flashTint(e.obj, { color: 0xffd050, ms: ENEMY_WINDUP_SECONDS * 1000 });
@@ -996,6 +1166,8 @@ async function start(): Promise<void> {
       }
     }
 
+    updateCoins(dt);
+    updateHealthBars();
     updateUpdrafts(dt);
     updateTints(tinted);
     world.update(dt);
@@ -1010,6 +1182,7 @@ async function start(): Promise<void> {
       get shots() { return shots; },
       get bullets() { return bullets; },
       get updrafts() { return updrafts; },
+      get coins() { return coins; },
       quality: () => ({ level: quality, name: QUALITY[quality].name,
                         pixelRatio: renderer.getPixelRatio() }),
       state: () => ({ gold, lives, heroHp, waveIndex, running, won, buildCell, selected,
