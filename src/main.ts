@@ -368,14 +368,13 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
 
   /** The hero carries all three and shows one. */
   let weapon: Weapon = startWeapon;
+  /** Called once, with whatever came through the door. Not a control. */
   const setWeapon = (w: Weapon): void => {
     weapon = w;
     if (sword) sword.visible = w === 'sword';
     if (bow) bow.visible = w === 'bow';
     if (staff) staff.visible = w === 'staff';
     if (lockRing) lockRing.visible = false;
-    audio.play('build');
-    renderHud();
   };
 
   // Prototypes, cloned per placement. Loading inside the build handler would
@@ -895,34 +894,9 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   // than hope the first answer still holds.
   window.addEventListener('orientationchange', () => setTimeout(placeHotbar, 250));
 
-  // Weapon picker, sharing the hotbar's row. The sword and the bow are not
-  // towers, so they are a separate little group rather than two more cells
-  // that would be selected by the same number keys.
-  const weaponBar = document.createElement('div');
-  weaponBar.style.cssText = 'display: flex; gap: 6px; margin-right: 14px; align-items: stretch;';
-  const weaponCells = ([['sword', '🗡', 'Q'], ['bow', '🏹', 'E'], ['staff', '🔮', 'R']] as const).map(([id, icon, key]) => {
-    const cell = document.createElement('button');
-    cell.style.cssText = `
-      width: 48px; padding: 6px 4px 5px; border-radius: 12px; border: 2px solid transparent;
-      background: rgba(0,0,0,.42); color: #fff; font: inherit; cursor: pointer;
-      display: flex; flex-direction: column; align-items: center; gap: 2px;
-      -webkit-tap-highlight-color: transparent;
-    `;
-    cell.innerHTML = `<span style="font-size:18px;line-height:1">${icon}</span>` +
-      `<span style="opacity:.45;font-size:10px">${key}</span>`;
-    cell.onclick = () => setWeapon(id);
-    weaponBar.appendChild(cell);
-    return [id, cell] as const;
-  });
-  hotbar.appendChild(weaponBar);
-
-  const refreshWeapons = (): void => {
-    for (const [id, cell] of weaponCells) {
-      cell.style.borderColor = weapon === id ? '#7fd4ff' : 'transparent';
-      cell.style.background = weapon === id ? 'rgba(0,0,0,.62)' : 'rgba(0,0,0,.42)';
-    }
-  };
-
+  // No weapon picker here. What you walked in carrying is what you fight with:
+  // the choice is made in the hub, at the pedestals, and a run you can re-arm
+  // halfway through is a run where the choice never cost anything.
   const cells = TOWERS.map((kind, i) => {
     const cell = document.createElement('button');
     cell.style.cssText = `
@@ -957,9 +931,6 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   window.addEventListener('keydown', (e) => {
     const n = Number(e.key);
     if (n >= 1 && n <= TOWERS.length) { selected = n - 1; refreshHotbar(); renderHud(); }
-    if (e.code === 'KeyQ') setWeapon('sword');
-    if (e.code === 'KeyE') setWeapon('bow');
-    if (e.code === 'KeyR') setWeapon('staff');
   });
 
   const renderHud = (): void => {
@@ -981,7 +952,6 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
             weapon === 'bow' ? '🏹 bow' : weapon === 'staff' ? '🔮 staff' : '🗡 sword'}`;
     }
     refreshHotbar();
-    refreshWeapons();
   };
 
   const endRun = (didWin: boolean): void => {
