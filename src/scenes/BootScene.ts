@@ -245,6 +245,12 @@ export class BootScene extends Phaser.Scene {
     // Harvested-fruit item icons (4×2 grid of 16×16): apple=0, orange=1, pear=2,
     // peach=3 (row 2 = berries/grapes). Used for the drop pop + the backpack item.
     this.load.spritesheet('fruit-items', 'uploaded/fruit_and_berries_items.png', { frameWidth: 16, frameHeight: 16 });
+    // Cooked DISHES — the output of the kitchen stove. Region-tagged in the Asset Manager
+    // rather than a uniform grid (the plates are all slightly different sizes), so it is an
+    // atlas with one named frame per dish. Frame names are the creator's region names, typos
+    // included (`mashroom`, and a `cooing-` duplicate of the stew art); `DISH_FRAME` in
+    // GameScene maps clean `dish-*` ids onto them so the misspellings stop at that one line.
+    this.load.atlas('cooking-items', 'uploaded/cooking-items_atlas.png', 'uploaded/cooking-items_atlas.json');
     // Berry BUSHES (Sprout Lands "Trees, stumps and bushes") — region-tagged (not a
     // uniform grid), so loaded as an image + the named frames registered in create():
     // grow stages `empty-bush-small`/`empty-bush` + one berry overlay per type

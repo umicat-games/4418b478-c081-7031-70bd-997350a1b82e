@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { finishTransition, coverAndHandoff } from '../transition';
 import { crossToBgm } from '../bgm';
-import { playSfx, SFX_DOOR } from '../sfx';
+import { playSfx, SFX_DOOR, SFX_COOK, SFX_GETITEM } from '../sfx';
 import { DESIGN_ZOOM } from '../config';
 import { isDebug } from '../debug';
 import { t } from '../i18n';
@@ -13,6 +13,8 @@ const PAN_SPEED = 260; // world px/sec for keyboard camera panning (a bigger-tha
 const BRACKET_BR = 0.625; // corner-bracket scale — matches the island's white-corner-bracket (~5×zoom)
 const HOVER_PAD = 6;      // world-px gap around the framed object (== GameScene.HOVER_PAD_WORLD)
 const SLEEPY_EMOJI_FRAME = 39; // `emoji` sheet (row*10+col): the sleeping-with-Z cat face for the sleep bubble
+// The cooking reveal sits above everything in the room — it is the only thing being looked at.
+const DISH_DEPTH = 900000;
 
 /**
  * House INTERIOR scene (Animal Crossing / Stardew style). The island house is a
@@ -39,6 +41,7 @@ export class HouseScene extends Phaser.Scene {
   private stoveRect?: Phaser.Geom.Rectangle;           // world bbox of the stove + pot (the clickable / hover group)
   private cooking = false;                             // the cooking modal (CookScene) is open
   private stoveBusy = false;                           // stove turn-on / turn-off anim is playing (block re-trigger)
+  private cookCinematic = false;                       // the dish reveal is playing (input stays locked through it)
   private exiting = false;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
@@ -68,6 +71,7 @@ export class HouseScene extends Phaser.Scene {
     this.bed = undefined; this.sleepCato = undefined; this.sleepBubble = undefined;
     this.interiorCato = undefined; this.nightMask = undefined; this.exitDoor = undefined;
     this.stove = undefined; this.stoveRect = undefined; this.cooking = false; this.stoveBusy = false;
+    this.cookCinematic = false;
     this.hoverBracket = undefined; this.hoverPill = undefined; this.hoverLabel = undefined;
   }
 
@@ -261,7 +265,7 @@ export class HouseScene extends Phaser.Scene {
    *  kitchen stove group), like the island's hover-inspect; else hide it. */
   private updateHover(p: Phaser.Input.Pointer): void {
     const br = this.hoverBracket;
-    if (!br || this.exiting || this.cooking || this.stoveBusy) { this.hideHover(); return; }
+    if (!br || this.exiting || this.cooking || this.stoveBusy || this.cookCinematic) { this.hideHover(); return; }
     const wp = this.cameras.main.getWorldPoint(p.x, p.y);
     // Priority: exit door, then the stove+pot group. Whichever contains the point wins.
     const door = this.exitDoor?.getBounds();
@@ -320,11 +324,97 @@ export class HouseScene extends Phaser.Scene {
     }
   }
 
-  /** Cooking modal closed → re-enable input, THEN play the turn-off animation and revert to the
-   *  static stove (the burner cools down after you step away). */
-  private onCookClosed(): void {
+  /** Cooking modal closed. A dish rides along when the player actually cooked something — then
+   *  the reveal plays FIRST and the burner only cools down afterwards, so the stove is still lit
+   *  under the finished dish. Closing without cooking cools it straight away. */
+  private onCookClosed(made?: { output: string; count: number }): void {
     this.cooking = false;
+    if (made) { this.playCookCinematic(made); return; }
     this.input.enabled = true;
+    this.coolStove();
+  }
+
+  /** Cooking, the way the workbench crafts: dip to black, something cooks in the dark, then the
+   *  dish is sitting above the stove waiting to be picked up.
+   *
+   *  Played HERE and not in GameScene, which owns the equivalent craft cinematic: inside the
+   *  house GameScene's world is frozen under this scene's black backdrop, so a reveal spawned
+   *  there would be covered by it. */
+  private playCookCinematic(made: { output: string; count: number }): void {
+    this.cookCinematic = true;
+    this.input.enabled = false; // no wandering off mid-cinematic
+    this.hideHover();
+    coverAndHandoff(this, () => {
+      playSfx(this, SFX_COOK, 0.45);
+      const snd = this.sound.get(SFX_COOK);
+      // Hold the black for as long as the sound runs, within reason — a cinematic that outlasts
+      // its own audio is just a pause.
+      const wait = Phaser.Math.Clamp((snd?.duration ?? 1.3) * 1000, 900, 2400);
+      this.time.delayedCall(wait, () => finishTransition(this, () => this.revealCookedDish(made)));
+    }, { effect: 'dissolve', color: 0x000000, ms: 420 });
+  }
+
+  /** The finished dish bursts in above the stove, then flies off and banks into the backpack. */
+  private revealCookedDish(made: { output: string; count: number }): void {
+    const gs = this.scene.get('GameScene') as GameScene | undefined;
+    const done = (): void => {
+      gs?.bankCookedDish(made.output, made.count);
+      this.cookCinematic = false;
+      this.input.enabled = true;
+      this.coolStove();
+    };
+
+    const rect = this.stoveRect;
+    const stove = this.stove;
+    if (!rect && !stove) { done(); return; } // no stove to reveal above — still hand over the dish
+    const cx = rect ? rect.centerX : stove!.x;
+    const cy = (rect ? rect.top : stove!.getBounds().top) - 10;
+
+    const AC = Phaser.Animations.Events.ANIMATION_COMPLETE;
+    const dish = gs?.cookedDishIcon(made.output);
+    const burst = this.add.sprite(cx, cy, 'newitem-appear', 0).setDepth(DISH_DEPTH).setScale(2.4);
+    const icon = dish
+      ? this.add.image(cx, cy, dish.key, dish.frame).setDepth(DISH_DEPTH + 1).setVisible(false)
+      : undefined;
+    playSfx(this, SFX_GETITEM); // the same "new item!" jingle a catch or a craft gets
+
+    // A safety timer finishes the hand-over even if an animation event is missed — a dish that
+    // never banks would have cost real ingredients.
+    let settled = false;
+    const settle = (): void => {
+      if (settled) return;
+      settled = true;
+      burst.destroy(); icon?.destroy();
+      done();
+    };
+    this.time.delayedCall(4000, settle);
+
+    burst.play('newitem-appear');
+    burst.once(AC, () => {
+      icon?.setVisible(true).setScale(0).setAlpha(0);
+      if (icon) this.tweens.add({ targets: icon, scale: 1, alpha: 1, duration: 180, ease: 'Back.easeOut' });
+      burst.play('newitem-hold');
+      burst.once(AC, () => {
+        icon?.setVisible(false);
+        burst.play('newitem-disappear');
+        burst.once(AC, () => {
+          burst.destroy();
+          if (!icon) { settle(); return; }
+          // The dish lifts, shrinks and fades — collected. There is no player body in the room to
+          // fly it to, so it simply goes where a collected thing goes: away, into the bag.
+          icon.setVisible(true).setScale(1).setAlpha(1).setPosition(cx, cy);
+          this.tweens.add({
+            targets: icon, y: cy - 14, scale: 0.3, alpha: 0,
+            duration: 320, ease: 'Sine.easeIn',
+            onComplete: settle,
+          });
+        });
+      });
+    });
+  }
+
+  /** Turn the burner off and revert to the static stove (it cools down after you step away). */
+  private coolStove(): void {
     const stove = this.stove;
     if (stove && this.anims.exists('stove-off')) {
       this.stoveBusy = true; // block a re-open while it cools down

@@ -51,6 +51,18 @@ const FALLBACK: Record<string, ItemDef> = {
   branch: { sell: 4 },  // first 3 chops/tree/day
   fiber: { sell: 3 },   // from chopping down a bush
   stick: { sell: 5 },   // crafted from wood; a tool-crafting material
+  // Cooked dishes (kitchen stove) — sellable and the most filling food in the game, which is
+  // what makes cooking worth the ingredients rather than eating them raw. Never buyable.
+  'dish-vegetable-stew': { sell: 160, food: 60 },
+  'dish-tomato-soup': { sell: 140, food: 55 },
+  'dish-mushroom-soup': { sell: 95, food: 50 },
+  'dish-pumpkin-soup': { sell: 150, food: 65 },
+  'dish-strawberry-pie': { sell: 130, food: 60 },
+  'dish-strawberry-yogurt': { sell: 110, food: 45 },
+  'dish-fruit-salad': { sell: 95, food: 45 },
+  'dish-pancakes': { sell: 100, food: 50 },
+  'dish-fried-egg': { sell: 45, food: 35 },
+  'dish-bread': { sell: 90, food: 40 },
 };
 
 // MUTABLE, populated by applyItemData() at boot. Seeded with the fallback so the game

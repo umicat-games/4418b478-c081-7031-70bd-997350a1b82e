@@ -36,6 +36,12 @@ export const SFX_DOOR = 'sfx-door';
 export const SFX_TAB = 'sfx-tab';
 /** A tree toppling over — plays with the `tree-fall` animation when a tree is felled. */
 export const SFX_TREE_FALL = 'sfx-tree-fall';
+/** The workbench "making" sound, reused for the cooking cinematic.
+ *
+ *  A placeholder with a name of its own: cooking wants a sizzle / bubbling pot, and this is a
+ *  tool-crafting clip. Pointing the cooking code at `SFX_COOK` rather than at `tools-making`
+ *  directly means swapping in a real one is this line, not a hunt through HouseScene. */
+export const SFX_COOK = 'tools-making';
 /** Occasional daytime farm-animal ambience — a moo / cluck when a cow pen / coop has animals. */
 export const SFX_COW = 'sfx-cow';
 export const SFX_CHICKEN = 'sfx-chicken';

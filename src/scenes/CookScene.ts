@@ -239,9 +239,20 @@ export class CookScene extends Phaser.Scene {
     if (!hit(b.panel)) this.close(); // tap outside → close
   }
 
+  /** A dish cooked but not yet banked — handed to HouseScene on close so it can play the reveal. */
+  private made?: { output: string; count: number };
+
   private cook(): void {
     const res = this.gs()?.tryCook(this.sel);
     if (!res) return;
+    if (res.ok && res.output) {
+      // Success CLOSES the modal: the cooking happens as a cinematic over the room, and staying
+      // in the modal to read "Cooked!" would mean watching it through a panel. Failures stay put
+      // and say why, which is the only case where there is something to read.
+      this.made = { output: res.output, count: res.count ?? 1 };
+      this.close();
+      return;
+    }
     this.msg = res.key ? t(res.key) : '';
     this.render(false);
     if (this.msg) this.time.delayedCall(1400, () => { this.msg = ''; if (!this.closing) this.render(false); });
@@ -252,7 +263,9 @@ export class CookScene extends Phaser.Scene {
     this.closing = true;
     playSfx(this); // close blip (same UI click as the chest/menu close)
     const root = this.root;
-    this.events.emit('cook-closed'); // HouseScene turns the stove off + re-enables input
+    // HouseScene turns the stove off + re-enables input; a dish rides along so it can play the
+    // cooking cinematic instead.
+    this.events.emit('cook-closed', this.made);
     if (!root) { this.scene.stop(); return; }
     this.tweens.add({ targets: root, alpha: 0, duration: 120, onComplete: () => { root.destroy(); this.scene.stop(); } });
   }

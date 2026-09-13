@@ -446,6 +446,42 @@ Persists the whole game per (game, user) with the platform primitive **`umicat.s
 - **Auto-save:** `scheduleSave()` debounces **700ms** after any mutation — hooked into `publishInventory` (covers inventory + selection) + till / plant / water / Cato-till / crop stage-advance. Plus a 15s periodic backstop + a save on tab hide / `pagehide`. Short debounce is deliberate: the backend write is async and a save-on-**close** can't flush as the page tears down, so the state must reach the backend **while the tab is open**.
 - **Never wipe the save — two guards (both bugs were hit):** (1) **`saveArmed`** — saving is armed ONLY after `loadGame` has actually READ the store (found or empty); a slow load or read error leaves it disarmed, so the default state can never overwrite the real save before it's restored. (2) The world + hotbar are **hidden behind a "Loading…" cover** (`showLoadingCover`/`markReady`, `gameReady` flag) until the save is applied — no flash of the empty farm; an 8s fallback + the init-failure path always reveal. (Also: do NOT bind destructive dev keys like a bare `saves.delete` — a stray K press wiped saves.)
 
+## Cooking — real dishes + the stove cinematic (2026-09-13)
+
+Cooking existed but produced PLACEHOLDER outputs (`crop-pumpkin`, `fruit-peach`, …) with a
+"replace with real dishes when the art lands" note. The art landed: the creator drew **10 dishes**
+and region-tagged them in the prod Asset Manager as `cooking-items_atlas` (96×88, 11 regions —
+the stew is drawn twice, and one copy carries a `cooing-` typo).
+
+- **The atlas** is pulled the usual way (`umicat-infra/playwright/pull-cooking-items.mjs` →
+  pw-prod token → `/projects/{id}/assets` + `/regions`) into `public/uploaded/`, with the
+  Aseprite JSON written from the tagged coordinates. Loaded as **`cooking-items`** in BootScene.
+- **Typos stop at ONE table.** The frame names keep the creator's spelling because that is what is
+  tagged upstream and the JSON is generated from it; **`DISH_FRAME`** (GameScene) maps clean
+  `dish-*` ids onto them. So save data, recipes, i18n keys — everything a person reads or types —
+  stays correctly spelled, and the duplicate stew frame is simply never referenced.
+- **`egg-any` / `milk-any` are WILDCARD materials** (`materialMatches`, honoured by `invCountOf`
+  and `takeFromInventory`). Hens and cows produce whatever colour they are, so a recipe naming
+  `egg-brown` would be uncraftable for a player whose hens are blue — not a choice they made, and
+  not something the cooking modal can explain. `itemFromId` resolves the wildcards to a
+  representative icon so the modal has something to draw; they are only ever asked for, never banked.
+- **The finish is a cinematic, like the workbench.** `tryCook` now spends the ingredients and hands
+  the dish back UNBANKED; CookScene closes on success and passes it to **HouseScene**, which dips
+  to black, plays `SFX_COOK`, then bursts the dish in above the stove and banks it via
+  `gs.bankCookedDish`. **It has to run in HouseScene**, not GameScene: inside the house GameScene's
+  world is frozen under HouseScene's black backdrop, so the craft-style reveal spawned there would
+  be hidden behind it. The burner only cools down AFTER the reveal, so the stove is still lit under
+  the finished dish. A 4s safety timer banks the dish even if an animation event is missed —
+  ingredients are already spent by then.
+- **`SFX_COOK` is a placeholder** pointing at the workbench's `tools-making`. Cooking wants a
+  sizzle or a bubbling pot; the constant exists so swapping in a real clip is one line.
+- **Balance is data** (`public/data/cooking.json` + the dish rows in `items.json`, both editable in
+  the Data Tables tool). The in-code fallbacks in `cooking.ts` / `items.ts` are kept in step on
+  purpose — a fallback that disagrees quietly plays a different game from the one that was balanced.
+- **Check it with `node umicat-infra/playwright/verify-cooking.mjs`** (no browser): every dish
+  resolves atlas → item row → i18n (both languages) → a recipe whose ingredients exist, and every
+  dish sells for more than it consumes.
+
 ## Chicken coops + chickens + daily eggs (2026-08, Phases 1a–3)
 
 A **buy-to-place** chicken coop with chickens that hatch/grow, roam, and lay **daily eggs** collected at the coop — the pattern the cow pen later mirrored. Multiple coops allowed (`this.coops: Map<"cx,cy" anchor, CoopObj>`, unlike the single cow pen).

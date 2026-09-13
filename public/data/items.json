@@ -243,6 +243,56 @@
     {
       "id": "stick",
       "sell": 5
+    },
+    {
+      "id": "dish-vegetable-stew",
+      "sell": 160,
+      "food": 60
+    },
+    {
+      "id": "dish-tomato-soup",
+      "sell": 140,
+      "food": 55
+    },
+    {
+      "id": "dish-mushroom-soup",
+      "sell": 95,
+      "food": 50
+    },
+    {
+      "id": "dish-pumpkin-soup",
+      "sell": 150,
+      "food": 65
+    },
+    {
+      "id": "dish-strawberry-pie",
+      "sell": 130,
+      "food": 60
+    },
+    {
+      "id": "dish-strawberry-yogurt",
+      "sell": 110,
+      "food": 45
+    },
+    {
+      "id": "dish-fruit-salad",
+      "sell": 95,
+      "food": 45
+    },
+    {
+      "id": "dish-pancakes",
+      "sell": 100,
+      "food": 50
+    },
+    {
+      "id": "dish-fried-egg",
+      "sell": 45,
+      "food": 35
+    },
+    {
+      "id": "dish-bread",
+      "sell": 90,
+      "food": 40
     }
   ]
 }

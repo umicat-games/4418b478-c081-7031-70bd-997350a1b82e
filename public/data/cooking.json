@@ -1,7 +1,166 @@
 {
   "recipes": [
-    { "id": "cook-veggie-stew", "output": "crop-pumpkin", "count": 1, "materials": [ { "id": "crop-corn", "count": 1 }, { "id": "crop-carrot", "count": 1 } ] },
-    { "id": "cook-fruit-bowl", "output": "fruit-peach", "count": 1, "materials": [ { "id": "fruit-apple", "count": 1 }, { "id": "fruit-pear", "count": 1 } ] },
-    { "id": "cook-mushroom-saute", "output": "forage-red-mushroom", "count": 1, "materials": [ { "id": "forage-purple-mushroom", "count": 1 }, { "id": "forage-grass", "count": 1 } ] }
+    {
+      "id": "cook-vegetable-stew",
+      "output": "dish-vegetable-stew",
+      "count": 1,
+      "materials": [
+        {
+          "id": "crop-carrot",
+          "count": 1
+        },
+        {
+          "id": "crop-corn",
+          "count": 1
+        },
+        {
+          "id": "crop-parsnip",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-tomato-soup",
+      "output": "dish-tomato-soup",
+      "count": 1,
+      "materials": [
+        {
+          "id": "crop-tomato",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "cook-mushroom-soup",
+      "output": "dish-mushroom-soup",
+      "count": 1,
+      "materials": [
+        {
+          "id": "forage-red-mushroom",
+          "count": 1
+        },
+        {
+          "id": "forage-purple-mushroom",
+          "count": 1
+        },
+        {
+          "id": "milk-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-pumpkin-soup",
+      "output": "dish-pumpkin-soup",
+      "count": 1,
+      "materials": [
+        {
+          "id": "crop-pumpkin",
+          "count": 1
+        },
+        {
+          "id": "milk-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-strawberry-pie",
+      "output": "dish-strawberry-pie",
+      "count": 1,
+      "materials": [
+        {
+          "id": "fruit-strawberry",
+          "count": 2
+        },
+        {
+          "id": "crop-wheat",
+          "count": 1
+        },
+        {
+          "id": "egg-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-strawberry-yogurt",
+      "output": "dish-strawberry-yogurt",
+      "count": 1,
+      "materials": [
+        {
+          "id": "fruit-strawberry",
+          "count": 1
+        },
+        {
+          "id": "fruit-blueberry",
+          "count": 1
+        },
+        {
+          "id": "milk-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-fruit-salad",
+      "output": "dish-fruit-salad",
+      "count": 1,
+      "materials": [
+        {
+          "id": "fruit-apple",
+          "count": 1
+        },
+        {
+          "id": "fruit-pear",
+          "count": 1
+        },
+        {
+          "id": "fruit-grape",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-pancakes",
+      "output": "dish-pancakes",
+      "count": 1,
+      "materials": [
+        {
+          "id": "crop-wheat",
+          "count": 1
+        },
+        {
+          "id": "egg-any",
+          "count": 1
+        },
+        {
+          "id": "milk-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-fried-egg",
+      "output": "dish-fried-egg",
+      "count": 1,
+      "materials": [
+        {
+          "id": "egg-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "cook-bread",
+      "output": "dish-bread",
+      "count": 1,
+      "materials": [
+        {
+          "id": "crop-wheat",
+          "count": 2
+        }
+      ]
+    }
   ]
 }

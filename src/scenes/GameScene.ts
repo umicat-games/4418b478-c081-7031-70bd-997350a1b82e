@@ -467,7 +467,47 @@ function makePlaceable(kind: PlaceKind, count: number, variant?: string): ItemSt
 
 /** Rebuild a full ItemStack from its saved `id` + count (the single source of
  *  truth for tools too — setupInventory + save-load both go through it). */
+/** Cooked DISHES: clean item id → the frame name tagged on the `cooking-items` atlas.
+ *
+ *  The creator's region names carry two typos — `mashroom`, and a `cooing-` duplicate of the
+ *  stew art — and the atlas has to keep them, because that is what is tagged upstream in the
+ *  Asset Manager and the JSON is generated from it. Mapping here means the typos stop at this
+ *  table: save files, recipes, i18n keys and anything else a person reads or types stay
+ *  correctly spelled. The duplicate stew frame is simply not referenced.
+ *
+ *  The English label is the fallback only — `itemName()` prefers `item_dish_*` from i18n. */
+const DISH_FRAME: Record<string, { frame: string; label: string }> = {
+  'dish-vegetable-stew':    { frame: 'cooking-item-vegetable-stew',    label: 'Vegetable stew' },
+  'dish-tomato-soup':       { frame: 'cooking-item-tomato-soup',       label: 'Tomato soup' },
+  'dish-mushroom-soup':     { frame: 'cooking-item-mashroom-soup',     label: 'Mushroom soup' },
+  'dish-pumpkin-soup':      { frame: 'cooking-item-pumpkin-soup',      label: 'Pumpkin soup' },
+  'dish-strawberry-pie':    { frame: 'cooking-item-strawberry-pie',    label: 'Strawberry pie' },
+  'dish-strawberry-yogurt': { frame: 'cooking-item-strawberry-yogurt', label: 'Strawberry yogurt' },
+  'dish-fruit-salad':       { frame: 'cooking-item-fruit-salad',       label: 'Fruit salad' },
+  'dish-pancakes':          { frame: 'cooking-item-pancakes',          label: 'Pancakes' },
+  'dish-fried-egg':         { frame: 'cooking-item-fried-egg',         label: 'Fried egg' },
+  'dish-bread':             { frame: 'cooking-item-bread',             label: 'Bread' },
+};
+
+/** Does a backpack stack of `have` satisfy a recipe material called `want`?
+ *
+ *  Exact, with one exception: eggs and milk exist in COLOURS, and which colour a player has
+ *  is decided by which hens and cows they happen to own. A recipe that named `egg-brown`
+ *  would be uncraftable for someone whose hens are blue — not a choice they made, and not
+ *  one the cooking modal can explain. `egg-any` / `milk-any` stand for the whole family, so
+ *  a dish asks for "an egg" the way a recipe card would. */
+function materialMatches(want: string, have: string): boolean {
+  if (want === have) return true;
+  if (want === 'egg-any') return have.startsWith('egg-');
+  if (want === 'milk-any') return have.startsWith('milk-');
+  return false;
+}
+
 function itemFromId(id: string, count: number): ItemStack {
+  // The two wildcard materials resolve to a representative icon so the cooking modal has
+  // something to draw; they are never banked, only ever asked for.
+  if (id === 'egg-any') return { id, label: 'Egg', iconKey: 'egg-items', iconFrame: eggFrame('brown'), count, stackable: true };
+  if (id === 'milk-any') return { id, label: 'Milk', iconKey: 'milk', iconFrame: 'blue_milk', count, stackable: true };
   if (id === 'hoe') return { id, label: 'Hoe', iconKey: 'tools_and_meterials', iconFrame: 'hoe', count: 1, stackable: false, toolId: 'hoe' };
   if (id === 'watering-can') return { id, label: 'Watering can', iconKey: 'tools_and_meterials', iconFrame: 'watering-can', count: 1, stackable: false, toolId: 'watering-can' };
   if (id === 'axe') return { id, label: 'Axe', iconKey: 'tools_and_meterials', iconFrame: 'axe', count: 1, stackable: false, toolId: 'axe' };
@@ -503,6 +543,8 @@ function itemFromId(id: string, count: number): ItemStack {
   if (fruit) return makeFruit(fruit[1], count);
   const forage = /^forage-([\w-]+)$/.exec(id);
   if (forage) return makeForage(forage[1] as ForagableName, count);
+  const dish = DISH_FRAME[id];
+  if (dish) return { id, label: dish.label, iconKey: 'cooking-items', iconFrame: dish.frame, count, stackable: true };
   return { id, count, stackable: true }; // unknown → generic stack
 }
 
@@ -7612,7 +7654,7 @@ export class GameScene extends Phaser.Scene {
   //    outside at the island door). `inventory` is the whole grid; row 0 is the hotbar view. ──
   private invCountOf(id: string): number {
     let n = 0;
-    for (const s of this.inventory) if (s && s.id === id) n += s.count;
+    for (const s of this.inventory) if (s && materialMatches(id, s.id)) n += s.count;
     return n;
   }
 
@@ -7621,7 +7663,7 @@ export class GameScene extends Phaser.Scene {
     let left = n;
     for (let i = this.inventory.length - 1; i >= 0 && left > 0; i--) {
       const s = this.inventory[i];
-      if (!s || s.id !== id) continue;
+      if (!s || !materialMatches(id, s.id)) continue;
       const take = Math.min(s.count, left);
       s.count -= take; left -= take;
       if (s.count <= 0) this.inventory[i] = null;
@@ -7989,18 +8031,43 @@ export class GameScene extends Phaser.Scene {
     return { recipes, detail };
   }
 
-  /** Cook the selected recipe: deduct ingredients from the backpack, add the dish. Returns an
-   *  i18n message key (CookScene shows `cook_done` / `cook_need` / `cook_full`). */
-  public tryCook(sel: number): { ok: boolean; key: string } {
+  /** Cook the selected recipe: spend the ingredients and hand the dish back UNBANKED.
+   *
+   *  The dish is deliberately NOT added here. Cooking finishes the way the workbench does — the
+   *  screen dips to black, something cooks, and the dish appears above the stove to be collected
+   *  — and that reveal is HouseScene's to play, because inside the house this scene is frozen
+   *  under HouseScene's black backdrop and anything spawned here would be hidden behind it.
+   *  HouseScene calls `bankCookedDish` when the dish lands.
+   *
+   *  Ingredients are spent immediately, so a failure after this point loses them — but the only
+   *  thing between here and the bank is a fade, and the space check has already passed. */
+  public tryCook(sel: number): { ok: boolean; key: string; output?: string; count?: number } {
     const r = COOKING_RECIPES[sel];
     if (!r) return { ok: false, key: '' };
     if (!r.materials.every((m) => this.invCountOf(m.id) >= m.count)) return { ok: false, key: 'cook_need' };
     if (!this.inventoryHasSpaceFor(r.output)) return { ok: false, key: 'cook_full' };
     for (const m of r.materials) this.takeFromInventory(m.id, m.count);
-    this.addToInventory(itemFromId(r.output, r.count));
     this.bumpStat('cooks'); this.markFirst('first_cook', 'Cooked a dish for the first time');
-    this.publishInventory(); // refresh the hotbar (an ingredient/dish may sit on row 0) + schedules a save
-    return { ok: true, key: 'cook_done' };
+    this.publishInventory(); // the ingredients are gone NOW — refresh the hotbar + schedule a save
+    return { ok: true, key: '', output: r.output, count: r.count };
+  }
+
+  /** The texture + frame to draw a cooked dish with, for HouseScene's reveal.
+   *
+   *  HouseScene cannot build an `ItemStack` itself — `itemFromId` is this module's — and the
+   *  alternative, hardcoding the atlas key over there, would drift the moment a dish's art moves. */
+  public cookedDishIcon(output: string): { key: string; frame: string | number } | undefined {
+    const it = itemFromId(output, 1);
+    return it.iconKey ? { key: it.iconKey, frame: it.iconFrame ?? 0 } : undefined;
+  }
+
+  /** Bank a dish once HouseScene's cooking cinematic has revealed it. */
+  public bankCookedDish(output: string, count: number): void {
+    const it = itemFromId(output, count);
+    this.addToInventory(it);
+    this.showHarvestToast(it);
+    this.catoReact('happy', { duration: 1400 });
+    this.publishInventory();
   }
 
   /** Route a tap while the crafting modal is open (modal — always consumes). */
