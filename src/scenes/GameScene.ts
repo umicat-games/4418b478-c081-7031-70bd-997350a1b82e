@@ -7649,31 +7649,45 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ── Backpack (inventory) counterparts of the chest helpers — used by COOKING, which pulls
-  //    ingredients from + returns dishes to the player's backpack (not the chest, which sits
-  //    outside at the island door). `inventory` is the whole grid; row 0 is the hotbar view. ──
-  private invCountOf(id: string): number {
-    let n = 0;
-    for (const s of this.inventory) if (s && materialMatches(id, s.id)) n += s.count;
+  // ── What COOKING can reach: the player's BACKPACK plus the hotbar row.
+  //
+  //    NOT the chest — that sits outside at the island door while cooking happens inside, which
+  //    is why cooking counts for itself instead of reusing `haveCountAnywhere`.
+  //
+  //    These used to read `this.inventory` alone, described here as "the whole grid; row 0 is
+  //    the hotbar view". That was true once. `backpackStore` replaced the grid's lower rows as
+  //    the bag the player actually opens, and this block never followed — so the kitchen could
+  //    not see a backpack full of vegetables, and a finished dish was banked into rows nothing
+  //    renders: cooked, gone, nowhere to find it. Renamed off `inv*` so the next person cannot
+  //    reach for the old names and inherit the same wrong store. ──
+  private cookCountOf(id: string): number {
+    let n = this.backpackCountOf(id);
+    for (const c of this.inventory) if (c && materialMatches(id, c.id)) n += c.count; // hotbar row
     return n;
   }
 
-  /** Remove `n` of item `id` from the backpack (across stacks). */
-  private takeFromInventory(id: string, n: number): void {
+  /** Spend `n` of `id` for a recipe — the backpack first, then the hotbar row. */
+  private cookConsume(id: string, n: number): void {
     let left = n;
-    for (let i = this.inventory.length - 1; i >= 0 && left > 0; i--) {
-      const s = this.inventory[i];
-      if (!s || !materialMatches(id, s.id)) continue;
+    for (let i = this.backpackStore.length - 1; i >= 0 && left > 0; i--) {
+      const s = this.backpackStore[i];
+      if (!materialMatches(id, s.id)) continue;
       const take = Math.min(s.count, left);
       s.count -= take; left -= take;
-      if (s.count <= 0) this.inventory[i] = null;
+      if (s.count <= 0) this.backpackStore.splice(i, 1);
+    }
+    for (let i = 0; i < this.inventory.length && left > 0; i++) {
+      const c = this.inventory[i];
+      if (!c || !materialMatches(id, c.id)) continue;
+      const take = Math.min(c.count, left);
+      c.count -= take; left -= take;
+      if (c.count <= 0) this.inventory[i] = null;
     }
   }
 
-  /** A free cell OR an existing matching stack with room → the dish will fit. */
-  private inventoryHasSpaceFor(id: string): boolean {
-    if (this.inventory.some((c) => c === null)) return true;
-    return this.inventory.some((c) => c != null && c.id === id && c.stackable && c.count < MAX_STACK);
+  /** Somewhere for the finished dish to go. */
+  private cookHasRoomFor(id: string): boolean {
+    return this.backpackHasSpaceFor(id);
   }
 
   /** Can every material of `r` be paid AND does the output have chest room? */
@@ -8010,7 +8024,7 @@ export class GameScene extends Phaser.Scene {
       iconFrame: itemFromId(r.output, 1).iconFrame ?? 0,
       name: this.itemName(r.output),
       count: r.count,
-      ok: r.materials.every((m) => this.invCountOf(m.id) >= m.count),
+      ok: r.materials.every((m) => this.cookCountOf(m.id) >= m.count),
     }));
     const s = COOKING_RECIPES[sel];
     const detail = s
@@ -8021,7 +8035,7 @@ export class GameScene extends Phaser.Scene {
           iconFrame: itemFromId(s.output, 1).iconFrame ?? 0,
           outCount: s.count,
           materials: s.materials.map((m) => {
-            const have = this.invCountOf(m.id);
+            const have = this.cookCountOf(m.id);
             return {
               iconKey: itemFromId(m.id, 1).iconKey ?? 'fruit-items',
               iconFrame: itemFromId(m.id, 1).iconFrame ?? 0,
@@ -8033,8 +8047,8 @@ export class GameScene extends Phaser.Scene {
           // Two different reasons a dish cannot be cooked, kept apart because they need different
           // treatment on screen: short ingredients are already spelled out by the red have/need
           // numbers, while a full backpack has nothing saying so and needs to be stated.
-          canCook: s.materials.every((m) => this.invCountOf(m.id) >= m.count) && this.inventoryHasSpaceFor(s.output),
-          roomOk: this.inventoryHasSpaceFor(s.output),
+          canCook: s.materials.every((m) => this.cookCountOf(m.id) >= m.count) && this.cookHasRoomFor(s.output),
+          roomOk: this.cookHasRoomFor(s.output),
         }
       : undefined;
     return { recipes, detail };
@@ -8053,9 +8067,9 @@ export class GameScene extends Phaser.Scene {
   public tryCook(sel: number): { ok: boolean; key: string; output?: string; count?: number } {
     const r = COOKING_RECIPES[sel];
     if (!r) return { ok: false, key: '' };
-    if (!r.materials.every((m) => this.invCountOf(m.id) >= m.count)) return { ok: false, key: 'cook_need' };
-    if (!this.inventoryHasSpaceFor(r.output)) return { ok: false, key: 'cook_full' };
-    for (const m of r.materials) this.takeFromInventory(m.id, m.count);
+    if (!r.materials.every((m) => this.cookCountOf(m.id) >= m.count)) return { ok: false, key: 'cook_need' };
+    if (!this.cookHasRoomFor(r.output)) return { ok: false, key: 'cook_full' };
+    for (const m of r.materials) this.cookConsume(m.id, m.count);
     this.bumpStat('cooks'); this.markFirst('first_cook', 'Cooked a dish for the first time');
     this.publishInventory(); // the ingredients are gone NOW — refresh the hotbar + schedule a save
     return { ok: true, key: '', output: r.output, count: r.count };
@@ -8087,11 +8101,11 @@ export class GameScene extends Phaser.Scene {
     for (const r of COOKING_RECIPES) for (const m of r.materials) wanted.add(CONCRETE[m.id] ?? m.id);
     let granted = 0;
     for (const id of wanted) {
-      const have = this.invCountOf(id);
+      const have = this.cookCountOf(id);
       if (have >= floor) continue;
-      if (!this.inventoryHasSpaceFor(id)) continue; // backpack full — stop rather than lose items
-      const left = this.addToInventory(itemFromId(id, floor - have));
-      granted += (floor - have) - left;
+      if (!this.cookHasRoomFor(id)) continue; // backpack full — stop rather than lose items
+      const want = floor - have;
+      if (this.addToBackpack(itemFromId(id, want))) granted += want;
     }
     if (granted > 0) { this.publishInventory(); this.scheduleSave(); }
     console.log(`[catopia][debug] pantry stocked: ${granted} items across ${wanted.size} ingredients`);
@@ -8100,7 +8114,8 @@ export class GameScene extends Phaser.Scene {
   /** Bank a dish once HouseScene's cooking cinematic has revealed it. */
   public bankCookedDish(output: string, count: number): void {
     const it = itemFromId(output, count);
-    this.addToInventory(it);
+    this.addToBackpack(it); // the bag the player opens
+    if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu();
     this.showHarvestToast(it);
     this.catoReact('happy', { duration: 1400 });
     this.publishInventory();
@@ -9127,26 +9142,10 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Add a stack to the inventory: merge into a same-id stackable cell with room,
-   *  else drop into the first empty cell. (Silently discards if totally full.) */
-  /** Deposit `item` into the backpack (merge into stacks, then a free slot). Returns
-   *  the LEFTOVER count that didn't fit (0 = all deposited) — callers that split a
-   *  known quantity need this to know how much was actually taken. */
-  private addToInventory(item: ItemStack): number {
-    if (item.stackable) {
-      for (const cell of this.inventory) {
-        if (cell && cell.id === item.id && cell.stackable && cell.count < MAX_STACK) {
-          const moved = Math.min(MAX_STACK - cell.count, item.count);
-          cell.count += moved;
-          item.count -= moved;
-          if (item.count <= 0) return 0;
-        }
-      }
-    }
-    const free = this.inventory.findIndex((c) => c === null);
-    if (free >= 0) { this.inventory[free] = item; return 0; }
-    return item.count; // no room → this many dropped
-  }
+  // `addToInventory` lived here and deposited into `this.inventory` — the legacy 8x5 grid whose
+  // only rendered row is the hotbar. Cooking was its last caller, and banking a dish there is
+  // what made a cooked dish vanish. Deleted rather than left for the next person to reach for:
+  // things the player receives go to `addToBackpack` / `collect`.
 
   /** Count down soil wetness; when a cell dries, un-tint it. */
   private updateSoil(delta: number): void {

@@ -208,7 +208,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   cook_ingredients: { en: 'Ingredients', 'zh-CN': '所需食材' },
   cook_button: { en: 'Cook', 'zh-CN': '烹饪' },
   cook_need: { en: 'Not enough ingredients', 'zh-CN': '食材不够' },
-  cook_full: { en: 'Chest is full', 'zh-CN': '箱子满了' },
+  cook_full: { en: 'Backpack is full', 'zh-CN': '背包满了' }, // dishes go into the BACKPACK — the chest is outside
   cook_done: { en: 'Cooked!', 'zh-CN': '做好啦！' },
   cook_empty: { en: 'No recipes yet', 'zh-CN': '还没有菜谱' },
   action_use: { en: 'Use', 'zh-CN': '使用' },
