@@ -473,8 +473,9 @@ the stew is drawn twice, and one copy carries a `cooing-` typo).
   be hidden behind it. The burner only cools down AFTER the reveal, so the stove is still lit under
   the finished dish. A 4s safety timer banks the dish even if an animation event is missed —
   ingredients are already spent by then.
-- **`SFX_COOK` is a placeholder** pointing at the workbench's `tools-making`. Cooking wants a
-  sizzle or a bubbling pot; the constant exists so swapping in a real clip is one line.
+- **`SFX_COOK` = `cooking-background-sound.mp3`** (creator-uploaded, ~2.9s). It outlasts the
+  black hold (capped at 2.4s), so the tail carries into the reveal — the pan is still going as
+  the dish appears, which is what cooking sounds like.
 - **Balance is data** (`public/data/cooking.json` + the dish rows in `items.json`, both editable in
   the Data Tables tool). The in-code fallbacks in `cooking.ts` / `items.ts` are kept in step on
   purpose — a fallback that disagrees quietly plays a different game from the one that was balanced.

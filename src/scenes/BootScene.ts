@@ -99,6 +99,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('rain-loop', 'uploaded/raining.mp3'); // looping rain ambience while it's raining (387KB)
     this.load.audio('night-cricket', 'uploaded/night-cricket-sound.mp3'); // occasional cricket chirp on clear nights
     this.load.audio('tools-making', 'uploaded/tools-making-sound.mp3'); // workbench tool-craft cinematic sound
+    this.load.audio('sfx-cooking', 'uploaded/cooking-background-sound.mp3'); // the stove sizzling through the cooking cinematic
     this.load.audio('sfx-confirm', 'uploaded/confirmation_001.ogg'); // laptop "new message" chime
     this.load.audio('sfx-drop', 'uploaded/drop_002.ogg'); // laptop: player sends a message
     this.load.audio('sfx-collect', 'uploaded/drop_004.ogg'); // a harvested item lands in the collector (Cato / cursor)
