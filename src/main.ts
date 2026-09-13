@@ -11,6 +11,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
+import { createDebugHud } from './debughud';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { NO_BONUS, type TownBonus } from './town';
 import type { GameAudio } from '@umicat/three-sdk';
@@ -674,6 +675,13 @@ export async function startLevel(
 
   const applyQuality = (): void => {
     const q = QUALITY[quality];
+    // Smooth also drops the far half of the forest. It is half the triangles on
+    // a board and it is the two rings you never stand next to — so if a phone
+    // struggles with the trees, the control a player already has is the one
+    // that helps, rather than a setting only I know about.
+    for (const o of world.scene.children) {
+      if (o.name === 'forest_far') o.visible = quality > 0;
+    }
     const screen = window.devicePixelRatio ?? 1;
     renderer.setPixelRatio(Math.min(screen, dprFlag > 0 ? dprFlag : (screen > 2 ? q.dpr : 2)));
     const size = shadowFlag > 0 ? shadowFlag : q.shadow;
@@ -1796,47 +1804,7 @@ export async function startLevel(
   // Everything is loaded, warmed and placed; the next frame is a real one.
   hideLoading();
 
-  // A frame counter, on the device that matters.
-  //
-  // `?debug=1` — because the numbers that decide performance questions have to
-  // come from the phone. A laptop renders this board without noticing 182 draw
-  // calls; an iPhone draws at 3x into a 2048 shadow map and very much does, and
-  // nothing about a screenshot from either machine shows the difference.
-  // `?debug=1`, or three taps on the HUD — the app plays games in a webview
-  // with no address bar, so a URL flag is unreachable exactly where the
-  // numbers matter most.
-  const debugHud = (() => {
-        const d = document.createElement('div');
-        // TOP CENTRE, and never interactive. It started bottom-right, which is
-        // where the jump and attack buttons are — a readout added to diagnose
-        // performance covered the two controls a player needs most, and made
-        // itself the fourth thing this session to be perfectly visible and
-        // quietly in the way. The HUD owns the top left; this takes the gap.
-        d.style.cssText = `position: fixed; left: 50%; top: 8px; transform: translateX(-50%);
-          z-index: 60; font: 600 11px/1.4 ui-monospace, monospace; color: #fff;
-          text-align: center; background: rgba(0,0,0,.45); padding: 5px 9px;
-          border-radius: 8px; pointer-events: none; white-space: pre;`;
-        // Visible by default while performance is the open question. A hidden
-        // gesture is the wrong default for a number someone has to read out to
-        // me: `?debug=1` is unreachable in the app (no address bar) and three
-        // quick taps turned out to be fiddly enough that it looked broken.
-        // `?debug=0` turns it off; so does tapping it.
-        d.style.display = new URLSearchParams(location.search).get('debug') === '0' ? 'none' : 'block';
-        // No tap-to-dismiss: making it tappable is what put it in front of the
-        // buttons. `?debug=0` turns it off.
-        document.body.appendChild(d);
-        let taps = 0, tapAt = 0;
-        hudEl.style.pointerEvents = 'auto';
-        hudEl.addEventListener('pointerdown', (e) => {
-          if ((e.target as HTMLElement).tagName === 'BUTTON') return;
-          const t = performance.now();
-          taps = t - tapAt < 600 ? taps + 1 : 1;
-          tapAt = t;
-          if (taps >= 3) { taps = 0; d.style.display = d.style.display === 'none' ? 'block' : 'none'; }
-        });
-        return d;
-      })();
-  let fpsFrames = 0, fpsSince = performance.now(), fpsWorst = 0;
+  const debug = createDebugHud(renderer, hudEl);
   const shadowOf = (): string => {
     const d = world.scene.children.find((c) => (c as THREE.DirectionalLight).isDirectionalLight) as THREE.DirectionalLight | undefined;
     return d ? `${d.shadow.mapSize.width}` : 'none';
@@ -2271,20 +2239,7 @@ export async function startLevel(
       }
     }
 
-    if (debugHud.style.display !== 'none') {
-      fpsFrames += 1;
-      fpsWorst = Math.max(fpsWorst, dt * 1000);
-      if (now - fpsSince > 500) {
-        const fps = (fpsFrames * 1000) / (now - fpsSince);
-        const info = renderer.info.render;
-        debugHud.textContent =
-          `${fps.toFixed(0)} fps   worst ${fpsWorst.toFixed(0)}ms\n` +
-          `${info.calls} draws  ${(info.triangles / 1000).toFixed(0)}k tris\n` +
-          `dpr ${window.devicePixelRatio} → ${renderer.getPixelRatio()}  ${renderer.domElement.width}×${renderer.domElement.height}\n` +
-          `shadow ${shadowOf()}`;
-        fpsFrames = 0; fpsSince = now; fpsWorst = 0;
-      }
-    }
+    debug.tick(now, dt, `shadow ${shadowOf()}`);
 
     // Out through the door, back to the hub. Only once the run is over — the
     // wall is solid until then, and the door is not even drawn.
@@ -2297,6 +2252,7 @@ export async function startLevel(
       window.removeEventListener('resize', resize);
       input.dispose();
       banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
+      debug.dispose();
       hudEl.textContent = '';
       world.dispose();
       world.scene.clear();

@@ -470,16 +470,23 @@ function buildLevel(def) {
       // Thin at the clearing's edge, thick at the horizon — the far rings are
       // what you actually see, and they are the cheapest to fill because
       // nothing about them needs to line up with anything.
-      // Thin at the clearing's edge, thick at the horizon. The near rings are
-      // right under the camera and a dense one there hides the edge of the
-      // board; the far rings are what you actually read as "forest", and they
-      // are the cheapest to fill because nothing about them lines up with
-      // anything.
-      const chance = Math.min(0.8, 0.14 + depth * 0.12);
-      const n = rand() < chance ? (rand() < 0.3 ? 2 : 1) : 0;
+      // Thick from the first ring. Thin looked like a scattering of trees on a
+      // lawn that happened to stop — the point of a tree line is that it reads
+      // as the EDGE of somewhere, and half a dozen trees per side does not. The
+      // first ring is the one doing that work, so it is the densest thing here
+      // after the horizon.
+      const chance = Math.min(0.96, 0.72 + depth * 0.05);
+      const r = rand();
+      const n = r < chance ? (r < chance * 0.45 ? 2 : 1) : 0;
       for (let k = 0; k < n; k++) {
         add({
-          id: `forest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'), name: 'forest',
+          id: `forest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'),
+          // The MIDDLE rings are their own thing so the picture-quality toggle
+          // can drop them — half the triangles on the board, and the rings
+          // nobody stands next to. The outermost one always stays: it is what
+          // hides the edge of the ground against the sky, and dropping it
+          // traded a frame for a visible seam.
+          name: depth >= 4 && depth < FOREST_OUT ? 'forest_far' : 'forest',
           modelAssetId: rand() < 0.22 ? t.props[1] : t.props[0],
           transform: {
             position: {
@@ -752,14 +759,15 @@ function buildHub() {
       // Open in front of the door, so the way out is visible from the middle.
       if (Math.abs(gx) < 2 && gz < -HALF) continue;
       const depth = Math.max(Math.abs(gx), Math.abs(gz)) - HALF;
-      // Denser from the first ring than a board's, because the hub is small:
-      // its clearing has to read as a clearing from the middle of it, and at a
-      // board's density the tree line was a green horizon a long way off.
-      const chance = Math.min(0.85, 0.42 + depth * 0.1);
-      const n = rand() < chance ? (rand() < 0.3 ? 2 : 1) : 0;
+      // Denser still than a board's: the hub is small, so its clearing has to
+      // read as a clearing from the middle of it.
+      const chance = Math.min(0.97, 0.8 + depth * 0.04);
+      const r = rand();
+      const n = r < chance ? (r < chance * 0.5 ? 2 : 1) : 0;
       for (let k = 0; k < n; k++) {
         ents.push({
-          id: `hforest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'), name: 'forest',
+          id: `hforest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'),
+          name: depth >= 4 && depth < HUB_OUT ? 'forest_far' : 'forest',
           modelAssetId: rand() < 0.22 ? 'td-detail-tree-large' : 'td-tree',
           transform: {
             position: {

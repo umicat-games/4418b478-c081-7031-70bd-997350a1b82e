@@ -9,6 +9,7 @@ import type { Shared, Weapon, Progress } from './main';
 import { patchSave } from './main';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
+import { createDebugHud } from './debughud';
 import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, type TownBonus } from './town';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
@@ -447,6 +448,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // Built, placed and about to render: the next frame is a real one.
   hideLoading();
 
+  // The same readout the levels have. The hub is eleven hundred objects of
+  // forest now and it was the one place with no way to see what that cost.
+  const debug = createDebugHud(renderer, hudEl);
+
   // --- the loop ---
   return await new Promise<HubChoice>((resolve) => {
     let last = performance.now();
@@ -567,6 +572,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         character.teleport({ x: hero.position.x, y: 0.5, z: DOOR_AT.z + 0.9 });
       }
 
+      debug.tick(now, dt);
       world.update(dt);
       renderer.render(world.scene, world.camera);
     });

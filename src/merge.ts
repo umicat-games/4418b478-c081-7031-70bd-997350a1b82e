@@ -36,6 +36,8 @@ const CASTS = new Set([
   'pedestal', 'decor',
 ]);
 const OUTSIDE = new Set(['forest', 'forest_ground', 'ground_skirt']);
+/** The far rings, merged on their own so they can be switched off together. */
+const FAR = new Set(['forest_far']);
 
 export interface MergeResult {
   /** How many objects went in, and how many meshes came out. */
@@ -67,13 +69,15 @@ export function mergeStatic(
     }
   }
 
-  const groups: { objs: THREE.Object3D[]; cast: boolean; receive: boolean }[] = [
-    { objs: [], cast: false, receive: true },
-    { objs: [], cast: true, receive: true },
-    { objs: [], cast: false, receive: false },
+  const groups: { objs: THREE.Object3D[]; cast: boolean; receive: boolean; name: string }[] = [
+    { objs: [], cast: false, receive: true, name: 'board' },
+    { objs: [], cast: true, receive: true, name: 'board_props' },
+    { objs: [], cast: false, receive: false, name: 'forest' },
+    { objs: [], cast: false, receive: false, name: 'forest_far' },
   ];
   for (const [id, obj] of world.entities) {
     if (CASTS.has(obj.name)) groups[1].objs.push(obj);
+    else if (FAR.has(obj.name)) groups[3].objs.push(obj);
     else if (OUTSIDE.has(obj.name)) groups[2].objs.push(obj);
     else if (FLAT.has(obj.name) || id.startsWith('path_')) groups[0].objs.push(obj);
   }
@@ -116,7 +120,7 @@ export function mergeStatic(
       const mesh = new THREE.Mesh(combined, mat);
       // Named, because after this the individual pieces are gone and this is
       // the only thing left that knows where the board is.
-      mesh.name = group.cast ? 'board_props' : group.receive ? 'board' : 'forest';
+      mesh.name = group.name;
       mesh.castShadow = group.cast;
       mesh.receiveShadow = group.receive;
       mesh.matrixAutoUpdate = false;
