@@ -135,6 +135,31 @@ const CRATE_GOLD = [12, 30];    // the range a gold crate pays
  *  crate that pays gold, so a full-health player gets the gold instead. */
 const CRATE_HEART_CHANCE = 0.42;
 
+// --- rare crates ---------------------------------------------------------
+/** One crate in four is worth a detour on its own terms.
+ *
+ *  Gold and hearts are the same decision every time: go and get it if you can
+ *  spare the walk. A timed effect is a different one — it is only worth
+ *  anything if you are near something to use it on, so a rare crate during a
+ *  quiet moment and a rare crate with sixteen saucers on the board are two
+ *  different offers. */
+const RARE_CRATE_CHANCE = 0.28;
+const BUFF_SECONDS = 20;
+interface BuffKind {
+  id: string;
+  /** Said once, on the banner, when you pick it up. */
+  label: string;
+  /** What sits in the HUD for twenty seconds. An icon and a countdown — the
+   *  full sentence there pushed the readout off a phone's screen. */
+  badge: string;
+}
+const BUFFS: BuffKind[] = [
+  { id: 'strike', label: '⚔ Double strike', badge: '⚔' },
+  { id: 'lucky', label: '💰 Lucky — richer bounties', badge: '💰' },
+  { id: 'shield', label: '🛡 Shielded', badge: '🛡' },
+  { id: 'overdrive', label: '⚡ Overdrive — towers reload faster', badge: '⚡' },
+];
+
 // --- towers ---------------------------------------------------------------
 interface TowerKind {
   id: string;
@@ -732,7 +757,13 @@ export async function startLevel(
   // Every weapon, not just the sword. The Range says "+1 to your own attacks",
   // and a bonus that silently applied to one of three would be a lie told by
   // the only line of text the player ever reads about it.
-  const heroDamage = HERO_ATTACK_DAMAGE + bonus.heroDamage;
+  const baseHeroDamage = HERO_ATTACK_DAMAGE + bonus.heroDamage;
+  /** What a swing is worth right now, effect included. A function rather than a
+   *  constant, because "double strike" has to reach every weapon and every call
+   *  site — a buff that reaches three of four looks broken to whoever notices.
+   *  (`heroHit` is taken: it is the sphere a bullet is tested against.) */
+  const withBuff = (base: number): number => base * (buff?.kind.id === 'strike' ? 2 : 1);
+  const heroDamage = baseHeroDamage;
   let gold = level.startGold + bonus.gold;
   let lives = level.lives;
   let heroHp = heroMaxHp;
@@ -756,7 +787,10 @@ export async function startLevel(
   /** The tower under the player's feet, if any — the thing `build` upgrades. */
   let standingOn: Tower | null = null;
 
-  interface Crate { obj: THREE.Object3D; t: number; hp: number; cell: [number, number]; }
+  interface Crate { obj: THREE.Object3D; t: number; hp: number; cell: [number, number]; rare: boolean; }
+  /** At most one at a time: two stacked effects is a state nobody can read off
+   *  a HUD line, and this game already asks you to watch four things. */
+  let buff: { kind: BuffKind; left: number } | null = null;
   const crates: Crate[] = [];
   let crateTimer = CRATE_EVERY * 0.6;
   /** Whether the hero is standing at an unopened crate — a HUD line, so it is
@@ -858,12 +892,18 @@ export async function startLevel(
   line3.style.opacity = '0.85';
   // Gold lives in its own element because a coin flying to the counter needs a
   // rectangle to aim at, and "somewhere in that line of text" is not one.
+  const buffEl = document.createElement('span');
+  buffEl.style.cssText = 'color:#ffd45e';
   const towerEl = document.createElement('span');
   const livesEl = document.createElement('span');
   const goldEl = document.createElement('span');
   const waveEl = document.createElement('span');
   goldEl.style.transition = 'transform 120ms ease-out';
-  line2.append(livesEl, goldEl, waveEl);
+  // ALL of them. The tower counter and the effect readout were created, had
+  // their text set every frame, and were never put in the document — the same
+  // shape of bug as a button rendered under the control layer, and just as
+  // invisible from the code.
+  line2.append(livesEl, goldEl, waveEl, towerEl, buffEl);
   const muteBtn = document.createElement('button');
   muteBtn.textContent = '🔊';
   muteBtn.style.cssText = `
@@ -1123,16 +1163,21 @@ export async function startLevel(
   };
 
   /** Drop a crate somewhere in the back field that is free right now. */
-  const dropCrate = (): void => {
+  const dropCrate = (forceRare?: boolean): void => {
     const taken = new Set(crates.map((c) => `${c.cell[0]},${c.cell[1]}`));
     const free = BACKFIELD.filter((c) => !taken.has(`${c[0]},${c[1]}`));
     if (!free.length) return;
     const cell = free[Math.floor(Math.random() * free.length)];
-    // Barrels and crates both, so the field does not look like a warehouse.
-    const obj = spawnFrom(Math.random() < 0.5 ? 'hub-crate' : 'hub-barrel');
+    const rare = forceRare ?? Math.random() < RARE_CRATE_CHANCE;
+    // Barrels and crates both, so the field does not look like a warehouse —
+    // and something obviously different for the rare one, because "is that
+    // worth crossing the board for" has to be answerable from across the board.
+    const obj = spawnFrom(rare ? 'td-tower-round-crystals'
+      : Math.random() < 0.5 ? 'hub-crate' : 'hub-barrel');
     obj.position.set(cell[0], 0, cell[1]);
     obj.rotation.y = Math.random() * Math.PI * 2;
-    crates.push({ obj, t: 0, hp: 2, cell });
+    if (rare) obj.scale.setScalar(0.85);
+    crates.push({ obj, t: 0, hp: rare ? 3 : 2, cell, rare });
     tinted.push(obj);
   };
 
@@ -1149,6 +1194,20 @@ export async function startLevel(
       c.hp -= amount;
       flashTint(c.obj, { color: 0xffe08a, ms: 140 });
       if (c.hp > 0) { audio.play('hit-enemy'); continue; }
+      if (c.rare) {
+        // A rare one always pays an effect, and always a DIFFERENT one from
+        // whatever is running — rerolling into the buff you already have is a
+        // crate that paid nothing.
+        const pool = BUFFS.filter((k) => k.id !== buff?.kind.id);
+        const kind = pool[Math.floor(Math.random() * pool.length)];
+        buff = { kind, left: BUFF_SECONDS };
+        flashBanner(kind.label);
+        audio.play('win');
+        flashTint(hero, { color: 0xffd45e, ms: 500 });
+        renderHud();
+        c.obj.visible = false;
+        continue;
+      }
       // What was in it. A heart only when one is missing: a crate that pays
       // nothing is a worse crate than one that pays gold.
       const wantHeart = heroHp < heroMaxHp && Math.random() < CRATE_HEART_CHANCE;
@@ -1310,6 +1369,7 @@ export async function startLevel(
     goldEl.textContent = `💰 ${gold}`;
     waveEl.textContent = `\u2003Wave ${w}/${WAVES.length}`;
     towerEl.textContent = `\u2003🗼 ${towers.length}/${maxTowers}`;
+    buffEl.textContent = buff ? `\u2003${buff.kind.badge} ${Math.ceil(buff.left)}s` : '';
     // A PROMPT, not narration. This line is empty unless the player is standing
     // somewhere the button does something, and then it is three or four words.
     // A sentence explaining the game that is on screen the whole time is a
@@ -1494,7 +1554,7 @@ export async function startLevel(
         const d = Math.hypot(e.obj.position.x - at.x, e.obj.position.z - at.z);
         if (d > STAFF_RADIUS) continue;
         struck += 1;
-        damage(e, STAFF_DAMAGE);
+        damage(e, withBuff(STAFF_DAMAGE));
       }
       hitCrates(at.x, at.z, STAFF_RADIUS, 2);
       if (struck) audio.play('enemy-die');
@@ -1533,7 +1593,7 @@ export async function startLevel(
       const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
       if (d > HERO_ATTACK_RANGE) continue;
       connected = true;
-      damage(e, heroDamage);
+      damage(e, withBuff(heroDamage));
     }
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
@@ -1555,15 +1615,17 @@ export async function startLevel(
       flashBanner('THE WARLORD FALLS');
       playEnemyClip(e, 'die', false);
       corpses.push({ obj: e.obj, t: 0, mixer: e.mixer ?? null });
-      for (let i = 0; i < 6; i++) flyCoin(e.obj.position, Math.round(e.bounty / 6));
+      const share = Math.round(e.bounty * (buff?.kind.id === 'lucky' ? 1.6 : 1) / 6);
+      for (let i = 0; i < 6; i++) flyCoin(e.obj.position, share);
       return;
     }
     e.obj.visible = false;
-    flyCoin(e.obj.position, e.bounty);
+    flyCoin(e.obj.position, Math.round(e.bounty * (buff?.kind.id === 'lucky' ? 1.6 : 1)));
   };
 
   const hurtHero = (amount = 1): void => {
     if (invincible > 0 || !running) return;
+    if (buff?.kind.id === 'shield') { flashTint(hero, { color: 0x6ec8ff, ms: 200 }); return; }
     invincible = HERO_INVINCIBLE_SECONDS;
     heroHp -= amount;
     audio.play('hero-hurt');
@@ -1984,7 +2046,7 @@ export async function startLevel(
             target.obj.position.x - t.cell[0], target.obj.position.z - t.cell[1]);
         }
         if (target && t.reload <= 0) {
-          t.reload = levelReload(t);
+          t.reload = levelReload(t) * (buff?.kind.id === 'overdrive' ? 0.55 : 1);
           const shot = spawnFrom(t.kind.ammo);
           // From the weapon, which is now somewhere up a tower — a level-three
           // catapult firing out of the grass at its feet looks like a bug.
@@ -1992,6 +2054,13 @@ export async function startLevel(
           shots.push({ obj: shot, target, damage: levelDamage(t), speed: t.kind.shotSpeed });
           audio.play(t.kind.id === 'cannon' ? 'cannon-shot' : 'tower-shot');
         }
+      }
+
+      // --- the running effect ---
+      if (buff) {
+        buff.left -= dt;
+        if (buff.left <= 0) { buff = null; renderHud(); flashBanner('Effect over'); }
+        else if (Math.ceil(buff.left) !== Math.ceil(buff.left + dt)) renderHud();
       }
 
       // --- supply crates ---
@@ -2062,7 +2131,7 @@ export async function startLevel(
           if (!segmentHitsSphere(prevPos, a.obj.position, e.obj.position, ARROW_HIT)) continue;
           hit = e; break;
         }
-        if (hit) damage(hit, ARROW_DAMAGE);
+        if (hit) damage(hit, withBuff(ARROW_DAMAGE));
         const brokeCrate = !hit && hitCrates(a.obj.position.x, a.obj.position.z, ARROW_HIT, 1);
         if (hit || brokeCrate || a.life <= 0 || Math.abs(a.obj.position.x) > 7 || Math.abs(a.obj.position.z) > 7) {
           world.scene.remove(a.obj);
@@ -2156,8 +2225,17 @@ export async function startLevel(
                         pixelRatio: renderer.getPixelRatio() }),
       get corpses() { return corpses; },
       get crates() { return crates; },
+      buff: () => (buff ? { id: buff.kind.id, left: +buff.left.toFixed(1) } : null),
+      /** Force one, for a probe that should not have to break crates until the
+       *  dice agree. The real effect, applied the real way. */
+      giveBuff: (id: string) => {
+        const kind = BUFFS.find((k) => k.id === id);
+        if (kind) { buff = { kind, left: BUFF_SECONDS }; renderHud(); }
+      },
       glide: () => ({ ...glide }),
-      dropCrate: () => dropCrate(),
+      /** `rare` forces the kind, for a probe that should not have to roll dice
+       *  until they agree — the crate it drops is the real one either way. */
+      dropCrate: (rare?: boolean) => dropCrate(rare),
       /** The attack button, and the end of the run. The real ones — a probe
        *  that calls its own copy is testing its own copy. */
       attack: () => heroAttack(),

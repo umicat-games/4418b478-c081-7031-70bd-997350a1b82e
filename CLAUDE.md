@@ -147,6 +147,14 @@ build — and pay gold or a heart when broken with any weapon. A heart only when
 one is missing: a crate that pays nothing is a worse crate than one that pays
 gold. They land away from everything on purpose; walking to one is the cost.
 
+**One crate in four is rare** and pays a twenty-second effect instead: double
+strike, richer bounties, a shield, or towers that reload faster. Gold and hearts
+are the same decision every time; a timed effect is only worth anything if you
+are near something to use it on, so the same crate is a different offer in a
+quiet moment and in a busy one. It never rerolls into the effect already
+running. `withBuff()` is the one place damage passes through, because a buff
+that reaches three weapons of four looks broken to whoever notices.
+
 ## Progression
 
 `td-progress` in `umicat.saves`:
@@ -259,6 +267,10 @@ What it has found, none of it visible by reading the wave table:
   Play Again, the HUD under the controls, the leaderboard panel.
 - **Never copy one kit's `Textures/` over another's.** `cmp` first. Doing it
   once turned the grass orange and every check still passed.
+- **An element created, updated and never appended is invisible and silent.**
+  The tower counter and the effect readout had their text set every frame for a
+  day before anyone noticed they were not in the document. Same shape as a
+  button rendered under the control layer.
 - **A spawn point written down twice disagrees with itself.** The hub placed its
   hero at z=1.9 in the scene and spawned the controller at z=3.0 in code; the
   controller wins, so editing the scene did nothing. Both now read the scene.
