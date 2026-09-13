@@ -21,6 +21,12 @@ const CLIPS: Record<string, AudioClipSpec> = {
   coin: { volume: 0.5, throttle: 40 },
   build: { volume: 0.6 },
   upgrade: { volume: 0.65 },
+  // Uploaded through the Assets tool, and `.mp3` while the rest are `.ogg`.
+  // The key IS the filename when it carries an extension, which is how a game
+  // mixes formats without the platform having to guess.
+  'place-weapon.mp3': { volume: 0.7 },
+  'upgrade-weapon.mp3': { volume: 0.7 },
+  'enter-door.mp3': { volume: 0.75 },
   denied: { volume: 0.5 },
   leak: { volume: 0.7 },
   wave: { volume: 0.6 },
@@ -33,6 +39,13 @@ const CLIPS: Record<string, AudioClipSpec> = {
  *  `.mp3` next to `.ogg` effects, which the SDK allows precisely so a game can
  *  use whatever its assets came as. */
 export const MUSIC = { lobby: 'bgm-lobby.mp3', level: 'bgm-level.mp3' } as const;
+
+/** Named so the call sites read as events rather than filenames. */
+export const SFX = {
+  placeTower: 'place-weapon.mp3',
+  upgradeTower: 'upgrade-weapon.mp3',
+  door: 'enter-door.mp3',
+} as const;
 
 export const createAudio = (): GameAudio =>
   new GameAudio({ clips: CLIPS, base: 'audio/', music: MUSIC.lobby, musicVolume: 0.3 });

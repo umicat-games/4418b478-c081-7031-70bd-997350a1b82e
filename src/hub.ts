@@ -6,7 +6,7 @@ import {
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
 import type { Shared, Weapon } from './main';
-import { MUSIC } from './audio';
+import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
 
 /**
@@ -292,7 +292,7 @@ export async function runHub(shared: Shared): Promise<Weapon> {
         && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH;
       if (!done && inDoorway) {
         done = true;
-        audio.play('wave');
+        audio.play(SFX.door);
         // Tear the hub down before handing the renderer over: its scene, its
         // physics and its listeners would otherwise keep running behind the
         // level, invisibly, for the rest of the session.

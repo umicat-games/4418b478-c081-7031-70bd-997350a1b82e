@@ -7,7 +7,7 @@ import {
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
-import { createAudio, MUSIC } from './audio';
+import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import type { GameAudio } from '@umicat/three-sdk';
@@ -1037,7 +1037,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       t.obj.scale.setScalar(1 + (t.level - 1) * 0.18);
       flashTint(t.obj, { color: 0xffe28a, ms: 320 });
       updraft(t.obj.position);
-      audio.play('upgrade');
+      audio.play(SFX.upgradeTower);
       flashBanner(`${t.kind.label} → Lv${t.level}`);
       renderHud();
       return;
@@ -1053,7 +1053,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     towers.push(tower);
     occupied.set(`${buildCell[0]},${buildCell[1]}`, tower);
     tinted.push(obj);
-    audio.play('build');
+    audio.play(SFX.placeTower);
     renderHud();
   };
 
@@ -1514,7 +1514,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       && Math.abs(hero.position.x - EXIT_AT.x) < EXIT_HALF_WIDTH;
     if (!running && inExit && leave) {
       const go = leave; leave = null;
-      audio.play('wave');
+      audio.play(SFX.door);
       renderer.setAnimationLoop(null);
       window.removeEventListener('resize', resize);
       input.dispose();
