@@ -12,6 +12,7 @@ import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
+import { Vfx, ring as ringVfx, motes, corpse } from './vfx';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { NO_BONUS, type TownBonus } from './town';
 import {
@@ -900,6 +901,7 @@ export async function startLevel(
   let waveTimer = level.firstWaveDelay;
   /** Whether the wave at `waveIndex` has actually been sent out yet. */
   let waveLaunched = false;
+  let wavesPaused = false;
   let spawnTimer = 0;
   let toSpawn = 0;
   let running = true;
@@ -967,6 +969,10 @@ export async function startLevel(
     (rangeFill.material as THREE.MeshBasicMaterial).color.setHex(colour);
   };
 
+  /** Short-lived visual things. The camera is read fresh each frame because a
+   *  billboard has to face wherever it IS, and in this game it turns under the
+   *  player's thumb. */
+  const vfx = new Vfx(world.scene, () => world.camera);
   const _muzzle = new THREE.Vector3();
   const _box = new THREE.Box3();
   const _mat = new THREE.Matrix4();
@@ -1000,7 +1006,6 @@ export async function startLevel(
   const enemies: Enemy[] = [];
   /** Things playing their death animation. Off the enemy list — it is dead, and
    *  everything that iterates enemies would otherwise have to say so. */
-  const corpses: { obj: THREE.Object3D; t: number; mixer: THREE.AnimationMixer | null }[] = [];
   const towers: Tower[] = [];
   const shots: Shot[] = [];
   const bullets: Bullet[] = [];
@@ -1153,100 +1158,27 @@ export async function startLevel(
    *  the damage does, so one cast teaches the radius better than any number
    *  in the HUD could. */
   const castBurst = (at: THREE.Vector3): void => {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.3, 0.44, 40),
-      new THREE.MeshBasicMaterial({ color: 0xb58cff, transparent: true, opacity: 0.95,
-        side: THREE.DoubleSide, depthWrite: false }));
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(at.x, at.y + 0.06, at.z);
-    ring.userData.grow = STAFF_RADIUS / 0.37;
-    world.scene.add(ring);
-    updrafts.push({ obj: ring, t: 0, life: 0.42, spin: 0, rise: 0, r0: 0, a0: 0.95 });
-
-    for (let i = 0; i < 18; i++) {
-      const a0 = (i / 18) * Math.PI * 2;
-      const mote = new THREE.Mesh(moteGeom, new THREE.MeshBasicMaterial({
-        color: i % 2 ? 0xd9c2ff : 0x8b5cf6, transparent: true, opacity: 1, depthWrite: false }));
-      const r0 = 0.4 + Math.random() * 0.5;
-      mote.position.set(at.x + Math.cos(a0) * r0, at.y + 0.1, at.z + Math.sin(a0) * r0);
-      mote.userData.cx = at.x; mote.userData.cz = at.z;
-      mote.scale.setScalar(1.6);
-      world.scene.add(mote);
-      updrafts.push({ obj: mote, t: 0, life: 0.5 + Math.random() * 0.3,
-                      spin: 3.4 + Math.random() * 2, rise: 1.6 + Math.random(), r0, a0 });
-    }
+    // The ring's size is the RANGE, not a decoration — it ends exactly where
+    // the damage does, so one cast teaches the radius better than any number in
+    // the HUD could.
+    ringVfx(vfx, at, { color: 0xb58cff, from: 0.3, to: STAFF_RADIUS, life: 0.42 });
+    motes(vfx, at, {
+      count: 18, color: 0x8b5cf6, color2: 0xd9c2ff,
+      radius: 0.65, rise: 1.6, spin: 3.4, life: 0.62, size: 0.15,
+    });
   };
 
-  /** Motes lifting off an upgraded tower — the updraft.
+  /** Light lifting off an upgraded tower.
    *
-   *  In the scene rather than in the DOM, because it has to sit in the world
-   *  next to the tower it belongs to: a DOM flourish over the same pixels
-   *  stops being attached to anything the moment the camera turns.
-   *
-   *  Deliberately cheap: a dozen unlit quads, no texture, no particle system.
-   *  They rise, spiral a little, shrink and fade, and are gone in under a
-   *  second — long enough to see, short enough that upgrading three towers in
-   *  a row does not become a light show. */
-  const updrafts: { obj: THREE.Mesh; t: number; life: number; spin: number; rise: number; r0: number; a0: number }[] = [];
-  const moteGeom = new THREE.PlaneGeometry(0.09, 0.09);
-
+   *  In the scene rather than the DOM, because it has to sit in the world next
+   *  to the tower it belongs to: a DOM flourish over the same pixels stops
+   *  being attached to anything the moment the camera turns. */
   const updraft = (at: THREE.Vector3): void => {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.18, 0.34, 24),
-      new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.9,
-        side: THREE.DoubleSide, depthWrite: false }));
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(at.x, at.y + 0.05, at.z);
-    world.scene.add(ring);
-    updrafts.push({ obj: ring, t: 0, life: 0.55, spin: 0, rise: 0.55, r0: 0, a0: 0.9 });
-
-    for (let i = 0; i < 12; i++) {
-      const a0 = (i / 12) * Math.PI * 2;
-      const r0 = 0.16 + Math.random() * 0.16;
-      const mote = new THREE.Mesh(moteGeom, new THREE.MeshBasicMaterial({
-        color: i % 3 === 0 ? 0xfff2c4 : 0xffc94d, transparent: true, opacity: 1, depthWrite: false,
-      }));
-      mote.position.set(at.x + Math.cos(a0) * r0, at.y + 0.04, at.z + Math.sin(a0) * r0);
-      mote.userData.cx = at.x; mote.userData.cz = at.z;
-      world.scene.add(mote);
-      updrafts.push({ obj: mote, t: 0, life: 0.7 + Math.random() * 0.35,
-                      spin: 2.2 + Math.random() * 1.6, rise: 0.95 + Math.random() * 0.7, r0, a0 });
-    }
-  };
-
-  const updateUpdrafts = (dt: number): void => {
-    for (let i = updrafts.length - 1; i >= 0; i--) {
-      const u = updrafts[i];
-      u.t += dt;
-      const k = u.t / u.life;
-      if (k >= 1) {
-        world.scene.remove(u.obj);
-        (u.obj.material as THREE.Material).dispose();
-        if (u.obj.geometry !== moteGeom) u.obj.geometry.dispose();
-        updrafts.splice(i, 1);
-        continue;
-      }
-      const mat = u.obj.material as THREE.MeshBasicMaterial;
-      if (u.spin === 0) {
-        // The ring: expands outward and thins away. A cast ring grows all the
-        // way to the spell's radius, so the effect and the rule are the same
-        // shape.
-        const g = 1 + k * ((u.obj.userData.grow as number) ?? 1.5);
-        u.obj.scale.setScalar(g);
-        mat.opacity = u.a0 * (1 - k);
-      } else {
-        // A mote: rises, drifts round, and always faces the camera so a flat
-        // quad never shows its edge.
-        const a = u.a0 + k * u.spin;
-        const r = u.r0 * (1 + k * 0.5);
-        u.obj.position.y += u.rise * dt;
-        u.obj.position.x = (u.obj.userData.cx as number) + Math.cos(a) * r;
-        u.obj.position.z = (u.obj.userData.cz as number) + Math.sin(a) * r;
-        u.obj.scale.setScalar(1 - k * 0.55);
-        mat.opacity = 1 - k * k;
-        u.obj.quaternion.copy(world.camera.quaternion);
-      }
-    }
+    ringVfx(vfx, at, { color: 0xffe08a, from: 0.18, to: 0.5, life: 0.55, opacity: 0.9 });
+    motes(vfx, at, {
+      count: 12, color: 0xffc94d, color2: 0xfff2c4,
+      radius: 0.24, rise: 1.1, spin: 2.6, life: 0.85,
+    });
   };
 
   // --- The coin ---
@@ -1690,6 +1622,7 @@ export async function startLevel(
     banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
     debug.dispose();
     hudEl.textContent = '';
+    vfx.clear();
     world.dispose();
     world.scene.clear();
     // The handle goes with it. A debug handle that outlives the thing it
@@ -1959,7 +1892,7 @@ export async function startLevel(
       // one.
       flashBanner('THE WARLORD FALLS');
       playEnemyClip(e, 'die', false);
-      corpses.push({ obj: e.obj, t: 0, mixer: e.mixer ?? null });
+      corpse(vfx, e.obj, { hold: CORPSE_SECONDS, sink: 1.2, mixer: e.mixer ?? null });
       kills += 1;
       const share = Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1) / 6);
       for (let i = 0; i < 6; i++) dropPickup(e.obj.position, share, 'gold');
@@ -2145,7 +2078,8 @@ export async function startLevel(
       if (changed) renderHud();
 
       // --- waves ---
-      if (toSpawn > 0) {
+      if (wavesPaused) { /* held for a measurement */ }
+      else if (toSpawn > 0) {
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
           spawnTimer = SPAWN_GAP;
@@ -2371,18 +2305,6 @@ export async function startLevel(
         c.obj.rotation.y += dt * 0.6;
       }
 
-      // --- things finishing their death animation ---
-      for (let i = corpses.length - 1; i >= 0; i--) {
-        const c = corpses[i];
-        c.t += dt;
-        c.mixer?.update(dt);
-        if (c.t > CORPSE_SECONDS) {
-          // Sink it rather than snapping it out of existence.
-          c.obj.position.y -= dt * 0.9;
-          if (c.t > CORPSE_SECONDS + 1.2) { world.scene.remove(c.obj); corpses.splice(i, 1); }
-        }
-      }
-
       // --- enemy bullets fly ---
       for (let i = bullets.length - 1; i >= 0; i--) {
         const bu = bullets[i];
@@ -2448,7 +2370,7 @@ export async function startLevel(
 
     updatePickups(dt);
     updateHealthBars();
-    updateUpdrafts(dt);
+    vfx.update(dt);
     updateTints(tinted);
     world.update(dt);
     // The blade is aimed LAST, after `world.update` — the hero carries a scene
@@ -2522,7 +2444,16 @@ export async function startLevel(
       weapon: () => weapon,
       lock: () => (lockTarget ? { hp: lockTarget.hp, visible: lockRing?.visible ?? false } : null),
       setWeapon: (w: Weapon) => setWeapon(w),
-      get updrafts() { return updrafts; },
+      /** How many effects are alive, and how high the highest speck got. The
+       *  motes are ONE instanced mesh now, so counting objects counts one — and
+       *  instances have no positions of their own to read. */
+      effects: () => {
+        let top = -Infinity;
+        world.scene.traverse((o) => {
+          if (typeof o.userData.topY === 'number') top = Math.max(top, o.userData.topY);
+        });
+        return { live: vfx.count, top: Number.isFinite(top) ? +top.toFixed(2) : null };
+      },
       get pickups() { return pickups; },
       earned: () => ({ ...earned }),
       /** Put materials straight in the run's tally, for a probe that is about
@@ -2538,7 +2469,7 @@ export async function startLevel(
       rollDrop: () => rollDrop(heroHp < heroMaxHp),
       quality: () => ({ level: quality, name: QUALITY[quality].name,
                         pixelRatio: renderer.getPixelRatio() }),
-      get corpses() { return corpses; },
+      corpses: () => vfx.count,
       get crates() { return crates; },
       buff: () => (buff ? { id: buff.kind.id, left: +buff.left.toFixed(1) } : null),
       /** Force one, for a probe that should not have to break crates until the
@@ -2623,6 +2554,10 @@ export async function startLevel(
        *  every other wave — otherwise a probe would be checking a boss that
        *  only exists inside the probe. Reaching wave twelve honestly takes nine
        *  minutes, which is nine minutes nobody spends before shipping. */
+      /** Stop the waves where they are. For measurements that need the board
+       *  to hold still — a draw-call count taken while enemies are spawning is
+       *  a count of the enemies. */
+      pauseWaves: (on: boolean) => { wavesPaused = on; },
       skipToWave: (n: number) => {
         for (const e of enemies) { if (e.alive) { e.alive = false; e.obj.visible = false; } }
         waveIndex = Math.max(0, Math.min(n, WAVES.length - 1));

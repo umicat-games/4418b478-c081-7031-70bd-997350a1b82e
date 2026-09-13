@@ -33,6 +33,7 @@ to the host. Each half tears its own scene down before handing over.
 | `src/levels.ts` | **the three boards**: wave tables, gold, lives, caps, ice |
 | `src/town.ts` | the four buildings in the hub and what they are worth |
 | `src/progress.ts` | drops, materials, the level curve — all of it arithmetic |
+| `src/vfx.ts` | short-lived visual things, and the one loop that owns them |
 | `src/main.ts` | the level engine: towers, the hero, crates, the frame loop |
 | `src/hub.ts` | the hub: weapons on pedestals, the leaderboard sign, the door |
 | `src/audio.ts` | this game's clip table and the two music tracks |
@@ -366,6 +367,31 @@ Three things that matter, all of them learned the hard way:
   it, so a pose computed earlier is stale by however far the arm moved that
   frame — which mid-swing meant some frames were right and some pointed at the
   sky.
+
+## Effects
+
+`src/vfx.ts` owns anything PURELY VISUAL and fire-and-forget. It exists because
+the same fifteen lines — an array, `t += dt`, a fade, `remove`, `splice` — had
+been written six times, and spell effects were going to be the seventh. Drops,
+shots and arrows are NOT effects: they are collected, they collide, they damage,
+and folding them in would mean the rules asking the effects registry what it
+holds.
+
+Two constraints shaped it, both ours rather than general:
+
+- **Draw calls are budgeted.** A level is about twenty, and that took folding
+  1300 objects into four meshes. Anything that comes in a crowd goes through
+  `motes()`, which is ONE instanced draw however many there are — it used to be
+  a mesh and a material EACH, so a single staff cast cost nineteen draws.
+  `verify-3d-feedback` holds the line at six.
+- **Phones mind overdraw, not triangles.** Additive blending stacked three deep
+  costs more than the rest of the board. `MAX_LIVE` caps how much can be on
+  screen, so the worst case is a number rather than however many things happened
+  to die at once.
+
+Additive blending is also what makes fading free: three has no per-instance
+opacity, but fading an additive instance's COLOUR to black is the same picture,
+and `instanceColor` is per-instance.
 
 ## Things that will bite
 
