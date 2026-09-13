@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeStatic } from './merge';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {
@@ -402,76 +402,7 @@ export async function startLevel(
 
   // --- Fold the board into a handful of draws ---
   //
-  // A tile per cell plus one per road cell, every one a separate mesh: ~180
-  // draw calls for a picture that never changes. They are static, they share a
-  // few materials, and nothing looks them up by id, so they merge into one mesh
-  // per material. A desktop does not notice 180 draws; a phone very much does.
-  //
-  // SCENERY tiles are left out of the merge — they carry colliders and cast
-  // shadows, and a tree folded into the ground mesh is a tree that stops
-  // casting one.
-  // Two groups, because they differ in exactly one thing: flat ground casts no
-  // shadow anyone can see, and a tree very much does.
-  //
-  // Scenery and props are merged too even though they carry COLLIDERS — the
-  // collider is a rigid body in the physics world keyed by entity id, and
-  // taking the mesh out of the scene does not touch it. So the trees still stop
-  // you; they just cost one draw between them.
-  const mergeGroups: { objs: THREE.Object3D[]; shadow: boolean }[] = [
-    { objs: [], shadow: false },
-    { objs: [], shadow: true },
-  ];
-  for (const [id, obj] of world.entities) {
-    if (obj.name === 'scenery' || obj.name === 'prop') mergeGroups[1].objs.push(obj);
-    else if (id.startsWith('ground_') || id.startsWith('path_')) mergeGroups[0].objs.push(obj);
-  }
-  for (const group of mergeGroups) {
-    const byMaterial = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
-    for (const obj of group.objs) {
-      obj.updateWorldMatrix(true, true);
-      obj.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-        const key = mat.uuid;
-        // Bake each tile's world transform into its vertices — after merging
-        // there is one object, so the individual transforms have nowhere left
-        // to live.
-        const g = mesh.geometry.clone();
-        g.applyMatrix4(mesh.matrixWorld);
-        // Merging requires identical attribute sets; drop anything unshared
-        // rather than letting mergeGeometries return null and silently lose
-        // the entire board.
-        for (const name of Object.keys(g.attributes)) {
-          if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
-        }
-        const slot = byMaterial.get(key) ?? { mat, geos: [] };
-        slot.geos.push(g);
-        byMaterial.set(key, slot);
-      });
-    }
-    let merged = 0;
-    for (const { mat, geos } of byMaterial.values()) {
-      const combined = mergeGeometries(geos, false);
-      if (!combined) continue;   // mismatched attributes: leave those alone
-      const mesh = new THREE.Mesh(combined, mat);
-      // Named, because after this the individual pieces are gone and this is
-      // the only thing left that knows where the board is.
-      mesh.name = group.shadow ? 'board_props' : 'board';
-      mesh.castShadow = group.shadow;
-      mesh.receiveShadow = true;
-      mesh.matrixAutoUpdate = false;
-      world.scene.add(mesh);
-      merged += geos.length;
-      for (const g of geos) g.dispose();
-    }
-    if (merged > 0) {
-      for (const obj of group.objs) {
-        obj.removeFromParent();
-        world.entities.delete(obj.userData.entityId as string);
-      }
-    }
-  }
+  const folded = mergeStatic(world, scene3d, manifest);
 
   const hero = world.entities.get('hero')!;
   const marker = world.entities.get('build_marker')!;
@@ -1436,10 +1367,16 @@ export async function startLevel(
   const hotbar = document.createElement('div');
   hotbar.style.cssText = `
     position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
-    display: flex; gap: 8px; z-index: 30; pointer-events: auto;
-    /* Wraps, because the smithy can take this from four cells to seven and a
-       phone in portrait is 390 wide. */
-    flex-wrap: wrap; justify-content: center; max-width: 92vw;
+    display: flex; gap: 6px; z-index: 30;
+    /* NONE on the row, AUTO on the cells. The row is as wide as the screen and
+       mostly empty; taking pointer events on it swallowed everything behind. */
+    pointer-events: none;
+    /* One row, always. It wrapped when the smithy took it from four cells to
+       seven — and a wrapped hotbar on a 390-wide phone is a block in the middle
+       of the screen sitting on top of the platform's thumbstick, at which point
+       you cannot walk. Fifth time something of this game's has landed on top of
+       the control layer; the cells get narrower instead. */
+    flex-wrap: nowrap; justify-content: center; max-width: 96vw;
     font: 600 12px/1.25 system-ui, sans-serif; color: #fff;
   `;
   document.body.appendChild(hotbar);
@@ -1454,8 +1391,18 @@ export async function startLevel(
    *
    *  Arithmetic about someone else's CSS is a guess. Their rectangle is a
    *  fact, so: sit at the bottom, and only climb if that actually collides. */
+  /** How wide a cell can be and still leave all of them on one row. */
+  const cellWidthNow = (): number =>
+    Math.max(40, Math.min(62,
+      Math.floor((window.innerWidth * 0.96 - 6 * KINDS.length) / KINDS.length)));
+
   const placeHotbar = (): void => {
     hotbar.style.bottom = '14px';
+    // Re-measured, because rotating the phone changes how much room there is —
+    // the same reason the bar's POSITION is re-measured rather than computed
+    // once from vmin.
+    const w = cellWidthNow();
+    for (const c of hotbar.children) (c as HTMLElement).style.width = `${w}px`;
     const layer = document.querySelector('[data-umicat-touch]');
     if (!layer) return;
     const controls = [...layer.querySelectorAll('div')]
@@ -1491,8 +1438,10 @@ export async function startLevel(
   // halfway through is a run where the choice never cost anything.
   const cells = KINDS.map((kind, i) => {
     const cell = document.createElement('button');
+    // Narrow enough that all of them fit one row on the narrowest phone.
     cell.style.cssText = `
-      width: 62px; padding: 6px 4px 5px; border-radius: 12px; border: 2px solid transparent;
+      width: ${cellWidthNow()}px; padding: 6px 3px 5px; border-radius: 12px; border: 2px solid transparent;
+      pointer-events: auto;
       background: rgba(0,0,0,.42); color: #fff; font: inherit; cursor: pointer;
       display: flex; flex-direction: column; align-items: center; gap: 2px;
       -webkit-tap-highlight-color: transparent;
@@ -2432,6 +2381,7 @@ export async function startLevel(
        *  coordinate break the day a road moves one row, and then report that
        *  the game is broken rather than that they are. */
       spots: () => pathData.spots,
+      merged: () => folded,
       canBuildAt: (x: number, z: number) => {
         const k = `${x},${z}`;
         return BUILDABLE.has(k) && !occupied.has(k);

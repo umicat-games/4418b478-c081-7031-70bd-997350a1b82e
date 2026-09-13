@@ -238,7 +238,10 @@ function buildLevel(def) {
   // is tiles, their tops at y=0, with one collision box underneath.
   add({
     id: 'ground', name: 'ground',
+    // Invisible: `ground_skirt` is the one you see, and it is bigger. This one
+    // is here for its COLLIDER — the floor of the playable board.
     primitive: { kind: 'box', size: { x: 13, y: 0.4, z: 13 }, color: t.skirt },
+    visible: false,
     transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
     castShadow: false,
     collider: {
@@ -411,16 +414,91 @@ function buildLevel(def) {
     });
   }
 
-  // --- walls, with a doorway where each gate goes ---
+  // --- the forest, and the air wall inside it ---
   //
-  // A gap exactly one door wide, filled by a SHUT door carrying its own
-  // collider. Not a door pasted on a solid wall, and not a hole with an
-  // invisible collider across it: the ground is 13x13 and stops, so a real hole
-  // is a fall out of the world. A shut gate is honest about all of it — the
-  // enemies are trying to break in, and a shut door is shut for everyone.
+  // The board used to end in a chest-high box of a wall with sky behind it,
+  // which is what an unfinished level looks like. Now the ground keeps going
+  // for five more cells in every direction and fills with trees, and the thing
+  // that actually stops you is an invisible collider where the wall used to be
+  // — the ordinary way a forest edge is done, because a tree line built to seal
+  // perfectly is a fence with leaves on.
   //
-  // The north wall also carries the player's EXIT, which opens when the run
-  // ends, so it always has a gap in the middle whether or not a gate is there.
+  // None of it costs a draw call: it merges into the same one mesh per material
+  // as the rest of the board. It does cost TRIANGLES, so the forest casts no
+  // shadow — it is outside the play area and nobody is looking at its shadows,
+  // and the shadow pass is where a phone actually notices geometry.
+  // Seven rings, not five. At five you could see past the tree line to open sky
+  // at the corners, which is the same "unfinished level" the wall used to be.
+  const FOREST_OUT = 7;
+  const OUTER = HALF + FOREST_OUT;
+
+  // The ground goes with it, or the trees stand on nothing.
+  add({
+    id: 'ground_skirt', name: 'ground_skirt',
+    primitive: { kind: 'box', size: { x: 2 * OUTER + 1, y: 0.4, z: 2 * OUTER + 1 }, color: t.skirt },
+    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
+    castShadow: false,
+  });
+  for (let gx = -OUTER; gx <= OUTER; gx += 1) {
+    for (let gz = -OUTER; gz <= OUTER; gz += 1) {
+      if (Math.abs(gx) <= HALF && Math.abs(gz) <= HALF) continue;
+      add({
+        id: `outer_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'forest_ground',
+        modelAssetId: t.tile,
+        transform: {
+          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
+          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
+        },
+        castShadow: false,
+      });
+    }
+  }
+
+  // Where a gate or the exit stands, leave the tree line open — a door you
+  // cannot see from the board is a door nobody finds.
+  const openings = [{ x: 0, z: -6.6 }, ...def.gates.map(gatePlacement)];
+  const nearOpening = (x, z) => openings.some((o) => Math.hypot(o.x - x, o.z - z) < 2.4);
+
+  for (let gx = -OUTER; gx <= OUTER; gx += 1) {
+    for (let gz = -OUTER; gz <= OUTER; gz += 1) {
+      const outside = Math.abs(gx) > HALF || Math.abs(gz) > HALF;
+      if (!outside) continue;
+      if (nearOpening(gx, gz)) continue;
+      // Denser further out, so the edge of the board reads as the edge of a
+      // clearing rather than as a hedge.
+      const depth = Math.max(Math.abs(gx), Math.abs(gz)) - HALF;
+      // Thin at the clearing's edge, thick at the horizon — the far rings are
+      // what you actually see, and they are the cheapest to fill because
+      // nothing about them needs to line up with anything.
+      // Thin at the clearing's edge, thick at the horizon. The near rings are
+      // right under the camera and a dense one there hides the edge of the
+      // board; the far rings are what you actually read as "forest", and they
+      // are the cheapest to fill because nothing about them lines up with
+      // anything.
+      const chance = Math.min(0.8, 0.14 + depth * 0.12);
+      const n = rand() < chance ? (rand() < 0.3 ? 2 : 1) : 0;
+      for (let k = 0; k < n; k++) {
+        add({
+          id: `forest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'), name: 'forest',
+          modelAssetId: rand() < 0.22 ? t.props[1] : t.props[0],
+          transform: {
+            position: {
+              x: gx + (rand() - 0.5) * 0.75,
+              y: GROUND_Y,
+              z: gz + (rand() - 0.5) * 0.75,
+            },
+            rotation: yaw(rand() * Math.PI * 2),
+            scale: { x: 0.85 + rand() * 0.5, y: 0.85 + rand() * 0.55, z: 0.85 + rand() * 0.5 },
+          },
+          castShadow: false,
+        });
+      }
+    }
+  }
+
+  // The air wall: the same rectangle the wall used to occupy, invisible. A
+  // doorway is still a gap in it, because a gate you cannot walk up to is a
+  // picture of a gate.
   const gaps = { n: [[0, 0.6]], s: [], w: [], e: [] };
   for (const g of def.gates) gaps[g.wall].push([g.at, 0.5]);
 
@@ -445,17 +523,18 @@ function buildLevel(def) {
         id: `wall_${side}${i}`, name: `wall_${side}${i}`,
         primitive: {
           kind: 'box',
-          size: along === 'x' ? { x: len, y: 1.2, z: 0.4 } : { x: 0.4, y: 1.2, z: len },
+          size: along === 'x' ? { x: len, y: 1.6, z: 0.4 } : { x: 0.4, y: 1.6, z: len },
           color: t.wall,
         },
+        visible: false,
         transform: {
-          position: along === 'x' ? { x: mid, y: 0.4, z: fixed } : { x: fixed, y: 0.4, z: mid },
+          position: along === 'x' ? { x: mid, y: 0.6, z: fixed } : { x: fixed, y: 0.6, z: mid },
         },
         collider: {
           shape: {
             kind: 'box',
             halfExtents: along === 'x'
-              ? { x: len / 2, y: 0.6, z: 0.2 } : { x: 0.2, y: 0.6, z: len / 2 },
+              ? { x: len / 2, y: 0.8, z: 0.2 } : { x: 0.2, y: 0.8, z: len / 2 },
           },
           body: 'fixed',
         },
@@ -466,10 +545,11 @@ function buildLevel(def) {
   // The exit doorway's own filler, so the gap is not a hole until it opens.
   add({
     id: 'exit_block', name: 'exit_block',
-    primitive: { kind: 'box', size: { x: 1.2, y: 1.2, z: 0.4 }, color: t.wall },
-    transform: { position: { x: 0, y: 0.4, z: -6.6 } },
+    primitive: { kind: 'box', size: { x: 1.2, y: 1.6, z: 0.4 }, color: t.wall },
+    visible: false,
+    transform: { position: { x: 0, y: 0.6, z: -6.6 } },
     collider: {
-      shape: { kind: 'box', halfExtents: { x: 0.6, y: 0.6, z: 0.2 } }, body: 'fixed',
+      shape: { kind: 'box', halfExtents: { x: 0.6, y: 0.8, z: 0.2 } }, body: 'fixed',
     },
   });
 
@@ -630,9 +710,17 @@ function buildHub() {
   const ents = [];
   const HALF = 4.5;               // a 9x9 board
 
+  // The same forest the boards have. The hub is the first thing anyone sees,
+  // and it was a green square in a brown box with sky behind it.
+  const HUB_OUT = 7;
+  const OUTER = HALF + HUB_OUT;
+  const rand = rng(5);
+
   ents.push({
     id: 'ground', name: 'ground',
+    // The collider is the playable 9x9; the ground you can SEE goes further.
     primitive: { kind: 'box', size: { x: 2 * HALF + 1, y: 0.4, z: 2 * HALF + 1 }, color: '#3f6b38' },
+    visible: false,
     transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
     collider: {
       shape: { kind: 'box', halfExtents: { x: HALF + 0.5, y: 0.3, z: HALF + 0.5 } },
@@ -640,14 +728,49 @@ function buildHub() {
     },
     castShadow: false,
   });
+  ents.push({
+    id: 'ground_skirt', name: 'ground_skirt',
+    primitive: { kind: 'box', size: { x: 2 * OUTER + 1, y: 0.4, z: 2 * OUTER + 1 }, color: '#3f6b38' },
+    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
+    castShadow: false,
+  });
 
-  for (let gx = -HALF + 0.5; gx <= HALF - 0.5; gx += 1) {
-    for (let gz = -HALF + 0.5; gz <= HALF - 0.5; gz += 1) {
+  for (let gx = -OUTER; gx <= OUTER; gx += 1) {
+    for (let gz = -OUTER; gz <= OUTER; gz += 1) {
+      const inside = Math.abs(gx) <= HALF && Math.abs(gz) <= HALF;
       ents.push({
-        id: `hgrass_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'grass', modelAssetId: 'td-tile',
-        transform: { position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz } },
+        id: `hgrass_${gx}_${gz}`.replace(/[.-]/g, '_'),
+        name: inside ? 'grass' : 'forest_ground',
+        modelAssetId: 'td-tile',
+        transform: {
+          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
+          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
+        },
         castShadow: false,
       });
+      if (inside) continue;
+      // Open in front of the door, so the way out is visible from the middle.
+      if (Math.abs(gx) < 2 && gz < -HALF) continue;
+      const depth = Math.max(Math.abs(gx), Math.abs(gz)) - HALF;
+      // Denser from the first ring than a board's, because the hub is small:
+      // its clearing has to read as a clearing from the middle of it, and at a
+      // board's density the tree line was a green horizon a long way off.
+      const chance = Math.min(0.85, 0.42 + depth * 0.1);
+      const n = rand() < chance ? (rand() < 0.3 ? 2 : 1) : 0;
+      for (let k = 0; k < n; k++) {
+        ents.push({
+          id: `hforest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'), name: 'forest',
+          modelAssetId: rand() < 0.22 ? 'td-detail-tree-large' : 'td-tree',
+          transform: {
+            position: {
+              x: gx + (rand() - 0.5) * 0.75, y: GROUND_Y, z: gz + (rand() - 0.5) * 0.75,
+            },
+            rotation: yaw(rand() * Math.PI * 2),
+            scale: { x: 0.85 + rand() * 0.5, y: 0.85 + rand() * 0.55, z: 0.85 + rand() * 0.5 },
+          },
+          castShadow: false,
+        });
+      }
     }
   }
 
@@ -672,9 +795,11 @@ function buildHub() {
   for (const [id, x, z, sx, sz] of walls) {
     ents.push({
       id, name: id,
-      primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
-      transform: { position: { x, y: 0.4, z } },
-      collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
+      // Invisible. The trees are what you see; this is what stops you.
+      primitive: { kind: 'box', size: { x: sx, y: 1.6, z: sz }, color: '#4a4036' },
+      visible: false,
+      transform: { position: { x, y: 0.6, z } },
+      collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.8, z: sz / 2 } }, body: 'fixed' },
     });
   }
   ents.push({

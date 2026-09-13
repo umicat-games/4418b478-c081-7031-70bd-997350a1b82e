@@ -8,6 +8,7 @@ import {
 import type { Shared, Weapon, Progress } from './main';
 import { patchSave } from './main';
 import { LEVELS } from './levels';
+import { mergeStatic } from './merge';
 import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, type TownBonus } from './town';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
@@ -109,6 +110,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     fetch('scenes3d/hub.json').then((r) => r.json() as Promise<Scene3D>),
   ]);
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
+  // The hub is eleven hundred objects now that its wall is a forest. Same fold
+  // as the boards, same module — a thousand draw calls in the first thing
+  // anyone sees would be a worse first impression than the wall was.
+  const folded = mergeStatic(world, scene3d, manifest);
 
   const hero = world.entities.get('hero')!;
   const marker = world.entities.get('sign_marker')!;
@@ -574,6 +579,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                available: () => available.map((p) => p.id),
                runs, cleared,
                THREE,
+               /** How much of the scene got folded into how few meshes. The
+                *  thing worth asserting about a merge is its RESULT — counting
+                *  objects by name finds nothing once they are merged, which is
+                *  the merge working. */
+               merged: () => folded,
                /** Where the leaderboard sign is. A probe should ask rather than
                 *  carry a coordinate that moves when the hub is re-laid. */
                signAt: () => ({ ...SIGN_AT }),

@@ -97,10 +97,28 @@ in and two ways out. Corners and the fork are full dirt tiles: a tile that is
 path on all four edges cannot be rotated wrong, and deleting a class of bug beat
 getting the kit's corner-tile lookup table right.
 
-Everything static is **merged into one mesh per material** at load, in two
-groups: flat ground (which casts no shadow anyone can see) and scenery and props
-(which very much do). That is ~200 draw calls down to a handful for a picture
-that never changes; a desktop does not notice, a phone very much does.
+**There are no walls.** The board is a clearing: the ground keeps going for
+seven more cells in every direction and fills with trees, and what stops you is
+an invisible collider where the wall used to be. That is the ordinary way a
+forest edge is done — a tree line built to seal perfectly is a fence with leaves
+on — and the boards went from "a green square in a brown box with sky behind it"
+to somewhere.
+
+It costs about eleven hundred objects per board, and `src/merge.ts` folds all of
+them into **four to ten meshes**. Three groups, differing only in what they do
+with light: the board receives shadows and casts none (flat ground casting onto
+flat ground draws nothing anyone can see), scenery inside the play area does
+both, and the forest does NEITHER — it is outside the board, nobody looks at its
+shadows, and receiving costs shader work on every pixel of four hundred trees.
+Keeping it out of the shadow pass is most of what makes it free.
+
+Merging is keyed by the **kit directory**, not by material. Every model in a kit
+points at the same colormap, but each GLB embeds its own copy — so the loaded
+textures are distinct objects wrapping identical pixels, with no URL to compare
+and an ImageBitmap for an image. Keying by material, by texture uuid, or by
+image source all gave the same answer: one mesh per source FILE, nineteen of
+them. After the fix the whole level is 20 draws, which is fewer than it was
+before the forest existed.
 
 The trees keep their COLLIDERS through the merge — a collider is a rigid body in
 the physics world keyed by entity id, and taking the mesh out of the scene does
@@ -308,10 +326,20 @@ What it has found, none of it visible by reading the wave table:
 - **`endRun` must stay idempotent.** The second call removes a rigid body that
   is already gone, and Rapier answers that with an unrecoverable `unreachable`
   trap out of the wasm, not an exception anyone can catch.
+- **`dt` is clamped at 0.05, so a slow scene runs in SLOW MOTION.** That is
+  deliberate (a stall must not tunnel the physics), but it means a probe that
+  sleeps in wall-clock is measuring something else: under the headless software
+  renderer at eight frames a second, game time advances at forty per cent of
+  real. Poll for the state you want; do not sleep for it.
 - **The platform's touch layer is full-screen at z-index 10.** Anything the game
   draws on top of it needs to say so, and `input.setEnabled(false)` before a
-  modal. This has bitten four times: the attack button under the jump button,
-  Play Again, the HUD under the controls, the leaderboard panel.
+  modal. This has bitten FIVE times: the attack button under the jump button, Play
+  Again, the HUD under the controls, the leaderboard panel, and the hotbar —
+  which wrapped to two rows when the smithy took it from four cells to seven,
+  became a block over the left half of a portrait phone, and made the game
+  unplayable because the thumbstick was underneath it. The row is
+  `pointer-events: none` with `auto` on the cells, never wraps, and
+  `verify-3d-jump-touch` now checks that the stick is reachable.
 - **Never copy one kit's `Textures/` over another's.** `cmp` first. Doing it
   once turned the grass orange and every check still passed.
 - **An element created, updated and never appended is invisible and silent.**
