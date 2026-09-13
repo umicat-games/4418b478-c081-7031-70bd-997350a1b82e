@@ -298,6 +298,7 @@ export class HouseScene extends Phaser.Scene {
    *  (CookScene). CookScene owns its own input; HouseScene input is disabled while it's open. */
   private openCooking(): void {
     if (this.cooking || this.exiting || this.stoveBusy) return;
+    playSfx(this); // open blip on the stove tap (same UI click as other menus)
     this.hideHover();
     this.input.enabled = false; // lock input through the light-up + the modal
     const launch = (): void => {
