@@ -205,31 +205,53 @@ interface TowerKind {
   reload: number;
   /** How fast its shot travels, in units per second. */
   shotSpeed: number;
-  /** The masonry under the weapon — one piece added per level.
+  /** Where the weapon sits.
    *
-   *  The kit ships towers as stackable sections, and an upgrade that makes the
-   *  tower physically TALLER is a different thing to look at from an upgrade
-   *  that changes a number in a tooltip. Level three is a weapon on a tower,
-   *  which is what a tower defense is supposed to look like. */
-  stack: [string, string, string];
+   *  `ground` is a weapon standing on the grass: cheap, there from the first
+   *  run, and upgrading makes it bigger. `tower` puts the same sort of weapon
+   *  on a stack of masonry — further, harder, and much more expensive — and it
+   *  has to be unlocked at the smithy first. That is the difference between
+   *  "what you fight the wave with" and "what you put in the corner when the
+   *  corner needs reaching". */
+  mount: 'ground' | 'tower';
+  /** The masonry under the weapon, one piece added per level. Tower mounts
+   *  only: the kit ships towers as stackable sections, so an upgrade makes the
+   *  thing physically TALLER rather than changing a number in a tooltip. */
+  stack?: [string, string, string];
+  /** Smithy level required before this appears in the hotbar at all. */
+  needsSmithy?: number;
 }
 /** Four, and each one is a different answer to "what is walking past me".
  *  Cheap-and-quick, slow-and-hard, long-and-lobbing, fast-and-weak. A second
  *  tower that is just the first with bigger numbers is a longer menu, not a
  *  decision. */
 const TOWERS: TowerKind[] = [
+  // On the ground. What you have from the first run, and what most of a board
+  // gets built out of.
   { id: 'ballista', label: 'Ballista', icon: '🏹', model: 'td-ballista', ammo: 'td-ammo-arrow',
-    cost: 25, range: 3.0, damage: 2, reload: 1.0, shotSpeed: 9,
-    stack: ['td-tower-square-bottom-a', 'td-tower-square-middle-a', 'td-tower-square-top-a'] },
+    cost: 25, range: 3.0, damage: 2, reload: 1.0, shotSpeed: 9, mount: 'ground' },
   { id: 'cannon', label: 'Cannon', icon: '💣', model: 'td-cannon', ammo: 'td-ammo-ball',
-    cost: 45, range: 2.2, damage: 5, reload: 2.0, shotSpeed: 7,
-    stack: ['td-tower-square-bottom-b', 'td-tower-square-middle-b', 'td-tower-square-top-b'] },
+    cost: 45, range: 2.2, damage: 5, reload: 2.0, shotSpeed: 7, mount: 'ground' },
   { id: 'catapult', label: 'Catapult', icon: '🪨', model: 'td-catapult', ammo: 'td-ammo-boulder',
-    cost: 60, range: 4.2, damage: 7, reload: 3.0, shotSpeed: 5,
-    stack: ['td-tower-round-bottom-a', 'td-tower-round-middle-a', 'td-tower-round-top-a'] },
+    cost: 60, range: 4.2, damage: 7, reload: 3.0, shotSpeed: 5, mount: 'ground' },
   { id: 'turret', label: 'Turret', icon: '⚙️', model: 'td-turret', ammo: 'td-ammo-arrow',
-    cost: 40, range: 2.6, damage: 1, reload: 0.28, shotSpeed: 12,
-    stack: ['td-tower-square-bottom-c', 'td-tower-square-middle-c', 'td-tower-square-top-c'] },
+    cost: 40, range: 2.6, damage: 1, reload: 0.28, shotSpeed: 12, mount: 'ground' },
+
+  // On a tower. Bought at the smithy, one per level of it, and priced so that
+  // one of these is three or four of the things above — the reason to want one
+  // is REACH, for a corner two ground weapons cannot cover between them.
+  { id: 'watchtower', label: 'Watchtower', icon: '🗼', model: 'td-ballista', ammo: 'td-ammo-arrow',
+    cost: 120, range: 5.0, damage: 4, reload: 0.9, shotSpeed: 11,
+    mount: 'tower', needsSmithy: 1,
+    stack: ['td-tower-square-bottom-a', 'td-tower-square-middle-a', 'td-tower-square-top-a'] },
+  { id: 'bastion', label: 'Bastion', icon: '🏰', model: 'td-cannon', ammo: 'td-ammo-ball',
+    cost: 190, range: 4.0, damage: 12, reload: 1.9, shotSpeed: 8,
+    mount: 'tower', needsSmithy: 2,
+    stack: ['td-tower-square-bottom-b', 'td-tower-square-middle-b', 'td-tower-square-top-b'] },
+  { id: 'spire', label: 'Spire', icon: '🔮', model: 'td-turret', ammo: 'td-ammo-arrow',
+    cost: 220, range: 4.4, damage: 2.2, reload: 0.26, shotSpeed: 13,
+    mount: 'tower', needsSmithy: 3,
+    stack: ['td-tower-round-bottom-a', 'td-tower-round-middle-a', 'td-tower-round-top-a'] },
 ];
 
 
@@ -595,7 +617,7 @@ export async function startLevel(
   const bossAnim: Record<string, string> =
     (manifest.models ?? []).find((m) => m.id === 'boss-orc')?.animations ?? {};
   for (const id of [...TOWERS.map((t) => t.model), ...TOWERS.map((t) => t.ammo),
-                    ...TOWERS.flatMap((t) => t.stack), 'td-tower-round-crystals',
+                    ...TOWERS.flatMap((t) => t.stack ?? []), 'td-tower-round-crystals',
                     ...WAVES.map((w) => w.model), ...WAVES.map((w) => w.ammo ?? 'td-bullet'),
                     // Everything `dropPickup`, `dropCrate` and the tower
                     // levels can ask for. A model that is not here is not a
@@ -645,14 +667,23 @@ export async function startLevel(
    *  top. It still has to LOOK different, or the most expensive upgrade in the
    *  game is the only one you cannot see. */
   const raiseTower = (t: Tower): void => {
-    if (t.level > t.kind.stack.length) {
+    if (t.kind.mount === 'ground') {
+      // No masonry. It grows instead — the same upgrade this game had before
+      // the towers arrived, and still the right one for something standing in
+      // the grass: a bigger ballista reads as a better ballista, and a ground
+      // weapon that sprouted a stone plinth would just be a tower.
+      t.obj.scale.setScalar(1 + (t.level - 1) * 0.16);
+      return;
+    }
+    const stack = t.kind.stack!;
+    if (t.level > stack.length) {
       const crystals = cloneOf('td-tower-round-crystals');
       crystals.position.y = 0;
       t.obj.add(crystals);
       t.mount.scale.setScalar(1.25);
       return;
     }
-    const id = t.kind.stack[t.level - 1];
+    const id = stack[t.level - 1];
     const piece = cloneOf(id);
     piece.position.y = t.height;
     t.obj.add(piece);
@@ -792,6 +823,10 @@ export async function startLevel(
   // What the town is worth, folded in where the run reads it — one place each,
   // so a bonus cannot apply to the HUD and not to the rule, or the other way.
   const maxTowers = level.maxTowers + bonus.towerCap;
+  /** What the hotbar offers on this run. A tower mount you have not unlocked
+   *  is not a greyed-out cell — it is not there, because a row of things you
+   *  cannot buy is a row you learn to look past. */
+  const KINDS = TOWERS.filter((k) => (k.needsSmithy ?? 0) <= bonus.smithy);
   const heroMaxHp = HERO_MAX_HP + bonus.hearts;
   // Every weapon, not just the sword. The Range says "+1 to your own attacks",
   // and a bonus that silently applied to one of three would be a lie told by
@@ -1200,6 +1235,32 @@ export async function startLevel(
   const pickups: Pickup[] = [];
   const POP_SECONDS = 0.55;     // the arc out of whatever dropped it
 
+  /** Repaint a projectile so it cannot be mistaken for money.
+   *
+   *  Enemy bullets and dropped coins both travel towards the hero, and the
+   *  kit's bullet is the same warm yellow as its coin — so the two things you
+   *  most need to tell apart at a glance were the two hardest to. Magenta for
+   *  the saucers, hot orange for the boss's boulder, and both emissive so they
+   *  read against grass, snow and a dirt road alike.
+   *
+   *  Materials are SHARED between clones cut from one model, so each shot gets
+   *  its own or repainting one repaints every bullet in the air — including the
+   *  arrows the towers fire. */
+  const paintShot = (obj: THREE.Object3D, colour: number): void => {
+    obj.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const paint = (m: THREE.Material): THREE.Material => {
+        const c = (m as THREE.MeshStandardMaterial).clone() as THREE.MeshStandardMaterial;
+        c.color.setHex(colour);
+        c.emissive?.setHex(colour);
+        c.emissiveIntensity = 0.75;
+        return c;
+      };
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(paint) : paint(mesh.material);
+    });
+  };
+
   /** Drop something where a thing died. `amount` is the gold it is worth; a
    *  heart ignores it. */
   const dropPickup = (from: THREE.Vector3, amount: number, forceKind?: 'coin' | 'heart'): void => {
@@ -1376,6 +1437,9 @@ export async function startLevel(
   hotbar.style.cssText = `
     position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
     display: flex; gap: 8px; z-index: 30; pointer-events: auto;
+    /* Wraps, because the smithy can take this from four cells to seven and a
+       phone in portrait is 390 wide. */
+    flex-wrap: wrap; justify-content: center; max-width: 92vw;
     font: 600 12px/1.25 system-ui, sans-serif; color: #fff;
   `;
   document.body.appendChild(hotbar);
@@ -1425,7 +1489,7 @@ export async function startLevel(
   // No weapon picker here. What you walked in carrying is what you fight with:
   // the choice is made in the hub, at the pedestals, and a run you can re-arm
   // halfway through is a run where the choice never cost anything.
-  const cells = TOWERS.map((kind, i) => {
+  const cells = KINDS.map((kind, i) => {
     const cell = document.createElement('button');
     cell.style.cssText = `
       width: 62px; padding: 6px 4px 5px; border-radius: 12px; border: 2px solid transparent;
@@ -1445,7 +1509,7 @@ export async function startLevel(
 
   function refreshHotbar(): void {
     cells.forEach((cell, i) => {
-      const affordable = gold >= TOWERS[i].cost;
+      const affordable = gold >= KINDS[i].cost;
       cell.style.borderColor = i === selected ? '#ffd54a' : 'transparent';
       cell.style.background = i === selected ? 'rgba(0,0,0,.62)' : 'rgba(0,0,0,.42)';
       // Dimmed rather than disabled: you can still select what you are saving
@@ -1458,7 +1522,7 @@ export async function startLevel(
 
   window.addEventListener('keydown', (e) => {
     const n = Number(e.key);
-    if (n >= 1 && n <= TOWERS.length) { selected = n - 1; refreshHotbar(); renderHud(); }
+    if (n >= 1 && n <= KINDS.length) { selected = n - 1; refreshHotbar(); renderHud(); }
   });
 
   const renderHud = (): void => {
@@ -1481,7 +1545,7 @@ export async function startLevel(
     } else if (atCrate) {
       line3.textContent = '⚔ break open';
     } else if (buildCell) {
-      const kind = TOWERS[selected];
+      const kind = KINDS[selected];
       line3.textContent = `🔨 ${kind.label} · ${kind.cost}g`;
     } else {
       line3.textContent = '';
@@ -1588,7 +1652,7 @@ export async function startLevel(
     }
 
     if (!buildCell) return;
-    const kind = TOWERS[selected];
+    const kind = KINDS[selected];
     if (towers.length >= maxTowers) {
       audio.play('denied');
       flashBanner(`${maxTowers} towers is the limit — upgrade instead`);
@@ -1954,7 +2018,7 @@ export async function startLevel(
       // What the thing under your feet can reach. Green for a tower that is
       // already there, white for the one you are about to put down.
       if (here) showRange(here.cell, levelRange(here), 0x8effa0);
-      else if (canBuild) showRange(cell, TOWERS[selected].range, 0xffffff);
+      else if (canBuild) showRange(cell, KINDS[selected].range, 0xffffff);
       else showRange(null, 0, 0);
       const nearCrate = crates.some((c) =>
         c.hp > 0 && Math.hypot(c.obj.position.x - hero.position.x, c.obj.position.z - hero.position.z) < 1.0);
@@ -2105,6 +2169,7 @@ export async function startLevel(
             // which is the thing this was supposed to replace.
             bullet.position.copy(e.obj.position).addScaledVector(v, BULLET_MUZZLE);
             bullet.lookAt(bullet.position.clone().add(v));
+            paintShot(bullet, e.boss ? 0xff3a1e : 0xff2d6b);
             if (e.boss) bullet.scale.setScalar(1.6);
             bullets.push({
               obj: bullet, vel: v.multiplyScalar(e.boss ? BULLET_SPEED * 0.85 : BULLET_SPEED),
@@ -2372,7 +2437,8 @@ export async function startLevel(
         return BUILDABLE.has(k) && !occupied.has(k);
       },
       /** Pick a tower kind, the same way the number keys do. */
-      select: (i: number) => { selected = Math.max(0, Math.min(i, TOWERS.length - 1)); renderHud(); },
+      select: (i: number) => { selected = Math.max(0, Math.min(i, KINDS.length - 1)); renderHud(); },
+      kinds: () => KINDS.map((k) => ({ id: k.id, mount: k.mount, cost: k.cost, range: k.range })),
       /** three itself, and the tint predicate. Probes need to measure the scene
        *  (where is this, how big is it), and reaching for a Box3 should not mean
        *  bundling a second copy of three into the test. */

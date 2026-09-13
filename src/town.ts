@@ -36,8 +36,11 @@ export const TOWN: TownBuilding[] = [
   {
     id: 'smithy',
     name: 'Smithy',
-    effect: '+1 tower per level',
+    effect: '+1 tower · unlocks tower mounts',
     icon: '⚒',
+    // Lv1 the Watchtower, Lv2 the Bastion, Lv3 the Spire. Each is three or four
+    // ground weapons' worth of gold, and the reason to want one is REACH — the
+    // corner two ground weapons cannot cover between them.
     models: ['bld-house-a', 'bld-house-b', 'bld-house-c'],
     costs: [180, 450, 1000],
     x: -4.2, z: -1.0, yaw: Math.PI / 2,
@@ -79,9 +82,14 @@ export interface TownBonus {
   hearts: number;
   gold: number;
   heroDamage: number;
+  /** The smithy's level, which is also which tower mounts are for sale. It
+   *  gives a NUMBER rather than a list of ids so that adding a mount is a line
+   *  in the tower table and nothing here. */
+  smithy: number;
 }
 
-export const NO_BONUS: TownBonus = { towerCap: 0, hearts: 0, gold: 0, heroDamage: 0 };
+export const NO_BONUS: TownBonus =
+  { towerCap: 0, hearts: 0, gold: 0, heroDamage: 0, smithy: 0 };
 
 /** Levels bought, by building id, turned into the numbers a run cares about.
  *
@@ -91,6 +99,7 @@ export function bonusesFrom(town: Record<string, number> | undefined): TownBonus
   const lv = (id: string): number => Math.min(town?.[id] ?? 0, TOWN_MAX_LEVEL);
   return {
     towerCap: lv('smithy'),
+    smithy: lv('smithy'),
     hearts: lv('clinic') * 2,
     gold: lv('market') * 50,
     heroDamage: lv('range'),

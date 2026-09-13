@@ -126,6 +126,14 @@ twenty saucers firing every 2.4s is a wall of bullets nobody dodges.
 **Clearing a wave gives two hearts back**, of eight. Six hearts and no way to
 heal was survivable over eight waves and a slow death over twelve.
 
+**Two kinds of emplacement.** A `ground` weapon stands on the grass: cheap,
+there from the first run, and upgrading makes it BIGGER. A `tower` mount is the
+same sort of weapon on a stack of masonry — further, harder, three or four times
+the price — and each level of the **smithy** unlocks one (Watchtower, Bastion,
+Spire). The reason to want one is reach: the corner two ground weapons cannot
+cover between them. A mount you have not unlocked is not a greyed-out cell, it
+is not in the hotbar at all.
+
 **Towers are capped** per board (`maxTowers`, 12–14) and go to **level 4**.
 Without a cap the game had exactly one strategy: buy the cheapest tower forever.
 A ballista is 25g for 2 damage a second and its first upgrade is 20g for 1.4
@@ -199,7 +207,7 @@ and each level is a bigger building, so the hub visibly grows as you play.
 
 | building | what it is worth per level |
 | --- | --- |
-| Smithy ⚒ | +1 tower you may have standing |
+| Smithy ⚒ | +1 tower you may have standing, and one tower mount unlocked |
 | Clinic ❤ | +2 hearts |
 | Market 💰 | +50 starting gold |
 | Range 🏹 | +1 damage on **every** weapon, not just the sword |
@@ -313,6 +321,11 @@ What it has found, none of it visible by reading the wave table:
 - **A spawn point written down twice disagrees with itself.** The hub placed its
   hero at z=1.9 in the scene and spawned the controller at z=3.0 in code; the
   controller wins, so editing the scene did nothing. Both now read the scene.
+- **Enemy bullets are magenta on purpose.** They and dropped coins both travel
+  towards the hero, and the kit's bullet is the same warm yellow as its coin —
+  the two things you most need to tell apart were the two hardest to. Each shot
+  gets its OWN material: clones cut from one model share theirs, so repainting
+  one would repaint every arrow in the air.
 - **The game runs in WebKit on phones.** `pw-engines.mjs` tests both engines;
   the Web Audio unlock bug was invisible in Chromium.
 
