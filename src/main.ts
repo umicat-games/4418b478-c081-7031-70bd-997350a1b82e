@@ -12,7 +12,7 @@ import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, lightning, preloadAtlas, FRAME } from './vfx';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { NO_BONUS, type TownBonus } from './town';
 import {
@@ -436,7 +436,11 @@ export async function startLevel(
       scenery: [number, number][]; gates: string[]; blocked?: [number, number][];
     }>),
   ]);
-  const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
+  const [world] = await Promise.all([
+    loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER }),
+    // The spell atlas, fetched WITH the scene rather than on the first cast.
+    preloadAtlas(),
+  ]);
   audio.setMusic(MUSIC.level);
 
   // --- Fold the board into a handful of draws ---
@@ -973,6 +977,11 @@ export async function startLevel(
    *  billboard has to face wherever it IS, and in this game it turns under the
    *  player's thumb. */
   const vfx = new Vfx(world.scene, () => world.camera);
+  /** One point light, kept in the scene and turned up when a spell lands.
+   *  Adding a light recompiles every lit material; driving one does not. */
+  const spellLamp = new THREE.PointLight(0x9fd0ff, 0, 7, 1.6);
+  world.scene.add(spellLamp);
+  let spellFlash = 0;
   const _muzzle = new THREE.Vector3();
   const _box = new THREE.Box3();
   const _mat = new THREE.Matrix4();
@@ -1158,14 +1167,16 @@ export async function startLevel(
    *  the damage does, so one cast teaches the radius better than any number
    *  in the HUD could. */
   const castBurst = (at: THREE.Vector3): void => {
-    // The ring's size is the RANGE, not a decoration — it ends exactly where
-    // the damage does, so one cast teaches the radius better than any number in
-    // the HUD could.
-    ringVfx(vfx, at, { color: 0xb58cff, from: 0.3, to: STAFF_RADIUS, life: 0.42 });
+    lightning(vfx, at, { radius: STAFF_RADIUS, bolts: 5, life: 0.46 });
     motes(vfx, at, {
-      count: 18, color: 0x8b5cf6, color2: 0xd9c2ff,
-      radius: 0.65, rise: 1.6, spin: 3.4, life: 0.62, size: 0.15,
+      count: 14, color: 0x6aa9ff, color2: 0xdceaff, frame: FRAME.sparkle,
+      radius: 0.7, rise: 1.7, spin: 3.4, life: 0.55, size: 0.24,
     });
+    // A real light, for the quarter-second it is worth one. Its intensity is
+    // driven rather than the light being added and removed — adding a light to
+    // a three scene recompiles every lit material in it, which is a stutter
+    // exactly when the screen is busiest.
+    spellFlash = 1;
   };
 
   /** Light lifting off an upgraded tower.
@@ -1176,8 +1187,8 @@ export async function startLevel(
   const updraft = (at: THREE.Vector3): void => {
     ringVfx(vfx, at, { color: 0xffe08a, from: 0.18, to: 0.5, life: 0.55, opacity: 0.9 });
     motes(vfx, at, {
-      count: 12, color: 0xffc94d, color2: 0xfff2c4,
-      radius: 0.24, rise: 1.1, spin: 2.6, life: 0.85,
+      count: 12, color: 0xffc94d, color2: 0xfff2c4, frame: FRAME.sparkle,
+      radius: 0.24, rise: 1.1, spin: 2.6, life: 0.85, size: 0.16,
     });
   };
 
@@ -1821,6 +1832,7 @@ export async function startLevel(
       // goes off underfoot makes the spell about walking into a crowd; one you
       // can place makes it about choosing which crowd.
       const at = lockTarget?.alive ? lockTarget.obj.position : hero.position;
+      spellLamp.position.set(at.x, at.y + 0.9, at.z);
       castBurst(at);
       if (lockTarget?.alive) {
         hero.rotation.y = Math.atan2(at.x - hero.position.x, at.z - hero.position.z);
@@ -2371,6 +2383,10 @@ export async function startLevel(
     updatePickups(dt);
     updateHealthBars();
     vfx.update(dt);
+    if (spellFlash > 0) {
+      spellFlash = Math.max(0, spellFlash - dt * 3.4);
+      spellLamp.intensity = spellFlash * 9;
+    }
     updateTints(tinted);
     world.update(dt);
     // The blade is aimed LAST, after `world.update` — the hero carries a scene

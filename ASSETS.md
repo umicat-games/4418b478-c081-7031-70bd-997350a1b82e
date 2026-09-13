@@ -74,11 +74,15 @@ a tree's belongs around its trunk, not its canopy.
 
 ## Licensing
 
-`public/assets/character.glb`, its `Textures/colormap.png`, and everything in
-`public/kit/` are from **Kenney** (Mini Characters 1 and the Platformer Kit) and
-are **CC0** — public domain. Commercial use,
-modification and redistribution, with no attribution required.
-<https://kenney.nl>
+`public/assets/character.glb`, its `Textures/colormap.png`, everything in
+`public/kit/`, and the effect sheet `public/vfx/particles.png` are from
+**Kenney** (Mini Characters 1, the Platformer Kit, the Tower Defense Kit, Mini
+Dungeon, Fantasy Town, Modular Buildings and the **Particle Pack**) and are
+**CC0** — public domain. Commercial use, modification and redistribution, with
+no attribution required. <https://kenney.nl>
+
+`particles.png` is a 4×4 sheet packed from sixteen of the Particle Pack's
+transparent PNGs; see the `FRAME` table in `src/vfx.ts` for which cell is what.
 
 That matters more here than it looks. A Umicat game ships its `.glb` to the
 player's browser from a public CDN, where anyone can take it — so a licence that

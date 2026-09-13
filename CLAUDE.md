@@ -393,6 +393,45 @@ Additive blending is also what makes fading free: three has no per-instance
 opacity, but fading an additive instance's COLOUR to black is the same picture,
 and `instanceColor` is per-instance.
 
+### The atlas
+
+`public/vfx/particles.png` is a 4×4 sheet of 256px cells cut from Kenney's
+Particle Pack (CC0): four lightning bolts, two arcs, two rings, a rune circle,
+a flare, a sparkle, a star burst, a scorch, a burst, a twirl and a slash.
+`FRAME` names them. **One texture, loaded once** — a texture per effect is a
+texture per cast, and the whole point of one sheet is that every spell in the
+game can share a single material.
+
+`quads(vfx, list, opts)` draws any number of textured quads as ONE mesh: one
+`BufferGeometry` of four verts and two triangles per quad, rewritten every frame
+from the quad list. Three modes, which is the whole vocabulary:
+
+- `face` — always square to the camera. Flares, bursts, sparks.
+- `ground` — flat on the floor, optional `roll`. Runes and scorch marks.
+- `beam` — stretched from `at` to `to` and rolled to keep its flat side towards
+  the camera. Bolts, and anything that runs between two points.
+
+`lightning(vfx, at, opts)` composes them into the staff's strike: five `beam`
+bolts scattered inside the damage radius, a `ground` glow that races out to
+exactly where the damage ends, a turning rune, and a flare and star at the
+centre. The bolts re-pick their frame and re-jitter their heads every 45ms,
+because a bolt that holds still for half a second is a drawn line rather than
+lightning. Five draw calls for the lot, measured.
+
+Two things this got wrong first, both of them invisible as errors:
+
+- **`TextureLoader.load` is asynchronous, and an additive material with an empty
+  map samples BLACK** — which added to the screen is nothing at all. The first
+  cast of every run drew ten perfectly correct triangles that could not be seen,
+  while the draw-call counter said it was working. `preloadAtlas()` is awaited
+  beside `loadScene3D`.
+- **The bolt in the atlas is a thread down the middle of a mostly empty square.**
+  A quad 0.75 across draws about 0.25 of lightning, so the first strike was
+  three white pencil lines. They are 1.2–2.0 wide now.
+
+A mote with no `frame` is an untextured square, and at 0.13 across next to
+textured lightning it reads as a scrap of white paper. Give sparks a frame.
+
 ## Things that will bite
 
 - **`Box3.setFromObject` lies about skinned meshes.** It reports the space the
