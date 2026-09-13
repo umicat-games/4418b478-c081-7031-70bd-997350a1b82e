@@ -479,9 +479,15 @@ the stew is drawn twice, and one copy carries a `cooing-` typo).
 - **Balance is data** (`public/data/cooking.json` + the dish rows in `items.json`, both editable in
   the Data Tables tool). The in-code fallbacks in `cooking.ts` / `items.ts` are kept in step on
   purpose — a fallback that disagrees quietly plays a different game from the one that was balanced.
+- **The close button cooked a free dish (2026-09-13, fixed).** `CookScene.made` (the cooked-but-
+  unbanked dish handed to HouseScene on close) was not reset in `init()`. Phaser reuses the scene
+  instance, so it survived to the NEXT visit — where tapping X handed the stale dish over, replayed
+  the cinematic and banked a second dish with no ingredients spent. Same trap as the HouseScene
+  lamp-glow arrays: **any field that must be re-derived per launch belongs in `init()`**, not just
+  in its initializer. It is also consumed on emit now, so it cannot be handed over twice either way.
 - **Check it with `node umicat-infra/playwright/verify-cooking.mjs`** (no browser): every dish
-  resolves atlas → item row → i18n (both languages) → a recipe whose ingredients exist, and every
-  dish sells for more than it consumes.
+  resolves atlas → item row → i18n (both languages) → a recipe whose ingredients exist, every dish
+  sells for more than it consumes, and the pending-dish reset above is pinned.
 
 ## Chicken coops + chickens + daily eggs (2026-08, Phases 1a–3)
 

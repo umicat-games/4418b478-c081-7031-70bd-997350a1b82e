@@ -53,6 +53,11 @@ export class CookScene extends Phaser.Scene {
     this.msg = '';
     this.scroll = 0;
     this.closing = false;
+    // Phaser REUSES the scene instance across launches, so a dish left over from the last visit
+    // would still be here — and `close()` hands whatever is in it to HouseScene. That made the X
+    // button replay the cooking cinematic and bank a SECOND dish, ingredients unspent. Any field
+    // that has to be re-derived per launch belongs here, not just in its initializer.
+    this.made = undefined;
   }
 
   private gs(): GameScene | undefined {
@@ -265,7 +270,9 @@ export class CookScene extends Phaser.Scene {
     const root = this.root;
     // HouseScene turns the stove off + re-enables input; a dish rides along so it can play the
     // cooking cinematic instead.
-    this.events.emit('cook-closed', this.made);
+    const made = this.made;
+    this.made = undefined; // consumed — never hand the same dish over twice
+    this.events.emit('cook-closed', made);
     if (!root) { this.scene.stop(); return; }
     this.tweens.add({ targets: root, alpha: 0, duration: 120, onComplete: () => { root.destroy(); this.scene.stop(); } });
   }
