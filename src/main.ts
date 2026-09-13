@@ -989,12 +989,14 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       const o = world.entities.get(id);
       if (o) o.visible = true;
     }
-    // And take the wall out of the way. A door you can see and cannot reach
-    // is worse than no door: the wall's collider is what stops you, and it
-    // does not care that something was drawn in front of it.
-    const wall = world.bodies.get('wall_n');
+    // And take out the MIDDLE section of the north wall — the door's width,
+    // not the whole side. A door you can see and cannot reach is worse than no
+    // door, because the wall's collider is what stops you and it does not care
+    // that something was drawn in front of it; but removing the lot turns the
+    // entire top of the board into the exit.
+    const wall = world.bodies.get('wall_n_m');
     if (wall) world.world.removeRigidBody(wall);
-    const wallMesh = world.entities.get('wall_n');
+    const wallMesh = world.entities.get('wall_n_m');
     if (wallMesh) wallMesh.visible = false;
   };
 
@@ -1229,7 +1231,11 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     return d ? `${d.shadow.mapSize.width}` : 'none';
   };
 
-  const EXIT_Z = -6.15;
+  /** Same shape as the hub's: a doorway, not a line across the top of the
+   *  board. Taking the whole north wall out made every step along the top an
+   *  exit. */
+  const EXIT_AT = { x: 0, z: -6.2 };
+  const EXIT_HALF_WIDTH = 0.62;
   let last = performance.now();
   const dir = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
@@ -1504,7 +1510,9 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
 
     // Out through the door, back to the hub. Only once the run is over — the
     // wall is solid until then, and the door is not even drawn.
-    if (!running && hero.position.z < EXIT_Z && leave) {
+    const inExit = hero.position.z < EXIT_AT.z
+      && Math.abs(hero.position.x - EXIT_AT.x) < EXIT_HALF_WIDTH;
+    if (!running && inExit && leave) {
       const go = leave; leave = null;
       audio.play('wave');
       renderer.setAnimationLoop(null);

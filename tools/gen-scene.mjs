@@ -127,7 +127,12 @@ for (let gx = -5.5; gx <= 5.5; gx += 1) {
 // Walls, so nothing walks off the edge. A world without a floor under its
 // floor strands people; a world without walls does the same more slowly.
 for (const [id, x, z, sx, sz] of [
-  ['wall_n', 0, -6.6, 13.4, 0.4], ['wall_s', 0, 6.6, 13.4, 0.4],
+  // The north wall is three pieces so the middle one can be taken out at the
+  // end, leaving a gap exactly the width of the door. Removing the whole wall
+  // made the entire top of the board an exit, which is not a door.
+  ['wall_n_l', -3.65, -6.6, 6.1, 0.4], ['wall_n_r', 3.65, -6.6, 6.1, 0.4],
+  ['wall_n_m', 0, -6.6, 1.2, 0.4],
+  ['wall_s', 0, 6.6, 13.4, 0.4],
   ['wall_w', -6.6, 0, 0.4, 13.4], ['wall_e', 6.6, 0, 0.4, 13.4],
 ]) {
   add({
@@ -190,14 +195,14 @@ for (const [m, x, z] of decor) {
 // The way out. Hidden until the run ends: a door standing open the whole time
 // would read as somewhere you could go, and there is nothing behind it yet.
 add({
-  id: 'exit_door', name: 'exit_door', modelAssetId: 'hub-door',
-  transform: { position: { x: 0, y: GROUND_Y, z: -6.35 } },
+  id: 'exit_door', name: 'exit_door', modelAssetId: 'hub-door-open',
+  transform: { position: { x: 0, y: GROUND_Y, z: -6.6 } },
   visible: false,
 });
 add({
   id: 'exit_frame', name: 'exit_frame',
-  primitive: { kind: 'box', size: { x: 1.9, y: 1.5, z: 0.25 }, color: '#6b4f2a' },
-  transform: { position: { x: 0, y: 0.55, z: -6.5 } },
+  primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
+  transform: { position: { x: 0, y: 0.5, z: -6.78 } },
   visible: false,
 });
 
@@ -318,8 +323,11 @@ function buildHub() {
     ['hwall_s', 0, HALF + 0.6, 2 * HALF + 1.4, 0.4],
     ['hwall_w', -HALF - 0.6, 0, 0.4, 2 * HALF + 1.4],
     ['hwall_e', HALF + 0.6, 0, 0.4, 2 * HALF + 1.4],
-    ['hwall_n1', -2.8, -HALF - 0.6, 3.8, 0.4],
-    ['hwall_n2', 2.8, -HALF - 0.6, 3.8, 0.4],
+    // The gap is the door's width, not a doorway-sized hole: you used to be
+    // able to walk in anywhere along the front and the level would start,
+    // which taught that the door was decoration.
+    ['hwall_n1', -2.9, -HALF - 0.6, 4.6, 0.4],
+    ['hwall_n2', 2.9, -HALF - 0.6, 4.6, 0.4],
   ]) {
     ents.push({
       id, name: id,
@@ -331,13 +339,13 @@ function buildHub() {
 
   // The door, in the gap. No collider: walking INTO it is the whole point.
   ents.push({
-    id: 'door', name: 'door', modelAssetId: 'hub-door',
-    transform: { position: { x: 0, y: GROUND_Y, z: -HALF - 0.55 } },
+    id: 'door', name: 'door', modelAssetId: 'hub-door-open',
+    transform: { position: { x: 0, y: GROUND_Y, z: -HALF - 0.6 } },
   });
   ents.push({
     id: 'door_frame', name: 'door_frame',
-    primitive: { kind: 'box', size: { x: 1.9, y: 1.5, z: 0.25 }, color: '#6b4f2a' },
-    transform: { position: { x: 0, y: 0.55, z: -HALF - 0.75 } },
+    primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
+    transform: { position: { x: 0, y: 0.5, z: -HALF - 0.78 } },
   });
 
   // The sign, and the ring that says you can do something here.

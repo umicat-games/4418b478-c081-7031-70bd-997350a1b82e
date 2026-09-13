@@ -1231,7 +1231,7 @@
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 3.8,
+          "x": 4.6,
           "y": 1.2,
           "z": 0.4
         },
@@ -1239,7 +1239,7 @@
       },
       "transform": {
         "position": {
-          "x": -2.8,
+          "x": -2.9,
           "y": 0.4,
           "z": -5.1
         }
@@ -1248,7 +1248,7 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 1.9,
+            "x": 2.3,
             "y": 0.6,
             "z": 0.2
           }
@@ -1262,7 +1262,7 @@
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 3.8,
+          "x": 4.6,
           "y": 1.2,
           "z": 0.4
         },
@@ -1270,7 +1270,7 @@
       },
       "transform": {
         "position": {
-          "x": 2.8,
+          "x": 2.9,
           "y": 0.4,
           "z": -5.1
         }
@@ -1279,7 +1279,7 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 1.9,
+            "x": 2.3,
             "y": 0.6,
             "z": 0.2
           }
@@ -1290,12 +1290,12 @@
     {
       "id": "door",
       "name": "door",
-      "modelAssetId": "hub-door",
+      "modelAssetId": "hub-door-open",
       "transform": {
         "position": {
           "x": 0,
           "y": 0,
-          "z": -5.05
+          "z": -5.1
         }
       }
     },
@@ -1305,17 +1305,17 @@
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 1.9,
-          "y": 1.5,
-          "z": 0.25
+          "x": 1.35,
+          "y": 1.4,
+          "z": 0.22
         },
         "color": "#6b4f2a"
       },
       "transform": {
         "position": {
           "x": 0,
-          "y": 0.55,
-          "z": -5.25
+          "y": 0.5,
+          "z": -5.28
         }
       }
     },

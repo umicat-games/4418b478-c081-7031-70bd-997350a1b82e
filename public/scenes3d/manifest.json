@@ -207,6 +207,11 @@
       "id": "hub-barrel",
       "path": "kit/platformer/barrel.glb",
       "importScale": 1
+    },
+    {
+      "id": "hub-door-open",
+      "path": "kit/platformer/door-large-open.glb",
+      "importScale": 1
     }
   ]
 }

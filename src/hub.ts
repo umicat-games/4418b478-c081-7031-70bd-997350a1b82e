@@ -21,7 +21,13 @@ import { hideLoading } from './loading';
  * triggers, not a second game.
  */
 
-const DOOR_Z = -4.6;          // walk past this and the level loads
+/** The doorway, as a place rather than a line.
+ *
+ *  It was `z < -4.6` — anywhere along the front wall started the level, which
+ *  taught that the door was decoration. A door you can miss by walking beside
+ *  it is a door; a line across the room is a trigger. */
+const DOOR_AT = { x: 0, z: -5.1 };
+const DOOR_HALF_WIDTH = 0.62;
 const SIGN_AT = { x: -2.5, z: 2.5 };
 const NEAR = 0.9;             // how close counts as "standing at" something
 const LEADERBOARD_KEY = 'leaderboard';
@@ -267,7 +273,7 @@ export async function runHub(shared: Shared): Promise<Weapon> {
       hint.textContent = panelOpen ? ''
         : atPickup ? (atPickup.id === weapon ? `${atPickup.label} (equipped)` : `⚔ to take · ${atPickup.label}`)
         : atSign ? '⚔ to read the leaderboard'
-        : `walk through the door to play · carrying ${weapon}`;
+        : `walk through the open door to play · carrying ${weapon}`;
 
       if (!panelOpen && input.consume('use')) {
         if (atPickup) {
@@ -282,7 +288,9 @@ export async function runHub(shared: Shared): Promise<Weapon> {
         }
       }
 
-      if (!done && hero.position.z < DOOR_Z) {
+      const inDoorway = hero.position.z < DOOR_AT.z
+        && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH;
+      if (!done && inDoorway) {
         done = true;
         audio.play('wave');
         // Tear the hub down before handing the renderer over: its scene, its
@@ -309,7 +317,8 @@ export async function runHub(shared: Shared): Promise<Weapon> {
 
     Object.assign(window as unknown as Record<string, unknown>, {
       __hub: { world, character, input, hero, openPanel, weapon: () => weapon,
-               atDoor: () => hero.position.z < DOOR_Z },
+               atDoor: () => hero.position.z < DOOR_AT.z
+                 && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH },
     });
   });
 }

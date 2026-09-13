@@ -1458,12 +1458,74 @@
       "castShadow": false
     },
     {
-      "id": "wall_n",
-      "name": "wall_n",
+      "id": "wall_n_l",
+      "name": "wall_n_l",
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 13.4,
+          "x": 6.1,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": -3.65,
+          "y": 0.4,
+          "z": -6.6
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 3.05,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall_n_r",
+      "name": "wall_n_r",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 6.1,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": 3.65,
+          "y": 0.4,
+          "z": -6.6
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 3.05,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall_n_m",
+      "name": "wall_n_m",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 1.2,
           "y": 1.2,
           "z": 0.4
         },
@@ -1480,7 +1542,7 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 6.7,
+            "x": 0.6,
             "y": 0.6,
             "z": 0.2
           }
@@ -2378,12 +2440,12 @@
     {
       "id": "exit_door",
       "name": "exit_door",
-      "modelAssetId": "hub-door",
+      "modelAssetId": "hub-door-open",
       "transform": {
         "position": {
           "x": 0,
           "y": 0,
-          "z": -6.35
+          "z": -6.6
         }
       },
       "visible": false
@@ -2394,17 +2456,17 @@
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 1.9,
-          "y": 1.5,
-          "z": 0.25
+          "x": 1.35,
+          "y": 1.4,
+          "z": 0.22
         },
         "color": "#6b4f2a"
       },
       "transform": {
         "position": {
           "x": 0,
-          "y": 0.55,
-          "z": -6.5
+          "y": 0.5,
+          "z": -6.78
         }
       },
       "visible": false
