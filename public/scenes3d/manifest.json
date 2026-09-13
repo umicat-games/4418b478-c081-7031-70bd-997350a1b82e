@@ -212,6 +212,17 @@
       "id": "hub-door-open",
       "path": "kit/platformer/door-large-open.glb",
       "importScale": 1
+    },
+    {
+      "id": "boss-orc",
+      "path": "kit/weapons/boss-orc.glb",
+      "importScale": 1,
+      "animations": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack-melee-right",
+        "die": "die"
+      }
     }
   ]
 }

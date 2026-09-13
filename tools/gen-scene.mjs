@@ -10,24 +10,46 @@
 // tiles measure (1 x 0.2 x 1, verified, not assumed).
 import { writeFileSync } from 'node:fs';
 
-/** Cell centres, in world units. The path runs through these in order. */
-const CORNERS = [
+/** Cell centres, in world units.
+ *
+ *  The road forks. It used to be one polyline ending on a tile in the middle of
+ *  the grass, which made the enemies' goal invisible: nothing marked the place
+ *  they were trying to reach, so a leak read as "it vanished". Now the trunk
+ *  comes down the middle and T's left and right into a GATE in each side wall.
+ *
+ *  Two goals is also the difficulty that matters. A single lane can be sealed
+ *  with four good towers and then the rest of the board is decoration; with two
+ *  you must choose what to leave thin, every wave. */
+const TRUNK = [
   [-5.5, -4.5], [3.5, -4.5], [3.5, -1.5], [-3.5, -1.5],
-  [-3.5, 1.5], [3.5, 1.5], [3.5, 4.5], [-1.5, 4.5],
+  [-3.5, 1.5], [0.5, 1.5], [0.5, 4.5],
+];
+/** From the fork to each gate. Nearly the same length on purpose — a short
+ *  branch and a long one is not a choice, it is one real lane and one trap. */
+const BRANCHES = [
+  [[0.5, 4.5], [-5.5, 4.5]],   // west gate
+  [[0.5, 4.5], [5.5, 4.5]],    // east gate
+];
+/** Where each branch ends up, for the gate that sits in the wall there.
+ *  On the wall's centre line, so the door fills the doorway rather than being
+ *  parked in front of it. */
+const GATES = [
+  { id: 'gate_w', x: -6.6, z: 4.5, yaw: Math.PI / 2 },
+  { id: 'gate_e', x: 6.6, z: 4.5, yaw: -Math.PI / 2 },
 ];
 
 const TILE_TOP = 0.2;          // the tiles' own height
 const GROUND_Y = 0;            // walkable surface
 
-/** Expand the polyline into every cell it passes through, once each. */
-function pathCells() {
+/** Expand a polyline into every cell it passes through, once each. */
+function expand(corners) {
   const out = [];
   const push = (x, z) => {
     const last = out[out.length - 1];
     if (!last || last[0] !== x || last[1] !== z) out.push([x, z]);
   };
-  for (let i = 0; i < CORNERS.length - 1; i++) {
-    const [x0, z0] = CORNERS[i], [x1, z1] = CORNERS[i + 1];
+  for (let i = 0; i < corners.length - 1; i++) {
+    const [x0, z0] = corners[i], [x1, z1] = corners[i + 1];
     const dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
     const n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
     for (let k = 0; k <= n; k++) push(x0 + dx * k, z0 + dz * k);
@@ -35,30 +57,50 @@ function pathCells() {
   return out;
 }
 
+/** One full walk per gate, trunk included, so the game can follow a route
+ *  without knowing that it shares its first thirty cells with the other one. */
+function buildRoutes() {
+  const trunk = expand(TRUNK);
+  return BRANCHES.map((b) => {
+    const branch = expand(b);
+    // The fork cell belongs to the trunk; drop the branch's copy of it.
+    return trunk.concat(branch.slice(1));
+  });
+}
+
 /** A quaternion, as the ARRAY the schema wants — an {x,y,z,w} object here is
  *  rejected at load, loudly and by name, which is the loader working. */
 const yaw = (a) => [0, Math.sin(a / 2), 0, Math.cos(a / 2)];
 
-/** Which model and which way round, from the directions in and out of a cell.
+/** Which model and which way round, from a cell's PATH NEIGHBOURS.
  *
- *  The straight tile's stripe runs along Z at yaw 0 and the corner joins -Z to
- *  +X; both were read off the models rather than guessed, and the corner table
- *  is written as "coming from / going to" so it can be checked by eye. */
-function tileFor(inDir, outDir) {
-  const key = (d) => `${d[0]},${d[1]}`;
-  if (!inDir) return { model: 'td-tile-spawn', rot: yaw(dirYaw(outDir)) };
-  // The end tile's stub has to face BACK the way the path came, not onward:
-  // pointing it along the direction of travel puts the join on the far edge
-  // and leaves a one-cell gap of grass right before the base.
-  if (!outDir) return { model: 'td-tile-end', rot: yaw(dirYaw(inDir) + Math.PI) };
-  if (key(inDir) === key(outDir)) return { model: 'td-tile-straight', rot: yaw(dirYaw(inDir)) };
-  // A full dirt tile at every turn. The kit's corner tile joins two specific
-  // edges, and getting its yaw wrong leaves the path visibly broken at every
-  // bend -- which is what happened. A tile that is path on all four edges
-  // cannot be rotated wrong, and against these wide path tiles it reads as the
-  // same road. Deleting a class of bug beats getting a lookup table right.
+ *  Rewritten from "the direction in and the direction out", which cannot
+ *  describe the fork: that cell has one way in and two ways out. Neighbour
+ *  counting handles junctions, corners and straights with one rule, and it
+ *  reads off the finished board rather than off the order someone walked it.
+ *
+ *  The straight tile's stripe runs along Z at yaw 0 — read off the model, not
+ *  guessed. */
+function tileFor(cell, neighbours, isSpawn, isEnd) {
+  if (isSpawn) return { model: 'td-tile-spawn', rot: yaw(dirYaw(dirTo(cell, neighbours[0]))) };
+  // The end tile's stub faces BACK the way the path came: pointing it along the
+  // direction of travel puts the join on the far edge and leaves a cell of
+  // grass right before the gate.
+  if (isEnd) return { model: 'td-tile-end', rot: yaw(dirYaw(dirTo(cell, neighbours[0])) + Math.PI) };
+  if (neighbours.length === 2) {
+    const a = dirTo(cell, neighbours[0]), b = dirTo(cell, neighbours[1]);
+    // Opposite directions = a straight run.
+    if (a[0] === -b[0] && a[1] === -b[1]) return { model: 'td-tile-straight', rot: yaw(dirYaw(a)) };
+  }
+  // Corners AND the fork: a full dirt tile, which is path on all four edges and
+  // therefore cannot be rotated wrong. The kit's corner tile joins two specific
+  // edges and every bend on the board was visibly broken until I stopped trying
+  // to get its lookup table right. Deleting a class of bug beats winning it.
   return { model: 'td-tile-dirt', rot: yaw(0) };
 }
+
+/** Unit direction from one cell to an adjacent one. */
+function dirTo(a, b) { return [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])]; }
 
 /** Yaw that points the tile's +Z along this direction. */
 function dirYaw(d) { return Math.atan2(d[0], d[1]); }
@@ -82,9 +124,18 @@ function cornerYaw(inDir, outDir) {
   return 0;
 }
 
-const cells = pathCells();
 const key = (c) => `${c[0]},${c[1]}`;
-const onPath = new Set(cells.map(key));
+const routes = buildRoutes();
+/** Every cell any route touches, once each — what gets a tile laid on it. */
+const cells = [];
+const onPath = new Set();
+for (const r of routes) for (const c of r) {
+  if (onPath.has(key(c))) continue;
+  onPath.add(key(c));
+  cells.push(c);
+}
+const SPAWN = key(routes[0][0]);
+const ENDS = new Set(routes.map((r) => key(r[r.length - 1])));
 
 const entities = [];
 const add = (e) => entities.push(e);
@@ -133,7 +184,13 @@ for (const [id, x, z, sx, sz] of [
   ['wall_n_l', -3.65, -6.6, 6.1, 0.4], ['wall_n_r', 3.65, -6.6, 6.1, 0.4],
   ['wall_n_m', 0, -6.6, 1.2, 0.4],
   ['wall_s', 0, 6.6, 13.4, 0.4],
-  ['wall_w', -6.6, 0, 0.4, 13.4], ['wall_e', 6.6, 0, 0.4, 13.4],
+  // The side walls have a doorway cut in them at z=4.5, exactly the width of a
+  // door, and a shut door standing in it. Not a hole with an invisible collider
+  // across it, and not a door pasted onto a solid wall: the door IS the wall
+  // there, which is why it stops you, and it is shut, which is why the things
+  // walking towards it are a problem.
+  ['wall_w_n', -6.6, -1.35, 0.4, 10.7], ['wall_w_s', -6.6, 5.85, 0.4, 1.7],
+  ['wall_e_n', 6.6, -1.35, 0.4, 10.7], ['wall_e_s', 6.6, 5.85, 0.4, 1.7],
 ]) {
   add({
     id, name: id,
@@ -146,15 +203,37 @@ for (const [id, x, z, sx, sz] of [
 // --- the path ---
 for (let i = 0; i < cells.length; i++) {
   const c = cells[i];
-  const prev = cells[i - 1], next = cells[i + 1];
-  const inDir = prev ? [c[0] - prev[0], c[1] - prev[1]] : null;
-  const outDir = next ? [next[0] - c[0], next[1] - c[1]] : null;
-  const { model, rot } = tileFor(inDir, outDir);
+  const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .map(([dx, dz]) => [c[0] + dx, c[1] + dz])
+    .filter((n) => onPath.has(key(n)));
+  const { model, rot } = tileFor(c, nb, key(c) === SPAWN, ENDS.has(key(c)));
   add({
     id: `path_${i}`, name: `path_${i}`, modelAssetId: model, castShadow: false,
     // Sunk so the tiles' TOP is the walkable surface — laid ON the ground they
     // would be a 0.2 step the character cannot climb (stepHeight is 0.17).
     transform: { position: { x: c[0], y: GROUND_Y - TILE_TOP, z: c[1] }, rotation: rot },
+  });
+}
+
+// --- the gates the enemies are walking towards ---
+//
+// SHUT, and set against the inside face of the wall rather than into a gap in
+// it. A hole in the wall would be a hole: the ground is 13x13 and the hero
+// would walk out of the world through it, and a doorway with an invisible
+// collider across it is worse than no doorway. A closed gate is honest about
+// all of it — the enemies are trying to break in, and a shut door is a shut
+// door for everyone.
+for (const g of GATES) {
+  add({
+    id: g.id, name: 'gate', modelAssetId: 'hub-door',
+    transform: { position: { x: g.x, y: GROUND_Y, z: g.z }, rotation: yaw(g.yaw) },
+    // Its own collider, filling the gap the wall pieces leave. A shut door you
+    // can walk through is a hole; a hole in this wall is a fall out of the
+    // world, because the ground is 13x13 and stops.
+    collider: {
+      shape: { kind: 'box', halfExtents: { x: 0.2, y: 0.6, z: 0.5 } },
+      body: 'fixed', offset: { x: 0, y: 0.4, z: 0 },
+    },
   });
 }
 
@@ -237,9 +316,10 @@ writeFileSync(new URL('../public/scenes3d/main.json', import.meta.url),
 // The waypoints the game walks enemies along — the same polyline, so the
 // path you SEE and the path they FOLLOW cannot drift apart.
 writeFileSync(new URL('../public/scenes3d/path.json', import.meta.url),
-  JSON.stringify({ cells, spots }, null, 2) + '\n');
+  JSON.stringify({ routes, cells, spots }, null, 2) + '\n');
 
-console.log(`${entities.length} entities — ${cells.length} path tiles, ${spots.length} build spots`);
+console.log(`${entities.length} entities — ${cells.length} path tiles, ${spots.length} build spots, `
+  + `${routes.length} routes (${routes.map((r) => r.length).join('/')} cells)`);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The hub: where a run starts.

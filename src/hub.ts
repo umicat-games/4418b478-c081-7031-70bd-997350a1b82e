@@ -5,7 +5,8 @@ import {
   CharacterController3D, CharacterAnimator, Input3D,
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
-import type { Shared, Weapon } from './main';
+import type { Shared, Weapon, Progress } from './main';
+import { patchSave } from './main';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
 
@@ -77,10 +78,16 @@ export async function submitScore(umicat: Shared['umicat'], wave: number): Promi
  *  no models anywhere in the asset library, so both are built — see
  *  `makeBow`/`makeStaff` in the level, which this mirrors deliberately: the
  *  thing on the pedestal has to be the thing you end up holding. */
-const PICKUPS: { id: Weapon; x: number; z: number; label: string }[] = [
-  { id: 'sword', x: -1.4, z: 0.2, label: '🗡 Sword — hits everything close' },
-  { id: 'bow', x: 0, z: 0.2, label: '🏹 Bow — locks on at range' },
-  { id: 'staff', x: 1.4, z: 0.2, label: '🔮 Staff — bursts a whole group' },
+/** The weapons on the ground, and how many finished levels each one takes.
+ *
+ *  You start with the sword and nothing else. A hub with all three laid out on
+ *  the first visit asks a new player to choose between three things they have
+ *  never used; one weapon at a time makes each arrival back from a level the
+ *  moment something new is waiting. */
+const PICKUPS: { id: Weapon; x: number; z: number; label: string; runs: number }[] = [
+  { id: 'sword', x: -1.4, z: 0.2, label: '🗡 Sword — hits everything close', runs: 0 },
+  { id: 'bow', x: 0, z: 0.2, label: '🏹 Bow — locks on at range', runs: 1 },
+  { id: 'staff', x: 1.4, z: 0.2, label: '🔮 Staff — bursts a whole group', runs: 2 },
 ];
 
 export async function runHub(shared: Shared): Promise<Weapon> {
@@ -128,7 +135,17 @@ export async function runHub(shared: Shared): Promise<Weapon> {
   const handRight = heroAsset?.sockets?.['hand-right'];
 
   const held: Partial<Record<Weapon, THREE.Object3D>> = {};
-  let weapon: Weapon = (await shared.umicat.saves.get<{ weapon?: Weapon }>('td-progress'))?.weapon ?? 'sword';
+  const progress = (await shared.umicat.saves.get<Progress>('td-progress')) ?? {};
+  const runs = progress.runs ?? 0;
+  /** What is on the ground this visit. */
+  const available = PICKUPS.filter((p) => p.runs <= runs);
+  /** Anything unlocked by the level just finished — worth saying out loud. */
+  const justUnlocked = PICKUPS.find((p) => p.runs === runs && p.runs > 0) ?? null;
+  const saved = progress.weapon;
+  // Never hand back a weapon that is no longer on the ground — a save from a
+  // future version, or a cleared progress, should not leave you carrying
+  // something the hub cannot show you putting down.
+  let weapon: Weapon = available.some((p) => p.id === saved) ? saved! : 'sword';
 
   const makeBow = (): THREE.Object3D => {
     const g = new THREE.Object3D();
@@ -174,7 +191,12 @@ export async function runHub(shared: Shared): Promise<Weapon> {
   // than cloned from the held ones: cloning would make the display copy share
   // a transform with something parented to a bone, which is a bug waiting for
   // the first time anyone rotates one.
+  // Only the ones that have been earned. The empty pedestals stay: a bare
+  // plinth beside the sword says something goes there, which is the point of
+  // unlocking them one at a time. The ring under an empty one never lights.
   for (const pick of PICKUPS) {
+    const ring = world.entities.get(`pickup_marker_${pick.id}`);
+    if (!available.includes(pick)) { if (ring) ring.visible = false; continue; }
     const display = pick.id === 'sword'
       ? (await loadModelAsset(manifest, 'sword', { assetBase: '' })).object
       : pick.id === 'bow' ? makeBow() : makeStaff();
@@ -193,6 +215,20 @@ export async function runHub(shared: Shared): Promise<Weapon> {
   const hint = document.createElement('div');
   hint.style.cssText = 'font: 600 14px/1.5 system-ui, sans-serif; opacity: .85;';
   hudEl.append(title, hint);
+
+  // Something new on the ground is the reward for the level just finished, and
+  // it is easy to miss: it appears while the screen is still fading in, two
+  // metres from where you were already standing. So it says so.
+  if (justUnlocked) {
+    const news = document.createElement('div');
+    news.style.cssText = 'font: 700 16px/1.6 system-ui, sans-serif; color: #ffd45e;'
+      + 'text-shadow: 0 1px 2px rgba(0,0,0,.55); transition: opacity .6s;';
+    news.textContent = `NEW · ${justUnlocked.label}`;
+    hudEl.append(news);
+    audio.play('coin');
+    setTimeout(() => { news.style.opacity = '0'; }, 7000);
+    setTimeout(() => news.remove(), 7800);
+  }
 
   // The leaderboard panel. Above the controls layer, for the reason every
   // other panel in this game is: they are a full-screen layer at z-index 10.
@@ -258,7 +294,7 @@ export async function runHub(shared: Shared): Promise<Weapon> {
 
       // Which weapon you are standing at, if any.
       let atPickup: typeof PICKUPS[number] | null = null;
-      for (const pick of PICKUPS) {
+      for (const pick of available) {
         const near = Math.hypot(hero.position.x - pick.x, hero.position.z - pick.z) < NEAR;
         const ring = world.entities.get(`pickup_marker_${pick.id}`);
         if (ring) ring.visible = near && !panelOpen;
@@ -280,8 +316,7 @@ export async function runHub(shared: Shared): Promise<Weapon> {
           weapon = atPickup.id;
           showWeapon();
           audio.play('build');
-          void shared.umicat.saves.get<Record<string, unknown>>('td-progress').then((prev) =>
-            shared.umicat.saves.set('td-progress', { ...(prev ?? {}), weapon }));
+          void patchSave(shared.umicat, { weapon });
         } else if (atSign) {
           audio.play('build');
           void openPanel();
@@ -317,6 +352,11 @@ export async function runHub(shared: Shared): Promise<Weapon> {
 
     Object.assign(window as unknown as Record<string, unknown>, {
       __hub: { world, character, input, hero, openPanel, weapon: () => weapon,
+               /** Which weapons are on the ground this visit — the question the
+                *  unlock is really about. Reading the scene for models would
+                *  answer "is something drawn there", which is not the same. */
+               available: () => available.map((p) => p.id),
+               runs,
                atDoor: () => hero.position.z < DOOR_AT.z
                  && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH },
     });

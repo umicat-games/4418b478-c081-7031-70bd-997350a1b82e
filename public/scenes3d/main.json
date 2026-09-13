@@ -197,19 +197,6 @@
       "castShadow": false
     },
     {
-      "id": "grass__5_5_4_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": -5.5,
-          "y": -0.2,
-          "z": 4.5
-        }
-      },
-      "castShadow": false
-    },
-    {
       "id": "grass__5_5_5_5",
       "name": "grass",
       "modelAssetId": "td-tile",
@@ -340,19 +327,6 @@
       "castShadow": false
     },
     {
-      "id": "grass__4_5_4_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": -4.5,
-          "y": -0.2,
-          "z": 4.5
-        }
-      },
-      "castShadow": false
-    },
-    {
       "id": "grass__4_5_5_5",
       "name": "grass",
       "modelAssetId": "td-tile",
@@ -426,19 +400,6 @@
           "x": -3.5,
           "y": -0.2,
           "z": 3.5
-        }
-      },
-      "castShadow": false
-    },
-    {
-      "id": "grass__3_5_4_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": -3.5,
-          "y": -0.2,
-          "z": 4.5
         }
       },
       "castShadow": false
@@ -543,19 +504,6 @@
           "x": -2.5,
           "y": -0.2,
           "z": 3.5
-        }
-      },
-      "castShadow": false
-    },
-    {
-      "id": "grass__2_5_4_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": -2.5,
-          "y": -0.2,
-          "z": 4.5
         }
       },
       "castShadow": false
@@ -847,32 +795,6 @@
       "castShadow": false
     },
     {
-      "id": "grass_0_5_2_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": 0.5,
-          "y": -0.2,
-          "z": 2.5
-        }
-      },
-      "castShadow": false
-    },
-    {
-      "id": "grass_0_5_3_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": 0.5,
-          "y": -0.2,
-          "z": 3.5
-        }
-      },
-      "castShadow": false
-    },
-    {
       "id": "grass_0_5_5_5",
       "name": "grass",
       "modelAssetId": "td-tile",
@@ -946,6 +868,19 @@
           "x": 1.5,
           "y": -0.2,
           "z": 0.5
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "grass_1_5_1_5",
+      "name": "grass",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": -0.2,
+          "z": 1.5
         }
       },
       "castShadow": false
@@ -1055,6 +990,19 @@
       "castShadow": false
     },
     {
+      "id": "grass_2_5_1_5",
+      "name": "grass",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": -0.2,
+          "z": 1.5
+        }
+      },
+      "castShadow": false
+    },
+    {
       "id": "grass_2_5_2_5",
       "name": "grass",
       "modelAssetId": "td-tile",
@@ -1128,6 +1076,45 @@
           "x": 3.5,
           "y": -0.2,
           "z": 0.5
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "grass_3_5_1_5",
+      "name": "grass",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": -0.2,
+          "z": 1.5
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "grass_3_5_2_5",
+      "name": "grass",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": -0.2,
+          "z": 2.5
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "grass_3_5_3_5",
+      "name": "grass",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": -0.2,
+          "z": 3.5
         }
       },
       "castShadow": false
@@ -1276,19 +1263,6 @@
       "castShadow": false
     },
     {
-      "id": "grass_4_5_4_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": 4.5,
-          "y": -0.2,
-          "z": 4.5
-        }
-      },
-      "castShadow": false
-    },
-    {
       "id": "grass_4_5_5_5",
       "name": "grass",
       "modelAssetId": "td-tile",
@@ -1432,19 +1406,6 @@
       "castShadow": false
     },
     {
-      "id": "grass_5_5_4_5",
-      "name": "grass",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": 5.5,
-          "y": -0.2,
-          "z": 4.5
-        }
-      },
-      "castShadow": false
-    },
-    {
       "id": "grass_5_5_5_5",
       "name": "grass",
       "modelAssetId": "td-tile",
@@ -1582,14 +1543,14 @@
       }
     },
     {
-      "id": "wall_w",
-      "name": "wall_w",
+      "id": "wall_w_n",
+      "name": "wall_w_n",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 13.4
+          "z": 10.7
         },
         "color": "#4a4036"
       },
@@ -1597,7 +1558,7 @@
         "position": {
           "x": -6.6,
           "y": 0.4,
-          "z": 0
+          "z": -1.35
         }
       },
       "collider": {
@@ -1606,21 +1567,52 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 6.7
+            "z": 5.35
           }
         },
         "body": "fixed"
       }
     },
     {
-      "id": "wall_e",
-      "name": "wall_e",
+      "id": "wall_w_s",
+      "name": "wall_w_s",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 13.4
+          "z": 1.7
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": -6.6,
+          "y": 0.4,
+          "z": 5.85
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 0.85
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall_e_n",
+      "name": "wall_e_n",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.4,
+          "y": 1.2,
+          "z": 10.7
         },
         "color": "#4a4036"
       },
@@ -1628,7 +1620,7 @@
         "position": {
           "x": 6.6,
           "y": 0.4,
-          "z": 0
+          "z": -1.35
         }
       },
       "collider": {
@@ -1637,7 +1629,38 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 6.7
+            "z": 5.35
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall_e_s",
+      "name": "wall_e_s",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.4,
+          "y": 1.2,
+          "z": 1.7
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": 6.6,
+          "y": 0.4,
+          "z": 5.85
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 0.85
           }
         },
         "body": "fixed"
@@ -1903,7 +1926,7 @@
         },
         "rotation": [
           0,
-          -0.7071067811865475,
+          0.7071067811865475,
           0,
           0.7071067811865476
         ]
@@ -1922,7 +1945,7 @@
         },
         "rotation": [
           0,
-          -0.7071067811865475,
+          0.7071067811865475,
           0,
           0.7071067811865476
         ]
@@ -1941,7 +1964,7 @@
         },
         "rotation": [
           0,
-          -0.7071067811865475,
+          0.7071067811865475,
           0,
           0.7071067811865476
         ]
@@ -1960,7 +1983,7 @@
         },
         "rotation": [
           0,
-          -0.7071067811865475,
+          0.7071067811865475,
           0,
           0.7071067811865476
         ]
@@ -1979,7 +2002,7 @@
         },
         "rotation": [
           0,
-          -0.7071067811865475,
+          0.7071067811865475,
           0,
           0.7071067811865476
         ]
@@ -1998,7 +2021,7 @@
         },
         "rotation": [
           0,
-          -0.7071067811865475,
+          0.7071067811865475,
           0,
           0.7071067811865476
         ]
@@ -2140,7 +2163,7 @@
     {
       "id": "path_26",
       "name": "path_26",
-      "modelAssetId": "td-tile-straight",
+      "modelAssetId": "td-tile-dirt",
       "castShadow": false,
       "transform": {
         "position": {
@@ -2150,9 +2173,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       }
     },
@@ -2163,15 +2186,15 @@
       "castShadow": false,
       "transform": {
         "position": {
-          "x": 1.5,
+          "x": 0.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 2.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       }
     },
@@ -2182,15 +2205,15 @@
       "castShadow": false,
       "transform": {
         "position": {
-          "x": 2.5,
+          "x": 0.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 3.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       }
     },
@@ -2201,9 +2224,9 @@
       "castShadow": false,
       "transform": {
         "position": {
-          "x": 3.5,
+          "x": 0.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -2220,15 +2243,15 @@
       "castShadow": false,
       "transform": {
         "position": {
-          "x": 3.5,
+          "x": -0.5,
           "y": -0.2,
-          "z": 2.5
+          "z": 4.5
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       }
     },
@@ -2236,120 +2259,6 @@
       "id": "path_31",
       "name": "path_31",
       "modelAssetId": "td-tile-straight",
-      "castShadow": false,
-      "transform": {
-        "position": {
-          "x": 3.5,
-          "y": -0.2,
-          "z": 3.5
-        },
-        "rotation": [
-          0,
-          0,
-          0,
-          1
-        ]
-      }
-    },
-    {
-      "id": "path_32",
-      "name": "path_32",
-      "modelAssetId": "td-tile-dirt",
-      "castShadow": false,
-      "transform": {
-        "position": {
-          "x": 3.5,
-          "y": -0.2,
-          "z": 4.5
-        },
-        "rotation": [
-          0,
-          0,
-          0,
-          1
-        ]
-      }
-    },
-    {
-      "id": "path_33",
-      "name": "path_33",
-      "modelAssetId": "td-tile-straight",
-      "castShadow": false,
-      "transform": {
-        "position": {
-          "x": 2.5,
-          "y": -0.2,
-          "z": 4.5
-        },
-        "rotation": [
-          0,
-          -0.7071067811865475,
-          0,
-          0.7071067811865476
-        ]
-      }
-    },
-    {
-      "id": "path_34",
-      "name": "path_34",
-      "modelAssetId": "td-tile-straight",
-      "castShadow": false,
-      "transform": {
-        "position": {
-          "x": 1.5,
-          "y": -0.2,
-          "z": 4.5
-        },
-        "rotation": [
-          0,
-          -0.7071067811865475,
-          0,
-          0.7071067811865476
-        ]
-      }
-    },
-    {
-      "id": "path_35",
-      "name": "path_35",
-      "modelAssetId": "td-tile-straight",
-      "castShadow": false,
-      "transform": {
-        "position": {
-          "x": 0.5,
-          "y": -0.2,
-          "z": 4.5
-        },
-        "rotation": [
-          0,
-          -0.7071067811865475,
-          0,
-          0.7071067811865476
-        ]
-      }
-    },
-    {
-      "id": "path_36",
-      "name": "path_36",
-      "modelAssetId": "td-tile-straight",
-      "castShadow": false,
-      "transform": {
-        "position": {
-          "x": -0.5,
-          "y": -0.2,
-          "z": 4.5
-        },
-        "rotation": [
-          0,
-          -0.7071067811865475,
-          0,
-          0.7071067811865476
-        ]
-      }
-    },
-    {
-      "id": "path_37",
-      "name": "path_37",
-      "modelAssetId": "td-tile-end",
       "castShadow": false,
       "transform": {
         "position": {
@@ -2363,6 +2272,245 @@
           0,
           0.7071067811865476
         ]
+      }
+    },
+    {
+      "id": "path_32",
+      "name": "path_32",
+      "modelAssetId": "td-tile-straight",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "path_33",
+      "name": "path_33",
+      "modelAssetId": "td-tile-straight",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "path_34",
+      "name": "path_34",
+      "modelAssetId": "td-tile-straight",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "path_35",
+      "name": "path_35",
+      "modelAssetId": "td-tile-end",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          -0.7071067811865475
+        ]
+      }
+    },
+    {
+      "id": "path_36",
+      "name": "path_36",
+      "modelAssetId": "td-tile-straight",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "path_37",
+      "name": "path_37",
+      "modelAssetId": "td-tile-straight",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "path_38",
+      "name": "path_38",
+      "modelAssetId": "td-tile-straight",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "path_39",
+      "name": "path_39",
+      "modelAssetId": "td-tile-straight",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "path_40",
+      "name": "path_40",
+      "modelAssetId": "td-tile-end",
+      "castShadow": false,
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "gate_w",
+      "name": "gate",
+      "modelAssetId": "hub-door",
+      "transform": {
+        "position": {
+          "x": -6.6,
+          "y": 0,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 0.5
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.4,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "gate_e",
+      "name": "gate",
+      "modelAssetId": "hub-door",
+      "transform": {
+        "position": {
+          "x": 6.6,
+          "y": 0,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          -0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 0.5
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.4,
+          "z": 0
+        }
       }
     },
     {
@@ -2398,30 +2546,6 @@
           "x": 5.5,
           "y": 0,
           "z": -0.5
-        }
-      }
-    },
-    {
-      "id": "decor_detail_tree__5_5_5_5",
-      "name": "decor",
-      "modelAssetId": "td-tree",
-      "transform": {
-        "position": {
-          "x": -5.5,
-          "y": 0,
-          "z": 5.5
-        }
-      }
-    },
-    {
-      "id": "decor_detail_rocks_5_5_5_5",
-      "name": "decor",
-      "modelAssetId": "td-rocks",
-      "transform": {
-        "position": {
-          "x": 5.5,
-          "y": 0,
-          "z": 5.5
         }
       }
     },

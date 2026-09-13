@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {
-  ThreeUmicat, loadScene3D, loadModelAsset, attachToSocket, flashTint, updateTints,
+  ThreeUmicat, loadScene3D, loadModelAsset, attachToSocket, flashTint, updateTints, isTinted,
   CharacterController3D, CharacterAnimator, Input3D,
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
@@ -24,6 +25,28 @@ import type { GameAudio } from '@umicat/three-sdk';
  */
 
 const SAVE_KEY = 'td-progress';
+
+/** What is kept between runs. */
+export interface Progress {
+  best?: number;
+  quality?: number;
+  weapon?: Weapon;
+  /** Levels finished — what the hub unlocks weapons from. */
+  runs?: number;
+}
+
+/** Read, change the named fields, write back.
+ *
+ *  Everything that saves has to go through this. The level used to write
+ *  `{ best, quality }` wholesale, which erased the weapon the hub had just
+ *  saved — a field written by one screen and deleted by the next, with nothing
+ *  anywhere reporting a problem. */
+export async function patchSave(
+  umicat: Shared['umicat'], fields: Progress,
+): Promise<void> {
+  const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
+  await umicat.saves.set(SAVE_KEY, { ...prev, ...fields });
+}
 const SPAWN = { x: 0, y: 0.5, z: 3.5 };
 const RESPAWN_BELOW_Y = -5;
 
@@ -61,6 +84,38 @@ const BULLET_LIFE = 2.6;          // seconds before a miss gives up
  *  the hero against a UFO and it can never hurt him, so melee became free.
  *  A fast hit you barely see beats an enemy that cannot fight back. */
 const BULLET_MUZZLE = 0.15;
+/** The boss winds up for longer and fires less often — it hits for two hearts
+ *  of six, so the answer to it has to be "move", and moving needs warning. */
+/** How many things may be shooting at the hero at once.
+ *
+ *  Without a cap, danger scales with the size of the wave: twenty saucers each
+ *  firing every 2.4s within 3.4 units is a wall of bullets nobody dodges, and
+ *  the measured result was a board that never lost a life while the hero was
+ *  shot to death on wave eight. A cap keeps each enemy exactly as dangerous as
+ *  it was and stops the crowd from being dangerous by arithmetic.
+ *
+ *  The boss is exempt — it is the one thing that is supposed to be personal. */
+const MAX_SHOOTERS = 3;
+const BOSS_WINDUP_SECONDS = 0.9;
+const BOSS_SHOOT_COOLDOWN = 3.2;
+/** How long the body lies there before it sinks away. */
+const CORPSE_SECONDS = 2.4;
+
+// --- crates ---------------------------------------------------------------
+/** Supply crates drop onto the back field while a wave is running. Breaking
+ *  one pays gold or a heart.
+ *
+ *  They land AWAY from the road and away from the build spots, which is the
+ *  whole design: the reward for leaving your towers to fend for themselves.
+ *  Somewhere safe to stand that also pays you would just be the place to
+ *  stand. */
+const CRATE_EVERY = 11;         // seconds between drops
+const CRATE_MAX = 3;            // how many can be waiting at once
+const CRATE_LIFE = 26;          // seconds before an unopened one is gone
+const CRATE_GOLD = [12, 30];    // the range a gold crate pays
+/** A heart only if one is missing — a crate that pays nothing is worse than a
+ *  crate that pays gold, so a full-health player gets the gold instead. */
+const CRATE_HEART_CHANCE = 0.42;
 
 // --- towers ---------------------------------------------------------------
 interface TowerKind {
@@ -100,24 +155,57 @@ interface Wave {
   /** The kit's UFOs are a full tile wide; this is how big they read next to
    *  a 0.72-tall hero. */
   scale: number;
+  /** Walks on the ground rather than flying over it. Rigged models only — a
+   *  UFO set down at y=0 looks parked. */
+  ground?: boolean;
+  /** Turns to face the way it is going, instead of spinning like a saucer. */
+  facesTravel?: boolean;
+  /** What it throws. Defaults to the small bullet everything else fires. */
+  ammo?: string;
+  /** Hearts per hit. Defaults to 1. */
+  damage?: number;
+  /** Announced, health bar always up, and the run is over when it falls. */
+  boss?: boolean;
+  /** Shown on the banner when it arrives. */
+  label?: string;
 }
-/** Eight waves, six kinds of thing to shoot at.
+/** Twelve waves, and the last one is a single thing.
  *
  *  Every one of them shoots back. The ramp is hit points, speed and count —
  *  the scouts are fast and fragile, the heavies slow and thick, which is a
  *  different problem each time rather than a larger one.
  *
+ *  The hit points here were MEASURED, not chosen: `verify-3d-balance.mjs`
+ *  plays the board with a competent scripted defence and reports how far it
+ *  gets. Picking numbers that look reasonable on a laptop is how this game
+ *  ended up with waves you could stand in front of.
+ *
+ *  What that measurement says about the shape of the curve: a full board of
+ *  upgraded towers out-scales hit points far faster than a wave table does, so
+ *  the late waves need to grow steeply or they are easier than the early ones.
+ *  The first run of twelve waves lost every one of its five lives before wave
+ *  seven and not one after it, while sitting on 1500 unspendable gold.
+ *
  *  `armed` stays as a field because it is per-KIND, not a global: the moment
  *  one enemy should be harmless, that is a data change and not a rewrite. */
 const WAVES: Wave[] = [
-  { count: 5, hp: 6, speed: 1.1, model: 'td-ufo-a', bounty: 8, armed: true, scale: 0.62 },
-  { count: 7, hp: 9, speed: 1.25, model: 'td-ufo-b', bounty: 10, armed: true, scale: 0.62 },
-  { count: 8, hp: 8, speed: 2.1, model: 'td-ufo-c', bounty: 11, armed: true, scale: 0.5 },
-  { count: 9, hp: 16, speed: 1.2, model: 'td-ufo-a2', bounty: 14, armed: true, scale: 0.68 },
-  { count: 10, hp: 22, speed: 1.3, model: 'td-ufo-d', bounty: 16, armed: true, scale: 0.72 },
-  { count: 12, hp: 20, speed: 1.9, model: 'td-ufo-b2', bounty: 18, armed: true, scale: 0.6 },
-  { count: 14, hp: 34, speed: 1.2, model: 'td-ufo-c2', bounty: 22, armed: true, scale: 0.78 },
-  { count: 16, hp: 48, speed: 1.45, model: 'td-ufo-d2', bounty: 28, armed: true, scale: 0.85 },
+  { count: 6, hp: 10, speed: 1.1, model: 'td-ufo-a', bounty: 9, armed: true, scale: 0.62 },
+  { count: 8, hp: 16, speed: 1.25, model: 'td-ufo-b', bounty: 11, armed: true, scale: 0.62 },
+  { count: 10, hp: 14, speed: 2.1, model: 'td-ufo-c', bounty: 12, armed: true, scale: 0.5 },
+  { count: 10, hp: 30, speed: 1.2, model: 'td-ufo-a2', bounty: 15, armed: true, scale: 0.68 },
+  { count: 12, hp: 44, speed: 1.3, model: 'td-ufo-d', bounty: 18, armed: true, scale: 0.72 },
+  { count: 14, hp: 38, speed: 1.9, model: 'td-ufo-b2', bounty: 20, armed: true, scale: 0.6 },
+  { count: 14, hp: 70, speed: 1.2, model: 'td-ufo-c2', bounty: 25, armed: true, scale: 0.78 },
+  { count: 16, hp: 120, speed: 1.45, model: 'td-ufo-d2', bounty: 30, armed: true, scale: 0.85 },
+  { count: 18, hp: 125, speed: 2.0, model: 'td-ufo-c', bounty: 28, armed: true, scale: 0.55 },
+  { count: 18, hp: 215, speed: 1.3, model: 'td-ufo-a2', bounty: 34, armed: true, scale: 0.75 },
+  { count: 20, hp: 300, speed: 1.5, model: 'td-ufo-d2', bounty: 40, armed: true, scale: 0.9 },
+  // The boss. One of it, walking, on the ground, taking the west gate — a
+  // wall of hit points that throws boulders and cannot be out-ranged by
+  // standing still. It is the only enemy in the game that is not a saucer.
+  { count: 1, hp: 2200, speed: 0.62, model: 'boss-orc', bounty: 300, armed: true, scale: 2.1,
+    ground: true, facesTravel: true, ammo: 'td-ammo-boulder', damage: 2, boss: true,
+    label: 'THE WARLORD' },
 ];
 const SPAWN_GAP = 1.1;          // seconds between enemies in a wave
 const WAVE_GAP = 6;             // breathing room between waves
@@ -139,9 +227,22 @@ interface Enemy {
   bounty: number;
   /** How far along the path, in cells. Fractional between waypoints. */
   t: number;
+  /** Which fork it took, chosen at spawn. Both gates are always live, so the
+   *  question the board asks is no longer "where is the path" but "which half
+   *  of it can I afford to leave thin". */
+  route: number;
   alive: boolean;
   shootCooldown: number;
   windup: number;
+  /** Bosses only: the rig's mixer, and the clip currently playing. */
+  mixer?: THREE.AnimationMixer;
+  actions?: Map<string, THREE.AnimationAction>;
+  clip?: string;
+  ground: boolean;
+  facesTravel: boolean;
+  ammo: string;
+  damage: number;
+  boss: boolean;
 }
 
 interface Tower {
@@ -173,6 +274,8 @@ interface Bullet {
   obj: THREE.Object3D;
   vel: THREE.Vector3;
   life: number;
+  /** Hearts on contact. The boss's boulder is worth two. */
+  damage: number;
 }
 
 /** Does the segment a→b pass within `r` of `c`? Closest-point-on-segment.
@@ -213,15 +316,18 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   const [manifest, scene3d, pathData] = await Promise.all([
     fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
     fetch('scenes3d/main.json').then((r) => r.json() as Promise<Scene3D>),
-    fetch('scenes3d/path.json').then((r) => r.json() as Promise<{ cells: [number, number][]; spots: [number, number][] }>),
+    fetch('scenes3d/path.json').then((r) => r.json() as Promise<{
+      routes: [number, number][][]; cells: [number, number][]; spots: [number, number][];
+    }>),
   ]);
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
   audio.setMusic(MUSIC.level);
 
   // --- Fold the board into a handful of draws ---
   //
-  // The board is 144 grass tiles plus 38 path tiles, and every one of them was
-  // a separate mesh: 182 draw calls for a picture that never changes. They are
+  // The board is a grass tile per cell plus one per path cell, and every one of
+  // them was a separate mesh: ~180 draw calls for a picture that never
+  // changes. They are
   // static, they share a few materials, and nothing looks them up by id, so
   // they can be merged into one mesh per material. A desktop does not notice
   // 182 draws; a phone very much does.
@@ -259,6 +365,9 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       const combined = mergeGeometries(geos, false);
       if (!combined) continue;   // mismatched attributes: leave those tiles be
       const mesh = new THREE.Mesh(combined, mat);
+      // Named, because after this the individual tiles are gone and this is the
+      // only thing left that knows where the board is.
+      mesh.name = 'board';
       mesh.castShadow = false;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
@@ -283,8 +392,20 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
 
   // The path the enemies walk is the same polyline the tiles were laid from,
   // so what you see and what they follow cannot drift apart.
-  const PATH = pathData.cells;
+  // One list of waypoints per gate, each a complete walk from the spawn tile.
+  // They share their first thirty cells; nothing here needs to know that.
+  const ROUTES = pathData.routes;
   const BUILDABLE = new Set(pathData.spots.map(([x, z]) => `${x},${z}`));
+  const ON_PATH = new Set(pathData.cells.map(([x, z]) => `${x},${z}`));
+  /** The back field: cells that are neither road nor a place to build. Nothing
+   *  else ever wants them, which is exactly why the crates go there. */
+  const BACKFIELD: [number, number][] = [];
+  for (let x = -5.5; x <= 5.5; x += 1) {
+    for (let z = -5.5; z <= 5.5; z += 1) {
+      const k = `${x},${z}`;
+      if (!ON_PATH.has(k) && !BUILDABLE.has(k)) BACKFIELD.push([x, z]);
+    }
+  }
 
   const character = new CharacterController3D(world.world, RAPIER, {
     position: SPAWN, halfHeight: HERO_HALF_HEIGHT, radius: HERO_RADIUS,
@@ -380,17 +501,50 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   // Prototypes, cloned per placement. Loading inside the build handler would
   // put a download in the middle of a button press.
   const protos = new Map<string, THREE.Object3D>();
+  /** The boss's clips. Kept because a rigged model needs a mixer per instance,
+   *  and a mixer needs the clips — `loadModelAsset` hands them over and every
+   *  other model in this game throws them away. */
+  let bossClips: THREE.AnimationClip[] = [];
+  /** Semantic name -> the clip actually in the file. `attack` is
+   *  `attack-melee-right` in Kenney's rig; `walk` and `die` happen to match,
+   *  which is exactly the kind of coincidence that hides a missing mapping. */
+  const bossAnim: Record<string, string> =
+    (manifest.models ?? []).find((m) => m.id === 'boss-orc')?.animations ?? {};
   for (const id of [...TOWERS.map((t) => t.model), ...TOWERS.map((t) => t.ammo),
-                    ...WAVES.map((w) => w.model), 'td-bullet', 'td-coin']) {
+                    ...WAVES.map((w) => w.model), ...WAVES.map((w) => w.ammo ?? 'td-bullet'),
+                    'td-bullet', 'td-coin', 'hub-crate', 'hub-barrel']) {
     if (protos.has(id)) continue;
-    const { object } = await loadModelAsset(manifest, id, { assetBase: '' });
+    const { object, clips } = await loadModelAsset(manifest, id, { assetBase: '' });
     object.traverse((o) => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).castShadow = true; } });
     protos.set(id, object);
+    if (id === 'boss-orc') bossClips = clips;
   }
   const spawnFrom = (id: string): THREE.Object3D => {
-    const o = protos.get(id)!.clone(true);
+    // A plain clone of a SKINNED mesh shares its skeleton: two of them animate
+    // as one, and the second to spawn snaps into the first one's pose. Only the
+    // boss is skinned, and there is only ever one of it, but the rule belongs
+    // next to the clone rather than in someone's memory.
+    const proto = protos.get(id)!;
+    const o = proto.type === 'Group' && bossClips.length && id === 'boss-orc'
+      ? (SkeletonUtils.clone(proto) as THREE.Object3D)
+      : proto.clone(true);
     world.scene.add(o);
     return o;
+  };
+
+  /** Cross-fade a boss clip in. `loop` false for the ones that end — a death
+   *  animation on repeat is a thing standing up again. */
+  const playEnemyClip = (e: Enemy, name: string, loop = true): void => {
+    if (!e.actions || e.clip === name) return;
+    const next = e.actions.get(bossAnim[name] ?? name);
+    if (!next) return;
+    const prev = e.clip ? e.actions.get(e.clip) : null;
+    next.reset();
+    next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+    next.clampWhenFinished = !loop;
+    next.fadeIn(0.15).play();
+    prev?.fadeOut(0.15);
+    e.clip = name;
   };
 
   // --- render ---
@@ -520,15 +674,63 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   let won = false;
   let invincible = 1.5;
   let selected = 0;             // which tower kind the build button places
+  /** The fork alternates, so both gates stay under pressure all wave. */
+  let nextRoute = 0;
   let buildCell: [number, number] | null = null;
   /** The tower under the player's feet, if any — the thing `build` upgrades. */
   let standingOn: Tower | null = null;
 
+  interface Crate { obj: THREE.Object3D; t: number; hp: number; cell: [number, number]; }
+  const crates: Crate[] = [];
+  let crateTimer = CRATE_EVERY * 0.6;
+  /** Whether the hero is standing at an unopened crate — a HUD line, so it is
+   *  kept as state rather than recomputed inside the render. */
+  let atCrate = false;
+  const _box = new THREE.Box3();
+  const _mat = new THREE.Matrix4();
+  /** How tall a model is in ITS OWN units, from the geometry.
+   *
+   *  Not `Box3.setFromObject`: on a skinned mesh that reports 1.64 where the
+   *  thing on screen is 0.78, because it accounts for where the bones could
+   *  put the vertices rather than where they are. A health bar placed from
+   *  that number floats a metre over the boss's head. */
+  const localTop = (root: THREE.Object3D): number => {
+    root.updateWorldMatrix(true, true);
+    const inv = _mat.copy(root.matrixWorld).invert();
+    const rel = new THREE.Matrix4();
+    let top = 0;
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !m.geometry) return;
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      _box.copy(m.geometry.boundingBox!);
+      // A SKINNED mesh's vertices do not go through its node transform at all —
+      // they go through the bind matrix and the bones. Applying the node
+      // transform anyway scaled the boss's height to 0.37 of what is drawn, and
+      // hung its health bar around its waist.
+      if (!(m as unknown as THREE.SkinnedMesh).isSkinnedMesh) {
+        _box.applyMatrix4(rel.multiplyMatrices(inv, m.matrixWorld));
+      }
+      top = Math.max(top, _box.max.y);
+    });
+    return top;
+  };
   const enemies: Enemy[] = [];
+  /** Things playing their death animation. Off the enemy list — it is dead, and
+   *  everything that iterates enemies would otherwise have to say so. */
+  const corpses: { obj: THREE.Object3D; t: number; mixer: THREE.AnimationMixer | null }[] = [];
   const towers: Tower[] = [];
   const shots: Shot[] = [];
   const bullets: Bullet[] = [];
+  // Everything that can flash has to be LISTED here, because `updateTints` only
+  // restores what it is given. Flashing something that is not on this list
+  // leaves it that colour for the rest of the run — the gates went red on the
+  // first leak and stayed red, which reads as damage you cannot repair.
   const tinted: THREE.Object3D[] = [hero];
+  for (const id of ['gate_w', 'gate_e']) {
+    const g = world.entities.get(id);
+    if (g) tinted.push(g);
+  }
 
   // --- HUD ---
   const line1 = document.createElement('div');
@@ -560,7 +762,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     quality = (quality + 1) % QUALITY.length;
     applyQuality();
     labelQuality();
-    void umicat.saves.set(SAVE_KEY, { best: bestWave, quality });
+    void patchSave(umicat, { quality });
   };
   labelQuality();
 
@@ -624,7 +826,10 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     for (const e of enemies) {
       if (!e.alive || !e.bar || !e.barFill) continue;
       const frac = Math.max(0, e.hp / e.maxHp);
-      if (frac >= 1) { e.bar.visible = false; continue; }
+      // Full bars everywhere are noise and the interesting information is which
+      // things are nearly dead — except for the boss, whose bar IS the fight's
+      // progress bar and has to be there from the first hit to the last.
+      if (frac >= 1 && !e.boss) { e.bar.visible = false; continue; }
       e.bar.visible = true;
       e.barFill.scale.x = frac;
       (e.barFill.material as THREE.MeshBasicMaterial).color.setHex(
@@ -797,6 +1002,51 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     });
   };
 
+  /** Drop a crate somewhere in the back field that is free right now. */
+  const dropCrate = (): void => {
+    const taken = new Set(crates.map((c) => `${c.cell[0]},${c.cell[1]}`));
+    const free = BACKFIELD.filter((c) => !taken.has(`${c[0]},${c[1]}`));
+    if (!free.length) return;
+    const cell = free[Math.floor(Math.random() * free.length)];
+    // Barrels and crates both, so the field does not look like a warehouse.
+    const obj = spawnFrom(Math.random() < 0.5 ? 'hub-crate' : 'hub-barrel');
+    obj.position.set(cell[0], 0, cell[1]);
+    obj.rotation.y = Math.random() * Math.PI * 2;
+    crates.push({ obj, t: 0, hp: 2, cell });
+    tinted.push(obj);
+  };
+
+  /** Anything the hero swings at, shoots or blasts also breaks crates. Called
+   *  from all three weapons rather than folded into `damage`, because a crate
+   *  is not an enemy: towers ignore it, it does not walk, and giving it an
+   *  Enemy record would mean every loop over enemies having to say so. */
+  const hitCrates = (x: number, z: number, radius: number, amount: number): boolean => {
+    let struck = false;
+    for (const c of crates) {
+      if (c.hp <= 0) continue;
+      if (Math.hypot(c.obj.position.x - x, c.obj.position.z - z) > radius + 0.35) continue;
+      struck = true;
+      c.hp -= amount;
+      flashTint(c.obj, { color: 0xffe08a, ms: 140 });
+      if (c.hp > 0) { audio.play('hit-enemy'); continue; }
+      // What was in it. A heart only when one is missing: a crate that pays
+      // nothing is a worse crate than one that pays gold.
+      const wantHeart = heroHp < HERO_MAX_HP && Math.random() < CRATE_HEART_CHANCE;
+      if (wantHeart) {
+        heroHp += 1;
+        audio.play('coin');
+        flashBanner('+1 ❤️');
+        renderHud();
+      } else {
+        const amount = CRATE_GOLD[0] + Math.floor(Math.random() * (CRATE_GOLD[1] - CRATE_GOLD[0] + 1));
+        flyCoin(c.obj.position, amount);
+      }
+      audio.play('enemy-die');
+      c.obj.visible = false;
+    }
+    return struck;
+  };
+
   const _coinTarget = new THREE.Vector3();
   const counterInWorld = (out: THREE.Vector3): THREE.Vector3 => {
     const r = goldEl.getBoundingClientRect();
@@ -944,6 +1194,10 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       line3.textContent = t.level >= MAX_LEVEL
         ? `${t.kind.label} Lv${t.level} — fully upgraded`
         : `🔨 upgrade ${t.kind.label} to Lv${t.level + 1} · ${upgradeCost(t)}g`;
+    } else if (atCrate) {
+      // Nothing about a wooden box says "hit me". Without this the crates are
+      // scenery that occasionally disappears.
+      line3.textContent = '⚔ break it open · gold or a heart';
     } else {
       const kind = TOWERS[selected];
       line3.textContent = buildCell
@@ -955,6 +1209,12 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   };
 
   const endRun = (didWin: boolean): void => {
+    // Once. A second call re-opens the exit, which means removing a rigid body
+    // that is already gone — and Rapier answers that with an unrecoverable
+    // `unreachable` trap out of the wasm, not an exception anyone can catch.
+    // Two things can plausibly end the same run in the same breath: the last
+    // life going and the hero falling.
+    if (!running) return;
     running = false; won = didWin;
     // Stop taking input and take the on-screen controls away. Both halves
     // matter: the thumbstick would otherwise keep walking the character behind
@@ -969,7 +1229,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     const reached = Math.min(waveIndex + 1, WAVES.length);
     if (reached > bestWave) {
       bestWave = reached;
-      void umicat.saves.set(SAVE_KEY, { best: bestWave, quality });
+      void patchSave(umicat, { quality });
     }
     // The shared board. A guest run is not recorded — writing needs a signed-in
     // player — and that is handled inside rather than being a caller's problem.
@@ -1001,14 +1261,15 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   };
 
   // --- the path, as a position lookup -------------------------------------
-  const posAt = (t: number, out: THREE.Vector3): THREE.Vector3 => {
+  const posAt = (route: number, t: number, y: number, out: THREE.Vector3): THREE.Vector3 => {
+    const path = ROUTES[route];
     const i = Math.floor(t);
-    if (i >= PATH.length - 1) {
-      const last = PATH[PATH.length - 1];
-      return out.set(last[0], ENEMY_FLY_HEIGHT, last[1]);
+    if (i >= path.length - 1) {
+      const last = path[path.length - 1];
+      return out.set(last[0], y, last[1]);
     }
-    const a = PATH[i], b = PATH[i + 1], f = t - i;
-    return out.set(a[0] + (b[0] - a[0]) * f, ENEMY_FLY_HEIGHT, a[1] + (b[1] - a[1]) * f);
+    const a = path[i], b = path[i + 1], f = t - i;
+    return out.set(a[0] + (b[0] - a[0]) * f, y, a[1] + (b[1] - a[1]) * f);
   };
 
   // --- building ------------------------------------------------------------
@@ -1099,6 +1360,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
         struck += 1;
         damage(e, STAFF_DAMAGE);
       }
+      hitCrates(at.x, at.z, STAFF_RADIUS, 2);
       if (struck) audio.play('enemy-die');
       return;
     }
@@ -1139,6 +1401,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     }
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
+    if (hitCrates(hero.position.x, hero.position.z, HERO_ATTACK_RANGE, 1)) connected = true;
     if (connected) audio.play('sword-hit');
   };
 
@@ -1148,14 +1411,25 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     if (e.hp > 0) { audio.play('hit-enemy'); return; }
     audio.play('enemy-die');
     e.alive = false;
+    if (e.boss) {
+      // It does not blink out. A thousand-hit-point fight ending on a frame
+      // where the model simply stops existing is the anticlimax of the run, so
+      // it falls over, and the payout arrives as a handful of coins rather than
+      // one.
+      flashBanner('THE WARLORD FALLS');
+      playEnemyClip(e, 'die', false);
+      corpses.push({ obj: e.obj, t: 0, mixer: e.mixer ?? null });
+      for (let i = 0; i < 6; i++) flyCoin(e.obj.position, Math.round(e.bounty / 6));
+      return;
+    }
     e.obj.visible = false;
     flyCoin(e.obj.position, e.bounty);
   };
 
-  const hurtHero = (): void => {
+  const hurtHero = (amount = 1): void => {
     if (invincible > 0 || !running) return;
     invincible = HERO_INVINCIBLE_SECONDS;
-    heroHp -= 1;
+    heroHp -= amount;
     audio.play('hero-hurt');
     flashScreen();
     flashTint(hero, { color: 0xff2a1a, ms: 220 });
@@ -1315,7 +1589,12 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       // otherwise standing on your own tower looks like standing on grass.
       marker.visible = canBuild || !!here;
       if (marker.visible) marker.position.set(cell[0], 0.03, cell[1]);
-      if (before !== `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`) renderHud();
+      const nearCrate = crates.some((c) =>
+        c.hp > 0 && Math.hypot(c.obj.position.x - hero.position.x, c.obj.position.z - hero.position.z) < 1.0);
+      const changed = before !== `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`
+        || nearCrate !== atCrate;
+      atCrate = nearCrate;
+      if (changed) renderHud();
 
       // --- waves ---
       if (toSpawn > 0) {
@@ -1326,16 +1605,45 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
           const w = WAVES[waveIndex];
           const obj = spawnFrom(w.model);
           obj.scale.setScalar(w.scale);
+          // Measured before anything is hung off it — a bar inside the box it
+          // is being placed from is a number that chases itself.
+          const top = localTop(obj);
           const { group: bar, fill: barFill } = makeHealthBar();
           obj.add(bar);
-          bar.position.y = 0.62 / w.scale;   // the bar is a child, so it inherits the scale
-          bar.scale.setScalar(1 / w.scale);
+          // The bar is a CHILD, so it inherits the scale — a 2.1x boss would
+          // wear a 2.1x health bar, and the tiny scouts an unreadable one.
+          // `top` is already in the model's own units; only the MARGIN needs
+          // converting. Dividing the whole thing by the scale is how the boss
+          // ended up wearing its bar at hip height.
+          bar.position.y = top + 0.24 / w.scale;
+          // Same world size for everything, so a bar means the same thing
+          // wherever it is — except the boss's, which is the run's progress
+          // bar and gets to be twice the size of a scout's.
+          bar.scale.setScalar((w.boss ? 1.9 : 1) / w.scale);
           const e: Enemy = {
             obj, hp: w.hp, maxHp: w.hp, speed: w.speed, bounty: w.bounty,
             armed: w.armed, bar, barFill,
-            t: 0, alive: true, shootCooldown: 1, windup: 0,
+            // Alternate, rather than choose at random. Both lanes stay live all
+            // wave, which is the point of the fork; randomness would sometimes
+            // send fifteen of sixteen down one side and read as a bug.
+            t: 0, route: nextRoute, alive: true, shootCooldown: 1, windup: 0,
+            ground: w.ground ?? false, facesTravel: w.facesTravel ?? false,
+            ammo: w.ammo ?? 'td-bullet', damage: w.damage ?? 1, boss: w.boss ?? false,
           };
-          posAt(0, obj.position);
+          nextRoute = (nextRoute + 1) % ROUTES.length;
+          if (w.model === 'boss-orc' && bossClips.length) {
+            // A rig needs a mixer or it renders in its bind pose and slides —
+            // silently, looking exactly like a model that has no animation.
+            e.mixer = new THREE.AnimationMixer(obj);
+            e.actions = new Map(bossClips.map((c) => [c.name, e.mixer!.clipAction(c)]));
+            playEnemyClip(e, 'walk');
+          }
+          if (w.boss) {
+            flashBanner(w.label ?? 'BOSS');
+            audio.play('wave');
+            if (bar) bar.visible = true;   // always up: it is the run's clock
+          }
+          posAt(e.route, 0, e.ground ? 0 : ENEMY_FLY_HEIGHT, obj.position);
           enemies.push(e);
           tinted.push(obj);
         }
@@ -1346,7 +1654,19 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
           // wave one forever: every mechanic worked, the HUD read "Wave 1/4"
           // the whole time, and the game could not be won or lost to anything
           // but the first five critters.
-          if (waveLaunched) { waveIndex += 1; waveLaunched = false; }
+          if (waveLaunched) {
+            waveIndex += 1;
+            waveLaunched = false;
+            // Surviving a wave gives a heart back. Six hearts and no way to
+            // heal was survivable over eight waves and a slow death over
+            // twelve: with no recovery a long run is lost to accumulated
+            // carelessness rather than to any particular wave, and the lull
+            // between waves is the natural place to hand it back.
+            if (heroHp < HERO_MAX_HP && waveIndex < WAVES.length) {
+              heroHp += 1;
+              flashBanner('Wave cleared · +1 ❤️');
+            }
+          }
           if (waveIndex >= WAVES.length) { endRun(true); }
           else {
             toSpawn = WAVES[waveIndex].count;
@@ -1360,22 +1680,41 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       }
 
       // --- enemies walk the path ---
+      // How many are already committed to a shot. Counted before the loop so
+      // the cap is about the board, not about who happens to be early in the
+      // list.
+      let shooters = 0;
+      for (const e of enemies) if (e.alive && e.windup > 0 && !e.boss) shooters += 1;
       for (const e of enemies) {
         if (!e.alive) continue;
         e.t += (e.speed * dt);
-        if (e.t >= PATH.length - 1) {
-          // It got through. That is what the towers were for.
+        e.mixer?.update(dt);
+        if (e.t >= ROUTES[e.route].length - 1) {
+          // It reached the gate. That is what the towers were for.
           e.alive = false;
           e.obj.visible = false;
           lives -= 1;
           audio.play('leak');
           flashScreen();
+          // WHICH gate, not just "a life gone". With one lane the screen flash
+          // told you everything; with two it tells you half of it, and the half
+          // it leaves out is the one you would act on.
+          const gate = world.entities.get(e.route === 0 ? 'gate_w' : 'gate_e');
+          if (gate) flashTint(gate, { color: 0xff2a1a, ms: 420 });
           renderHud();
           if (lives <= 0) { endRun(false); break; }
           continue;
         }
-        posAt(e.t, e.obj.position);
-        e.obj.rotation.y += dt * 1.6;   // UFOs spin; it reads as "alive"
+        const prevX = e.obj.position.x, prevZ = e.obj.position.z;
+        posAt(e.route, e.t, e.ground ? 0 : ENEMY_FLY_HEIGHT, e.obj.position);
+        if (e.facesTravel) {
+          // Face where it is going. A walk cycle playing sideways is the kind of
+          // wrong that reads as the model being broken rather than the code.
+          const dx = e.obj.position.x - prevX, dz = e.obj.position.z - prevZ;
+          if (dx * dx + dz * dz > 1e-8) e.obj.rotation.y = Math.atan2(dx, dz);
+        } else {
+          e.obj.rotation.y += dt * 1.6;   // UFOs spin; it reads as "alive"
+        }
 
         // Shooting the hero. Same shape as the tower's: a wind-up you can see
         // and walk out of, rather than damage for standing nearby.
@@ -1392,22 +1731,32 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
             );
             if (v.lengthSq() < 1e-6) v.set(0, 0, 1);
             v.normalize();
-            const bullet = spawnFrom('td-bullet');
+            const bullet = spawnFrom(e.ammo);
             // Out in front, not from inside the hull. Spawned at the centre it
             // could already be past the player, and at close range it crossed
             // the gap faster than a frame — invisible damage for being nearby,
             // which is the thing this was supposed to replace.
             bullet.position.copy(e.obj.position).addScaledVector(v, BULLET_MUZZLE);
             bullet.lookAt(bullet.position.clone().add(v));
-            bullets.push({ obj: bullet, vel: v.multiplyScalar(BULLET_SPEED), life: BULLET_LIFE });
-            audio.play('enemy-shot');
+            if (e.boss) bullet.scale.setScalar(1.6);
+            bullets.push({
+              obj: bullet, vel: v.multiplyScalar(e.boss ? BULLET_SPEED * 0.85 : BULLET_SPEED),
+              life: BULLET_LIFE, damage: e.damage,
+            });
+            audio.play(e.boss ? 'cannon-shot' : 'enemy-shot');
+            if (e.mixer) playEnemyClip(e, 'walk');
           }
         } else if (e.shootCooldown > 0) {
           e.shootCooldown -= dt;
-        } else if (e.armed && dHero < ENEMY_SHOOT_RANGE) {
-          e.windup = ENEMY_WINDUP_SECONDS;
-          e.shootCooldown = ENEMY_SHOOT_COOLDOWN;
-          flashTint(e.obj, { color: 0xffd050, ms: ENEMY_WINDUP_SECONDS * 1000 });
+        } else if (e.armed && dHero < ENEMY_SHOOT_RANGE && (e.boss || shooters < MAX_SHOOTERS)) {
+          if (!e.boss) shooters += 1;
+          e.windup = e.boss ? BOSS_WINDUP_SECONDS : ENEMY_WINDUP_SECONDS;
+          e.shootCooldown = e.boss ? BOSS_SHOOT_COOLDOWN : ENEMY_SHOOT_COOLDOWN;
+          flashTint(e.obj, { color: 0xffd050, ms: e.windup * 1000 });
+          // The boss's tell is its own arm going back. Longer than the saucers'
+          // and visible from across the board, because two hearts is most of
+          // what the hero has.
+          if (e.mixer) playEnemyClip(e, 'attack');
         }
       }
 
@@ -1438,6 +1787,44 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
         }
       }
 
+      // --- supply crates ---
+      crateTimer -= dt;
+      if (crateTimer <= 0) {
+        crateTimer = CRATE_EVERY;
+        if (crates.length < CRATE_MAX) dropCrate();
+      }
+      for (let i = crates.length - 1; i >= 0; i--) {
+        const c = crates[i];
+        c.t += dt;
+        // A broken one is gone on the next frame; an untouched one keeps for a
+        // while and then goes, so the field does not silently fill up with
+        // crates nobody wanted.
+        if (c.hp <= 0 || c.t > CRATE_LIFE) {
+          if (c.hp > 0) c.obj.visible = false;
+          world.scene.remove(c.obj);
+          const ti = tinted.indexOf(c.obj);
+          if (ti >= 0) tinted.splice(ti, 1);
+          crates.splice(i, 1);
+          continue;
+        }
+        // A slow bob, so it reads as something to go and get rather than
+        // scenery someone left on the grass.
+        c.obj.position.y = Math.sin(c.t * 2.2) * 0.05 + 0.05;
+        c.obj.rotation.y += dt * 0.6;
+      }
+
+      // --- things finishing their death animation ---
+      for (let i = corpses.length - 1; i >= 0; i--) {
+        const c = corpses[i];
+        c.t += dt;
+        c.mixer?.update(dt);
+        if (c.t > CORPSE_SECONDS) {
+          // Sink it rather than snapping it out of existence.
+          c.obj.position.y -= dt * 0.9;
+          if (c.t > CORPSE_SECONDS + 1.2) { world.scene.remove(c.obj); corpses.splice(i, 1); }
+        }
+      }
+
       // --- enemy bullets fly ---
       for (let i = bullets.length - 1; i >= 0; i--) {
         const bu = bullets[i];
@@ -1450,7 +1837,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
         const hit = segmentHitsSphere(prevPos, bu.obj.position,
           heroHit.set(hero.position.x, hero.position.y + 0.3, hero.position.z), BULLET_HIT_RADIUS);
         if (hit || bu.life <= 0 || Math.abs(bu.obj.position.x) > 7 || Math.abs(bu.obj.position.z) > 7) {
-          if (hit) hurtHero();
+          if (hit) hurtHero(bu.damage);
           world.scene.remove(bu.obj);
           bullets.splice(i, 1);
         }
@@ -1469,7 +1856,8 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
           hit = e; break;
         }
         if (hit) damage(hit, ARROW_DAMAGE);
-        if (hit || a.life <= 0 || Math.abs(a.obj.position.x) > 7 || Math.abs(a.obj.position.z) > 7) {
+        const brokeCrate = !hit && hitCrates(a.obj.position.x, a.obj.position.z, ARROW_HIT, 1);
+        if (hit || brokeCrate || a.life <= 0 || Math.abs(a.obj.position.x) > 7 || Math.abs(a.obj.position.z) > 7) {
           world.scene.remove(a.obj);
           arrows.splice(i, 1);
         }
@@ -1553,7 +1941,60 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       get coins() { return coins; },
       quality: () => ({ level: quality, name: QUALITY[quality].name,
                         pixelRatio: renderer.getPixelRatio() }),
-      state: () => ({ gold, lives, heroHp, waveIndex, running, won, buildCell, selected,
+      get corpses() { return corpses; },
+      get crates() { return crates; },
+      dropCrate: () => dropCrate(),
+      /** The attack button, and the end of the run. The real ones — a probe
+       *  that calls its own copy is testing its own copy. */
+      attack: () => heroAttack(),
+      hurt: (n: number) => { invincible = 0; heroHp = Math.max(1, heroHp - n); renderHud(); },
+      debugEndRun: (won = false) => endRun(won),
+      /** The waypoints of one branch, and whether a cell is free to build on.
+       *  For the balance probe, which has to find its own places to stand —
+       *  hard-coded coordinates would turn "is the game too easy" into "is this
+       *  one layout too easy". */
+      pathOf: (r: number) => ROUTES[r],
+      canBuildAt: (x: number, z: number) => {
+        const k = `${x},${z}`;
+        return BUILDABLE.has(k) && !occupied.has(k);
+      },
+      /** Pick a tower kind, the same way the number keys do. */
+      select: (i: number) => { selected = Math.max(0, Math.min(i, TOWERS.length - 1)); renderHud(); },
+      /** three itself, and the tint predicate. Probes need to measure the scene
+       *  (where is this, how big is it), and reaching for a Box3 should not mean
+       *  bundling a second copy of three into the test. */
+      THREE,
+      isTinted: (o: THREE.Object3D) => isTinted(o),
+      /** Damage something, for a probe that needs a kill without a ten-minute
+       *  siege. The real function, not a copy of it. */
+      damage: (e: Enemy, amount: number) => damage(e, amount),
+      /** Jump the wave counter. A SEAM, not a shortcut: it moves only the
+       *  *when*, and the enemies it produces come out of the same spawn code as
+       *  every other wave — otherwise a probe would be checking a boss that
+       *  only exists inside the probe. Reaching wave twelve honestly takes nine
+       *  minutes, which is nine minutes nobody spends before shipping. */
+      skipToWave: (n: number) => {
+        for (const e of enemies) { if (e.alive) { e.alive = false; e.obj.visible = false; } }
+        waveIndex = Math.max(0, Math.min(n, WAVES.length - 1));
+        toSpawn = WAVES[waveIndex].count;
+        spawnTimer = 0;
+        waveTimer = WAVE_GAP;
+        waveLaunched = true;
+        renderHud();
+      },
+    state: () => ({ gold, lives, heroHp, waveIndex, waveCount: WAVES.length, running, won,
+      buildCell, selected,
+      routes: ROUTES.length,
+      /** Where each branch ends. The tiles get merged into one mesh for the
+       *  sake of the phone's frame rate, so this is the only thing left that
+       *  can answer "where does the road go". */
+      routeEnds: ROUTES.map((r) => r[r.length - 1]),
+      lanes: ROUTES.map((_, r) => enemies.filter((e) => e.alive && e.route === r).length),
+      boss: (() => {
+        const b = enemies.find((e) => e.boss);
+        return b ? { alive: b.alive, hp: b.hp, maxHp: b.maxHp, clip: b.clip ?? null,
+                     y: +b.obj.position.y.toFixed(3) } : null;
+      })(),
                       standingOn: standingOn ? { kind: standingOn.kind.id, level: standingOn.level } : null,
                       towers: towers.map((t) => ({ kind: t.kind.id, level: t.level, cell: t.cell })) }),
       build: () => tryBuild(),
@@ -1584,6 +2025,11 @@ async function boot(): Promise<void> {
     const weapon = await runHub(shared);
     showLoading('Raising the defences');
     await startLevel(shared, weapon);
+    // Finishing a level — won or lost — is what unlocks the next weapon back
+    // in the hub. Counted HERE rather than in `endRun` because "finished" means
+    // walking back out through the door, not the moment the last life went.
+    const prev = (await umicat.saves.get<Progress>(SAVE_KEY))?.runs ?? 0;
+    await patchSave(umicat, { runs: prev + 1 });
   }
 }
 
