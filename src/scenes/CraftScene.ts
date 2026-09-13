@@ -27,7 +27,7 @@ export interface CraftModel {
   rev: number;
   recipes: CraftRow[];
   selected: number;
-  detail?: { name: string; desc: string; iconKey: string; iconFrame: string | number; outCount: number; materials: CraftMat[]; canCraft: boolean };
+  detail?: { name: string; desc: string; iconKey: string; iconFrame: string | number; outCount: number; materials: CraftMat[]; canCraft: boolean; roomOk: boolean };
   msg?: string;
 }
 
@@ -189,7 +189,12 @@ export class CraftScene extends Phaser.Scene {
     if (!cbTintOk) cbg.setTint(DIM_TINT);
     box.add(cbg);
     box.add(this.T(cbX, cbY, m.msg || t('craft_button'), ph * 0.036, m.msg ? BAD : '#5b4327'));
-    const craftB = { x: cx + cbX - cbW / 2, y: cy + cbY - cbH / 2, w: cbW, h: cbH };
+    // The one blocker with nothing on screen explaining it: every material reads green (coins
+    // included) and the button is simply dead. Say it under the button.
+    if (d && !d.roomOk) box.add(this.T(cbX, cbY + cbH * 0.85, t('craft_full'), ph * 0.026, BAD));
+    // A recipe you cannot make is not PRESSABLE, not pressable-then-scolded: with no bounds
+    // published the tap lands on the panel and is swallowed, like any other dead space.
+    const craftB = cbTintOk ? { x: cx + cbX - cbW / 2, y: cy + cbY - cbH / 2, w: cbW, h: cbH } : undefined;
 
     if (popIn) { box.setScale(0.85); this.tweens.add({ targets: box, scale: 1, duration: 160, ease: 'Back.easeOut' }); }
 

@@ -7887,6 +7887,11 @@ export class GameScene extends Phaser.Scene {
             ...(sel.price != null ? [{ iconKey: 'coins', iconFrame: 'coin-white-border-shadow-below', need: sel.price, have: this.money, ok: this.money >= sel.price }] : []),
           ],
           canCraft: this.canCraftRecipe(sel),
+          // A chest recipe also needs somewhere to PUT the output, and unlike short materials
+          // (spelled out by the red have/need rows, coins included) nothing on screen says the
+          // chest is full — so a dead button would have no stated reason. Workbench recipes bank
+          // into the tool tab / backpack-with-replace, so they are never blocked on room.
+          roomOk: sel.price != null || this.chestHasSpaceFor(sel.output),
         }
       : undefined;
     this.registry.set('craft', { visible: true, rev: ++this.craftRev, recipes, selected: this.craftSel, detail, msg: this.craftMsg });
@@ -8104,13 +8109,19 @@ export class GameScene extends Phaser.Scene {
   /** Route a tap while the crafting modal is open (modal — always consumes). */
   private handleCraftClick(x: number, y: number): boolean {
     if (!this.craftOpen) return false;
-    const b = this.registry.get('craftBounds') as { rows: Array<{ x: number; y: number; w: number; h: number; idx: number }>; craft: { x: number; y: number; w: number; h: number }; close: { x: number; y: number; w: number; h: number }; panel: { x: number; y: number; w: number; h: number } } | null;
+    const b = this.registry.get('craftBounds') as { rows: Array<{ x: number; y: number; w: number; h: number; idx: number }>; craft?: { x: number; y: number; w: number; h: number }; close: { x: number; y: number; w: number; h: number }; panel: { x: number; y: number; w: number; h: number } } | null;
     if (!b) return true;
     const hit = (r: { x: number; y: number; w: number; h: number }) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
     if (hit(b.close)) { this.closeCraft(); return true; }
     const row = b.rows.find((r) => hit(r));
-    if (row) { this.craftSel = row.idx; this.craftMsg = ''; this.publishCraft(); return true; }
-    if (hit(b.craft)) { this.doCraft(); return true; }
+    if (row) {
+      playSfx(this); // the standard UI blip — picking a recipe should feel like pressing something
+      this.craftSel = row.idx;
+      this.craftMsg = '';
+      this.publishCraft();
+      return true;
+    }
+    if (b.craft && hit(b.craft)) { this.doCraft(); return true; } // absent = the recipe cannot be made
     if (!hit(b.panel)) this.closeCraft(); // tap outside → close
     return true; // modal — swallow everything else
   }

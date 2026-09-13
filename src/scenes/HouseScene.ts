@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { loadWorldScene, getEntityRegistry } from '@umicat/phaser-sdk';
 import { finishTransition, coverAndHandoff } from '../transition';
 import { crossToBgm } from '../bgm';
-import { playSfx, SFX_DOOR, SFX_COOK, SFX_GETITEM } from '../sfx';
+import { playSfx, SFX_DOOR, SFX_COOK, SFX_GETITEM, SFX_COLLECT } from '../sfx';
 import { DESIGN_ZOOM } from '../config';
 import { isDebug } from '../debug';
 import { t } from '../i18n';
@@ -387,7 +387,7 @@ export class HouseScene extends Phaser.Scene {
       burst.destroy(); icon?.destroy();
       done();
     };
-    this.time.delayedCall(4000, settle);
+    this.time.delayedCall(6000, settle); // covers burst + bob + the longest flight, then some
 
     burst.play('newitem-appear');
     burst.once(AC, () => {
@@ -400,16 +400,41 @@ export class HouseScene extends Phaser.Scene {
         burst.once(AC, () => {
           burst.destroy();
           if (!icon) { settle(); return; }
-          // The dish lifts, shrinks and fades — collected. There is no player body in the room to
-          // fly it to, so it simply goes where a collected thing goes: away, into the bag.
+          // Same finish as a caught fish: a springy bob so the dish reads as landing, then it
+          // flies to the cursor and gets sucked in.
           icon.setVisible(true).setScale(1).setAlpha(1).setPosition(cx, cy);
           this.tweens.add({
-            targets: icon, y: cy - 14, scale: 0.3, alpha: 0,
-            duration: 320, ease: 'Sine.easeIn',
-            onComplete: settle,
+            targets: icon, y: cy - 12,
+            duration: 240, ease: 'Back.easeOut', yoyo: true,
+            onComplete: () => { if (icon.active) this.flyDishToCursor(icon, settle); else settle(); },
           });
         });
       });
+    });
+  }
+
+  /** Fly the dish to the cursor and let it get sucked in — the caught-fish finish, in the room.
+   *
+   *  Duration scales with distance (~0.9 px/ms, clamped) so a short hop is quick and a long one
+   *  never blinks, matching `GameScene.flyItemToCollector`; on touch the pointer holds the last
+   *  tap, which is where the player is looking anyway. */
+  private flyDishToCursor(icon: Phaser.GameObjects.Image, done: () => void): void {
+    const p = this.input.activePointer;
+    const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+    const dist = Phaser.Math.Distance.Between(icon.x, icon.y, wp.x, wp.y);
+    this.tweens.add({
+      targets: icon,
+      x: wp.x, y: wp.y,
+      scale: 0.6, // shrinks on the way but stays visible for the whole flight
+      duration: Phaser.Math.Clamp(dist / 0.9, 180, 700),
+      ease: 'Cubic.easeIn', // accelerates as it homes in
+      onComplete: () => {
+        playSfx(this, SFX_COLLECT);
+        this.tweens.add({
+          targets: icon, scale: 0, alpha: 0, duration: 130, ease: 'Quad.easeIn',
+          onComplete: done,
+        });
+      },
     });
   }
 
