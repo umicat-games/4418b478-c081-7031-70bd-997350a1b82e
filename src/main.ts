@@ -333,14 +333,24 @@ export async function startLevel(
   // SCENERY tiles are left out of the merge — they carry colliders and cast
   // shadows, and a tree folded into the ground mesh is a tree that stops
   // casting one.
-  const staticTiles: THREE.Object3D[] = [];
+  // Two groups, because they differ in exactly one thing: flat ground casts no
+  // shadow anyone can see, and a tree very much does.
+  //
+  // Scenery and props are merged too even though they carry COLLIDERS — the
+  // collider is a rigid body in the physics world keyed by entity id, and
+  // taking the mesh out of the scene does not touch it. So the trees still stop
+  // you; they just cost one draw between them.
+  const mergeGroups: { objs: THREE.Object3D[]; shadow: boolean }[] = [
+    { objs: [], shadow: false },
+    { objs: [], shadow: true },
+  ];
   for (const [id, obj] of world.entities) {
-    if (obj.name === 'scenery') continue;
-    if (id.startsWith('ground_') || id.startsWith('path_')) staticTiles.push(obj);
+    if (obj.name === 'scenery' || obj.name === 'prop') mergeGroups[1].objs.push(obj);
+    else if (id.startsWith('ground_') || id.startsWith('path_')) mergeGroups[0].objs.push(obj);
   }
-  {
+  for (const group of mergeGroups) {
     const byMaterial = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
-    for (const obj of staticTiles) {
+    for (const obj of group.objs) {
       obj.updateWorldMatrix(true, true);
       obj.traverse((o) => {
         const mesh = o as THREE.Mesh;
@@ -366,12 +376,12 @@ export async function startLevel(
     let merged = 0;
     for (const { mat, geos } of byMaterial.values()) {
       const combined = mergeGeometries(geos, false);
-      if (!combined) continue;   // mismatched attributes: leave those tiles be
+      if (!combined) continue;   // mismatched attributes: leave those alone
       const mesh = new THREE.Mesh(combined, mat);
-      // Named, because after this the individual tiles are gone and this is the
-      // only thing left that knows where the board is.
-      mesh.name = 'board';
-      mesh.castShadow = false;
+      // Named, because after this the individual pieces are gone and this is
+      // the only thing left that knows where the board is.
+      mesh.name = group.shadow ? 'board_props' : 'board';
+      mesh.castShadow = group.shadow;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       world.scene.add(mesh);
@@ -379,7 +389,10 @@ export async function startLevel(
       for (const g of geos) g.dispose();
     }
     if (merged > 0) {
-      for (const obj of staticTiles) { obj.removeFromParent(); world.entities.delete(obj.userData.entityId as string); }
+      for (const obj of group.objs) {
+        obj.removeFromParent();
+        world.entities.delete(obj.userData.entityId as string);
+      }
     }
   }
 
@@ -2157,6 +2170,7 @@ export async function startLevel(
        *  hard-coded coordinates would turn "is the game too easy" into "is this
        *  one layout too easy". */
       pathOf: (r: number) => ROUTES[r],
+      scenery: () => [...SCENERY].map((k) => k.split(',').map(Number)),
       canBuildAt: (x: number, z: number) => {
         const k = `${x},${z}`;
         return BUILDABLE.has(k) && !occupied.has(k);

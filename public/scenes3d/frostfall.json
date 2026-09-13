@@ -82,7 +82,7 @@
     {
       "id": "ground__5_5__5_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-crystal",
+      "modelAssetId": "td-snow-tile-bump",
       "transform": {
         "position": {
           "x": -5.5,
@@ -250,7 +250,7 @@
     {
       "id": "ground__5_5_2_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-crystal",
+      "modelAssetId": "td-snow-tile-hill",
       "transform": {
         "position": {
           "x": -5.5,
@@ -472,7 +472,7 @@
     {
       "id": "ground__3_5__5_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-crystal",
+      "modelAssetId": "td-snow-tile-bump",
       "transform": {
         "position": {
           "x": -3.5,
@@ -925,7 +925,7 @@
     {
       "id": "ground__0_5__5_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-rock",
+      "modelAssetId": "td-snow-tile-crystal",
       "transform": {
         "position": {
           "x": -0.5,
@@ -1131,7 +1131,7 @@
     {
       "id": "ground__0_5_5_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-tree",
+      "modelAssetId": "td-snow-tile-tree-double",
       "transform": {
         "position": {
           "x": -0.5,
@@ -1356,7 +1356,7 @@
     {
       "id": "ground_0_5_5_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-tree-double",
+      "modelAssetId": "td-snow-tile-tree-quad",
       "transform": {
         "position": {
           "x": 0.5,
@@ -2186,7 +2186,7 @@
     {
       "id": "ground_4_5_5_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-tree-double",
+      "modelAssetId": "td-snow-tile-tree-quad",
       "transform": {
         "position": {
           "x": 4.5,
@@ -2297,7 +2297,7 @@
     {
       "id": "ground_5_5__0_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-tree-double",
+      "modelAssetId": "td-snow-tile-tree-quad",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2351,7 +2351,7 @@
     {
       "id": "ground_5_5_1_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-crystal",
+      "modelAssetId": "td-snow-tile-bump",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2405,7 +2405,7 @@
     {
       "id": "ground_5_5_3_5",
       "name": "scenery",
-      "modelAssetId": "td-snow-tile-tree-quad",
+      "modelAssetId": "td-snow-tile-rock",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2490,6 +2490,109 @@
         ]
       },
       "castShadow": false
+    },
+    {
+      "id": "spawn_portal",
+      "name": "spawn_portal",
+      "modelAssetId": "td-spawn-square",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0.01,
+          "z": 4.5
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "prop__2_5__5_5",
+      "name": "prop",
+      "modelAssetId": "td-snow-wood-structure",
+      "transform": {
+        "position": {
+          "x": -2.4764361685840415,
+          "y": 0,
+          "z": -5.4426919594872745
+        },
+        "rotation": [
+          0,
+          0.9260491809923438,
+          0,
+          -0.3774028542332573
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5__5_5",
+      "name": "prop",
+      "modelAssetId": "td-snow-detail-crystal-large",
+      "transform": {
+        "position": {
+          "x": 5.623377895983867,
+          "y": 0,
+          "z": -5.436867061350495
+        },
+        "rotation": [
+          0,
+          0.9644856488512661,
+          0,
+          -0.2641352554278814
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5__1_5",
+      "name": "prop",
+      "modelAssetId": "td-snow-detail-rocks-large",
+      "transform": {
+        "position": {
+          "x": 5.532381062768399,
+          "y": 0,
+          "z": -1.5406750376103446
+        },
+        "rotation": [
+          0,
+          0.8452131486247608,
+          0,
+          -0.5344293530409964
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5_2_5",
+      "name": "prop",
+      "modelAssetId": "td-snow-wood-structure",
+      "transform": {
+        "position": {
+          "x": 5.540287969494239,
+          "y": 0,
+          "z": 2.403242789185606
+        },
+        "rotation": [
+          0,
+          0.964528571281058,
+          0,
+          0.26397847484694875
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5_5_5",
+      "name": "prop",
+      "modelAssetId": "td-snow-detail-rocks-large",
+      "transform": {
+        "position": {
+          "x": 5.558910368639045,
+          "y": 0,
+          "z": 5.3521792973391715
+        },
+        "rotation": [
+          0,
+          0.3512807994356107,
+          0,
+          -0.93627015329331
+        ]
+      }
     },
     {
       "id": "path_0",

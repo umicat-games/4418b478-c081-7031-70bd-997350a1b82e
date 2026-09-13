@@ -228,7 +228,7 @@
     {
       "id": "ground__5_5_1_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-rock",
+      "modelAssetId": "td-tile-hill",
       "transform": {
         "position": {
           "x": -5.5,
@@ -1894,7 +1894,7 @@
     {
       "id": "ground_5_5__5_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree-double",
+      "modelAssetId": "td-tile-tree-quad",
       "transform": {
         "position": {
           "x": 5.5,
@@ -1929,7 +1929,7 @@
     {
       "id": "ground_5_5__4_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree-quad",
+      "modelAssetId": "td-tile-rock",
       "transform": {
         "position": {
           "x": 5.5,
@@ -1983,7 +1983,7 @@
     {
       "id": "ground_5_5__2_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree-quad",
+      "modelAssetId": "td-tile-rock",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2110,7 +2110,7 @@
     {
       "id": "ground_5_5_2_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree-double",
+      "modelAssetId": "td-tile-tree-quad",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2179,6 +2179,55 @@
         ]
       },
       "castShadow": false
+    },
+    {
+      "id": "spawn_portal",
+      "name": "spawn_portal",
+      "modelAssetId": "td-spawn-round",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0.01,
+          "z": -4.5
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "prop_5_5_0_5",
+      "name": "prop",
+      "modelAssetId": "td-wood-structure",
+      "transform": {
+        "position": {
+          "x": 5.495719794766046,
+          "y": 0,
+          "z": 0.46220334474928676
+        },
+        "rotation": [
+          0,
+          0.4374849220417005,
+          0,
+          0.8992257463986267
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5_1_5",
+      "name": "prop",
+      "modelAssetId": "td-wood-structure",
+      "transform": {
+        "position": {
+          "x": 5.500451601995155,
+          "y": 0,
+          "z": 1.4736313775880263
+        },
+        "rotation": [
+          0,
+          0.9152407456074781,
+          0,
+          -0.40290740571484596
+        ]
+      }
     },
     {
       "id": "path_0",

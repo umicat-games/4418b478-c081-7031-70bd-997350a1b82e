@@ -82,7 +82,7 @@
     {
       "id": "ground__5_5__5_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree-quad",
+      "modelAssetId": "td-tile-rock",
       "transform": {
         "position": {
           "x": -5.5,
@@ -301,7 +301,7 @@
     {
       "id": "ground__5_5_4_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-crystal",
+      "modelAssetId": "td-tile-bump",
       "transform": {
         "position": {
           "x": -5.5,
@@ -564,7 +564,7 @@
     {
       "id": "ground__3_5__5_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-crystal",
+      "modelAssetId": "td-tile-bump",
       "transform": {
         "position": {
           "x": -3.5,
@@ -1410,7 +1410,7 @@
     {
       "id": "ground_0_5_5_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree",
+      "modelAssetId": "td-tile-tree-double",
       "transform": {
         "position": {
           "x": 0.5,
@@ -1844,7 +1844,7 @@
     {
       "id": "ground_2_5_5_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-crystal",
+      "modelAssetId": "td-tile-bump",
       "transform": {
         "position": {
           "x": 2.5,
@@ -1879,7 +1879,7 @@
     {
       "id": "ground_3_5__5_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-rock",
+      "modelAssetId": "td-tile-crystal",
       "transform": {
         "position": {
           "x": 3.5,
@@ -2351,7 +2351,7 @@
     {
       "id": "ground_5_5__3_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree-quad",
+      "modelAssetId": "td-tile-rock",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2550,6 +2550,199 @@
         ]
       },
       "castShadow": false
+    },
+    {
+      "id": "spawn_portal",
+      "name": "spawn_portal",
+      "modelAssetId": "td-spawn-round",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0.01,
+          "z": -5.5
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "prop__5_5__2_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-rocks-large",
+      "transform": {
+        "position": {
+          "x": -5.443961473461241,
+          "y": 0,
+          "z": -2.4007926795398817
+        },
+        "rotation": [
+          0,
+          0.7831029396155619,
+          0,
+          0.621892101546133
+        ]
+      }
+    },
+    {
+      "id": "prop__4_5__5_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-tree-large",
+      "transform": {
+        "position": {
+          "x": -4.568184494320303,
+          "y": 0,
+          "z": -5.424588110833429
+        },
+        "rotation": [
+          0,
+          0.8422758257065317,
+          0,
+          0.5390467822280179
+        ]
+      }
+    },
+    {
+      "id": "prop__4_5_5_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-rocks-large",
+      "transform": {
+        "position": {
+          "x": -4.404018752533011,
+          "y": 0,
+          "z": 5.55676038148813
+        },
+        "rotation": [
+          0,
+          0.05425043438086551,
+          0,
+          -0.9985273608517131
+        ]
+      }
+    },
+    {
+      "id": "prop__2_5_5_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-rocks-large",
+      "transform": {
+        "position": {
+          "x": -2.5115402502473443,
+          "y": 0,
+          "z": 5.535777430958115
+        },
+        "rotation": [
+          0,
+          0.5082665073334983,
+          0,
+          -0.8611998359980144
+        ]
+      }
+    },
+    {
+      "id": "prop__0_5_5_5",
+      "name": "prop",
+      "modelAssetId": "td-wood-structure",
+      "transform": {
+        "position": {
+          "x": -0.381057627662085,
+          "y": 0,
+          "z": 5.523136159824207
+        },
+        "rotation": [
+          0,
+          0.6108215701358876,
+          0,
+          -0.7917682801531828
+        ]
+      }
+    },
+    {
+      "id": "prop_2_5__5_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-rocks-large",
+      "transform": {
+        "position": {
+          "x": 2.373366577993147,
+          "y": 0,
+          "z": -5.425945565011352
+        },
+        "rotation": [
+          0,
+          0.953549264204294,
+          0,
+          -0.30123711712776946
+        ]
+      }
+    },
+    {
+      "id": "prop_4_5__5_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-tree-large",
+      "transform": {
+        "position": {
+          "x": 4.384991544415243,
+          "y": 0,
+          "z": -5.378711825842037
+        },
+        "rotation": [
+          0,
+          0.19674028794754803,
+          0,
+          0.9804556385162543
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5__2_5",
+      "name": "prop",
+      "modelAssetId": "td-wood-structure",
+      "transform": {
+        "position": {
+          "x": 5.424620137107558,
+          "y": 0,
+          "z": -2.3954606492538004
+        },
+        "rotation": [
+          0,
+          0.938657287251695,
+          0,
+          -0.34485141305972494
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5__1_5",
+      "name": "prop",
+      "modelAssetId": "td-wood-structure-high",
+      "transform": {
+        "position": {
+          "x": 5.607081259274855,
+          "y": 0,
+          "z": -1.5960851297015324
+        },
+        "rotation": [
+          0,
+          0.9520352802529608,
+          0,
+          0.30598827617029123
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5_5_5",
+      "name": "prop",
+      "modelAssetId": "td-wood-structure-high",
+      "transform": {
+        "position": {
+          "x": 5.3815704172709955,
+          "y": 0,
+          "z": 5.369628395931795
+        },
+        "rotation": [
+          0,
+          0.6954707528465026,
+          0,
+          -0.7185544042973495
+        ]
+      }
     },
     {
       "id": "path_0",

@@ -30,7 +30,14 @@ const THEMES = {
     // Scenery baked into a tile — a tree standing on its own patch of ground.
     // Cheaper than a tile plus a prop, and it lines up by construction.
     scenery: ['td-tile-tree', 'td-tile-tree-double', 'td-tile-tree-quad',
-              'td-tile-rock', 'td-tile-crystal'],
+              'td-tile-rock', 'td-tile-crystal', 'td-tile-hill', 'td-tile-bump'],
+    props: ['td-detail-tree-large', 'td-detail-rocks-large', 'td-detail-crystal-large',
+            'td-wood-structure', 'td-wood-structure-high', 'td-detail-dirt-large'],
+    portal: 'td-spawn-round',
+    river: {
+      straight: 'td-tile-river-straight',
+      bridge: 'td-tile-river-bridge',
+    },
   },
   snow: {
     sky: '#c8dcea', skirt: '#9fb3c4', wall: '#5b5a58', ground: '#c6d4e0',
@@ -38,7 +45,16 @@ const THEMES = {
     tile: 'td-snow-tile', straight: 'td-snow-tile-straight', dirt: 'td-snow-tile-dirt',
     spawn: 'td-snow-tile-spawn', end: 'td-snow-tile-end',
     scenery: ['td-snow-tile-tree', 'td-snow-tile-tree-double', 'td-snow-tile-tree-quad',
-              'td-snow-tile-rock', 'td-snow-tile-crystal'],
+              'td-snow-tile-rock', 'td-snow-tile-crystal', 'td-snow-tile-hill',
+              'td-snow-tile-bump'],
+    props: ['td-snow-detail-tree-large', 'td-snow-detail-rocks-large',
+            'td-snow-detail-crystal-large', 'td-snow-wood-structure',
+            'td-snow-wood-structure-high', 'td-snow-detail-dirt-large'],
+    portal: 'td-spawn-square',
+    river: {
+      straight: 'td-snow-tile-river-straight',
+      bridge: 'td-snow-tile-river-bridge',
+    },
   },
 };
 
@@ -264,6 +280,44 @@ function buildLevel(def) {
         };
       }
       add(e);
+    }
+  }
+
+  // --- where they come from ---
+  //
+  // The spawn tile is where every wave walks out of, and nothing marked it. A
+  // portal on it answers "which end is which" from across the board, which is
+  // the first question anyone asks on a board they have not played.
+  add({
+    id: 'spawn_portal', name: 'spawn_portal', modelAssetId: t.portal,
+    transform: { position: { x: routes[0][0][0], y: GROUND_Y + 0.01, z: routes[0][0][1] } },
+    castShadow: false,
+  });
+
+  // --- props, standing ON the plain ring tiles ---
+  //
+  // Scenery tiles carry their own tree; these are the loose things beside them.
+  // Ring only, same as the scenery, and never where a crate could land.
+  {
+    const ringPlain = [];
+    for (let gx = -HALF; gx <= HALF; gx += 1) {
+      for (let gz = -HALF; gz <= HALF; gz += 1) {
+        const k = key([gx, gz]);
+        if (onPath.has(k) || spotSet.has(k) || sceneryAt.has(k)) continue;
+        if (Math.abs(gx) !== HALF && Math.abs(gz) !== HALF) continue;
+        ringPlain.push([gx, gz]);
+      }
+    }
+    for (const [gx, gz] of ringPlain) {
+      if (rand() > 0.4) continue;
+      const model = t.props[Math.floor(rand() * t.props.length)];
+      add({
+        id: `prop_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'prop', modelAssetId: model,
+        transform: {
+          position: { x: gx + (rand() - 0.5) * 0.3, y: GROUND_Y, z: gz + (rand() - 0.5) * 0.3 },
+          rotation: yaw(rand() * Math.PI * 2),
+        },
+      });
     }
   }
 

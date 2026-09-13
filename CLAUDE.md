@@ -90,10 +90,19 @@ in and two ways out. Corners and the fork are full dirt tiles: a tile that is
 path on all four edges cannot be rotated wrong, and deleting a class of bug beat
 getting the kit's corner-tile lookup table right.
 
-The tiles are **merged into one mesh per material** at load (~180 draw calls for
-a picture that never changes). After that the individual tiles no longer exist
-and are gone from `world.entities` — anything that needs to know where the road
-is must ask the path data, not the scene.
+Everything static is **merged into one mesh per material** at load, in two
+groups: flat ground (which casts no shadow anyone can see) and scenery and props
+(which very much do). That is ~200 draw calls down to a handful for a picture
+that never changes; a desktop does not notice, a phone very much does.
+
+The trees keep their COLLIDERS through the merge — a collider is a rigid body in
+the physics world keyed by entity id, and taking the mesh out of the scene does
+not touch it. There is a probe check for that, because "works because" is a
+thing to verify rather than assert.
+
+After the merge the individual tiles no longer exist and are gone from
+`world.entities` — anything that needs to know where the road is must ask the
+path data, not the scene.
 
 ## A run
 
