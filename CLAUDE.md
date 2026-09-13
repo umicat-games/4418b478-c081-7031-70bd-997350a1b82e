@@ -18,8 +18,8 @@ workspace rebuild wipes out.
 
 ## The shape of a session
 
-Hub → pick a weapon → walk through **one of three doors** → that board → the
-exit door opens when the run ends → back to the hub. One `WebGLRenderer` and one `ThreeUmicat.init()`
+Hub → pick a weapon → walk through the door → **choose a board from the list** →
+that board → the exit door opens when the run ends → back to the hub. One `WebGLRenderer` and one `ThreeUmicat.init()`
 are made at boot and handed between the two; a second renderer on the same
 canvas cannot be created at all, and a second `init()` opens a second connection
 to the host. Each half tears its own scene down before handing over.
@@ -149,6 +149,23 @@ the run ended because the hero was shot walking between build spots. Walking to
 a spot IS the mechanic. Now you are carried back to the door, and that walk is
 the punishment.
 
+**Nothing pays itself in.** A kill leaves a coin — or, rarely, a heart — on the
+ground where it died, and the counter does not move until you take it. Walk
+within `MAGNET_RADIUS` (3.5 tiles) and it comes to you; leave it fourteen
+seconds and it flashes and is gone. That is the point of being a character on
+the board rather than a cursor over it: the money is somewhere, and you are
+somewhere else.
+
+`BOUNTY_SCALE` exists because of it. With the same wave tables as the
+fly-to-the-counter version, Meadow went from a comfortable win to losing on wave
+seven with thirteen upgrades instead of sixty-nine — you simply do not collect
+what dies on the far side of the board. One lever rather than forty edited
+numbers, so the wave tables stay readable as "how hard is this wave".
+
+Hearts are ~5% of drops, and only when one is missing. A kill that might pay
+health every time makes hit points stop being a resource, which is what the
+crates, the wave bonus and the knock-out rule are all built around.
+
 **Crates** drop on the back field — cells that are neither road nor a place to
 build — and pay gold or a heart when broken with any weapon. A heart only when
 one is missing: a crate that pays nothing is a worse crate than one that pays
@@ -192,6 +209,11 @@ faith — "+1 tower" changes what you build, "+8% damage" changes nothing you ca
 see. `bonusesFrom()` turns the saved levels into the four numbers a run reads,
 in one place, so a bonus cannot reach the HUD and miss the rule.
 
+The doorway is ONE door in the middle of the front wall, and walking through it
+opens the list of boards rather than starting one. A door per board read well
+and chose badly: it asked which board you wanted before you had a reason to
+care, and had nowhere to say how far you had got on each.
+
 **The hub is a 9×9 board with its walls at ±5.1** — not the 13×13 the levels
 use. The first town layout put the plots at ±4.2 and ran them through the wall.
 `fitToPlot` scales and centres each building on its foundation, because Kenney's
@@ -218,9 +240,9 @@ Where the boards stand, as measured:
 
 | board | result |
 | --- | --- |
-| Meadow | won, 7 of 10 lives left |
-| Frostfall | won, 11 of 12 |
-| Rivermeet | lost on wave 8–10 of 11 |
+| Meadow | won, 8 of 10 lives left |
+| Frostfall | won, 12 of 12 |
+| Rivermeet | won, 6 of 12 |
 | Crossroads | lost on wave 11 of 12 |
 
 **The run-to-run spread is wider than most of the changes worth making.** Two
@@ -255,6 +277,8 @@ What it has found, none of it visible by reading the wave table:
 - Boards whose road starts far from the door need a much longer opening: the
   hero arrives at the top of every board, Meadow's spawn tile is a few steps
   away and Frostfall's is in the opposite corner. Eight of ten lives, wave one.
+- The bot has to do everything a player does. It did not collect drops when
+  drops arrived, and reported a board with no income.
 - Check what the bot is allowed to do before believing it. It had `level < 3`
   hard-coded after the game grew a fourth tower level, so it sat on 1700 gold
   reporting that a board could not be held — by a defence it had declined to

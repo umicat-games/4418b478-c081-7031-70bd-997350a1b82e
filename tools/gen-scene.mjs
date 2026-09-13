@@ -636,33 +636,24 @@ function buildHub() {
     }
   }
 
-  // One doorway per level, along the front wall.
+  // ONE doorway, in the middle of the front wall.
   //
-  // A door you can see from where you spawn is the level select: no menu, no
-  // list, walk at the one you want. Locked ones are SHUT and stay shut, which
-  // is the same rule the gates on the boards follow — a shut door is shut.
-  // Spread across the front wall, whatever the number of boards. At a fixed
-  // 3.4 apart, a fourth board put the outer doors through the corners.
-  const DOOR_SPACING = Math.min(3.4, 9.0 / LEVELS.length);
-  const DOOR_X = LEVELS.map((_, i) => (i - (LEVELS.length - 1) / 2) * DOOR_SPACING);
-  const gaps = DOOR_X.map((x) => [x - 0.6, x + 0.6]).sort((a, b) => a[0] - b[0]);
-  const frontPieces = [];
-  {
-    let from = -HALF - 0.7;
-    for (const [a, b] of gaps) {
-      if (a > from) frontPieces.push([from, a]);
-      from = Math.max(from, b);
-    }
-    if (from < HALF + 0.7) frontPieces.push([from, HALF + 0.7]);
-  }
+  // It was a door per board for a while, which read well but made the choice
+  // before the player had any reason to care which board was which. Walking
+  // through this one opens a list of what has been played, and the choosing
+  // happens there.
+  const DOOR_X = 0;
   const walls = [
     ['hwall_s', 0, HALF + 0.6, 2 * HALF + 1.4, 0.4],
     ['hwall_w', -HALF - 0.6, 0, 0.4, 2 * HALF + 1.4],
     ['hwall_e', HALF + 0.6, 0, 0.4, 2 * HALF + 1.4],
+    // The gap is the door's width, not a doorway-sized hole: you used to be
+    // able to walk in anywhere along the front and the level would start,
+    // which taught that the door was decoration.
+    // The front wall runs -5.2..5.2 with a 1.4 gap in the middle for the door.
+    ['hwall_n1', -(0.7 + HALF + 0.7) / 2, -HALF - 0.6, HALF + 0.7 - 0.7, 0.4],
+    ['hwall_n2', (0.7 + HALF + 0.7) / 2, -HALF - 0.6, HALF + 0.7 - 0.7, 0.4],
   ];
-  frontPieces.forEach(([a, b], i) => {
-    walls.push([`hwall_n${i}`, (a + b) / 2, -HALF - 0.6, b - a, 0.4]);
-  });
   for (const [id, x, z, sx, sz] of walls) {
     ents.push({
       id, name: id,
@@ -671,38 +662,18 @@ function buildHub() {
       collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
     });
   }
-
-  // Two doors per slot, in the same place: the open one and the shut one. The
-  // game shows whichever matches your progress — swapping a model at runtime
-  // means loading it at runtime, and a door that pops in a second after the
-  // hub does reads as a glitch.
-  LEVELS.forEach((lv, i) => {
-    const x = DOOR_X[i];
-    ents.push({
-      id: `door_${lv.id}`, name: 'door', modelAssetId: 'hub-door-open',
-      transform: { position: { x, y: GROUND_Y, z: -HALF - 0.6 } },
-      visible: false,
-    });
-    ents.push({
-      id: `door_${lv.id}_shut`, name: 'door_shut', modelAssetId: 'hub-door',
-      transform: { position: { x, y: GROUND_Y, z: -HALF - 0.6 } },
-      visible: false,
-      collider: {
-        shape: { kind: 'box', halfExtents: { x: 0.5, y: 0.6, z: 0.2 } },
-        body: 'fixed', offset: { x: 0, y: 0.4, z: 0 },
-      },
-    });
-    ents.push({
-      id: `door_${lv.id}_frame`, name: 'door_frame',
-      primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
-      transform: { position: { x, y: 0.5, z: -HALF - 0.78 } },
-    });
-    // A signpost beside each, so a door is a PLACE with a name rather than one
-    // of three identical holes in a wall.
-    ents.push({
-      id: `door_${lv.id}_sign`, name: 'door_sign', modelAssetId: 'hub-sign',
-      transform: { position: { x: x + 0.95, y: GROUND_Y, z: -HALF + 0.15 } },
-    });
+  ents.push({
+    id: 'door', name: 'door', modelAssetId: 'hub-door-open',
+    transform: { position: { x: DOOR_X, y: GROUND_Y, z: -HALF - 0.6 } },
+  });
+  ents.push({
+    id: 'door_frame', name: 'door_frame',
+    primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
+    transform: { position: { x: DOOR_X, y: 0.5, z: -HALF - 0.78 } },
+  });
+  ents.push({
+    id: 'door_sign', name: 'door_sign', modelAssetId: 'hub-sign',
+    transform: { position: { x: DOOR_X + 1.15, y: GROUND_Y, z: -HALF + 0.15 } },
   });
 
   // --- the town ---

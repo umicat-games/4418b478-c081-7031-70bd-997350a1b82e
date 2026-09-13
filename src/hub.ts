@@ -29,16 +29,14 @@ import { hideLoading } from './loading';
  *  It was `z < -4.6` — anywhere along the front wall started the level, which
  *  taught that the door was decoration. A door you can miss by walking beside
  *  it is a door; a line across the room is a trigger. */
-/** The doorways, in the order `LEVELS` lists them — the same spacing the scene
- *  generator used. A door you can see from the spawn point IS the level select:
- *  no menu, no list, walk at the one you want. */
-const DOOR_Z = -5.1;
-const DOOR_HALF_WIDTH = 0.62;
-/** Spread across the front wall — the same rule `gen-scene.mjs` lays them by.
- *  At a fixed 3.4 apart, a fourth board put the outer doors through the
- *  corners. */
-const DOOR_SPACING = Math.min(3.4, 9.0 / LEVELS.length);
-const doorX = (i: number): number => (i - (LEVELS.length - 1) / 2) * DOOR_SPACING;
+/** The doorway. One of them, in the middle of the front wall.
+ *
+ *  It was a door per board for a while. That read well and chose badly: it
+ *  asked which board you wanted before you had any reason to care, and it had
+ *  no room to say how far you had got on each. Walking through now opens the
+ *  list, and the choosing happens there. */
+const DOOR_AT = { x: 0, z: -5.1 };
+const DOOR_HALF_WIDTH = 0.7;
 const SIGN_AT = { x: 0, z: 3.6 };
 const NEAR = 0.9;             // how close counts as "standing at" something
 const LEADERBOARD_KEY = 'leaderboard';
@@ -378,6 +376,49 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     input.setEnabled(true);
   };
 
+  /** The list of boards, opened by walking through the door.
+   *
+   *  Everything unlocked, with how far you got on each — a menu that only
+   *  offers the next board is a corridor, and the point of finishing one is
+   *  partly being able to go back to it. Resolves the hub with whichever is
+   *  chosen; closing it puts you back in front of the door.
+   */
+  const chooseLevel = (onPick: (i: number) => void): void => {
+    panelOpen = true;
+    input.setEnabled(false);
+    panel.style.display = 'block';
+    const rows = LEVELS.map((lv, i) => {
+      const open = levelOpen(i);
+      const best = progress.bests?.[lv.id] ?? 0;
+      const note = !open
+        ? `<span style="opacity:.55">🔒 clear ${LEVELS[i - 1].name}</span>`
+        : best
+          ? `<span style="opacity:.6">best wave ${best}/${lv.waves.length}</span>`
+          : '<span style="opacity:.6">not played</span>';
+      return `<button data-level="${i}" ${open ? '' : 'disabled'} style="
+          display:flex; gap:12px; align-items:baseline; justify-content:space-between;
+          width:100%; margin:6px 0; padding:10px 14px; border:0; border-radius:12px;
+          font:600 14px/1.5 system-ui; text-align:left; cursor:${open ? 'pointer' : 'default'};
+          background:${open ? '#fff' : 'rgba(255,255,255,.12)'}; color:${open ? '#222' : '#fff'}">
+          <span style="font-weight:800">${escapeHtml(lv.name)}</span>
+          <span style="flex:1;opacity:.7;font-weight:600">${escapeHtml(lv.blurb)}</span>
+          ${note}</button>`;
+    }).join('');
+    panel.innerHTML =
+      '<div style="font:700 17px/1.8 system-ui">Where to?</div>' + rows
+      + `<button data-back="1" style="margin-top:10px;padding:8px 18px;border:0;border-radius:999px;
+          font:700 14px system-ui;background:rgba(255,255,255,.18);color:#fff;cursor:pointer">Back</button>`;
+    for (const el of panel.querySelectorAll<HTMLButtonElement>('button')) {
+      el.onclick = () => {
+        if (el.dataset.back) { closePanel(); return; }
+        const i = Number(el.dataset.level);
+        if (!levelOpen(i)) return;
+        closePanel();
+        onPick(i);
+      };
+    }
+  };
+
   const openPanel = async (): Promise<void> => {
     panelOpen = true;
     input.setEnabled(false);
@@ -432,14 +473,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         if (near) atPlot = b;
       }
 
-      let nearDoor = -1;
-      for (let i = 0; i < LEVELS.length; i++) {
-        if (hero.position.z < DOOR_Z + 1.7
-            && Math.abs(hero.position.x - doorX(i)) < DOOR_SPACING / 2) {
-          nearDoor = i;
-          break;
-        }
-      }
+      const nearDoor = hero.position.z < DOOR_AT.z + 1.7
+        && Math.abs(hero.position.x - DOOR_AT.x) < 1.6;
       marker.visible = atSign && !panelOpen;
 
       // Which weapon you are standing at, if any.
@@ -470,11 +505,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         : atPlot ? plotLine(atPlot)
         : atPickup ? (atPickup.id === weapon ? `${atPickup.label} · equipped` : `⚔ take · ${atPickup.label}`)
         : atSign ? '⚔ leaderboard'
-        : nearDoor >= 0
-          ? (levelOpen(nearDoor)
-              ? `▶ ${LEVELS[nearDoor].name} · ${LEVELS[nearDoor].blurb}`
-              : `🔒 clear ${LEVELS[nearDoor - 1].name} first`)
-          : '';
+        : nearDoor ? '▶ choose a level'
+        : '';
 
       if (!panelOpen && input.consume('use')) {
         if (atPlot) {
@@ -500,33 +532,34 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         }
       }
 
-      let through = -1;
-      for (let i = 0; i < LEVELS.length; i++) {
-        if (!levelOpen(i)) continue;
-        if (hero.position.z < DOOR_Z && Math.abs(hero.position.x - doorX(i)) < DOOR_HALF_WIDTH) {
-          through = i;
-          break;
-        }
-      }
-      if (!done && through >= 0) {
-        done = true;
+      // Through the doorway opens the list. It does not start anything by
+      // itself — the last step of leaving is choosing where to go, and a door
+      // that commits you the moment you touch it is a door you cannot approach.
+      const inDoorway = hero.position.z < DOOR_AT.z
+        && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH;
+      if (!done && !panelOpen && inDoorway) {
         audio.play(SFX.door);
-        // Tear the hub down before handing the renderer over: its scene, its
-        // physics and its listeners would otherwise keep running behind the
-        // level, invisibly, for the rest of the session.
-        renderer.setAnimationLoop(null);
-        window.removeEventListener('resize', resize);
-        input.dispose();
-        panel.remove();
-        hudEl.textContent = '';
-        world.dispose();
-        // `dispose()` frees the GPU resources; it does not empty the graph.
-        // Clearing it as well is what makes "the hub is gone" true rather than
-        // merely invisible — and it is the difference a probe can see.
-        world.scene.clear();
-        delete (window as unknown as Record<string, unknown>).__hub;
-        resolve({ weapon, level: through, bonus: bonusesFrom(town) });
-        return;
+        chooseLevel((pick) => {
+          done = true;
+          // Tear the hub down before handing the renderer over: its scene, its
+          // physics and its listeners would otherwise keep running behind the
+          // level, invisibly, for the rest of the session.
+          renderer.setAnimationLoop(null);
+          window.removeEventListener('resize', resize);
+          input.dispose();
+          panel.remove();
+          hudEl.textContent = '';
+          world.dispose();
+          // `dispose()` frees the GPU resources; it does not empty the graph.
+          // Clearing it as well is what makes "the hub is gone" true rather
+          // than merely invisible — and it is the difference a probe can see.
+          world.scene.clear();
+          delete (window as unknown as Record<string, unknown>).__hub;
+          resolve({ weapon, level: pick, bonus: bonusesFrom(town) });
+        });
+        // Step back out of the doorway, so closing the list does not
+        // immediately reopen it.
+        character.teleport({ x: hero.position.x, y: 0.5, z: DOOR_AT.z + 0.9 });
       }
 
       world.update(dt);
@@ -550,8 +583,17 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                /** Which boards are open, and where their doors are — a probe
                 *  should walk to one rather than be told a coordinate. */
                levels: () => LEVELS.map((lv, i) => ({
-                 id: lv.id, name: lv.name, open: levelOpen(i), x: doorX(i), z: DOOR_Z,
-               })) },
+                 id: lv.id, name: lv.name, open: levelOpen(i),
+                 x: DOOR_AT.x, z: DOOR_AT.z,
+               })),
+               /** Open the list and pick a board, the way a tap does. A probe
+                *  that resolved the hub directly would not be testing the one
+                *  screen between the hub and a run. */
+               pick: (i: number) => {
+                 const btn = panel.querySelector<HTMLButtonElement>(`button[data-level="${i}"]`);
+                 btn?.click();
+               },
+               listOpen: () => panelOpen && !!panel.querySelector('button[data-level]') },
     });
   });
 }

@@ -144,6 +144,36 @@ const CRATE_HEART_CHANCE = 0.42;
  *  quiet moment and a rare crate with sixteen saucers on the board are two
  *  different offers. */
 const RARE_CRATE_CHANCE = 0.28;
+
+// --- drops -----------------------------------------------------------------
+/** What a kill leaves on the ground.
+ *
+ *  It used to fly straight to the counter and pay itself in. That is one fewer
+ *  thing to do, which in this game is the wrong direction: the whole point of
+ *  being a character on the board rather than a cursor over it is that money is
+ *  somewhere, and you are somewhere else. Now it lands where the thing died and
+ *  waits for you.
+ *
+ *  The magnet is what keeps that from being tedious. Three and a half tiles is
+ *  wide enough that fighting near the road collects itself and standing at the
+ *  far end of the board does not.
+ */
+const MAGNET_RADIUS = 3.5;
+const PICKUP_LIFE = 14;         // seconds on the ground before it is gone
+const PICKUP_BLINK = 3.5;       // it starts flashing this long before that
+/** Hearts are rare. A kill that might pay health every time makes the hero's
+ *  hit points stop being a resource. */
+const HEART_DROP_CHANCE = 0.055;
+/** Bounties are worth more than the wave table says, because you no longer get
+ *  all of them. A kill used to pay itself in; now it leaves a coin that is gone
+ *  in fourteen seconds, and a player fighting on one side of the board simply
+ *  does not collect what dies on the other. Measured: with the same numbers as
+ *  the fly-to-the-counter version, Meadow went from a comfortable win to losing
+ *  on wave seven with thirteen upgrades instead of sixty-nine.
+ *
+ *  One lever rather than forty edited numbers, so the wave tables stay readable
+ *  as "how hard is this wave" rather than "how hard is this wave, adjusted". */
+const BOUNTY_SCALE = 1.5;
 const BUFF_SECONDS = 20;
 interface BuffKind {
   id: string;
@@ -567,7 +597,12 @@ export async function startLevel(
   for (const id of [...TOWERS.map((t) => t.model), ...TOWERS.map((t) => t.ammo),
                     ...TOWERS.flatMap((t) => t.stack), 'td-tower-round-crystals',
                     ...WAVES.map((w) => w.model), ...WAVES.map((w) => w.ammo ?? 'td-bullet'),
-                    'td-bullet', 'td-coin', 'hub-crate', 'hub-barrel']) {
+                    // Everything `dropPickup`, `dropCrate` and the tower
+                    // levels can ask for. A model that is not here is not a
+                    // missing texture — it is `undefined.type` thrown out of
+                    // the clone, from whichever frame first needed it.
+                    'td-bullet', 'td-coin', 'td-crystal',
+                    'hub-crate', 'hub-barrel']) {
     if (protos.has(id)) continue;
     const { object, clips } = await loadModelAsset(manifest, id, { assetBase: '' });
     object.traverse((o) => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).castShadow = true; } });
@@ -1150,19 +1185,50 @@ export async function startLevel(
   let pointerNdc: THREE.Vector2 | null = null;
   const raycaster = new THREE.Raycaster();
 
-  interface Coin { obj: THREE.Object3D; vel: THREE.Vector3; t: number; amount: number; paid: boolean; }
-  const coins: Coin[] = [];
-  const COIN_POP = 0.55;        // seconds of arc before it heads for the corner
-  const COIN_FLY = 0.5;         // seconds to cross the screen
+  interface Pickup {
+    obj: THREE.Object3D;
+    kind: 'coin' | 'heart';
+    amount: number;
+    t: number;
+    taken: boolean;
+    vel: THREE.Vector3;
+  }
+  const pickups: Pickup[] = [];
+  const POP_SECONDS = 0.55;     // the arc out of whatever dropped it
 
-  const flyCoin = (from: THREE.Vector3, amount: number): void => {
-    const obj = spawnFrom('td-coin');
+  /** Drop something where a thing died. `amount` is the gold it is worth; a
+   *  heart ignores it. */
+  const dropPickup = (from: THREE.Vector3, amount: number, forceKind?: 'coin' | 'heart'): void => {
+    // A heart only when one is missing — the same rule the crates follow, for
+    // the same reason: a drop that does nothing is worse than a drop of gold.
+    const kind = forceKind
+      ?? (heroHp < heroMaxHp && Math.random() < HEART_DROP_CHANCE ? 'heart' : 'coin');
+    const obj = spawnFrom(kind === 'heart' ? 'td-crystal' : 'td-coin');
+    if (kind === 'heart') {
+      // The kit has no heart, and the crystal is purple. Its own copy of the
+      // material, red — cloning matters because models cut from one file SHARE
+      // materials, and recolouring this one would recolour every crystal on the
+      // board including the scenery.
+      obj.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const paint = (m: THREE.Material): THREE.Material => {
+          const c = (m as THREE.MeshStandardMaterial).clone() as THREE.MeshStandardMaterial;
+          c.color.setHex(0xff4f6e);
+          c.emissive?.setHex(0x51101d);
+          return c;
+        };
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map(paint) : paint(mesh.material);
+      });
+    }
     obj.position.copy(from);
-    obj.scale.setScalar(0.55);
-    coins.push({
-      obj, amount, t: 0, paid: false,
+    obj.position.y = Math.max(from.y, 0.2);
+    obj.scale.setScalar(kind === 'heart' ? 0.5 : 0.55);
+    pickups.push({
+      obj, kind, amount, t: 0, taken: false,
       // Up and slightly outward, so several from one kill do not stack.
-      vel: new THREE.Vector3((Math.random() - 0.5) * 0.9, 2.2, (Math.random() - 0.5) * 0.9),
+      vel: new THREE.Vector3((Math.random() - 0.5) * 1.1, 2.2, (Math.random() - 0.5) * 1.1),
     });
   };
 
@@ -1216,13 +1282,12 @@ export async function startLevel(
       // nothing is a worse crate than one that pays gold.
       const wantHeart = heroHp < heroMaxHp && Math.random() < CRATE_HEART_CHANCE;
       if (wantHeart) {
-        heroHp += 1;
-        audio.play('coin');
-        flashBanner('+1 ❤️');
-        renderHud();
+        // Dropped, not granted. Nothing in this game pays itself in any more —
+        // what a crate holds is on the ground next to it until you take it.
+        dropPickup(c.obj.position, 0, 'heart');
       } else {
         const amount = CRATE_GOLD[0] + Math.floor(Math.random() * (CRATE_GOLD[1] - CRATE_GOLD[0] + 1));
-        flyCoin(c.obj.position, amount);
+        dropPickup(c.obj.position, amount, 'coin');
       }
       audio.play('enemy-die');
       c.obj.visible = false;
@@ -1230,39 +1295,65 @@ export async function startLevel(
     return struck;
   };
 
-  const _coinTarget = new THREE.Vector3();
-  const counterInWorld = (out: THREE.Vector3): THREE.Vector3 => {
-    const r = goldEl.getBoundingClientRect();
-    const ndcX = ((r.left + r.width * 0.4) / window.innerWidth) * 2 - 1;
-    const ndcY = -((r.top + r.height * 0.5) / window.innerHeight) * 2 + 1;
-    // Just in front of the camera: far enough not to clip, near enough that
-    // the coin is still large when it arrives.
-    return out.set(ndcX, ndcY, 0.82).unproject(world.camera);
-  };
+  /** Pops, lands, waits, then comes to you if you come near enough.
+   *
+   *  Nothing is credited until it is TAKEN. That is the whole change: the money
+   *  is on the board with you rather than in the corner of the screen, so a
+   *  fight in the far lane is a fight you have to walk back through.
+   */
+  const updatePickups = (dt: number): void => {
+    for (let i = pickups.length - 1; i >= 0; i--) {
+      const q = pickups[i];
+      q.t += dt;
+      q.obj.rotation.y += dt * (q.kind === 'heart' ? 2.4 : 7);
 
-  const updateCoins = (dt: number): void => {
-    for (let i = coins.length - 1; i >= 0; i--) {
-      const c = coins[i];
-      c.t += dt;
-      c.obj.rotation.y += dt * 7;
-      if (c.t < COIN_POP) {
-        // The pop: a real little arc, under the scene's own gravity.
-        c.vel.y -= 6 * dt;
-        c.obj.position.addScaledVector(c.vel, dt);
+      const dx = hero.position.x - q.obj.position.x;
+      const dz = hero.position.z - q.obj.position.z;
+      const dist = Math.hypot(dx, dz);
+
+      if (q.t < POP_SECONDS) {
+        // The pop: a real little arc, under its own gravity.
+        q.vel.y -= 6 * dt;
+        q.obj.position.addScaledVector(q.vel, dt);
+        if (q.obj.position.y < 0.2) { q.obj.position.y = 0.2; q.vel.set(0, 0, 0); }
+      } else if (dist < MAGNET_RADIUS) {
+        // Pulled in, and faster the closer it gets — a constant speed reads as
+        // the coin walking towards you.
+        const pull = 3.2 + (1 - dist / MAGNET_RADIUS) * 9;
+        q.obj.position.x += (dx / (dist || 1)) * pull * dt;
+        q.obj.position.z += (dz / (dist || 1)) * pull * dt;
+        q.obj.position.y = 0.2 + Math.sin(q.t * 9) * 0.04;
+      } else {
+        q.obj.position.y = 0.2 + Math.sin(q.t * 2.6) * 0.06;
+      }
+
+      // Taken.
+      if (!q.taken && dist < 0.5 && q.t > 0.25) {
+        q.taken = true;
+        if (q.kind === 'heart') {
+          heroHp = Math.min(heroMaxHp, heroHp + 1);
+          audio.play('coin');
+          flashTint(hero, { color: 0xff5f7a, ms: 260 });
+        } else {
+          gold += q.amount;
+          audio.play('coin');
+          goldEl.style.transform = 'scale(1.22)';
+          setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
+        }
+        renderHud();
+        world.scene.remove(q.obj);
+        pickups.splice(i, 1);
         continue;
       }
-      const k = Math.min(1, (c.t - COIN_POP) / COIN_FLY);
-      counterInWorld(_coinTarget);
-      // Ease in: it hangs for a moment and then goes, which reads as being
-      // pulled rather than sliding.
-      c.obj.position.lerp(_coinTarget, 1 - Math.pow(1 - k, 3) * 0.85);
-      c.obj.scale.setScalar(0.55 * (1 - k * 0.45));
-      if (k >= 1) {
-        if (!c.paid) { gold += c.amount; audio.play('coin'); renderHud(); c.paid = true; }
-        goldEl.style.transform = 'scale(1.22)';
-        setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
-        world.scene.remove(c.obj);
-        coins.splice(i, 1);
+
+      // Gone, if nobody came. It flashes first — a drop that simply vanishes
+      // looks like a bug, and a board that slowly fills with coins nobody
+      // picked up is worse than either.
+      if (q.t > PICKUP_LIFE) {
+        world.scene.remove(q.obj);
+        pickups.splice(i, 1);
+      } else if (q.t > PICKUP_LIFE - PICKUP_BLINK) {
+        q.obj.visible = Math.floor(q.t * 8) % 2 === 0;
       }
     }
   };
@@ -1619,12 +1710,13 @@ export async function startLevel(
       flashBanner('THE WARLORD FALLS');
       playEnemyClip(e, 'die', false);
       corpses.push({ obj: e.obj, t: 0, mixer: e.mixer ?? null });
-      const share = Math.round(e.bounty * (buff?.kind.id === 'lucky' ? 1.6 : 1) / 6);
-      for (let i = 0; i < 6; i++) flyCoin(e.obj.position, share);
+      const share = Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1) / 6);
+      for (let i = 0; i < 6; i++) dropPickup(e.obj.position, share, 'coin');
       return;
     }
     e.obj.visible = false;
-    flyCoin(e.obj.position, Math.round(e.bounty * (buff?.kind.id === 'lucky' ? 1.6 : 1)));
+    dropPickup(e.obj.position,
+      Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1)));
   };
 
   const hurtHero = (amount = 1): void => {
@@ -2204,7 +2296,7 @@ export async function startLevel(
       return;
     }
 
-    updateCoins(dt);
+    updatePickups(dt);
     updateHealthBars();
     updateUpdrafts(dt);
     updateTints(tinted);
@@ -2224,7 +2316,14 @@ export async function startLevel(
       lock: () => (lockTarget ? { hp: lockTarget.hp, visible: lockRing?.visible ?? false } : null),
       setWeapon: (w: Weapon) => setWeapon(w),
       get updrafts() { return updrafts; },
-      get coins() { return coins; },
+      get pickups() { return pickups; },
+      /** Drop one on demand, for a probe that should not have to wait for a
+       *  tower to kill something at the right moment. The real drop. */
+      drop: (x: number, z: number, kind?: 'coin' | 'heart', amount = 7) =>
+        dropPickup(new THREE.Vector3(x, 0.3, z), amount, kind),
+      /** What a kill rolls, without a kill. Used to measure how rare a heart
+       *  is — counting real drops needs hundreds of kills. */
+      rollDrop: () => (heroHp < heroMaxHp && Math.random() < HEART_DROP_CHANCE ? 'heart' : 'coin'),
       quality: () => ({ level: quality, name: QUALITY[quality].name,
                         pixelRatio: renderer.getPixelRatio() }),
       get corpses() { return corpses; },
@@ -2240,6 +2339,12 @@ export async function startLevel(
       /** `rare` forces the kind, for a probe that should not have to roll dice
        *  until they agree — the crate it drops is the real one either way. */
       dropCrate: (rare?: boolean) => dropCrate(rare),
+      /** Take every crate off the field. A probe testing what ONE crate does
+       *  cannot have three within swing range — a single swing broke two and
+       *  the second effect looked like the first one rerolling into itself. */
+      clearCrates: () => {
+        for (const c of crates) { c.obj.visible = false; c.hp = 0; }
+      },
       /** The attack button, and the end of the run. The real ones — a probe
        *  that calls its own copy is testing its own copy. */
       attack: () => heroAttack(),

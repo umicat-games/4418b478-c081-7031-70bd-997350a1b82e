@@ -1226,43 +1226,12 @@
       }
     },
     {
-      "id": "hwall_n0",
-      "name": "hwall_n0",
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 1.225,
-          "y": 1.2,
-          "z": 0.4
-        },
-        "color": "#4a4036"
-      },
-      "transform": {
-        "position": {
-          "x": -4.5875,
-          "y": 0.4,
-          "z": -5.1
-        }
-      },
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.6125,
-            "y": 0.6,
-            "z": 0.2
-          }
-        },
-        "body": "fixed"
-      }
-    },
-    {
       "id": "hwall_n1",
       "name": "hwall_n1",
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 1.0499999999999998,
+          "x": 4.5,
           "y": 1.2,
           "z": 0.4
         },
@@ -1270,7 +1239,7 @@
       },
       "transform": {
         "position": {
-          "x": -2.25,
+          "x": -2.95,
           "y": 0.4,
           "z": -5.1
         }
@@ -1279,7 +1248,7 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 0.5249999999999999,
+            "x": 2.25,
             "y": 0.6,
             "z": 0.2
           }
@@ -1293,7 +1262,7 @@
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 1.05,
+          "x": 4.5,
           "y": 1.2,
           "z": 0.4
         },
@@ -1301,7 +1270,7 @@
       },
       "transform": {
         "position": {
-          "x": 0,
+          "x": 2.95,
           "y": 0.4,
           "z": -5.1
         }
@@ -1310,7 +1279,7 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 0.525,
+            "x": 2.25,
             "y": 0.6,
             "z": 0.2
           }
@@ -1319,111 +1288,19 @@
       }
     },
     {
-      "id": "hwall_n3",
-      "name": "hwall_n3",
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 1.0499999999999998,
-          "y": 1.2,
-          "z": 0.4
-        },
-        "color": "#4a4036"
-      },
-      "transform": {
-        "position": {
-          "x": 2.25,
-          "y": 0.4,
-          "z": -5.1
-        }
-      },
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.5249999999999999,
-            "y": 0.6,
-            "z": 0.2
-          }
-        },
-        "body": "fixed"
-      }
-    },
-    {
-      "id": "hwall_n4",
-      "name": "hwall_n4",
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 1.225,
-          "y": 1.2,
-          "z": 0.4
-        },
-        "color": "#4a4036"
-      },
-      "transform": {
-        "position": {
-          "x": 4.5875,
-          "y": 0.4,
-          "z": -5.1
-        }
-      },
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.6125,
-            "y": 0.6,
-            "z": 0.2
-          }
-        },
-        "body": "fixed"
-      }
-    },
-    {
-      "id": "door_meadow",
+      "id": "door",
       "name": "door",
       "modelAssetId": "hub-door-open",
       "transform": {
         "position": {
-          "x": -3.375,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false
-    },
-    {
-      "id": "door_meadow_shut",
-      "name": "door_shut",
-      "modelAssetId": "hub-door",
-      "transform": {
-        "position": {
-          "x": -3.375,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false,
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.5,
-            "y": 0.6,
-            "z": 0.2
-          }
-        },
-        "body": "fixed",
-        "offset": {
           "x": 0,
-          "y": 0.4,
-          "z": 0
+          "y": 0,
+          "z": -5.1
         }
       }
     },
     {
-      "id": "door_meadow_frame",
+      "id": "door_frame",
       "name": "door_frame",
       "primitive": {
         "kind": "box",
@@ -1436,241 +1313,19 @@
       },
       "transform": {
         "position": {
-          "x": -3.375,
-          "y": 0.5,
-          "z": -5.28
-        }
-      }
-    },
-    {
-      "id": "door_meadow_sign",
-      "name": "door_sign",
-      "modelAssetId": "hub-sign",
-      "transform": {
-        "position": {
-          "x": -2.425,
-          "y": 0,
-          "z": -4.35
-        }
-      }
-    },
-    {
-      "id": "door_frostfall",
-      "name": "door",
-      "modelAssetId": "hub-door-open",
-      "transform": {
-        "position": {
-          "x": -1.125,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false
-    },
-    {
-      "id": "door_frostfall_shut",
-      "name": "door_shut",
-      "modelAssetId": "hub-door",
-      "transform": {
-        "position": {
-          "x": -1.125,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false,
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.5,
-            "y": 0.6,
-            "z": 0.2
-          }
-        },
-        "body": "fixed",
-        "offset": {
           "x": 0,
-          "y": 0.4,
-          "z": 0
-        }
-      }
-    },
-    {
-      "id": "door_frostfall_frame",
-      "name": "door_frame",
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 1.35,
-          "y": 1.4,
-          "z": 0.22
-        },
-        "color": "#6b4f2a"
-      },
-      "transform": {
-        "position": {
-          "x": -1.125,
           "y": 0.5,
           "z": -5.28
         }
       }
     },
     {
-      "id": "door_frostfall_sign",
+      "id": "door_sign",
       "name": "door_sign",
       "modelAssetId": "hub-sign",
       "transform": {
         "position": {
-          "x": -0.17500000000000004,
-          "y": 0,
-          "z": -4.35
-        }
-      }
-    },
-    {
-      "id": "door_rivermeet",
-      "name": "door",
-      "modelAssetId": "hub-door-open",
-      "transform": {
-        "position": {
-          "x": 1.125,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false
-    },
-    {
-      "id": "door_rivermeet_shut",
-      "name": "door_shut",
-      "modelAssetId": "hub-door",
-      "transform": {
-        "position": {
-          "x": 1.125,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false,
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.5,
-            "y": 0.6,
-            "z": 0.2
-          }
-        },
-        "body": "fixed",
-        "offset": {
-          "x": 0,
-          "y": 0.4,
-          "z": 0
-        }
-      }
-    },
-    {
-      "id": "door_rivermeet_frame",
-      "name": "door_frame",
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 1.35,
-          "y": 1.4,
-          "z": 0.22
-        },
-        "color": "#6b4f2a"
-      },
-      "transform": {
-        "position": {
-          "x": 1.125,
-          "y": 0.5,
-          "z": -5.28
-        }
-      }
-    },
-    {
-      "id": "door_rivermeet_sign",
-      "name": "door_sign",
-      "modelAssetId": "hub-sign",
-      "transform": {
-        "position": {
-          "x": 2.075,
-          "y": 0,
-          "z": -4.35
-        }
-      }
-    },
-    {
-      "id": "door_crossroads",
-      "name": "door",
-      "modelAssetId": "hub-door-open",
-      "transform": {
-        "position": {
-          "x": 3.375,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false
-    },
-    {
-      "id": "door_crossroads_shut",
-      "name": "door_shut",
-      "modelAssetId": "hub-door",
-      "transform": {
-        "position": {
-          "x": 3.375,
-          "y": 0,
-          "z": -5.1
-        }
-      },
-      "visible": false,
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.5,
-            "y": 0.6,
-            "z": 0.2
-          }
-        },
-        "body": "fixed",
-        "offset": {
-          "x": 0,
-          "y": 0.4,
-          "z": 0
-        }
-      }
-    },
-    {
-      "id": "door_crossroads_frame",
-      "name": "door_frame",
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 1.35,
-          "y": 1.4,
-          "z": 0.22
-        },
-        "color": "#6b4f2a"
-      },
-      "transform": {
-        "position": {
-          "x": 3.375,
-          "y": 0.5,
-          "z": -5.28
-        }
-      }
-    },
-    {
-      "id": "door_crossroads_sign",
-      "name": "door_sign",
-      "modelAssetId": "hub-sign",
-      "transform": {
-        "position": {
-          "x": 4.325,
+          "x": 1.15,
           "y": 0,
           "z": -4.35
         }
