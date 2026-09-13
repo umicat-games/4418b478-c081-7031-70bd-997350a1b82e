@@ -15,6 +15,8 @@ const ATLAS = 'inventory';
 const PANEL_FRAME = 'frame-medium', PANEL_SLICE = { l: 10, r: 10, t: 11, b: 11 }, PANEL_SCALE = 3;
 const SLOT_FRAME = 'slot-light', SLOT_SLICE = { l: 7, r: 7, t: 8, b: 8 }, SLOT_SCALE = 2;
 const BTN = 'square-buttons', BTN_FRAME = 'white-button';
+// Scroll bar art (creator-tagged in all_ui_assets_on_one_sheet): a thin recessed TRACK + a wider THUMB.
+const RAIL_ATLAS = 'ui-sheet', RAIL_BG = 'vertial-scroll-bar-background', RAIL_THUMB = 'vertical-scroll-bar-dark';
 // Close button — the SAME `icon-buttons` graphic the chest/mail/shop modals use (a complete
 // button image, not a nineslice + icon), with a pressed-down frame for the click feedback.
 const CLOSE_ATLAS = 'icon-buttons', CLOSE_FRAME = 'close-light-big', CLOSE_PRESSED = 'close-light-big-pressed-down';
@@ -166,10 +168,17 @@ export class CookScene extends Phaser.Scene {
     }
     if (this.totalRows > this.visibleRows) {
       const railX = listX + listW + pw * 0.02, railTop = listY, railH = this.visibleRows * (rowH + gap) - gap;
-      box.add(this.add.rectangle(railX, railTop + railH / 2, 6, railH, 0x3a2a12, 0.2).setOrigin(0.5));
       const thumbH = Math.max(24, railH * (this.visibleRows / this.totalRows));
       const thumbY = railTop + (railH - thumbH) * (this.scroll / Math.max(1, this.totalRows - this.visibleRows));
-      box.add(this.add.rectangle(railX, thumbY + thumbH / 2, 6, thumbH, 0x9a7b4f, 1).setOrigin(0.5));
+      const hasArt = this.textures.exists(RAIL_ATLAS) && this.textures.get(RAIL_ATLAS).has(RAIL_BG) && this.textures.get(RAIL_ATLAS).has(RAIL_THUMB);
+      if (hasArt) {
+        // Track (thin) + thumb (wider) — the creator-tagged scroll bar art, as vertical nine-slices.
+        box.add(this.add.nineslice(railX, railTop + railH / 2, RAIL_ATLAS, RAIL_BG, pw * 0.010, railH, 1, 1, 4, 4));
+        box.add(this.add.nineslice(railX, thumbY + thumbH / 2, RAIL_ATLAS, RAIL_THUMB, pw * 0.018, thumbH, 2, 2, 4, 4));
+      } else {
+        box.add(this.add.rectangle(railX, railTop + railH / 2, 6, railH, 0x3a2a12, 0.2).setOrigin(0.5));
+        box.add(this.add.rectangle(railX, thumbY + thumbH / 2, 6, thumbH, 0x9a7b4f, 1).setOrigin(0.5));
+      }
     }
 
     // ── RIGHT: ingredients + description + Cook button ──
