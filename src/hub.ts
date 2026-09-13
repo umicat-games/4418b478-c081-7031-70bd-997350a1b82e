@@ -7,6 +7,7 @@ import {
 } from '@umicat/three-sdk';
 import type { Shared, Weapon, Progress } from './main';
 import { patchSave } from './main';
+import { LEVELS } from './levels';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
 
@@ -27,8 +28,12 @@ import { hideLoading } from './loading';
  *  It was `z < -4.6` — anywhere along the front wall started the level, which
  *  taught that the door was decoration. A door you can miss by walking beside
  *  it is a door; a line across the room is a trigger. */
-const DOOR_AT = { x: 0, z: -5.1 };
+/** The doorways, in the order `LEVELS` lists them — the same spacing the scene
+ *  generator used. A door you can see from the spawn point IS the level select:
+ *  no menu, no list, walk at the one you want. */
+const DOOR_Z = -5.1;
 const DOOR_HALF_WIDTH = 0.62;
+const doorX = (i: number): number => (i - (LEVELS.length - 1) / 2) * 3.4;
 const SIGN_AT = { x: -2.5, z: 2.5 };
 const NEAR = 0.9;             // how close counts as "standing at" something
 const LEADERBOARD_KEY = 'leaderboard';
@@ -90,7 +95,10 @@ const PICKUPS: { id: Weapon; x: number; z: number; label: string; runs: number }
   { id: 'staff', x: 1.4, z: 0.2, label: '🔮 Staff — bursts a whole group', runs: 2 },
 ];
 
-export async function runHub(shared: Shared): Promise<Weapon> {
+/** What the player chose on the way out of the hub. */
+export interface HubChoice { weapon: Weapon; level: number; }
+
+export async function runHub(shared: Shared): Promise<HubChoice> {
   const { umicat, renderer, canvas, hudEl, audio } = shared;
 
   const [manifest, scene3d] = await Promise.all([
@@ -141,6 +149,11 @@ export async function runHub(shared: Shared): Promise<Weapon> {
   const available = PICKUPS.filter((p) => p.runs <= runs);
   /** Anything unlocked by the level just finished — worth saying out loud. */
   const justUnlocked = PICKUPS.find((p) => p.runs === runs && p.runs > 0) ?? null;
+  /** How many boards have been WON. Weapons come from finishing a level either
+   *  way, because being handed a bow for losing is kind; a new board comes from
+   *  clearing the one before it, because otherwise the order means nothing. */
+  const cleared = progress.cleared ?? 0;
+  const levelOpen = (i: number): boolean => i <= cleared;
   const saved = progress.weapon;
   // Never hand back a weapon that is no longer on the ground — a save from a
   // future version, or a cleared progress, should not leave you carrying
@@ -207,11 +220,53 @@ export async function runHub(shared: Shared): Promise<Weapon> {
     world.scene.add(display);
   }
 
+  // Open doors where you may go, shut ones where you may not. Both are in the
+  // scene already: swapping a model at runtime means loading it at runtime, and
+  // a door that pops in a second after the hub does reads as a glitch.
+  LEVELS.forEach((lv, i) => {
+    const open = world.entities.get(`door_${lv.id}`);
+    const shut = world.entities.get(`door_${lv.id}_shut`);
+    if (open) open.visible = levelOpen(i);
+    if (shut) shut.visible = !levelOpen(i);
+    // A shut door keeps its collider either way — it is only in the way when it
+    // is the one being shown, and a locked doorway you can walk through is not
+    // locked.
+    if (!levelOpen(i)) {
+      // Locked doors are the brightest thing on the wall otherwise: the kit's
+      // shut door is a cheerful yellow arch and the open one is a dark opening,
+      // so the eye goes straight to the two you cannot use. Muted, they read as
+      // "not yet" and the way in reads as the way in. Only muted, though —
+      // taking them to 0.42 made them vanish into the wall behind, and three
+      // openings where two of them are solid is worse than three bright doors.
+      shut?.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        // Clone before touching it: models cloned from one file SHARE their
+        // materials, so dimming this door dims every door cut from the same
+        // one — including the level's gates.
+        const dim = (m: THREE.Material): THREE.Material => {
+          const c = (m as THREE.MeshStandardMaterial).clone() as THREE.MeshStandardMaterial;
+          c.color.multiplyScalar(0.72);
+          return c;
+        };
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map(dim)
+          : dim(mesh.material);
+      });
+      return;
+    }
+    const body = world.bodies.get(`door_${lv.id}_shut`);
+    if (body) world.world.removeRigidBody(body);
+  });
+
   // --- HUD ---
   hudEl.textContent = '';
   const title = document.createElement('div');
   title.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
   title.textContent = umicat.user ? `Welcome, ${umicat.user.name}` : 'Playing as a guest';
+  // A greeting, not a readout. It goes away.
+  title.style.transition = 'opacity .8s';
+  setTimeout(() => { title.style.opacity = '0'; }, 5000);
   const hint = document.createElement('div');
   hint.style.cssText = 'font: 600 14px/1.5 system-ui, sans-serif; opacity: .85;';
   hudEl.append(title, hint);
@@ -272,7 +327,7 @@ export async function runHub(shared: Shared): Promise<Weapon> {
   hideLoading();
 
   // --- the loop ---
-  return await new Promise<Weapon>((resolve) => {
+  return await new Promise<HubChoice>((resolve) => {
     let last = performance.now();
     let done = false;
     renderer.setAnimationLoop((now: number) => {
@@ -290,6 +345,16 @@ export async function runHub(shared: Shared): Promise<Weapon> {
       // The sign: the same ring the level uses for a build spot, because it
       // means the same thing — stand here and the action button does something.
       const atSign = Math.hypot(hero.position.x - SIGN_AT.x, hero.position.z - SIGN_AT.z) < NEAR;
+      // Close to a doorway, not through it: the prompt is what tells a new
+      // player the door is a door before they walk into it, and which board is
+      // behind it.
+      let nearDoor = -1;
+      for (let i = 0; i < LEVELS.length; i++) {
+        if (hero.position.z < DOOR_Z + 1.7 && Math.abs(hero.position.x - doorX(i)) < 1.5) {
+          nearDoor = i;
+          break;
+        }
+      }
       marker.visible = atSign && !panelOpen;
 
       // Which weapon you are standing at, if any.
@@ -306,10 +371,16 @@ export async function runHub(shared: Shared): Promise<Weapon> {
         if (o.userData.spin) o.rotation.y += dt * 1.2;
       }
 
+      // Only when there is something to say, and then briefly. A line of
+      // narration that is always on screen is one nobody reads.
       hint.textContent = panelOpen ? ''
-        : atPickup ? (atPickup.id === weapon ? `${atPickup.label} (equipped)` : `⚔ to take · ${atPickup.label}`)
-        : atSign ? '⚔ to read the leaderboard'
-        : `walk through the open door to play · carrying ${weapon}`;
+        : atPickup ? (atPickup.id === weapon ? `${atPickup.label} · equipped` : `⚔ take · ${atPickup.label}`)
+        : atSign ? '⚔ leaderboard'
+        : nearDoor >= 0
+          ? (levelOpen(nearDoor)
+              ? `▶ ${LEVELS[nearDoor].name} · ${LEVELS[nearDoor].blurb}`
+              : `🔒 clear ${LEVELS[nearDoor - 1].name} first`)
+          : '';
 
       if (!panelOpen && input.consume('use')) {
         if (atPickup) {
@@ -323,9 +394,15 @@ export async function runHub(shared: Shared): Promise<Weapon> {
         }
       }
 
-      const inDoorway = hero.position.z < DOOR_AT.z
-        && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH;
-      if (!done && inDoorway) {
+      let through = -1;
+      for (let i = 0; i < LEVELS.length; i++) {
+        if (!levelOpen(i)) continue;
+        if (hero.position.z < DOOR_Z && Math.abs(hero.position.x - doorX(i)) < DOOR_HALF_WIDTH) {
+          through = i;
+          break;
+        }
+      }
+      if (!done && through >= 0) {
         done = true;
         audio.play(SFX.door);
         // Tear the hub down before handing the renderer over: its scene, its
@@ -342,7 +419,7 @@ export async function runHub(shared: Shared): Promise<Weapon> {
         // merely invisible — and it is the difference a probe can see.
         world.scene.clear();
         delete (window as unknown as Record<string, unknown>).__hub;
-        resolve(weapon);
+        resolve({ weapon, level: through });
         return;
       }
 
@@ -356,9 +433,12 @@ export async function runHub(shared: Shared): Promise<Weapon> {
                 *  unlock is really about. Reading the scene for models would
                 *  answer "is something drawn there", which is not the same. */
                available: () => available.map((p) => p.id),
-               runs,
-               atDoor: () => hero.position.z < DOOR_AT.z
-                 && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH },
+               runs, cleared,
+               /** Which boards are open, and where their doors are — a probe
+                *  should walk to one rather than be told a coordinate. */
+               levels: () => LEVELS.map((lv, i) => ({
+                 id: lv.id, name: lv.name, open: levelOpen(i), x: doorX(i), z: DOOR_Z,
+               })) },
     });
   });
 }

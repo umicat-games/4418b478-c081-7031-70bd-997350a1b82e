@@ -11,6 +11,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
+import { LEVELS, type LevelDef, type Wave } from './levels';
 import type { GameAudio } from '@umicat/three-sdk';
 
 /**
@@ -21,7 +22,7 @@ import type { GameAudio } from '@umicat/three-sdk';
  * only thing that holds a lane while you are somewhere else, and the hero is
  * the only thing that can be somewhere else in time.
  *
- * Start here: `WAVES`, `TOWERS`, and the frame loop in `start()`.
+ * Start here: `LEVELS` in `levels.ts`, `TOWERS` below, and the frame loop.
  */
 
 const SAVE_KEY = 'td-progress';
@@ -33,6 +34,13 @@ export interface Progress {
   weapon?: Weapon;
   /** Levels finished — what the hub unlocks weapons from. */
   runs?: number;
+  /** How many boards have been WON, in order. Level `i` is open when
+   *  `cleared >= i`, so clearing Meadow opens Frostfall. */
+  cleared?: number;
+  /** Best wave reached on each board, by level id. */
+  bests?: Record<string, number>;
+  /** Gold carried home from runs, to be spent in the hub. */
+  coin?: number;
 }
 
 /** Read, change the named fields, write back.
@@ -47,18 +55,20 @@ export async function patchSave(
   const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
   await umicat.saves.set(SAVE_KEY, { ...prev, ...fields });
 }
-const SPAWN = { x: 0, y: 0.5, z: 3.5 };
+/** Where the hero comes in, and where a knocked-out hero is carried back to.
+ *  Just inside the exit door at the top of every board. */
+const SPAWN = { x: 0, y: 0.5, z: -5.0 };
 const RESPAWN_BELOW_Y = -5;
 
 // --- the hero -------------------------------------------------------------
 const HERO_HALF_HEIGHT = 0.2;
 const HERO_RADIUS = 0.16;
 const HERO_SYNC_OFFSET = -(HERO_HALF_HEIGHT + HERO_RADIUS);
-const HERO_MAX_HP = 6;
+const HERO_MAX_HP = 8;
 const HERO_SPEED = 4.2;
 const HERO_ATTACK_RANGE = 1.15;
 const HERO_ATTACK_DAMAGE = 2;
-const HERO_INVINCIBLE_SECONDS = 1.4;
+const HERO_INVINCIBLE_SECONDS = 1.7;
 
 // --- enemies --------------------------------------------------------------
 /** They fly, so they float above the path rather than walking it. */
@@ -88,6 +98,11 @@ const BULLET_MUZZLE = 0.15;
  *  of six, so the answer to it has to be "move", and moving needs warning. */
 /** How many things may be shooting at the hero at once.
  *
+ *  Two, not three. With the tower count capped, every measured run ended the
+ *  same way: the base never lost a life and the hero was shot to death while
+ *  walking between build spots. That is the game inverted — walking to a spot
+ *  is the mechanic, so being shot for walking is being shot for playing.
+ *
  *  Without a cap, danger scales with the size of the wave: twenty saucers each
  *  firing every 2.4s within 3.4 units is a wall of bullets nobody dodges, and
  *  the measured result was a board that never lost a life while the hero was
@@ -95,7 +110,7 @@ const BULLET_MUZZLE = 0.15;
  *  it was and stops the crowd from being dangerous by arithmetic.
  *
  *  The boss is exempt — it is the one thing that is supposed to be personal. */
-const MAX_SHOOTERS = 3;
+const MAX_SHOOTERS = 2;
 const BOSS_WINDUP_SECONDS = 0.9;
 const BOSS_SHOOT_COOLDOWN = 3.2;
 /** How long the body lies there before it sinks away. */
@@ -132,6 +147,13 @@ interface TowerKind {
   reload: number;
   /** How fast its shot travels, in units per second. */
   shotSpeed: number;
+  /** The masonry under the weapon — one piece added per level.
+   *
+   *  The kit ships towers as stackable sections, and an upgrade that makes the
+   *  tower physically TALLER is a different thing to look at from an upgrade
+   *  that changes a number in a tooltip. Level three is a weapon on a tower,
+   *  which is what a tower defense is supposed to look like. */
+  stack: [string, string, string];
 }
 /** Four, and each one is a different answer to "what is walking past me".
  *  Cheap-and-quick, slow-and-hard, long-and-lobbing, fast-and-weak. A second
@@ -139,78 +161,20 @@ interface TowerKind {
  *  decision. */
 const TOWERS: TowerKind[] = [
   { id: 'ballista', label: 'Ballista', icon: '🏹', model: 'td-ballista', ammo: 'td-ammo-arrow',
-    cost: 25, range: 3.0, damage: 2, reload: 1.0, shotSpeed: 9 },
+    cost: 25, range: 3.0, damage: 2, reload: 1.0, shotSpeed: 9,
+    stack: ['td-tower-square-bottom-a', 'td-tower-square-middle-a', 'td-tower-square-top-a'] },
   { id: 'cannon', label: 'Cannon', icon: '💣', model: 'td-cannon', ammo: 'td-ammo-ball',
-    cost: 45, range: 2.2, damage: 5, reload: 2.0, shotSpeed: 7 },
+    cost: 45, range: 2.2, damage: 5, reload: 2.0, shotSpeed: 7,
+    stack: ['td-tower-square-bottom-b', 'td-tower-square-middle-b', 'td-tower-square-top-b'] },
   { id: 'catapult', label: 'Catapult', icon: '🪨', model: 'td-catapult', ammo: 'td-ammo-boulder',
-    cost: 60, range: 4.2, damage: 7, reload: 3.0, shotSpeed: 5 },
+    cost: 60, range: 4.2, damage: 7, reload: 3.0, shotSpeed: 5,
+    stack: ['td-tower-round-bottom-a', 'td-tower-round-middle-a', 'td-tower-round-top-a'] },
   { id: 'turret', label: 'Turret', icon: '⚙️', model: 'td-turret', ammo: 'td-ammo-arrow',
-    cost: 40, range: 2.6, damage: 1, reload: 0.28, shotSpeed: 12 },
+    cost: 40, range: 2.6, damage: 1, reload: 0.28, shotSpeed: 12,
+    stack: ['td-tower-square-bottom-c', 'td-tower-square-middle-c', 'td-tower-square-top-c'] },
 ];
 
-interface Wave {
-  count: number; hp: number; speed: number; model: string; bounty: number;
-  /** Whether this kind shoots back. */
-  armed: boolean;
-  /** The kit's UFOs are a full tile wide; this is how big they read next to
-   *  a 0.72-tall hero. */
-  scale: number;
-  /** Walks on the ground rather than flying over it. Rigged models only — a
-   *  UFO set down at y=0 looks parked. */
-  ground?: boolean;
-  /** Turns to face the way it is going, instead of spinning like a saucer. */
-  facesTravel?: boolean;
-  /** What it throws. Defaults to the small bullet everything else fires. */
-  ammo?: string;
-  /** Hearts per hit. Defaults to 1. */
-  damage?: number;
-  /** Announced, health bar always up, and the run is over when it falls. */
-  boss?: boolean;
-  /** Shown on the banner when it arrives. */
-  label?: string;
-}
-/** Twelve waves, and the last one is a single thing.
- *
- *  Every one of them shoots back. The ramp is hit points, speed and count —
- *  the scouts are fast and fragile, the heavies slow and thick, which is a
- *  different problem each time rather than a larger one.
- *
- *  The hit points here were MEASURED, not chosen: `verify-3d-balance.mjs`
- *  plays the board with a competent scripted defence and reports how far it
- *  gets. Picking numbers that look reasonable on a laptop is how this game
- *  ended up with waves you could stand in front of.
- *
- *  What that measurement says about the shape of the curve: a full board of
- *  upgraded towers out-scales hit points far faster than a wave table does, so
- *  the late waves need to grow steeply or they are easier than the early ones.
- *  The first run of twelve waves lost every one of its five lives before wave
- *  seven and not one after it, while sitting on 1500 unspendable gold.
- *
- *  `armed` stays as a field because it is per-KIND, not a global: the moment
- *  one enemy should be harmless, that is a data change and not a rewrite. */
-const WAVES: Wave[] = [
-  { count: 6, hp: 10, speed: 1.1, model: 'td-ufo-a', bounty: 9, armed: true, scale: 0.62 },
-  { count: 8, hp: 16, speed: 1.25, model: 'td-ufo-b', bounty: 11, armed: true, scale: 0.62 },
-  { count: 10, hp: 14, speed: 2.1, model: 'td-ufo-c', bounty: 12, armed: true, scale: 0.5 },
-  { count: 10, hp: 30, speed: 1.2, model: 'td-ufo-a2', bounty: 15, armed: true, scale: 0.68 },
-  { count: 12, hp: 44, speed: 1.3, model: 'td-ufo-d', bounty: 18, armed: true, scale: 0.72 },
-  { count: 14, hp: 38, speed: 1.9, model: 'td-ufo-b2', bounty: 20, armed: true, scale: 0.6 },
-  { count: 14, hp: 70, speed: 1.2, model: 'td-ufo-c2', bounty: 25, armed: true, scale: 0.78 },
-  { count: 16, hp: 120, speed: 1.45, model: 'td-ufo-d2', bounty: 30, armed: true, scale: 0.85 },
-  { count: 18, hp: 125, speed: 2.0, model: 'td-ufo-c', bounty: 28, armed: true, scale: 0.55 },
-  { count: 18, hp: 215, speed: 1.3, model: 'td-ufo-a2', bounty: 34, armed: true, scale: 0.75 },
-  { count: 20, hp: 300, speed: 1.5, model: 'td-ufo-d2', bounty: 40, armed: true, scale: 0.9 },
-  // The boss. One of it, walking, on the ground, taking the west gate — a
-  // wall of hit points that throws boulders and cannot be out-ranged by
-  // standing still. It is the only enemy in the game that is not a saucer.
-  { count: 1, hp: 2200, speed: 0.62, model: 'boss-orc', bounty: 300, armed: true, scale: 2.1,
-    ground: true, facesTravel: true, ammo: 'td-ammo-boulder', damage: 2, boss: true,
-    label: 'THE WARLORD' },
-];
-const SPAWN_GAP = 1.1;          // seconds between enemies in a wave
-const WAVE_GAP = 6;             // breathing room between waves
-const START_GOLD = 60;
-const BASE_LIVES = 10;
+
 
 interface Enemy {
   obj: THREE.Object3D;
@@ -247,7 +211,14 @@ interface Enemy {
 
 interface Tower {
   kind: TowerKind;
+  /** The whole tower: masonry plus the weapon. Sits on the cell and never
+   *  turns — only the weapon on top does. A rotating stone base reads as the
+   *  ground moving. */
   obj: THREE.Object3D;
+  /** The weapon, riding on top of the stack. */
+  mount: THREE.Object3D;
+  /** How tall the masonry currently is, in world units. */
+  height: number;
   cell: [number, number];
   reload: number;
   level: number;
@@ -255,10 +226,25 @@ interface Tower {
 
 /** Levels 1-3. Everything about a tower scales off its level rather than being
  *  stored per upgrade, so there is one place to change how upgrading feels. */
-const MAX_LEVEL = 3;
-const levelDamage = (t: Tower): number => t.kind.damage * Math.pow(1.7, t.level - 1);
-const levelRange = (t: Tower): number => t.kind.range * Math.pow(1.15, t.level - 1);
-const levelReload = (t: Tower): number => t.kind.reload * Math.pow(0.82, t.level - 1);
+/** Four. Three was a ceiling on POWER, not just on levels: with the tower count
+ *  capped, a board of maxed towers is a fixed amount of damage per second, and
+ *  every measured run on the hardest board ended the same way — the defence
+ *  complete, 1700 gold in hand and nothing to spend it on, watching wave ten
+ *  walk through. A fourth level is where the late-game gold goes. */
+const MAX_LEVEL = 4;
+/** What each level multiplies, spelled out rather than raised to a power.
+ *
+ *  It WAS `1.7 ** (level - 1)`, and adding a fourth level therefore handed out
+ *  a 4.9x tower — measured, that turned the hardest board from "lost on wave
+ *  ten" into "won with ten of twelve lives still up". A table keeps the first
+ *  three levels exactly as they were balanced and makes the fourth a step
+ *  rather than another doubling. */
+const DAMAGE_BY_LEVEL = [1, 1.7, 2.89, 3.75];
+const RANGE_BY_LEVEL = [1, 1.15, 1.32, 1.42];
+const RELOAD_BY_LEVEL = [1, 0.82, 0.672, 0.60];
+const levelDamage = (t: Tower): number => t.kind.damage * DAMAGE_BY_LEVEL[t.level - 1];
+const levelRange = (t: Tower): number => t.kind.range * RANGE_BY_LEVEL[t.level - 1];
+const levelReload = (t: Tower): number => t.kind.reload * RELOAD_BY_LEVEL[t.level - 1];
 const upgradeCost = (t: Tower): number => Math.round(t.kind.cost * 0.8 * t.level);
 
 interface Shot {
@@ -310,14 +296,24 @@ export type Weapon = 'sword' | 'bow' | 'staff';
 
 /** Runs one level. Resolves when the player walks back out through the exit
  *  door — so the caller can hand control to the hub and start the loop again. */
-export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'): Promise<void> {
+/** What a finished run reports back. */
+export interface LevelResult { won: boolean; wave: number; level: number; banked: number; }
+
+export async function startLevel(
+  shared: Shared, startWeapon: Weapon = 'sword', levelIndex = 0,
+): Promise<LevelResult> {
+  const level: LevelDef = LEVELS[Math.max(0, Math.min(levelIndex, LEVELS.length - 1))];
+  const WAVES = level.waves;
+  const SPAWN_GAP = level.spawnGap;
+  const WAVE_GAP = level.waveGap;
   const { umicat, renderer, canvas, hudEl, audio } = shared;
 
   const [manifest, scene3d, pathData] = await Promise.all([
     fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
-    fetch('scenes3d/main.json').then((r) => r.json() as Promise<Scene3D>),
-    fetch('scenes3d/path.json').then((r) => r.json() as Promise<{
+    fetch(`scenes3d/${level.id}.json`).then((r) => r.json() as Promise<Scene3D>),
+    fetch(`scenes3d/${level.id}-path.json`).then((r) => r.json() as Promise<{
       routes: [number, number][][]; cells: [number, number][]; spots: [number, number][];
+      scenery: [number, number][]; gates: string[];
     }>),
   ]);
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
@@ -325,15 +321,18 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
 
   // --- Fold the board into a handful of draws ---
   //
-  // The board is a grass tile per cell plus one per path cell, and every one of
-  // them was a separate mesh: ~180 draw calls for a picture that never
-  // changes. They are
-  // static, they share a few materials, and nothing looks them up by id, so
-  // they can be merged into one mesh per material. A desktop does not notice
-  // 182 draws; a phone very much does.
+  // A tile per cell plus one per road cell, every one a separate mesh: ~180
+  // draw calls for a picture that never changes. They are static, they share a
+  // few materials, and nothing looks them up by id, so they merge into one mesh
+  // per material. A desktop does not notice 180 draws; a phone very much does.
+  //
+  // SCENERY tiles are left out of the merge — they carry colliders and cast
+  // shadows, and a tree folded into the ground mesh is a tree that stops
+  // casting one.
   const staticTiles: THREE.Object3D[] = [];
   for (const [id, obj] of world.entities) {
-    if (id.startsWith('grass_') || id.startsWith('path_')) staticTiles.push(obj);
+    if (obj.name === 'scenery') continue;
+    if (id.startsWith('ground_') || id.startsWith('path_')) staticTiles.push(obj);
   }
   {
     const byMaterial = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
@@ -399,11 +398,13 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   const ON_PATH = new Set(pathData.cells.map(([x, z]) => `${x},${z}`));
   /** The back field: cells that are neither road nor a place to build. Nothing
    *  else ever wants them, which is exactly why the crates go there. */
+  const SCENERY = new Set((pathData.scenery ?? []).map(([x, z]) => `${x},${z}`));
   const BACKFIELD: [number, number][] = [];
   for (let x = -5.5; x <= 5.5; x += 1) {
     for (let z = -5.5; z <= 5.5; z += 1) {
       const k = `${x},${z}`;
-      if (!ON_PATH.has(k) && !BUILDABLE.has(k)) BACKFIELD.push([x, z]);
+      // Not on the road, not on a build spot, and not inside a tree.
+      if (!ON_PATH.has(k) && !BUILDABLE.has(k) && !SCENERY.has(k)) BACKFIELD.push([x, z]);
     }
   }
 
@@ -511,6 +512,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   const bossAnim: Record<string, string> =
     (manifest.models ?? []).find((m) => m.id === 'boss-orc')?.animations ?? {};
   for (const id of [...TOWERS.map((t) => t.model), ...TOWERS.map((t) => t.ammo),
+                    ...TOWERS.flatMap((t) => t.stack), 'td-tower-round-crystals',
                     ...WAVES.map((w) => w.model), ...WAVES.map((w) => w.ammo ?? 'td-bullet'),
                     'td-bullet', 'td-coin', 'hub-crate', 'hub-barrel']) {
     if (protos.has(id)) continue;
@@ -519,7 +521,9 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     protos.set(id, object);
     if (id === 'boss-orc') bossClips = clips;
   }
-  const spawnFrom = (id: string): THREE.Object3D => {
+  /** A fresh copy, NOT parented to anything. `spawnFrom` is this plus adding to
+   *  the scene; a tower needs the copy inside its own group instead. */
+  const cloneOf = (id: string): THREE.Object3D => {
     // A plain clone of a SKINNED mesh shares its skeleton: two of them animate
     // as one, and the second to spawn snaps into the first one's pose. Only the
     // boss is skinned, and there is only ever one of it, but the rule belongs
@@ -528,8 +532,44 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     const o = proto.type === 'Group' && bossClips.length && id === 'boss-orc'
       ? (SkeletonUtils.clone(proto) as THREE.Object3D)
       : proto.clone(true);
+    return o;
+  };
+  const spawnFrom = (id: string): THREE.Object3D => {
+    const o = cloneOf(id);
     world.scene.add(o);
     return o;
+  };
+
+  /** How tall a tower piece is, measured once from the model. Stacking by a
+   *  number typed in here would be right until someone swaps a piece. */
+  const pieceHeights = new Map<string, number>();
+  const pieceHeight = (id: string): number => {
+    let h = pieceHeights.get(id);
+    if (h === undefined) { h = localTop(protos.get(id)!); pieceHeights.set(id, h); }
+    return h;
+  };
+
+  /** Add the next section of masonry and lift the weapon onto it.
+   *
+   *  Past the last section there is no more masonry — a tower tall enough to
+   *  hide the road behind it is a worse tower — so the final level decorates
+   *  instead: the kit's crystal cluster at the foot, and a bigger weapon on
+   *  top. It still has to LOOK different, or the most expensive upgrade in the
+   *  game is the only one you cannot see. */
+  const raiseTower = (t: Tower): void => {
+    if (t.level > t.kind.stack.length) {
+      const crystals = cloneOf('td-tower-round-crystals');
+      crystals.position.y = 0;
+      t.obj.add(crystals);
+      t.mount.scale.setScalar(1.25);
+      return;
+    }
+    const id = t.kind.stack[t.level - 1];
+    const piece = cloneOf(id);
+    piece.position.y = t.height;
+    t.obj.add(piece);
+    t.height += pieceHeight(id);
+    t.mount.position.y = t.height;
   };
 
   /** Cross-fade a boss clip in. `loop` false for the ones that end — a death
@@ -661,11 +701,15 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   }
 
   // --- state ---
-  let gold = START_GOLD;
-  let lives = BASE_LIVES;
+  let gold = level.startGold;
+  let lives = level.lives;
   let heroHp = HERO_MAX_HP;
   let waveIndex = 0;
-  let waveTimer = 3;            // countdown to the next wave
+  // Countdown to the next wave. The FIRST one is longer than the rest: a board
+  // with a short road gives the towers less time with everything that walks it,
+  // and the answer to that is more time to build before it starts, not a
+  // gentler wave one. Measured — Frostfall's opening cost eight of ten lives.
+  let waveTimer = level.firstWaveDelay;
   /** Whether the wave at `waveIndex` has actually been sent out yet. */
   let waveLaunched = false;
   let spawnTimer = 0;
@@ -686,6 +730,49 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   /** Whether the hero is standing at an unopened crate — a HUD line, so it is
    *  kept as state rather than recomputed inside the render. */
   let atCrate = false;
+  /** The circle a tower can reach.
+   *
+   *  Range is the number that decides where a tower is worth putting, and it
+   *  was invisible: you placed a catapult by guessing whether "4.2" covered the
+   *  bend. Shown while you are standing on a tower or on a spot you could build
+   *  on, and gone the moment you walk off — a board with eight range circles
+   *  drawn on it permanently is a board you cannot see.
+   */
+  const rangeRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.965, 1, 72).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.55,
+      // Over the ground, not fighting it: a hairline ring lying exactly on the
+      // tiles z-fights into a dashed mess at this camera distance.
+      depthWrite: false, side: THREE.DoubleSide,
+    }),
+  );
+  rangeRing.visible = false;
+  rangeRing.renderOrder = 2;
+  world.scene.add(rangeRing);
+  /** A filled disc under it, very faint, so the ring reads as an AREA rather
+   *  than as a circle drawn on the grass. */
+  const rangeFill = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 72).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.09, depthWrite: false }),
+  );
+  rangeFill.visible = false;
+  rangeFill.renderOrder = 1;
+  world.scene.add(rangeFill);
+  const showRange = (at: [number, number] | null, radius: number, colour: number): void => {
+    const on = at !== null;
+    rangeRing.visible = on;
+    rangeFill.visible = on;
+    if (!on) return;
+    rangeRing.position.set(at[0], 0.035, at[1]);
+    rangeFill.position.set(at[0], 0.03, at[1]);
+    rangeRing.scale.setScalar(radius);
+    rangeFill.scale.setScalar(radius);
+    (rangeRing.material as THREE.MeshBasicMaterial).color.setHex(colour);
+    (rangeFill.material as THREE.MeshBasicMaterial).color.setHex(colour);
+  };
+
+  const _muzzle = new THREE.Vector3();
   const _box = new THREE.Box3();
   const _mat = new THREE.Matrix4();
   /** How tall a model is in ITS OWN units, from the geometry.
@@ -727,7 +814,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   // leaves it that colour for the rest of the run — the gates went red on the
   // first leak and stayed red, which reads as damage you cannot repair.
   const tinted: THREE.Object3D[] = [hero];
-  for (const id of ['gate_w', 'gate_e']) {
+  for (const id of pathData.gates) {
     const g = world.entities.get(id);
     if (g) tinted.push(g);
   }
@@ -739,6 +826,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   line3.style.opacity = '0.85';
   // Gold lives in its own element because a coin flying to the counter needs a
   // rectangle to aim at, and "somewhere in that line of text" is not one.
+  const towerEl = document.createElement('span');
   const livesEl = document.createElement('span');
   const goldEl = document.createElement('span');
   const waveEl = document.createElement('span');
@@ -1189,21 +1277,23 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     livesEl.textContent = `🏰 ${lives}\u2003`;
     goldEl.textContent = `💰 ${gold}`;
     waveEl.textContent = `\u2003Wave ${w}/${WAVES.length}`;
+    towerEl.textContent = `\u2003🗼 ${towers.length}/${level.maxTowers}`;
+    // A PROMPT, not narration. This line is empty unless the player is standing
+    // somewhere the button does something, and then it is three or four words.
+    // A sentence explaining the game that is on screen the whole time is a
+    // sentence nobody reads twice and everybody looks past.
     if (standingOn) {
       const t = standingOn;
       line3.textContent = t.level >= MAX_LEVEL
-        ? `${t.kind.label} Lv${t.level} — fully upgraded`
-        : `🔨 upgrade ${t.kind.label} to Lv${t.level + 1} · ${upgradeCost(t)}g`;
+        ? `${t.kind.label} Lv${MAX_LEVEL} · max`
+        : `🔨 Lv${t.level + 1} · ${upgradeCost(t)}g`;
     } else if (atCrate) {
-      // Nothing about a wooden box says "hit me". Without this the crates are
-      // scenery that occasionally disappears.
-      line3.textContent = '⚔ break it open · gold or a heart';
-    } else {
+      line3.textContent = '⚔ break open';
+    } else if (buildCell) {
       const kind = TOWERS[selected];
-      line3.textContent = buildCell
-        ? `🔨 build ${kind.label} · ${kind.cost}g`
-        : `walk to a spot beside the path to build · ${
-            weapon === 'bow' ? '🏹 bow' : weapon === 'staff' ? '🔮 staff' : '🗡 sword'}`;
+      line3.textContent = `🔨 ${kind.label} · ${kind.cost}g`;
+    } else {
+      line3.textContent = '';
     }
     refreshHotbar();
   };
@@ -1249,14 +1339,14 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       const o = world.entities.get(id);
       if (o) o.visible = true;
     }
-    // And take out the MIDDLE section of the north wall — the door's width,
-    // not the whole side. A door you can see and cannot reach is worse than no
-    // door, because the wall's collider is what stops you and it does not care
-    // that something was drawn in front of it; but removing the lot turns the
+    // And take out the block filling the doorway — the door's width, not the
+    // whole side. A door you can see and cannot reach is worse than no door,
+    // because the collider is what stops you and it does not care that
+    // something was drawn in front of it; but removing the whole wall turns the
     // entire top of the board into the exit.
-    const wall = world.bodies.get('wall_n_m');
+    const wall = world.bodies.get('exit_block');
     if (wall) world.world.removeRigidBody(wall);
-    const wallMesh = world.entities.get('wall_n_m');
+    const wallMesh = world.entities.get('exit_block');
     if (wallMesh) wallMesh.visible = false;
   };
 
@@ -1293,9 +1383,11 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       if (gold < cost) { audio.play('denied'); flashBanner(`Upgrade costs ${cost}g`); return; }
       gold -= cost;
       t.level += 1;
-      // Bigger, so a levelled tower is legible from across the board without
-      // reading a number.
-      t.obj.scale.setScalar(1 + (t.level - 1) * 0.18);
+      // A section of masonry, not a bigger copy of the same thing. Scaling the
+      // whole tower up made a levelled one legible across the board, which was
+      // the point, but it also made it a large version of a small tower —
+      // "this one cost me sixty gold" reads better as a tower that got taller.
+      raiseTower(t);
       flashTint(t.obj, { color: 0xffe28a, ms: 320 });
       updraft(t.obj.position);
       audio.play(SFX.upgradeTower);
@@ -1306,11 +1398,23 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
 
     if (!buildCell) return;
     const kind = TOWERS[selected];
+    if (towers.length >= level.maxTowers) {
+      audio.play('denied');
+      flashBanner(`${level.maxTowers} towers is the limit — upgrade instead`);
+      return;
+    }
     if (gold < kind.cost) { audio.play('denied'); flashBanner(`${kind.label} costs ${kind.cost}g`); return; }
     gold -= kind.cost;
-    const obj = spawnFrom(kind.model);
+    const obj = new THREE.Group();
     obj.position.set(buildCell[0], 0.02, buildCell[1]);
-    const tower: Tower = { kind, obj, cell: [...buildCell] as [number, number], reload: 0, level: 1 };
+    world.scene.add(obj);
+    const mount = cloneOf(kind.model);
+    obj.add(mount);
+    const tower: Tower = {
+      kind, obj, mount, height: 0,
+      cell: [...buildCell] as [number, number], reload: 0, level: 1,
+    };
+    raiseTower(tower);
     towers.push(tower);
     occupied.set(`${buildCell[0]},${buildCell[1]}`, tower);
     tinted.push(obj);
@@ -1434,7 +1538,33 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     flashScreen();
     flashTint(hero, { color: 0xff2a1a, ms: 220 });
     renderHud();
-    if (heroHp <= 0) endRun(false);
+    if (heroHp <= 0) knockOut();
+  };
+
+  /** The hero falls — and gets back up.
+   *
+   *  Losing the whole run to it was the single loudest thing in every measured
+   *  game: the base would be untouched at ten of ten lives and the run would end
+   *  because the hero had been shot while walking between build spots. Walking
+   *  to a spot IS the mechanic, so dying for walking is dying for playing.
+   *
+   *  So it costs a life off the base instead — the two failure conditions were
+   *  already there, and this makes them one resource rather than two ways to
+   *  lose. You are carried back to the door, which is the far end of the board
+   *  from wherever the trouble was, and that walk back is the real punishment.
+   */
+  const knockOut = (): void => {
+    if (!running) return;
+    lives -= 1;
+    heroHp = Math.max(3, Math.ceil(HERO_MAX_HP / 2));
+    invincible = 3.2;
+    audio.play('lose');
+    flashScreen();
+    flashBanner('Knocked out · a life lost');
+    character.teleport(SPAWN);
+    glide.x = 0; glide.z = 0;
+    renderHud();
+    if (lives <= 0) endRun(false);
   };
 
   // Left click swings. `button`/`pointerType` checked because the right button
@@ -1512,10 +1642,14 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
   const EXIT_HALF_WIDTH = 0.62;
   let last = performance.now();
   const dir = new THREE.Vector3();
+  /** Where the hero is actually going, as opposed to where the stick says. Only
+   *  used on slippery levels. */
+  const glide = { x: 0, z: 0 };
   const prevPos = new THREE.Vector3();
   const heroHit = new THREE.Vector3();
-  let leave: (() => void) | null = null;
-  const leaving = new Promise<void>((res) => { leave = res; });
+  /** How the run went, handed back so the hub can unlock the next board. */
+  let leave: ((r: LevelResult) => void) | null = null;
+  const leaving = new Promise<LevelResult>((res) => { leave = res; });
 
   renderer.setAnimationLoop((now: number) => {
     const dt = Math.min((now - last) / 1000, 0.05);
@@ -1526,6 +1660,40 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
 
     // Walking is not part of "the game is running" — it is how you leave.
     const move = input.direction(world.cameraYaw);
+    // Ice. The controller takes a direction and goes, so slip is the direction
+    // LAGGING the stick: you keep going the way you were for a moment after you
+    // let go or turn, which is what sliding feels like from the inside. Done
+    // here rather than in the SDK because "the ground is slippery" is a rule
+    // this game has and not a platform capability.
+    if (level.slip > 0) {
+      // A time constant, not a per-frame lerp — a per-frame factor makes the
+      // ice feel different at 30fps and at 120.
+      const k = 1 - Math.exp(-dt / (0.05 + level.slip * 0.2));
+      glide.x += (move.x - glide.x) * k;
+      glide.z += (move.z - glide.z) * k;
+      // The controller NORMALISES whatever direction it is given, so a glide of
+      // 0.1 still walks at full speed — the slide is in the heading, not in the
+      // pace. That is why this cuts off at a third rather than at a whisker:
+      // decaying to 0.02 kept the hero at full tilt for half a second, which is
+      // two units on a thirteen-unit board.
+      //
+      // (Real deceleration needs the controller's speed to be settable at
+      // runtime, and it is `private readonly` in the SDK. Worth adding there —
+      // slow effects, sprint and heavy characters all want it — but "this level
+      // is icy" is a game rule and belongs here either way.)
+      // ONLY once the stick is centred. Applied unconditionally it also kills
+      // the ramp UP — glide climbs from zero to 0.1, gets cut back to zero, and
+      // climbs again, so the hero cannot move on ice at all. Which looks, in a
+      // screenshot, exactly like a hero standing still.
+      // Cut off at half rather than a third. The fun of ice is that you cannot
+      // turn sharply; the overshoot when you STOP is just an obstacle to
+      // building, and a slide of 0.63 on a board of 1-unit cells means landing
+      // on the wrong cell most times you try. Measured, on a bot that could not
+      // place a single tower here.
+      const stick = move.x !== 0 || move.z !== 0;
+      if (!stick && Math.hypot(glide.x, glide.z) < 0.55) { glide.x = 0; glide.z = 0; }
+      move.x = glide.x; move.z = glide.z;
+    }
     character.update(dt, move, { jump: input.jump });
     if (character.position.y < RESPAWN_BELOW_Y) character.teleport(SPAWN);
     character.syncTo(hero, HERO_SYNC_OFFSET);
@@ -1589,6 +1757,11 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       // otherwise standing on your own tower looks like standing on grass.
       marker.visible = canBuild || !!here;
       if (marker.visible) marker.position.set(cell[0], 0.03, cell[1]);
+      // What the thing under your feet can reach. Green for a tower that is
+      // already there, white for the one you are about to put down.
+      if (here) showRange(here.cell, levelRange(here), 0x8effa0);
+      else if (canBuild) showRange(cell, TOWERS[selected].range, 0xffffff);
+      else showRange(null, 0, 0);
       const nearCrate = crates.some((c) =>
         c.hp > 0 && Math.hypot(c.obj.position.x - hero.position.x, c.obj.position.z - hero.position.z) < 1.0);
       const changed = before !== `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`
@@ -1663,8 +1836,8 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
             // carelessness rather than to any particular wave, and the lull
             // between waves is the natural place to hand it back.
             if (heroHp < HERO_MAX_HP && waveIndex < WAVES.length) {
-              heroHp += 1;
-              flashBanner('Wave cleared · +1 ❤️');
+              heroHp = Math.min(HERO_MAX_HP, heroHp + 2);
+              flashBanner('Wave cleared · +2 ❤️');
             }
           }
           if (waveIndex >= WAVES.length) { endRun(true); }
@@ -1699,7 +1872,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
           // WHICH gate, not just "a life gone". With one lane the screen flash
           // told you everything; with two it tells you half of it, and the half
           // it leaves out is the one you would act on.
-          const gate = world.entities.get(e.route === 0 ? 'gate_w' : 'gate_e');
+          const gate = world.entities.get(pathData.gates[e.route]);
           if (gate) flashTint(gate, { color: 0xff2a1a, ms: 420 });
           renderHud();
           if (lives <= 0) { endRun(false); break; }
@@ -1775,13 +1948,15 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
         if (target) {
           // Face it even while reloading — a turret tracking its target is how
           // a player reads "this one is covering that corner".
-          t.obj.rotation.y = Math.atan2(
+          t.mount.rotation.y = Math.atan2(
             target.obj.position.x - t.cell[0], target.obj.position.z - t.cell[1]);
         }
         if (target && t.reload <= 0) {
           t.reload = levelReload(t);
           const shot = spawnFrom(t.kind.ammo);
-          shot.position.set(t.cell[0], 0.35, t.cell[1]);
+          // From the weapon, which is now somewhere up a tower — a level-three
+          // catapult firing out of the grass at its feet looks like a bug.
+          shot.position.copy(t.mount.getWorldPosition(_muzzle));
           shots.push({ obj: shot, target, damage: levelDamage(t), speed: t.kind.shotSpeed });
           audio.play(t.kind.id === 'cannon' ? 'cannon-shot' : 'tower-shot');
         }
@@ -1914,7 +2089,13 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
       // describes is worse than none: anything asking "am I in the level?" is
       // told yes by the corpse of the last one.
       delete (window as unknown as Record<string, unknown>).__game;
-      go();
+      go({
+        won, wave: Math.min(waveIndex + 1, WAVES.length), level: levelIndex,
+        // Whatever is left over comes home. Measured runs were sitting on 1600
+        // unspendable gold by wave seven — a currency with nowhere to go stops
+        // being a decision, and the hub is where it can become one.
+        banked: gold,
+      });
       return;
     }
 
@@ -1943,10 +2124,13 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
                         pixelRatio: renderer.getPixelRatio() }),
       get corpses() { return corpses; },
       get crates() { return crates; },
+      glide: () => ({ ...glide }),
       dropCrate: () => dropCrate(),
       /** The attack button, and the end of the run. The real ones — a probe
        *  that calls its own copy is testing its own copy. */
       attack: () => heroAttack(),
+      /** Gold, for a probe that needs a board built without playing for it. */
+      gift: (n: number) => { gold += n; renderHud(); },
       hurt: (n: number) => { invincible = 0; heroHp = Math.max(1, heroHp - n); renderHud(); },
       debugEndRun: (won = false) => endRun(won),
       /** The waypoints of one branch, and whether a cell is free to build on.
@@ -1982,8 +2166,9 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
         waveLaunched = true;
         renderHud();
       },
-    state: () => ({ gold, lives, heroHp, waveIndex, waveCount: WAVES.length, running, won,
-      buildCell, selected,
+    state: () => ({ level: level.id, levelIndex, slip: level.slip,
+      gold, lives, heroHp, heroMax: HERO_MAX_HP, waveIndex, waveCount: WAVES.length, running, won,
+      buildCell, selected, maxTowers: level.maxTowers, maxLevel: MAX_LEVEL,
       routes: ROUTES.length,
       /** Where each branch ends. The tiles get merged into one mesh for the
        *  sake of the phone's frame rate, so this is the only thing left that
@@ -2002,7 +2187,7 @@ export async function startLevel(shared: Shared, startWeapon: Weapon = 'sword'):
     } as unknown,
   });
   void tmp;
-  await leaving;
+  return leaving;
 }
 
 async function boot(): Promise<void> {
@@ -2022,14 +2207,22 @@ async function boot(): Promise<void> {
   // scene per run.
   for (;;) {
     showLoading('Entering the woods');
-    const weapon = await runHub(shared);
-    showLoading('Raising the defences');
-    await startLevel(shared, weapon);
+    const choice = await runHub(shared);
+    showLoading(`Entering ${LEVELS[choice.level].name}`);
+    const result = await startLevel(shared, choice.weapon, choice.level);
     // Finishing a level — won or lost — is what unlocks the next weapon back
     // in the hub. Counted HERE rather than in `endRun` because "finished" means
     // walking back out through the door, not the moment the last life went.
-    const prev = (await umicat.saves.get<Progress>(SAVE_KEY))?.runs ?? 0;
-    await patchSave(umicat, { runs: prev + 1 });
+    // Clearing one is what opens the NEXT board, which is a different question
+    // and a different counter.
+    const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
+    await patchSave(umicat, {
+      runs: (prev.runs ?? 0) + 1,
+      cleared: result.won ? Math.max(prev.cleared ?? 0, result.level + 1) : prev.cleared,
+      bests: { ...(prev.bests ?? {}), [LEVELS[result.level].id]:
+        Math.max(prev.bests?.[LEVELS[result.level].id] ?? 0, result.wave) },
+      coin: (prev.coin ?? 0) + result.banked,
+    });
   }
 }
 

@@ -1,45 +1,100 @@
-// Generate the tower-defense board.
+// Generate the tower-defense boards, and the hub.
 //
-// The board is DESIGN DATA, but it is regular enough that authoring it by hand
-// would be forty near-identical JSON objects with a rotation nobody could
-// check. A path is a polyline; which tile goes where and which way it faces
-// follows from it. So the polyline is the source, this derives the rest, and
-// `npm run scene` regenerates it.
+// A board is DESIGN DATA, but it is regular enough that authoring it by hand
+// would be two hundred near-identical JSON objects with a rotation nobody could
+// check. A road is a polyline; which tile goes where and which way it faces
+// follows from it. So the polylines are the source, this derives the rest, and
+// `npm run scene` regenerates all of it.
 //
 // Everything sits on a 1-unit grid because that is exactly what the kit's
 // tiles measure (1 x 0.2 x 1, verified, not assumed).
 import { writeFileSync } from 'node:fs';
 
-/** Cell centres, in world units.
- *
- *  The road forks. It used to be one polyline ending on a tile in the middle of
- *  the grass, which made the enemies' goal invisible: nothing marked the place
- *  they were trying to reach, so a leak read as "it vanished". Now the trunk
- *  comes down the middle and T's left and right into a GATE in each side wall.
- *
- *  Two goals is also the difficulty that matters. A single lane can be sealed
- *  with four good towers and then the rest of the board is decoration; with two
- *  you must choose what to leave thin, every wave. */
-const TRUNK = [
-  [-5.5, -4.5], [3.5, -4.5], [3.5, -1.5], [-3.5, -1.5],
-  [-3.5, 1.5], [0.5, 1.5], [0.5, 4.5],
-];
-/** From the fork to each gate. Nearly the same length on purpose — a short
- *  branch and a long one is not a choice, it is one real lane and one trap. */
-const BRANCHES = [
-  [[0.5, 4.5], [-5.5, 4.5]],   // west gate
-  [[0.5, 4.5], [5.5, 4.5]],    // east gate
-];
-/** Where each branch ends up, for the gate that sits in the wall there.
- *  On the wall's centre line, so the door fills the doorway rather than being
- *  parked in front of it. */
-const GATES = [
-  { id: 'gate_w', x: -6.6, z: 4.5, yaw: Math.PI / 2 },
-  { id: 'gate_e', x: 6.6, z: 4.5, yaw: -Math.PI / 2 },
-];
-
 const TILE_TOP = 0.2;          // the tiles' own height
 const GROUND_Y = 0;            // walkable surface
+const HALF = 5.5;              // outermost cell centre
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Themes
+//
+// The kit ships a snow copy of every terrain piece, so a level's look is one
+// table lookup rather than a second set of code. Anything a level places goes
+// through here, which is what keeps a new theme from being a rewrite.
+
+const THEMES = {
+  grass: {
+    sky: '#8fc9e8', skirt: '#3f6b38', wall: '#4a4036', ground: '#8fa08a',
+    sun: '#fff6e0', sunIntensity: 2.2, skyIntensity: 2.0,
+    tile: 'td-tile', straight: 'td-tile-straight', dirt: 'td-tile-dirt',
+    spawn: 'td-tile-spawn', end: 'td-tile-end',
+    // Scenery baked into a tile — a tree standing on its own patch of ground.
+    // Cheaper than a tile plus a prop, and it lines up by construction.
+    scenery: ['td-tile-tree', 'td-tile-tree-double', 'td-tile-tree-quad',
+              'td-tile-rock', 'td-tile-crystal'],
+  },
+  snow: {
+    sky: '#c8dcea', skirt: '#9fb3c4', wall: '#5b5a58', ground: '#c6d4e0',
+    sun: '#eaf2ff', sunIntensity: 1.9, skyIntensity: 2.3,
+    tile: 'td-snow-tile', straight: 'td-snow-tile-straight', dirt: 'td-snow-tile-dirt',
+    spawn: 'td-snow-tile-spawn', end: 'td-snow-tile-end',
+    scenery: ['td-snow-tile-tree', 'td-snow-tile-tree-double', 'td-snow-tile-tree-quad',
+              'td-snow-tile-rock', 'td-snow-tile-crystal'],
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The levels
+//
+// Each is a trunk polyline plus a branch to each gate. The road forks on every
+// board: a single lane can be sealed with four good towers and the rest of the
+// map is decoration, and with two the question becomes which half you can
+// afford to leave thin.
+//
+// `gates` says which WALL each branch ends at, because the fork does not have
+// to be left-and-right.
+
+const LEVELS = [
+  {
+    id: 'meadow',
+    name: 'Meadow',
+    theme: 'grass',
+    // Long and open. The first board anyone plays: one loop, wide bends,
+    // nothing hidden, and more room beside the road than the gold will buy.
+    trunk: [[-5.5, -4.5], [3.5, -4.5], [3.5, -1.5], [-3.5, -1.5],
+            [-3.5, 1.5], [0.5, 1.5], [0.5, 4.5]],
+    branches: [[[0.5, 4.5], [-5.5, 4.5]], [[0.5, 4.5], [5.5, 4.5]]],
+    gates: [{ id: 'gate_w', wall: 'w', at: 4.5 }, { id: 'gate_e', wall: 'e', at: 4.5 }],
+    scenerySeed: 11,
+  },
+  {
+    id: 'frostfall',
+    name: 'Frostfall',
+    theme: 'snow',
+    // The fork is early and the two gates are on different walls, so a hero who
+    // commits to one side has a real walk back. And the ground is ice.
+    trunk: [[-5.5, 4.5], [-1.5, 4.5], [-1.5, -0.5], [-4.5, -0.5], [-4.5, -3.5],
+            [2.5, -3.5]],
+    branches: [[[2.5, -3.5], [2.5, -5.5]], [[2.5, -3.5], [5.5, -3.5]]],
+    gates: [{ id: 'gate_n', wall: 'n', at: 2.5 }, { id: 'gate_e', wall: 'e', at: -3.5 }],
+    scenerySeed: 29,
+  },
+  {
+    id: 'crossroads',
+    name: 'Crossroads',
+    theme: 'grass',
+    // The two gates are on OPPOSITE walls and the road doubles back through the
+    // middle. Whatever you build near one gate is thirteen units from the
+    // other, which is the whole level: you cannot cover both with the same guns
+    // and you cannot be at both.
+    trunk: [[0.5, -5.5], [0.5, -1.5], [-3.5, -1.5], [-3.5, 2.5], [1.5, 2.5]],
+    branches: [[[1.5, 2.5], [-5.5, 2.5]], [[1.5, 2.5], [5.5, 2.5]]],
+    gates: [{ id: 'gate_w', wall: 'w', at: 2.5 }, { id: 'gate_e', wall: 'e', at: 2.5 }],
+    scenerySeed: 47,
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Geometry helpers
 
 /** Expand a polyline into every cell it passes through, once each. */
 function expand(corners) {
@@ -57,269 +112,327 @@ function expand(corners) {
   return out;
 }
 
-/** One full walk per gate, trunk included, so the game can follow a route
- *  without knowing that it shares its first thirty cells with the other one. */
-function buildRoutes() {
-  const trunk = expand(TRUNK);
-  return BRANCHES.map((b) => {
-    const branch = expand(b);
-    // The fork cell belongs to the trunk; drop the branch's copy of it.
-    return trunk.concat(branch.slice(1));
-  });
-}
-
 /** A quaternion, as the ARRAY the schema wants — an {x,y,z,w} object here is
  *  rejected at load, loudly and by name, which is the loader working. */
 const yaw = (a) => [0, Math.sin(a / 2), 0, Math.cos(a / 2)];
 
+/** Yaw that points a tile's +Z along this direction. */
+const dirYaw = (d) => Math.atan2(d[0], d[1]);
+const dirTo = (a, b) => [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])];
+const key = (c) => `${c[0]},${c[1]}`;
+
 /** Which model and which way round, from a cell's PATH NEIGHBOURS.
  *
- *  Rewritten from "the direction in and the direction out", which cannot
- *  describe the fork: that cell has one way in and two ways out. Neighbour
- *  counting handles junctions, corners and straights with one rule, and it
- *  reads off the finished board rather than off the order someone walked it.
+ *  Neighbour counting rather than "the direction in and the direction out",
+ *  which cannot describe a fork: that cell has one way in and two ways out. It
+ *  also reads off the finished board rather than off the order someone walked
+ *  it.
  *
- *  The straight tile's stripe runs along Z at yaw 0 — read off the model, not
- *  guessed. */
-function tileFor(cell, neighbours, isSpawn, isEnd) {
-  if (isSpawn) return { model: 'td-tile-spawn', rot: yaw(dirYaw(dirTo(cell, neighbours[0]))) };
-  // The end tile's stub faces BACK the way the path came: pointing it along the
-  // direction of travel puts the join on the far edge and leaves a cell of
-  // grass right before the gate.
-  if (isEnd) return { model: 'td-tile-end', rot: yaw(dirYaw(dirTo(cell, neighbours[0])) + Math.PI) };
+ *  Corners AND forks get a full dirt tile, which is path on all four edges and
+ *  therefore cannot be rotated wrong. The kit's corner tile joins two specific
+ *  edges and every bend was visibly broken until I stopped trying to get its
+ *  lookup table right. Deleting a class of bug beat winning it. */
+function tileFor(theme, cell, neighbours, isSpawn, isEnd) {
+  const t = THEMES[theme];
+  if (isSpawn) return { model: t.spawn, rot: yaw(dirYaw(dirTo(cell, neighbours[0]))) };
+  // The end tile's stub faces BACK the way the road came: pointing it along the
+  // direction of travel puts the join on the far edge and leaves a cell of bare
+  // ground right before the gate.
+  if (isEnd) return { model: t.end, rot: yaw(dirYaw(dirTo(cell, neighbours[0])) + Math.PI) };
   if (neighbours.length === 2) {
     const a = dirTo(cell, neighbours[0]), b = dirTo(cell, neighbours[1]);
-    // Opposite directions = a straight run.
-    if (a[0] === -b[0] && a[1] === -b[1]) return { model: 'td-tile-straight', rot: yaw(dirYaw(a)) };
+    if (a[0] === -b[0] && a[1] === -b[1]) return { model: t.straight, rot: yaw(dirYaw(a)) };
   }
-  // Corners AND the fork: a full dirt tile, which is path on all four edges and
-  // therefore cannot be rotated wrong. The kit's corner tile joins two specific
-  // edges and every bend on the board was visibly broken until I stopped trying
-  // to get its lookup table right. Deleting a class of bug beats winning it.
-  return { model: 'td-tile-dirt', rot: yaw(0) };
+  return { model: t.dirt, rot: yaw(0) };
 }
 
-/** Unit direction from one cell to an adjacent one. */
-function dirTo(a, b) { return [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])]; }
+/** A repeatable shuffle, so a board looks the same every time it is generated.
+ *  Scenery placed with `Math.random()` moves on every `npm run scene`, which
+ *  makes yesterday's screenshot a lie. */
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
 
-/** Yaw that points the tile's +Z along this direction. */
-function dirYaw(d) { return Math.atan2(d[0], d[1]); }
+/** Where a gate sits and which way it faces, from the wall it is set into. */
+function gatePlacement(g) {
+  const D = 6.6;
+  if (g.wall === 'w') return { x: -D, z: g.at, yaw: Math.PI / 2, axis: 'z' };
+  if (g.wall === 'e') return { x: D, z: g.at, yaw: -Math.PI / 2, axis: 'z' };
+  if (g.wall === 'n') return { x: g.at, z: -D, yaw: 0, axis: 'x' };
+  return { x: g.at, z: D, yaw: Math.PI, axis: 'x' };
+}
 
-/** Unused: corners are full dirt tiles now. Kept because the next person to
- *  reach for the kit's corner tile will want the rotation table, and because
- *  it records that the table was the problem rather than the idea. */
-// eslint-disable-next-line no-unused-vars
-function cornerYaw(inDir, outDir) {
-  const from = [-inDir[0], -inDir[1]];     // the edge we came in through
-  for (let k = 0; k < 4; k++) {
-    const a = (k * Math.PI) / 2;
-    const rot = (v) => {
-      const c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
-      return [v[0] * c + v[1] * s, -v[0] * s + v[1] * c];
-    };
-    const f = rot([0, -1]), t = rot([1, 0]);
-    if (f[0] === from[0] && f[1] === from[1] && t[0] === outDir[0] && t[1] === outDir[1]) return a;
-    if (t[0] === from[0] && t[1] === from[1] && f[0] === outDir[0] && f[1] === outDir[1]) return a;
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildLevel(def) {
+  const t = THEMES[def.theme];
+  const entities = [];
+  const add = (e) => entities.push(e);
+
+  // One full walk per gate, trunk included, so the game can follow a route
+  // without knowing that it shares its first cells with the other one.
+  const trunk = expand(def.trunk);
+  const routes = def.branches.map((b) => trunk.concat(expand(b).slice(1)));
+
+  const cells = [];
+  const onPath = new Set();
+  for (const r of routes) for (const c of r) {
+    if (onPath.has(key(c))) continue;
+    onPath.add(key(c));
+    cells.push(c);
   }
-  return 0;
-}
+  const SPAWN = key(routes[0][0]);
+  const ENDS = new Set(routes.map((r) => key(r[r.length - 1])));
 
-const key = (c) => `${c[0]},${c[1]}`;
-const routes = buildRoutes();
-/** Every cell any route touches, once each — what gets a tile laid on it. */
-const cells = [];
-const onPath = new Set();
-for (const r of routes) for (const c of r) {
-  if (onPath.has(key(c))) continue;
-  onPath.add(key(c));
-  cells.push(c);
-}
-const SPAWN = key(routes[0][0]);
-const ENDS = new Set(routes.map((r) => key(r[r.length - 1])));
-
-const entities = [];
-const add = (e) => entities.push(e);
-
-// --- the board ---
-//
-// The tiles ARE the ground. Laying them ON a ground plane and sinking them
-// flush buries them: the first version left 0.01 of a 0.2-thick tile showing
-// and the path read as a few faint scratches. Raising them instead makes a
-// 0.2 lip the character cannot climb (stepHeight is 0.17). So the whole board
-// is tiles, their tops at y=0, with one collision box underneath.
-add({
-  id: 'ground', name: 'ground',
-  // Visible only as a skirt around and below the tiles.
-  primitive: { kind: 'box', size: { x: 13, y: 0.4, z: 13 }, color: '#3f6b38' },
-  transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
-  castShadow: false,
-  // Offset so the collider's TOP lands at y=0 — the tiles' own top surface.
-  collider: {
-    shape: { kind: 'box', halfExtents: { x: 6.5, y: 0.3, z: 6.5 } },
-    body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
-  },
-});
-
-// Grass, everywhere the path is not. Placed before the path so the path tiles
-// are unambiguous about which cells they own.
-for (let gx = -5.5; gx <= 5.5; gx += 1) {
-  for (let gz = -5.5; gz <= 5.5; gz += 1) {
-    if (onPath.has(key([gx, gz]))) continue;
-    add({
-      id: `grass_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'grass', modelAssetId: 'td-tile',
-      transform: { position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz } },
-      // Flat ground casting onto flat ground draws nothing anyone can see and
-      // costs a second full draw of the mesh every frame.
-      castShadow: false,
-    });
-  }
-}
-
-// Walls, so nothing walks off the edge. A world without a floor under its
-// floor strands people; a world without walls does the same more slowly.
-for (const [id, x, z, sx, sz] of [
-  // The north wall is three pieces so the middle one can be taken out at the
-  // end, leaving a gap exactly the width of the door. Removing the whole wall
-  // made the entire top of the board an exit, which is not a door.
-  ['wall_n_l', -3.65, -6.6, 6.1, 0.4], ['wall_n_r', 3.65, -6.6, 6.1, 0.4],
-  ['wall_n_m', 0, -6.6, 1.2, 0.4],
-  ['wall_s', 0, 6.6, 13.4, 0.4],
-  // The side walls have a doorway cut in them at z=4.5, exactly the width of a
-  // door, and a shut door standing in it. Not a hole with an invisible collider
-  // across it, and not a door pasted onto a solid wall: the door IS the wall
-  // there, which is why it stops you, and it is shut, which is why the things
-  // walking towards it are a problem.
-  ['wall_w_n', -6.6, -1.35, 0.4, 10.7], ['wall_w_s', -6.6, 5.85, 0.4, 1.7],
-  ['wall_e_n', 6.6, -1.35, 0.4, 10.7], ['wall_e_s', 6.6, 5.85, 0.4, 1.7],
-]) {
+  // --- the board ---
+  //
+  // The tiles ARE the ground. Laying them ON a ground plane and sinking them
+  // flush buries them: the first version left 0.01 of a 0.2-thick tile showing
+  // and the road read as a few faint scratches. Raising them instead makes a
+  // 0.2 lip the character cannot climb (stepHeight is 0.17). So the whole board
+  // is tiles, their tops at y=0, with one collision box underneath.
   add({
-    id, name: id,
-    primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
-    transform: { position: { x, y: 0.4, z } },
-    collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
-  });
-}
-
-// --- the path ---
-for (let i = 0; i < cells.length; i++) {
-  const c = cells[i];
-  const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-    .map(([dx, dz]) => [c[0] + dx, c[1] + dz])
-    .filter((n) => onPath.has(key(n)));
-  const { model, rot } = tileFor(c, nb, key(c) === SPAWN, ENDS.has(key(c)));
-  add({
-    id: `path_${i}`, name: `path_${i}`, modelAssetId: model, castShadow: false,
-    // Sunk so the tiles' TOP is the walkable surface — laid ON the ground they
-    // would be a 0.2 step the character cannot climb (stepHeight is 0.17).
-    transform: { position: { x: c[0], y: GROUND_Y - TILE_TOP, z: c[1] }, rotation: rot },
-  });
-}
-
-// --- the gates the enemies are walking towards ---
-//
-// SHUT, and set against the inside face of the wall rather than into a gap in
-// it. A hole in the wall would be a hole: the ground is 13x13 and the hero
-// would walk out of the world through it, and a doorway with an invisible
-// collider across it is worse than no doorway. A closed gate is honest about
-// all of it — the enemies are trying to break in, and a shut door is a shut
-// door for everyone.
-for (const g of GATES) {
-  add({
-    id: g.id, name: 'gate', modelAssetId: 'hub-door',
-    transform: { position: { x: g.x, y: GROUND_Y, z: g.z }, rotation: yaw(g.yaw) },
-    // Its own collider, filling the gap the wall pieces leave. A shut door you
-    // can walk through is a hole; a hole in this wall is a fall out of the
-    // world, because the ground is 13x13 and stops.
+    id: 'ground', name: 'ground',
+    primitive: { kind: 'box', size: { x: 13, y: 0.4, z: 13 }, color: t.skirt },
+    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
+    castShadow: false,
     collider: {
-      shape: { kind: 'box', halfExtents: { x: 0.2, y: 0.6, z: 0.5 } },
-      body: 'fixed', offset: { x: 0, y: 0.4, z: 0 },
+      shape: { kind: 'box', halfExtents: { x: 6.5, y: 0.3, z: 6.5 } },
+      body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
     },
   });
-}
 
-// --- build spots: every cell orthogonally next to the path, inside the board ---
-const spots = [];
-const seen = new Set();
-for (const c of cells) {
-  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-    const n = [c[0] + dx, c[1] + dz];
-    if (onPath.has(key(n)) || seen.has(key(n))) continue;
-    if (Math.abs(n[0]) > 5.5 || Math.abs(n[1]) > 5.5) continue;
-    seen.add(key(n));
-    spots.push(n);
+  // --- build spots: every cell orthogonally next to the road ---
+  const spots = [];
+  const spotSet = new Set();
+  for (const c of cells) {
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const n = [c[0] + dx, c[1] + dz];
+      if (onPath.has(key(n)) || spotSet.has(key(n))) continue;
+      if (Math.abs(n[0]) > HALF || Math.abs(n[1]) > HALF) continue;
+      spotSet.add(key(n));
+      spots.push(n);
+    }
   }
-}
-// ONE marker, moved to whatever the player is standing on. Drawing all 71 of
-// them turned the board into a grid of orange brackets with the game somewhere
-// underneath — the kit's selection ring is a cursor, not a legend.
-add({
-  id: 'build_marker', name: 'build_marker', modelAssetId: 'td-selection',
-  transform: { position: { x: 0, y: GROUND_Y + 0.02, z: 0 } },
-});
 
-// --- scenery, only where it cannot be built on ---
-const decor = [
-  ['detail-tree', -5.5, 0.5], ['detail-tree', 5.5, -0.5], ['detail-tree', -5.5, 5.5],
-  ['detail-rocks', 5.5, 5.5], ['detail-crystal', -5.5, -1.5], ['detail-rocks', 0.5, -5.5],
-];
-for (const [m, x, z] of decor) {
-  if (onPath.has(key([x, z])) || seen.has(key([x, z]))) continue;
+  // --- scenery, then plain ground for whatever is left ---
+  //
+  // Trees and rocks come as TILES in this kit, so a wooded corner costs the
+  // same as bare ground. They go on the outer ring only: scenery in the middle
+  // of the field is scenery the hero has to walk around on the way to a tower,
+  // and a board that reads as rich is not worth a board that fights you.
+  const rand = rng(def.scenerySeed);
+  const sceneryAt = new Map();
+  for (let gx = -HALF; gx <= HALF; gx += 1) {
+    for (let gz = -HALF; gz <= HALF; gz += 1) {
+      const k = key([gx, gz]);
+      if (onPath.has(k) || spotSet.has(k)) continue;
+      const onRing = Math.abs(gx) === HALF || Math.abs(gz) === HALF;
+      if (!onRing || rand() > 0.5) continue;
+      sceneryAt.set(k, t.scenery[Math.floor(rand() * t.scenery.length)]);
+    }
+  }
+
+  for (let gx = -HALF; gx <= HALF; gx += 1) {
+    for (let gz = -HALF; gz <= HALF; gz += 1) {
+      const k = key([gx, gz]);
+      if (onPath.has(k)) continue;
+      const decorated = sceneryAt.has(k);
+      const e = {
+        id: `ground_${gx}_${gz}`.replace(/[.-]/g, '_'),
+        name: decorated ? 'scenery' : 'ground_tile',
+        modelAssetId: decorated ? sceneryAt.get(k) : t.tile,
+        transform: {
+          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
+          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
+        },
+        // Flat ground casting onto flat ground draws nothing anyone can see and
+        // costs a second full draw of the mesh every frame. Scenery is not flat.
+        castShadow: decorated,
+      };
+      if (decorated) {
+        // Solid, or the hero walks through the trunk of a tree. A thin post is
+        // enough: the point is that it reads as an obstacle, not that the
+        // collider is shaped like one.
+        e.collider = {
+          shape: { kind: 'box', halfExtents: { x: 0.34, y: 0.5, z: 0.34 } },
+          body: 'fixed', offset: { x: 0, y: 0.5, z: 0 },
+        };
+      }
+      add(e);
+    }
+  }
+
+  // --- the road ---
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i];
+    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+      .map(([dx, dz]) => [c[0] + dx, c[1] + dz])
+      .filter((n) => onPath.has(key(n)));
+    const { model, rot } = tileFor(def.theme, c, nb, key(c) === SPAWN, ENDS.has(key(c)));
+    add({
+      id: `path_${i}`, name: `path_${i}`, modelAssetId: model, castShadow: false,
+      // Sunk so the tiles' TOP is the walkable surface — laid ON the ground they
+      // would be a 0.2 step the character cannot climb (stepHeight is 0.17).
+      transform: { position: { x: c[0], y: GROUND_Y - TILE_TOP, z: c[1] }, rotation: rot },
+    });
+  }
+
+  // --- walls, with a doorway where each gate goes ---
+  //
+  // A gap exactly one door wide, filled by a SHUT door carrying its own
+  // collider. Not a door pasted on a solid wall, and not a hole with an
+  // invisible collider across it: the ground is 13x13 and stops, so a real hole
+  // is a fall out of the world. A shut gate is honest about all of it — the
+  // enemies are trying to break in, and a shut door is shut for everyone.
+  //
+  // The north wall also carries the player's EXIT, which opens when the run
+  // ends, so it always has a gap in the middle whether or not a gate is there.
+  const gaps = { n: [[0, 0.6]], s: [], w: [], e: [] };
+  for (const g of def.gates) gaps[g.wall].push([g.at, 0.5]);
+
+  /** One wall, minus its doorways. */
+  const wallRun = (side) => {
+    const holes = [...gaps[side]].sort((a, b) => a[0] - b[0]);
+    const pieces = [];
+    let from = -6.7;
+    for (const [centre, half] of holes) {
+      if (centre - half > from) pieces.push([from, centre - half]);
+      from = Math.max(from, centre + half);
+    }
+    if (from < 6.7) pieces.push([from, 6.7]);
+    return pieces;
+  };
+  for (const side of ['n', 's', 'w', 'e']) {
+    const along = side === 'n' || side === 's' ? 'x' : 'z';
+    const fixed = side === 'n' || side === 'w' ? -6.6 : 6.6;
+    wallRun(side).forEach(([a, b], i) => {
+      const mid = (a + b) / 2, len = b - a;
+      add({
+        id: `wall_${side}${i}`, name: `wall_${side}${i}`,
+        primitive: {
+          kind: 'box',
+          size: along === 'x' ? { x: len, y: 1.2, z: 0.4 } : { x: 0.4, y: 1.2, z: len },
+          color: t.wall,
+        },
+        transform: {
+          position: along === 'x' ? { x: mid, y: 0.4, z: fixed } : { x: fixed, y: 0.4, z: mid },
+        },
+        collider: {
+          shape: {
+            kind: 'box',
+            halfExtents: along === 'x'
+              ? { x: len / 2, y: 0.6, z: 0.2 } : { x: 0.2, y: 0.6, z: len / 2 },
+          },
+          body: 'fixed',
+        },
+      });
+    });
+  }
+
+  // The exit doorway's own filler, so the gap is not a hole until it opens.
   add({
-    id: `decor_${m}_${x}_${z}`.replace(/[.-]/g, '_'), name: 'decor',
-    modelAssetId: `td-${m.replace('detail-', '')}`,
-    transform: { position: { x, y: GROUND_Y, z } },
+    id: 'exit_block', name: 'exit_block',
+    primitive: { kind: 'box', size: { x: 1.2, y: 1.2, z: 0.4 }, color: t.wall },
+    transform: { position: { x: 0, y: 0.4, z: -6.6 } },
+    collider: {
+      shape: { kind: 'box', halfExtents: { x: 0.6, y: 0.6, z: 0.2 } }, body: 'fixed',
+    },
   });
+
+  def.gates.map(gatePlacement).forEach((pl, i) => {
+    add({
+      id: def.gates[i].id, name: 'gate', modelAssetId: 'hub-door',
+      transform: { position: { x: pl.x, y: GROUND_Y, z: pl.z }, rotation: yaw(pl.yaw) },
+      collider: {
+        shape: {
+          kind: 'box',
+          halfExtents: pl.axis === 'z'
+            ? { x: 0.2, y: 0.6, z: 0.5 } : { x: 0.5, y: 0.6, z: 0.2 },
+        },
+        body: 'fixed', offset: { x: 0, y: 0.4, z: 0 },
+      },
+    });
+  });
+
+  // ONE selection marker, moved to whatever the player is standing on. Drawing
+  // all seventy of them turned the board into a grid of orange brackets with
+  // the game somewhere underneath — the kit's selection ring is a cursor, not a
+  // legend.
+  add({
+    id: 'build_marker', name: 'build_marker', modelAssetId: 'td-selection',
+    transform: { position: { x: 0, y: GROUND_Y + 0.02, z: 0 } },
+  });
+
+  // --- the way out ---
+  //
+  // Hidden until the run ends: a door standing open the whole time would read
+  // as somewhere you could go, and there is nothing behind it yet.
+  add({
+    id: 'exit_door', name: 'exit_door', modelAssetId: 'hub-door-open',
+    transform: { position: { x: 0, y: GROUND_Y, z: -6.6 } },
+    visible: false,
+  });
+  add({
+    id: 'exit_frame', name: 'exit_frame',
+    primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
+    transform: { position: { x: 0, y: 0.5, z: -6.78 } },
+    visible: false,
+  });
+
+  // --- the hero ---
+  //
+  // Dropped just inside the exit door, which is where they walked in.
+  add({
+    id: 'hero', name: 'hero', modelAssetId: 'hero',
+    transform: { position: { x: 0, y: GROUND_Y, z: -5.0 } },
+    // Declaring a starting clip is what creates the MIXER, and without a mixer
+    // there is no CharacterAnimator and the hero never moves a limb — silently,
+    // with the model rendering and sliding around exactly as if it were fine.
+    animation: { play: 'idle', loop: true },
+  });
+
+  const scene = {
+    schemaVersion: 1,
+    id: def.id,
+    name: def.name,
+    environment: { background: t.sky },
+    gravity: { x: 0, y: -4.1692, z: 0 },
+    lights: [
+      { id: 'sky', kind: 'hemisphere', color: '#ffffff', groundColor: t.ground,
+        intensity: t.skyIntensity },
+      { id: 'sun', kind: 'directional', color: t.sun, intensity: t.sunIntensity,
+        position: { x: 4, y: 8, z: 5 }, castShadow: true },
+    ],
+    camera: { kind: 'follow', target: 'hero', fov: 55, offset: { x: 0, y: 5.2, z: 6.4 } },
+    entities,
+  };
+
+  // The waypoints the game walks enemies along — the same polylines the tiles
+  // were laid from, so the road you SEE and the road they FOLLOW cannot drift
+  // apart. `scenery` goes with them so the crates know where not to land.
+  const path = {
+    routes, cells, spots,
+    scenery: [...sceneryAt.keys()].map((k) => k.split(',').map(Number)),
+    gates: def.gates.map((g) => g.id),
+  };
+  return { scene, path };
 }
 
-// The way out. Hidden until the run ends: a door standing open the whole time
-// would read as somewhere you could go, and there is nothing behind it yet.
-add({
-  id: 'exit_door', name: 'exit_door', modelAssetId: 'hub-door-open',
-  transform: { position: { x: 0, y: GROUND_Y, z: -6.6 } },
-  visible: false,
-});
-add({
-  id: 'exit_frame', name: 'exit_frame',
-  primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
-  transform: { position: { x: 0, y: 0.5, z: -6.78 } },
-  visible: false,
-});
-
-// --- the hero ---
-add({
-  id: 'hero', name: 'hero', modelAssetId: 'hero',
-  transform: { position: { x: 0, y: GROUND_Y, z: 3.5 } },
-  // Declaring a starting clip is what creates the MIXER, and without a mixer
-  // there is no CharacterAnimator and the hero never moves a limb — silently,
-  // with the model rendering and sliding around exactly as if it were fine.
-  animation: { play: 'idle', loop: true },
-});
-
-const scene = {
-  schemaVersion: 1,
-  id: 'main',
-  name: 'Woodland Defense',
-  environment: { background: '#8fc9e8' },
-  gravity: { x: 0, y: -4.1692, z: 0 },
-  lights: [
-    { id: 'sky', kind: 'hemisphere', color: '#ffffff', groundColor: '#8fa08a', intensity: 2.0 },
-    { id: 'sun', kind: 'directional', color: '#fff6e0', intensity: 2.2,
-      position: { x: 4, y: 8, z: 5 }, castShadow: true },
-  ],
-  camera: { kind: 'follow', target: 'hero', fov: 55, offset: { x: 0, y: 5.2, z: 6.4 } },
-  entities,
-};
-
-writeFileSync(new URL('../public/scenes3d/main.json', import.meta.url),
-  JSON.stringify(scene, null, 2) + '\n');
-
-// The waypoints the game walks enemies along — the same polyline, so the
-// path you SEE and the path they FOLLOW cannot drift apart.
-writeFileSync(new URL('../public/scenes3d/path.json', import.meta.url),
-  JSON.stringify({ routes, cells, spots }, null, 2) + '\n');
-
-console.log(`${entities.length} entities — ${cells.length} path tiles, ${spots.length} build spots, `
-  + `${routes.length} routes (${routes.map((r) => r.length).join('/')} cells)`);
+for (const def of LEVELS) {
+  const { scene, path } = buildLevel(def);
+  writeFileSync(new URL(`../public/scenes3d/${def.id}.json`, import.meta.url),
+    JSON.stringify(scene, null, 2) + '\n');
+  writeFileSync(new URL(`../public/scenes3d/${def.id}-path.json`, import.meta.url),
+    JSON.stringify(path, null, 2) + '\n');
+  console.log(`${def.id.padEnd(12)} ${String(scene.entities.length).padStart(4)} entities · `
+    + `${path.cells.length} road · ${path.spots.length} spots · ${path.scenery.length} scenery · `
+    + `routes ${path.routes.map((r) => r.length).join('/')}`);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The hub: where a run starts.
@@ -398,17 +511,31 @@ function buildHub() {
     }
   }
 
-  // Walls, with a gap at the top where the door is.
-  for (const [id, x, z, sx, sz] of [
+  // One doorway per level, along the front wall.
+  //
+  // A door you can see from where you spawn is the level select: no menu, no
+  // list, walk at the one you want. Locked ones are SHUT and stay shut, which
+  // is the same rule the gates on the boards follow — a shut door is shut.
+  const DOOR_X = LEVELS.map((_, i) => (i - (LEVELS.length - 1) / 2) * 3.4);
+  const gaps = DOOR_X.map((x) => [x - 0.7, x + 0.7]).sort((a, b) => a[0] - b[0]);
+  const frontPieces = [];
+  {
+    let from = -HALF - 0.7;
+    for (const [a, b] of gaps) {
+      if (a > from) frontPieces.push([from, a]);
+      from = Math.max(from, b);
+    }
+    if (from < HALF + 0.7) frontPieces.push([from, HALF + 0.7]);
+  }
+  const walls = [
     ['hwall_s', 0, HALF + 0.6, 2 * HALF + 1.4, 0.4],
     ['hwall_w', -HALF - 0.6, 0, 0.4, 2 * HALF + 1.4],
     ['hwall_e', HALF + 0.6, 0, 0.4, 2 * HALF + 1.4],
-    // The gap is the door's width, not a doorway-sized hole: you used to be
-    // able to walk in anywhere along the front and the level would start,
-    // which taught that the door was decoration.
-    ['hwall_n1', -2.9, -HALF - 0.6, 4.6, 0.4],
-    ['hwall_n2', 2.9, -HALF - 0.6, 4.6, 0.4],
-  ]) {
+  ];
+  frontPieces.forEach(([a, b], i) => {
+    walls.push([`hwall_n${i}`, (a + b) / 2, -HALF - 0.6, b - a, 0.4]);
+  });
+  for (const [id, x, z, sx, sz] of walls) {
     ents.push({
       id, name: id,
       primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
@@ -417,15 +544,37 @@ function buildHub() {
     });
   }
 
-  // The door, in the gap. No collider: walking INTO it is the whole point.
-  ents.push({
-    id: 'door', name: 'door', modelAssetId: 'hub-door-open',
-    transform: { position: { x: 0, y: GROUND_Y, z: -HALF - 0.6 } },
-  });
-  ents.push({
-    id: 'door_frame', name: 'door_frame',
-    primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
-    transform: { position: { x: 0, y: 0.5, z: -HALF - 0.78 } },
+  // Two doors per slot, in the same place: the open one and the shut one. The
+  // game shows whichever matches your progress — swapping a model at runtime
+  // means loading it at runtime, and a door that pops in a second after the
+  // hub does reads as a glitch.
+  LEVELS.forEach((lv, i) => {
+    const x = DOOR_X[i];
+    ents.push({
+      id: `door_${lv.id}`, name: 'door', modelAssetId: 'hub-door-open',
+      transform: { position: { x, y: GROUND_Y, z: -HALF - 0.6 } },
+      visible: false,
+    });
+    ents.push({
+      id: `door_${lv.id}_shut`, name: 'door_shut', modelAssetId: 'hub-door',
+      transform: { position: { x, y: GROUND_Y, z: -HALF - 0.6 } },
+      visible: false,
+      collider: {
+        shape: { kind: 'box', halfExtents: { x: 0.5, y: 0.6, z: 0.2 } },
+        body: 'fixed', offset: { x: 0, y: 0.4, z: 0 },
+      },
+    });
+    ents.push({
+      id: `door_${lv.id}_frame`, name: 'door_frame',
+      primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
+      transform: { position: { x, y: 0.5, z: -HALF - 0.78 } },
+    });
+    // A signpost beside each, so a door is a PLACE with a name rather than one
+    // of three identical holes in a wall.
+    ents.push({
+      id: `door_${lv.id}_sign`, name: 'door_sign', modelAssetId: 'hub-sign',
+      transform: { position: { x: x + 0.95, y: GROUND_Y, z: -HALF + 0.15 } },
+    });
   });
 
   // The sign, and the ring that says you can do something here.

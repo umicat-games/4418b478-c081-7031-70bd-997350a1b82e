@@ -223,6 +223,676 @@
         "attack": "attack-melee-right",
         "die": "die"
       }
+    },
+    {
+      "id": "td-detail-crystal-large",
+      "path": "kit/td/detail-crystal-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-detail-dirt-large",
+      "path": "kit/td/detail-dirt-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-detail-dirt",
+      "path": "kit/td/detail-dirt.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-detail-rocks-large",
+      "path": "kit/td/detail-rocks-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-detail-tree-large",
+      "path": "kit/td/detail-tree-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-enemy-ufo-beam-burst",
+      "path": "kit/td/enemy-ufo-beam-burst.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-enemy-ufo-beam",
+      "path": "kit/td/enemy-ufo-beam.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-selection-b",
+      "path": "kit/td/selection-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-crystal-large",
+      "path": "kit/td/snow-detail-crystal-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-crystal",
+      "path": "kit/td/snow-detail-crystal.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-dirt-large",
+      "path": "kit/td/snow-detail-dirt-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-dirt",
+      "path": "kit/td/snow-detail-dirt.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-rocks-large",
+      "path": "kit/td/snow-detail-rocks-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-rocks",
+      "path": "kit/td/snow-detail-rocks.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-tree-large",
+      "path": "kit/td/snow-detail-tree-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-detail-tree",
+      "path": "kit/td/snow-detail-tree.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-bump",
+      "path": "kit/td/snow-tile-bump.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-corner-inner",
+      "path": "kit/td/snow-tile-corner-inner.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-corner-large",
+      "path": "kit/td/snow-tile-corner-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-corner-outer",
+      "path": "kit/td/snow-tile-corner-outer.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-corner-round",
+      "path": "kit/td/snow-tile-corner-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-corner-square",
+      "path": "kit/td/snow-tile-corner-square.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-crossing",
+      "path": "kit/td/snow-tile-crossing.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-crystal",
+      "path": "kit/td/snow-tile-crystal.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-dirt",
+      "path": "kit/td/snow-tile-dirt.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-end-round",
+      "path": "kit/td/snow-tile-end-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-end",
+      "path": "kit/td/snow-tile-end.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-hill",
+      "path": "kit/td/snow-tile-hill.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-river-bridge",
+      "path": "kit/td/snow-tile-river-bridge.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-river-corner",
+      "path": "kit/td/snow-tile-river-corner.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-river-slope-large",
+      "path": "kit/td/snow-tile-river-slope-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-river-slope",
+      "path": "kit/td/snow-tile-river-slope.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-river-straight",
+      "path": "kit/td/snow-tile-river-straight.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-river-transition",
+      "path": "kit/td/snow-tile-river-transition.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-river-waterfall",
+      "path": "kit/td/snow-tile-river-waterfall.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-rock",
+      "path": "kit/td/snow-tile-rock.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-slope",
+      "path": "kit/td/snow-tile-slope.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-spawn-end-round",
+      "path": "kit/td/snow-tile-spawn-end-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-spawn-end",
+      "path": "kit/td/snow-tile-spawn-end.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-spawn-round",
+      "path": "kit/td/snow-tile-spawn-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-spawn",
+      "path": "kit/td/snow-tile-spawn.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-split",
+      "path": "kit/td/snow-tile-split.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-straight-slope-large",
+      "path": "kit/td/snow-tile-straight-slope-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-straight-slope",
+      "path": "kit/td/snow-tile-straight-slope.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-straight",
+      "path": "kit/td/snow-tile-straight.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-transition",
+      "path": "kit/td/snow-tile-transition.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-tree-double",
+      "path": "kit/td/snow-tile-tree-double.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-tree-quad",
+      "path": "kit/td/snow-tile-tree-quad.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-tree",
+      "path": "kit/td/snow-tile-tree.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-wide-corner",
+      "path": "kit/td/snow-tile-wide-corner.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-wide-split",
+      "path": "kit/td/snow-tile-wide-split.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-wide-straight",
+      "path": "kit/td/snow-tile-wide-straight.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile-wide-transition",
+      "path": "kit/td/snow-tile-wide-transition.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-tile",
+      "path": "kit/td/snow-tile.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-wood-structure-high-part",
+      "path": "kit/td/snow-wood-structure-high-part.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-wood-structure-high",
+      "path": "kit/td/snow-wood-structure-high.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-wood-structure-part",
+      "path": "kit/td/snow-wood-structure-part.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-snow-wood-structure",
+      "path": "kit/td/snow-wood-structure.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-spawn-round",
+      "path": "kit/td/spawn-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-spawn-square",
+      "path": "kit/td/spawn-square.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-bump",
+      "path": "kit/td/tile-bump.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-corner-inner",
+      "path": "kit/td/tile-corner-inner.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-corner-large",
+      "path": "kit/td/tile-corner-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-corner-outer",
+      "path": "kit/td/tile-corner-outer.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-corner-round",
+      "path": "kit/td/tile-corner-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-crossing",
+      "path": "kit/td/tile-crossing.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-crystal",
+      "path": "kit/td/tile-crystal.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-end-round",
+      "path": "kit/td/tile-end-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-hill",
+      "path": "kit/td/tile-hill.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-river-bridge",
+      "path": "kit/td/tile-river-bridge.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-river-corner",
+      "path": "kit/td/tile-river-corner.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-river-slope-large",
+      "path": "kit/td/tile-river-slope-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-river-slope",
+      "path": "kit/td/tile-river-slope.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-river-straight",
+      "path": "kit/td/tile-river-straight.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-river-transition",
+      "path": "kit/td/tile-river-transition.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-river-waterfall",
+      "path": "kit/td/tile-river-waterfall.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-rock",
+      "path": "kit/td/tile-rock.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-slope",
+      "path": "kit/td/tile-slope.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-spawn-end-round",
+      "path": "kit/td/tile-spawn-end-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-spawn-end",
+      "path": "kit/td/tile-spawn-end.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-spawn-round",
+      "path": "kit/td/tile-spawn-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-split",
+      "path": "kit/td/tile-split.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-straight-slope-large",
+      "path": "kit/td/tile-straight-slope-large.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-straight-slope",
+      "path": "kit/td/tile-straight-slope.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-transition",
+      "path": "kit/td/tile-transition.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-tree-double",
+      "path": "kit/td/tile-tree-double.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-tree-quad",
+      "path": "kit/td/tile-tree-quad.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-tree",
+      "path": "kit/td/tile-tree.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-wide-corner",
+      "path": "kit/td/tile-wide-corner.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-wide-split",
+      "path": "kit/td/tile-wide-split.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-wide-straight",
+      "path": "kit/td/tile-wide-straight.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tile-wide-transition",
+      "path": "kit/td/tile-wide-transition.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-base",
+      "path": "kit/td/tower-round-base.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-bottom-a",
+      "path": "kit/td/tower-round-bottom-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-bottom-b",
+      "path": "kit/td/tower-round-bottom-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-bottom-c",
+      "path": "kit/td/tower-round-bottom-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-build-a",
+      "path": "kit/td/tower-round-build-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-build-b",
+      "path": "kit/td/tower-round-build-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-build-c",
+      "path": "kit/td/tower-round-build-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-build-d",
+      "path": "kit/td/tower-round-build-d.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-build-e",
+      "path": "kit/td/tower-round-build-e.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-build-f",
+      "path": "kit/td/tower-round-build-f.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-crystals",
+      "path": "kit/td/tower-round-crystals.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-middle-a",
+      "path": "kit/td/tower-round-middle-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-middle-b",
+      "path": "kit/td/tower-round-middle-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-middle-c",
+      "path": "kit/td/tower-round-middle-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-roof-a",
+      "path": "kit/td/tower-round-roof-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-roof-b",
+      "path": "kit/td/tower-round-roof-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-roof-c",
+      "path": "kit/td/tower-round-roof-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-top-a",
+      "path": "kit/td/tower-round-top-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-top-b",
+      "path": "kit/td/tower-round-top-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-round-top-c",
+      "path": "kit/td/tower-round-top-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-bottom-a",
+      "path": "kit/td/tower-square-bottom-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-bottom-b",
+      "path": "kit/td/tower-square-bottom-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-bottom-c",
+      "path": "kit/td/tower-square-bottom-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-build-a",
+      "path": "kit/td/tower-square-build-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-build-b",
+      "path": "kit/td/tower-square-build-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-build-c",
+      "path": "kit/td/tower-square-build-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-build-d",
+      "path": "kit/td/tower-square-build-d.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-build-e",
+      "path": "kit/td/tower-square-build-e.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-build-f",
+      "path": "kit/td/tower-square-build-f.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-middle-a",
+      "path": "kit/td/tower-square-middle-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-middle-b",
+      "path": "kit/td/tower-square-middle-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-middle-c",
+      "path": "kit/td/tower-square-middle-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-roof-a",
+      "path": "kit/td/tower-square-roof-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-roof-b",
+      "path": "kit/td/tower-square-roof-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-roof-c",
+      "path": "kit/td/tower-square-roof-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-top-a",
+      "path": "kit/td/tower-square-top-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-top-b",
+      "path": "kit/td/tower-square-top-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-tower-square-top-c",
+      "path": "kit/td/tower-square-top-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-wood-structure-high-part",
+      "path": "kit/td/wood-structure-high-part.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-wood-structure-high",
+      "path": "kit/td/wood-structure-high.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-wood-structure-part",
+      "path": "kit/td/wood-structure-part.glb",
+      "importScale": 1
+    },
+    {
+      "id": "td-wood-structure",
+      "path": "kit/td/wood-structure.glb",
+      "importScale": 1
     }
   ]
 }
