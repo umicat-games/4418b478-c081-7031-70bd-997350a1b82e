@@ -95,6 +95,20 @@ const LEVELS = [
     scenerySeed: 29,
   },
   {
+    id: 'rivermeet',
+    name: 'Rivermeet',
+    theme: 'grass',
+    // A river straight across the middle. The saucers FLY, so it is not in
+    // their way at all — it is in yours. Three bridges, and whichever half of
+    // the board you are on, getting to the other one costs the walk to a
+    // crossing. It is the sharpest version of the thing this game is about.
+    trunk: [[-5.5, -4.5], [3.5, -4.5], [3.5, -2.5], [0.5, -2.5], [0.5, 3.5]],
+    branches: [[[0.5, 3.5], [-5.5, 3.5]], [[0.5, 3.5], [5.5, 3.5]]],
+    gates: [{ id: 'gate_w', wall: 'w', at: 3.5 }, { id: 'gate_e', wall: 'e', at: 3.5 }],
+    river: { z: 0.5, bridges: [-3.5, 0.5, 4.5] },
+    scenerySeed: 73,
+  },
+  {
     id: 'crossroads',
     name: 'Crossroads',
     theme: 'grass',
@@ -204,6 +218,13 @@ function buildLevel(def) {
   const SPAWN = key(routes[0][0]);
   const ENDS = new Set(routes.map((r) => key(r[r.length - 1])));
 
+  // The river, if this board has one. `blocked` is what the hero cannot cross;
+  // `bridges` is where they can. The saucers ignore both — they fly.
+  const river = def.river ?? null;
+  const isRiver = (x, z) => river !== null && z === river.z;
+  const isBridge = (x, z) => isRiver(x, z) && river.bridges.includes(x);
+  const blocked = [];
+
   // --- the board ---
   //
   // The tiles ARE the ground. Laying them ON a ground plane and sinking them
@@ -230,6 +251,8 @@ function buildLevel(def) {
       const n = [c[0] + dx, c[1] + dz];
       if (onPath.has(key(n)) || spotSet.has(key(n))) continue;
       if (Math.abs(n[0]) > HALF || Math.abs(n[1]) > HALF) continue;
+      // Nothing gets built in the water.
+      if (isRiver(n[0], n[1])) continue;
       spotSet.add(key(n));
       spots.push(n);
     }
@@ -246,7 +269,7 @@ function buildLevel(def) {
   for (let gx = -HALF; gx <= HALF; gx += 1) {
     for (let gz = -HALF; gz <= HALF; gz += 1) {
       const k = key([gx, gz]);
-      if (onPath.has(k) || spotSet.has(k)) continue;
+      if (onPath.has(k) || spotSet.has(k) || isRiver(gx, gz)) continue;
       const onRing = Math.abs(gx) === HALF || Math.abs(gz) === HALF;
       if (!onRing || rand() > 0.5) continue;
       sceneryAt.set(k, t.scenery[Math.floor(rand() * t.scenery.length)]);
@@ -257,6 +280,35 @@ function buildLevel(def) {
     for (let gz = -HALF; gz <= HALF; gz += 1) {
       const k = key([gx, gz]);
       if (onPath.has(k)) continue;
+      if (isRiver(gx, gz)) {
+        // Water, or a bridge over it. The river tile is 0.25 deep and the
+        // bridge sits on top of it, so both go down at the same height as any
+        // other tile and the surface still lines up.
+        const bridge = isBridge(gx, gz);
+        const e = {
+          id: `river_${gx}_${gz}`.replace(/[.-]/g, '_'),
+          name: bridge ? 'bridge' : 'river',
+          modelAssetId: bridge ? t.river.bridge : t.river.straight,
+          transform: {
+            position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
+            // The straight tile's channel runs along Z at yaw 0, same as the
+            // road's stripe — read off the model, not guessed.
+            rotation: yaw(Math.PI / 2),
+          },
+          castShadow: false,
+        };
+        if (!bridge) {
+          // A wall you can see the point of. The hero is stopped; the saucers
+          // are not, because they were never on the ground.
+          e.collider = {
+            shape: { kind: 'box', halfExtents: { x: 0.5, y: 0.5, z: 0.5 } },
+            body: 'fixed', offset: { x: 0, y: 0.45, z: 0 },
+          };
+          blocked.push([gx, gz]);
+        }
+        add(e);
+        continue;
+      }
       const decorated = sceneryAt.has(k);
       const e = {
         id: `ground_${gx}_${gz}`.replace(/[.-]/g, '_'),
@@ -303,7 +355,7 @@ function buildLevel(def) {
     for (let gx = -HALF; gx <= HALF; gx += 1) {
       for (let gz = -HALF; gz <= HALF; gz += 1) {
         const k = key([gx, gz]);
-        if (onPath.has(k) || spotSet.has(k) || sceneryAt.has(k)) continue;
+        if (onPath.has(k) || spotSet.has(k) || sceneryAt.has(k) || isRiver(gx, gz)) continue;
         if (Math.abs(gx) !== HALF && Math.abs(gz) !== HALF) continue;
         ringPlain.push([gx, gz]);
       }
@@ -327,12 +379,31 @@ function buildLevel(def) {
     const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]]
       .map(([dx, dz]) => [c[0] + dx, c[1] + dz])
       .filter((n) => onPath.has(key(n)));
-    const { model, rot } = tileFor(def.theme, c, nb, key(c) === SPAWN, ENDS.has(key(c)));
+    let { model, rot } = tileFor(def.theme, c, nb, key(c) === SPAWN, ENDS.has(key(c)));
+    if (isRiver(c[0], c[1])) {
+      // Where the road meets the water it is a bridge, whatever the road would
+      // otherwise have been.
+      model = t.river.bridge;
+      rot = yaw(Math.PI / 2);
+    }
     add({
       id: `path_${i}`, name: `path_${i}`, modelAssetId: model, castShadow: false,
       // Sunk so the tiles' TOP is the walkable surface — laid ON the ground they
       // would be a 0.2 step the character cannot climb (stepHeight is 0.17).
       transform: { position: { x: c[0], y: GROUND_Y - TILE_TOP, z: c[1] }, rotation: rot },
+    });
+  }
+
+  // The water itself. The kit's river tile is SOLID — the water is painted into
+  // its channel by the colormap — and a 5cm trench catches no light at all, so
+  // the river read as a black crack across the board. A slab of blue sitting in
+  // the channel is what makes it a river.
+  if (river) {
+    add({
+      id: 'water', name: 'water',
+      primitive: { kind: 'box', size: { x: 2 * HALF + 1, y: 0.04, z: 0.72 }, color: '#4fa8d8' },
+      transform: { position: { x: 0, y: GROUND_Y - 0.06, z: river.z } },
+      castShadow: false,
     });
   }
 
@@ -470,7 +541,7 @@ function buildLevel(def) {
   // were laid from, so the road you SEE and the road they FOLLOW cannot drift
   // apart. `scenery` goes with them so the crates know where not to land.
   const path = {
-    routes, cells, spots,
+    routes, cells, spots, blocked,
     scenery: [...sceneryAt.keys()].map((k) => k.split(',').map(Number)),
     gates: def.gates.map((g) => g.id),
   };
@@ -570,8 +641,11 @@ function buildHub() {
   // A door you can see from where you spawn is the level select: no menu, no
   // list, walk at the one you want. Locked ones are SHUT and stay shut, which
   // is the same rule the gates on the boards follow — a shut door is shut.
-  const DOOR_X = LEVELS.map((_, i) => (i - (LEVELS.length - 1) / 2) * 3.4);
-  const gaps = DOOR_X.map((x) => [x - 0.7, x + 0.7]).sort((a, b) => a[0] - b[0]);
+  // Spread across the front wall, whatever the number of boards. At a fixed
+  // 3.4 apart, a fourth board put the outer doors through the corners.
+  const DOOR_SPACING = Math.min(3.4, 9.0 / LEVELS.length);
+  const DOOR_X = LEVELS.map((_, i) => (i - (LEVELS.length - 1) / 2) * DOOR_SPACING);
+  const gaps = DOOR_X.map((x) => [x - 0.6, x + 0.6]).sort((a, b) => a[0] - b[0]);
   const frontPieces = [];
   {
     let from = -HALF - 0.7;

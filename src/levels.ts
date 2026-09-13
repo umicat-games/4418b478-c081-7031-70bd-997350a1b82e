@@ -14,6 +14,8 @@
  *  - Frostfall is 25 cells and the ground is ice. The same wave is worse here
  *    because the towers get a third less time with it, and the hero cannot stop
  *    on a coin.
+ *  - Rivermeet has a river straight across the middle with three bridges. The
+ *    saucers fly, so it is not in their way at all — it is in yours.
  *  - Crossroads puts the two gates on opposite walls. Nothing covers both, and
  *    neither can you.
  *
@@ -132,6 +134,34 @@ export const LEVELS: LevelDef[] = [
       { count: 16, hp: 178, speed: 2.0, model: 'td-ufo-c', bounty: 28, armed: true, scale: 0.55 },
       { count: 16, hp: 235, speed: 1.3, model: 'td-ufo-a2', bounty: 30, armed: true, scale: 0.75 },
       boss(2000, 260, 'THE FROST WARLORD'),
+    ],
+  },
+  {
+    id: 'rivermeet',
+    name: 'Rivermeet',
+    blurb: 'A river you must cross',
+    startGold: 150,
+    lives: 12,
+    spawnGap: 1.1,
+    waveGap: 6.5,
+    // The river is between the door and half the board, so the opening is a
+    // walk to a bridge before a single tower goes down. Measured: three of
+    // twelve lives in wave one.
+    firstWaveDelay: 14,
+    maxTowers: 14,
+    slip: 0,
+    waves: [
+      { count: 8, hp: 16, speed: 1.15, model: 'td-ufo-b', bounty: 14, armed: true, scale: 0.62 },
+      { count: 10, hp: 26, speed: 1.3, model: 'td-ufo-a2', bounty: 16, armed: true, scale: 0.68 },
+      { count: 10, hp: 24, speed: 2.05, model: 'td-ufo-c', bounty: 17, armed: true, scale: 0.5 },
+      { count: 12, hp: 52, speed: 1.25, model: 'td-ufo-d', bounty: 20, armed: true, scale: 0.72 },
+      { count: 12, hp: 70, speed: 2.0, model: 'td-ufo-b2', bounty: 23, armed: true, scale: 0.6 },
+      { count: 14, hp: 100, speed: 1.25, model: 'td-ufo-c2', bounty: 27, armed: true, scale: 0.78 },
+      { count: 14, hp: 138, speed: 1.45, model: 'td-ufo-d2', bounty: 31, armed: true, scale: 0.85 },
+      { count: 16, hp: 172, speed: 2.05, model: 'td-ufo-c', bounty: 30, armed: true, scale: 0.55 },
+      { count: 16, hp: 220, speed: 1.3, model: 'td-ufo-a2', bounty: 38, armed: true, scale: 0.75 },
+      { count: 18, hp: 252, speed: 1.5, model: 'td-ufo-d2', bounty: 42, armed: true, scale: 0.9 },
+      boss(2400, 320, 'THE RIVER WARLORD'),
     ],
   },
   {

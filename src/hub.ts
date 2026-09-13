@@ -34,7 +34,11 @@ import { hideLoading } from './loading';
  *  no menu, no list, walk at the one you want. */
 const DOOR_Z = -5.1;
 const DOOR_HALF_WIDTH = 0.62;
-const doorX = (i: number): number => (i - (LEVELS.length - 1) / 2) * 3.4;
+/** Spread across the front wall — the same rule `gen-scene.mjs` lays them by.
+ *  At a fixed 3.4 apart, a fourth board put the outer doors through the
+ *  corners. */
+const DOOR_SPACING = Math.min(3.4, 9.0 / LEVELS.length);
+const doorX = (i: number): number => (i - (LEVELS.length - 1) / 2) * DOOR_SPACING;
 const SIGN_AT = { x: 0, z: 3.6 };
 const NEAR = 0.9;             // how close counts as "standing at" something
 const LEADERBOARD_KEY = 'leaderboard';
@@ -430,7 +434,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
       let nearDoor = -1;
       for (let i = 0; i < LEVELS.length; i++) {
-        if (hero.position.z < DOOR_Z + 1.7 && Math.abs(hero.position.x - doorX(i)) < 1.5) {
+        if (hero.position.z < DOOR_Z + 1.7
+            && Math.abs(hero.position.x - doorX(i)) < DOOR_SPACING / 2) {
           nearDoor = i;
           break;
         }

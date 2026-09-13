@@ -50,9 +50,16 @@ bigger numbers. `tools/gen-scene.mjs` generates all three plus the hub from a
 
 | board | theme | road | spots | what makes it hard |
 | --- | --- | --- | --- | --- |
-| Meadow | grass | 36 cells | 74 | nothing — it is where the game is learned |
-| Frostfall | snow | 25 cells | 49 | ice, and a third less time per tower |
-| Crossroads | grass | 22 cells | 43 | gates on opposite walls, shortest road |
+| Meadow | grass | 36 | 74 | nothing — it is where the game is learned |
+| Frostfall | snow | 25 | 49 | ice, and a third less time per tower |
+| Rivermeet | grass | 32 | 54 | a river across the middle, three bridges |
+| Crossroads | grass | 22 | 43 | gates on opposite walls, shortest road |
+
+**Rivermeet's river is in YOUR way, not theirs.** The saucers fly. Three bridges,
+and whichever half you are on, the other one costs the walk to a crossing. The
+kit's river tile is solid with the water painted into its channel, and a 5cm
+trench catches no light — so there is a slab of blue laid in it, or the river
+reads as a black crack across the board.
 
 A board's look is one lookup in `THEMES`: the kit ships a snow copy of every
 terrain piece, so a new theme is a table entry rather than a second code path.
@@ -207,13 +214,21 @@ anywhere reporting a problem.
 with a fixed competent strategy — **walk** to a spot, build, upgrade when it can
 afford to, open crates, keep out of the shooting — and reports where it gets to.
 
-Where the three boards stand, as measured:
+Where the boards stand, as measured:
 
 | board | result |
 | --- | --- |
 | Meadow | won, 7 of 10 lives left |
 | Frostfall | won, 11 of 12 |
+| Rivermeet | lost on wave 8–10 of 11 |
 | Crossroads | lost on wave 11 of 12 |
+
+**The run-to-run spread is wider than most of the changes worth making.** Two
+runs of the same build on Rivermeet reached waves 8 and 10. Tune on a difference
+that survives that, or you are fitting noise — and the counter that made those
+two look like different strategies was itself wrong: it counted upgrade
+ATTEMPTS, and printed 145 on a board where fourteen towers of four levels can
+absorb forty-two.
 
 **Run it alone.** The bot acts in wall-clock while the game advances on real
 elapsed time, so a busy machine starves the bot and the result comes back as

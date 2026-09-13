@@ -342,7 +342,7 @@ export async function startLevel(
     fetch(`scenes3d/${level.id}.json`).then((r) => r.json() as Promise<Scene3D>),
     fetch(`scenes3d/${level.id}-path.json`).then((r) => r.json() as Promise<{
       routes: [number, number][][]; cells: [number, number][]; spots: [number, number][];
-      scenery: [number, number][]; gates: string[];
+      scenery: [number, number][]; gates: string[]; blocked?: [number, number][];
     }>),
   ]);
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
@@ -441,12 +441,16 @@ export async function startLevel(
   /** The back field: cells that are neither road nor a place to build. Nothing
    *  else ever wants them, which is exactly why the crates go there. */
   const SCENERY = new Set((pathData.scenery ?? []).map(([x, z]) => `${x},${z}`));
+  /** Water. Nothing is built there and nothing lands there. */
+  const BLOCKED = new Set((pathData.blocked ?? []).map(([x, z]) => `${x},${z}`));
   const BACKFIELD: [number, number][] = [];
   for (let x = -5.5; x <= 5.5; x += 1) {
     for (let z = -5.5; z <= 5.5; z += 1) {
       const k = `${x},${z}`;
       // Not on the road, not on a build spot, and not inside a tree.
-      if (!ON_PATH.has(k) && !BUILDABLE.has(k) && !SCENERY.has(k)) BACKFIELD.push([x, z]);
+      if (!ON_PATH.has(k) && !BUILDABLE.has(k) && !SCENERY.has(k) && !BLOCKED.has(k)) {
+        BACKFIELD.push([x, z]);
+      }
     }
   }
 
@@ -2249,6 +2253,7 @@ export async function startLevel(
        *  one layout too easy". */
       pathOf: (r: number) => ROUTES[r],
       scenery: () => [...SCENERY].map((k) => k.split(',').map(Number)),
+      blocked: () => [...BLOCKED].map((k) => k.split(',').map(Number)),
       canBuildAt: (x: number, z: number) => {
         const k = `${x},${z}`;
         return BUILDABLE.has(k) && !occupied.has(k);
