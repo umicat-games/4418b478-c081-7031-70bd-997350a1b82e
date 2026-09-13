@@ -549,17 +549,6 @@ function buildLevel(def) {
     });
   }
 
-  // The exit doorway's own filler, so the gap is not a hole until it opens.
-  add({
-    id: 'exit_block', name: 'exit_block',
-    primitive: { kind: 'box', size: { x: 1.2, y: 1.6, z: 0.4 }, color: t.wall },
-    visible: false,
-    transform: { position: { x: 0, y: 0.6, z: -6.6 } },
-    collider: {
-      shape: { kind: 'box', halfExtents: { x: 0.6, y: 0.8, z: 0.2 } }, body: 'fixed',
-    },
-  });
-
   def.gates.map(gatePlacement).forEach((pl, i) => {
     add({
       id: def.gates[i].id, name: 'gate', modelAssetId: 'hub-door',
@@ -582,22 +571,6 @@ function buildLevel(def) {
   add({
     id: 'build_marker', name: 'build_marker', modelAssetId: 'td-selection',
     transform: { position: { x: 0, y: GROUND_Y + 0.02, z: 0 } },
-  });
-
-  // --- the way out ---
-  //
-  // Hidden until the run ends: a door standing open the whole time would read
-  // as somewhere you could go, and there is nothing behind it yet.
-  add({
-    id: 'exit_door', name: 'exit_door', modelAssetId: 'hub-door-open',
-    transform: { position: { x: 0, y: GROUND_Y, z: -6.6 } },
-    visible: false,
-  });
-  add({
-    id: 'exit_frame', name: 'exit_frame',
-    primitive: { kind: 'box', size: { x: 1.35, y: 1.4, z: 0.22 }, color: '#6b4f2a' },
-    transform: { position: { x: 0, y: 0.5, z: -6.78 } },
-    visible: false,
   });
 
   // --- the hero ---

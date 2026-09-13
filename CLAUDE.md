@@ -19,7 +19,7 @@ workspace rebuild wipes out.
 ## The shape of a session
 
 Hub → pick a weapon → walk through the door → **choose a board from the list** →
-that board → the exit door opens when the run ends → back to the hub. One `WebGLRenderer` and one `ThreeUmicat.init()`
+that board → the run ends into a **summary** → back to the hub. One `WebGLRenderer` and one `ThreeUmicat.init()`
 are made at boot and handed between the two; a second renderer on the same
 canvas cannot be created at all, and a second `init()` opens a second connection
 to the host. Each half tears its own scene down before handing over.
@@ -32,6 +32,7 @@ to the host. Each half tears its own scene down before handing over.
 | --- | --- |
 | `src/levels.ts` | **the three boards**: wave tables, gold, lives, caps, ice |
 | `src/town.ts` | the four buildings in the hub and what they are worth |
+| `src/progress.ts` | drops, materials, the level curve — all of it arithmetic |
 | `src/main.ts` | the level engine: towers, the hero, crates, the frame loop |
 | `src/hub.ts` | the hub: weapons on pedestals, the leaderboard sign, the door |
 | `src/audio.ts` | this game's clip table and the two music tracks |
@@ -144,11 +145,17 @@ so each wave is a different problem rather than a larger one. The last wave is
 worth two hearts with a tell you can see from across the board. It is the only
 enemy in the game that is not a saucer.
 
+**Health is a BAR of 100, not hearts.** Eight hearts meant a hit was always an
+eighth of what you had and the run ended in eight touches; a bullet takes 10 and
+a boulder 22, so a hit can be a scratch. **Running out ends the run** — it used
+to cost a life and carry you back to the door, which made health a second pool
+of lives rather than the thing you are looking after.
+
 **At most two things may be shooting at the hero at once** (`MAX_SHOOTERS`; the
 boss is exempt). Without the cap, danger scales with the size of the wave and
 twenty saucers firing every 2.4s is a wall of bullets nobody dodges.
 
-**Clearing a wave gives two hearts back**, of eight. Six hearts and no way to
+**Clearing a wave gives 25 health back**, of 100. Six hearts and no way to
 heal was survivable over eight waves and a slow death over twelve.
 
 **Two kinds of emplacement.** A `ground` weapon stands on the grass: cheap,
@@ -182,8 +189,8 @@ the run ended because the hero was shot walking between build spots. Walking to
 a spot IS the mechanic. Now you are carried back to the door, and that walk is
 the punishment.
 
-**Nothing pays itself in.** A kill leaves a coin — or, rarely, a heart — on the
-ground where it died, and the counter does not move until you take it. Walk
+**Nothing pays itself in.** A kill leaves GOLD, WOOD, STONE or health on the
+ground where it died (50/22/18/10, and health only when some is missing), and the counter does not move until you take it. Walk
 within `MAGNET_RADIUS` (3.5 tiles) and it comes to you; leave it fourteen
 seconds and it flashes and is gone. That is the point of being a character on
 the board rather than a cursor over it: the money is somewhere, and you are
@@ -195,9 +202,9 @@ seven with thirteen upgrades instead of sixty-nine — you simply do not collect
 what dies on the far side of the board. One lever rather than forty edited
 numbers, so the wave tables stay readable as "how hard is this wave".
 
-Hearts are ~5% of drops, and only when one is missing. A kill that might pay
-health every time makes hit points stop being a resource, which is what the
-crates, the wave bonus and the knock-out rule are all built around.
+Only GOLD is spendable during a run. Wood and stone have nothing to buy on a
+board, which is what makes them come home in full while the gold is a choice
+between a tower now and a building later.
 
 **Crates** drop on the back field — cells that are neither road nor a place to
 build — and pay gold or a heart when broken with any weapon. A heart only when
@@ -215,25 +222,44 @@ that reaches three weapons of four looks broken to whoever notices.
 ## Progression
 
 `td-progress` in `umicat.saves`:
-`{ best, quality, weapon, runs, cleared, bests, coin }`.
+`{ best, quality, weapon, runs, cleared, bests, store, level, xp, town }`.
+
+A run ends into a **summary panel**: the level bar filling (one level at a time,
+so the moment it wraps is visible), and what the run earned by material. The
+summary is what WRITES the save — level, experience, the store, what was cleared
+and how far. Nothing else may, or the run gets counted twice.
+
+**Level decides how hard you hit and how hard you are hit**: +8% attack a level,
+−3.5% damage taken a level capped at half. `xpToNext(n) = 300 + (n-1)·220`, and
+a run is worth `kills·3 + wave·15 + (won ? 100 : 0)` — waves count for more than
+kills so that pushing deeper beats farming wave one.
+
+**The numbers in `progress.ts` are ARITHMETIC, not measurement.** Worked out
+from how many things a board has and how many a run kills: Meadow pays about
+550 gold / 20 wood / 16 stone, Crossroads about 2150 / 63 / 51, and a fully
+built village is 4500 / 660 / 490 — eight to twelve runs, weighted to the later
+boards. `verify-3d-balance` measures the FIGHT; measuring the economy the same
+way would cost hours per tweak, and this is a thing to tune by playing.
 
 - `runs` — levels FINISHED, win or lose. Unlocks weapons: sword at 0, bow at 1,
   staff at 2. Being handed a bow for losing is kind.
 - `cleared` — boards WON, in order. Board `i` is open when `cleared >= i`.
   Otherwise the order means nothing.
-- `coin` — gold carried home from runs, spent in the town.
+- `store` — gold, wood and stone carried home, spent in the town.
 - `town` — which buildings are paid for, and to what level.
+- `coin` — the old gold-only store. Read once so a save from before wood and
+  stone existed is not thrown away.
 
 ## The town
 
-Four plots in the hub, bought with `coin` the same way as everything else in
+Four plots in the hub, bought with gold, wood and stone the same way as everything else in
 this game: walk to it, press the action button. No menu. Each is three levels,
 and each level is a bigger building, so the hub visibly grows as you play.
 
 | building | what it is worth per level |
 | --- | --- |
 | Smithy ⚒ | +1 tower you may have standing, and one tower mount unlocked |
-| Clinic ❤ | +2 hearts |
+| Clinic ❤ | +25 max health |
 | Market 💰 | +50 starting gold |
 | Range 🏹 | +1 damage on **every** weapon, not just the sword |
 

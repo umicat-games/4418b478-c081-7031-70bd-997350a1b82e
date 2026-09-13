@@ -14,6 +14,11 @@ import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { NO_BONUS, type TownBonus } from './town';
+import {
+  NO_MATERIALS, rollDrop, xpFromRun, applyXp, xpToNext,
+  attackMultiplier, damageTakenMultiplier, MATERIAL_ICON,
+  type Material, type Materials,
+} from './progress';
 import type { GameAudio } from '@umicat/three-sdk';
 
 /**
@@ -41,8 +46,14 @@ export interface Progress {
   cleared?: number;
   /** Best wave reached on each board, by level id. */
   bests?: Record<string, number>;
-  /** Gold carried home from runs, to be spent in the hub. */
+  /** Gold carried home from runs. Superseded by `store`; still read once so a
+   *  save from before the village took wood and stone is not thrown away. */
   coin?: number;
+  /** The village store: gold, wood and stone brought back from runs. */
+  store?: Materials;
+  /** The hero's level and progress towards the next one. */
+  level?: number;
+  xp?: number;
   /** Which town buildings have been paid for, and to what level. */
   town?: Record<string, number>;
 }
@@ -68,7 +79,24 @@ const RESPAWN_BELOW_Y = -5;
 const HERO_HALF_HEIGHT = 0.2;
 const HERO_RADIUS = 0.16;
 const HERO_SYNC_OFFSET = -(HERO_HALF_HEIGHT + HERO_RADIUS);
-const HERO_MAX_HP = 8;
+/** A BAR, not hearts. Eight hearts meant every hit cost an eighth of the run's
+ *  survivability and the bar emptied in eight touches; a hundred points spends
+ *  at ten or twenty a time and leaves room for a hit to be a scratch. */
+const HERO_MAX_HP = 100;
+/** What a saucer's bullet takes, before the level's defence is applied. */
+const BULLET_DAMAGE = 10;
+/** Healing, in the same points. A drop is worth a fifth of the bar; a crate a
+ *  third; clearing a wave a quarter. */
+const HEAL_DROP = 18;
+const HEAL_CRATE = 30;
+const HEAL_WAVE = 25;
+/** What each kind of drop looks like on the ground. Wood and stone come from
+ *  the kit's own scenery, which is why a plank reads as a plank. Module scope
+ *  because the preload list needs it before the run does. */
+const DROP_MODEL: Record<Material | 'health', string> = {
+  gold: 'td-coin', wood: 'td-wood-structure-part', stone: 'td-rocks', health: 'td-crystal',
+};
+const DROP_TINT: Partial<Record<Material | 'health', number>> = { health: 0xff4f6e };
 const HERO_SPEED = 4.2;
 const HERO_ATTACK_RANGE = 1.15;
 /** How much bigger than the kit's sword. It measures 0.45 against a 0.72 hero
@@ -84,7 +112,7 @@ const SWING_ARC = 1.35;
  *  carry. */
 const SWING_CUT = 0.62;
 const HERO_ATTACK_DAMAGE = 2;
-const HERO_INVINCIBLE_SECONDS = 1.7;
+const HERO_INVINCIBLE_SECONDS = 1.1;
 
 // --- enemies --------------------------------------------------------------
 /** They fly, so they float above the path rather than walking it. */
@@ -174,9 +202,6 @@ const RARE_CRATE_CHANCE = 0.28;
 const MAGNET_RADIUS = 3.5;
 const PICKUP_LIFE = 14;         // seconds on the ground before it is gone
 const PICKUP_BLINK = 3.5;       // it starts flashing this long before that
-/** Hearts are rare. A kill that might pay health every time makes the hero's
- *  hit points stop being a resource. */
-const HEART_DROP_CHANCE = 0.055;
 /** Bounties are worth more than the wave table says, because you no longer get
  *  all of them. A kill used to pay itself in; now it leaves a coin that is gone
  *  in fourteen seconds, and a player fighting on one side of the board simply
@@ -633,7 +658,7 @@ export async function startLevel(
                     // levels can ask for. A model that is not here is not a
                     // missing texture — it is `undefined.type` thrown out of
                     // the clone, from whichever frame first needed it.
-                    'td-bullet', 'td-coin', 'td-crystal',
+                    'td-bullet', ...Object.values(DROP_MODEL),
                     'hub-crate', 'hub-barrel']) {
     if (protos.has(id)) continue;
     const { object, clips } = await loadModelAsset(manifest, id, { assetBase: '' });
@@ -839,6 +864,14 @@ export async function startLevel(
   // --- state ---
   // What the town is worth, folded in where the run reads it — one place each,
   // so a bonus cannot apply to the HUD and not to the rule, or the other way.
+  const saveNow = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
+  /** The hero's level, which decides how hard they hit and how hard they are
+   *  hit. Read once at the start: a run is played at the level you walked in
+   *  with, and the one you leave with is the summary's news. */
+  const playerLevel = saveNow.level ?? 1;
+  /** What this run has picked up, for the summary and for the village. */
+  const earned: Materials = { ...NO_MATERIALS };
+  let kills = 0;
   const maxTowers = level.maxTowers + bonus.towerCap;
   /** What the hotbar offers on this run. A tower mount you have not unlocked
    *  is not a greyed-out cell — it is not there, because a row of things you
@@ -853,7 +886,8 @@ export async function startLevel(
    *  constant, because "double strike" has to reach every weapon and every call
    *  site — a buff that reaches three of four looks broken to whoever notices.
    *  (`heroHit` is taken: it is the sphere a bullet is tested against.) */
-  const withBuff = (base: number): number => base * (buff?.kind.id === 'strike' ? 2 : 1);
+  const withBuff = (base: number): number =>
+    base * attackMultiplier(playerLevel) * (buff?.kind.id === 'strike' ? 2 : 1);
   const heroDamage = baseHeroDamage;
   let gold = level.startGold + bonus.gold;
   let lives = level.lives;
@@ -981,7 +1015,22 @@ export async function startLevel(
   }
 
   // --- HUD ---
+  //
+  // A BAR, not a row of hearts. Eight hearts meant a hit was always an eighth
+  // of what you had; a bar can show a scratch, and it is the thing the whole
+  // run is now decided by.
   const line1 = document.createElement('div');
+  line1.style.cssText = 'display:flex; align-items:center; gap:8px;';
+  const hpTrack = document.createElement('div');
+  hpTrack.style.cssText = `width: 168px; height: 13px; border-radius: 7px;
+    background: rgba(0,0,0,.42); box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
+    overflow: hidden;`;
+  const hpFill = document.createElement('div');
+  hpFill.style.cssText = 'height:100%; width:100%; border-radius:7px; transition: width .18s;';
+  hpTrack.appendChild(hpFill);
+  const hpText = document.createElement('span');
+  hpText.style.cssText = 'font: 700 13px/1 system-ui, sans-serif;';
+  line1.append(hpTrack, hpText);
   const line2 = document.createElement('div');
   const line3 = document.createElement('div');
   line3.style.opacity = '0.85';
@@ -1243,12 +1292,13 @@ export async function startLevel(
 
   interface Pickup {
     obj: THREE.Object3D;
-    kind: 'coin' | 'heart';
+    kind: Material | 'health';
     amount: number;
     t: number;
     taken: boolean;
     vel: THREE.Vector3;
   }
+
   const pickups: Pickup[] = [];
   const POP_SECONDS = 0.55;     // the arc out of whatever dropped it
 
@@ -1280,23 +1330,31 @@ export async function startLevel(
 
   /** Drop something where a thing died. `amount` is the gold it is worth; a
    *  heart ignores it. */
-  const dropPickup = (from: THREE.Vector3, amount: number, forceKind?: 'coin' | 'heart'): void => {
-    // A heart only when one is missing — the same rule the crates follow, for
+  const dropPickup = (
+    from: THREE.Vector3, amount: number, forceKind?: Material | 'health',
+  ): void => {
+    // Health only when some is missing — the same rule the crates follow, for
     // the same reason: a drop that does nothing is worse than a drop of gold.
-    const kind = forceKind
-      ?? (heroHp < heroMaxHp && Math.random() < HEART_DROP_CHANCE ? 'heart' : 'coin');
-    const obj = spawnFrom(kind === 'heart' ? 'td-crystal' : 'td-coin');
-    if (kind === 'heart') {
-      // The kit has no heart, and the crystal is purple. Its own copy of the
-      // material, red — cloning matters because models cut from one file SHARE
-      // materials, and recolouring this one would recolour every crystal on the
-      // board including the scenery.
+    const kind = forceKind ?? rollDrop(heroHp < heroMaxHp);
+    // `amount` arrives as the GOLD this kill was worth; the other kinds are
+    // worth something else entirely. Wood and stone scale with it so that late
+    // waves are worth walking to, but in ones and twos — a village priced in
+    // hundreds of gold and dozens of planks needs planks to stay countable.
+    const worth = kind === 'gold' ? amount
+      : kind === 'health' ? HEAL_DROP
+      : Math.max(1, Math.min(4, 1 + Math.floor(amount / 22)));
+    const obj = spawnFrom(DROP_MODEL[kind]);
+    const tint = DROP_TINT[kind];
+    if (tint !== undefined) {
+      // Its own copy of the material. Models cut from one file SHARE theirs, so
+      // recolouring this one would recolour every crystal on the board,
+      // scenery included.
       obj.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
         const paint = (m: THREE.Material): THREE.Material => {
           const c = (m as THREE.MeshStandardMaterial).clone() as THREE.MeshStandardMaterial;
-          c.color.setHex(0xff4f6e);
+          c.color.setHex(tint);
           c.emissive?.setHex(0x51101d);
           return c;
         };
@@ -1306,9 +1364,9 @@ export async function startLevel(
     }
     obj.position.copy(from);
     obj.position.y = Math.max(from.y, 0.2);
-    obj.scale.setScalar(kind === 'heart' ? 0.5 : 0.55);
+    obj.scale.setScalar(kind === 'gold' ? 0.55 : kind === 'health' ? 0.5 : 0.42);
     pickups.push({
-      obj, kind, amount, t: 0, taken: false,
+      obj, kind, amount: worth, t: 0, taken: false,
       // Up and slightly outward, so several from one kill do not stack.
       vel: new THREE.Vector3((Math.random() - 0.5) * 1.1, 2.2, (Math.random() - 0.5) * 1.1),
     });
@@ -1366,10 +1424,10 @@ export async function startLevel(
       if (wantHeart) {
         // Dropped, not granted. Nothing in this game pays itself in any more —
         // what a crate holds is on the ground next to it until you take it.
-        dropPickup(c.obj.position, 0, 'heart');
+        dropPickup(c.obj.position, HEAL_CRATE, 'health');
       } else {
         const amount = CRATE_GOLD[0] + Math.floor(Math.random() * (CRATE_GOLD[1] - CRATE_GOLD[0] + 1));
-        dropPickup(c.obj.position, amount, 'coin');
+        dropPickup(c.obj.position, amount, 'gold');
       }
       audio.play('enemy-die');
       c.obj.visible = false;
@@ -1387,7 +1445,7 @@ export async function startLevel(
     for (let i = pickups.length - 1; i >= 0; i--) {
       const q = pickups[i];
       q.t += dt;
-      q.obj.rotation.y += dt * (q.kind === 'heart' ? 2.4 : 7);
+      q.obj.rotation.y += dt * (q.kind === 'gold' ? 7 : 2.4);
 
       const dx = hero.position.x - q.obj.position.x;
       const dz = hero.position.z - q.obj.position.z;
@@ -1412,15 +1470,22 @@ export async function startLevel(
       // Taken.
       if (!q.taken && dist < 0.5 && q.t > 0.25) {
         q.taken = true;
-        if (q.kind === 'heart') {
-          heroHp = Math.min(heroMaxHp, heroHp + 1);
+        if (q.kind === 'health') {
+          heroHp = Math.min(heroMaxHp, heroHp + q.amount);
           audio.play('coin');
           flashTint(hero, { color: 0xff5f7a, ms: 260 });
         } else {
-          gold += q.amount;
+          earned[q.kind] += q.amount;
+          // Only GOLD is spendable during a run. Wood and stone have nothing to
+          // buy here, which is what makes them come home in full while the gold
+          // is a choice between a tower now and a building later.
+          if (q.kind === 'gold') {
+            gold += q.amount;
+            goldEl.style.transform = 'scale(1.22)';
+            setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
+          }
           audio.play('coin');
-          goldEl.style.transform = 'scale(1.22)';
-          setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
+          flashBanner(`${MATERIAL_ICON[q.kind]} +${q.amount}`);
         }
         renderHud();
         world.scene.remove(q.obj);
@@ -1561,7 +1626,12 @@ export async function startLevel(
   });
 
   const renderHud = (): void => {
-    line1.textContent = `${'❤️'.repeat(Math.max(heroHp, 0))}${'🤍'.repeat(Math.max(heroMaxHp - heroHp, 0))}`;
+    const frac = Math.max(0, heroHp) / heroMaxHp;
+    hpFill.style.width = `${(frac * 100).toFixed(1)}%`;
+    // Green down to amber down to red: the colour is the warning, because at a
+    // glance nobody reads a number on a bar.
+    hpFill.style.background = frac > 0.55 ? '#5fd36a' : frac > 0.28 ? '#f0b429' : '#ef4b4b';
+    hpText.textContent = `${Math.max(0, Math.ceil(heroHp))}/${heroMaxHp}`;
     const w = Math.min(waveIndex + 1, WAVES.length);
     livesEl.textContent = `🏰 ${lives}\u2003`;
     goldEl.textContent = `💰 ${gold}`;
@@ -1589,55 +1659,131 @@ export async function startLevel(
   };
 
   const endRun = (didWin: boolean): void => {
-    // Once. A second call re-opens the exit, which means removing a rigid body
-    // that is already gone — and Rapier answers that with an unrecoverable
-    // `unreachable` trap out of the wasm, not an exception anyone can catch.
-    // Two things can plausibly end the same run in the same breath: the last
-    // life going and the hero falling.
+    // Once. A run can plausibly end twice in the same breath — the last life
+    // going and the hero falling — and the second pass would replay the
+    // summary on top of itself.
     if (!running) return;
     running = false; won = didWin;
-    // Stop taking input and take the on-screen controls away. Both halves
-    // matter: the thumbstick would otherwise keep walking the character behind
-    // the dialog, and its full-screen layer would swallow the taps meant for
-    // the button on top of it.
-    // Input stays ON. The run is over, but walking to the door is the last
-    // thing the player does, and taking the controls away would strand them.
+    // The controls go. There is nowhere left to walk: the run ends into a
+    // summary, not into a door at the far end of the board. That door existed
+    // so the ending would not be a wall of UI over a paused game — but what the
+    // ending is ABOUT is now a level bar and a pile of materials, and those
+    // belong on a panel rather than at the end of a walk.
+    input.setEnabled(false);
     hotbar.style.display = 'none';
-    // The ending gets the room to itself.
     audio.duck(10);
     audio.play(didWin ? 'win' : 'lose');
     const reached = Math.min(waveIndex + 1, WAVES.length);
-    if (reached > bestWave) {
-      bestWave = reached;
-      void patchSave(umicat, { quality });
-    }
+    if (reached > bestWave) bestWave = reached;
     // The shared board. A guest run is not recorded — writing needs a signed-in
     // player — and that is handled inside rather than being a caller's problem.
     void submitScore(umicat, reached);
-    banner.style.display = 'block';
-    banner.innerHTML = didWin
-      ? `<div>All waves cleared</div><div style="font:600 15px/1.6 system-ui;opacity:.85">The woods are safe.</div>`
-      : `<div>${lives <= 0 ? 'The base fell' : 'You were knocked out'}</div>` +
-        `<div style="font:600 15px/1.6 system-ui;opacity:.85">Reached wave ${Math.min(waveIndex + 1, WAVES.length)} of ${WAVES.length}.</div>`;
-    banner.innerHTML += `<div style="margin-top:12px;font:600 14px/1.6 system-ui;opacity:.8">
-      A door has opened at the far end — walk through it to go back.</div>`;
+    void showSummary(didWin, reached);
+  };
 
-    // The way out is a door in the world, not a button on top of it. The
-    // banner stops being a wall you have to dismiss and becomes a caption on
-    // something you are already standing in.
-    for (const id of ['exit_door', 'exit_frame']) {
-      const o = world.entities.get(id);
-      if (o) o.visible = true;
-    }
-    // And take out the block filling the doorway — the door's width, not the
-    // whole side. A door you can see and cannot reach is worse than no door,
-    // because the collider is what stops you and it does not care that
-    // something was drawn in front of it; but removing the whole wall turns the
-    // entire top of the board into the exit.
-    const wall = world.bodies.get('exit_block');
-    if (wall) world.world.removeRigidBody(wall);
-    const wallMesh = world.entities.get('exit_block');
-    if (wallMesh) wallMesh.visible = false;
+  /** Take the level apart. Its scene, its physics and its listeners would
+   *  otherwise keep running behind the hub for the rest of the session. */
+  const tearDown = (): void => {
+    renderer.setAnimationLoop(null);
+    window.removeEventListener('resize', resize);
+    input.dispose();
+    banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
+    debug.dispose();
+    hudEl.textContent = '';
+    world.dispose();
+    world.scene.clear();
+    // The handle goes with it. A debug handle that outlives the thing it
+    // describes is worse than none: anything asking "am I in the level?" is
+    // told yes by the corpse of the last one.
+    delete (window as unknown as Record<string, unknown>).__game;
+  };
+
+  /** The end of a run: what it was worth, and what it made of you.
+   *
+   *  An overlay rather than a scene, because it is about NUMBERS — the level
+   *  bar filling is the only thing on screen that moves, and a 3D room would
+   *  be competing with it.
+   */
+  const showSummary = async (didWin: boolean, reached: number): Promise<void> => {
+    const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
+    const fromLevel = prev.level ?? 1;
+    const fromXp = prev.xp ?? 0;
+    const gained = xpFromRun({ kills, wave: reached, won: didWin });
+    const after = applyXp(fromLevel, fromXp, gained);
+    const store: Materials = {
+      gold: (prev.store?.gold ?? prev.coin ?? 0) + gold,
+      wood: (prev.store?.wood ?? 0) + earned.wood,
+      stone: (prev.store?.stone ?? 0) + earned.stone,
+    };
+    await patchSave(umicat, {
+      level: after.level, xp: after.xp, store, quality, best: bestWave,
+      runs: (prev.runs ?? 0) + 1,
+      cleared: didWin ? Math.max(prev.cleared ?? 0, levelIndex + 1) : prev.cleared,
+      bests: { ...(prev.bests ?? {}), [level.id]: Math.max(prev.bests?.[level.id] ?? 0, reached) },
+    });
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `position: fixed; inset: 0; z-index: 80; display: flex;
+      align-items: center; justify-content: center; background: rgba(8,12,16,.72);
+      pointer-events: auto; font: 600 15px/1.6 system-ui, sans-serif; color: #fff;`;
+    const row = (icon: string, label: string, n: number): string =>
+      `<div style="display:flex;justify-content:space-between;gap:18px;padding:3px 0">
+         <span style="opacity:.8">${icon} ${label}</span><span style="font-weight:800">+${n}</span></div>`;
+    panel.innerHTML = `
+      <div style="min-width:290px;max-width:86vw;background:rgba(18,22,28,.96);
+                  border-radius:18px;padding:22px 24px">
+        <div style="font:800 19px/1.5 system-ui">${didWin ? 'Cleared' : 'Defeated'}</div>
+        <div style="opacity:.75;margin-bottom:14px">${level.name} · wave ${reached}/${WAVES.length}</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span id="sum-lv" style="font:800 17px/1.4 system-ui">Level ${fromLevel}</span>
+          <span id="sum-xp" style="opacity:.7">+${gained} XP</span>
+        </div>
+        <div style="height:12px;border-radius:6px;background:rgba(255,255,255,.14);
+                    overflow:hidden;margin:6px 0 16px">
+          <div id="sum-bar" style="height:100%;width:0%;background:#7cc4ff;border-radius:6px"></div>
+        </div>
+        ${row('🪙', 'Gold', gold)}${row('🪵', 'Wood', earned.wood)}${row('🪨', 'Stone', earned.stone)}
+        <button id="sum-go" style="margin-top:18px;width:100%;padding:11px 0;border:0;
+          border-radius:999px;font:800 15px system-ui;background:#fff;color:#222;
+          cursor:pointer">Back to the village</button>
+      </div>`;
+    document.body.appendChild(panel);
+
+    // Fill the bar, one level at a time. A single jump to the final number
+    // hides the thing worth watching, which is the moment it wraps.
+    const bar = panel.querySelector<HTMLElement>('#sum-bar')!;
+    const lvEl = panel.querySelector<HTMLElement>('#sum-lv')!;
+    void (async () => {
+      let lv = fromLevel;
+      let have = fromXp;
+      let left = gained;
+      bar.style.transition = 'width .5s ease-out';
+      bar.style.width = `${(have / xpToNext(lv)) * 100}%`;
+      while (left > 0) {
+        const need = xpToNext(lv) - have;
+        if (left < need) {
+          have += left; left = 0;
+          bar.style.width = `${(have / xpToNext(lv)) * 100}%`;
+          break;
+        }
+        left -= need;
+        bar.style.width = '100%';
+        await new Promise((r) => setTimeout(r, 520));
+        lv += 1; have = 0;
+        lvEl.textContent = `Level ${lv}`;
+        lvEl.style.color = '#ffd45e';
+        audio.play('win');
+        bar.style.transition = 'none';
+        bar.style.width = '0%';
+        await new Promise((r) => setTimeout(r, 40));
+        bar.style.transition = 'width .5s ease-out';
+      }
+    })();
+
+    panel.querySelector<HTMLButtonElement>('#sum-go')!.onclick = () => {
+      panel.remove();
+      if (leave) { const go = leave; leave = null; tearDown(); go({ won, wave: reached, level: levelIndex, banked: gold }); }
+    };
   };
 
   // --- the path, as a position lookup -------------------------------------
@@ -1814,51 +1960,31 @@ export async function startLevel(
       flashBanner('THE WARLORD FALLS');
       playEnemyClip(e, 'die', false);
       corpses.push({ obj: e.obj, t: 0, mixer: e.mixer ?? null });
+      kills += 1;
       const share = Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1) / 6);
-      for (let i = 0; i < 6; i++) dropPickup(e.obj.position, share, 'coin');
+      for (let i = 0; i < 6; i++) dropPickup(e.obj.position, share, 'gold');
       return;
     }
     e.obj.visible = false;
+    kills += 1;
     dropPickup(e.obj.position,
       Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1)));
   };
 
-  const hurtHero = (amount = 1): void => {
+  const hurtHero = (amount = BULLET_DAMAGE): void => {
     if (invincible > 0 || !running) return;
     if (buff?.kind.id === 'shield') { flashTint(hero, { color: 0x6ec8ff, ms: 200 }); return; }
     invincible = HERO_INVINCIBLE_SECONDS;
-    heroHp -= amount;
+    heroHp -= Math.max(1, Math.round(amount * damageTakenMultiplier(playerLevel)));
     audio.play('hero-hurt');
     flashScreen();
     flashTint(hero, { color: 0xff2a1a, ms: 220 });
     renderHud();
-    if (heroHp <= 0) knockOut();
-  };
-
-  /** The hero falls — and gets back up.
-   *
-   *  Losing the whole run to it was the single loudest thing in every measured
-   *  game: the base would be untouched at ten of ten lives and the run would end
-   *  because the hero had been shot while walking between build spots. Walking
-   *  to a spot IS the mechanic, so dying for walking is dying for playing.
-   *
-   *  So it costs a life off the base instead — the two failure conditions were
-   *  already there, and this makes them one resource rather than two ways to
-   *  lose. You are carried back to the door, which is the far end of the board
-   *  from wherever the trouble was, and that walk back is the real punishment.
-   */
-  const knockOut = (): void => {
-    if (!running) return;
-    lives -= 1;
-    heroHp = Math.max(3, Math.ceil(heroMaxHp / 2));
-    invincible = 3.2;
-    audio.play('lose');
-    flashScreen();
-    flashBanner('Knocked out · a life lost');
-    character.teleport(SPAWN);
-    glide.x = 0; glide.z = 0;
-    renderHud();
-    if (lives <= 0) endRun(false);
+    // Down is DOWN. It used to cost a life and carry you back to the door,
+    // which made the hero's health a second pool of lives rather than the thing
+    // you are looking after — and a bar you can be brought back from is not a
+    // bar anyone watches.
+    if (heroHp <= 0) { heroHp = 0; renderHud(); endRun(false); }
   };
 
   // Left click swings. `button`/`pointerType` checked because the right button
@@ -1889,11 +2015,6 @@ export async function startLevel(
     return d ? `${d.shadow.mapSize.width}` : 'none';
   };
 
-  /** Same shape as the hub's: a doorway, not a line across the top of the
-   *  board. Taking the whole north wall out made every step along the top an
-   *  exit. */
-  const EXIT_AT = { x: 0, z: -6.2 };
-  const EXIT_HALF_WIDTH = 0.62;
   let last = performance.now();
   const dir = new THREE.Vector3();
   /** Where the hero is actually going, as opposed to where the stick says. Only
@@ -2055,7 +2176,7 @@ export async function startLevel(
             // send fifteen of sixteen down one side and read as a bug.
             t: 0, route: nextRoute, alive: true, shootCooldown: 1, windup: 0,
             ground: w.ground ?? false, facesTravel: w.facesTravel ?? false,
-            ammo: w.ammo ?? 'td-bullet', damage: w.damage ?? 1, boss: w.boss ?? false,
+            ammo: w.ammo ?? 'td-bullet', damage: w.damage ?? BULLET_DAMAGE, boss: w.boss ?? false,
           };
           nextRoute = (nextRoute + 1) % ROUTES.length;
           if (w.model === 'boss-orc' && bossClips.length) {
@@ -2090,8 +2211,8 @@ export async function startLevel(
             // carelessness rather than to any particular wave, and the lull
             // between waves is the natural place to hand it back.
             if (heroHp < heroMaxHp && waveIndex < WAVES.length) {
-              heroHp = Math.min(heroMaxHp, heroHp + 2);
-              flashBanner('Wave cleared · +2 ❤️');
+              heroHp = Math.min(heroMaxHp, heroHp + HEAL_WAVE);
+              flashBanner(`Wave cleared · +${HEAL_WAVE} health`);
             }
           }
           if (waveIndex >= WAVES.length) { endRun(true); }
@@ -2323,34 +2444,7 @@ export async function startLevel(
     // rather than as a rotation.
     debug.tick(now, dt, `shadow ${shadowOf()}`);
 
-    // Out through the door, back to the hub. Only once the run is over — the
-    // wall is solid until then, and the door is not even drawn.
-    const inExit = hero.position.z < EXIT_AT.z
-      && Math.abs(hero.position.x - EXIT_AT.x) < EXIT_HALF_WIDTH;
-    if (!running && inExit && leave) {
-      const go = leave; leave = null;
-      audio.play(SFX.door);
-      renderer.setAnimationLoop(null);
-      window.removeEventListener('resize', resize);
-      input.dispose();
-      banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
-      debug.dispose();
-      hudEl.textContent = '';
-      world.dispose();
-      world.scene.clear();
-      // The handle goes with it. A debug handle that outlives the thing it
-      // describes is worse than none: anything asking "am I in the level?" is
-      // told yes by the corpse of the last one.
-      delete (window as unknown as Record<string, unknown>).__game;
-      go({
-        won, wave: Math.min(waveIndex + 1, WAVES.length), level: levelIndex,
-        // Whatever is left over comes home. Measured runs were sitting on 1600
-        // unspendable gold by wave seven — a currency with nowhere to go stops
-        // being a decision, and the hub is where it can become one.
-        banked: gold,
-      });
-      return;
-    }
+
 
     updatePickups(dt);
     updateHealthBars();
@@ -2430,13 +2524,18 @@ export async function startLevel(
       setWeapon: (w: Weapon) => setWeapon(w),
       get updrafts() { return updrafts; },
       get pickups() { return pickups; },
+      earned: () => ({ ...earned }),
+      /** Put materials straight in the run's tally, for a probe that is about
+       *  what the village COSTS rather than about walking over to collect. */
+      stock: (wood: number, stone: number) => { earned.wood += wood; earned.stone += stone; },
+      playerLevel: () => playerLevel,
       /** Drop one on demand, for a probe that should not have to wait for a
        *  tower to kill something at the right moment. The real drop. */
-      drop: (x: number, z: number, kind?: 'coin' | 'heart', amount = 7) =>
+      drop: (x: number, z: number, kind?: Material | 'health', amount = 7) =>
         dropPickup(new THREE.Vector3(x, 0.3, z), amount, kind),
       /** What a kill rolls, without a kill. Used to measure how rare a heart
        *  is — counting real drops needs hundreds of kills. */
-      rollDrop: () => (heroHp < heroMaxHp && Math.random() < HEART_DROP_CHANCE ? 'heart' : 'coin'),
+      rollDrop: () => rollDrop(heroHp < heroMaxHp),
       quality: () => ({ level: quality, name: QUALITY[quality].name,
                         pixelRatio: renderer.getPixelRatio() }),
       get corpses() { return corpses; },
@@ -2484,6 +2583,12 @@ export async function startLevel(
       },
       /** Gold, for a probe that needs a board built without playing for it. */
       gift: (n: number) => { gold += n; renderHud(); },
+      /** Top the bar back up. For probes that need to watch something SLOW
+       *  happen without the hero quietly dying of chip damage halfway. */
+      heal: (n = 999) => { heroHp = Math.min(heroMaxHp, heroHp + n); renderHud(); },
+      /** Take damage the way a bullet does — invincibility, defence and the
+       *  end-of-run check included. `hurt` is a blunt setter; this is the rule. */
+      hurtHero: (n?: number) => { invincible = 0; hurtHero(n); },
       hurt: (n: number) => { invincible = 0; heroHp = Math.max(1, heroHp - n); renderHud(); },
       debugEndRun: (won = false) => endRun(won),
       /** The waypoints of one branch, and whether a cell is free to build on.
@@ -2570,20 +2675,9 @@ async function boot(): Promise<void> {
     showLoading('Entering the woods');
     const choice = await runHub(shared);
     showLoading(`Entering ${LEVELS[choice.level].name}`);
-    const result = await startLevel(shared, choice.weapon, choice.level, choice.bonus);
-    // Finishing a level — won or lost — is what unlocks the next weapon back
-    // in the hub. Counted HERE rather than in `endRun` because "finished" means
-    // walking back out through the door, not the moment the last life went.
-    // Clearing one is what opens the NEXT board, which is a different question
-    // and a different counter.
-    const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
-    await patchSave(umicat, {
-      runs: (prev.runs ?? 0) + 1,
-      cleared: result.won ? Math.max(prev.cleared ?? 0, result.level + 1) : prev.cleared,
-      bests: { ...(prev.bests ?? {}), [LEVELS[result.level].id]:
-        Math.max(prev.bests?.[LEVELS[result.level].id] ?? 0, result.wave) },
-      coin: (prev.coin ?? 0) + result.banked,
-    });
+    // The summary writes the save — level, experience, the store, what was
+    // cleared and how far. Doing it here as well double-counted the run.
+    await startLevel(shared, choice.weapon, choice.level, choice.bonus);
   }
 }
 

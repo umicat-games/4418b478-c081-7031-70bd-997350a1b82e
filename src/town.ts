@@ -14,6 +14,8 @@
  * plot, press the action button. No menu.
  */
 
+import type { Materials } from './progress';
+
 export interface TownBuilding {
   id: string;
   name: string;
@@ -23,8 +25,8 @@ export interface TownBuilding {
   /** The model that appears once it is built, one per level. Later levels are
    *  bigger buildings, so the town visibly grows. */
   models: [string, string, string];
-  /** What each level costs, in coin carried home from runs. */
-  costs: [number, number, number];
+  /** What each level costs, in materials carried home from runs. */
+  costs: [Materials, Materials, Materials];
   /** Where it stands in the hub. */
   x: number;
   z: number;
@@ -42,16 +44,24 @@ export const TOWN: TownBuilding[] = [
     // ground weapons' worth of gold, and the reason to want one is REACH — the
     // corner two ground weapons cannot cover between them.
     models: ['bld-house-a', 'bld-house-b', 'bld-house-c'],
-    costs: [180, 450, 1000],
+    costs: [
+      { gold: 150, wood: 20, stone: 10 },
+      { gold: 400, wood: 50, stone: 35 },
+      { gold: 900, wood: 110, stone: 90 },
+    ],
     x: -4.2, z: -1.0, yaw: Math.PI / 2,
   },
   {
     id: 'clinic',
     name: 'Clinic',
-    effect: '+2 hearts per level',
+    effect: '+25 health per level',
     icon: '❤',
     models: ['town-stall-red', 'bld-house-a', 'bld-house-b'],
-    costs: [150, 400, 900],
+    costs: [
+      { gold: 120, wood: 25, stone: 5 },
+      { gold: 320, wood: 60, stone: 25 },
+      { gold: 750, wood: 120, stone: 70 },
+    ],
     x: -4.2, z: 2.6, yaw: Math.PI / 2,
   },
   {
@@ -60,7 +70,11 @@ export const TOWN: TownBuilding[] = [
     effect: '+50 starting gold per level',
     icon: '💰',
     models: ['town-stall-green', 'town-cart', 'town-watermill'],
-    costs: [140, 360, 820],
+    costs: [
+      { gold: 120, wood: 15, stone: 15 },
+      { gold: 300, wood: 40, stone: 40 },
+      { gold: 700, wood: 90, stone: 95 },
+    ],
     x: 4.2, z: -1.0, yaw: -Math.PI / 2,
   },
   {
@@ -69,12 +83,29 @@ export const TOWN: TownBuilding[] = [
     effect: '+1 to your own attacks per level',
     icon: '🏹',
     models: ['bld-tower-a', 'bld-tower-b', 'town-windmill'],
-    costs: [200, 500, 1100],
+    costs: [
+      { gold: 170, wood: 30, stone: 10 },
+      { gold: 450, wood: 70, stone: 30 },
+      { gold: 1000, wood: 130, stone: 80 },
+    ],
     x: 4.2, z: 2.6, yaw: -Math.PI / 2,
   },
 ];
 
 export const TOWN_MAX_LEVEL = 3;
+
+/** Can this be paid for out of what is in the store? */
+export const canAfford = (have: Materials, cost: Materials): boolean =>
+  have.gold >= cost.gold && have.wood >= cost.wood && have.stone >= cost.stone;
+
+/** What is still missing, for a prompt that says what to go and get. */
+export function shortfall(have: Materials, cost: Materials): string {
+  const bits: string[] = [];
+  if (have.gold < cost.gold) bits.push(`🪙 ${cost.gold - have.gold}`);
+  if (have.wood < cost.wood) bits.push(`🪵 ${cost.wood - have.wood}`);
+  if (have.stone < cost.stone) bits.push(`🪨 ${cost.stone - have.stone}`);
+  return bits.join('  ');
+}
 
 /** What the town is worth on the next run. */
 export interface TownBonus {
@@ -100,7 +131,7 @@ export function bonusesFrom(town: Record<string, number> | undefined): TownBonus
   return {
     towerCap: lv('smithy'),
     smithy: lv('smithy'),
-    hearts: lv('clinic') * 2,
+    hearts: lv('clinic') * 25,
     gold: lv('market') * 50,
     heroDamage: lv('range'),
   };

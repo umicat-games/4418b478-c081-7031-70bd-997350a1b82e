@@ -38,7 +38,7 @@ export interface Wave {
   facesTravel?: boolean;
   /** What it throws. Defaults to the small bullet everything else fires. */
   ammo?: string;
-  /** Hearts per hit. Defaults to 1. */
+  /** Damage per hit, in bar points. Defaults to the ordinary bullet. */
   damage?: number;
   /** Announced, health bar always up, and the wave is over when it falls. */
   boss?: boolean;
@@ -51,7 +51,7 @@ export interface Wave {
  *  only enemy in the game that is not a saucer. */
 const boss = (hp: number, bounty: number, label: string): Wave => ({
   count: 1, hp, speed: 0.62, model: 'boss-orc', bounty, armed: true, scale: 2.1,
-  ground: true, facesTravel: true, ammo: 'td-ammo-boulder', damage: 2, boss: true, label,
+  ground: true, facesTravel: true, ammo: 'td-ammo-boulder', damage: 22, boss: true, label,
 });
 
 export interface LevelDef {

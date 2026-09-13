@@ -10,7 +10,8 @@ import { patchSave } from './main';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createDebugHud } from './debughud';
-import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, type TownBonus } from './town';
+import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, type TownBonus } from './town';
+import type { Materials } from './progress';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
 
@@ -170,8 +171,13 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  clearing the one before it, because otherwise the order means nothing. */
   const cleared = progress.cleared ?? 0;
   const levelOpen = (i: number): boolean => i <= cleared;
-  /** Coin carried home from runs, and what it has been spent on. */
-  let coin = progress.coin ?? 0;
+  /** What is in the store, and what it has been spent on. */
+  const store: Materials = {
+    gold: progress.store?.gold ?? progress.coin ?? 0,
+    wood: progress.store?.wood ?? 0,
+    stone: progress.store?.stone ?? 0,
+  };
+  const level = progress.level ?? 1;
   const town: Record<string, number> = { ...(progress.town ?? {}) };
   const saved = progress.weapon;
   // Never hand back a weapon that is no longer on the ground — a save from a
@@ -346,7 +352,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   hint.style.cssText = 'font: 600 14px/1.5 system-ui, sans-serif; opacity: .85;';
   const purse = document.createElement('div');
   purse.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
-  const renderPurse = (): void => { purse.textContent = coin > 0 ? `🪙 ${coin}` : ''; };
+  const renderPurse = (): void => {
+    purse.textContent = [
+      `Lv ${level}`,
+      store.gold > 0 && `🪙 ${store.gold}`,
+      store.wood > 0 && `🪵 ${store.wood}`,
+      store.stone > 0 && `🪨 ${store.stone}`,
+    ].filter(Boolean).join('   ');
+  };
   renderPurse();
   hudEl.append(title, purse, hint);
 
@@ -503,13 +516,18 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
       // Only when there is something to say, and then briefly. A line of
       // narration that is always on screen is one nobody reads.
+      const priceOf = (c: Materials): string =>
+        [c.gold && `🪙 ${c.gold}`, c.wood && `🪵 ${c.wood}`, c.stone && `🪨 ${c.stone}`]
+          .filter(Boolean).join('  ');
       const plotLine = (b: typeof TOWN[number]): string => {
         const lv = town[b.id] ?? 0;
         if (lv >= TOWN_MAX_LEVEL) return `${b.icon} ${b.name} Lv${lv} · ${b.effect}`;
         const cost = b.costs[lv];
-        return coin >= cost
-          ? `${b.icon} ⚔ build ${b.name} Lv${lv + 1} · ${cost} 🪙 · ${b.effect}`
-          : `${b.icon} ${b.name} Lv${lv + 1} needs ${cost} 🪙 · ${b.effect}`;
+        return canAfford(store, cost)
+          ? `${b.icon} ⚔ build ${b.name} Lv${lv + 1} · ${priceOf(cost)} · ${b.effect}`
+          // What is MISSING, not what it costs — "needs 40 more wood" is a
+          // thing you can go and do something about.
+          : `${b.icon} ${b.name} Lv${lv + 1} needs ${shortfall(store, cost)}`;
       };
       hint.textContent = panelOpen ? ''
         : atPlot ? plotLine(atPlot)
@@ -521,15 +539,17 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       if (!panelOpen && input.consume('use')) {
         if (atPlot) {
           const lv = town[atPlot.id] ?? 0;
-          if (lv >= TOWN_MAX_LEVEL) { audio.play('denied'); }
-          else if (coin < atPlot.costs[lv]) { audio.play('denied'); }
+          const cost = lv < TOWN_MAX_LEVEL ? atPlot.costs[lv] : null;
+          if (!cost || !canAfford(store, cost)) { audio.play('denied'); }
           else {
-            coin -= atPlot.costs[lv];
+            store.gold -= cost.gold;
+            store.wood -= cost.wood;
+            store.stone -= cost.stone;
             town[atPlot.id] = lv + 1;
             showTown();
             renderPurse();
             audio.play(SFX.upgradeTower);
-            void patchSave(shared.umicat, { coin, town });
+            void patchSave(shared.umicat, { store, town });
           }
         } else if (atPickup) {
           weapon = atPickup.id;
@@ -593,7 +613,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                /** Where the leaderboard sign is. A probe should ask rather than
                 *  carry a coordinate that moves when the hub is re-laid. */
                signAt: () => ({ ...SIGN_AT }),
-               coin: () => coin,
+               coin: () => store.gold,
+               store: () => ({ ...store }),
+               level: () => level,
                town: () => ({ ...town }),
                plots: () => TOWN.map((b) => ({ id: b.id, x: b.x, z: b.z, level: town[b.id] ?? 0 })),
                /** Which boards are open, and where their doors are — a probe
