@@ -76,10 +76,14 @@ const LEVELS = [
     theme: 'grass',
     // Long and open. The first board anyone plays: one loop, wide bends,
     // nothing hidden, and more room beside the road than the gold will buy.
-    trunk: [[-5.5, -4.5], [3.5, -4.5], [3.5, -1.5], [-3.5, -1.5],
-            [-3.5, 1.5], [0.5, 1.5], [0.5, 4.5]],
-    branches: [[[0.5, 4.5], [-5.5, 4.5]], [[0.5, 4.5], [5.5, 4.5]]],
-    gates: [{ id: 'gate_w', wall: 'w', at: 4.5 }, { id: 'gate_e', wall: 'e', at: 4.5 }],
+    // Shifted a row south of where it started. The top run used to be at
+    // z=-4.5 and the door drops the hero in at z=-5.0, which put arrival half a
+    // tile from the lane and inside everything's range — the whole north strip
+    // was, so no spawn point could fix it. Same shape, one row down.
+    trunk: [[-5.5, -3.5], [3.5, -3.5], [3.5, -0.5], [-3.5, -0.5],
+            [-3.5, 2.5], [0.5, 2.5], [0.5, 5.5]],
+    branches: [[[0.5, 5.5], [-5.5, 5.5]], [[0.5, 5.5], [5.5, 5.5]]],
+    gates: [{ id: 'gate_w', wall: 'w', at: 5.5 }, { id: 'gate_e', wall: 'e', at: 5.5 }],
     scenerySeed: 11,
   },
   {
@@ -511,10 +515,21 @@ function buildLevel(def) {
 
   // --- the hero ---
   //
-  // Dropped just inside the exit door, which is where they walked in.
+  // Just inside the exit door, which is where they walked in — but nudged
+  // sideways if the road runs past it. On Meadow the top of the road is at
+  // z=-4.5 and the door is at z=-5.0, so arriving put the hero half a tile from
+  // the lane and inside everything's firing range: standing still on arrival
+  // cost six of eight hearts before the first tower was up. A player moves, but
+  // being shot for the first second of a run is not a thing a player chose.
+  // At the door. Picking a clearer spot instead put the hero in a far corner,
+  // which makes the way in and the way out different places — and on Meadow the
+  // whole north strip was inside enemy range anyway, so no spawn point fixed
+  // it. The road moved a row south and arrival gets a few seconds of grace.
+  const spawnZ = -5.0;
+  const spawnX = 0;
   add({
     id: 'hero', name: 'hero', modelAssetId: 'hero',
-    transform: { position: { x: 0, y: GROUND_Y, z: -5.0 } },
+    transform: { position: { x: spawnX, y: GROUND_Y, z: spawnZ } },
     // Declaring a starting clip is what creates the MIXER, and without a mixer
     // there is no CharacterAnimator and the hero never moves a limb — silently,
     // with the model rendering and sliding around exactly as if it were fine.

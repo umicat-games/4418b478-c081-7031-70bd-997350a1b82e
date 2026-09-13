@@ -81,8 +81,8 @@
     },
     {
       "id": "ground__5_5__5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
+      "name": "scenery",
+      "modelAssetId": "td-tile-tree-double",
       "transform": {
         "position": {
           "x": -5.5,
@@ -91,47 +91,9 @@
         },
         "rotation": [
           0,
+          0.7071067811865476,
           0,
-          0,
-          1
-        ]
-      },
-      "castShadow": false
-    },
-    {
-      "id": "ground__5_5__3_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": -5.5,
-          "y": -0.2,
-          "z": -3.5
-        },
-        "rotation": [
-          0,
-          1,
-          0,
-          6.123233995736766e-17
-        ]
-      },
-      "castShadow": false
-    },
-    {
-      "id": "ground__5_5__2_5",
-      "name": "scenery",
-      "modelAssetId": "td-tile-tree-double",
-      "transform": {
-        "position": {
-          "x": -5.5,
-          "y": -0.2,
-          "z": -2.5
-        },
-        "rotation": [
-          0,
-          0,
-          0,
-          1
+          -0.7071067811865475
         ]
       },
       "castShadow": true,
@@ -153,6 +115,44 @@
       }
     },
     {
+      "id": "ground__5_5__4_5",
+      "name": "ground_tile",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": -0.2,
+          "z": -4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          -0.7071067811865475
+        ]
+      },
+      "castShadow": false
+    },
+    {
+      "id": "ground__5_5__2_5",
+      "name": "ground_tile",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": -0.2,
+          "z": -2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          -0.7071067811865475
+        ]
+      },
+      "castShadow": false
+    },
+    {
       "id": "ground__5_5__1_5",
       "name": "scenery",
       "modelAssetId": "td-tile-tree",
@@ -164,9 +164,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": true,
@@ -199,9 +199,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
           0,
-          -0.7071067811865475
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -218,9 +218,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          0.7071067811865475,
           0,
-          -0.7071067811865475
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -272,9 +272,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          1,
           0,
-          -0.7071067811865475
+          6.123233995736766e-17
         ]
       },
       "castShadow": true,
@@ -307,22 +307,22 @@
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__5_5_5_5",
+      "id": "ground__5_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -5.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -335,8 +335,8 @@
     },
     {
       "id": "ground__4_5__5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
+      "name": "scenery",
+      "modelAssetId": "td-tile-tree-quad",
       "transform": {
         "position": {
           "x": -4.5,
@@ -345,28 +345,44 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          1,
           0,
-          -0.7071067811865475
+          6.123233995736766e-17
         ]
       },
-      "castShadow": false
+      "castShadow": true,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.34,
+            "y": 0.5,
+            "z": 0.34
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
     },
     {
-      "id": "ground__4_5__3_5",
+      "id": "ground__4_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -4.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -440,9 +456,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -459,9 +475,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          1,
           0,
-          -0.7071067811865475
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -478,9 +494,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          0.7071067811865475,
           0,
-          -0.7071067811865475
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -497,25 +513,6 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
-          0,
-          -0.7071067811865475
-        ]
-      },
-      "castShadow": false
-    },
-    {
-      "id": "ground__4_5_5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": -4.5,
-          "y": -0.2,
-          "z": 5.5
-        },
-        "rotation": [
-          0,
           1,
           0,
           6.123233995736766e-17
@@ -524,9 +521,28 @@
       "castShadow": false
     },
     {
-      "id": "ground__3_5__5_5",
+      "id": "ground__4_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "castShadow": false
+    },
+    {
+      "id": "ground__3_5__5_5",
+      "name": "scenery",
+      "modelAssetId": "td-tile-rock",
       "transform": {
         "position": {
           "x": -3.5,
@@ -535,28 +551,44 @@
         },
         "rotation": [
           0,
+          0.7071067811865476,
           0,
-          0,
-          1
+          -0.7071067811865475
         ]
       },
-      "castShadow": false
+      "castShadow": true,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.34,
+            "y": 0.5,
+            "z": 0.34
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
     },
     {
-      "id": "ground__3_5__3_5",
+      "id": "ground__3_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -573,28 +605,28 @@
         },
         "rotation": [
           0,
-          1,
           0,
-          6.123233995736766e-17
+          0,
+          1
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__3_5_2_5",
+      "id": "ground__3_5__1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": 2.5
+          "z": -1.5
         },
         "rotation": [
           0,
-          1,
           0,
-          6.123233995736766e-17
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -611,22 +643,22 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__3_5_5_5",
+      "id": "ground__3_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -649,28 +681,28 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865475,
           0,
-          6.123233995736766e-17
+          0.7071067811865476
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__2_5__3_5",
+      "id": "ground__2_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -687,28 +719,28 @@
         },
         "rotation": [
           0,
+          1,
           0,
-          0,
-          1
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__2_5__0_5",
+      "id": "ground__2_5__1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": -0.5
+          "z": -1.5
         },
         "rotation": [
           0,
-          0.7071067811865476,
           0,
-          -0.7071067811865475
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -725,22 +757,22 @@
         },
         "rotation": [
           0,
+          1,
           0,
-          0,
-          1
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__2_5_2_5",
+      "id": "ground__2_5_1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": 2.5
+          "z": 1.5
         },
         "rotation": [
           0,
@@ -771,14 +803,14 @@
       "castShadow": false
     },
     {
-      "id": "ground__2_5_5_5",
+      "id": "ground__2_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -791,8 +823,8 @@
     },
     {
       "id": "ground__1_5__5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
+      "name": "scenery",
+      "modelAssetId": "td-tile-rock",
       "transform": {
         "position": {
           "x": -1.5,
@@ -801,28 +833,44 @@
         },
         "rotation": [
           0,
-          1,
           0,
-          6.123233995736766e-17
+          0,
+          1
         ]
       },
-      "castShadow": false
+      "castShadow": true,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.34,
+            "y": 0.5,
+            "z": 0.34
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
     },
     {
-      "id": "ground__1_5__3_5",
+      "id": "ground__1_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -839,28 +887,28 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          1,
           0,
-          -0.7071067811865475
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__1_5__0_5",
+      "id": "ground__1_5__1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": -0.5
+          "z": -1.5
         },
         "rotation": [
           0,
+          0.7071067811865476,
           0,
-          0,
-          1
+          -0.7071067811865475
         ]
       },
       "castShadow": false
@@ -885,20 +933,20 @@
       "castShadow": false
     },
     {
-      "id": "ground__1_5_2_5",
+      "id": "ground__1_5_1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": 2.5
+          "z": 1.5
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -915,28 +963,28 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865475,
           0,
-          6.123233995736766e-17
+          0.7071067811865476
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__1_5_5_5",
+      "id": "ground__1_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          0.7071067811865476,
           0,
-          0.7071067811865476
+          -0.7071067811865475
         ]
       },
       "castShadow": false
@@ -961,20 +1009,20 @@
       "castShadow": false
     },
     {
-      "id": "ground__0_5__3_5",
+      "id": "ground__0_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -0.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865475,
           0,
-          6.123233995736766e-17
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -991,28 +1039,28 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865476,
           0,
-          6.123233995736766e-17
+          -0.7071067811865475
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground__0_5__0_5",
+      "id": "ground__0_5__1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -0.5,
           "y": -0.2,
-          "z": -0.5
+          "z": -1.5
         },
         "rotation": [
           0,
+          1,
           0,
-          0,
-          1
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -1037,20 +1085,20 @@
       "castShadow": false
     },
     {
-      "id": "ground__0_5_2_5",
+      "id": "ground__0_5_1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": -0.5,
           "y": -0.2,
-          "z": 2.5
+          "z": 1.5
         },
         "rotation": [
           0,
+          0.7071067811865476,
           0,
-          0,
-          1
+          -0.7071067811865475
         ]
       },
       "castShadow": false
@@ -1067,44 +1115,6 @@
         },
         "rotation": [
           0,
-          1,
-          0,
-          6.123233995736766e-17
-        ]
-      },
-      "castShadow": false
-    },
-    {
-      "id": "ground__0_5_5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": -0.5,
-          "y": -0.2,
-          "z": 5.5
-        },
-        "rotation": [
-          0,
-          0.7071067811865475,
-          0,
-          0.7071067811865476
-        ]
-      },
-      "castShadow": false
-    },
-    {
-      "id": "ground_0_5__5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
-      "transform": {
-        "position": {
-          "x": 0.5,
-          "y": -0.2,
-          "z": -5.5
-        },
-        "rotation": [
-          0,
           0,
           0,
           1
@@ -1113,14 +1123,68 @@
       "castShadow": false
     },
     {
-      "id": "ground_0_5__3_5",
+      "id": "ground__0_5_4_5",
+      "name": "ground_tile",
+      "modelAssetId": "td-tile",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": -0.2,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ]
+      },
+      "castShadow": false
+    },
+    {
+      "id": "ground_0_5__5_5",
+      "name": "scenery",
+      "modelAssetId": "td-tile-tree",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": -0.2,
+          "z": -5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "castShadow": true,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.34,
+            "y": 0.5,
+            "z": 0.34
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "ground_0_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
@@ -1143,22 +1207,22 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865475,
           0,
-          6.123233995736766e-17
+          0.7071067811865476
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_0_5__0_5",
+      "id": "ground_0_5__1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": -0.5
+          "z": -1.5
         },
         "rotation": [
           0,
@@ -1181,28 +1245,28 @@
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_0_5_5_5",
+      "id": "ground_0_5_1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 1.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          0.7071067811865476,
           0,
-          0.7071067811865476
+          -0.7071067811865475
         ]
       },
       "castShadow": false
@@ -1219,22 +1283,22 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_1_5__3_5",
+      "id": "ground_1_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 1.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
@@ -1257,28 +1321,28 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_1_5__0_5",
+      "id": "ground_1_5__1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 1.5,
           "y": -0.2,
-          "z": -0.5
+          "z": -1.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -1295,9 +1359,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          0.7071067811865475,
           0,
-          -0.7071067811865475
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -1314,9 +1378,9 @@
         },
         "rotation": [
           0,
-          1,
           0,
-          6.123233995736766e-17
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -1352,22 +1416,22 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          0.7071067811865475,
           0,
-          -0.7071067811865475
+          0.7071067811865476
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_1_5_5_5",
+      "id": "ground_1_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 1.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -1398,20 +1462,20 @@
       "castShadow": false
     },
     {
-      "id": "ground_2_5__3_5",
+      "id": "ground_2_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 2.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -4.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -1428,28 +1492,28 @@
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_2_5__0_5",
+      "id": "ground_2_5__1_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 2.5,
           "y": -0.2,
-          "z": -0.5
+          "z": -1.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -1485,9 +1549,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -1504,9 +1568,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          1,
           0,
-          -0.7071067811865475
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -1523,22 +1587,22 @@
         },
         "rotation": [
           0,
-          1,
           0,
-          6.123233995736766e-17
+          0,
+          1
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_2_5_5_5",
+      "id": "ground_2_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 2.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -1551,8 +1615,8 @@
     },
     {
       "id": "ground_3_5__5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
+      "name": "scenery",
+      "modelAssetId": "td-tile-tree-quad",
       "transform": {
         "position": {
           "x": 3.5,
@@ -1561,22 +1625,38 @@
         },
         "rotation": [
           0,
+          1,
           0,
-          0,
-          1
+          6.123233995736766e-17
         ]
       },
-      "castShadow": false
+      "castShadow": true,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.34,
+            "y": 0.5,
+            "z": 0.34
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
     },
     {
-      "id": "ground_3_5__0_5",
+      "id": "ground_3_5__4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 3.5,
           "y": -0.2,
-          "z": -0.5
+          "z": -4.5
         },
         "rotation": [
           0,
@@ -1599,9 +1679,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -1618,9 +1698,9 @@
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -1637,9 +1717,9 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865475,
           0,
-          6.123233995736766e-17
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -1656,22 +1736,22 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
           0,
-          0.7071067811865476
+          0,
+          1
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_3_5_5_5",
+      "id": "ground_3_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 3.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -1684,8 +1764,8 @@
     },
     {
       "id": "ground_4_5__5_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
+      "name": "scenery",
+      "modelAssetId": "td-tile-crystal",
       "transform": {
         "position": {
           "x": 4.5,
@@ -1694,12 +1774,28 @@
         },
         "rotation": [
           0,
-          1,
           0,
-          6.123233995736766e-17
+          0,
+          1
         ]
       },
-      "castShadow": false
+      "castShadow": true,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.34,
+            "y": 0.5,
+            "z": 0.34
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
     },
     {
       "id": "ground_4_5__4_5",
@@ -1713,9 +1809,9 @@
         },
         "rotation": [
           0,
-          1,
           0,
-          6.123233995736766e-17
+          0,
+          1
         ]
       },
       "castShadow": false
@@ -1732,9 +1828,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -1751,9 +1847,9 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865476,
           0,
-          6.123233995736766e-17
+          -0.7071067811865475
         ]
       },
       "castShadow": false
@@ -1770,9 +1866,9 @@
         },
         "rotation": [
           0,
-          0.7071067811865476,
+          0.7071067811865475,
           0,
-          -0.7071067811865475
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -1789,9 +1885,9 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865475,
           0,
-          6.123233995736766e-17
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -1808,9 +1904,9 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865476,
           0,
-          6.123233995736766e-17
+          -0.7071067811865475
         ]
       },
       "castShadow": false
@@ -1827,9 +1923,9 @@
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -1865,28 +1961,28 @@
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865476,
           0,
-          6.123233995736766e-17
+          -0.7071067811865475
         ]
       },
       "castShadow": false
     },
     {
-      "id": "ground_4_5_5_5",
+      "id": "ground_4_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 4.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
-          1,
+          0.7071067811865475,
           0,
-          6.123233995736766e-17
+          0.7071067811865476
         ]
       },
       "castShadow": false
@@ -1928,8 +2024,8 @@
     },
     {
       "id": "ground_5_5__4_5",
-      "name": "scenery",
-      "modelAssetId": "td-tile-rock",
+      "name": "ground_tile",
+      "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 5.5,
@@ -1938,28 +2034,12 @@
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
-      "castShadow": true,
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.34,
-            "y": 0.5,
-            "z": 0.34
-          }
-        },
-        "body": "fixed",
-        "offset": {
-          "x": 0,
-          "y": 0.5,
-          "z": 0
-        }
-      }
+      "castShadow": false
     },
     {
       "id": "ground_5_5__3_5",
@@ -1982,8 +2062,8 @@
     },
     {
       "id": "ground_5_5__2_5",
-      "name": "scenery",
-      "modelAssetId": "td-tile-rock",
+      "name": "ground_tile",
+      "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 5.5,
@@ -1992,28 +2072,12 @@
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
-      "castShadow": true,
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.34,
-            "y": 0.5,
-            "z": 0.34
-          }
-        },
-        "body": "fixed",
-        "offset": {
-          "x": 0,
-          "y": 0.5,
-          "z": 0
-        }
-      }
+      "castShadow": false
     },
     {
       "id": "ground_5_5__1_5",
@@ -2037,7 +2101,7 @@
     {
       "id": "ground_5_5__0_5",
       "name": "scenery",
-      "modelAssetId": "td-tile-tree",
+      "modelAssetId": "td-tile-tree-quad",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2046,9 +2110,9 @@
         },
         "rotation": [
           0,
+          0.7071067811865475,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
       "castShadow": true,
@@ -2081,17 +2145,17 @@
         },
         "rotation": [
           0,
+          1,
           0,
-          0,
-          1
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
     },
     {
       "id": "ground_5_5_1_5",
-      "name": "ground_tile",
-      "modelAssetId": "td-tile",
+      "name": "scenery",
+      "modelAssetId": "td-tile-tree-double",
       "transform": {
         "position": {
           "x": 5.5,
@@ -2103,25 +2167,6 @@
           1,
           0,
           6.123233995736766e-17
-        ]
-      },
-      "castShadow": false
-    },
-    {
-      "id": "ground_5_5_2_5",
-      "name": "scenery",
-      "modelAssetId": "td-tile-tree-quad",
-      "transform": {
-        "position": {
-          "x": 5.5,
-          "y": -0.2,
-          "z": 2.5
-        },
-        "rotation": [
-          0,
-          0.7071067811865476,
-          0,
-          -0.7071067811865475
         ]
       },
       "castShadow": true,
@@ -2143,14 +2188,14 @@
       }
     },
     {
-      "id": "ground_5_5_3_5",
+      "id": "ground_5_5_2_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 5.5,
           "y": -0.2,
-          "z": 3.5
+          "z": 2.5
         },
         "rotation": [
           0,
@@ -2162,20 +2207,55 @@
       "castShadow": false
     },
     {
-      "id": "ground_5_5_5_5",
+      "id": "ground_5_5_3_5",
+      "name": "scenery",
+      "modelAssetId": "td-tile-tree-double",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": -0.2,
+          "z": 3.5
+        },
+        "rotation": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ]
+      },
+      "castShadow": true,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.34,
+            "y": 0.5,
+            "z": 0.34
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "ground_5_5_4_5",
       "name": "ground_tile",
       "modelAssetId": "td-tile",
       "transform": {
         "position": {
           "x": 5.5,
           "y": -0.2,
-          "z": 5.5
+          "z": 4.5
         },
         "rotation": [
           0,
-          0.7071067811865475,
+          1,
           0,
-          0.7071067811865476
+          6.123233995736766e-17
         ]
       },
       "castShadow": false
@@ -2188,44 +2268,98 @@
         "position": {
           "x": -5.5,
           "y": 0.01,
-          "z": -4.5
+          "z": -3.5
         }
       },
       "castShadow": false
     },
     {
-      "id": "prop_5_5_0_5",
+      "id": "prop__5_5__0_5",
       "name": "prop",
-      "modelAssetId": "td-wood-structure",
+      "modelAssetId": "td-detail-crystal-large",
       "transform": {
         "position": {
-          "x": 5.495719794766046,
+          "x": -5.501825223118066,
           "y": 0,
-          "z": 0.46220334474928676
+          "z": -0.4586902082664892
         },
         "rotation": [
           0,
-          0.4374849220417005,
+          0.8558758647470124,
           0,
-          0.8992257463986267
+          -0.5171813068388627
         ]
       }
     },
     {
-      "id": "prop_5_5_1_5",
+      "id": "prop__0_5__5_5",
       "name": "prop",
-      "modelAssetId": "td-wood-structure",
+      "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
-          "x": 5.500451601995155,
+          "x": -0.43487207088619473,
           "y": 0,
-          "z": 1.4736313775880263
+          "z": -5.4629714513896035
         },
         "rotation": [
           0,
-          0.9152407456074781,
+          0.9865217523408206,
           0,
-          -0.40290740571484596
+          -0.1636301688515797
+        ]
+      }
+    },
+    {
+      "id": "prop_1_5__5_5",
+      "name": "prop",
+      "modelAssetId": "td-wood-structure-high",
+      "transform": {
+        "position": {
+          "x": 1.3719478130573406,
+          "y": 0,
+          "z": -5.395650338148698
+        },
+        "rotation": [
+          0,
+          0.42306203369357775,
+          0,
+          0.9061007204759601
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5__2_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-dirt-large",
+      "transform": {
+        "position": {
+          "x": 5.604778808937408,
+          "y": 0,
+          "z": -2.5822330690454693
+        },
+        "rotation": [
+          0,
+          0.9560005664571634,
+          0,
+          0.293364818840949
+        ]
+      }
+    },
+    {
+      "id": "prop_5_5__1_5",
+      "name": "prop",
+      "modelAssetId": "td-detail-dirt-large",
+      "transform": {
+        "position": {
+          "x": 5.3903566069435325,
+          "y": 0,
+          "z": -1.498006924171932
+        },
+        "rotation": [
+          0,
+          0.4573752121171897,
+          0,
+          0.8892738134797155
         ]
       }
     },
@@ -2238,7 +2372,7 @@
         "position": {
           "x": -5.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2257,7 +2391,7 @@
         "position": {
           "x": -4.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2276,7 +2410,7 @@
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2295,7 +2429,7 @@
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2314,7 +2448,7 @@
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2333,7 +2467,7 @@
         "position": {
           "x": -0.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2352,7 +2486,7 @@
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2371,7 +2505,7 @@
         "position": {
           "x": 1.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2390,7 +2524,7 @@
         "position": {
           "x": 2.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2409,7 +2543,7 @@
         "position": {
           "x": 3.5,
           "y": -0.2,
-          "z": -4.5
+          "z": -3.5
         },
         "rotation": [
           0,
@@ -2428,7 +2562,7 @@
         "position": {
           "x": 3.5,
           "y": -0.2,
-          "z": -3.5
+          "z": -2.5
         },
         "rotation": [
           0,
@@ -2447,7 +2581,7 @@
         "position": {
           "x": 3.5,
           "y": -0.2,
-          "z": -2.5
+          "z": -1.5
         },
         "rotation": [
           0,
@@ -2466,7 +2600,7 @@
         "position": {
           "x": 3.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2485,7 +2619,7 @@
         "position": {
           "x": 2.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2504,7 +2638,7 @@
         "position": {
           "x": 1.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2523,7 +2657,7 @@
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2542,7 +2676,7 @@
         "position": {
           "x": -0.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2561,7 +2695,7 @@
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2580,7 +2714,7 @@
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2599,7 +2733,7 @@
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": -1.5
+          "z": -0.5
         },
         "rotation": [
           0,
@@ -2618,7 +2752,7 @@
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": -0.5
+          "z": 0.5
         },
         "rotation": [
           0,
@@ -2637,7 +2771,7 @@
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": 0.5
+          "z": 1.5
         },
         "rotation": [
           0,
@@ -2656,7 +2790,7 @@
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 2.5
         },
         "rotation": [
           0,
@@ -2675,7 +2809,7 @@
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 2.5
         },
         "rotation": [
           0,
@@ -2694,7 +2828,7 @@
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 2.5
         },
         "rotation": [
           0,
@@ -2713,7 +2847,7 @@
         "position": {
           "x": -0.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 2.5
         },
         "rotation": [
           0,
@@ -2732,7 +2866,7 @@
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": 1.5
+          "z": 2.5
         },
         "rotation": [
           0,
@@ -2751,7 +2885,7 @@
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": 2.5
+          "z": 3.5
         },
         "rotation": [
           0,
@@ -2770,7 +2904,7 @@
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": 3.5
+          "z": 4.5
         },
         "rotation": [
           0,
@@ -2789,7 +2923,7 @@
         "position": {
           "x": 0.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2808,7 +2942,7 @@
         "position": {
           "x": -0.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2827,7 +2961,7 @@
         "position": {
           "x": -1.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2846,7 +2980,7 @@
         "position": {
           "x": -2.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2865,7 +2999,7 @@
         "position": {
           "x": -3.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2884,7 +3018,7 @@
         "position": {
           "x": -4.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2903,7 +3037,7 @@
         "position": {
           "x": -5.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2922,7 +3056,7 @@
         "position": {
           "x": 1.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2941,7 +3075,7 @@
         "position": {
           "x": 2.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2960,7 +3094,7 @@
         "position": {
           "x": 3.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2979,7 +3113,7 @@
         "position": {
           "x": 4.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -2998,7 +3132,7 @@
         "position": {
           "x": 5.5,
           "y": -0.2,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -3109,7 +3243,7 @@
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 10.7
+          "z": 11.7
         },
         "color": "#4a4036"
       },
@@ -3117,7 +3251,7 @@
         "position": {
           "x": -6.6,
           "y": 0.4,
-          "z": -1.35
+          "z": -0.8500000000000001
         }
       },
       "collider": {
@@ -3126,7 +3260,7 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 5.35
+            "z": 5.85
           }
         },
         "body": "fixed"
@@ -3140,7 +3274,7 @@
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 1.7000000000000002
+          "z": 0.7000000000000002
         },
         "color": "#4a4036"
       },
@@ -3148,7 +3282,7 @@
         "position": {
           "x": -6.6,
           "y": 0.4,
-          "z": 5.85
+          "z": 6.35
         }
       },
       "collider": {
@@ -3157,7 +3291,7 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 0.8500000000000001
+            "z": 0.3500000000000001
           }
         },
         "body": "fixed"
@@ -3171,7 +3305,7 @@
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 10.7
+          "z": 11.7
         },
         "color": "#4a4036"
       },
@@ -3179,7 +3313,7 @@
         "position": {
           "x": 6.6,
           "y": 0.4,
-          "z": -1.35
+          "z": -0.8500000000000001
         }
       },
       "collider": {
@@ -3188,7 +3322,7 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 5.35
+            "z": 5.85
           }
         },
         "body": "fixed"
@@ -3202,7 +3336,7 @@
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 1.7000000000000002
+          "z": 0.7000000000000002
         },
         "color": "#4a4036"
       },
@@ -3210,7 +3344,7 @@
         "position": {
           "x": 6.6,
           "y": 0.4,
-          "z": 5.85
+          "z": 6.35
         }
       },
       "collider": {
@@ -3219,7 +3353,7 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 0.8500000000000001
+            "z": 0.3500000000000001
           }
         },
         "body": "fixed"
@@ -3264,7 +3398,7 @@
         "position": {
           "x": -6.6,
           "y": 0,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,
@@ -3298,7 +3432,7 @@
         "position": {
           "x": 6.6,
           "y": 0,
-          "z": 4.5
+          "z": 5.5
         },
         "rotation": [
           0,

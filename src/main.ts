@@ -818,7 +818,11 @@ export async function startLevel(
   let toSpawn = 0;
   let running = true;
   let won = false;
-  let invincible = 1.5;
+  // Long enough to walk out of the doorway. A board's road can pass close to
+  // the door — on Meadow the whole north strip is inside enemy range — so
+  // arriving used to mean taking fire before the first tower was up, which is
+  // damage for nothing the player did.
+  let invincible = 4;
   let selected = 0;             // which tower kind the build button places
   /** The fork alternates, so both gates stay under pressure all wave. */
   let nextRoute = 0;
@@ -2359,6 +2363,10 @@ export async function startLevel(
       pathOf: (r: number) => ROUTES[r],
       scenery: () => [...SCENERY].map((k) => k.split(',').map(Number)),
       blocked: () => [...BLOCKED].map((k) => k.split(',').map(Number)),
+      /** Where a tower may go, from the board's own data. Probes carrying a
+       *  coordinate break the day a road moves one row, and then report that
+       *  the game is broken rather than that they are. */
+      spots: () => pathData.spots,
       canBuildAt: (x: number, z: number) => {
         const k = `${x},${z}`;
         return BUILDABLE.has(k) && !occupied.has(k);
