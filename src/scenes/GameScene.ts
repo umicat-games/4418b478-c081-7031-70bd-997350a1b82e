@@ -8061,6 +8061,33 @@ export class GameScene extends Phaser.Scene {
     return it.iconKey ? { key: it.iconKey, frame: it.iconFrame ?? 0 } : undefined;
   }
 
+  /** TEST-PHASE: top every cooking ingredient up to `floor` in the backpack.
+   *
+   *  Reads the ingredient list off COOKING_RECIPES rather than naming items, so a recipe edited
+   *  in the Data Tables tool is stocked without touching this. The two WILDCARD materials have
+   *  no item of their own — `egg-any` / `milk-any` stand for a family — so they are granted as a
+   *  concrete member; `materialMatches` then accepts them for any recipe asking for the family.
+   *
+   *  Only ever TOPS UP, like the coin floor: it will not trim a stack the player built up, and
+   *  running it twice changes nothing. Stops when the backpack is full rather than silently
+   *  dropping items on the floor. Gated on the `pantryFloor` debug flag — delete with the rest of
+   *  the debug scaffolding before release. */
+  public stockPantry(floor = 10): void {
+    const CONCRETE: Record<string, string> = { 'egg-any': 'egg-brown', 'milk-any': 'milk-blue' };
+    const wanted = new Set<string>();
+    for (const r of COOKING_RECIPES) for (const m of r.materials) wanted.add(CONCRETE[m.id] ?? m.id);
+    let granted = 0;
+    for (const id of wanted) {
+      const have = this.invCountOf(id);
+      if (have >= floor) continue;
+      if (!this.inventoryHasSpaceFor(id)) continue; // backpack full — stop rather than lose items
+      const left = this.addToInventory(itemFromId(id, floor - have));
+      granted += (floor - have) - left;
+    }
+    if (granted > 0) { this.publishInventory(); this.scheduleSave(); }
+    console.log(`[catopia][debug] pantry stocked: ${granted} items across ${wanted.size} ingredients`);
+  }
+
   /** Bank a dish once HouseScene's cooking cinematic has revealed it. */
   public bankCookedDish(output: string, count: number): void {
     const it = itemFromId(output, count);
@@ -8192,7 +8219,15 @@ export class GameScene extends Phaser.Scene {
       // Debug toggles: flip the flag (persists to localStorage) + re-render the checkbox.
       const dbg = this.registry.get('menuDebugRows') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
       const row = dbg?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-      if (row) { toggleDebug(row.key); if (['rain', 'lightRain', 'fog', 'heavyFog'].includes(row.key)) this.publishWeatherHud(); this.publishMenu(); return true; }
+      if (row) {
+        toggleDebug(row.key);
+        if (['rain', 'lightRain', 'fog', 'heavyFog'].includes(row.key)) this.publishWeatherHud();
+        // Stocking runs the moment it is switched on, not on the next load — the point of it is
+        // to go and cook something NOW.
+        if (row.key === 'pantryFloor' && isDebug('pantryFloor')) this.stockPantry();
+        this.publishMenu();
+        return true;
+      }
     }
     // Tap outside the panel → close.
     if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
@@ -11552,6 +11587,7 @@ export class GameScene extends Phaser.Scene {
       // TEST-PHASE: keep a coin floor so testers (esp. on touch, no Y key) can always
       // afford to order. Gated on the debug flag → removed for release. Only tops up.
       if (isDebug('coinFloor') && this.money < 5000) { this.money = 5000; this.publishWeatherHud(); this.scheduleSave(); }
+      if (isDebug('pantryFloor')) this.stockPantry();
       if (CATO_DEBUG_TILL && DEBUG_CLEAR_MAILBOX) { this.mailboxStore = []; this.mailboxHasMail = false; this.scheduleSave(); }
     } catch (e) {
       // Read failed — do NOT arm saving, so we can't clobber a save that exists
