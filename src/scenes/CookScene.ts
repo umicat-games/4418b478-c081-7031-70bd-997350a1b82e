@@ -16,7 +16,17 @@ const PANEL_FRAME = 'frame-medium', PANEL_SLICE = { l: 10, r: 10, t: 11, b: 11 }
 const SLOT_FRAME = 'slot-light', SLOT_SLICE = { l: 7, r: 7, t: 8, b: 8 }, SLOT_SCALE = 2;
 const BTN = 'square-buttons', BTN_FRAME = 'white-button';
 // Scroll bar art (creator-tagged in all_ui_assets_on_one_sheet): a thin recessed TRACK + a wider THUMB.
+// Scroll bar (creator-tagged on the ui sheet; note the `vertial` typo is the region's real name).
+// `vertical-scroll-bar-medium-dark` is the paler thumb if this one ever reads too heavy.
 const RAIL_ATLAS = 'ui-sheet', RAIL_BG = 'vertial-scroll-bar-background', RAIL_THUMB = 'vertical-scroll-bar-dark';
+// Native sizes + the insets the ART ACTUALLY HAS, read off the sheet rather than guessed.
+//
+// The thumb is 7×18: rows 0–3 are the top cap, 4–12 the repeatable body, and 13–17 the dark
+// bottom shading plus the rounded end. The bottom inset was 4, which left row 13 — the first
+// shading row — inside the STRETCHED middle, so it was smeared into a band across the lower
+// tenth of the bar and read as a misplaced chunk stuck near the bottom. It is 5.
+const RAIL_BG_W = 4, RAIL_BG_SLICE = { l: 1, r: 1, t: 3, b: 1 };
+const RAIL_THUMB_W = 7, RAIL_THUMB_SLICE = { l: 2, r: 2, t: 4, b: 5 };
 // Close button — the SAME `icon-buttons` graphic the chest/mail/shop modals use (a complete
 // button image, not a nineslice + icon), with a pressed-down frame for the click feedback.
 const CLOSE_ATLAS = 'icon-buttons', CLOSE_FRAME = 'close-light-big', CLOSE_PRESSED = 'close-light-big-pressed-down';
@@ -168,13 +178,23 @@ export class CookScene extends Phaser.Scene {
     }
     if (this.totalRows > this.visibleRows) {
       const railX = listX + listW + pw * 0.02, railTop = listY, railH = this.visibleRows * (rowH + gap) - gap;
-      const thumbH = Math.max(24, railH * (this.visibleRows / this.totalRows));
+      // Pixel art is SCALED by a whole number, never stretched to a pixel width: a nine-slice
+      // sized with setSize keeps its caps at 1:1 native while the panel around it is drawn
+      // several times larger, so the rounded ends flatten out. Building at the art's own width
+      // and scaling the whole thing keeps the ends in proportion and every pixel square.
+      const railScale = Math.max(2, Math.round((pw * 0.018) / RAIL_THUMB_W));
+      const capH = (RAIL_THUMB_SLICE.t + RAIL_THUMB_SLICE.b) * railScale; // below this the caps would overlap
+      const thumbH = Math.max(capH, railH * (this.visibleRows / this.totalRows));
       const thumbY = railTop + (railH - thumbH) * (this.scroll / Math.max(1, this.totalRows - this.visibleRows));
       const hasArt = this.textures.exists(RAIL_ATLAS) && this.textures.get(RAIL_ATLAS).has(RAIL_BG) && this.textures.get(RAIL_ATLAS).has(RAIL_THUMB);
       if (hasArt) {
         // Track (thin) + thumb (wider) — the creator-tagged scroll bar art, as vertical nine-slices.
-        box.add(this.add.nineslice(railX, railTop + railH / 2, RAIL_ATLAS, RAIL_BG, pw * 0.010, railH, 1, 1, 4, 4));
-        box.add(this.add.nineslice(railX, thumbY + thumbH / 2, RAIL_ATLAS, RAIL_THUMB, pw * 0.018, thumbH, 2, 2, 4, 4));
+        box.add(this.add.nineslice(railX, railTop + railH / 2, RAIL_ATLAS, RAIL_BG,
+          RAIL_BG_W, railH / railScale,
+          RAIL_BG_SLICE.l, RAIL_BG_SLICE.r, RAIL_BG_SLICE.t, RAIL_BG_SLICE.b).setScale(railScale));
+        box.add(this.add.nineslice(railX, thumbY + thumbH / 2, RAIL_ATLAS, RAIL_THUMB,
+          RAIL_THUMB_W, thumbH / railScale,
+          RAIL_THUMB_SLICE.l, RAIL_THUMB_SLICE.r, RAIL_THUMB_SLICE.t, RAIL_THUMB_SLICE.b).setScale(railScale));
       } else {
         box.add(this.add.rectangle(railX, railTop + railH / 2, 6, railH, 0x3a2a12, 0.2).setOrigin(0.5));
         box.add(this.add.rectangle(railX, thumbY + thumbH / 2, 6, thumbH, 0x9a7b4f, 1).setOrigin(0.5));
