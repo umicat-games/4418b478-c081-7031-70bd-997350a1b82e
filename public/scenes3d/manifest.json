@@ -893,6 +893,81 @@
       "id": "td-wood-structure",
       "path": "kit/td/wood-structure.glb",
       "importScale": 1
+    },
+    {
+      "id": "town-banner-green",
+      "path": "kit/town/banner-green.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-banner-red",
+      "path": "kit/town/banner-red.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-cart",
+      "path": "kit/town/cart.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-fountain-round",
+      "path": "kit/town/fountain-round.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-lantern",
+      "path": "kit/town/lantern.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-stall-green",
+      "path": "kit/town/stall-green.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-stall-red",
+      "path": "kit/town/stall-red.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-tree",
+      "path": "kit/town/tree.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-watermill",
+      "path": "kit/town/watermill.glb",
+      "importScale": 1
+    },
+    {
+      "id": "town-windmill",
+      "path": "kit/town/windmill.glb",
+      "importScale": 1
+    },
+    {
+      "id": "bld-house-a",
+      "path": "kit/buildings/building-sample-house-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "bld-house-b",
+      "path": "kit/buildings/building-sample-house-b.glb",
+      "importScale": 1
+    },
+    {
+      "id": "bld-house-c",
+      "path": "kit/buildings/building-sample-house-c.glb",
+      "importScale": 1
+    },
+    {
+      "id": "bld-tower-a",
+      "path": "kit/buildings/building-sample-tower-a.glb",
+      "importScale": 1
+    },
+    {
+      "id": "bld-tower-b",
+      "path": "kit/buildings/building-sample-tower-b.glb",
+      "importScale": 1
     }
   ]
 }

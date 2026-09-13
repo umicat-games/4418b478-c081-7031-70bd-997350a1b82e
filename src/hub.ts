@@ -8,6 +8,7 @@ import {
 import type { Shared, Weapon, Progress } from './main';
 import { patchSave } from './main';
 import { LEVELS } from './levels';
+import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, type TownBonus } from './town';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
 
@@ -34,7 +35,7 @@ import { hideLoading } from './loading';
 const DOOR_Z = -5.1;
 const DOOR_HALF_WIDTH = 0.62;
 const doorX = (i: number): number => (i - (LEVELS.length - 1) / 2) * 3.4;
-const SIGN_AT = { x: -2.5, z: 2.5 };
+const SIGN_AT = { x: 0, z: 3.6 };
 const NEAR = 0.9;             // how close counts as "standing at" something
 const LEADERBOARD_KEY = 'leaderboard';
 const LEADERBOARD_MAX = 10;
@@ -96,7 +97,7 @@ const PICKUPS: { id: Weapon; x: number; z: number; label: string; runs: number }
 ];
 
 /** What the player chose on the way out of the hub. */
-export interface HubChoice { weapon: Weapon; level: number; }
+export interface HubChoice { weapon: Weapon; level: number; bonus: TownBonus; }
 
 export async function runHub(shared: Shared): Promise<HubChoice> {
   const { umicat, renderer, canvas, hudEl, audio } = shared;
@@ -128,7 +129,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   window.addEventListener('resize', resize);
 
   const character = new CharacterController3D(world.world, RAPIER, {
-    position: { x: 0, y: 0.5, z: 3.0 },
+    // From the SCENE, not a number typed here. The two disagreed — the hero
+    // model was placed at 1.9 and the controller spawned it at 3.0 — and since
+    // the controller wins, moving the hero in the scene did nothing at all.
+    position: {
+      x: hero.position.x,
+      y: hero.position.y + 0.5,
+      z: hero.position.z,
+    },
     halfHeight: 0.2, radius: 0.16, speed: 4.2, stepHeight: 0.17, jumpSpeed: 2.8,
   });
   const input = new Input3D({ actions: [{ id: 'use', label: '⚔', keys: ['KeyJ'] }] });
@@ -154,6 +162,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  clearing the one before it, because otherwise the order means nothing. */
   const cleared = progress.cleared ?? 0;
   const levelOpen = (i: number): boolean => i <= cleared;
+  /** Coin carried home from runs, and what it has been spent on. */
+  let coin = progress.coin ?? 0;
+  const town: Record<string, number> = { ...(progress.town ?? {}) };
   const saved = progress.weapon;
   // Never hand back a weapon that is no longer on the ground — a save from a
   // future version, or a cleared progress, should not leave you carrying
@@ -259,6 +270,62 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     if (body) world.world.removeRigidBody(body);
   });
 
+  // Show whichever building each plot has been paid for, and nothing on the
+  // ones that have not. The foundation stays either way: an empty plot that
+  // looks like grass is not an invitation.
+  /** Sit a building ON its plot, whatever the model's origin happens to be.
+   *
+   *  Kenney's building models are not centred — `bld-house-c` measures 2 x 2.2
+   *  from a corner — so placing one at the plot's coordinates put it half off
+   *  the foundation and, on the far plots, straight through the hub wall. And
+   *  the windmill is 3.1 tall, which is taller than the wall it stands beside.
+   *  So: measure the geometry, scale it to the plot, and move it so its middle
+   *  is the plot's middle and its feet are on the ground. */
+  const fitToPlot = (obj: THREE.Object3D, plotSize: number): void => {
+    obj.updateWorldMatrix(true, true);
+    const box = new THREE.Box3();
+    const one = new THREE.Box3();
+    const rel = new THREE.Matrix4();
+    const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+    obj.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      one.copy(mesh.geometry.boundingBox!).applyMatrix4(rel.multiplyMatrices(inv, mesh.matrixWorld));
+      box.union(one);
+    });
+    if (box.isEmpty()) return;
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const wide = Math.max(size.x, size.z);
+    const scale = wide > plotSize ? plotSize / wide : 1;
+    obj.scale.setScalar(scale);
+    const mid = new THREE.Vector3();
+    box.getCenter(mid);
+    // The offset is applied to the CHILD, so the plot's own position and
+    // rotation stay exactly what the scene said they were.
+    for (const child of [...obj.children]) {
+      child.position.x -= mid.x;
+      child.position.z -= mid.z;
+      child.position.y -= box.min.y;
+    }
+  };
+
+  const showTown = (): void => {
+    for (const b of TOWN) {
+      const lv = town[b.id] ?? 0;
+      for (let i = 1; i <= TOWN_MAX_LEVEL; i++) {
+        const o = world.entities.get(`town_${b.id}_${i}`);
+        if (o && !o.userData.fitted) { fitToPlot(o, 1.7); o.userData.fitted = true; }
+        if (o) o.visible = i === lv;
+        const body = world.bodies.get(`town_${b.id}_${i}`);
+        // A collider on a hidden building is a wall in the middle of a field.
+        if (body) body.setEnabled(i === lv);
+      }
+    }
+  };
+  showTown();
+
   // --- HUD ---
   hudEl.textContent = '';
   const title = document.createElement('div');
@@ -269,7 +336,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   setTimeout(() => { title.style.opacity = '0'; }, 5000);
   const hint = document.createElement('div');
   hint.style.cssText = 'font: 600 14px/1.5 system-ui, sans-serif; opacity: .85;';
-  hudEl.append(title, hint);
+  const purse = document.createElement('div');
+  purse.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
+  const renderPurse = (): void => { purse.textContent = coin > 0 ? `🪙 ${coin}` : ''; };
+  renderPurse();
+  hudEl.append(title, purse, hint);
 
   // Something new on the ground is the reward for the level just finished, and
   // it is easy to miss: it appears while the screen is still fading in, two
@@ -348,6 +419,15 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       // Close to a doorway, not through it: the prompt is what tells a new
       // player the door is a door before they walk into it, and which board is
       // behind it.
+      // Which plot you are standing at, if any.
+      let atPlot: typeof TOWN[number] | null = null;
+      for (const b of TOWN) {
+        const near = Math.hypot(hero.position.x - b.x, hero.position.z - b.z) < 1.9;
+        const ring = world.entities.get(`plot_${b.id}_marker`);
+        if (ring) ring.visible = near && !panelOpen;
+        if (near) atPlot = b;
+      }
+
       let nearDoor = -1;
       for (let i = 0; i < LEVELS.length; i++) {
         if (hero.position.z < DOOR_Z + 1.7 && Math.abs(hero.position.x - doorX(i)) < 1.5) {
@@ -373,7 +453,16 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
       // Only when there is something to say, and then briefly. A line of
       // narration that is always on screen is one nobody reads.
+      const plotLine = (b: typeof TOWN[number]): string => {
+        const lv = town[b.id] ?? 0;
+        if (lv >= TOWN_MAX_LEVEL) return `${b.icon} ${b.name} Lv${lv} · ${b.effect}`;
+        const cost = b.costs[lv];
+        return coin >= cost
+          ? `${b.icon} ⚔ build ${b.name} Lv${lv + 1} · ${cost} 🪙 · ${b.effect}`
+          : `${b.icon} ${b.name} Lv${lv + 1} needs ${cost} 🪙 · ${b.effect}`;
+      };
       hint.textContent = panelOpen ? ''
+        : atPlot ? plotLine(atPlot)
         : atPickup ? (atPickup.id === weapon ? `${atPickup.label} · equipped` : `⚔ take · ${atPickup.label}`)
         : atSign ? '⚔ leaderboard'
         : nearDoor >= 0
@@ -383,7 +472,19 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           : '';
 
       if (!panelOpen && input.consume('use')) {
-        if (atPickup) {
+        if (atPlot) {
+          const lv = town[atPlot.id] ?? 0;
+          if (lv >= TOWN_MAX_LEVEL) { audio.play('denied'); }
+          else if (coin < atPlot.costs[lv]) { audio.play('denied'); }
+          else {
+            coin -= atPlot.costs[lv];
+            town[atPlot.id] = lv + 1;
+            showTown();
+            renderPurse();
+            audio.play(SFX.upgradeTower);
+            void patchSave(shared.umicat, { coin, town });
+          }
+        } else if (atPickup) {
           weapon = atPickup.id;
           showWeapon();
           audio.play('build');
@@ -419,7 +520,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         // merely invisible — and it is the difference a probe can see.
         world.scene.clear();
         delete (window as unknown as Record<string, unknown>).__hub;
-        resolve({ weapon, level: through });
+        resolve({ weapon, level: through, bonus: bonusesFrom(town) });
         return;
       }
 
@@ -434,6 +535,13 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                 *  answer "is something drawn there", which is not the same. */
                available: () => available.map((p) => p.id),
                runs, cleared,
+               THREE,
+               /** Where the leaderboard sign is. A probe should ask rather than
+                *  carry a coordinate that moves when the hub is re-laid. */
+               signAt: () => ({ ...SIGN_AT }),
+               coin: () => coin,
+               town: () => ({ ...town }),
+               plots: () => TOWN.map((b) => ({ id: b.id, x: b.x, z: b.z, level: town[b.id] ?? 0 })),
                /** Which boards are open, and where their doors are — a probe
                 *  should walk to one rather than be told a coordinate. */
                levels: () => LEVELS.map((lv, i) => ({

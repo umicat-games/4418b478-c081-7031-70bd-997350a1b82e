@@ -577,14 +577,73 @@ function buildHub() {
     });
   });
 
+  // --- the town ---
+  //
+  // Four plots. Every level's building is placed and hidden; the hub shows the
+  // one you own. Swapping a model at runtime means loading it at runtime, and a
+  // building that pops in a second after the hub does reads as a glitch.
+  // The hub is a 9x9 board with its walls at +/-5.1 — NOT the 13x13 the levels
+  // use. The first layout put these at +/-4.2 with a 1.9 foundation, which ran
+  // the plots into the wall and the buildings through it.
+  const TOWN = [
+    { id: 'smithy', x: -3.5, z: -1.6, yaw: Math.PI / 2,
+      models: ['bld-house-a', 'bld-house-b', 'bld-house-c'] },
+    { id: 'clinic', x: -3.5, z: 2.2, yaw: Math.PI / 2,
+      models: ['town-stall-red', 'bld-house-a', 'bld-house-b'] },
+    { id: 'market', x: 3.5, z: -1.6, yaw: -Math.PI / 2,
+      models: ['town-stall-green', 'town-cart', 'town-watermill'] },
+    { id: 'range', x: 3.5, z: 2.2, yaw: -Math.PI / 2,
+      models: ['bld-tower-a', 'bld-tower-b', 'town-windmill'] },
+  ];
+  for (const b of TOWN) {
+    // A foundation, so an empty plot is obviously a PLOT and not a patch of
+    // grass someone forgot. It stays under the building once there is one.
+    ents.push({
+      id: `plot_${b.id}`, name: 'plot',
+      primitive: { kind: 'box', size: { x: 1.8, y: 0.14, z: 1.8 }, color: '#9a8f7d' },
+      transform: { position: { x: b.x, y: GROUND_Y + 0.07, z: b.z } },
+      castShadow: false,
+    });
+    // A signpost, like the ones beside the doors. A bare rectangle on the grass
+    // reads as a mud patch; a rectangle with a sign beside it reads as a plot.
+    ents.push({
+      id: `plot_${b.id}_sign`, name: 'plot_sign', modelAssetId: 'hub-sign',
+      transform: {
+        position: { x: b.x + (b.x < 0 ? 1.2 : -1.2), y: GROUND_Y, z: b.z - 0.85 },
+        rotation: yaw(b.x < 0 ? -Math.PI / 2 : Math.PI / 2),
+      },
+    });
+    ents.push({
+      id: `plot_${b.id}_lantern`, name: 'plot_lantern', modelAssetId: 'town-lantern',
+      transform: { position: { x: b.x + (b.x < 0 ? 1.1 : -1.1), y: GROUND_Y + 0.14, z: b.z + 0.85 } },
+    });
+    ents.push({
+      id: `plot_${b.id}_marker`, name: 'plot_marker', modelAssetId: 'td-selection',
+      transform: { position: { x: b.x, y: GROUND_Y + 0.14, z: b.z } },
+      visible: false,
+    });
+    b.models.forEach((m, i) => {
+      ents.push({
+        id: `town_${b.id}_${i + 1}`, name: 'town_building', modelAssetId: m,
+        transform: { position: { x: b.x, y: GROUND_Y + 0.12, z: b.z }, rotation: yaw(b.yaw) },
+        visible: false,
+        // Solid once it is there — a house you can walk through is scenery.
+        collider: {
+          shape: { kind: 'box', halfExtents: { x: 0.55, y: 0.7, z: 0.55 } },
+          body: 'fixed', offset: { x: 0, y: 0.7, z: 0 },
+        },
+      });
+    });
+  }
+
   // The sign, and the ring that says you can do something here.
   ents.push({
     id: 'sign', name: 'sign', modelAssetId: 'hub-sign',
-    transform: { position: { x: -2.5, y: GROUND_Y, z: 1.5 } },
+    transform: { position: { x: 0, y: GROUND_Y, z: 3.6 } },
   });
   ents.push({
     id: 'sign_marker', name: 'sign_marker', modelAssetId: 'td-selection',
-    transform: { position: { x: -2.5, y: GROUND_Y + 0.02, z: 2.5 } },
+    transform: { position: { x: 0, y: GROUND_Y + 0.02, z: 3.6 } },
     visible: false,
   });
 
@@ -627,7 +686,7 @@ function buildHub() {
 
   ents.push({
     id: 'hero', name: 'hero', modelAssetId: 'hero',
-    transform: { position: { x: 0, y: GROUND_Y, z: 3.0 } },
+    transform: { position: { x: 0, y: GROUND_Y, z: 1.9 } },
     animation: { play: 'idle', loop: true },
   });
 

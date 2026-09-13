@@ -31,6 +31,7 @@ to the host. Each half tears its own scene down before handing over.
 | file | what |
 | --- | --- |
 | `src/levels.ts` | **the three boards**: wave tables, gold, lives, caps, ice |
+| `src/town.ts` | the four buildings in the hub and what they are worth |
 | `src/main.ts` | the level engine: towers, the hero, crates, the frame loop |
 | `src/hub.ts` | the hub: weapons on pedestals, the leaderboard sign, the door |
 | `src/audio.ts` | this game's clip table and the two music tracks |
@@ -146,10 +147,32 @@ gold. They land away from everything on purpose; walking to one is the cost.
   staff at 2. Being handed a bow for losing is kind.
 - `cleared` — boards WON, in order. Board `i` is open when `cleared >= i`.
   Otherwise the order means nothing.
-- `coin` — gold carried home from runs. Measured runs were sitting on 1600
-  unspendable gold by wave seven; a currency with nowhere to go stops being a
-  decision, and the hub is where it can become one. **Nothing spends it yet** —
-  that is the town/houses system.
+- `coin` — gold carried home from runs, spent in the town.
+- `town` — which buildings are paid for, and to what level.
+
+## The town
+
+Four plots in the hub, bought with `coin` the same way as everything else in
+this game: walk to it, press the action button. No menu. Each is three levels,
+and each level is a bigger building, so the hub visibly grows as you play.
+
+| building | what it is worth per level |
+| --- | --- |
+| Smithy ⚒ | +1 tower you may have standing |
+| Clinic ❤ | +2 hearts |
+| Market 💰 | +50 starting gold |
+| Range 🏹 | +1 damage on **every** weapon, not just the sword |
+
+They are things you can plan a run around rather than percentages you take on
+faith — "+1 tower" changes what you build, "+8% damage" changes nothing you can
+see. `bonusesFrom()` turns the saved levels into the four numbers a run reads,
+in one place, so a bonus cannot reach the HUD and miss the rule.
+
+**The hub is a 9×9 board with its walls at ±5.1** — not the 13×13 the levels
+use. The first town layout put the plots at ±4.2 and ran them through the wall.
+`fitToPlot` scales and centres each building on its foundation, because Kenney's
+building models are not centred on their origins (`bld-house-c` measures 2×2.2
+from a corner) and a windmill is 3.1 tall.
 
 `runs` counts **finished levels** — incremented in `boot()` after `startLevel`
 resolves, because "finished" means walking back out through the exit door.
@@ -227,6 +250,9 @@ What it has found, none of it visible by reading the wave table:
   Play Again, the HUD under the controls, the leaderboard panel.
 - **Never copy one kit's `Textures/` over another's.** `cmp` first. Doing it
   once turned the grass orange and every check still passed.
+- **A spawn point written down twice disagrees with itself.** The hub placed its
+  hero at z=1.9 in the scene and spawned the controller at z=3.0 in code; the
+  controller wins, so editing the scene did nothing. Both now read the scene.
 - **The game runs in WebKit on phones.** `pw-engines.mjs` tests both engines;
   the Web Audio unlock bug was invisible in Chromium.
 
@@ -243,7 +269,8 @@ Probes live in `umicat-infra/playwright/`: `verify-3d-levels` (three boards, the
 doors, the ice), `verify-3d-lanes` (the fork, the gates, the boss),
 `verify-3d-crates-unlocks`, `verify-3d-hub`, `verify-3d-td`,
 `verify-3d-feedback`, `verify-3d-endscreen`, `verify-3d-audio`,
-`verify-3d-audio-engines`, `verify-3d-jump-touch`, `verify-3d-balance`.
+`verify-3d-audio-engines`, `verify-3d-jump-touch`, `verify-3d-balance`,
+`verify-3d-town`.
 
 Getting from the hub into a board lives in **`pw-level.mjs`**, once. It was
 copied into every probe with a comment saying it was shared "so that when the

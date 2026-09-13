@@ -12,6 +12,7 @@ import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { LEVELS, type LevelDef, type Wave } from './levels';
+import { NO_BONUS, type TownBonus } from './town';
 import type { GameAudio } from '@umicat/three-sdk';
 
 /**
@@ -41,6 +42,8 @@ export interface Progress {
   bests?: Record<string, number>;
   /** Gold carried home from runs, to be spent in the hub. */
   coin?: number;
+  /** Which town buildings have been paid for, and to what level. */
+  town?: Record<string, number>;
 }
 
 /** Read, change the named fields, write back.
@@ -55,9 +58,9 @@ export async function patchSave(
   const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
   await umicat.saves.set(SAVE_KEY, { ...prev, ...fields });
 }
-/** Where the hero comes in, and where a knocked-out hero is carried back to.
- *  Just inside the exit door at the top of every board. */
-const SPAWN = { x: 0, y: 0.5, z: -5.0 };
+// The spawn point is read from the scene's own hero entity (see `SPAWN` inside
+// `startLevel`), not written down here. The hub had the two separately and they
+// disagreed — the controller wins, so editing the scene did nothing at all.
 const RESPAWN_BELOW_Y = -5;
 
 // --- the hero -------------------------------------------------------------
@@ -301,6 +304,7 @@ export interface LevelResult { won: boolean; wave: number; level: number; banked
 
 export async function startLevel(
   shared: Shared, startWeapon: Weapon = 'sword', levelIndex = 0,
+  bonus: TownBonus = NO_BONUS,
 ): Promise<LevelResult> {
   const level: LevelDef = LEVELS[Math.max(0, Math.min(levelIndex, LEVELS.length - 1))];
   const WAVES = level.waves;
@@ -408,6 +412,13 @@ export async function startLevel(
     }
   }
 
+  /** Where the hero comes in, and where a knocked-out one is carried back to —
+   *  read from the scene, so moving the hero entity moves the hero. */
+  const SPAWN = {
+    x: hero.position.x,
+    y: hero.position.y + 0.5,
+    z: hero.position.z,
+  };
   const character = new CharacterController3D(world.world, RAPIER, {
     position: SPAWN, halfHeight: HERO_HALF_HEIGHT, radius: HERO_RADIUS,
     speed: HERO_SPEED, stepHeight: 0.17, jumpSpeed: 2.8,
@@ -701,9 +712,17 @@ export async function startLevel(
   }
 
   // --- state ---
-  let gold = level.startGold;
+  // What the town is worth, folded in where the run reads it — one place each,
+  // so a bonus cannot apply to the HUD and not to the rule, or the other way.
+  const maxTowers = level.maxTowers + bonus.towerCap;
+  const heroMaxHp = HERO_MAX_HP + bonus.hearts;
+  // Every weapon, not just the sword. The Range says "+1 to your own attacks",
+  // and a bonus that silently applied to one of three would be a lie told by
+  // the only line of text the player ever reads about it.
+  const heroDamage = HERO_ATTACK_DAMAGE + bonus.heroDamage;
+  let gold = level.startGold + bonus.gold;
   let lives = level.lives;
-  let heroHp = HERO_MAX_HP;
+  let heroHp = heroMaxHp;
   let waveIndex = 0;
   // Countdown to the next wave. The FIRST one is longer than the rest: a board
   // with a short road gives the towers less time with everything that walks it,
@@ -1049,7 +1068,7 @@ export async function startLevel(
   interface Arrow { obj: THREE.Object3D; vel: THREE.Vector3; life: number; }
   const arrows: Arrow[] = [];
   const ARROW_SPEED = 11;
-  const ARROW_DAMAGE = 3;
+  const ARROW_DAMAGE = 3 + bonus.heroDamage;
   const ARROW_LIFE = 1.6;
   const ARROW_HIT = 0.42;
   /** How far the bow finds a target on its own. Auto-aim, because picking a
@@ -1060,7 +1079,7 @@ export async function startLevel(
   /** The staff hits everything around you at once, so it is on a real
    *  cooldown rather than just the animation's length. */
   const STAFF_RADIUS = 2.6;
-  const STAFF_DAMAGE = 4;
+  const STAFF_DAMAGE = 4 + bonus.heroDamage;
   const STAFF_COOLDOWN = 1.7;
   let staffCooldown = 0;
   let lockTarget: Enemy | null = null;
@@ -1119,7 +1138,7 @@ export async function startLevel(
       if (c.hp > 0) { audio.play('hit-enemy'); continue; }
       // What was in it. A heart only when one is missing: a crate that pays
       // nothing is a worse crate than one that pays gold.
-      const wantHeart = heroHp < HERO_MAX_HP && Math.random() < CRATE_HEART_CHANCE;
+      const wantHeart = heroHp < heroMaxHp && Math.random() < CRATE_HEART_CHANCE;
       if (wantHeart) {
         heroHp += 1;
         audio.play('coin');
@@ -1272,12 +1291,12 @@ export async function startLevel(
   });
 
   const renderHud = (): void => {
-    line1.textContent = `${'❤️'.repeat(Math.max(heroHp, 0))}${'🤍'.repeat(Math.max(HERO_MAX_HP - heroHp, 0))}`;
+    line1.textContent = `${'❤️'.repeat(Math.max(heroHp, 0))}${'🤍'.repeat(Math.max(heroMaxHp - heroHp, 0))}`;
     const w = Math.min(waveIndex + 1, WAVES.length);
     livesEl.textContent = `🏰 ${lives}\u2003`;
     goldEl.textContent = `💰 ${gold}`;
     waveEl.textContent = `\u2003Wave ${w}/${WAVES.length}`;
-    towerEl.textContent = `\u2003🗼 ${towers.length}/${level.maxTowers}`;
+    towerEl.textContent = `\u2003🗼 ${towers.length}/${maxTowers}`;
     // A PROMPT, not narration. This line is empty unless the player is standing
     // somewhere the button does something, and then it is three or four words.
     // A sentence explaining the game that is on screen the whole time is a
@@ -1398,9 +1417,9 @@ export async function startLevel(
 
     if (!buildCell) return;
     const kind = TOWERS[selected];
-    if (towers.length >= level.maxTowers) {
+    if (towers.length >= maxTowers) {
       audio.play('denied');
-      flashBanner(`${level.maxTowers} towers is the limit — upgrade instead`);
+      flashBanner(`${maxTowers} towers is the limit — upgrade instead`);
       return;
     }
     if (gold < kind.cost) { audio.play('denied'); flashBanner(`${kind.label} costs ${kind.cost}g`); return; }
@@ -1501,7 +1520,7 @@ export async function startLevel(
       const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
       if (d > HERO_ATTACK_RANGE) continue;
       connected = true;
-      damage(e, HERO_ATTACK_DAMAGE);
+      damage(e, heroDamage);
     }
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
@@ -1556,7 +1575,7 @@ export async function startLevel(
   const knockOut = (): void => {
     if (!running) return;
     lives -= 1;
-    heroHp = Math.max(3, Math.ceil(HERO_MAX_HP / 2));
+    heroHp = Math.max(3, Math.ceil(heroMaxHp / 2));
     invincible = 3.2;
     audio.play('lose');
     flashScreen();
@@ -1835,8 +1854,8 @@ export async function startLevel(
             // twelve: with no recovery a long run is lost to accumulated
             // carelessness rather than to any particular wave, and the lull
             // between waves is the natural place to hand it back.
-            if (heroHp < HERO_MAX_HP && waveIndex < WAVES.length) {
-              heroHp = Math.min(HERO_MAX_HP, heroHp + 2);
+            if (heroHp < heroMaxHp && waveIndex < WAVES.length) {
+              heroHp = Math.min(heroMaxHp, heroHp + 2);
               flashBanner('Wave cleared · +2 ❤️');
             }
           }
@@ -2167,8 +2186,8 @@ export async function startLevel(
         renderHud();
       },
     state: () => ({ level: level.id, levelIndex, slip: level.slip,
-      gold, lives, heroHp, heroMax: HERO_MAX_HP, waveIndex, waveCount: WAVES.length, running, won,
-      buildCell, selected, maxTowers: level.maxTowers, maxLevel: MAX_LEVEL,
+      gold, lives, heroHp, heroMax: heroMaxHp, waveIndex, waveCount: WAVES.length, running, won,
+      buildCell, selected, maxTowers, maxLevel: MAX_LEVEL,
       routes: ROUTES.length,
       /** Where each branch ends. The tiles get merged into one mesh for the
        *  sake of the phone's frame rate, so this is the only thing left that
@@ -2209,7 +2228,7 @@ async function boot(): Promise<void> {
     showLoading('Entering the woods');
     const choice = await runHub(shared);
     showLoading(`Entering ${LEVELS[choice.level].name}`);
-    const result = await startLevel(shared, choice.weapon, choice.level);
+    const result = await startLevel(shared, choice.weapon, choice.level, choice.bonus);
     // Finishing a level — won or lost — is what unlocks the next weapon back
     // in the hub. Counted HERE rather than in `endRun` because "finished" means
     // walking back out through the door, not the moment the last life went.
