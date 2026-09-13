@@ -27,6 +27,9 @@ export interface DebugHud {
 export function createDebugHud(
   renderer: THREE.WebGLRenderer,
   hudEl: HTMLElement,
+  /** A banner that is always shown, above the numbers. `?dev` uses it, because
+   *  a build quietly in god mode is a build whose every impression is wrong. */
+  banner?: string,
 ): DebugHud {
   const el = document.createElement('div');
   el.style.cssText = `position: fixed; left: 50%; top: 8px; transform: translateX(-50%);
@@ -62,7 +65,8 @@ export function createDebugHud(
       const fps = (frames * 1000) / (now - since);
       const info = renderer.info.render;
       el.textContent =
-        `${fps.toFixed(0)} fps   worst ${worst.toFixed(0)}ms\n`
+        (banner ? `${banner}\n` : '')
+        + `${fps.toFixed(0)} fps   worst ${worst.toFixed(0)}ms\n`
         + `${info.calls} draws  ${(info.triangles / 1000).toFixed(0)}k tris\n`
         + `dpr ${window.devicePixelRatio} → ${renderer.getPixelRatio()}`
         + `  ${renderer.domElement.width}×${renderer.domElement.height}`

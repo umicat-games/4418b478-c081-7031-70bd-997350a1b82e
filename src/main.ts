@@ -13,6 +13,7 @@ import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, lightning, preloadAtlas, FRAME } from './vfx';
+import { DEV, devProgress } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { NO_BONUS, type TownBonus } from './town';
 import {
@@ -68,8 +69,18 @@ export interface Progress {
 export async function patchSave(
   umicat: Shared['umicat'], fields: Progress,
 ): Promise<void> {
+  // The sandbox reads a save it was handed and writes nothing back. Without
+  // this, opening `?dev` once and finishing a run would put `cleared: 4` and a
+  // hundred thousand gold into the real save permanently.
+  if (DEV) return;
   const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
   await umicat.saves.set(SAVE_KEY, { ...prev, ...fields });
+}
+
+/** Read the save, with the sandbox folded over it if it is on. Everything that
+ *  reads progress goes through this, or `?dev` unlocks half the game. */
+export async function readSave(umicat: Shared['umicat']): Promise<Progress> {
+  return devProgress((await umicat.saves.get<Progress>(SAVE_KEY)) ?? {});
 }
 // The spawn point is read from the scene's own hero entity (see `SPAWN` inside
 // `startLevel`), not written down here. The hub had the two separately and they
@@ -869,7 +880,7 @@ export async function startLevel(
   // --- state ---
   // What the town is worth, folded in where the run reads it — one place each,
   // so a bonus cannot apply to the HUD and not to the rule, or the other way.
-  const saveNow = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
+  const saveNow = await readSave(umicat);
   /** The hero's level, which decides how hard they hit and how hard they are
    *  hit. Read once at the start: a run is played at the level you walked in
    *  with, and the one you leave with is the summary's news. */
@@ -1649,7 +1660,7 @@ export async function startLevel(
    *  be competing with it.
    */
   const showSummary = async (didWin: boolean, reached: number): Promise<void> => {
-    const prev = (await umicat.saves.get<Progress>(SAVE_KEY)) ?? {};
+    const prev = await readSave(umicat);
     const fromLevel = prev.level ?? 1;
     const fromXp = prev.xp ?? 0;
     const gained = xpFromRun({ kills, wave: reached, won: didWin });
@@ -1954,7 +1965,8 @@ export async function startLevel(
   // Everything is loaded, warmed and placed; the next frame is a real one.
   hideLoading();
 
-  const debug = createDebugHud(renderer, hudEl);
+  const debug = createDebugHud(renderer, hudEl,
+    DEV ? '\u2605 DEV \u2014 all unlocked, nothing saved' : undefined);
   const shadowOf = (): string => {
     const d = world.scene.children.find((c) => (c as THREE.DirectionalLight).isDirectionalLight) as THREE.DirectionalLight | undefined;
     return d ? `${d.shadow.mapSize.width}` : 'none';

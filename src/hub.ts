@@ -6,7 +6,8 @@ import {
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
 import type { Shared, Weapon, Progress } from './main';
-import { patchSave } from './main';
+import { patchSave, readSave } from './main';
+import { DEV } from './dev';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createDebugHud } from './debughud';
@@ -160,7 +161,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const handRight = heroAsset?.sockets?.['hand-right'];
 
   const held: Partial<Record<Weapon, THREE.Object3D>> = {};
-  const progress = (await shared.umicat.saves.get<Progress>('td-progress')) ?? {};
+  const progress = await readSave(shared.umicat);
   const runs = progress.runs ?? 0;
   /** What is on the ground this visit. */
   const available = PICKUPS.filter((p) => p.runs <= runs);
@@ -463,7 +464,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
   // The same readout the levels have. The hub is eleven hundred objects of
   // forest now and it was the one place with no way to see what that cost.
-  const debug = createDebugHud(renderer, hudEl);
+  const debug = createDebugHud(renderer, hudEl,
+    DEV ? '\u2605 DEV \u2014 all unlocked, nothing saved' : undefined);
 
   // --- the loop ---
   return await new Promise<HubChoice>((resolve) => {

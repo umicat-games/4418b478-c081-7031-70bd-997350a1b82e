@@ -251,6 +251,35 @@ way would cost hours per tweak, and this is a thing to tune by playing.
 - `coin` — the old gold-only store. Read once so a save from before wood and
   stone existed is not thrown away.
 
+## The sandbox — `?dev`
+
+`?dev` unlocks everything; `?dev=staff` (or `sword`/`bow`) also puts that weapon
+in your hand. All three weapons on the pedestals, all four boards in the list,
+every village building at level three — so the tower mounts exist — and a store
+with enough in it to buy anything.
+
+**It never writes.** `patchSave` returns immediately while it is on, so a
+sandbox session cannot put `cleared: 4` into a real save. Open it on the same
+browser as your real game, win a run in it, close it, and nothing has changed —
+there is a probe that does exactly that and compares the save byte for byte.
+
+It exists because the parts of this game that most need looking at are the ones
+furthest from the start: a lightning spell you cannot see until you have won two
+boards is a lightning spell nobody checks, and "play three levels first" is a
+tax on every change to the staff, the mounts, the later boards and the village.
+
+`src/dev.ts` is the whole of it, and everything that reads progress goes through
+`readSave()` — a second reader that talks to `saves.get` directly is half the
+game still locked.
+
+**LEVEL and XP are deliberately NOT granted.** They decide how hard you hit and
+how hard you are hit, so a sandbox at level 20 would make every impression of
+the balance wrong, and looking at a spell is not a reason to stop being able to
+judge a fight.
+
+It says `★ DEV` in the frame counter. A build quietly in god mode is a build
+whose every measurement is wrong.
+
 ## The town
 
 Four plots in the hub, bought with gold, wood and stone the same way as everything else in
@@ -502,7 +531,7 @@ doors, the ice), `verify-3d-lanes` (the fork, the gates, the boss),
 `verify-3d-crates-unlocks`, `verify-3d-hub`, `verify-3d-td`,
 `verify-3d-feedback`, `verify-3d-endscreen`, `verify-3d-audio`,
 `verify-3d-audio-engines`, `verify-3d-jump-touch`, `verify-3d-balance`,
-`verify-3d-town`.
+`verify-3d-town`, `verify-3d-dev`.
 
 Getting from the hub into a board lives in **`pw-level.mjs`**, once. It was
 copied into every probe with a comment saying it was shared "so that when the
