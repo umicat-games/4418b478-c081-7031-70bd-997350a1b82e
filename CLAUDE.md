@@ -317,6 +317,30 @@ What it has found, none of it visible by reading the wave table:
   reporting that a board could not be held — by a defence it had declined to
   finish.
 
+## The sword
+
+Half again as long as the kit's (0.67 against a 0.72 hero — at 0.45 it read as a
+knife), and it **slashes**. The arm is still playing Kenney's
+`attack-melee-right`, which is a vertical chop; the blade rides on a pivot of
+its own between the hand socket and the model, and sweeps level across the body
+while the arm does whatever it does. Carried upright between swings.
+
+Three things that matter, all of them learned the hard way:
+
+- **Aim it in WORLD space.** The socket hangs off a bone whose frame is whatever
+  the animation says this frame, so posing the pivot in its own Euler angles is
+  guesswork — that is how it ended up carried horizontally at hip height, which
+  is what "hitting things with a scabbard" looks like. `aimBlade(dir, edge)`
+  builds the world quaternion and converts back through the parent.
+- **The EDGE has to lead.** The blade is a plate, 0.23 across its edges and 0.11
+  thick, so a swing with the flat leading is a swing with a plank. The roll
+  follows the tip's direction of travel.
+- **Aim it LAST, after `world.update`.** The hero carries a scene mixer of its
+  own (the `animation: { play: 'idle' }` on its entity) and `world.update` steps
+  it, so a pose computed earlier is stale by however far the arm moved that
+  frame — which mid-swing meant some frames were right and some pointed at the
+  sky.
+
 ## Things that will bite
 
 - **`Box3.setFromObject` lies about skinned meshes.** It reports the space the
@@ -353,6 +377,10 @@ What it has found, none of it visible by reading the wave table:
   The tower counter and the effect readout had their text set every frame for a
   day before anyone noticed they were not in the document. Same shape as a
   button rendered under the control layer.
+- **A `const` used by a hoisted function is not ready when that function is
+  called early.** `restSword()` ran at attach time and reached into the temporal
+  dead zone; inside an async boot that shows up as a loading screen that never
+  ends, not as an error anyone sees.
 - **A spawn point written down twice disagrees with itself.** The hub placed its
   hero at z=1.9 in the scene and spawned the controller at z=3.0 in code; the
   controller wins, so editing the scene did nothing. Both now read the scene.

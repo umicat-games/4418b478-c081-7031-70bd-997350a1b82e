@@ -71,6 +71,18 @@ const HERO_SYNC_OFFSET = -(HERO_HALF_HEIGHT + HERO_RADIUS);
 const HERO_MAX_HP = 8;
 const HERO_SPEED = 4.2;
 const HERO_ATTACK_RANGE = 1.15;
+/** How much bigger than the kit's sword. It measures 0.45 against a 0.72 hero
+ *  — from this camera that is a knife, and a short blade carried level is what
+ *  made it read as a scabbard. */
+const SWORD_SCALE = 1.5;
+/** How long the blade takes to cross the body. Matched by eye to the arm's own
+ *  `attack-melee-right`, which is what it is riding on top of. */
+const SWING_SECONDS = 0.4;
+/** How far to either side the blade sweeps, measured from straight ahead. */
+const SWING_ARC = 1.35;
+/** How much of the swing is the CUT; the rest is the blade coming back to the
+ *  carry. */
+const SWING_CUT = 0.62;
 const HERO_ATTACK_DAMAGE = 2;
 const HERO_INVINCIBLE_SECONDS = 1.7;
 
@@ -479,6 +491,10 @@ export async function startLevel(
   const heroAsset = manifest.models?.find((m) => m.id === 'hero');
   const handRight = heroAsset?.sockets?.['hand-right'];
   let sword: THREE.Object3D | null = null;
+  /** The sword's own pivot, between the hand socket and the blade. */
+  let swordPivot: THREE.Object3D | null = null;
+  /** Seconds left in the current swing; 0 is at rest. */
+  let swing = 0;
   let bow: THREE.Object3D | null = null;
   let staff: THREE.Object3D | null = null;
 
@@ -516,13 +532,75 @@ export async function startLevel(
 
   if (handRight) {
     const loaded = await loadModelAsset(manifest, 'sword', { assetBase: '' });
-    sword = loaded.object;
-    sword.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
-    attachToSocket(hero, handRight, sword);
+    const blade = loaded.object;
+    blade.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
+    // Longer. The kit's sword is 0.45 against a 0.72 hero, which from the
+    // game's camera is a knife — and a short blade held level reads as a stick.
+    blade.scale.setScalar(SWORD_SCALE);
+    // A pivot of its own between the hand and the blade.
+    //
+    // The socket is shared by all three weapons, so it cannot hold the sword's
+    // pose; and the swing is Kenney's `attack-melee-right`, which is a vertical
+    // CHOP. Rotating this pivot is how the blade gets carried upright and swept
+    // across the body instead — the arm does the chop, the blade does the cut.
+    swordPivot = new THREE.Object3D();
+    swordPivot.add(blade);
+    sword = swordPivot;
+    attachToSocket(hero, handRight, swordPivot);
+    // Not posed here: `restSword` reads vectors declared further down, and
+    // calling it from up here is a reference into the temporal dead zone —
+    // which throws inside an async boot and shows up as a loading screen that
+    // never ends rather than as an error anyone sees. The frame loop poses it.
     bow = makeBow();
     attachToSocket(hero, handRight, bow);
     staff = makeStaff();
     attachToSocket(hero, handRight, staff);
+  }
+
+  const _up = new THREE.Vector3(0, 1, 0);
+  const _dir = new THREE.Vector3();
+  const _edge = new THREE.Vector3();
+  const _localX = new THREE.Vector3();
+  const _rest = new THREE.Vector3();
+  const _cross = new THREE.Vector3();
+  const _bladeQ = new THREE.Quaternion();
+  const _roll = new THREE.Quaternion();
+  const _parentQ = new THREE.Quaternion();
+
+  /** Point the blade along a WORLD direction, with its edge leading.
+   *
+   *  Posing the pivot in its own Euler angles is how the sword ended up looking
+   *  like a scabbard: the socket hangs off a bone whose frame is whatever the
+   *  animation says this frame, so "up" in the pivot is not up. Aiming it in
+   *  world space and converting back is exact and needs no numbers guessed off
+   *  a bone.
+   *
+   *  `edge` matters as much as `dir`. The blade is a plate — 0.23 wide across
+   *  its edges and 0.11 thick — so a swing with the flat leading is a swing
+   *  with a plank. Rolling it so the edge faces the way the tip is travelling
+   *  is the difference between a cut and a slap.
+   */
+  const aimBlade = (dir: THREE.Vector3, edge: THREE.Vector3): void => {
+    if (!swordPivot?.parent) return;
+    _dir.copy(dir).normalize();
+    _bladeQ.setFromUnitVectors(_up, _dir);
+    _localX.set(1, 0, 0).applyQuaternion(_bladeQ);
+    _edge.copy(edge).projectOnPlane(_dir);
+    if (_edge.lengthSq() > 1e-6) {
+      _edge.normalize();
+      const angle = Math.atan2(_cross.crossVectors(_localX, _edge).dot(_dir), _localX.dot(_edge));
+      _bladeQ.premultiply(_roll.setFromAxisAngle(_dir, angle));
+    }
+    swordPivot.parent.getWorldQuaternion(_parentQ);
+    swordPivot.quaternion.copy(_parentQ.invert().multiply(_bladeQ));
+  };
+
+  /** Carried: blade up, leaning a little forward, edge facing out. */
+  function restSword(): void {
+    if (!swordPivot) return;
+    const yaw = hero.rotation.y;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    aimBlade(_dir.set(fx * 0.22, 1, fz * 0.22), _edge.set(fx, 0, fz));
   }
 
   /** The hero carries all three and shows one. */
@@ -1706,6 +1784,7 @@ export async function startLevel(
     }
 
     animator.play('attack');
+    swing = SWING_SECONDS;
     audio.play('swing');
     let connected = false;
     for (const e of enemies) {
@@ -2239,6 +2318,9 @@ export async function startLevel(
       }
     }
 
+    // The blade's own arc, on top of whatever the arm is doing. Eased so it
+    // leaves fast and settles slow, which is what makes a swing read as a cut
+    // rather than as a rotation.
     debug.tick(now, dt, `shadow ${shadowOf()}`);
 
     // Out through the door, back to the hub. Only once the run is over — the
@@ -2275,12 +2357,69 @@ export async function startLevel(
     updateUpdrafts(dt);
     updateTints(tinted);
     world.update(dt);
+    // The blade is aimed LAST, after `world.update` — the hero carries a scene
+    // mixer of its own (the `animation: { play: 'idle' }` on its entity) and
+    // `world.update` steps it, so a pose computed before that is stale by
+    // however far the arm moved this frame. Which is a lot, mid-swing: some
+    // frames came out right and some pointed at the sky.
+    if (swordPivot && weapon === 'sword') {
+      // The bone the pivot hangs from moved this frame; read it after that.
+      hero.updateMatrixWorld(true);
+      if (swing > 0) {
+        swing = Math.max(0, swing - dt);
+        const k = 1 - swing / SWING_SECONDS;
+        const yaw = hero.rotation.y;
+        const fx = Math.sin(yaw), fz = Math.cos(yaw);
+        const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+        // Smoothstep across the CUT part of the swing, so the first frames
+        // still show the blade cocked back. An ease that starts fast skipped
+        // the wind-up entirely: by the time anything was drawn the sweep was a
+        // third done.
+        const cut = Math.min(1, k / SWING_CUT);
+        const e = cut * cut * (3 - 2 * cut);
+        const a = SWING_ARC - 2 * SWING_ARC * e;         // right to left
+        const ca = Math.cos(a), sa = Math.sin(a);
+        // Level, dipping slightly as it finishes — a flat arc at chest height
+        // is what "it cut at the thing" looks like from this camera.
+        _dir.set(fx * ca + rx * sa, -0.1 - 0.25 * e, fz * ca + rz * sa).normalize();
+        // The tip's direction of travel, which is where the edge should face.
+        _edge.set(fx * sa - rx * ca, 0, fz * sa - rz * ca);
+        if (k > SWING_CUT) {
+          // Back to the carry, over the tail of the swing. Snapping there in a
+          // single frame is a sword that teleports.
+          const back = (k - SWING_CUT) / (1 - SWING_CUT);
+          _rest.set(fx * 0.22, 1, fz * 0.22).normalize();
+          _dir.lerp(_rest, back * back * (3 - 2 * back)).normalize();
+        }
+        aimBlade(_dir, _edge);
+        if (swing === 0) restSword();
+      } else {
+        restSword();
+      }
+    }
+
     renderer.render(world.scene, world.camera);
   });
 
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, world, character, input, animator,
+      umicat, world, character, input, animator, renderer,
+      /** Freeze the loop and render one frame from wherever you like. For
+       *  LOOKING at things — the follow camera overwrites its own transform
+       *  every frame, so a probe that moves it sees nothing. */
+      /** Stop the loop and redraw from the GAME's own camera — for judging how
+       *  a moment reads in play, which a camera I placed by hand cannot. */
+      freeze: () => {
+        renderer.setAnimationLoop(null);
+        renderer.render(world.scene, world.camera);
+      },
+      freezeAndRender: (from: [number, number, number], at: [number, number, number], fov = 35) => {
+        renderer.setAnimationLoop(null);
+        const cam = new THREE.PerspectiveCamera(fov, canvas.width / canvas.height, 0.05, 60);
+        cam.position.set(from[0], from[1], from[2]);
+        cam.lookAt(at[0], at[1], at[2]);
+        renderer.render(world.scene, cam);
+      },
       get enemies() { return enemies; },
       get towers() { return towers; },
       get shots() { return shots; },
@@ -2322,6 +2461,27 @@ export async function startLevel(
       /** The attack button, and the end of the run. The real ones — a probe
        *  that calls its own copy is testing its own copy. */
       attack: () => heroAttack(),
+      /** Pose the blade by hand, for finding the numbers. The rest pose and the
+       *  arc are three angles each and guessing them from a bone's local frame
+       *  is how a sword ends up through a shoulder. */
+      setSwordPose: (x: number, y: number, z: number) => swordPivot?.rotation.set(x, y, z),
+      swingLeft: () => swing,
+      /** Ask for a world direction and read back what the blade actually does.
+       *  A round trip, because every wrong sword pose so far has been a frame
+       *  I reasoned about instead of measuring. */
+      aimAt: (x: number, y: number, z: number) => {
+        hero.updateMatrixWorld(true);
+        aimBlade(_dir.set(x, y, z), _edge.set(0, 0, 1));
+        hero.updateMatrixWorld(true);
+      },
+      heroYaw: () => +hero.rotation.y.toFixed(3),
+      swordTip: () => {
+        if (!swordPivot) return null;
+        const v = new THREE.Vector3(0, 0.348, 0).applyMatrix4(swordPivot.children[0].matrixWorld);
+        const gp = new THREE.Vector3(0, -0.1, 0).applyMatrix4(swordPivot.children[0].matrixWorld);
+        return { tip: v.toArray().map((n) => +n.toFixed(2)),
+                 grip: gp.toArray().map((n) => +n.toFixed(2)) };
+      },
       /** Gold, for a probe that needs a board built without playing for it. */
       gift: (n: number) => { gold += n; renderHud(); },
       hurt: (n: number) => { invincible = 0; heroHp = Math.max(1, heroHp - n); renderHud(); },
