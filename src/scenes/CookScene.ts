@@ -268,7 +268,13 @@ export class CookScene extends Phaser.Scene {
       return;
     }
     const row = b.rows.find((r) => hit(r));
-    if (row) { this.sel = row.idx; this.msg = ''; this.render(false); return; }
+    if (row) {
+      playSfx(this); // the standard UI blip — picking a dish should feel like pressing something
+      this.sel = row.idx;
+      this.msg = '';
+      this.render(false);
+      return;
+    }
     if (b.cook && hit(b.cook)) { this.cook(); return; }
     if (!hit(b.panel)) this.close(); // tap outside → close
   }
