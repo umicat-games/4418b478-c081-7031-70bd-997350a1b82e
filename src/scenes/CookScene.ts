@@ -39,7 +39,7 @@ export interface CookMatView { iconKey: string; iconFrame: string | number; need
 export interface CookRowView { id: string; iconKey: string; iconFrame: string | number; name: string; count: number; ok: boolean }
 export interface CookModel {
   recipes: CookRowView[];
-  detail?: { name: string; desc: string; iconKey: string; iconFrame: string | number; outCount: number; materials: CookMatView[]; canCook: boolean };
+  detail?: { name: string; desc: string; iconKey: string; iconFrame: string | number; outCount: number; materials: CookMatView[]; canCook: boolean; roomOk: boolean };
 }
 
 export class CookScene extends Phaser.Scene {
@@ -229,7 +229,12 @@ export class CookScene extends Phaser.Scene {
     if (!cbOk) cbg.setTint(DIM_TINT);
     box.add(cbg);
     box.add(this.T(cbX, cbY, this.msg || t('cook_button'), ph * 0.036, this.msg ? BAD : '#5b4327'));
-    const cookB = { x: cx + cbX - cbW / 2, y: cy + cbY - cbH / 2, w: cbW, h: cbH };
+    // A full backpack is the one blocker with nothing on screen explaining it — the ingredients
+    // all read green and the button is simply dead. Say it under the button.
+    if (d && !d.roomOk) box.add(this.T(cbX, cbY + cbH * 0.85, t('cook_full'), ph * 0.026, BAD));
+    // A dish you cannot cook is not PRESSABLE, not pressable-then-scolded: publishing no bounds
+    // for it means the tap lands on the panel and is swallowed, like any other dead space.
+    const cookB = cbOk ? { x: cx + cbX - cbW / 2, y: cy + cbY - cbH / 2, w: cbW, h: cbH } : undefined;
 
     this.finishRender(popIn, box, cx, cy, pw, ph, closeX, closeY, closeSz, rowBounds, cookB);
   }

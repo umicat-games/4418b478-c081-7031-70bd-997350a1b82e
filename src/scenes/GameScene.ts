@@ -8025,7 +8025,11 @@ export class GameScene extends Phaser.Scene {
               ok: have >= m.count,
             };
           }),
+          // Two different reasons a dish cannot be cooked, kept apart because they need different
+          // treatment on screen: short ingredients are already spelled out by the red have/need
+          // numbers, while a full backpack has nothing saying so and needs to be stated.
           canCook: s.materials.every((m) => this.invCountOf(m.id) >= m.count) && this.inventoryHasSpaceFor(s.output),
+          roomOk: this.inventoryHasSpaceFor(s.output),
         }
       : undefined;
     return { recipes, detail };
