@@ -443,8 +443,12 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  A phone in landscape is 393 CSS pixels tall. The shop is taller than that,
    *  so a Close button below the content sat BELOW THE SCREEN — no scrollbar to
    *  hint at it, no way to dismiss the panel except the hardware back gesture.
-   *  A corner button cannot be pushed off by content, and it is where every
-   *  other app on the device puts it.
+   *  A corner button cannot be pushed off by content.
+   *
+   *  The LEFT corner, macOS-style. The right one is not ours: umicat frames the
+   *  game with its own pill for leaving it, and two round buttons a few pixels
+   *  apart — one closing a panel, one quitting to the platform — is a misfire
+   *  waiting to happen, and the expensive one is not ours to undo.
    *
    *  Outside the body, so it survives the innerHTML the panels rewrite on every
    *  render, and stays put while the body scrolls under it. `svh` (with a `vh`
@@ -455,7 +459,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   panelClose.setAttribute('aria-label', 'Close');
   panelClose.dataset.panelClose = '';
   panelClose.style.cssText = `
-    position: absolute; top: 10px; right: 10px; width: 32px; height: 32px;
+    position: absolute; top: 10px; left: 10px; width: 32px; height: 32px;
     border: 0; border-radius: 999px; background: rgba(255,255,255,.14);
     color: #fff; font: 700 17px/1 system-ui; cursor: pointer; padding: 0;
     display: flex; align-items: center; justify-content: center;
@@ -464,10 +468,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
   /** Everything the panels render. It scrolls; the close button does not.
    *
-   *  `padding-right` leaves the corner clear — a title centred in the full
-   *  width would run under the button on a narrow screen. */
+   *  Indented past the button — every panel here starts with a heading on the
+   *  left, and it would otherwise sit under it. */
   const panelBody = document.createElement('div');
-  panelBody.style.cssText = 'overflow: auto; min-height: 0; padding-right: 26px;';
+  panelBody.style.cssText = 'overflow: auto; min-height: 0; padding-left: 30px;';
   panel.append(panelClose, panelBody);
   document.body.appendChild(panel);
   let panelOpen = false;

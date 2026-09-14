@@ -1334,11 +1334,17 @@ chunk, no loader needed — turned up a second one: `bld-tower-a` is 2.5 tall an
 `bld-tower-b` is 1.89, so the Range got SHORTER when you upgraded it to level
 two. Chains are now ordered by measured size, not by the letter in the filename.
 
-### Panels close in the corner, and must fit a 393px screen
+### Panels close in the top-LEFT corner, and must fit a 393px screen
 
-Every panel that uses the hub's `panel` element (the shop, the board list) now
-has one persistent `[data-panel-close]` button pinned to its top-right, outside
-the scrolling body so the `innerHTML` each panel rewrites cannot destroy it.
+Every panel that uses the hub's `panel` element (the shop, the board list) has
+one persistent `[data-panel-close]` button pinned to its top-left, outside the
+scrolling body so the `innerHTML` each panel rewrites cannot destroy it.
+
+**Left, not right, and the reason is not taste.** umicat frames the running game
+with its own pill for quitting it, top-right. A close button there sits a few
+pixels from it — two round buttons, one dismissing a panel and one leaving the
+game, and only one of them is undoable. The top-right corner of the screen is
+the platform's; build into the corner that is ours.
 
 This started as a report that the shop had no close button on a phone. It had
 one — under the content, which on a landscape phone (**852x393 CSS pixels**) put
