@@ -59,7 +59,7 @@ export const TOWN: TownBuilding[] = [
     name: 'Clinic',
     effect: '+25 health per level',
     icon: 'heart',
-    models: ['town-stall-red', 'bld-house-a', 'bld-house-b'],
+    models: ['town-stall-red', 'town-watermill', 'bld-house-b'],
     costs: [
       { gold: 120, wood: 25, stone: 5 },
       { gold: 320, wood: 60, stone: 25 },
@@ -72,7 +72,7 @@ export const TOWN: TownBuilding[] = [
     name: 'Market',
     effect: '+50 starting gold per level',
     icon: 'coin',
-    models: ['town-stall-green', 'town-cart', 'town-watermill'],
+    models: ['town-stall-green', 'bld-house-a', 'town-watermill'],
     costs: [
       { gold: 120, wood: 15, stone: 15 },
       { gold: 300, wood: 40, stone: 40 },
@@ -85,7 +85,7 @@ export const TOWN: TownBuilding[] = [
     name: 'Range',
     effect: '+1 to your own attacks per level',
     icon: 'bow',
-    models: ['bld-tower-a', 'bld-tower-b', 'town-windmill'],
+    models: ['bld-tower-b', 'bld-tower-a', 'town-windmill'],
     costs: [
       { gold: 170, wood: 30, stone: 10 },
       { gold: 450, wood: 70, stone: 30 },
@@ -106,7 +106,7 @@ export const TOWN: TownBuilding[] = [
     // OFF the centre line, though. At x 0 the Lv3 building stood squarely in
     // front of the exit door and hid it: the one thing in the hub a player has
     // to be able to find is the way out.
-    models: ['town-stall-red', 'bld-house-c', 'bld-tower-b'],
+    models: ['town-cart', 'town-stall-red', 'bld-tower-a'],
     costs: [
       { gold: 180, wood: 30, stone: 10 },
       { gold: 480, wood: 60, stone: 45 },

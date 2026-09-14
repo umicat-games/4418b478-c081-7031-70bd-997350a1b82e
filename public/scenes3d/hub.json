@@ -26946,7 +26946,7 @@
     {
       "id": "town_clinic_2",
       "name": "town_building",
-      "modelAssetId": "bld-house-a",
+      "modelAssetId": "town-watermill",
       "transform": {
         "position": {
           "x": -3.5,
@@ -27115,7 +27115,7 @@
     {
       "id": "town_market_2",
       "name": "town_building",
-      "modelAssetId": "town-cart",
+      "modelAssetId": "bld-house-a",
       "transform": {
         "position": {
           "x": 3.5,
@@ -27249,7 +27249,7 @@
     {
       "id": "town_range_1",
       "name": "town_building",
-      "modelAssetId": "bld-tower-a",
+      "modelAssetId": "bld-tower-b",
       "transform": {
         "position": {
           "x": 3.5,
@@ -27284,7 +27284,7 @@
     {
       "id": "town_range_2",
       "name": "town_building",
-      "modelAssetId": "bld-tower-b",
+      "modelAssetId": "bld-tower-a",
       "transform": {
         "position": {
           "x": 3.5,
@@ -27418,7 +27418,7 @@
     {
       "id": "town_armory_1",
       "name": "town_building",
-      "modelAssetId": "town-stall-red",
+      "modelAssetId": "town-cart",
       "transform": {
         "position": {
           "x": -2,
@@ -27453,7 +27453,7 @@
     {
       "id": "town_armory_2",
       "name": "town_building",
-      "modelAssetId": "bld-house-c",
+      "modelAssetId": "town-stall-red",
       "transform": {
         "position": {
           "x": -2,
@@ -27488,7 +27488,7 @@
     {
       "id": "town_armory_3",
       "name": "town_building",
-      "modelAssetId": "bld-tower-b",
+      "modelAssetId": "bld-tower-a",
       "transform": {
         "position": {
           "x": -2,

@@ -1303,3 +1303,33 @@ that, because the guard was prose rather than a check. It exits loudly now.
 They ask about **effect**, not existence. "Is there a health bar" passed for a
 bar worn at hip height; "is there a wave counter" passed for a game that could
 never reach wave two.
+
+### Pictures in the shop, and what they exposed
+
+The detail pane photographs the building with `createThumbMaker` — the same
+maker the hotbar uses, so the picture IS the model and changing the model
+changes the picture. Two things about that:
+
+- **Clone it and force `visible` on the clone.** The `town_<id>_<n>` models are
+  hidden until owned, and an invisible object renders as a fully transparent
+  image — no error, no warning, an `<img>` that is there and empty. Handing the
+  live entity to the maker is worse: it leaves the hub's scene and comes back
+  with its transform reset.
+- **Photograph level ONE.** That is what the Buy button gives you. The level
+  three model is a better picture of something you are not buying.
+
+Checking `<img>` tags would have passed on both failures. `verify-3d-shop`
+decodes the image and counts pixels with alpha, and separately asserts that the
+five buildings produce five DIFFERENT pictures.
+
+That last check is what found the real bug: the clinic and the armory both used
+`town-stall-red` at level one, so two rows of the shop showed the same photo —
+and the two buildings were indistinguishable standing in the village. **Model
+collisions at the same level are bugs; collisions across levels are fine** (a
+village repeats its architecture). There are 10 usable models for 15 slots, so
+reuse is forced; the constraint is only that the five level-ones differ.
+
+Measuring the GLBs to pick replacements — bounds come straight out of the JSON
+chunk, no loader needed — turned up a second one: `bld-tower-a` is 2.5 tall and
+`bld-tower-b` is 1.89, so the Range got SHORTER when you upgraded it to level
+two. Chains are now ordered by measured size, not by the letter in the filename.

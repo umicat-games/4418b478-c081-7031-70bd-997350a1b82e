@@ -10,6 +10,7 @@ import { patchSave, readSave } from './main';
 import { DEV, toggleDev } from './dev';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
+import { createThumbMaker } from './thumbs';
 import { iconHtml, type IconName } from './icons';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
@@ -351,6 +352,36 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     }
   };
 
+  /** A photograph of each building, made from the building.
+   *
+   *  A shop detail that is three lines of text does not look like a game — you
+   *  are buying a THING and the panel never shows it. Same maker the hotbar
+   *  cells use (`src/thumbs.ts`), so the picture is the model and changing the
+   *  model changes the picture.
+   *
+   *  The LEVEL ONE model, which is what the Buy button gives you. Photographing
+   *  the level-three one would be a nicer picture of something you are not
+   *  buying.
+   *
+   *  CLONED, and made visible on the clone. The originals are hidden until the
+   *  building is owned, and an invisible object renders as nothing at all —
+   *  and handing the live entity to the thumb maker would take it out of the
+   *  hub's scene and reset its transform on the way. */
+  const shopShot = new Map<string, string>();
+  {
+    const thumbs = createThumbMaker(renderer);
+    for (const b of TOWN) {
+      const src = world.entities.get(`town_${b.id}_1`);
+      if (!src) continue;
+      try {
+        const shot = src.clone(true);
+        shot.traverse((o) => { o.visible = true; });
+        shopShot.set(b.id, thumbs.make(shot));
+      } catch { /* a picture is decoration; a hub that will not start is not */ }
+    }
+    thumbs.dispose();
+  }
+
   const showTown = (): void => {
     for (const b of TOWN) {
       const lv = town[b.id] ?? 0;
@@ -398,6 +429,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // The board list. Above the controls layer, for the reason every
   // other panel in this game is: they are a full-screen layer at z-index 10.
   const panel = document.createElement('div');
+  panel.dataset.hubPanel = '';
   panel.style.cssText = `
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
     z-index: 40; display: none; min-width: 260px; max-width: 82vw;
@@ -587,11 +619,16 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       }).join('')
       : '<div style="opacity:.7;padding:10px 2px">Nothing left to buy.</div>';
 
+    const shot = sel ? shopShot.get(sel.id) : undefined;
     const detail = sel
       ? `<div style="font:800 19px/1.4 system-ui; display:flex; align-items:center;
                      justify-content:center; gap:9px; padding-bottom:9px;
                      border-bottom:1px solid rgba(255,255,255,.22)">
            ${iconHtml(sel.icon, '1.2em')}${escapeHtml(sel.name)}</div>
+         ${shot ? `<img alt="${escapeHtml(sel.name)}" src="${shot}" style="
+             display:block; margin:12px auto 0; width:min(190px, 40vh);
+             aspect-ratio:1; object-fit:contain;
+             background:rgba(255,255,255,.06); border-radius:16px">` : ''}
          <div style="margin-top:14px; opacity:.92">${escapeHtml(sel.effect)}</div>
          <div style="margin-top:16px">${priceOf(sel.costs[0])}</div>
          <button id="shop-buy" ${canAfford(store, sel.costs[0]) ? '' : 'disabled'} style="

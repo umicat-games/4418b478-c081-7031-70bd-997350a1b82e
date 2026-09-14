@@ -858,15 +858,15 @@ function buildHub() {
     { id: 'smithy', x: -3.5, z: -1.6, yaw: Math.PI / 2,
       models: ['bld-house-a', 'bld-house-b', 'bld-house-c'] },
     { id: 'clinic', x: -3.5, z: 2.2, yaw: Math.PI / 2,
-      models: ['town-stall-red', 'bld-house-a', 'bld-house-b'] },
+      models: ['town-stall-red', 'town-watermill', 'bld-house-b'] },
     { id: 'market', x: 3.5, z: -1.6, yaw: -Math.PI / 2,
-      models: ['town-stall-green', 'town-cart', 'town-watermill'] },
+      models: ['town-stall-green', 'bld-house-a', 'town-watermill'] },
     { id: 'range', x: 3.5, z: 2.2, yaw: -Math.PI / 2,
-      models: ['bld-tower-a', 'bld-tower-b', 'town-windmill'] },
+      models: ['bld-tower-b', 'bld-tower-a', 'town-windmill'] },
     // The armory stands behind the weapon rack, facing the room. It is the only
     // plot off the corners, because the rack in front of it is what it is for.
     { id: 'armory', x: -2.0, z: -3.0, yaw: 0,
-      models: ['town-stall-red', 'bld-house-c', 'bld-tower-b'] },
+      models: ['town-cart', 'town-stall-red', 'bld-tower-a'] },
   ];
   // --- the shop ---------------------------------------------------------
   //
