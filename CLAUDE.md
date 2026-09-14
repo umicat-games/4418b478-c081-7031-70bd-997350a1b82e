@@ -808,7 +808,11 @@ that actually reaches the speaker: the three uploaded casts are 2.0s, 3.0s and
 (`… <url> webkit`), because audio is where they have differed before.
 
 `verify-3d-elements` asks what each element leaves ON what it hits, which is
-the half of an element that no damage number shows.
+the half of an element that no damage number shows. It ARRANGES the crowd it
+needs — the storm only hops when there is somewhere to hop to, and measuring
+that against whatever the wave happened to look like passed locally and failed
+on the deployed build running identical code, because that board was thinner
+that run.
 
 Getting from the hub into a board lives in **`pw-level.mjs`**, once. It was
 copied into every probe with a comment saying it was shared "so that when the
