@@ -39,12 +39,17 @@ export const MATERIAL_ICON: Record<Material, string> = {
  *
  *  Health is the rarest on purpose: with a bar rather than hearts, a drop that
  *  heals is worth a fifth of it, and a kill that might hand one over every
- *  other time makes the bar stop being something to manage. */
+ *  other time makes the bar stop being something to manage.
+ *
+ *  It went from a tenth to a seventh when measurement kept ending runs with the
+ *  hero dead and the base untouched. They must add to one — `rollDrop` walks
+ *  the list subtracting, so the last entry silently absorbs any slack — which
+ *  is why the gold came down by the same four points. */
 export const DROP_WEIGHTS: { kind: Material | 'health'; weight: number }[] = [
-  { kind: 'gold', weight: 0.5 },
+  { kind: 'gold', weight: 0.46 },
   { kind: 'wood', weight: 0.22 },
   { kind: 'stone', weight: 0.18 },
-  { kind: 'health', weight: 0.1 },
+  { kind: 'health', weight: 0.14 },
 ];
 
 /** Roll one. `wounded` is false when the hero is at full health, in which case

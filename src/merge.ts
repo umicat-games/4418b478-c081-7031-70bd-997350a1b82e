@@ -33,8 +33,13 @@ const CASTS = new Set([
   // The hub's furniture. The name in blocks is a HUNDRED AND FOUR little cubes
   // — on its own it was two thirds of the hub's draw calls.
   'title', 'plot', 'plot_sign', 'plot_lantern', 'door_frame', 'door_sign',
-  'pedestal', 'decor',
+  'decor',
 ]);
+// `pedestal` is NOT in that list, and the omission is load-bearing. The rack
+// only shows the weapons you have made plus the next one, which means plinths
+// that appear one at a time — and an entity folded into a merged mesh has no
+// visibility of its own left to turn off. Five cylinders is five draw calls at
+// the very most, and only once the whole rack is full.
 const OUTSIDE = new Set(['forest', 'forest_ground', 'ground_skirt']);
 /** The far rings, merged on their own so they can be switched off together. */
 const FAR = new Set(['forest_far']);

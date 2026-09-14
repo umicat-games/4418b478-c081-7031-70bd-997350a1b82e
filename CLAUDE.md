@@ -51,12 +51,22 @@ Three of them, deliberately different PROBLEMS rather than the same problem with
 bigger numbers. `tools/gen-scene.mjs` generates all three plus the hub from a
 `LEVELS` table of polylines; `src/levels.ts` holds what walks them.
 
-| board | theme | road | spots | what makes it hard |
+| board | theme | road | lanes | what it introduces |
 | --- | --- | --- | --- | --- |
-| Meadow | grass | 36 | 74 | nothing — it is where the game is learned |
-| Frostfall | snow | 25 | 49 | ice, and a third less time per tower |
-| Rivermeet | grass | 32 | 54 | a river across the middle, three bridges |
-| Crossroads | grass | 22 | 43 | gates on opposite walls, shortest road |
+| Meadow | grass | 38 | 1 | the game — this is the board that teaches |
+| Frostfall | snow | 38 | 1 | ice: you cannot turn sharply and you overshoot |
+| Rivermeet | grass | 32 | 2 | the fork, and a river in YOUR way |
+| Crossroads | grass | 22 | 2 | the fork on OPPOSITE walls |
+
+**One new thing per board, and the first two do not fork.** Every board used to,
+including the first one anybody plays — so the game's second-hardest idea
+arrived before its first one had been explained.
+
+Taking the fork off a board takes ROAD off it, and road length is exposure: the
+same wave table that Meadow had been winning with eight lives left lost on wave
+four, because every saucer spent a sixth less time in front of the guns. Both
+single-lane boards were wound back out to 38 cells. A board's difficulty lives
+in its polyline at least as much as in its wave table.
 
 **Rivermeet's river is in YOUR way, not theirs.** The saucers fly. Three bridges,
 and whichever half you are on, the other one costs the walk to a crossing. The
@@ -70,6 +80,12 @@ Scenery (trees, rocks, crystals) is baked into TILES in this kit, so a wooded
 corner costs the same as bare ground — they go on the outer ring only, because
 scenery in the middle of the field is scenery the hero walks around on the way
 to a tower.
+
+**The first waves of the first two boards do not shoot back.** Learning where a
+tower goes and learning to dodge are two lessons, and they were arriving on the
+same wave: a measured run on Meadow reached wave seven with SEVEN of ten lives
+still up — the base was never in trouble, the hero was being shot to death while
+walking between build spots.
 
 **Ice** is the direction lagging the stick, in `main.ts`, not a controller
 feature: you cannot turn sharply and you overshoot. The overshoot has to stay
@@ -438,20 +454,80 @@ Other things left open, in the order they will be noticed:
   and `CHAIN_HOP` were picked so that the storm staff is worst against one
   enemy and best against a crowd. That is the intent, not a measurement.
 
+## Teaching
+
+The first board teaches itself, in `src/tutorial.ts` plus the steps built in
+`startLevel`. `teaches: true` on Meadow is the whole switch, and it runs while
+Meadow is UNCLEARED rather than on a first visit — losing your first run and
+coming back to no help is the moment help was for.
+
+Not a paragraph. This game's rule is that explanation happens WHERE the thing
+is, and a tutorial is that rule with an order imposed on it: one line at a time,
+above the hotbar, gone the moment it is true. There is no "next" button —
+pressing a button to dismiss an instruction about pressing buttons teaches the
+wrong button.
+
+Two things hold it up:
+
+- **The first wave does not start until you have built something.** A tutorial
+  you can lose while reading it is not a tutorial. `gateWaves` on those steps.
+- **Steps that name an OPTIONAL thing expire.** "Upgrade a tower" waits for
+  something a player may reasonably not do for two minutes, and a step that
+  waits forever is not an instruction, it is a permanent banner. A probe found
+  this by doing everything except the optional thing, which is also what a
+  player does. A step that gates the waves may never expire.
+
+Timed in `realDt`, not `dt`. `dt` is clamped at 0.05 so a slow scene runs the
+world in slow motion — anything measured against a PERSON rather than against
+the world (how long a line has been readable, how long a button has been held)
+uses the unclamped one.
+
+## What the hub does not show
+
+**A board you cannot play is not in the list, and a weapon you cannot make is
+not on the rack.** Both used to be shown greyed out, on the argument that an
+empty plinth is the thing you are saving for. That reads well with five and
+badly with twelve: it tells a new player exactly how long this game is, and this
+game is meant to keep getting boards and weapons. Four rows with three padlocks
+is a progress bar with a known end, and adding a fifth board later would visibly
+move the finish line.
+
+What IS shown is everything you have plus exactly one step past it — the next
+plinth, so there is somewhere to walk to forge, and a line at the bottom of the
+list saying which board opens the next one. It promises there is more without
+promising how much.
+
+`pedestal` is deliberately **not** in `merge.ts`'s `CASTS` set. An entity folded
+into a merged mesh has no visibility left to turn off, and plinths now appear
+one at a time. Five cylinders is five draw calls at the very most.
+
 ## Balance is measured, not chosen
 
 `umicat-infra/playwright/verify-3d-balance.mjs <url> <level>` plays a real run
 with a fixed competent strategy — **walk** to a spot, build, upgrade when it can
 afford to, open crates, keep out of the shooting — and reports where it gets to.
 
-Where the boards stand, as measured:
+Where the boards stand, as measured — **after** the bot was taught to break off
+when hurt. Everything measured before that was measured by a bot that would
+stand on a build spot at fifteen health, so those numbers are not comparable and
+are not kept here.
 
-| board | result |
-| --- | --- |
-| Meadow | won, 8 of 10 lives left |
-| Frostfall | won, 12 of 12 |
-| Rivermeet | won, 6 of 12 |
-| Crossroads | lost on wave 11 of 12 |
+| board | result | which way it ended |
+| --- | --- | --- |
+| Meadow | wave 7 of 8, 9 of 10 lives | the HERO fell |
+| Frostfall | wave 9 of 10, 12 of 12 lives | the HERO fell |
+
+**Both boards end the same way, and it is not the towers.** The base is all but
+untouched in each — the hero dies on the last wave or two. That is what raised
+the wave-clear heal from 25 to 40 and health drops from a tenth to a seventh:
+you are a character on the board, you spend every wave walking through the fire
+to reach the next build spot, and no wave table fixes that.
+
+**Fewer road cells is not a gentler version of more.** Frostfall at 25 cells lost
+the base on wave six; at 38 it reached wave nine with every life; pulled back to
+33 — the obvious middle — it was sharply worse than either, leaking from wave
+three. Road length is how many guns can see the same saucer, and the falloff is
+not linear. Measure the guess; do not interpolate it.
 
 **The run-to-run spread is wider than most of the changes worth making.** Two
 runs of the same build on Rivermeet reached waves 8 and 10. Tune on a difference
@@ -491,6 +567,20 @@ What it has found, none of it visible by reading the wave table:
   hard-coded after the game grew a fourth tower level, so it sat on 1700 gold
   reporting that a board could not be held — by a defence it had declined to
   finish.
+- **The bot has to look after itself, or it measures a board nobody plays.** Its
+  retreat lived under `if (!acted)` — it only ran on a turn with nothing else to
+  do, and this bot always has something else to do, so it would walk to a build
+  spot beside the road at fifteen health and stand on it. That was survivable
+  while every board forked and there was a quiet half to be accidentally
+  standing in. On a single lane it showed up every run: four Frostfalls in a row
+  ended with the hero dead and the base on eleven or twelve of twelve lives. It
+  breaks off below 42% now and waits for the wave-clear heal — the same run went
+  from wave six to wave nine, which means every board conclusion drawn before
+  the fix was drawn from a broken instrument.
+- **Say WHICH loss it was.** The result line printed "the base fell" whatever
+  happened, including a run that ended with seven of ten lives still up. The
+  base falling is a tower problem and the hero falling is a survivability one,
+  and they want opposite fixes.
 
 ## The weapons
 

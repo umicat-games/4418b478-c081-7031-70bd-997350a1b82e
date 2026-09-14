@@ -61,10 +61,17 @@ const THEMES = {
 // ─────────────────────────────────────────────────────────────────────────────
 // The levels
 //
-// Each is a trunk polyline plus a branch to each gate. The road forks on every
-// board: a single lane can be sealed with four good towers and the rest of the
-// map is decoration, and with two the question becomes which half you can
-// afford to leave thin.
+// Each is a trunk polyline plus a branch to each gate. A board with TWO
+// branches forks: a single lane can be sealed with four good towers and the
+// rest of the map is decoration, and with two the question becomes which half
+// you can afford to leave thin.
+//
+// **The first two boards do not fork.** Every board used to, including the
+// first one anybody plays — so the game's second-hardest idea arrived before
+// its first one had been explained. Each board now introduces exactly one new
+// thing: Meadow is the tutorial and has a single lane, Frostfall adds ice and
+// keeps the single lane, Rivermeet adds the fork, and Crossroads puts the fork
+// on OPPOSITE walls, which is the hardest version of it.
 //
 // `gates` says which WALL each branch ends at, because the fork does not have
 // to be left-and-right.
@@ -80,32 +87,59 @@ const LEVELS = [
     // z=-4.5 and the door drops the hero in at z=-5.0, which put arrival half a
     // tile from the lane and inside everything's range — the whole north strip
     // was, so no spawn point could fix it. Same shape, one row down.
-    trunk: [[-5.5, -3.5], [3.5, -3.5], [3.5, -0.5], [-3.5, -0.5],
-            [-3.5, 2.5], [0.5, 2.5], [0.5, 5.5]],
-    branches: [[[0.5, 5.5], [-5.5, 5.5]], [[0.5, 5.5], [5.5, 5.5]]],
-    gates: [{ id: 'gate_w', wall: 'w', at: 5.5 }, { id: 'gate_e', wall: 'e', at: 5.5 }],
+    // ONE lane, one gate. This is the board the game is learned on, and it
+    // used to fork like all the others — which meant the first thing a new
+    // player met was the mechanic that exists to make a veteran choose.
+    // Longer than it looks it needs to be, on purpose. Dropping the fork took
+    // six cells off the road, and road length IS exposure — the same wave table
+    // that had been won with eight lives left lost on wave four, because every
+    // saucer now spent a sixth less time in front of the guns. Wound back up to
+    // 37 cells, which is a shade more than the two branches added together.
+    //
+    // The top run stays at z=-3.5 and does NOT go to -4.5: the door drops the
+    // hero in at z=-5.0, and a lane one tile from the arrival point puts you
+    // inside everything's range before you have moved.
+    trunk: [[-5.5, -3.5], [4.5, -3.5], [4.5, -0.5], [-4.5, -0.5],
+            [-4.5, 2.5], [2.5, 2.5], [2.5, 4.5], [0.5, 4.5]],
+    branches: [[[0.5, 4.5], [0.5, 5.5]]],
+    gates: [{ id: 'gate_s', wall: 's', at: 0.5 }],
     scenerySeed: 11,
   },
   {
     id: 'frostfall',
     name: 'Frostfall',
     theme: 'snow',
-    // The fork is early and the two gates are on different walls, so a hero who
-    // commits to one side has a real walk back. And the ground is ice.
-    trunk: [[-5.5, 4.5], [-1.5, 4.5], [-1.5, -0.5], [-4.5, -0.5], [-4.5, -3.5],
-            [2.5, -3.5]],
-    branches: [[[2.5, -3.5], [2.5, -5.5]], [[2.5, -3.5], [5.5, -3.5]]],
-    gates: [{ id: 'gate_n', wall: 'n', at: 2.5 }, { id: 'gate_e', wall: 'e', at: -3.5 }],
+    // Still one lane — the new thing here is the GROUND. It is ice: you cannot
+    // turn sharply and you overshoot, and learning that while also being asked
+    // which half of a fork to abandon is two lessons at once.
+    // Wound out to 38 cells for the same reason Meadow was: losing the fork
+    // lost road, and road length is how long a saucer spends in front of a gun.
+    //
+    // Three measured points, because the obvious next guess was wrong. At 25
+    // cells the base fell on wave six. At 38 it reached wave NINE with twelve
+    // of twelve lives — which looked like a board that had stopped asking
+    // anything of the towers, so the road was pulled back to 33. That made it
+    // sharply WORSE: wave six again, and leaking from wave three. Fewer cells
+    // is not a gentler version of more cells; it is fewer guns that can see the
+    // same saucer, and the falloff is not linear. 38 stands.
+    //
+    // The hero arrives at (0, -5) on every board. Nothing here runs closer to
+    // that than two and a half cells.
+    trunk: [[-5.5, 4.5], [3.5, 4.5], [3.5, 1.5], [-4.5, 1.5], [-4.5, -1.5],
+            [4.5, -1.5], [4.5, -3.5], [2.5, -3.5]],
+    branches: [[[2.5, -3.5], [2.5, -5.5]]],
+    gates: [{ id: 'gate_n', wall: 'n', at: 2.5 }],
     scenerySeed: 29,
   },
   {
     id: 'rivermeet',
     name: 'Rivermeet',
     theme: 'grass',
-    // A river straight across the middle. The saucers FLY, so it is not in
-    // their way at all — it is in yours. Three bridges, and whichever half of
-    // the board you are on, getting to the other one costs the walk to a
-    // crossing. It is the sharpest version of the thing this game is about.
+    // Where the road FORKS, and where the river is. The saucers fly, so the
+    // river is not in their way at all — it is in yours. Three bridges, and
+    // whichever half of the board you are on, getting to the other one costs
+    // the walk to a crossing. It is the sharpest version of the thing this
+    // game is about, which is why it is the third board and not the first.
     trunk: [[-5.5, -4.5], [3.5, -4.5], [3.5, -2.5], [0.5, -2.5], [0.5, 3.5]],
     branches: [[[0.5, 3.5], [-5.5, 3.5]], [[0.5, 3.5], [5.5, 3.5]]],
     gates: [{ id: 'gate_w', wall: 'w', at: 3.5 }, { id: 'gate_e', wall: 'e', at: 3.5 }],

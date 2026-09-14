@@ -15,6 +15,7 @@ import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
 import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
+import { createTutorial, type Tutorial } from './tutorial';
 import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
   type Weapon, type WeaponLevels,
@@ -109,7 +110,16 @@ const BULLET_DAMAGE = 10;
  *  third; clearing a wave a quarter. */
 const HEAL_DROP = 18;
 const HEAL_CRATE = 30;
-const HEAL_WAVE = 25;
+/** What surviving a wave gives back.
+ *
+ *  25 to begin with, raised after eight measured runs across two boards all
+ *  ended the same way: the HERO dead and the base on most of its lives. That is
+ *  not a tower problem and no wave table fixes it — you are a character on the
+ *  board, you spend every wave walking through the fire to reach the next build
+ *  spot, and a quarter of a bar per wave does not cover the walk. The bot was
+ *  made to break off and heal like a player would and the boards STILL ended
+ *  that way, which is what makes it the game's number rather than the bot's. */
+const HEAL_WAVE = 40;
 /** What each kind of drop looks like on the ground. Wood and stone come from
  *  the kit's own scenery, which is why a plank reads as a plank. Module scope
  *  because the preload list needs it before the run does. */
@@ -947,6 +957,12 @@ export async function startLevel(
   /** What this run has picked up, for the summary and for the village. */
   const earned: Materials = { ...NO_MATERIALS };
   let kills = 0;
+  /** How many drops have been PICKED UP. The tutorial's "walk over it" step
+   *  reads this: the counter moving is the whole lesson, since nothing in this
+   *  game pays itself in. */
+  let pickedUp = 0;
+  /** Whether the hero has swung at anything and connected. */
+  let heroHits = 0;
   const maxTowers = level.maxTowers + bonus.towerCap;
   /** What the hotbar offers on this run. A tower mount you have not unlocked
    *  is not a greyed-out cell — it is not there, because a row of things you
@@ -1598,10 +1614,12 @@ export async function startLevel(
         q.taken = true;
         if (q.kind === 'health') {
           heroHp = Math.min(heroMaxHp, heroHp + q.amount);
+          pickedUp += 1;
           audio.play('coin');
           flashTint(hero, { color: 0xff5f7a, ms: 260 });
         } else {
           earned[q.kind] += q.amount;
+          pickedUp += 1;
           // Only GOLD is spendable during a run. Wood and stone have nothing to
           // buy here, which is what makes them come home in full while the gold
           // is a choice between a tower now and a building later.
@@ -1792,6 +1810,85 @@ export async function startLevel(
     refreshHotbar();
   };
 
+  /** Whether to say "drag" or "WASD".
+   *
+   *  The SAME test the SDK uses to decide whether to mount a thumbstick at all
+   *  — coarse pointers and no fine one, a phone rather than a laptop with a
+   *  touchscreen. Asking a different question than the thing that draws the
+   *  control would eventually tell somebody to drag a stick that is not there.
+   */
+  const touchLikely = (): boolean =>
+    window.matchMedia?.('(pointer: coarse)').matches === true
+    && window.matchMedia?.('(any-pointer: fine)').matches !== true;
+
+  /** The teaching line, above the hotbar and never interactive.
+   *
+   *  Its own element rather than a fourth line in the corner HUD: an
+   *  instruction has to be where the eye is, and the eye is on the middle of
+   *  the board and the two buttons under it. `pointer-events: none`, because
+   *  this game has drawn over the platform's control layer five times. */
+  const teachEl = document.createElement('div');
+  teachEl.style.cssText = `position: fixed; left: 50%; bottom: 86px;
+    transform: translateX(-50%); z-index: 29; pointer-events: none;
+    max-width: min(92vw, 460px); text-align: center;
+    font: 700 15px/1.45 system-ui, sans-serif; color: #fff;
+    background: rgba(20,26,38,.72); padding: 8px 16px; border-radius: 999px;
+    text-shadow: 0 1px 2px rgba(0,0,0,.5); display: none;`;
+  document.body.appendChild(teachEl);
+
+  /** The board that teaches does it here.
+   *
+   *  Every step ends when the PLAYER has done the thing, not when a timer runs
+   *  out and not when a "next" button is pressed — pressing a button to dismiss
+   *  an instruction about pressing buttons teaches the wrong button.
+   *
+   *  It runs while Meadow is unbeaten rather than on a first visit: losing your
+   *  first run and coming back to no help is the moment help was for.
+   */
+  const teaching = level.teaches && (saveNow.cleared ?? 0) < 1;
+  let startedAt = hero.position.clone();
+  const tutorial: Tutorial | null = teaching ? createTutorial([
+    {
+      text: touchLikely()
+        ? '👈 Drag the left of the screen to walk'
+        : 'WASD or the arrow keys to walk',
+      done: () => hero.position.distanceTo(startedAt) > 2.2,
+    },
+    {
+      // The marker is already drawn under your feet on a buildable cell, so
+      // this names a thing that is visibly happening rather than describing it.
+      text: 'Stand on one of the pale squares beside the road',
+      done: () => buildCell !== null || towers.length > 0,
+      gateWaves: true,
+    },
+    {
+      text: `🔨 Build a ${KINDS[0].label} · ${KINDS[0].cost}g`,
+      done: () => towers.length > 0,
+      gateWaves: true,
+    },
+    {
+      text: 'It shoots on its own. They come through the gate.',
+      done: () => kills > 0,
+      expires: 30,
+    },
+    {
+      // The one rule of this game that nothing else in it would tell you.
+      text: 'Nothing pays itself in — walk over what they drop',
+      done: () => pickedUp > 0,
+      expires: 45,
+    },
+    {
+      text: 'Stand on your tower · 🔨 upgrades it · hold 🔨 sells it',
+      done: () => towers.some((t) => t.level > 1) || towers.length === 0,
+      expires: 40,
+    },
+    {
+      text: '⚔ swings at anything close. Crates too.',
+      done: () => heroHits > 0,
+      expires: 30,
+    },
+  ]) : null;
+
   const endRun = (didWin: boolean): void => {
     // Once. A run can plausibly end twice in the same breath — the last life
     // going and the hero falling — and the second pass would replay the
@@ -1828,6 +1925,9 @@ export async function startLevel(
     if (devCycle) { window.removeEventListener('keydown', devCycle); devCycle = null; }
     input.dispose();
     banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
+    // An element created and never removed outlives the run and sits over the
+    // summary. Every other one on this line learned that the hard way.
+    teachEl.remove();
     debug.dispose();
     hudEl.textContent = '';
     vfx.clear();
@@ -2192,7 +2292,7 @@ export async function startLevel(
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
     if (hitCrates(hero.position.x, hero.position.z, HERO_ATTACK_RANGE, 1)) connected = true;
-    if (connected) audio.play('sword-hit');
+    if (connected) { heroHits += 1; audio.play('sword-hit'); }
   };
 
   const damage = (e: Enemy, amount: number, quiet = false): void => {
@@ -2299,7 +2399,12 @@ export async function startLevel(
   const leaving = new Promise<LevelResult>((res) => { leave = res; });
 
   renderer.setAnimationLoop((now: number) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    // `dt` is CLAMPED so a stall cannot tunnel the physics, which means a slow
+    // scene runs the world in slow motion. `realDt` is not — anything measured
+    // against a person rather than against the world (how long an instruction
+    // has been on screen, how long a button has been held) uses this one.
+    const realDt = (now - last) / 1000;
+    const dt = Math.min(realDt, 0.05);
     last = now;
 
     const turn = input.look();
@@ -2352,6 +2457,13 @@ export async function startLevel(
       readBuildButton();
       if (invincible > 0) invincible -= dt;
       if (staffCooldown > 0) staffCooldown -= dt;
+
+      if (tutorial) {
+        tutorial.update(realDt);
+        const line = tutorial.line();
+        teachEl.style.display = line ? 'block' : 'none';
+        if (line) teachEl.textContent = line;
+      }
 
       // The tower being sold is what shows the hold — not the button, which is
       // on the platform's control layer and under the player's own thumb. It
@@ -2433,7 +2545,11 @@ export async function startLevel(
       if (changed) renderHud();
 
       // --- waves ---
-      if (wavesPaused) { /* held for a measurement */ }
+      // A tutorial you can lose while reading it is not a tutorial. The first
+      // wave waits until there is something on the board to meet it; after
+      // that the lessons run alongside the fight, which is where they mean
+      // anything.
+      if (wavesPaused || tutorial?.holdsWaves()) { /* held */ }
       else if (toSpawn > 0) {
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
@@ -2981,6 +3097,11 @@ export async function startLevel(
       sellValue: () => (standingOn ? sellValue(standingOn) : null),
       invested: () => (standingOn ? standingOn.invested : null),
       sellProgress: () => sellProgress(),
+      /** What the board is currently teaching, and how far through. `null` on
+       *  a board that does not teach, and once the last step is done. */
+      teaching: () => (tutorial
+        ? { step: tutorial.step(), line: tutorial.line(), holding: tutorial.holdsWaves() }
+        : null),
       locomotion: () => animator.action || character.state,
     } as unknown,
   });

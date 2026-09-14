@@ -244,9 +244,29 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   };
   showWeapon();
 
-  // A weapon stands on its pedestal once it has been made. An empty plinth is
-  // not a gap — it is the thing you are saving for, which is why all five are
-  // there from the first visit.
+  /** Which plinths exist at all: everything MADE, plus the next one along.
+   *
+   *  All five used to stand there from the first visit, on the argument that an
+   *  empty plinth is the thing you are saving for. That reads well with five
+   *  and badly with twelve — it tells a new player exactly how many weapons
+   *  this game will ever have, and this game is meant to keep getting weapons.
+   *  One empty plinth is still something to save for; four of them is a
+   *  catalogue with a known end, and adding a sixth later would visibly move
+   *  it.
+   *
+   *  The NEXT one is always shown, or there would be nowhere to walk to forge
+   *  anything and the rack would be a display case.
+   *
+   *  Declared BEFORE `showRack`, which reads it. A `const` reached by a
+   *  function called earlier than the line that defines it is the temporal dead
+   *  zone, and inside an async boot that shows up as a loading screen that
+   *  never ends rather than as an error anybody sees. This game has had that
+   *  once already.
+   */
+  const visibleRack = new Map<Weapon, boolean>();
+  const rackShown = (id: Weapon): boolean => visibleRack.get(id) ?? false;
+
+  // A weapon stands on its pedestal once it has been made.
   const displays = new Map<Weapon, THREE.Object3D>();
   for (const r of RACK) {
     const display = await buildWeapon(r.id);
@@ -254,16 +274,27 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     display.rotation.z = Math.PI * 0.12;
     display.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
     display.userData.spin = true;
-    display.visible = levelOf(weapons, r.id) > 0;
     world.scene.add(display);
     displays.set(r.id, display);
   }
   const showRack = (): void => {
+    // Recomputed every time, not captured once: forging one weapon is what
+    // makes the NEXT plinth appear, and the point is that it happens while you
+    // are standing there watching.
+    const next = RACK.findIndex((r) => levelOf(weapons, r.id) === 0);
     for (const r of RACK) {
+      const made = levelOf(weapons, r.id) > 0;
+      const shown = made || (next >= 0 && RACK[next].id === r.id);
+      visibleRack.set(r.id, shown);
       const d = displays.get(r.id);
-      if (d) d.visible = levelOf(weapons, r.id) > 0;
+      if (d) d.visible = made;
+      // The plinth is a scene entity and deliberately NOT merged — see the
+      // note in `merge.ts`. A folded entity has no visibility left to turn off.
+      const plinth = world.entities.get(`pedestal_${r.id}`);
+      if (plinth) plinth.visible = shown;
     }
   };
+  showRack();
 
   // Open doors where you may go, shut ones where you may not. Both are in the
   // scene already: swapping a model at runtime means loading it at runtime, and
@@ -481,34 +512,43 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
   /** The list of boards, opened by walking through the door.
    *
-   *  Everything unlocked, with how far you got on each — a menu that only
-   *  offers the next board is a corridor, and the point of finishing one is
-   *  partly being able to go back to it. Resolves the hub with whichever is
+   *  Everything you have unlocked, with how far you got on each — a menu that
+   *  only offers the next board is a corridor, and the point of finishing one
+   *  is partly being able to go back to it. Resolves the hub with whichever is
    *  chosen; closing it puts you back in front of the door.
+   *
+   *  **A board you have not reached is not in the list at all.** It used to be
+   *  a greyed row saying "clear Meadow", which tells a new player the game is
+   *  four boards long — and this game is meant to keep getting boards. A list
+   *  that ends where you are ends nowhere in particular; a list of four with
+   *  three padlocks is a progress bar with a known end, and adding a fifth
+   *  board later would visibly move the finish line.
    */
   const chooseLevel = (onPick: (i: number) => void): void => {
     panelOpen = true;
     input.setEnabled(false);
     panel.style.display = 'block';
-    const rows = LEVELS.map((lv, i) => {
-      const open = levelOpen(i);
+    const rows = LEVELS.map((lv, i) => ({ lv, i })).filter(({ i }) => levelOpen(i)).map(({ lv, i }) => {
       const best = progress.bests?.[lv.id] ?? 0;
-      const note = !open
-        ? `<span style="opacity:.55">🔒 clear ${LEVELS[i - 1].name}</span>`
-        : best
-          ? `<span style="opacity:.6">best wave ${best}/${lv.waves.length}</span>`
-          : '<span style="opacity:.6">not played</span>';
-      return `<button data-level="${i}" ${open ? '' : 'disabled'} style="
+      const note = best
+        ? `<span style="opacity:.6">best wave ${best}/${lv.waves.length}</span>`
+        : '<span style="opacity:.6">not played</span>';
+      return `<button data-level="${i}" style="
           display:flex; gap:12px; align-items:baseline; justify-content:space-between;
           width:100%; margin:6px 0; padding:10px 14px; border:0; border-radius:12px;
-          font:600 14px/1.5 system-ui; text-align:left; cursor:${open ? 'pointer' : 'default'};
-          background:${open ? '#fff' : 'rgba(255,255,255,.12)'}; color:${open ? '#222' : '#fff'}">
+          font:600 14px/1.5 system-ui; text-align:left; cursor:pointer;
+          background:#fff; color:#222">
           <span style="font-weight:800">${escapeHtml(lv.name)}</span>
           <span style="flex:1;opacity:.7;font-weight:600">${escapeHtml(lv.blurb)}</span>
           ${note}</button>`;
     }).join('');
+    // Said once, at the bottom, instead of listed as padlocks. It promises
+    // there is more without promising HOW MUCH more.
+    const more = cleared + 1 < LEVELS.length
+      ? `<div style="opacity:.55;font:600 12px/2 system-ui">Clear ${escapeHtml(LEVELS[cleared].name)} to find the next one.</div>`
+      : '';
     panel.innerHTML =
-      '<div style="font:700 17px/1.8 system-ui">Where to?</div>' + rows
+      '<div style="font:700 17px/1.8 system-ui">Where to?</div>' + rows + more
       + `<button data-back="1" style="margin-top:10px;padding:8px 18px;border:0;border-radius:999px;
           font:700 14px system-ui;background:rgba(255,255,255,.18);color:#fff;cursor:pointer">Back</button>`;
     for (const el of panel.querySelectorAll<HTMLButtonElement>('button')) {
@@ -588,7 +628,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       // Which weapon you are standing at, if any.
       let atPickup: typeof RACK[number] | null = null;
       for (const pick of RACK) {
-        const near = Math.hypot(hero.position.x - pick.x, hero.position.z - pick.z) < NEAR;
+        // Only a plinth that is THERE. Standing on the spot where a hidden one
+        // would be and being offered a weapon to forge is the rack leaking the
+        // catalogue it was just made to stop showing.
+        const near = rackShown(pick.id)
+          && Math.hypot(hero.position.x - pick.x, hero.position.z - pick.z) < NEAR;
         const ring = world.entities.get(`pickup_marker_${pick.id}`);
         if (ring) ring.visible = near && !panelOpen;
         if (near) atPickup = pick;

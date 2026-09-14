@@ -57,6 +57,11 @@ const boss = (hp: number, bounty: number, label: string): Wave => ({
 export interface LevelDef {
   id: string;
   name: string;
+  /** Teach on this board, while it is still unbeaten. One board carries the
+   *  tutorial rather than a fifth board existing to be one: a separate tutorial
+   *  level is a level you play once, and this is the level everyone plays
+   *  first anyway. */
+  teaches?: boolean;
   /** One line, shown on the door in the hub. Not a paragraph. */
   blurb: string;
   waves: Wave[];
@@ -89,16 +94,29 @@ export const LEVELS: LevelDef[] = [
     id: 'meadow',
     name: 'Meadow',
     blurb: 'Open ground',
+    teaches: true,
     startGold: 60,
     lives: 10,
     spawnGap: 1.1,
-    waveGap: 6,
-    firstWaveDelay: 3,
+    // Roomy, because this is the board the game is learned on. Three seconds
+    // before the first wave meant a measured run leaked a life to wave ONE —
+    // six unarmed saucers with ten health each, against one ballista, because
+    // there had not been time to put up a second. A tutorial board that
+    // punishes you before you have finished reading is teaching the wrong
+    // lesson.
+    waveGap: 8,
+    firstWaveDelay: 10,
     maxTowers: 12,
     slip: 0,
     waves: [
-      { count: 6, hp: 10, speed: 1.1, model: 'td-ufo-a', bounty: 9, armed: true, scale: 0.62 },
-      { count: 8, hp: 16, speed: 1.25, model: 'td-ufo-b', bounty: 11, armed: true, scale: 0.62 },
+      // The first two waves do NOT shoot back. This is the board the game is
+      // learned on, and a measured run reached wave seven with SEVEN of ten
+      // lives still up — the base was never in trouble, the hero was being
+      // shot to death while walking between build spots. Learning where a
+      // tower goes and learning to dodge are two lessons, and they arrived on
+      // the same wave.
+      { count: 6, hp: 10, speed: 1.1, model: 'td-ufo-a', bounty: 9, armed: false, scale: 0.62 },
+      { count: 8, hp: 16, speed: 1.25, model: 'td-ufo-b', bounty: 11, armed: false, scale: 0.62 },
       { count: 10, hp: 14, speed: 2.1, model: 'td-ufo-c', bounty: 12, armed: true, scale: 0.5 },
       { count: 10, hp: 42, speed: 1.2, model: 'td-ufo-a2', bounty: 15, armed: true, scale: 0.68 },
       { count: 12, hp: 66, speed: 1.3, model: 'td-ufo-d', bounty: 18, armed: true, scale: 0.72 },
@@ -124,14 +142,25 @@ export const LEVELS: LevelDef[] = [
     firstWaveDelay: 13,
     slip: 0.55,
     waves: [
-      { count: 6, hp: 13, speed: 1.1, model: 'td-ufo-b', bounty: 13, armed: true, scale: 0.62 },
-      { count: 8, hp: 21, speed: 1.25, model: 'td-ufo-a2', bounty: 15, armed: true, scale: 0.68 },
+      // The first wave holds its fire. This is the board where you cannot turn
+      // sharply and you overshoot, and being shot at while learning that is
+      // being asked two things at once — a measured run lost the HERO on wave
+      // seven with eight of twelve lives still up, which is not a tower
+      // problem at all.
+      { count: 6, hp: 13, speed: 1.1, model: 'td-ufo-b', bounty: 13, armed: false, scale: 0.62 },
+      { count: 8, hp: 21, speed: 1.25, model: 'td-ufo-a2', bounty: 15, armed: false, scale: 0.68 },
       { count: 10, hp: 19, speed: 2.0, model: 'td-ufo-c', bounty: 16, armed: true, scale: 0.5 },
       { count: 10, hp: 48, speed: 1.25, model: 'td-ufo-d', bounty: 19, armed: true, scale: 0.72 },
       { count: 12, hp: 62, speed: 1.95, model: 'td-ufo-b2', bounty: 21, armed: true, scale: 0.6 },
       { count: 12, hp: 112, speed: 1.2, model: 'td-ufo-c2', bounty: 25, armed: true, scale: 0.78 },
       { count: 14, hp: 150, speed: 1.4, model: 'td-ufo-d2', bounty: 28, armed: true, scale: 0.85 },
-      { count: 16, hp: 178, speed: 2.0, model: 'td-ufo-c', bounty: 28, armed: true, scale: 0.55 },
+      // The wave that kept killing the HERO while the base sat at twelve of
+      // twelve lives. It raised three things at once — count 14→16, hp
+      // 150→178, and speed 1.4→2.0 — so a wave whose identity is "these
+      // arrive fast" was also the biggest and the toughest. Sixteen fast
+      // shooters on a single lane, on ice, is nowhere to stand. The speed
+      // stays; it is what the wave is FOR.
+      { count: 12, hp: 150, speed: 2.0, model: 'td-ufo-c', bounty: 28, armed: true, scale: 0.55 },
       { count: 16, hp: 235, speed: 1.3, model: 'td-ufo-a2', bounty: 30, armed: true, scale: 0.75 },
       boss(2000, 260, 'THE FROST WARLORD'),
     ],
