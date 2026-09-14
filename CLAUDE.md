@@ -944,6 +944,15 @@ standing still in exactly the case the option exists for.
   sleeps in wall-clock is measuring something else: under the headless software
   renderer at eight frames a second, game time advances at forty per cent of
   real. Poll for the state you want; do not sleep for it.
+- **The right-hand buttons are SHAPES, not emoji** (`src/icons.ts`,
+  `public/icons/`, `npm run icons`). Three reasons, all of which only show up on
+  a device: an emoji is a different picture in every platform's font, it is TEXT
+  and text can be SELECTED (long-pressing the attack button is how the iOS Copy
+  / Look Up / Translate callout came up mid-fight), and it ignores `color`, so a
+  glyph could never match the controls beside it. They go to `Input3D` as URLs
+  and are drawn as CSS masks. **The attack button follows the weapon** — one
+  control, five meanings, and a sword on a button that fires arrows is a lie.
+  The bottom weapon hotbar is a separate design and is not part of this.
 - **The platform's touch layer is full-screen at z-index 10.** Anything the game
   draws on top of it needs to say so, and `input.setEnabled(false)` before a
   modal. This has bitten FIVE times: the attack button under the jump button, Play

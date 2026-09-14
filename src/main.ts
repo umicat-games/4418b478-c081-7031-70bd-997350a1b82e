@@ -17,6 +17,7 @@ import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
 import { skyWithClouds } from './sky';
+import { ICON, WEAPON_ICON } from './icons';
 import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
   type Weapon, type WeaponLevels,
@@ -566,9 +567,12 @@ export async function startLevel(
   });
   const input = new Input3D({
     actions: [
-      { id: 'attack', label: '⚔', keys: ['KeyJ'] },
-      { id: 'build', label: '🔨', keys: ['KeyB', 'KeyE'] },
+      // Shapes, not emoji — see `src/icons.ts`. The attack one is swapped in
+      // `setWeapon` for whatever is in your hand.
+      { id: 'attack', icon: WEAPON_ICON.sword, keys: ['KeyJ'] },
+      { id: 'build', icon: ICON.build, keys: ['KeyB', 'KeyE'] },
     ],
+    jumpIcon: ICON.jump,
   });
 
   const heroMixer = world.mixerFor.get('hero');
@@ -716,6 +720,11 @@ export async function startLevel(
   /** Called once, with whatever came through the door. Not a control. */
   const setWeapon = (w: Weapon): void => {
     weapon = w;
+    // The button wears what you are holding. Swinging a sword, loosing an
+    // arrow and calling down lightning are three different actions sharing one
+    // control, and a button that shows a sword through all of them is telling
+    // you the wrong thing about the one you have.
+    input.setActionIcon('attack', WEAPON_ICON[w] ?? WEAPON_ICON.sword);
     kind = WEAPON_BY_ID.get(w) ?? WEAPON_BY_ID.get('sword')!;
     // A weapon you are holding is at least level 1 — arriving with a 0 would
     // mean a hero swinging something that does no damage, which reads as the

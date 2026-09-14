@@ -9,6 +9,7 @@ import type { Shared, Progress } from './main';
 import { patchSave, readSave } from './main';
 import { DEV, toggleDev } from './dev';
 import { skyWithClouds } from './sky';
+import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createDebugHud } from './debughud';
@@ -170,7 +171,12 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     },
     halfHeight: 0.2, radius: 0.16, speed: 4.2, stepHeight: 0.17, jumpSpeed: 2.8,
   });
-  const input = new Input3D({ actions: [{ id: 'use', label: '⚔', keys: ['KeyJ'] }] });
+  // The hub's one button is "use what you are standing at" — forge, take,
+  // build, read the sign. A hand, not a sword: nothing here is a fight.
+  const input = new Input3D({
+    actions: [{ id: 'use', icon: ICON.build, keys: ['KeyJ'] }],
+    jumpIcon: ICON.jump,
+  });
 
   const heroMixer = world.mixerFor.get('hero');
   if (!heroMixer) throw new Error('the hub hero has no animation mixer');
