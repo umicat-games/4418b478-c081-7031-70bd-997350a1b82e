@@ -1074,6 +1074,18 @@ export async function startLevel(
    *  as belonging to that square. */
   const SELL_RING_IN = 0.56;
   const SELL_RING_OUT = 0.72;
+  /** Deep red, not the gold everything else in this game uses for money.
+   *
+   *  Selling is the one DESTRUCTIVE thing a player can do on a board — the only
+   *  action that takes something away — and it deserves the colour the rest of
+   *  the interface never uses. Deep rather than bright: a signal-red ring on a
+   *  cartoon green board reads as an error message, and this is a choice, not a
+   *  mistake.
+   *
+   *  The sparks AFTER it are still gold. Red while you can still let go, gold
+   *  once you have been paid — the two halves of the gesture are two different
+   *  things and should not be the same colour. */
+  const SELL_RED = 0xb0342c;
 
   /** The sell hold, drawn ROUND THE TOWER rather than in the corner.
    *
@@ -1090,7 +1102,7 @@ export async function startLevel(
   const sellRing = new THREE.Mesh(
     new THREE.RingGeometry(SELL_RING_IN, SELL_RING_OUT, 56, 1, Math.PI / 2, 0).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({
-      color: 0xffd76a, transparent: true, opacity: 0.85,
+      color: SELL_RED, transparent: true, opacity: 0.92,
       depthWrite: false, side: THREE.DoubleSide,
     }),
   );
@@ -1102,7 +1114,12 @@ export async function startLevel(
   const sellTrack = new THREE.Mesh(
     new THREE.RingGeometry(SELL_RING_IN, SELL_RING_OUT, 56).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({
-      color: 0x000000, transparent: true, opacity: 0.28,
+      // The UNFILLED part of the same red ring, not a black shadow: at 0.28
+      // black over grass it read as the tower's own shadow, so the ring looked
+      // like a red arc floating on nothing. A dark red needs to be carried at
+      // a fairly high opacity to stay red — under about a half, green grass
+      // pulls it olive and the two halves of the ring stop looking related.
+      color: 0x6b2a24, transparent: true, opacity: 0.62,
       depthWrite: false, side: THREE.DoubleSide,
     }),
   );
@@ -1122,7 +1139,9 @@ export async function startLevel(
   sellTag.style.cssText = `position: fixed; z-index: 28; pointer-events: none;
     display: none; transform: translate(-50%, -100%);
     font: 800 13px/1 system-ui, sans-serif; letter-spacing: .04em; color: #fff;
-    background: rgba(18,22,30,.62); padding: 5px 10px; border-radius: 999px;
+    /* Carries the ring's red so the two read as one warning rather than as a
+       label that happens to be near a coloured circle. */
+    background: rgba(138,36,30,.78); padding: 5px 10px; border-radius: 999px;
     white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.5);`;
   document.body.appendChild(sellTag);
 
@@ -1137,15 +1156,20 @@ export async function startLevel(
     const [x, z] = t.cell;
     sellRing.position.set(x, 0.05, z);
     sellTrack.position.set(x, 0.045, z);
-    // Clockwise from the top, the way every hold-to-confirm in every game
-    // sweeps. `thetaStart` at +90 degrees and a NEGATIVE length would be
-    // anticlockwise, so the start walks backwards instead.
+    // Starts at the NEAR side and sweeps clockwise.
+    //
+    // Twelve o'clock is where a hold-to-confirm ring starts on a flat screen,
+    // but this one is lying on the ground under a character, and twelve
+    // o'clock on the ground is the FAR side — directly behind the hero, who is
+    // standing on the tower. The first third of the sweep happened where
+    // nobody could see it. After `rotateX(-90°)` the ring's local +Y points
+    // away from the camera, so -90° is the edge nearest it.
     sellRing.geometry.dispose();
     // (inner, outer, thetaSegments, PHISEGMENTS, thetaStart, thetaLength). The
     // fourth argument is not the start angle, and leaving it out type-checks
     // perfectly — every parameter is a number.
     sellRing.geometry = new THREE.RingGeometry(
-      SELL_RING_IN, SELL_RING_OUT, 56, 1, Math.PI / 2 - k * Math.PI * 2, k * Math.PI * 2,
+      SELL_RING_IN, SELL_RING_OUT, 56, 1, -Math.PI / 2 - k * Math.PI * 2, k * Math.PI * 2,
     ).rotateX(-Math.PI / 2);
 
     _tagAt.set(x, 0.35 + t.height + 0.55, z).project(world.camera);

@@ -215,8 +215,23 @@ Three things it has to get right:
   half. A hold is a thing a finger does, not a thing happening in the world.
 
 **The feedback is ON THE TOWER**, all of it. A ring sweeps clockwise round the
-cell as the hold fills, with a dark track behind the empty part, and the word
-and the price sit over the tower on a translucent pill. Selling it makes it come
+cell as the hold fills, with the unfilled part behind it, and the word and the
+price sit over the tower on a translucent pill.
+
+**The ring is DEEP RED**, and it is the only red in the interface. Selling is
+the one destructive thing a player can do on a board — the only action that
+takes something away — so it gets a colour nothing else uses. Deep rather than
+bright: a signal-red ring on a cartoon green board reads as an error message,
+and this is a choice, not a mistake. The sparks AFTERWARDS are still gold: red
+while you can still let go, gold once you have been paid.
+
+Two things about drawing it that are only obvious once it is wrong. It sweeps
+from the NEAR edge, because twelve o'clock on a ring lying on the ground is the
+far side — directly behind the hero, who is standing on the tower, so the first
+third of the sweep happened where nobody could see it. And the unfilled part has
+to be carried at a fairly high opacity to stay red at all: under about a half,
+green grass pulls a dark red olive and the two halves stop looking like one
+ring. Selling it makes it come
 APART — it sinks, shrinks and fades while sparks lift off the cell — because a
 thing that blinks out on the frame a button fires reads as a glitch rather than
 as a transaction.
