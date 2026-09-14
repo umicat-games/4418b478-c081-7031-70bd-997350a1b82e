@@ -36,7 +36,7 @@ to the host. Each half tears its own scene down before handing over.
 | `src/progress.ts` | drops, materials, the level curve — all of it arithmetic |
 | `src/vfx.ts` | short-lived visual things, and the one loop that owns them |
 | `src/main.ts` | the level engine: towers, the hero, crates, the frame loop |
-| `src/hub.ts` | the hub: weapons on pedestals, the leaderboard sign, the door |
+| `src/hub.ts` | the hub: the weapon rack, the town plots, the door |
 | `src/audio.ts` | this game's clip table and the two music tracks |
 | `src/loading.ts` | the loading screen between scenes |
 | `tools/gen-scene.mjs` | **generates** `public/scenes3d/*.json` — `npm run scene` |
@@ -501,6 +501,18 @@ radial gradient built at `(px, py)` and then `translate(px, py)`-ed lands at
 twice the distance, outside the circle being filled, so every blob painted its
 outermost stop — which was transparent. The whole sky drew, without error, and
 produced a clean gradient with nothing in it.
+
+## What the hub no longer has
+
+**No leaderboard.** It ranked runs by the wave reached — one number out of a
+game that has four boards, five weapons, a village and a player level, and no
+honest way to say which run was better. It cost a sign to walk to, a panel, a
+`gameData` key, a submit on every run and a section of `verify-3d-hub`, and
+paid for none of it. The probe checks it is GONE rather than that it works.
+
+**No greeting.** "Welcome, <name>" was the first thing on screen every single
+time. A line that tells you something you already knew is a line you stop
+reading, and it takes the line beside it — the purse — down with it.
 
 ## The town
 
@@ -1055,7 +1067,7 @@ standing still in exactly the case the option exists for.
 - **The platform's touch layer is full-screen at z-index 10.** Anything the game
   draws on top of it needs to say so, and `input.setEnabled(false)` before a
   modal. This has bitten FIVE times: the attack button under the jump button, Play
-  Again, the HUD under the controls, the leaderboard panel, and the hotbar —
+  Again, the HUD under the controls, the board-list panel, and the hotbar —
   which wrapped to two rows when the smithy took it from four cells to seven,
   became a block over the left half of a portrait phone, and made the game
   unplayable because the thumbstick was underneath it. The row is

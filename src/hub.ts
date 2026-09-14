@@ -27,8 +27,8 @@ import { hideLoading } from './loading';
 /**
  * The hub — where a run starts, and where it is scored.
  *
- * Small, walled, and quiet: a door at the far end, a sign that shows the
- * leaderboard, the game's name in blocks, and some scenery. Walking into the
+ * Small, walled, and quiet: a door at the far end, the game's name in blocks,
+ * and some scenery. Walking into the
  * door resolves, and the level takes over the same renderer.
  *
  * It shares the character, the controls and the camera with the level — the
@@ -49,55 +49,7 @@ import { hideLoading } from './loading';
  *  list, and the choosing happens there. */
 const DOOR_AT = { x: 0, z: -5.1 };
 const DOOR_HALF_WIDTH = 0.7;
-const SIGN_AT = { x: 0, z: 3.6 };
 const NEAR = 0.9;             // how close counts as "standing at" something
-const LEADERBOARD_KEY = 'leaderboard';
-const LEADERBOARD_MAX = 10;
-
-export interface LeaderboardEntry { name: string; wave: number; at: number; }
-
-/** Read the shared board. Public data — an anonymous player sees it too. */
-export async function readLeaderboard(umicat: Shared['umicat']): Promise<LeaderboardEntry[]> {
-  const raw = await umicat.gameData.get<LeaderboardEntry[]>(LEADERBOARD_KEY);
-  return Array.isArray(raw) ? raw : [];
-}
-
-/**
- * Add a result, keeping the top ten.
- *
- * `gameData` stores one opaque value per key and enforces nothing INSIDE it,
- * so the read-modify-write loop is ours: merge, sort, truncate, and write with
- * `ifVersion` so a concurrent finish cannot be silently lost. Writing needs a
- * signed-in player; a guest run simply is not recorded.
- */
-export async function submitScore(umicat: Shared['umicat'], wave: number): Promise<void> {
-  const name = umicat.user?.name;
-  if (!name) return;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const current = await umicat.gameData.get<LeaderboardEntry[]>(LEADERBOARD_KEY);
-    const list = Array.isArray(current) ? [...current] : [];
-    const mine = list.find((e) => e.name === name);
-    if (mine) {
-      if (mine.wave >= wave) return;         // already better; nothing to write
-      mine.wave = wave; mine.at = Date.now();
-    } else {
-      list.push({ name, wave, at: Date.now() });
-    }
-    list.sort((a, b) => b.wave - a.wave || a.at - b.at);
-    try {
-      await umicat.gameData.set(LEADERBOARD_KEY, list.slice(0, LEADERBOARD_MAX));
-      return;
-    } catch {
-      // Someone else finished a run in the same moment. Re-read and redo —
-      // last-write-wins would quietly drop their score.
-    }
-  }
-}
-
-/** Where each weapon sits, and what it looks like. The bow and the staff have
- *  no models anywhere in the asset library, so both are built — see
- *  `makeBow`/`makeStaff` in the level, which this mirrors deliberately: the
- *  thing on the pedestal has to be the thing you end up holding. */
 /** The rack in front of the Armory. Five pedestals, in the order they cost.
  *
  *  They used to arrive on a schedule — sword at zero finished levels, bow at
@@ -143,7 +95,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   });
 
   const hero = world.entities.get('hero')!;
-  const marker = world.entities.get('sign_marker')!;
   shared.audio.setMusic(MUSIC.lobby);
 
   // No prefetching the level here. It would mean naming, from the hub, which
@@ -416,18 +367,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
   // --- HUD ---
   hudEl.textContent = '';
-  const title = document.createElement('div');
-  title.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
-  title.textContent = umicat.user ? `Welcome, ${umicat.user.name}` : 'Playing as a guest';
-  // A greeting, not a readout. It goes away — and then it gets out of the way.
-  // Fading to `opacity: 0` leaves the row occupying its full height, which was
-  // invisible when the HUD was bare text and is a permanent blank stripe now
-  // that the readout sits on a plate.
-  title.style.transition = 'opacity .8s';
-  setTimeout(() => {
-    title.style.opacity = '0';
-    setTimeout(() => { title.style.display = 'none'; }, 900);
-  }, 5000);
   const purse = document.createElement('div');
   purse.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
   const renderPurse = (): void => {
@@ -445,13 +384,17 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   renderPurse();
   // Same plate as a level's readout: this is the same white text in the same
   // corner over the same sky.
-  hudEl.append(readoutPlate(title, purse));
+  //
+  // No greeting. "Welcome, <name>" was the first thing on screen every single
+  // time, and a line that says nothing you did not know is a line you stop
+  // reading — which makes the one beside it, the purse, easier to miss too.
+  hudEl.append(readoutPlate(purse));
 
   // There is no "NEW ·" banner any more. It announced the weapon the finished
   // level had handed over, and nothing is handed over now — what is waiting on
   // the rack is what you decide to pay for.
 
-  // The leaderboard panel. Above the controls layer, for the reason every
+  // The board list. Above the controls layer, for the reason every
   // other panel in this game is: they are a full-screen layer at z-index 10.
   const panel = document.createElement('div');
   panel.style.cssText = `
@@ -520,8 +463,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   /** `lines` and `action` are HTML, because prices and materials carry ICONS
    *  now and an icon is an element. Everything that reaches this is authored
    *  here — building names, weapon names, prices — and player text must never
-   *  be routed through it. (The leaderboard, which does show player names, is
-   *  `openPanel` and escapes them.) */
+   *  be routed through it — nothing in this hub shows player text at all now
+   *  that the leaderboard is gone, and that is the reason this is safe. */
   const showCard = (title: string, lines: string[], action?: string,
                     glyph?: IconName): void => {
     card.innerHTML = '';
@@ -605,25 +548,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     }
   };
 
-  const openPanel = async (): Promise<void> => {
-    panelOpen = true;
-    input.setEnabled(false);
-    panel.style.display = 'block';
-    panel.innerHTML = '<div style="font:700 17px/1.6 system-ui">Leaderboard</div><div>Loading…</div>';
-    let rows: LeaderboardEntry[] = [];
-    try { rows = await readLeaderboard(umicat); } catch { /* offline is not a crash */ }
-    const body = rows.length
-      ? rows.map((e, i) => `<div style="display:flex;gap:12px;justify-content:space-between">
-           <span style="opacity:.6;width:1.4em">${i + 1}</span>
-           <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.name)}</span>
-           <span>wave ${e.wave}</span></div>`).join('')
-      : '<div style="opacity:.7">Nobody has finished a run yet.</div>';
-    panel.innerHTML =
-      `<div style="font:700 17px/1.6 system-ui">Leaderboard</div>${body}` +
-      `<button style="margin-top:14px;padding:8px 18px;border:0;border-radius:999px;
-        font:700 14px system-ui;background:#fff;color:#222;cursor:pointer">Close</button>`;
-    panel.querySelector('button')!.onclick = closePanel;
-  };
 
   // Built, placed and about to render: the next frame is a real one.
   hideLoading();
@@ -649,9 +573,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       character.faceTowards(hero, dir, dt);
       animator.update(character.state);
 
-      // The sign: the same ring the level uses for a build spot, because it
-      // means the same thing — stand here and the action button does something.
-      const atSign = Math.hypot(hero.position.x - SIGN_AT.x, hero.position.z - SIGN_AT.z) < NEAR;
       // Close to a doorway, not through it: the prompt is what tells a new
       // player the door is a door before they walk into it, and which board is
       // behind it.
@@ -666,7 +587,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
       const nearDoor = hero.position.z < DOOR_AT.z + 1.7
         && Math.abs(hero.position.x - DOOR_AT.x) < 1.6;
-      marker.visible = atSign && !panelOpen;
 
       // Which weapon you are standing at, if any.
       let atPickup: typeof RACK[number] | null = null;
@@ -765,9 +685,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       } else if (atPickup) {
         rackCard(atPickup.id);
         placeCard(atPickup.x, 1.1, atPickup.z);
-      } else if (atSign) {
-        showCard('Leaderboard', ['Best runs, by board'], `${iconHtml('build')} read`, 'award');
-        placeCard(SIGN_AT.x, 1.6, SIGN_AT.z);
       } else if (nearDoor) {
         showCard('The road out', ['Choose which board to take'], 'walk through', 'gate');
         placeCard(DOOR_AT.x, 2.0, DOOR_AT.z);
@@ -816,9 +733,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           } else {
             audio.play('denied');
           }
-        } else if (atSign) {
-          audio.play('build');
-          void openPanel();
         }
       }
 
@@ -859,7 +773,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     });
 
     Object.assign(window as unknown as Record<string, unknown>, {
-      __hub: { world, character, input, hero, openPanel, weapon: () => weapon,
+      __hub: { world, character, input, hero, weapon: () => weapon,
                /** The save API itself, so a probe can put the game into a state
                 *  a player would take several runs to reach — through the same
                 *  door the game uses, rather than by guessing at how the SDK
@@ -878,9 +792,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                 *  objects by name finds nothing once they are merged, which is
                 *  the merge working. */
                merged: () => folded,
-               /** Where the leaderboard sign is. A probe should ask rather than
-                *  carry a coordinate that moves when the hub is re-laid. */
-               signAt: () => ({ ...SIGN_AT }),
                coin: () => store.gold,
                store: () => ({ ...store }),
                level: () => level,

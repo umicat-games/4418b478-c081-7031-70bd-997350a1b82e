@@ -673,7 +673,7 @@ for (const def of LEVELS) {
 // The hub: where a run starts.
 //
 // Smaller than the board, with a door at the far end, a sign that shows the
-// leaderboard, and the game's name built out of cubes. Same generator because
+// the game's name built out of cubes. Same generator because
 // it is the same kind of data — a grid of tiles and a handful of props.
 
 /** A 5x7 blocky font, in the only letters "BALABOO" needs.
@@ -909,16 +909,6 @@ function buildHub() {
     });
   }
 
-  // The sign, and the ring that says you can do something here.
-  ents.push({
-    id: 'sign', name: 'sign', modelAssetId: 'hub-sign',
-    transform: { position: { x: 0, y: GROUND_Y, z: 3.6 } },
-  });
-  ents.push({
-    id: 'sign_marker', name: 'sign_marker', modelAssetId: 'td-selection',
-    transform: { position: { x: 0, y: GROUND_Y + 0.02, z: 3.6 } },
-    visible: false,
-  });
 
   ents.push(...titleEntities(0, 1.35, -HALF - 0.3));
 

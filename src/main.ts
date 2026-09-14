@@ -9,7 +9,7 @@ import {
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { createAudio, MUSIC, SFX } from './audio';
-import { runHub, submitScore } from './hub';
+import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
@@ -2167,7 +2167,6 @@ export async function startLevel(
     if (reached > bestWave) bestWave = reached;
     // The shared board. A guest run is not recorded — writing needs a signed-in
     // player — and that is handled inside rather than being a caller's problem.
-    void submitScore(umicat, reached);
     void showSummary(didWin, reached);
   };
 

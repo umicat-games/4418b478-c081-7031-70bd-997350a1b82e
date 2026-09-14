@@ -27474,31 +27474,6 @@
       }
     },
     {
-      "id": "sign",
-      "name": "sign",
-      "modelAssetId": "hub-sign",
-      "transform": {
-        "position": {
-          "x": 0,
-          "y": 0,
-          "z": 3.6
-        }
-      }
-    },
-    {
-      "id": "sign_marker",
-      "name": "sign_marker",
-      "modelAssetId": "td-selection",
-      "transform": {
-        "position": {
-          "x": 0,
-          "y": 0.02,
-          "z": 3.6
-        }
-      },
-      "visible": false
-    },
-    {
       "id": "title_0_0_0",
       "name": "title",
       "primitive": {
