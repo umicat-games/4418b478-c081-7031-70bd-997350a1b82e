@@ -358,6 +358,12 @@ interface Enemy {
 
 interface Tower {
   kind: TowerKind;
+  /** Everything ever spent on this one, build and every upgrade. The refund is
+   *  a share of THIS, not of the build price — refunding the base cost of a
+   *  Lv4 tower is a punishment nobody takes, and then "sell it and put
+   *  something better here" is a feature that exists and never gets used, which
+   *  is the exact thing it was added for. */
+  invested: number;
   /** The whole tower: masonry plus the weapon. Sits on the cell and never
    *  turns — only the weapon on top does. A rotating stone base reads as the
    *  ground moving. */
@@ -393,6 +399,25 @@ const levelDamage = (t: Tower): number => t.kind.damage * DAMAGE_BY_LEVEL[t.leve
 const levelRange = (t: Tower): number => t.kind.range * RANGE_BY_LEVEL[t.level - 1];
 const levelReload = (t: Tower): number => t.kind.reload * RELOAD_BY_LEVEL[t.level - 1];
 const upgradeCost = (t: Tower): number => Math.round(t.kind.cost * 0.8 * t.level);
+
+/** What selling one hands back: 60% of everything put in.
+ *
+ *  Enough that moving a tower is a real option late in a board, and short
+ *  enough of the whole that where you put it still matters. A Lv4 ballista is
+ *  145g in and 87g out. What binds on this board is the tower CAP rather than
+ *  the gold, so selling is mostly about freeing a slot and a position — which
+ *  is also why it must be quick to do, and why it is a hold rather than a
+ *  dialogue box. */
+const SELL_SHARE = 0.6;
+const sellValue = (t: Tower): number => Math.round(t.invested * SELL_SHARE);
+
+/** How long the build button has to be held, in REAL seconds.
+ *
+ *  Real, not game, time. `dt` is clamped at 0.05 so a slow scene runs the
+ *  simulation in slow motion, and a hold is an interaction with a finger rather
+ *  than a thing happening in the world — a player on a struggling phone should
+ *  not have to hold the button for a second and a half. */
+const SELL_HOLD_MS = 600;
 
 interface Shot {
   obj: THREE.Object3D;
@@ -966,6 +991,13 @@ export async function startLevel(
   let buildCell: [number, number] | null = null;
   /** The tower under the player's feet, if any — the thing `build` upgrades. */
   let standingOn: Tower | null = null;
+  /** The tower currently shrinking under a sell-hold, so it can be put back the
+   *  frame the thumb comes off — including the frame it is sold, when
+   *  `standingOn` has already been cleared. */
+  let sellHeld: Tower | null = null;
+  /** The last bar length drawn, so a filling hold redraws and a still one does
+   *  not. */
+  let sellShown = 0;
 
   interface Crate { obj: THREE.Object3D; t: number; hp: number; cell: [number, number]; rare: boolean; }
   /** At most one at a time: two stacked effects is a state nobody can read off
@@ -1093,6 +1125,9 @@ export async function startLevel(
   const line2 = document.createElement('div');
   const line3 = document.createElement('div');
   line3.style.opacity = '0.85';
+  // The prompt carries two lines when a tower is under you. A `\n` in
+  // `textContent` is whitespace and nothing else without this.
+  line3.style.whiteSpace = 'pre-line';
   // Gold lives in its own element because a coin flying to the counter needs a
   // rectangle to aim at, and "somewhere in that line of text" is not one.
   const buffEl = document.createElement('span');
@@ -1735,9 +1770,17 @@ export async function startLevel(
     // sentence nobody reads twice and everybody looks past.
     if (standingOn) {
       const t = standingOn;
-      line3.textContent = t.level >= MAX_LEVEL
+      const up = t.level >= MAX_LEVEL
         ? `${t.kind.label} Lv${MAX_LEVEL} · max`
         : `🔨 Lv${t.level + 1} · ${upgradeCost(t)}g`;
+      // Two lines, because there are two verbs on the one button and the
+      // second one is the one nobody would find by pressing things. A hold is
+      // invisible until it is named, and the prompt line is where this game
+      // already teaches — it is the only text on screen and it is only there
+      // when the button does something.
+      const k = sellProgress();
+      const bar = k > 0 ? ` ${'█'.repeat(Math.round(k * 6)).padEnd(6, '░')}` : '';
+      line3.textContent = `${up}\n↩ hold to sell${bar} · +${sellValue(t)}g`;
     } else if (atCrate) {
       line3.textContent = '⚔ break open';
     } else if (buildCell) {
@@ -1907,6 +1950,77 @@ export async function startLevel(
    *  already has four, to do something you can only ever do in one place —
    *  standing on the tower. Where you are IS the selection in this game; that
    *  is the whole difference from a tower defense you play with a cursor. */
+  /** One button, two verbs: tap to build or upgrade, HOLD to sell.
+   *
+   *  `consume()` fires on the PRESS, so wiring the hold naively means a long
+   *  press upgrades the tower on the way to selling it — you pay forty gold and
+   *  then get sixty per cent of a bigger number back, which is a net loss
+   *  disguised as a feature. So the press is only REMEMBERED here, and what it
+   *  meant is decided on release or when the hold fills.
+   *
+   *  It still has to go through `consume()` rather than reading `held()` alone.
+   *  A press that begins and ends between two frames never appears in the held
+   *  set at all — that is the whole reason the latch exists — and on a phone
+   *  rendering at eight frames a second that is a perfectly ordinary tap. */
+  let pressPending = false;
+  let pressAt = 0;
+  const readBuildButton = (): void => {
+    if (input.consume('build')) { pressPending = true; pressAt = performance.now(); }
+    if (!pressPending) return;
+    const down = input.held('build');
+    const heldMs = performance.now() - pressAt;
+
+    if (standingOn && down && heldMs >= SELL_HOLD_MS) {
+      sellTower(standingOn);
+      pressPending = false;
+      return;
+    }
+    // Released. A long press that was let go early is just a slow tap.
+    if (!down) {
+      pressPending = false;
+      tryBuild();
+    }
+  };
+
+  /** How far through a sell-hold we are, 0 to 1, or 0 when nothing is being
+   *  held. The HUD and the tower both read it — the feedback belongs on the
+   *  thing being sold, not on the finger doing it. */
+  const sellProgress = (): number => {
+    if (!pressPending || !standingOn || !input.held('build')) return 0;
+    return Math.min(1, (performance.now() - pressAt) / SELL_HOLD_MS);
+  };
+
+  /** Take a tower down and hand back a share of what it cost.
+   *
+   *  There is no confirmation box. The HOLD is the confirmation: six hundred
+   *  milliseconds is not something a thumb does by accident, and letting go
+   *  before the ring fills cancels it — which is safer than a dialogue, where
+   *  the wrong button is one tap away either way.
+   *
+   *  A dialogue would also be worst exactly when you want to sell. You sell
+   *  late in a board, with a wave already walking, and a modal has to disable
+   *  the touch layer and cover the field while the enemies keep coming.
+   */
+  const sellTower = (t: Tower): void => {
+    if (!running) return;
+    const paid = sellValue(t);
+    gold += paid;
+    world.scene.remove(t.obj);
+    const ti = tinted.indexOf(t.obj);
+    if (ti >= 0) tinted.splice(ti, 1);
+    const i = towers.indexOf(t);
+    if (i >= 0) towers.splice(i, 1);
+    occupied.delete(`${t.cell[0]},${t.cell[1]}`);
+    // Standing where it was is now standing on a build spot, and the prompt has
+    // to say so on the same frame — otherwise the line still offers an upgrade
+    // for a tower that is not there.
+    if (standingOn === t) standingOn = null;
+    updraft(new THREE.Vector3(t.cell[0], 0.5, t.cell[1]));
+    audio.play('coin');
+    flashBanner(`Sold ${t.kind.label} · +${paid}g`);
+    renderHud();
+  };
+
   const tryBuild = (): void => {
     if (!running) return;
 
@@ -1916,6 +2030,7 @@ export async function startLevel(
       const cost = upgradeCost(t);
       if (gold < cost) { audio.play('denied'); flashBanner(`Upgrade costs ${cost}g`); return; }
       gold -= cost;
+      t.invested += cost;
       t.level += 1;
       // A section of masonry, not a bigger copy of the same thing. Scaling the
       // whole tower up made a levelled one legible across the board, which was
@@ -1947,6 +2062,7 @@ export async function startLevel(
     const tower: Tower = {
       kind, obj, mount, height: 0,
       cell: [...buildCell] as [number, number], reload: 0, level: 1,
+      invested: kind.cost,
     };
     raiseTower(tower);
     towers.push(tower);
@@ -2233,9 +2349,20 @@ export async function startLevel(
 
     if (running) {
       if (input.consume('attack')) heroAttack();
-      if (input.consume('build')) tryBuild();
+      readBuildButton();
       if (invincible > 0) invincible -= dt;
       if (staffCooldown > 0) staffCooldown -= dt;
+
+      // The tower being sold is what shows the hold — not the button, which is
+      // on the platform's control layer and under the player's own thumb. It
+      // sinks and pales as the hold fills, so letting go is visibly "it came
+      // back".
+      if (sellHeld && sellHeld !== standingOn) { sellHeld.obj.scale.setScalar(1); sellHeld = null; }
+      const k = sellProgress();
+      if (standingOn) {
+        if (k > 0) { sellHeld = standingOn; standingOn.obj.scale.setScalar(1 - k * 0.22); }
+        else if (sellHeld) { sellHeld.obj.scale.setScalar(1); sellHeld = null; }
+      }
 
       // --- what the bow and the staff are pointed at ---
       lockTarget = null;
@@ -2296,7 +2423,12 @@ export async function startLevel(
       const nearCrate = crates.some((c) =>
         c.hp > 0 && Math.hypot(c.obj.position.x - hero.position.x, c.obj.position.z - hero.position.z) < 1.0);
       const changed = before !== `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`
-        || nearCrate !== atCrate;
+        || nearCrate !== atCrate
+        // The sell bar fills over six hundred milliseconds, and the HUD is only
+        // rebuilt when what is under your feet changes — so without this the
+        // bar would be drawn once, empty, and never again.
+        || sellShown !== Math.round(sellProgress() * 6);
+      sellShown = Math.round(sellProgress() * 6);
       atCrate = nearCrate;
       if (changed) renderHud();
 
@@ -2840,6 +2972,15 @@ export async function startLevel(
                       standingOn: standingOn ? { kind: standingOn.kind.id, level: standingOn.level } : null,
                       towers: towers.map((t) => ({ kind: t.kind.id, level: t.level, cell: t.cell })) }),
       build: () => tryBuild(),
+      /** Sell whatever is under the hero, and what it is worth before you do —
+       *  so a probe can check the arithmetic without having to hold a button
+       *  for six hundred milliseconds of wall-clock. The HOLD is checked
+       *  separately, through the real input, because that is the part a player
+       *  actually touches. */
+      sell: () => { if (standingOn) sellTower(standingOn); },
+      sellValue: () => (standingOn ? sellValue(standingOn) : null),
+      invested: () => (standingOn ? standingOn.invested : null),
+      sellProgress: () => sellProgress(),
       locomotion: () => animator.action || character.state,
     } as unknown,
   });

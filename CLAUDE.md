@@ -168,6 +168,47 @@ Spire). The reason to want one is reach: the corner two ground weapons cannot
 cover between them. A mount you have not unlocked is not a greyed-out cell, it
 is not in the hotbar at all.
 
+**A tower can be taken down again**, for 60% of everything put into it — build
+price and every upgrade. Not 60% of the base cost: refunding only that would
+make selling a levelled tower a punishment nobody takes, and then "sell it and
+put something better here" is a feature that exists and never gets used, which
+is the exact thing it was added for.
+
+**Hold the build button to sell. There is no confirmation box.** The HOLD is
+the confirmation — six hundred milliseconds is not something a thumb does by
+accident, and letting go before the bar fills cancels, which is safer than a
+dialogue where the wrong answer is one tap away either way. A dialogue would
+also be worst exactly when you sell: late in a board, with a wave already
+walking, and a modal has to disable the touch layer and cover the field while
+the enemies keep coming. It would also be a THIRD button on a control layer
+this game has already drawn over five times.
+
+Three things it has to get right:
+
+- **`consume()` fires on the PRESS.** Wiring a hold onto it naively means a
+  long press upgrades the tower on the way to selling it — you pay the upgrade
+  and get 60% of a bigger number back, a net loss dressed up as a feature. The
+  press is only REMEMBERED; what it meant is decided on release, or when the
+  hold fills.
+- **It still has to go through `consume()` rather than `held()` alone.** A press
+  that begins and ends between two frames never appears in the held set — that
+  is what the latch is for — and on a phone at eight frames a second that is an
+  ordinary tap.
+- **The hold is measured in REAL time, not game time.** `dt` is clamped at 0.05,
+  so a struggling phone would otherwise want the button held for a second and a
+  half. A hold is a thing a finger does, not a thing happening in the world.
+
+The feedback is on the TOWER, not the button: it sinks and pales as the hold
+fills, so letting go visibly puts it back. The button is under the player's own
+thumb and belongs to the platform's control layer. The prompt line grows a
+second row (`↩ hold to sell · +87g`) because a hold is invisible until it is
+named, and that line is where this game already teaches. Desktop gets `X`,
+because holding a KEY reads as a stuck key rather than a gesture.
+
+What actually binds on a board is the tower CAP, not the gold — so selling is
+mostly about freeing a slot and a position, which is another reason it has to
+be quick.
+
 **Towers are capped** per board (`maxTowers`, 12–14) and go to **level 4**.
 Without a cap the game had exactly one strategy: buy the cheapest tower forever.
 A ballista is 25g for 2 damage a second and its first upgrade is 20g for 1.4
@@ -798,7 +839,7 @@ doors, the ice), `verify-3d-lanes` (the fork, the gates, the boss),
 `verify-3d-audio-engines`, `verify-3d-jump-touch`, `verify-3d-balance`,
 `verify-3d-town`, `verify-3d-armory` (forging, the Armory cap, and that a save
 from before it keeps the weapons it had earned), `verify-3d-dev`,
-`verify-3d-staff-audio`, `verify-3d-elements`.
+`verify-3d-staff-audio`, `verify-3d-elements`, `verify-3d-sell`.
 
 `verify-3d-staff-audio` does not ask whether `play()` was called — that passes
 for a clip that 404s, and a missing audio file is silent with no error at all.
