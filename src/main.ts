@@ -17,6 +17,7 @@ import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
 import { skyWithClouds } from './sky';
+import { icon, setIconText, iconHtml, type IconName } from './icons';
 import { createThumbMaker } from './thumbs';
 import { ICON, WEAPON_ICON } from './icons';
 import {
@@ -256,21 +257,19 @@ interface BuffKind {
   label: string;
   /** What sits in the HUD for twenty seconds. An icon and a countdown — the
    *  full sentence there pushed the readout off a phone's screen. */
-  badge: string;
+  badge: IconName;
 }
 const BUFFS: BuffKind[] = [
-  { id: 'strike', label: '⚔ Double strike', badge: '⚔' },
-  { id: 'lucky', label: '💰 Lucky — richer bounties', badge: '💰' },
-  { id: 'shield', label: '🛡 Shielded', badge: '🛡' },
-  { id: 'overdrive', label: '⚡ Overdrive — towers reload faster', badge: '⚡' },
+  { id: 'strike', label: 'Double strike', badge: 'sword' },
+  { id: 'lucky', label: 'Lucky — richer bounties', badge: 'coin' },
+  { id: 'shield', label: 'Shielded', badge: 'shield' },
+  { id: 'overdrive', label: 'Overdrive — towers reload faster', badge: 'bolt' },
 ];
 
 // --- towers ---------------------------------------------------------------
 interface TowerKind {
   id: string;
   label: string;
-  /** Shown in the hotbar. */
-  icon: string;
   model: string;
   ammo: string;
   cost: number;
@@ -303,27 +302,27 @@ interface TowerKind {
 const TOWERS: TowerKind[] = [
   // On the ground. What you have from the first run, and what most of a board
   // gets built out of.
-  { id: 'ballista', label: 'Ballista', icon: '🏹', model: 'td-ballista', ammo: 'td-ammo-arrow',
+  { id: 'ballista', label: 'Ballista', model: 'td-ballista', ammo: 'td-ammo-arrow',
     cost: 25, range: 3.0, damage: 2, reload: 1.0, shotSpeed: 9, mount: 'ground' },
-  { id: 'cannon', label: 'Cannon', icon: '💣', model: 'td-cannon', ammo: 'td-ammo-ball',
+  { id: 'cannon', label: 'Cannon', model: 'td-cannon', ammo: 'td-ammo-ball',
     cost: 45, range: 2.2, damage: 5, reload: 2.0, shotSpeed: 7, mount: 'ground' },
-  { id: 'catapult', label: 'Catapult', icon: '🪨', model: 'td-catapult', ammo: 'td-ammo-boulder',
+  { id: 'catapult', label: 'Catapult', model: 'td-catapult', ammo: 'td-ammo-boulder',
     cost: 60, range: 4.2, damage: 7, reload: 3.0, shotSpeed: 5, mount: 'ground' },
-  { id: 'turret', label: 'Turret', icon: '⚙️', model: 'td-turret', ammo: 'td-ammo-arrow',
+  { id: 'turret', label: 'Turret', model: 'td-turret', ammo: 'td-ammo-arrow',
     cost: 40, range: 2.6, damage: 1, reload: 0.28, shotSpeed: 12, mount: 'ground' },
 
   // On a tower. Bought at the smithy, one per level of it, and priced so that
   // one of these is three or four of the things above — the reason to want one
   // is REACH, for a corner two ground weapons cannot cover between them.
-  { id: 'watchtower', label: 'Watchtower', icon: '🗼', model: 'td-ballista', ammo: 'td-ammo-arrow',
+  { id: 'watchtower', label: 'Watchtower', model: 'td-ballista', ammo: 'td-ammo-arrow',
     cost: 120, range: 5.0, damage: 4, reload: 0.9, shotSpeed: 11,
     mount: 'tower', needsSmithy: 1,
     stack: ['td-tower-square-bottom-a', 'td-tower-square-middle-a', 'td-tower-square-top-a'] },
-  { id: 'bastion', label: 'Bastion', icon: '🏰', model: 'td-cannon', ammo: 'td-ammo-ball',
+  { id: 'bastion', label: 'Bastion', model: 'td-cannon', ammo: 'td-ammo-ball',
     cost: 190, range: 4.0, damage: 12, reload: 1.9, shotSpeed: 8,
     mount: 'tower', needsSmithy: 2,
     stack: ['td-tower-square-bottom-b', 'td-tower-square-middle-b', 'td-tower-square-top-b'] },
-  { id: 'spire', label: 'Spire', icon: '🔮', model: 'td-turret', ammo: 'td-ammo-arrow',
+  { id: 'spire', label: 'Spire', model: 'td-turret', ammo: 'td-ammo-arrow',
     cost: 220, range: 4.4, damage: 2.2, reload: 0.26, shotSpeed: 13,
     mount: 'tower', needsSmithy: 3,
     stack: ['td-tower-round-bottom-a', 'td-tower-round-middle-a', 'td-tower-round-top-a'] },
@@ -1298,7 +1297,10 @@ export async function startLevel(
   // invisible from the code.
   line2.append(livesEl, goldEl, waveEl, towerEl, buffEl);
   const muteBtn = document.createElement('button');
-  muteBtn.textContent = '🔊';
+  const showMute = (): void => {
+    muteBtn.textContent = '';
+    muteBtn.append(icon(audio.isMuted ? 'audioOff' : 'audioOn', '17px'));
+  };
   muteBtn.style.cssText = `
     margin-top: 8px; width: 34px; height: 34px; border-radius: 17px; border: 0;
     background: rgba(0,0,0,.35); color: #fff; font-size: 15px; cursor: pointer;
@@ -1306,8 +1308,12 @@ export async function startLevel(
   `;
   muteBtn.onclick = () => {
     audio.setMuted(!audio.isMuted);
-    muteBtn.textContent = audio.isMuted ? '🔇' : '🔊';
+    showMute();
   };
+  // And once now. A `showX` that only runs on click leaves the button empty
+  // until the first press — which is exactly as visible as a button that does
+  // not work, and exactly as silent.
+  showMute();
   const qualityBtn = document.createElement('button');
   qualityBtn.style.cssText = muteBtn.style.cssText + 'width: auto; padding: 0 11px; margin-left: 6px;';
   const labelQuality = (): void => { qualityBtn.textContent = QUALITY[quality].name; };
@@ -1692,7 +1698,7 @@ export async function startLevel(
         const pool = BUFFS.filter((k) => k.id !== buff?.kind.id);
         const kind = pool[Math.floor(Math.random() * pool.length)];
         buff = { kind, left: BUFF_SECONDS };
-        flashBanner(kind.label);
+        flashBanner(kind.label, kind.badge);
         audio.play('win');
         flashTint(hero, { color: 0xffd45e, ms: 500 });
         renderHud();
@@ -1768,7 +1774,7 @@ export async function startLevel(
             setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
           }
           audio.play('coin');
-          flashBanner(`${MATERIAL_ICON[q.kind]} +${q.amount}`);
+              flashBanner(`+${q.amount}`, MATERIAL_ICON[q.kind]);
         }
         renderHud();
         world.scene.remove(q.obj);
@@ -1991,6 +1997,17 @@ export async function startLevel(
     if (n >= 1 && n <= KINDS.length) { selected = n - 1; refreshHotbar(); renderHud(); }
   });
 
+  /** The one line of prompt, as a shape and some words. */
+  const prompt = (glyph: IconName | null, text: string): void => {
+    line3.textContent = '';
+    if (glyph) line3.append(icon(glyph, HUD_ICON));
+    line3.append(document.createTextNode(text));
+  };
+
+  /** Icons in the HUD run a little larger than the text beside them. A
+   *  silhouette needs more room than a letter of the same nominal size. */
+  const HUD_ICON = '1.25em';
+
   const renderHud = (): void => {
     const frac = Math.max(0, heroHp) / heroMaxHp;
     hpFill.style.width = `${(frac * 100).toFixed(1)}%`;
@@ -1999,11 +2016,22 @@ export async function startLevel(
     hpFill.style.background = frac > 0.55 ? '#5fd36a' : frac > 0.28 ? '#f0b429' : '#ef4b4b';
     hpText.textContent = `${Math.max(0, Math.ceil(heroHp))}/${heroMaxHp}`;
     const w = Math.min(waveIndex + 1, WAVES.length);
-    livesEl.textContent = `🏰 ${lives}\u2003`;
-    goldEl.textContent = `💰 ${gold}`;
+    // Shapes, and the base's own MAXIMUM alongside it. `10` on its own does not
+    // say whether it is climbing or falling, and this is the number the run
+    // ends on — it was quieter than the gold beside it.
+    // 1.25em, not 1em. A silhouette needs more room than a letter of the same
+    // nominal size — at 1em the tower's rook read as a small white square.
+    setIconText(livesEl, 'house', ` ${lives}/${level.lives}\u2003`, HUD_ICON);
+    setIconText(goldEl, 'coin', ` ${gold}`, HUD_ICON);
     waveEl.textContent = `\u2003Wave ${w}/${WAVES.length}`;
-    towerEl.textContent = `\u2003🗼 ${towers.length}/${maxTowers}`;
-    buffEl.textContent = buff ? `\u2003${buff.kind.badge} ${Math.ceil(buff.left)}s` : '';
+    setIconText(towerEl, 'tower', ` ${towers.length}/${maxTowers}`, HUD_ICON);
+    towerEl.style.marginLeft = '1em';
+    buffEl.textContent = '';
+    if (buff) {
+      buffEl.style.marginLeft = '1em';
+      buffEl.append(icon(buff.kind.badge, HUD_ICON),
+        document.createTextNode(` ${Math.ceil(buff.left)}s`));
+    }
     // A PROMPT, not narration. This line is empty unless the player is standing
     // somewhere the button does something, and then it is three or four words.
     // A sentence explaining the game that is on screen the whole time is a
@@ -2018,16 +2046,15 @@ export async function startLevel(
       //
       // The price still appears before you commit to it: it is on the label
       // over the tower, which shows up as soon as the hold arms.
-      line3.textContent = t.level >= MAX_LEVEL
-        ? `${t.kind.label} Lv${MAX_LEVEL} · max`
-        : `🔨 Lv${t.level + 1} · ${upgradeCost(t)}g`;
+      if (t.level >= MAX_LEVEL) prompt(null, `${t.kind.label} Lv${MAX_LEVEL} · max`);
+      else prompt('build', ` Lv${t.level + 1} · ${upgradeCost(t)}g`);
     } else if (atCrate) {
-      line3.textContent = '⚔ break open';
+      prompt('sword', ' break open');
     } else if (buildCell) {
       const kind = KINDS[selected];
-      line3.textContent = `🔨 ${kind.label} · ${kind.cost}g`;
+      prompt('build', ` ${kind.label} · ${kind.cost}g`);
     } else {
-      line3.textContent = '';
+      prompt(null, '');
     }
     refreshHotbar();
   };
@@ -2069,10 +2096,13 @@ export async function startLevel(
    */
   const teaching = level.teaches && (saveNow.cleared ?? 0) < 1;
   let startedAt = hero.position.clone();
+  /** What the teaching line last said, so it is not rebuilt sixty times a
+   *  second — an `innerHTML` write per frame re-parses the icons with it. */
+  let lastTaught: string | null = null;
   const tutorial: Tutorial | null = teaching ? createTutorial([
     {
       text: touchLikely()
-        ? '👈 Drag the left of the screen to walk'
+        ? 'Drag the left of the screen to walk'
         : 'WASD or the arrow keys to walk',
       done: () => hero.position.distanceTo(startedAt) > 2.2,
     },
@@ -2084,7 +2114,7 @@ export async function startLevel(
       gateWaves: true,
     },
     {
-      text: `🔨 Build a ${KINDS[0].label} · ${KINDS[0].cost}g`,
+      text: `${iconHtml('build')} Build a ${KINDS[0].label} · ${KINDS[0].cost}g`,
       done: () => towers.length > 0,
       gateWaves: true,
     },
@@ -2100,12 +2130,13 @@ export async function startLevel(
       expires: 45,
     },
     {
-      text: 'Stand on your tower · 🔨 upgrades it · hold 🔨 sells it',
+      text: `Stand on your tower · ${iconHtml('build')} upgrades it`
+        + ` · hold ${iconHtml('build')} sells it`,
       done: () => towers.some((t) => t.level > 1) || towers.length === 0,
       expires: 40,
     },
     {
-      text: '⚔ swings at anything close. Crates too.',
+      text: `${iconHtml('sword')} swings at anything close. Crates too.`,
       done: () => heroHits > 0,
       expires: 30,
     },
@@ -2189,9 +2220,10 @@ export async function startLevel(
     panel.style.cssText = `position: fixed; inset: 0; z-index: 80; display: flex;
       align-items: center; justify-content: center; background: rgba(8,12,16,.72);
       pointer-events: auto; font: 600 15px/1.6 system-ui, sans-serif; color: #fff;`;
-    const row = (icon: string, label: string, n: number): string =>
+    const row = (glyph: IconName, label: string, n: number): string =>
       `<div style="display:flex;justify-content:space-between;gap:18px;padding:3px 0">
-         <span style="opacity:.8">${icon} ${label}</span><span style="font-weight:800">+${n}</span></div>`;
+         <span style="opacity:.8;display:inline-flex;align-items:center;gap:7px">
+           ${iconHtml(glyph)} ${label}</span><span style="font-weight:800">+${n}</span></div>`;
     panel.innerHTML = `
       <div style="min-width:290px;max-width:86vw;background:rgba(18,22,28,.96);
                   border-radius:18px;padding:22px 24px">
@@ -2205,7 +2237,7 @@ export async function startLevel(
                     overflow:hidden;margin:6px 0 16px">
           <div id="sum-bar" style="height:100%;width:0%;background:#7cc4ff;border-radius:6px"></div>
         </div>
-        ${row('🪙', 'Gold', gold)}${row('🪵', 'Wood', earned.wood)}${row('🪨', 'Stone', earned.stone)}
+        ${row('coin', 'Gold', gold)}${row('wood', 'Wood', earned.wood)}${row('stone', 'Stone', earned.stone)}
         <button id="sum-go" style="margin-top:18px;width:100%;padding:11px 0;border:0;
           border-radius:999px;font:800 15px system-ui;background:#fff;color:#222;
           cursor:pointer">Back to the village</button>
@@ -2368,7 +2400,7 @@ export async function startLevel(
     ringVfx(vfx, new THREE.Vector3(t.cell[0], 0.05, t.cell[1]),
       { color: 0xffd76a, from: 0.3, to: 0.8, life: 0.45, opacity: 0.8 });
     audio.play('coin');
-    flashBanner(`Sold ${t.kind.label} · +${paid}g`);
+    flashBanner(`Sold ${t.kind.label} · +${paid}g`, 'coin');
     renderHud();
   };
 
@@ -2431,8 +2463,10 @@ export async function startLevel(
     padding: 8px 14px; border-radius: 999px; pointer-events: none; display: none;
   `;
   document.body.appendChild(toast);
-  function flashBanner(text: string): void {
-    toast.textContent = text;
+  function flashBanner(text: string, glyph?: IconName): void {
+    toast.textContent = '';
+    if (glyph) { toast.append(icon(glyph), document.createTextNode(' ')); }
+    toast.append(document.createTextNode(text));
     toast.style.display = 'block';
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 1400);
@@ -2637,7 +2671,7 @@ export async function startLevel(
       if (e.code !== 'Backquote' && e.code !== 'Backslash') return;
       const order = WEAPONS.map((w) => w.id);
       setWeapon(order[(order.indexOf(weapon) + 1) % order.length]);
-      flashBanner(`${kind.icon} ${kind.name.toUpperCase()}`);
+      flashBanner(kind.name.toUpperCase(), kind.icon);
     };
     window.addEventListener('keydown', devCycle);
   }
@@ -2727,7 +2761,9 @@ export async function startLevel(
         tutorial.update(realDt);
         const line = tutorial.line();
         teachEl.style.display = line ? 'block' : 'none';
-        if (line) teachEl.textContent = line;
+        // HTML, so a step can SHOW the button it is talking about. Authored
+        // here, never player text.
+        if (line !== lastTaught) { teachEl.innerHTML = line ?? ''; lastTaught = line; }
       }
 
       // The tower being sold is what shows the hold — not the button, which is

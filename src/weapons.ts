@@ -20,6 +20,7 @@
  */
 
 import type { Materials } from './progress';
+import type { IconName } from './icons';
 
 export type Weapon = 'sword' | 'bow' | 'fire' | 'ice' | 'bolt';
 
@@ -32,7 +33,8 @@ export type Status = 'burn' | 'chill' | 'chain';
 export interface WeaponKind {
   id: Weapon;
   name: string;
-  icon: string;
+  /** A SHAPE, not an emoji — see `src/icons.ts` for why. */
+  icon: IconName;
   /** What it DOES, in a few words. It goes on the card, so it is a prompt. */
   blurb: string;
   /** How the attack is delivered. Three shapes, five weapons — the three
@@ -70,7 +72,7 @@ export const WEAPONS: WeaponKind[] = [
   {
     id: 'sword',
     name: 'Sword',
-    icon: '🗡',
+    icon: 'sword',
     blurb: 'Hits everything close',
     cast: 'melee',
     forge: null,
@@ -83,7 +85,7 @@ export const WEAPONS: WeaponKind[] = [
   {
     id: 'bow',
     name: 'Bow',
-    icon: '🏹',
+    icon: 'bow',
     blurb: 'Locks on at range',
     cast: 'arrow',
     forge: { gold: 200, wood: 30, stone: 5 },
@@ -96,7 +98,7 @@ export const WEAPONS: WeaponKind[] = [
   {
     id: 'fire',
     name: 'Fire staff',
-    icon: '🔥',
+    icon: 'fire',
     // The burn is the point: it is the only damage in the game that happens
     // while you are somewhere else.
     blurb: 'Sets them alight — keeps burning',
@@ -128,7 +130,7 @@ export const WEAPONS: WeaponKind[] = [
   {
     id: 'ice',
     name: 'Ice staff',
-    icon: '❄',
+    icon: 'ice',
     // Hits softest and is often the best answer anyway: a wave that arrives
     // late arrives into towers that have reloaded.
     blurb: 'A wide chill — slows a whole group',
@@ -150,7 +152,7 @@ export const WEAPONS: WeaponKind[] = [
   {
     id: 'bolt',
     name: 'Storm staff',
-    icon: '⚡',
+    icon: 'bolt',
     // This one is not new. The staff was ALREADY a lightning spell (`vfx.lightning`,
     // sky-to-ground bolts) before the rack existed, so it keeps the reach and the
     // look it had — a player who has been using it must not find it quietly cut

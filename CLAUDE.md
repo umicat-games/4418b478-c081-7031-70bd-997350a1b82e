@@ -1014,6 +1014,27 @@ standing still in exactly the case the option exists for.
   sleeps in wall-clock is measuring something else: under the headless software
   renderer at eight frames a second, game time advances at forty per cent of
   real. Poll for the state you want; do not sleep for it.
+- **Nothing in this game's own UI is an emoji.** `src/icons.ts` and
+  `public/icons/` (`npm run icons`), drawn as CSS MASKS — `mask-image` plus
+  `background: currentColor` — so one file is a white button glyph, a gold coin
+  counter and a red warning, fetched once for all three. Three reasons, all of
+  which only show on a device: an emoji is a different drawing in every
+  platform's font (`🗼` is Tokyo Tower), it is TEXT and text can be SELECTED
+  (long-pressing the attack button is how the iOS Copy / Look Up / Translate
+  callout came up mid-fight), and it ignores `color`, so a disabled row and an
+  affordable one had the same bright glyph in them.
+
+  Two of the set are PNG rather than SVG: the Game Icons pack ships its vectors
+  as one sheet, and a mask reads the ALPHA channel, so a white-on-transparent
+  PNG serves exactly as well.
+
+  **HUD icons run at 1.25em, not 1em.** A silhouette needs more room than a
+  letter of the same nominal size — at 1em the tower's rook read as a small
+  white square.
+
+  A `showX()` that only runs on click leaves its button EMPTY until the first
+  press, which is exactly as visible as a button that does not work. The mute
+  button spent a build like that.
 - **The right-hand buttons are SHAPES, not emoji** (`src/icons.ts`,
   `public/icons/`, `npm run icons`). Three reasons, all of which only show up on
   a device: an emoji is a different picture in every platform's font, it is TEXT

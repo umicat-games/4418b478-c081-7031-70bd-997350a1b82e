@@ -15,13 +15,16 @@
  */
 
 import type { Materials } from './progress';
+import { iconHtml, type IconName } from './icons';
 
 export interface TownBuilding {
   id: string;
   name: string;
   /** Shown at the plot. Three or four words — it is a prompt, not a manual. */
   effect: string;
-  icon: string;
+  /** What this building HANDS YOU, as a shape. More use than a picture of the
+   *  building: "+1 tower" is the reason to buy the smithy. */
+  icon: IconName;
   /** The model that appears once it is built, one per level. Later levels are
    *  bigger buildings, so the town visibly grows. */
   models: [string, string, string];
@@ -39,7 +42,7 @@ export const TOWN: TownBuilding[] = [
     id: 'smithy',
     name: 'Smithy',
     effect: '+1 tower · unlocks tower mounts',
-    icon: '⚒',
+    icon: 'tower',
     // Lv1 the Watchtower, Lv2 the Bastion, Lv3 the Spire. Each is three or four
     // ground weapons' worth of gold, and the reason to want one is REACH — the
     // corner two ground weapons cannot cover between them.
@@ -55,7 +58,7 @@ export const TOWN: TownBuilding[] = [
     id: 'clinic',
     name: 'Clinic',
     effect: '+25 health per level',
-    icon: '❤',
+    icon: 'heart',
     models: ['town-stall-red', 'bld-house-a', 'bld-house-b'],
     costs: [
       { gold: 120, wood: 25, stone: 5 },
@@ -68,7 +71,7 @@ export const TOWN: TownBuilding[] = [
     id: 'market',
     name: 'Market',
     effect: '+50 starting gold per level',
-    icon: '💰',
+    icon: 'coin',
     models: ['town-stall-green', 'town-cart', 'town-watermill'],
     costs: [
       { gold: 120, wood: 15, stone: 15 },
@@ -81,7 +84,7 @@ export const TOWN: TownBuilding[] = [
     id: 'range',
     name: 'Range',
     effect: '+1 to your own attacks per level',
-    icon: '🏹',
+    icon: 'bow',
     models: ['bld-tower-a', 'bld-tower-b', 'town-windmill'],
     costs: [
       { gold: 170, wood: 30, stone: 10 },
@@ -94,7 +97,7 @@ export const TOWN: TownBuilding[] = [
     id: 'armory',
     name: 'Armory',
     effect: 'forge and improve weapons',
-    icon: '⚔',
+    icon: 'sword',
     // Behind the weapon rack, which is its frontage: the rack is what you walk
     // along, and this is the building that explains why the rack can do
     // anything. Deliberately not another corner plot — the four of those are a
@@ -146,9 +149,12 @@ export const canAfford = (have: Materials, cost: Materials): boolean =>
 /** What is still missing, for a prompt that says what to go and get. */
 export function shortfall(have: Materials, cost: Materials): string {
   const bits: string[] = [];
-  if (have.gold < cost.gold) bits.push(`🪙 ${cost.gold - have.gold}`);
-  if (have.wood < cost.wood) bits.push(`🪵 ${cost.wood - have.wood}`);
-  if (have.stone < cost.stone) bits.push(`🪨 ${cost.stone - have.stone}`);
+  // HTML, because the cards these land in are built from strings. Everything
+  // here is game-authored — prices and material names — and none of it is ever
+  // player text, which is the only reason that is safe.
+  if (have.gold < cost.gold) bits.push(`${iconHtml('coin')} ${cost.gold - have.gold}`);
+  if (have.wood < cost.wood) bits.push(`${iconHtml('wood')} ${cost.wood - have.wood}`);
+  if (have.stone < cost.stone) bits.push(`${iconHtml('stone')} ${cost.stone - have.stone}`);
   return bits.join('  ');
 }
 

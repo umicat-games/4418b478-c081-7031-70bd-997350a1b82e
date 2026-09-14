@@ -26,6 +26,11 @@ import { join } from 'node:path';
 const KENNEY = process.env.KENNEY
   ?? `${process.env.HOME}/work/game-assets/Kenney Game Assets All-in-1 3.4.0`;
 const BOARD = join(KENNEY, 'Icons/Board Game Icons/Vector/Icons');
+/** The Game Icons pack ships its vectors as one SHEET, so these two come in as
+ *  PNGs. A mask reads the ALPHA channel, so a white-on-transparent PNG works
+ *  exactly as an SVG does — it is only the scaling that is worse, and at 34px
+ *  a 2x source has more pixels than the button. */
+const GAME_PNG = join(KENNEY, 'Icons/Game Icons/PNG/White/2x');
 const OUT = new URL('../public/icons/', import.meta.url).pathname;
 
 /** Covers every icon in the pack (they run to +/-36.5) with a little air. */
@@ -44,6 +49,24 @@ const WANT = {
   // Kenney has no hammer anywhere in the library, and a hammer was the wrong
   // picture for it regardless: you are not hitting anything.
   build: 'hand_cube',
+
+  // The HUD, the cards and the summary. All of this was emoji.
+  house: 'structure_house',        // the base, and how much of it is left
+  tower: 'structure_tower',        // towers standing, out of the cap
+  coin: 'tokens',                  // gold
+  wood: 'resource_wood',
+  stone: 'resource_iron',
+  heart: 'suit_hearts',
+  shield: 'shield',
+  award: 'award',                  // the leaderboard
+  gate: 'structure_gate',          // the way out of the hub
+  crate: 'pouch',                  // something to break open
+};
+
+/** Copied as-is, because that pack has no per-icon vector. */
+const WANT_PNG = {
+  audioOn: 'audioOn',
+  audioOff: 'audioOff',
 };
 
 /** The one Kenney has no word for.
@@ -77,6 +100,12 @@ function main() {
     writeFileSync(join(OUT, `${name}.svg`), readFileSync(src, 'utf8').replace(
       /<svg([^>]*)>/, `<svg$1 viewBox="${VIEWBOX}" width="76" height="76">`));
     names.push(name);
+  }
+  for (const [name, file] of Object.entries(WANT_PNG)) {
+    const src = join(GAME_PNG, `${file}.png`);
+    if (!existsSync(src)) { console.error(`missing: ${src}`); process.exitCode = 1; continue; }
+    writeFileSync(join(OUT, `${name}.png`), readFileSync(src));
+    names.push(`${name}.png`);
   }
   for (const [name, d] of Object.entries(DRAWN)) {
     writeFileSync(join(OUT, `${name}.svg`),

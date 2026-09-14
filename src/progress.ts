@@ -25,14 +25,16 @@
  *   boards.
  */
 
+import type { IconName } from './icons';
+
 export type Material = 'gold' | 'wood' | 'stone';
 
 export interface Materials { gold: number; wood: number; stone: number; }
 
 export const NO_MATERIALS: Materials = { gold: 0, wood: 0, stone: 0 };
 
-export const MATERIAL_ICON: Record<Material, string> = {
-  gold: '🪙', wood: '🪵', stone: '🪨',
+export const MATERIAL_ICON: Record<Material, IconName> = {
+  gold: 'coin', wood: 'wood', stone: 'stone',
 };
 
 /** What one kill leaves behind, as odds out of one.

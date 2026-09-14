@@ -9,6 +9,7 @@ import type { Shared, Progress } from './main';
 import { patchSave, readSave } from './main';
 import { DEV, toggleDev } from './dev';
 import { skyWithClouds } from './sky';
+import { iconHtml, type IconName } from './icons';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
@@ -425,9 +426,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const renderPurse = (): void => {
     purse.textContent = [
       `Lv ${level}`,
-      store.gold > 0 && `🪙 ${store.gold}`,
-      store.wood > 0 && `🪵 ${store.wood}`,
-      store.stone > 0 && `🪨 ${store.stone}`,
+      store.gold > 0 && `${iconHtml('coin')} ${store.gold}`,
+      store.wood > 0 && `${iconHtml('wood')} ${store.wood}`,
+      store.stone > 0 && `${iconHtml('stone')} ${store.stone}`,
     ].filter(Boolean).join('   ');
   };
   renderPurse();
@@ -503,23 +504,31 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   };
 
   /** Rows, not a sentence: a title line, then whatever applies. */
-  const showCard = (title: string, lines: string[], action?: string): void => {
+  /** `lines` and `action` are HTML, because prices and materials carry ICONS
+   *  now and an icon is an element. Everything that reaches this is authored
+   *  here — building names, weapon names, prices — and player text must never
+   *  be routed through it. (The leaderboard, which does show player names, is
+   *  `openPanel` and escapes them.) */
+  const showCard = (title: string, lines: string[], action?: string,
+                    glyph?: IconName): void => {
     card.innerHTML = '';
     const t = document.createElement('div');
-    t.style.cssText = 'font: 700 15px/1.4 system-ui, sans-serif; margin-bottom: 2px;';
-    t.textContent = title;
+    t.style.cssText = 'font: 700 15px/1.4 system-ui, sans-serif; margin-bottom: 2px;'
+      + 'display: flex; align-items: center; gap: 7px;';
+    t.innerHTML = (glyph ? iconHtml(glyph) : '') + escapeHtml(title);
     card.append(t);
     for (const line of lines) {
       if (!line) continue;
       const d = document.createElement('div');
       d.style.cssText = 'opacity: .82;';
-      d.textContent = line;
+      d.innerHTML = line;
       card.append(d);
     }
     if (action) {
       const a = document.createElement('div');
-      a.style.cssText = 'margin-top: 7px; font: 700 13px/1.4 system-ui, sans-serif; color: #ffd76a;';
-      a.textContent = action;
+      a.style.cssText = 'margin-top: 7px; font: 700 13px/1.4 system-ui, sans-serif;'
+        + 'color: #ffd76a; display: flex; align-items: center; gap: 6px;';
+      a.innerHTML = action;
       card.append(a);
     }
     card.style.display = 'block';
@@ -667,7 +676,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       // Only when there is something to say, and then briefly. A line of
       // narration that is always on screen is one nobody reads.
       const priceOf = (c: Materials): string =>
-        [c.gold && `🪙 ${c.gold}`, c.wood && `🪵 ${c.wood}`, c.stone && `🪨 ${c.stone}`]
+        [c.gold && `${iconHtml('coin')} ${c.gold}`,
+         c.wood && `${iconHtml('wood')} ${c.wood}`,
+         c.stone && `${iconHtml('stone')} ${c.stone}`]
           .filter(Boolean).join('  ');
       // What the card says about a plot: where it is now, what the next level
       // changes, and what that costs — or, when it cannot be paid for, what is
@@ -676,7 +687,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         const lv = town[b.id] ?? 0;
         const now = townNow(b.id, town);
         if (lv >= TOWN_MAX_LEVEL) {
-          showCard(`${b.icon} ${b.name} · Lv${lv}`, [now, 'Fully built']);
+          showCard(`${b.name} · Lv${lv}`, [now, 'Fully built'], undefined, b.icon);
           return;
         }
         const cost = b.costs[lv];
@@ -686,8 +697,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           `Lv${lv + 1}: ${next}`,
           `Cost: ${priceOf(cost)}`,
         ];
-        showCard(`${b.icon} ${b.name}${lv ? ` · Lv${lv}` : ''}`, lines,
-          canAfford(store, cost) ? `⚔ build Lv${lv + 1}` : `needs ${shortfall(store, cost)}`);
+        showCard(`${b.name}${lv ? ` · Lv${lv}` : ''}`, lines,
+          canAfford(store, cost)
+            ? `${iconHtml('build')} build Lv${lv + 1}`
+            : `needs ${shortfall(store, cost)}`);
       };
 
       /** A weapon, at whatever stage it is in. The lines change with the stage
@@ -719,14 +732,16 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
         const act = rackAction(id);
         let action: string | undefined;
-        if (act === 'take') action = '⚔ take';
+        if (act === 'take') action = `${iconHtml('build')} take`;
         else if (act === 'forge' || act === 'improve') {
           if (!canStep) action = undefined;
           else action = canAfford(store, cost!)
-            ? (act === 'forge' ? '⚔ forge' : `⚔ improve to Lv${lvl + 1}`)
+            ? (act === 'forge'
+              ? `${iconHtml('build')} forge`
+              : `${iconHtml('build')} improve to Lv${lvl + 1}`)
             : `needs ${shortfall(store, cost!)}`;
         } else if (id === weapon) action = 'equipped';
-        showCard(`${k.icon} ${k.name}${lvl ? ` · Lv${lvl}` : ''}`, lines, action);
+        showCard(`${k.name}${lvl ? ` · Lv${lvl}` : ''}`, lines, action, k.icon);
       };
 
       if (panelOpen) {
@@ -738,10 +753,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         rackCard(atPickup.id);
         placeCard(atPickup.x, 1.1, atPickup.z);
       } else if (atSign) {
-        showCard('🏆 Leaderboard', ['Best runs, by board'], '⚔ read');
+        showCard('Leaderboard', ['Best runs, by board'], `${iconHtml('build')} read`, 'award');
         placeCard(SIGN_AT.x, 1.6, SIGN_AT.z);
       } else if (nearDoor) {
-        showCard('▶ The road out', ['Choose which board to take'], 'walk through');
+        showCard('The road out', ['Choose which board to take'], 'walk through', 'gate');
         placeCard(DOOR_AT.x, 2.0, DOOR_AT.z);
       } else {
         card.style.display = 'none';
