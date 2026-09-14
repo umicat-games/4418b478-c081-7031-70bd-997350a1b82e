@@ -1916,11 +1916,18 @@ export async function startLevel(
       display: flex; flex-direction: column; align-items: center; gap: 2px;
       -webkit-tap-highlight-color: transparent;
     `;
+    // No shortcut number. It was `1`-`7` under the price, and on a phone — which
+    // is where this is played — there is no keyboard for it to mean anything
+    // about: a line of digits nobody can act on, in the most crowded strip of
+    // the screen. At seven cells a cell is down to its 40px minimum and the
+    // labels are already clipping.
+    //
+    // The KEYS still work. Only the caption is gone, until the hotbar gets a
+    // design of its own.
     cell.innerHTML =
       `<span style="font-size:19px;line-height:1">${kind.icon}</span>` +
       `<span>${kind.label}</span>` +
-      `<span class="cost" style="opacity:.85">${kind.cost}g</span>` +
-      `<span style="opacity:.45;font-size:10px">${i + 1}</span>`;
+      `<span class="cost" style="opacity:.85">${kind.cost}g</span>`;
     cell.onclick = () => { selected = i; refreshHotbar(); audio.play('build'); renderHud(); };
     hotbar.appendChild(cell);
     return cell;

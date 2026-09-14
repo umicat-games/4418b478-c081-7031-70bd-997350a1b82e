@@ -1032,6 +1032,12 @@ standing still in exactly the case the option exists for.
   unplayable because the thumbstick was underneath it. The row is
   `pointer-events: none` with `auto` on the cells, never wraps, and
   `verify-3d-jump-touch` now checks that the stick is reachable.
+- **The hotbar cells show no shortcut number.** They carried `1`-`7` under the
+  price, and on a phone — which is where this is played — there is no keyboard
+  for that to mean anything about: a line of digits nobody can act on, in the
+  most crowded strip of the screen, at a size where the labels are already
+  clipping. The KEYS still work; only the caption is gone, until the hotbar gets
+  a design of its own. This is a casual game and it does not ask for fast hands.
 - **The hotbar dodges the buttons SIDEWAYS, and only climbs as a last resort.**
   Climbing is the wrong first move because the button cluster WRAPS: clearing
   the bottom row lands you in the row above it. The same seven cells that caused
