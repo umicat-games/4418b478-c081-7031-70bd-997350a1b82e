@@ -214,12 +214,34 @@ Three things it has to get right:
   so a struggling phone would otherwise want the button held for a second and a
   half. A hold is a thing a finger does, not a thing happening in the world.
 
-The feedback is on the TOWER, not the button: it sinks and pales as the hold
-fills, so letting go visibly puts it back. The button is under the player's own
-thumb and belongs to the platform's control layer. The prompt line grows a
-second row (`↩ hold to sell · +87g`) because a hold is invisible until it is
-named, and that line is where this game already teaches. Desktop gets `X`,
-because holding a KEY reads as a stuck key rather than a gesture.
+**The feedback is ON THE TOWER**, all of it. A ring sweeps clockwise round the
+cell as the hold fills, with a dark track behind the empty part, and the word
+and the price sit over the tower on a translucent pill. Selling it makes it come
+APART — it sinks, shrinks and fades while sparks lift off the cell — because a
+thing that blinks out on the frame a button fires reads as a glitch rather than
+as a transaction.
+
+The progress was six block characters in the prompt line at the TOP LEFT first,
+which is the far corner of the screen from both the thumb doing the holding and
+the thing being sold. A progress bar nobody looks at is a progress bar that does
+not exist.
+
+Two sizes that are not arbitrary. The ring is 0.56–0.72 of a cell: at 0.42 it
+was completely hidden by the tower's own base and the hero standing on top of
+it, and a tile is one unit across so this is as wide as it can be and still
+belong to that square. And `RingGeometry`'s fourth argument is `phiSegments`,
+not the start angle — dropping it type-checks perfectly, because every
+parameter is a number.
+
+The prompt line still NAMES the gesture (`↩ hold to sell · +87g`), because a
+hold is invisible until it is named. Desktop gets `X`, because holding a KEY
+reads as a stuck key rather than a gesture.
+
+`dissolve()` in `src/vfx.ts` takes the object OVER — the caller must already
+have taken it out of its own list, or the game keeps shooting with a tower that
+is dissolving. It clones each material first: a tower's meshes come from
+`cloneOf` and SHARE their materials with every other tower of that kind, so
+fading the original fades the whole board.
 
 What actually binds on a board is the tower CAP, not the gold — so selling is
 mostly about freeing a slot and a position, which is another reason it has to

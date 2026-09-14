@@ -12,7 +12,7 @@ import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
 import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
@@ -1027,9 +1027,6 @@ export async function startLevel(
    *  frame the thumb comes off — including the frame it is sold, when
    *  `standingOn` has already been cleared. */
   let sellHeld: Tower | null = null;
-  /** The last bar length drawn, so a filling hold redraws and a still one does
-   *  not. */
-  let sellShown = 0;
 
   interface Crate { obj: THREE.Object3D; t: number; hp: number; cell: [number, number]; rare: boolean; }
   /** At most one at a time: two stacked effects is a state nobody can read off
@@ -1069,6 +1066,94 @@ export async function startLevel(
   rangeFill.visible = false;
   rangeFill.renderOrder = 1;
   world.scene.add(rangeFill);
+  /** Out at the edge of the cell, not against the tower.
+   *
+   *  0.42 to 0.5 was the first try and it was invisible: a tower's own base and
+   *  the hero standing on top of it cover everything inside about half a cell.
+   *  A tile is one unit across, so this is as wide as it can be and still read
+   *  as belonging to that square. */
+  const SELL_RING_IN = 0.56;
+  const SELL_RING_OUT = 0.72;
+
+  /** The sell hold, drawn ROUND THE TOWER rather than in the corner.
+   *
+   *  It was six block characters in the prompt line at the top left, which is
+   *  the far corner of the screen from both the thumb doing the holding and the
+   *  tower being sold — a progress bar nobody looks at is a progress bar that
+   *  does not exist. This one is where the thing is.
+   *
+   *  A RING that fills clockwise, not a bar: it wraps the object, so it says
+   *  "this one" as well as "how far". Built once and re-swept by rebuilding its
+   *  geometry, because `RingGeometry`'s arc is baked into the vertices —
+   *  scaling or rotating cannot shorten it.
+   */
+  const sellRing = new THREE.Mesh(
+    new THREE.RingGeometry(SELL_RING_IN, SELL_RING_OUT, 56, 1, Math.PI / 2, 0).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd76a, transparent: true, opacity: 0.85,
+      depthWrite: false, side: THREE.DoubleSide,
+    }),
+  );
+  sellRing.visible = false;
+  sellRing.renderOrder = 4;
+  world.scene.add(sellRing);
+  /** The track behind it, so the empty part of the sweep is visible too. An
+   *  arc with nothing behind it reads as a stray mark rather than as progress. */
+  const sellTrack = new THREE.Mesh(
+    new THREE.RingGeometry(SELL_RING_IN, SELL_RING_OUT, 56).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.28,
+      depthWrite: false, side: THREE.DoubleSide,
+    }),
+  );
+  sellTrack.visible = false;
+  sellTrack.renderOrder = 3;
+  world.scene.add(sellTrack);
+
+  /** The word, over the tower. A ring says how far; it does not say what is
+   *  about to happen, and "the thing under me is about to be sold" is not
+   *  something a player should have to infer from a shrinking model.
+   *
+   *  DOM projected onto the world point rather than a sprite: it is text, it
+   *  has to stay legible at any camera distance, and a canvas texture of a word
+   *  goes soft the moment the camera moves. `pointer-events: none` — this game
+   *  has drawn over the platform's control layer five times. */
+  const sellTag = document.createElement('div');
+  sellTag.style.cssText = `position: fixed; z-index: 28; pointer-events: none;
+    display: none; transform: translate(-50%, -100%);
+    font: 800 13px/1 system-ui, sans-serif; letter-spacing: .04em; color: #fff;
+    background: rgba(18,22,30,.62); padding: 5px 10px; border-radius: 999px;
+    white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.5);`;
+  document.body.appendChild(sellTag);
+
+  const _tagAt = new THREE.Vector3();
+  /** Sweep the ring and place the word, or put both away. */
+  const showSellHold = (t: Tower | null, k: number): void => {
+    const on = t !== null && k > 0;
+    sellRing.visible = on;
+    sellTrack.visible = on;
+    sellTag.style.display = on ? 'block' : 'none';
+    if (!t || !on) return;
+    const [x, z] = t.cell;
+    sellRing.position.set(x, 0.05, z);
+    sellTrack.position.set(x, 0.045, z);
+    // Clockwise from the top, the way every hold-to-confirm in every game
+    // sweeps. `thetaStart` at +90 degrees and a NEGATIVE length would be
+    // anticlockwise, so the start walks backwards instead.
+    sellRing.geometry.dispose();
+    // (inner, outer, thetaSegments, PHISEGMENTS, thetaStart, thetaLength). The
+    // fourth argument is not the start angle, and leaving it out type-checks
+    // perfectly — every parameter is a number.
+    sellRing.geometry = new THREE.RingGeometry(
+      SELL_RING_IN, SELL_RING_OUT, 56, 1, Math.PI / 2 - k * Math.PI * 2, k * Math.PI * 2,
+    ).rotateX(-Math.PI / 2);
+
+    _tagAt.set(x, 0.35 + t.height + 0.55, z).project(world.camera);
+    sellTag.textContent = `Sell  +${sellValue(t)}g`;
+    sellTag.style.left = `${(_tagAt.x * 0.5 + 0.5) * window.innerWidth}px`;
+    sellTag.style.top = `${(-_tagAt.y * 0.5 + 0.5) * window.innerHeight}px`;
+  };
+
   const showRange = (at: [number, number] | null, radius: number, colour: number): void => {
     const on = at !== null;
     rangeRing.visible = on;
@@ -1812,9 +1897,8 @@ export async function startLevel(
       // invisible until it is named, and the prompt line is where this game
       // already teaches — it is the only text on screen and it is only there
       // when the button does something.
-      const k = sellProgress();
-      const bar = k > 0 ? ` ${'█'.repeat(Math.round(k * 6)).padEnd(6, '░')}` : '';
-      line3.textContent = `${up}\n↩ hold to sell${bar} · +${sellValue(t)}g`;
+      // NAMES the gesture; the progress of it is drawn on the tower.
+      line3.textContent = `${up}\n↩ hold to sell · +${sellValue(t)}g`;
     } else if (atCrate) {
       line3.textContent = '⚔ break open';
     } else if (buildCell) {
@@ -1943,7 +2027,7 @@ export async function startLevel(
     banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
     // An element created and never removed outlives the run and sits over the
     // summary. Every other one on this line learned that the hard way.
-    teachEl.remove();
+    teachEl.remove(); sellTag.remove();
     debug.dispose();
     hudEl.textContent = '';
     vfx.clear();
@@ -2121,7 +2205,6 @@ export async function startLevel(
     if (!running) return;
     const paid = sellValue(t);
     gold += paid;
-    world.scene.remove(t.obj);
     const ti = tinted.indexOf(t.obj);
     if (ti >= 0) tinted.splice(ti, 1);
     const i = towers.indexOf(t);
@@ -2131,7 +2214,18 @@ export async function startLevel(
     // to say so on the same frame — otherwise the line still offers an upgrade
     // for a tower that is not there.
     if (standingOn === t) standingOn = null;
-    updraft(new THREE.Vector3(t.cell[0], 0.5, t.cell[1]));
+    if (sellHeld === t) { sellHeld = null; showSellHold(null, 0); }
+    // It comes APART rather than blinking out. Taken out of `towers` above and
+    // handed to the effects loop, which owns it now and will remove it; leaving
+    // `scene.remove` here as well would take it away before it could dissolve.
+    t.obj.scale.setScalar(1);
+    dissolve(vfx, t.obj, { life: 0.5 });
+    motes(vfx, new THREE.Vector3(t.cell[0], 0.35, t.cell[1]), {
+      count: 16, color: 0xffd76a, color2: 0xfff4cf, frame: FRAME.sparkle,
+      radius: 0.42, rise: 1.3, spin: 2.2, life: 0.7, size: 0.17,
+    });
+    ringVfx(vfx, new THREE.Vector3(t.cell[0], 0.05, t.cell[1]),
+      { color: 0xffd76a, from: 0.3, to: 0.8, life: 0.45, opacity: 0.8 });
     audio.play('coin');
     flashBanner(`Sold ${t.kind.label} · +${paid}g`);
     renderHud();
@@ -2505,6 +2599,10 @@ export async function startLevel(
         if (k > 0) { sellHeld = standingOn; standingOn.obj.scale.setScalar(1 - k * 0.22); }
         else if (sellHeld) { sellHeld.obj.scale.setScalar(1); sellHeld = null; }
       }
+      // Round the tower, every frame — not in the corner HUD, which is only
+      // rebuilt when what is under your feet changes and is the far side of the
+      // screen from both the thumb and the thing being sold.
+      showSellHold(k > 0 ? standingOn : null, k);
 
       // --- what the bow and the staff are pointed at ---
       lockTarget = null;
@@ -2565,12 +2663,7 @@ export async function startLevel(
       const nearCrate = crates.some((c) =>
         c.hp > 0 && Math.hypot(c.obj.position.x - hero.position.x, c.obj.position.z - hero.position.z) < 1.0);
       const changed = before !== `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`
-        || nearCrate !== atCrate
-        // The sell bar fills over six hundred milliseconds, and the HUD is only
-        // rebuilt when what is under your feet changes — so without this the
-        // bar would be drawn once, empty, and never again.
-        || sellShown !== Math.round(sellProgress() * 6);
-      sellShown = Math.round(sellProgress() * 6);
+        || nearCrate !== atCrate;
       atCrate = nearCrate;
       if (changed) renderHud();
 

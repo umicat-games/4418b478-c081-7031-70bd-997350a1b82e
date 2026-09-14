@@ -225,6 +225,57 @@ export function corpse(
   });
 }
 
+/** Take something apart: it sinks, shrinks and fades out where it stood.
+ *
+ *  For things that are REMOVED rather than killed — a tower you sold. Vanishing
+ *  on the frame the button fires reads as a glitch: you cannot tell whether the
+ *  thing was sold, fell through the floor, or was never there. Half a second of
+ *  it coming apart is the difference between a transaction and a bug.
+ *
+ *  It takes the object OVER — the caller must already have taken it out of its
+ *  own list, or the game will keep shooting with a tower that is dissolving.
+ *  The material is cloned per mesh before fading, because a tower's meshes come
+ *  from `cloneOf` and share their materials with every other tower of that kind:
+ *  fading the original would fade the whole board.
+ */
+export function dissolve(
+  vfx: Vfx,
+  obj: THREE.Object3D,
+  opts: { life?: number } = {},
+): void {
+  const life = opts.life ?? 0.5;
+  const own: (THREE.Material | THREE.BufferGeometry)[] = [];
+  obj.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    const copies = mats.map((mat) => {
+      const c = mat.clone();
+      c.transparent = true;
+      c.depthWrite = false;
+      own.push(c);
+      return c;
+    });
+    m.material = Array.isArray(m.material) ? copies : copies[0];
+  });
+  const y0 = obj.position.y;
+  const s0 = obj.scale.clone();
+  vfx.add({
+    obj, t: 0, life, own,
+    step: (o, k) => {
+      o.position.y = y0 - k * 0.45;
+      o.scale.set(s0.x * (1 - k * 0.55), s0.y * (1 - k * 0.8), s0.z * (1 - k * 0.55));
+      o.traverse((c) => {
+        const m = c as THREE.Mesh;
+        if (!m.isMesh) return;
+        for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+          (mat as THREE.Material).opacity = 1 - k * k;
+        }
+      });
+    },
+  });
+}
+
 // --- textured quads ---------------------------------------------------------
 
 /** The atlas, 4×4. One texture for every billboard in the game, which is what
