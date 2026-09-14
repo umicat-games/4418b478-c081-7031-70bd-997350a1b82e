@@ -11,7 +11,7 @@ import { DEV, toggleDev } from './dev';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createDebugHud } from './debughud';
-import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, type TownBonus } from './town';
+import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, townNow, townAfter, type TownBonus } from './town';
 import type { Materials } from './progress';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
@@ -349,8 +349,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // A greeting, not a readout. It goes away.
   title.style.transition = 'opacity .8s';
   setTimeout(() => { title.style.opacity = '0'; }, 5000);
-  const hint = document.createElement('div');
-  hint.style.cssText = 'font: 600 14px/1.5 system-ui, sans-serif; opacity: .85;';
   const purse = document.createElement('div');
   purse.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
   const renderPurse = (): void => {
@@ -362,7 +360,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     ].filter(Boolean).join('   ');
   };
   renderPurse();
-  hudEl.append(title, purse, hint);
+  hudEl.append(title, purse); // the prompt is a card over the building now, not a line up here
 
   // Something new on the ground is the reward for the level just finished, and
   // it is easy to miss: it appears while the screen is still fading in, two
@@ -389,6 +387,70 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   `;
   document.body.appendChild(panel);
   let panelOpen = false;
+
+  // --- the sign that hangs over whatever you are standing at ---------------
+  //
+  // A one-line hint in the top-left corner is a line nobody reads: it is as far
+  // from the building as the screen allows, and it had room for a price but not
+  // for what the price BUYS. This is a card, and it is anchored to the thing
+  // itself — projected from the building's own world position each frame, so it
+  // follows as the camera moves and is never somewhere you have to go looking.
+  //
+  // `pointer-events: none` throughout: the action is the action button, the same
+  // verb as everything else in the hub. Z-index sits above the platform's
+  // on-screen controls (10) and the HUD (20), below the modal panel (40).
+  const card = document.createElement('div');
+  card.style.cssText = `
+    position: fixed; z-index: 30; display: none; pointer-events: none;
+    transform: translate(-50%, -100%);
+    min-width: 210px; max-width: min(340px, 86vw);
+    background: rgba(18,22,28,.92); color: #fff;
+    border-radius: 14px; padding: 11px 14px;
+    font: 600 13px/1.55 system-ui, sans-serif;
+    text-shadow: none; box-shadow: 0 10px 28px rgba(0,0,0,.45);
+  `;
+  document.body.appendChild(card);
+
+  // How high above a plot the card hangs. The camera sits at y 3.6 looking down,
+  // so a couple of metres of world is most of the screen: at 2.6 the card
+  // projected off the top edge and was clamped there, which put it as far from
+  // the building as the corner it replaced.
+  const PLOT_CARD_Y = 1.8;
+  const cardAnchor = new THREE.Vector3();
+  /** Put the card over a world point, clamped so it never hangs off the screen. */
+  const placeCard = (x: number, y: number, z: number): void => {
+    cardAnchor.set(x, y, z).project(world.camera);
+    const sx = (cardAnchor.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-cardAnchor.y * 0.5 + 0.5) * window.innerHeight;
+    const w = card.offsetWidth || 240, h = card.offsetHeight || 90;
+    card.style.left = `${Math.max(w / 2 + 8, Math.min(window.innerWidth - w / 2 - 8, sx))}px`;
+    // Behind the camera projects to a nonsense point; keep it on screen rather
+    // than letting it fly off, since you can only be near what you can see.
+    card.style.top = `${Math.max(h + 8, Math.min(window.innerHeight - 8, sy))}px`;
+  };
+
+  /** Rows, not a sentence: a title line, then whatever applies. */
+  const showCard = (title: string, lines: string[], action?: string): void => {
+    card.innerHTML = '';
+    const t = document.createElement('div');
+    t.style.cssText = 'font: 700 15px/1.4 system-ui, sans-serif; margin-bottom: 2px;';
+    t.textContent = title;
+    card.append(t);
+    for (const line of lines) {
+      if (!line) continue;
+      const d = document.createElement('div');
+      d.style.cssText = 'opacity: .82;';
+      d.textContent = line;
+      card.append(d);
+    }
+    if (action) {
+      const a = document.createElement('div');
+      a.style.cssText = 'margin-top: 7px; font: 700 13px/1.4 system-ui, sans-serif; color: #ffd76a;';
+      a.textContent = action;
+      card.append(a);
+    }
+    card.style.display = 'block';
+  };
 
   const closePanel = (): void => {
     panelOpen = false;
@@ -521,22 +583,46 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       const priceOf = (c: Materials): string =>
         [c.gold && `🪙 ${c.gold}`, c.wood && `🪵 ${c.wood}`, c.stone && `🪨 ${c.stone}`]
           .filter(Boolean).join('  ');
-      const plotLine = (b: typeof TOWN[number]): string => {
+      // What the card says about a plot: where it is now, what the next level
+      // changes, and what that costs — or, when it cannot be paid for, what is
+      // MISSING, which is a thing you can go and do something about.
+      const plotCard = (b: typeof TOWN[number]): void => {
         const lv = town[b.id] ?? 0;
-        if (lv >= TOWN_MAX_LEVEL) return `${b.icon} ${b.name} Lv${lv} · ${b.effect}`;
+        const now = townNow(b.id, town);
+        if (lv >= TOWN_MAX_LEVEL) {
+          showCard(`${b.icon} ${b.name} · Lv${lv}`, [now, 'Fully built']);
+          return;
+        }
         const cost = b.costs[lv];
-        return canAfford(store, cost)
-          ? `${b.icon} ⚔ build ${b.name} Lv${lv + 1} · ${priceOf(cost)} · ${b.effect}`
-          // What is MISSING, not what it costs — "needs 40 more wood" is a
-          // thing you can go and do something about.
-          : `${b.icon} ${b.name} Lv${lv + 1} needs ${shortfall(store, cost)}`;
+        const next = townAfter(b.id, town, lv + 1);
+        const lines = [
+          lv ? `Now: ${now}` : b.effect,
+          `Lv${lv + 1}: ${next}`,
+          `Cost: ${priceOf(cost)}`,
+        ];
+        showCard(`${b.icon} ${b.name}${lv ? ` · Lv${lv}` : ''}`, lines,
+          canAfford(store, cost) ? `⚔ build Lv${lv + 1}` : `needs ${shortfall(store, cost)}`);
       };
-      hint.textContent = panelOpen ? ''
-        : atPlot ? plotLine(atPlot)
-        : atPickup ? (atPickup.id === weapon ? `${atPickup.label} · equipped` : `⚔ take · ${atPickup.label}`)
-        : atSign ? '⚔ leaderboard'
-        : nearDoor ? '▶ choose a level'
-        : '';
+
+      if (panelOpen) {
+        card.style.display = 'none';
+      } else if (atPlot) {
+        plotCard(atPlot);
+        placeCard(atPlot.x, PLOT_CARD_Y, atPlot.z);
+      } else if (atPickup) {
+        const equipped = atPickup.id === weapon;
+        showCard(`⚔ ${atPickup.label}`, [equipped ? 'Equipped' : 'On the ground'],
+          equipped ? undefined : '⚔ take');
+        placeCard(atPickup.x, 1.1, atPickup.z);
+      } else if (atSign) {
+        showCard('🏆 Leaderboard', ['Best runs, by board'], '⚔ read');
+        placeCard(SIGN_AT.x, 1.6, SIGN_AT.z);
+      } else if (nearDoor) {
+        showCard('▶ The road out', ['Choose which board to take'], 'walk through');
+        placeCard(DOOR_AT.x, 2.0, DOOR_AT.z);
+      } else {
+        card.style.display = 'none';
+      }
 
       if (!panelOpen && input.consume('use')) {
         if (atPlot) {
@@ -580,6 +666,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           window.removeEventListener('resize', resize);
           input.dispose();
           panel.remove();
+          card.remove();
           hudEl.textContent = '';
           world.dispose();
           // `dispose()` frees the GPU resources; it does not empty the graph.

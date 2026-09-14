@@ -318,6 +318,19 @@ faith — "+1 tower" changes what you build, "+8% damage" changes nothing you ca
 see. `bonusesFrom()` turns the saved levels into the four numbers a run reads,
 in one place, so a bonus cannot reach the HUD and miss the rule.
 
+**What a plot says, it says OVER the plot.** The prompt used to be one line in
+the top-left corner — as far from the building as the screen allows, with room
+for a price but not for what the price buys. It is a card now, projected from
+the building's own world position each frame so it follows the camera: what the
+building gives at its current level, what the next level would give, what that
+costs, and either the action or what is still MISSING. `townNow` / `townAfter`
+derive both numbers from `bonusesFrom`, so what the card promises cannot drift
+from what a run applies.
+
+**Anchor it low.** The camera sits at y 3.6 looking down, so two metres of world
+is most of the screen: at y 2.6 the card projected off the top edge and was
+clamped there, which put it back in the corner it was meant to escape. 1.8.
+
 The doorway is ONE door in the middle of the front wall, and walking through it
 opens the list of boards rather than starting one. A door per board read well
 and chose badly: it asked which board you wanted before you had a reason to

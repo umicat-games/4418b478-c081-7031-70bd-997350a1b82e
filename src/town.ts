@@ -94,6 +94,29 @@ export const TOWN: TownBuilding[] = [
 
 export const TOWN_MAX_LEVEL = 3;
 
+/** What a building is giving RIGHT NOW, phrased as a total rather than a rate.
+ *
+ *  `effect` says what a LEVEL is worth ("+25 health per level"), which is the
+ *  right thing on a plot you have not bought yet and the wrong thing on one you
+ *  have — standing at a Lv2 Clinic, the number you want is +50. Derived from
+ *  `bonusesFrom` so it cannot drift from what a run actually applies. */
+export function townNow(id: string, town: Record<string, number> | undefined): string {
+  const b = bonusesFrom(town);
+  switch (id) {
+    case 'smithy': return b.towerCap ? `+${b.towerCap} tower${b.towerCap > 1 ? 's' : ''} · ${b.smithy} mount${b.smithy > 1 ? 's' : ''}` : '';
+    case 'clinic': return b.hearts ? `+${b.hearts} health` : '';
+    case 'market': return b.gold ? `+${b.gold} starting gold` : '';
+    case 'range': return b.heroDamage ? `+${b.heroDamage} damage on every weapon` : '';
+    default: return '';
+  }
+}
+
+/** The same, for the level you are ABOUT to buy — so the prompt can say what
+ *  the money changes, not merely what it costs. */
+export function townAfter(id: string, town: Record<string, number> | undefined, level: number): string {
+  return townNow(id, { ...(town ?? {}), [id]: level });
+}
+
 /** Can this be paid for out of what is in the store? */
 export const canAfford = (have: Materials, cost: Materials): boolean =>
   have.gold >= cost.gold && have.wood >= cost.wood && have.stone >= cost.stone;
