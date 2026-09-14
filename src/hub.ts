@@ -424,7 +424,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const purse = document.createElement('div');
   purse.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
   const renderPurse = (): void => {
-    purse.textContent = [
+    // innerHTML, because the entries carry ICONS and an icon is an element.
+    // This said `textContent` and printed four hundred characters of `<span
+    // style=...>` across the top of the hub — the markup was correct, the sink
+    // was not, and nothing typed anywhere says which of these a string is.
+    purse.innerHTML = [
       `Lv ${level}`,
       store.gold > 0 && `${iconHtml('coin')} ${store.gold}`,
       store.wood > 0 && `${iconHtml('wood')} ${store.wood}`,

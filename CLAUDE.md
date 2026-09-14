@@ -1035,6 +1035,14 @@ standing still in exactly the case the option exists for.
   A `showX()` that only runs on click leaves its button EMPTY until the first
   press, which is exactly as visible as a button that does not work. The mute
   button spent a build like that.
+
+  **An icon is an ELEMENT, so a string carrying one is HTML — and nothing types
+  that.** `iconHtml(...)` into a `textContent` sink prints four hundred
+  characters of `<span style=...>` where a coin should be. It shipped: the
+  hub's purse went out reading its own markup across the top of the screen,
+  with nothing thrown and every probe green, because no check read that
+  particular element. `rawMarkup(page)` in `pw-level.mjs` asks the WHOLE page
+  instead, and the hub and town probes call it.
 - **The right-hand buttons are SHAPES, not emoji** (`src/icons.ts`,
   `public/icons/`, `npm run icons`). Three reasons, all of which only show up on
   a device: an emoji is a different picture in every platform's font, it is TEXT
