@@ -1470,6 +1470,28 @@ export class GameScene extends Phaser.Scene {
         // Camera bounds (set by loadWorldScene) auto-clamp on preRender
       });
 
+      // ── Two-finger TRACKPAD pan (desktop) ──────────────────────────────
+      // A trackpad two-finger swipe fires `wheel` events with deltaX/deltaY; pan the camera by them
+      // so you can shove the world around like dragging the editor canvas (a mouse wheel pans too).
+      // Native listener (not this.input.on('wheel')) so we can preventDefault the page/iframe scroll
+      // under the gesture. We ADD the delta (not subtract like the touch grab) so the OS scroll
+      // direction — natural vs traditional — is respected as-is. Guarded so it never fights a modal's
+      // own wheel-scroll (menus/cook own the wheel while open) or pans behind the house.
+      const onWheelPan = (e: WheelEvent): void => {
+        if (!this.gameReady || this.inHouse) return;
+        if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen || this.confirmOpen
+            || this.travelOpen || this.toolPaletteOpen || this.coopWheel || this.penWheel) return;
+        e.preventDefault();
+        this.tweens.killTweensOf(cam);
+        this.cameraFollow = false; // manual pan wins over follow-Cato
+        const dpr = hudDpr(this); // deltas are CSS px; cam.zoom is cssZoom×dpr → ×dpr before ÷zoom
+        cam.scrollX += (e.deltaX * dpr) / cam.zoom;
+        cam.scrollY += (e.deltaY * dpr) / cam.zoom;
+        // Camera bounds (set by loadWorldScene) auto-clamp on preRender.
+      };
+      this.game.canvas.addEventListener('wheel', onWheelPan, { passive: false });
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.canvas.removeEventListener('wheel', onWheelPan));
+
       // When the mouse LEAVES the canvas (possible now that we don't lock it), drop desktop-cursor
       // mode so the drawn triangle hides + the OS arrow shows over the surrounding page; a mouse move
       // back in re-enters it. (edge-scroll is gone; edgePointer is vestigial.)
