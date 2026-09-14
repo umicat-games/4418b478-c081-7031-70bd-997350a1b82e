@@ -119,6 +119,30 @@ hits, `RPG Audio` for the sword and the coins, `Interface Sounds` for build and
 refuse, `Digital Audio` for the upgrade chime, `Music Jingles` for the wave and
 win stingers.
 
+The `.mp3` files are **uploaded through the platform's Assets tool** rather than
+committed from a kit, and they keep the name they were uploaded under so a clip
+in the game can be traced back to the row in the Asset Manager. `place-weapon`,
+`upgrade-weapon`, `enter-door`, the two music tracks, and one per staff:
+`fire-` / `ice-` / `lightning-magic-wand-sound-effect.mp3`. Pull them with
+`umicat-infra/playwright` against `GET /projects/{id}/assets` — the files are at
+`cdn.umicat.ai/uploads/{gameId}/`.
+
+A weapon says which clip is its own, in `sound` on its row in `weapons.ts`. Not
+a switch inside the level: a fourth staff should arrive WITH its sound, rather
+than arrive silent and wait for somebody to remember the other file.
+
+**Match uploaded clips by measurement, not by ear.** Over the loud quarter of
+each file, the fire and lightning casts are about one and a half times the RMS
+of the ice one — a difference between library recordings, not a decision anyone
+made about fire, and left alone it means changing staff changes how loud the
+game is. Their `volume` in `CLIPS` divides it back out.
+
+**Check what a clip sounds like before wiring it, not after.** The lightning
+cast is four seconds long and does not reach its loudest point until 1.2s in,
+while the spell it belongs to is over in 0.46s — so the bang lands long after
+the flash. `afconvert` to WAV and print an RMS envelope; it takes a minute and
+it is the difference between a sound effect and a sound that arrives late.
+
 `src/audio.ts` plays them, through **Web Audio** — decoded once into buffers,
 played by throwaway source nodes.
 

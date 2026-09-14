@@ -55,6 +55,11 @@ export interface WeaponKind {
   effect?: [number, number, number];
   /** Seconds the status lasts. Chain is instant and has none. */
   effectSeconds?: number;
+  /** The clip this one plays when it goes off, uploaded through the Assets
+   *  tool and keyed by filename. On the WEAPON rather than in a switch inside
+   *  the level, so a fourth staff arrives with its sound instead of arriving
+   *  silent and waiting for someone to remember the other file. */
+  sound?: string;
   /** What colour this one is, when it is a staff. The shaft is the same carved
    *  stick for all three — only the gem and what comes out of it differ, so the
    *  rack reads as three staves rather than three unrelated objects. */
@@ -107,6 +112,7 @@ export const WEAPONS: WeaponKind[] = [
     cooldown: 1.7,
     effect: [2, 3.5, 5],   // damage per second
     effectSeconds: 3.5,
+    sound: 'fire-magic-wand-sound-effect.mp3',
     tint: { gem: 0xff7a3a, glow: 0xd63a10, mote: 0xff3606, mote2: 0xffc07a },
   },
   {
@@ -128,6 +134,7 @@ export const WEAPONS: WeaponKind[] = [
     cooldown: 1.7,
     effect: [0.55, 0.42, 0.3], // how much of their speed is LEFT — lower is colder
     effectSeconds: 3,
+    sound: 'ice-magic-wand-sound-effect.mp3',
     tint: { gem: 0x7fd4ff, glow: 0x2aa7d6, mote: 0x3fb0ff, mote2: 0xcdefff },
   },
   {
@@ -150,6 +157,7 @@ export const WEAPONS: WeaponKind[] = [
     radius: 2.6,          // ditto — unchanged from the staff it used to be
     cooldown: 1.7,
     effect: [1, 2, 3],    // how many further enemies the arc reaches
+    sound: 'lightning-magic-wand-sound-effect.mp3',
     tint: { gem: 0xffe66a, glow: 0xd6b400, mote: 0xfff07a, mote2: 0xffffff },
   },
 ];

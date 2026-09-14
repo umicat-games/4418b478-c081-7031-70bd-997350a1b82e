@@ -27,6 +27,17 @@ const CLIPS: Record<string, AudioClipSpec> = {
   'place-weapon.mp3': { volume: 0.7 },
   'upgrade-weapon.mp3': { volume: 0.7 },
   'enter-door.mp3': { volume: 0.75 },
+  // One per staff — see `sound` in `weapons.ts`, which is where a weapon says
+  // which of these is its own.
+  //
+  // The VOLUMES are matched by measurement, not by ear through a laptop
+  // speaker: over the loud quarter of each clip, fire and lightning are about
+  // one and a half times the RMS of ice. That is a difference between library
+  // recordings, not a decision anybody made about fire, and left alone it means
+  // changing staff changes how loud the game is.
+  'fire-magic-wand-sound-effect.mp3': { volume: 0.5, throttle: 300 },
+  'ice-magic-wand-sound-effect.mp3': { volume: 0.75, throttle: 300 },
+  'lightning-magic-wand-sound-effect.mp3': { volume: 0.48, throttle: 300 },
   denied: { volume: 0.5 },
   leak: { volume: 0.7 },
   wave: { volume: 0.6 },

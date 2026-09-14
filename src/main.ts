@@ -1928,7 +1928,9 @@ export async function startLevel(
       if (staffCooldown > 0) return;
       staffCooldown = kind.cooldown ?? 1.7;
       animator.play('interact');
-      audio.play('upgrade');
+      // Each staff's own sound, and the generic one only if a weapon has not
+      // been given one yet.
+      audio.play(kind.sound ?? 'upgrade');
       // Centred on what you have locked, not on yourself. A burst that always
       // goes off underfoot makes the spell about walking into a crowd; one you
       // can place makes it about choosing which crowd.
