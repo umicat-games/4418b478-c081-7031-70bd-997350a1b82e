@@ -485,6 +485,66 @@ the stew is drawn twice, and one copy carries a `cooing-` typo).
   the cinematic and banked a second dish with no ingredients spent. Same trap as the HouseScene
   lamp-glow arrays: **any field that must be re-derived per launch belongs in `init()`**, not just
   in its initializer. It is also consumed on emit now, so it cannot be handed over twice either way.
+- **Chrome polish (2026-09-13):** the cooking modal's scroll bar uses the creator-tagged `ui-sheet`
+  art (`vertial-scroll-bar-background` track + `vertical-scroll-bar-dark` thumb, drawn as vertical
+  nine-slices with the insets read off the sheet — the thumb's bottom inset is **5**, not 4, or row
+  13's first shading row smears into a band across the lower bar; falls back to plain rects if a
+  frame is missing) instead of drawn rectangles. Tapping the stove plays the UI open blip (`playSfx`
+  in `HouseScene.openCooking`), like every other menu open.
+
+## Tools = a player LOADOUT: 工具 tab + wheel + workbench crafting (2026-09-13)
+
+The radial wheel used to be a FIXED set of 5 tools (see the older "Tool selection" section); it is
+now a **player-configurable loadout**, and tools live in the backpack. Supersedes the fixed-wheel
+and chest-only-crafting descriptions above where they conflict.
+- **The backpack is now TWO tabs** — 物品 (`TAB_BACKPACK`=11) + 工具 (`TAB_TOOLS`=12), opened together
+  via `BACKPACK_TABS`. Both are real `TAB_DEFS` entries now (物品 = white-sprout frame 229; 工具 =
+  the `toolbox-icon` image, pulled from the Asset Manager). The 工具 tab lists **`ownedTools`**
+  (undeletable; workbench-crafted tools append here). Tap a tool → **使用** (hold it now, via
+  `menuUse`) / **放进轮盘** (equip to the wheel, shown only when it isn't already equipped). The
+  pickaxe uses the bordered `wheel-pickaxe` art in this tab. A tool already on the wheel is marked
+  by the SAME `HOVER_TINT` slot wash as hover/selected (NOT a border — a green border clashed), and
+  the right detail pane shows a description (`desc_<tool>`) + an **"已在轮盘 / On the wheel"** pill
+  (`tool_on_wheel`; renamed from "In use", which clashed with the 使用 action). Tools hover exactly
+  like 物品 items (detail + `SFX_HOVER`).
+- **The wheel reads `equippedTools`** — a 5-slot array (indexed by `WHEEL_RING` position; the top
+  6th slot stays the mouse/cancel key). `publishToolPalette` + `handleToolPaletteClick` read
+  `equippedTools[i]`, not a fixed toolId. **放进轮盘** fills a null slot; if all 5 are taken it opens
+  a **replace picker** (reuses the slot-picker chrome via `toolReplace` + a `title`) to choose which
+  to swap out. `findOwnedTool` gates on `ownedTools` (was the `DEFAULT_TOOLS` const).
+- **The fishing rod is NO LONGER default** — it must be CRAFTED. Start state: `ownedTools` = hoe /
+  watering-can / axe / pickaxe; `equippedTools` = `[pickaxe, axe, null, hoe, watering-can]` (the
+  6-o'clock slot empty until the rod is made + equipped). Saved in **v29** (`ownedTools` /
+  `equippedTools`; old saves keep their seeded defaults, which INCLUDE the rod — only new games lack
+  it, since `DEFAULT_TOOLS` still validates all 5 as legal ids).
+- **Workbench TOOL crafting** — the existing work-station `CraftScene` gained coin-priced recipes.
+  A recipe with **`price`** set (`recipes.ts` / `recipes.json`) is a workbench recipe: materials are
+  counted/consumed from the **backpack (+ chest + hotbar)** (`haveCountAnywhere` / `consumeAnywhere`,
+  backpack-first), it also costs coins (shown in the modal as a coin "material", have = money), and
+  crafting runs the **making cinematic**. Recipes now: **stick** ← wood + 30c; **fishing-rod** ←
+  stick + fiber + 100c. **All the legacy crop/tree/building recipes were DELETED** — only the two
+  tool recipes remain. (Legacy no-`price` recipes still route the old instant chest flow if any are
+  re-added.) `stick` is a new item (tools_and_meterials `stick` frame).
+- **The making cinematic** (`doCraftTool` → `startCraftCinematic` → `revealCraftedItem`): close the
+  modal → `coverAndHandoff` (dissolve to BLACK) → `playSfx('tools-making', 0.45)` while black →
+  after the sound → `finishTransition` reveals → the item **bursts in ABOVE the work station**
+  (`playCatchReveal`, generalized to any icon — same burst + `SFX_GETITEM` jingle as a fished catch)
+  and flies to the cursor. Banking: a **tool** → `ownedTools` (工具 tab, unbounded); a **material** →
+  the backpack, and if the backpack is FULL a **replace mode** (`craftReplace` + a menu banner
+  `craft_replace_hint`) lets the player tap one backpack slot to overwrite (the old item discarded;
+  cleared on `closeMenu`).
+- **Bushes can be FELLED for fiber + branch (2026-09-13)** — a bush is now choppable DOWN with the
+  **axe OR the hoe** (there's no scythe tool yet — a scythe would just be another applicable tool):
+  3 CONSECUTIVE strikes (`chopStage`/`chopTimer`/`chopBusy` on `BushObj`, `TREE_CHOP_WINDOW_MS`
+  combo) → 1 fiber + 1 branch pop out (`playChopDrop` — toss → bounce → fly to the collector) → the
+  bush is removed. The hoe on a RIPE bush still picks berries; on a NON-ripe bush it fells it
+  (`chopBush` swings the held tool). The wheel offers axe + hoe on any bush; `bushAtPoint` (axe path,
+  sprite-bounds) mirrors `treeAtPoint`. New `fiber` item (tools_and_meterials `fiber` frame).
+- **Tree chop, refined (2026-09-13):** the first 3 chops/tree/DAY drop branches (`branchDay`/
+  `branchStrikes`) and are SEPARATE from the payoff — a fruit tree gives fruit on the **4th** chop
+  (not the 3rd, which used to double up with the last branch), a plain tree shakes on chop 4 and
+  falls on chop 5 (+3 wood). Branch + wood drops use `playChopDrop` (toss → ground-bounce → fly),
+  not the instant `playPopOut`.
 - **Check it with `node umicat-infra/playwright/verify-cooking.mjs`** (no browser): every dish
   resolves atlas → item row → i18n (both languages) → a recipe whose ingredients exist, every dish
   sells for more than it consumes, and the pending-dish reset above is pinned.
