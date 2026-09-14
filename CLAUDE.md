@@ -1032,6 +1032,25 @@ standing still in exactly the case the option exists for.
   unplayable because the thumbstick was underneath it. The row is
   `pointer-events: none` with `auto` on the cells, never wraps, and
   `verify-3d-jump-touch` now checks that the stick is reachable.
+- **A hotbar cell is a PICTURE OF THE MODEL and a price.** Nothing else — the
+  corner prompt already names what you are standing on and what it costs, in
+  full, and repeating that in a 40px cell only clips it. The picture is rendered
+  at boot from the tower's own model (`src/thumbs.ts`), with the game's
+  renderer into an offscreen target — a second WebGL context is a second set of
+  every shader, and browsers cap how many can exist. Change a model and the icon
+  changes, because there is nothing else to change.
+
+  It was an emoji: a different drawing in every platform's font, never the thing
+  you are about to place (the bastion is a cannon on masonry; the glyph was a
+  Japanese castle), and stale in silence whenever a model changed.
+
+  **A mount is photographed ON its masonry.** The first version rendered the
+  weapon alone, reasoning that at 40px the stone would be most of the picture —
+  and the result was that the ballista and the watchtower were the same picture
+  at 25g and at 120g. The stone is exactly what tells them apart, which is why
+  it costs four times as much. `verify-3d-hotbar` checks no two cells share a
+  picture, on the FULL rack: the mounts need a smithy, so four cells cannot see
+  this at all.
 - **The hotbar cells show no shortcut number.** They carried `1`-`7` under the
   price, and on a phone — which is where this is played — there is no keyboard
   for that to mean anything about: a line of digits nobody can act on, in the

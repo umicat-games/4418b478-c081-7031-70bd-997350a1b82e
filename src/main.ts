@@ -17,6 +17,7 @@ import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
 import { skyWithClouds } from './sky';
+import { createThumbMaker } from './thumbs';
 import { ICON, WEAPON_ICON } from './icons';
 import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
@@ -1916,22 +1917,61 @@ export async function startLevel(
       display: flex; flex-direction: column; align-items: center; gap: 2px;
       -webkit-tap-highlight-color: transparent;
     `;
-    // No shortcut number. It was `1`-`7` under the price, and on a phone — which
-    // is where this is played — there is no keyboard for it to mean anything
-    // about: a line of digits nobody can act on, in the most crowded strip of
-    // the screen. At seven cells a cell is down to its 40px minimum and the
-    // labels are already clipping.
+    // A PICTURE and a price. Nothing else.
     //
-    // The KEYS still work. Only the caption is gone, until the hotbar gets a
-    // design of its own.
+    // No name: the corner prompt already says what you are standing on and
+    // what it costs, in full, and repeating it in a 40px cell only clips it.
+    // No shortcut number: there is no keyboard on a phone, and this is a
+    // casual game that does not ask for fast hands.
+    //
+    // The picture is the MODEL, rendered at boot — see `src/thumbs.ts`. It was
+    // an emoji, which is a different drawing in every platform's font, is never
+    // the thing you are about to place (the bastion is a cannon on masonry; the
+    // glyph was a Japanese castle), and goes stale in silence when a model
+    // changes.
     cell.innerHTML =
-      `<span style="font-size:19px;line-height:1">${kind.icon}</span>` +
-      `<span>${kind.label}</span>` +
-      `<span class="cost" style="opacity:.85">${kind.cost}g</span>`;
+      `<img alt="${kind.label}" style="width:76%;aspect-ratio:1;object-fit:contain;display:block">`
+      + `<span class="cost" style="opacity:.85">${kind.cost}g</span>`;
     cell.onclick = () => { selected = i; refreshHotbar(); audio.play('build'); renderHud(); };
     hotbar.appendChild(cell);
     return cell;
   });
+
+  // Photograph each tower once, now that the models are loaded.
+  //
+  // A MOUNT is photographed on its masonry. The first version rendered the
+  // weapon alone, reasoning that at 40px across the stone would be most of the
+  // picture and the gun a speck on top — and the result was that the ballista
+  // and the watchtower, and the cannon and the bastion, were the same picture
+  // at 25g and at 120g. The stone is exactly what tells them apart, which is
+  // why it costs four times as much.
+  {
+    const thumbs = createThumbMaker(renderer);
+    KINDS.forEach((kind, i) => {
+      const img = cells[i].querySelector('img');
+      if (!img) return;
+      try {
+        const shot = new THREE.Group();
+        let y = 0;
+        if (kind.mount === 'tower' && kind.stack?.length) {
+          // One section, not the whole stack: this is what you are buying, and
+          // what you are buying is a level-one tower.
+          const base = cloneOf(kind.stack[0]);
+          shot.add(base);
+          y = pieceHeight(kind.stack[0]);
+        }
+        const gun = cloneOf(kind.model);
+        gun.position.y = y;
+        shot.add(gun);
+        img.src = thumbs.make(shot);
+      } catch {
+        // A picture is decoration; a level that will not start is not. If the
+        // render fails on some driver, the cells keep their price and their
+        // colour and the game is entirely playable.
+      }
+    });
+    thumbs.dispose();
+  }
 
   function refreshHotbar(): void {
     cells.forEach((cell, i) => {
