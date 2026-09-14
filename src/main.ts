@@ -429,7 +429,19 @@ const sellValue = (t: Tower): number => Math.round(t.invested * SELL_SHARE);
  *  simulation in slow motion, and a hold is an interaction with a finger rather
  *  than a thing happening in the world — a player on a struggling phone should
  *  not have to hold the button for a second and a half. */
-const SELL_HOLD_MS = 600;
+const SELL_HOLD_MS = 800;
+
+/** How long before the sell UI appears at all.
+ *
+ *  A DEAD ZONE at the start of the press, and it is not cosmetic. The same
+ *  button upgrades on a tap and sells on a hold, and without this the tap
+ *  showed a flash of the sell ring and the word SELL every single time — the
+ *  destructive reading of the button announcing itself during the ordinary
+ *  one. It made upgrading feel like a cancelled sale.
+ *
+ *  Under this, a press is an upgrade and shows nothing. Over it, the ring
+ *  appears and begins to fill. */
+const SELL_ARM_MS = 200;
 
 interface Shot {
   obj: THREE.Object3D;
@@ -1136,6 +1148,10 @@ export async function startLevel(
    *  goes soft the moment the camera moves. `pointer-events: none` — this game
    *  has drawn over the platform's control layer five times. */
   const sellTag = document.createElement('div');
+  // A handle a probe can find in one query. Walking the DOM for text starting
+  // with "Sell" works and costs a full document scan per sample, which is
+  // enough to turn a measured TAP into a hold.
+  sellTag.dataset.sellTag = '1';
   sellTag.style.cssText = `position: fixed; z-index: 28; pointer-events: none;
     display: none; transform: translate(-50%, -100%);
     font: 800 13px/1 system-ui, sans-serif; letter-spacing: .04em; color: #fff;
@@ -2248,7 +2264,12 @@ export async function startLevel(
    *  thing being sold, not on the finger doing it. */
   const sellProgress = (): number => {
     if (!pressPending || !standingOn || !input.held('build')) return 0;
-    return Math.min(1, (performance.now() - pressAt) / SELL_HOLD_MS);
+    const held = performance.now() - pressAt;
+    // Nothing at all until the press has outlived a tap. Then 0 to 1 over what
+    // is left, so the ring starts empty when it appears rather than jumping in
+    // a quarter full.
+    if (held < SELL_ARM_MS) return 0;
+    return Math.min(1, (held - SELL_ARM_MS) / (SELL_HOLD_MS - SELL_ARM_MS));
   };
 
   /** Take a tower down and hand back a share of what it cost.

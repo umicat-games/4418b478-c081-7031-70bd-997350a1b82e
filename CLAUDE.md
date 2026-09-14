@@ -199,7 +199,15 @@ walking, and a modal has to disable the touch layer and cover the field while
 the enemies keep coming. It would also be a THIRD button on a control layer
 this game has already drawn over five times.
 
-Three things it has to get right:
+**There is a DEAD ZONE at the start of the press.** The same button upgrades on
+a tap and sells on a hold, and the sell ring and the word appeared from the
+first frame of any press — so every upgrade flashed the destructive reading of
+the button on the way through, and upgrading felt like a cancelled sale.
+Nothing is drawn for the first 200ms; after that the ring appears empty and
+fills over the remaining 600. A press shorter than the dead zone is an upgrade
+and looks like nothing else.
+
+Four things it has to get right:
 
 - **`consume()` fires on the PRESS.** Wiring a hold onto it naively means a
   long press upgrades the tower on the way to selling it — you pay the upgrade
@@ -213,6 +221,11 @@ Three things it has to get right:
 - **The hold is measured in REAL time, not game time.** `dt` is clamped at 0.05,
   so a struggling phone would otherwise want the button held for a second and a
   half. A hold is a thing a finger does, not a thing happening in the world.
+- **A probe measuring a TAP must sample cheaply.** The first version of that
+  check walked the scene looking for the ring on every sample, and 1400 objects
+  a sample took long enough that the tap being measured became a hold — it sold
+  the tower and then reported that the dead zone was missing. It reads
+  `sellProgress()` and one `data-sell-tag` query on rAF instead.
 
 **The feedback is ON THE TOWER**, all of it. A ring sweeps clockwise round the
 cell as the hold fills, with the unfilled part behind it, and the word and the
