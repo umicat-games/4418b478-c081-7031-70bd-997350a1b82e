@@ -107,10 +107,20 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 520, wood: 25, stone: 70 },
       { gold: 980, wood: 45, stone: 125 },
     ],
-    damage: [3, 4, 5],
+    // A TAP, and then the fire does the work. It used to be 3/4/5, which with
+    // the Range bonus is 6/7/8 against a wave-one saucer's 10 — so the thing
+    // fire is FOR was killing them before it could be seen, and the element
+    // whose whole identity is "damage that happens while you are somewhere
+    // else" played as the one that killed on contact.
+    damage: [1, 1, 2],
     radius: 2.2,
     cooldown: 1.7,
-    effect: [2, 3.5, 5],   // damage per second
+    // What came off the direct hit went in here, so the staff is worth about
+    // what it was worth: with the Range at 3, a Lv1 cast was 6 + 2x3.5 = 13 and
+    // is now 4 + 3.06x3.5 = 14.7. Fresh, with no town, it is 8.7 against 10 —
+    // slightly weaker on the first run, which is the run where you have time to
+    // watch it.
+    effect: [2.2, 3.8, 5.4],   // damage per second
     effectSeconds: 3.5,
     sound: 'fire-magic-wand-sound-effect.mp3',
     tint: { gem: 0xff7a3a, glow: 0xd63a10, mote: 0xff3606, mote2: 0xffc07a },

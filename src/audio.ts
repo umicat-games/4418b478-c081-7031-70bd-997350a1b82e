@@ -38,6 +38,11 @@ const CLIPS: Record<string, AudioClipSpec> = {
   'fire-magic-wand-sound-effect.mp3': { volume: 0.5, throttle: 300 },
   'ice-magic-wand-sound-effect.mp3': { volume: 0.75, throttle: 300 },
   'lightning-magic-wand-sound-effect.mp3': { volume: 0.48, throttle: 300 },
+  // Once a WAVE, where the jingle used to be. It was one per arrival first,
+  // which is a real cue — the gates are at the far end of the board and you
+  // spend the wave somewhere else — but fourteen of them a wave is the board
+  // talking over the player.
+  'enemy-spawn.mp3': { volume: 0.6, throttle: 400 },
   denied: { volume: 0.5 },
   leak: { volume: 0.7 },
   wave: { volume: 0.6 },
@@ -56,6 +61,7 @@ export const SFX = {
   placeTower: 'place-weapon.mp3',
   upgradeTower: 'upgrade-weapon.mp3',
   door: 'enter-door.mp3',
+  enemySpawn: 'enemy-spawn.mp3',
 } as const;
 
 export const createAudio = (): GameAudio =>

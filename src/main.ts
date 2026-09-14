@@ -12,7 +12,7 @@ import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, lightning, flames, frost, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
 import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import {
@@ -1225,14 +1225,19 @@ export async function startLevel(
     // them. The bolts never showed this because they run sky-to-ground and
     // reach the floor whatever height they start from.
     const floor = _burstAt.set(at.x, 0, at.z);
-    if (kind.status === 'burn') flames(vfx, floor, { radius: r, color: t?.mote, life: 0.6 });
-    else if (kind.status === 'chill') frost(vfx, floor, { radius: r, color: t?.mote, life: 0.55 });
-    else lightning(vfx, floor, { radius: r, bolts: 5, life: 0.46 });
+    // These used to be about half a second each, which is long enough to SEE
+    // and too short to watch. A cast is the loudest thing a staff does and it
+    // was over before the eye had finished moving to it — and the lightning's
+    // own sound does not reach its peak until 1.2s, so the bang was landing on
+    // an empty patch of grass.
+    if (kind.status === 'burn') flames(vfx, floor, { radius: r, color: t?.mote, life: 1.25 });
+    else if (kind.status === 'chill') frost(vfx, floor, { radius: r, color: t?.mote, life: 1.2 });
+    else lightning(vfx, floor, { radius: r, bolts: 5, life: 1.15 });
     motes(vfx, at, {
       count: 14, color: t?.mote ?? 0x6aa9ff, color2: t?.mote2 ?? 0xdceaff, frame: FRAME.sparkle,
       // Fire rises, ice settles. The same particles with a different rise read
       // as two different things happening, which is most of what an element is.
-      radius: 0.7, rise: kind.status === 'chill' ? 0.5 : 1.7, spin: 3.4, life: 0.55, size: 0.24,
+      radius: 0.7, rise: kind.status === 'chill' ? 0.5 : 1.7, spin: 3.4, life: 1.0, size: 0.24,
     });
     // A real light, for the quarter-second it is worth one. Its intensity is
     // driven rather than the light being added and removed — adding a light to
@@ -1241,15 +1246,20 @@ export async function startLevel(
     spellFlash = 1;
   };
 
-  /** Mark where an arc landed.
+  /** Draw the arc, and mark what it hit.
    *
-   *  It does not DRAW the arc. A connected beam between two moving points needs
-   *  a primitive this game does not have, and the draw budget for a whole level
-   *  is about twenty — so each hop flashes at the enemy it reached, and the
-   *  sequence reads as a chain because it arrives in order.
-   */
-  const arc = (_from: THREE.Vector3, to: THREE.Vector3): void => {
-    lightning(vfx, to, { radius: 0.42, bolts: 2, life: 0.26, height: 1.6 });
+   *  It used to draw only the landing — "a connected beam between two moving
+   *  points needs a primitive this game does not have" — which meant the storm
+   *  staff's whole point, that it LEAVES the burst and goes looking, had to be
+   *  inferred from a sequence of flashes. `beam` quads are that primitive, and
+   *  they take the enemies' own position vectors, so the arc stays joined while
+   *  both ends keep flying.
+   *
+   *  One draw for the arc and one for the landing: a level-three storm staff
+   *  makes three hops, and the budget for a whole level is about twenty. */
+  const arc = (from: THREE.Vector3, to: THREE.Vector3): void => {
+    arcBetween(vfx, from, to, { color: 0xa8d4ff, life: 0.32 });
+    lightning(vfx, to, { radius: 0.42, bolts: 2, life: 0.45, height: 1.6 });
   };
 
   /** Leave the held staff's status on something it just hit.
@@ -1263,13 +1273,56 @@ export async function startLevel(
     const n = weaponEffect(weapon, weaponLevel);
     const secs = kind.effectSeconds ?? 0;
     if (kind.status === 'burn') {
-      e.burn = { dps: Math.max(n, e.burn?.dps ?? 0), left: secs, tick: 0 };
+      // Everything the player grows has to reach the burn, because the burn is
+      // where fire's damage lives. The Range bonus reads "+1 damage on every
+      // weapon", so it arrives as +1 TOTAL spread across the burn rather than
+      // +1 per second, which would be three and a half times what the sword
+      // gets for the same building. `withBuff` carries the player's level and
+      // the double-strike crate for the same reason: a buff that doubled a
+      // fire cast's one point of contact damage and left the fire alone would
+      // be a buff that does nothing, on the weapon it looks biggest on.
+      const dps = withBuff(n + bonus.heroDamage / Math.max(1, secs));
+      e.burn = { dps: Math.max(dps, e.burn?.dps ?? 0), left: secs, tick: 0 };
+      // Burning things LOOK burnt, for the same reason chilled things look
+      // chilled: fire's whole identity is the damage that happens while you
+      // are somewhere else, and a status only visible in the arithmetic is a
+      // status nobody believes in. This was the one element that marked its
+      // victims in no way at all.
+      flashTint(e.obj, { color: 0xff4a10, ms: secs * 1000 });
     } else if (kind.status === 'chill') {
       e.chill = { mult: Math.min(n, e.chill?.mult ?? 1), left: secs };
       // Chilled things LOOK chilled, for as long as they are: a slow that is
       // only visible in the arithmetic is a slow nobody believes in.
       flashTint(e.obj, { color: 0x8fd8ff, ms: secs * 1000 });
+    } else if (kind.status === 'chain') {
+      // The storm leaves nothing behind — that is what makes it the burst
+      // element rather than the lingering one — so the mark is short. It still
+      // has to exist: fire and ice both said something about what they had hit
+      // and lightning said nothing, which read as the arcs missing.
+      //
+      // 0.8s, not the 0.26 it started at. A quarter of a second is a mark you
+      // find in a frame grab and miss while playing — a probe reading the state
+      // 300ms after the cast already found it gone, which is the same question
+      // an eye asks. Still four times shorter than a burn, so it reads as
+      // struck rather than as a status.
+      flashTint(e.obj, { color: 0xdcefff, ms: 800 });
     }
+  };
+
+  /** A flame lifting off something that is burning.
+   *
+   *  Alternate bites only (`puff` flips), and three tongues rather than
+   *  thirteen: this runs per BURNING ENEMY rather than per cast, so a wave
+   *  caught in one burst is ten of these at once against a whole-level budget
+   *  of about twenty draws. `MAX_LIVE` is the backstop, but a backstop that is
+   *  hit every fight is a design that gets its effects eaten at random. */
+  let puff = false;
+  const burnPuff = (e: Enemy): void => {
+    puff = !puff;
+    if (!puff) return;
+    flames(vfx, _burstAt.set(e.obj.position.x, e.obj.position.y - 0.25, e.obj.position.z), {
+      radius: 0.26, tongues: 3, color: 0xff6a2a, life: 0.55, decals: false,
+    });
   };
 
   /** Light lifting off an upgraded tower.
@@ -1973,6 +2026,9 @@ export async function startLevel(
           struckSet.add(next);
           arc(from.obj.position, next.obj.position);
           damage(next, power);
+          // The hops were the one path that skipped this — so the enemies the
+          // arc went LOOKING for were the ones that showed nothing.
+          applyStatus(next);
           struck += 1;
           from = next;
         }
@@ -2322,7 +2378,14 @@ export async function startLevel(
             spawnTimer = 0;
             waveTimer = WAVE_GAP;
             waveLaunched = true;
-            audio.play('wave');
+            // ONCE A WAVE, not once an enemy. Per-arrival was a real cue — the
+            // gates are at the far end and you spend the wave somewhere else —
+            // but fourteen of them is the board talking over the player, and
+            // the wave already has a moment of its own to land on.
+            //
+            // It REPLACES the jingle here rather than layering with it: two
+            // announcements on the same frame is one announcement nobody hears.
+            audio.play(SFX.enemySpawn);
             renderHud();
           }
         }
@@ -2342,6 +2405,11 @@ export async function startLevel(
           e.burn.tick -= dt;
           if (e.burn.tick <= 0) {
             e.burn.tick = BURN_TICK;
+            // A small flame off the thing itself, every other bite. Every bite
+            // would be twice a second per burning enemy, and ten burning
+            // enemies is a draw call each — the tint says "this is on fire" for
+            // free, and this says it again where you are looking.
+            burnPuff(e);
             damage(e, e.burn.dps * BURN_TICK, true);
             if (!e.alive) continue;
           }

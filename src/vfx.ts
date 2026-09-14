@@ -449,6 +449,9 @@ export function quads(
 
 const UP_AXIS = new THREE.Vector3(0, 1, 0);
 
+/** How much of a bolt's life is the strike, and how much is the afterglow. */
+const STRIKE_FRACTION = 0.32;
+
 /**
  * A lightning strike: bolts out of the sky, a rune ring on the ground, a flash.
  *
@@ -486,17 +489,26 @@ const UP_AXIS = new THREE.Vector3(0, 1, 0);
 export function flames(
   vfx: Vfx,
   at: THREE.Vector3,
-  opts: { radius: number; tongues?: number; color?: number; life?: number },
+  opts: {
+    radius: number; tongues?: number; color?: number; life?: number;
+    /** The scorch and the glow on the floor. TRUE for a cast, which lands on
+     *  the ground; FALSE for something burning in mid-air, where a ground decal
+     *  is a scorch mark hanging two metres up. The saucers FLY, and this game
+     *  has already drawn a burst's rings in the sky once. */
+    decals?: boolean;
+  },
 ): void {
   const n = opts.tongues ?? 13;
   const life = opts.life ?? 0.6;
   const list: Quad[] = [];
 
-  // The scorch first, so it draws under the rest of the same mesh.
-  list.push({ at: new THREE.Vector3(at.x, at.y + 0.03, at.z), frame: FRAME.scorch,
-              w: opts.radius * 2.1, h: opts.radius * 2.1, mode: 'ground' });
-  list.push({ at: new THREE.Vector3(at.x, at.y + 0.05, at.z), frame: FRAME.glowRing,
-              w: opts.radius * 1.3, h: opts.radius * 1.3, mode: 'ground' });
+  if (opts.decals !== false) {
+    // The scorch first, so it draws under the rest of the same mesh.
+    list.push({ at: new THREE.Vector3(at.x, at.y + 0.03, at.z), frame: FRAME.scorch,
+                w: opts.radius * 2.1, h: opts.radius * 2.1, mode: 'ground' });
+    list.push({ at: new THREE.Vector3(at.x, at.y + 0.05, at.z), frame: FRAME.glowRing,
+                w: opts.radius * 1.3, h: opts.radius * 1.3, mode: 'ground' });
+  }
 
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
@@ -528,7 +540,10 @@ export function flames(
     // buys white.
     alpha: (k) => (k < 0.12 ? 0.62 : Math.max(0, 0.62 * (1 - ((k - 0.12) / 0.88) ** 0.55))),
     step: (qs, _k, dt) => {
-      for (let i = 2; i < qs.length - 1; i++) {
+      // The tongues start after the decals, and there are no decals when a
+      // caller asked for none. A hard-coded 2 left the first two tongues
+      // standing still in exactly the case this option exists for.
+      for (let i = opts.decals === false ? 0 : 2; i < qs.length - 1; i++) {
         // Climb, widen, thin. Widening while the alpha drops is what reads as
         // smoke at the end rather than a flame being shrunk.
         qs[i].at.y += dt * 1.9;
@@ -623,6 +638,48 @@ export function frost(
   });
 }
 
+/** A live arc between two MOVING points.
+ *
+ *  The bolt is a `beam` quad whose ends are the two Vector3s it was handed —
+ *  the enemies' own position vectors, not copies — so the arc stays connected
+ *  while both ends keep flying. That is the thing a beam primitive buys: the
+ *  chain used to flash at each enemy in turn and leave the connection to be
+ *  inferred, with a comment saying a connected beam "needs a primitive this
+ *  game does not have".
+ *
+ *  Kept to three quads (the bolt, and a small burst at each end) because a
+ *  level-three storm staff draws three of these at once.
+ */
+export function arcBetween(
+  vfx: Vfx,
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  opts: { color?: number; life?: number; width?: number } = {},
+): void {
+  const life = opts.life ?? 0.3;
+  const frames = [FRAME.boltA, FRAME.boltB, FRAME.strandA, FRAME.strandB];
+  const list: Quad[] = [
+    { at: from, to, frame: frames[0], w: opts.width ?? 0.85, h: 1, mode: 'beam' },
+    { at: from, frame: FRAME.flare, w: 0.7, h: 0.7, mode: 'face' },
+    { at: to, frame: FRAME.starBurst, w: 0.9, h: 0.9, mode: 'face' },
+  ];
+  let flick = 0;
+  quads(vfx, list, {
+    life,
+    color: opts.color ?? 0xa8d4ff,
+    alpha: (k) => (k < 0.2 ? 1 : Math.max(0, 1 - ((k - 0.2) / 0.8) ** 0.6)),
+    step: (qs, _k, dt) => {
+      flick += dt;
+      if (flick > 0.04) {
+        flick = 0;
+        qs[0].frame = frames[Math.floor(Math.random() * frames.length)];
+        qs[0].w = 0.7 + Math.random() * 0.5;
+      }
+      qs[2].w = qs[2].h = qs[2].w + dt * 1.4;
+    },
+  });
+}
+
 export function lightning(
   vfx: Vfx,
   at: THREE.Vector3,
@@ -672,8 +729,13 @@ export function lightning(
     // Bright, then gone. A linear fade reads as a light being turned down.
     alpha: (k) => (k < 0.12 ? 1 : Math.max(0, 1 - ((k - 0.12) / 0.88) ** 0.7)),
     step: (qs, k, dt) => {
+      // Flicker only while it is STRIKING. Lengthening the effect by raising
+      // `life` alone turned a strike into a strobe — twenty-five re-jitters
+      // instead of eight, at the same rate, which reads as a broken light
+      // rather than a longer bolt. So the first third crackles and the rest
+      // holds still and fades, which is what a strike actually looks like.
       flick += dt;
-      if (flick > 0.045) {
+      if (k < STRIKE_FRACTION && flick > 0.045) {
         flick = 0;
         for (let i = 0; i < n; i++) {
           const q = qs[i];

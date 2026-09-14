@@ -664,6 +664,68 @@ Two things this got wrong first, both of them invisible as errors:
 A mote with no `frame` is an untextured square, and at 0.13 across next to
 textured lightning it reads as a scrap of white paper. Give sparks a frame.
 
+`arcBetween(vfx, from, to)` is a live arc between two MOVING points — it holds
+the enemies' own position vectors, not copies, so the bolt stays joined while
+both ends keep flying. The storm's hops used to flash at each enemy in turn and
+leave the connection to be inferred, under a comment saying a connected beam
+"needs a primitive this game does not have". It does now; that is what `beam`
+is.
+
+**A cast lasts about 1.2 seconds, not half of one.** Half a second is long
+enough to SEE and too short to watch — and the lightning's own uploaded sound
+does not reach its loudest point until 1.2s in, so the bang was landing on an
+empty patch of grass. Lengthening is not just a bigger `life`: the bolts flicker
+only through the first third (`STRIKE_FRACTION`) and hold still for the rest,
+because re-jittering at the same rate for three times as long turns a strike
+into a strobe.
+
+### What an element leaves on what it hits
+
+Every element marks its victims, and for a while only one did.
+
+| element | mark | for |
+| --- | --- | --- |
+| fire | orange tint, and a flame off the body every second bite | the burn, 3.5s |
+| ice | blue tint | the chill, 3s |
+| storm | pale flash | 0.8s — struck, not a status |
+
+The storm's mark started at 0.26s, which is a mark you find in a frame grab and
+miss while playing: a probe reading the state 300ms after the cast already found
+it gone, and that is the same question an eye asks.
+
+**A wave starting has a sound of its own** (`enemy-spawn.mp3`, uploaded), in
+place of the jingle. It was one per ARRIVAL first, which is a real cue — the
+gates are at the far end of the board and you spend the wave somewhere else —
+but fourteen a wave is the board talking over the player, and two announcements
+on the same frame is one announcement nobody hears.
+
+**Fire is the one this mattered most for, and it was the one with nothing.** Its
+whole identity is damage that happens while you are somewhere else, and it said
+so in the arithmetic only. It also killed on contact: direct damage of 3/4/5
+plus the Range bonus is 6/7/8 against a wave-one saucer's 10, so the burn never
+got a chance to be seen. The tap is 1/1/2 now and what came off it went into the
+burn, which is where fire's damage is supposed to live.
+
+**Everything the player grows has to reach the burn.** The Range bonus and the
+level multiplier and the double-strike crate all landed on the direct hit, which
+on a burn weapon is the part that is not the point — so the more you grew, the
+more fire played like a weapon that kills on contact. The bonus arrives as +1
+TOTAL spread across the burn (`+heroDamage / effectSeconds`), which is exactly
+what every other weapon gets for the same building, delivered the way fire
+delivers.
+
+**A per-enemy effect is not a per-cast effect.** The burn's flame runs once per
+BURNING ENEMY, so a wave caught in one burst is ten of them at once against a
+whole-level budget of about twenty draws. It fires on alternate bites and uses
+three tongues instead of thirteen. `MAX_LIVE` is the backstop, but a backstop
+that is hit every fight is a design whose effects get eaten at random.
+
+**`flames()` draws a scorch and a glow on the FLOOR, and the saucers fly.** Pass
+`decals: false` for anything burning in mid-air, or the scorch mark hangs two
+metres up — the same bug the burst itself already had once. Its `step` used to
+skip `i < 2` to get past those two decals, which left the first two tongues
+standing still in exactly the case the option exists for.
+
 ## Things that will bite
 
 - **`Box3.setFromObject` lies about skinned meshes.** It reports the space the
@@ -735,7 +797,18 @@ doors, the ice), `verify-3d-lanes` (the fork, the gates, the boss),
 `verify-3d-feedback`, `verify-3d-endscreen`, `verify-3d-audio`,
 `verify-3d-audio-engines`, `verify-3d-jump-touch`, `verify-3d-balance`,
 `verify-3d-town`, `verify-3d-armory` (forging, the Armory cap, and that a save
-from before it keeps the weapons it had earned), `verify-3d-dev`.
+from before it keeps the weapons it had earned), `verify-3d-dev`,
+`verify-3d-staff-audio`, `verify-3d-elements`.
+
+`verify-3d-staff-audio` does not ask whether `play()` was called — that passes
+for a clip that 404s, and a missing audio file is silent with no error at all.
+It patches `AudioBufferSourceNode.start` and reads the DURATION of the buffer
+that actually reaches the speaker: the three uploaded casts are 2.0s, 3.0s and
+4.0s, so the length of what started is proof of which FILE played. Both engines
+(`… <url> webkit`), because audio is where they have differed before.
+
+`verify-3d-elements` asks what each element leaves ON what it hits, which is
+the half of an element that no damage number shows.
 
 Getting from the hub into a board lives in **`pw-level.mjs`**, once. It was
 copied into every probe with a comment saying it was shared "so that when the
