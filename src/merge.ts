@@ -33,7 +33,7 @@ const CASTS = new Set([
   // The hub's furniture. The name in blocks is a HUNDRED AND FOUR little cubes
   // — on its own it was two thirds of the hub's draw calls.
   'title', 'plot', 'plot_sign', 'plot_lantern', 'door_frame', 'door_sign',
-  'decor',
+  'decor', 'village_wall',
 ]);
 // `pedestal` is NOT in that list, and the omission is load-bearing. The rack
 // only shows the weapons you have made plus the next one, which means plinths

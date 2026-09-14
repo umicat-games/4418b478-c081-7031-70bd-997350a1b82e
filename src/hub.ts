@@ -8,6 +8,7 @@ import {
 import type { Shared, Progress } from './main';
 import { patchSave, readSave } from './main';
 import { DEV, toggleDev } from './dev';
+import { skyWithClouds } from './sky';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createDebugHud } from './debughud';
@@ -131,6 +132,12 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // as the boards, same module — a thousand draw calls in the first thing
   // anyone sees would be a worse first impression than the wall was.
   const folded = mergeStatic(world, scene3d, manifest);
+  // Clouds. AFTER the scene is loaded, and not as entities: the SDK fits every
+  // shadow camera to the bounds of what it loaded, so anything far away costs
+  // the whole board its shadow resolution. A background has no bounds.
+  world.scene.background = skyWithClouds({
+    horizon: `#${(world.scene.background as THREE.Color | null)?.getHexString?.() ?? '9fd4ef'}`,
+  });
 
   const hero = world.entities.get('hero')!;
   const marker = world.entities.get('sign_marker')!;

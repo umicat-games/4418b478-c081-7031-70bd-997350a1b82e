@@ -16,6 +16,7 @@ import { Vfx, ring as ringVfx, motes, corpse, lightning, arcBetween, flames, fro
 import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
+import { skyWithClouds } from './sky';
 import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
   type Weapon, type WeaponLevels,
@@ -512,6 +513,12 @@ export async function startLevel(
   // --- Fold the board into a handful of draws ---
   //
   const folded = mergeStatic(world, scene3d, manifest);
+  // Clouds. AFTER the scene is loaded, and not as entities: the SDK fits every
+  // shadow camera to the bounds of what it loaded, so anything far away costs
+  // the whole board its shadow resolution. A background has no bounds.
+  world.scene.background = skyWithClouds({
+    horizon: `#${(world.scene.background as THREE.Color | null)?.getHexString?.() ?? '9fd4ef'}`,
+  });
 
   const hero = world.entities.get('hero')!;
   const marker = world.entities.get('build_marker')!;

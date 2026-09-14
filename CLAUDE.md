@@ -383,6 +383,55 @@ over the platform's touch layer, so `verify-3d-jump-touch` was re-run and
 actually under its own middle — "is it there" has passed for a button nothing
 could reach before.
 
+## The village wall, and the sky
+
+**The boards have no wall and the village does**, and that is not an
+inconsistency. A board is a CLEARING — what stops you there is an invisible
+collider inside a tree line, because a forest edge built to seal perfectly is a
+fence with leaves on. The village has a GATE in it, and a gate standing in a gap
+between two trees guards nothing; the door read as scenery somebody had left on
+the grass.
+
+It is the same box that stops you, made visible: thin, brown, 1.2 high, the
+same family as the door frame beside it. A modular STONE wall from Kenney's
+Castle Kit was tried first and was wrong — correct, tileable, and a fortress
+rampart around a cartoon village with a little wooden arch in it. **The version
+this game already had, before the walls came down, was the right answer**; it
+was in the commit before `7813086`.
+
+All five sides share the NAME `village_wall` so `merge.ts` folds them into the
+mesh the rest of the village furniture is in. Five boxes is five draw calls
+otherwise, and the hub measured 42 instead of 34.
+
+### Clouds are painted into the sky, not hung in the world
+
+`src/sky.ts` builds a canvas and hands it to `scene.background` as an
+equirectangular texture. Geometry was tried first and is wrong twice over:
+
+- **This camera shows almost no sky.** It sits 3.6 above the hero and looks
+  down, and the TOP EDGE of the frame points two degrees BELOW horizontal. The
+  blue at the top of a screenshot is not sky overhead — it is the background
+  showing past the last row of trees, in a band eight degrees deep between the
+  treetops and the top of the frame. Clouds placed at any sensible height were
+  in the scene, merged, drawn, and entirely off screen.
+- **A distant object wrecks the shadows.** The SDK fits every directional
+  light's shadow camera to the bounds of everything it LOADED, `castShadow`
+  or not. A ring of clouds thirty units out took the hub's shadow radius from 8
+  to 37 with the same 1024 map — a twentieth of the resolution, which showed up
+  as a soft grey smear across the grass that nothing in the scene explained.
+  Anything decorative and far away belongs outside the scene file.
+
+The same trap appears once more inside the texture: the visible band is BELOW
+the horizon line, so the clouds are painted just under the middle of the
+equirect image. Painting them where clouds obviously go put them all in the part
+of the texture nothing renders.
+
+**And a canvas gradient is resolved in the user space current at FILL time.** A
+radial gradient built at `(px, py)` and then `translate(px, py)`-ed lands at
+twice the distance, outside the circle being filled, so every blob painted its
+outermost stop — which was transparent. The whole sky drew, without error, and
+produced a clean gradient with nothing in it.
+
 ## The town
 
 Five plots in the hub, bought with gold, wood and stone the same way as everything else in

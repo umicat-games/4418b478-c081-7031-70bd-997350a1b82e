@@ -225,6 +225,7 @@ function rng(seed) {
   };
 }
 
+
 /** Where a gate sits and which way it faces, from the wall it is set into. */
 function gatePlacement(g) {
   const D = 6.6;
@@ -807,16 +808,30 @@ function buildHub() {
     ['hwall_n1', -(0.7 + HALF + 0.7) / 2, -HALF - 0.6, HALF + 0.7 - 0.7, 0.4],
     ['hwall_n2', (0.7 + HALF + 0.7) / 2, -HALF - 0.6, HALF + 0.7 - 0.7, 0.4],
   ];
+  // VISIBLE again, and it is the same box that stops you rather than a model
+  // standing in front of one.
+  //
+  // The boards are a CLEARING and deliberately have no wall — what stops you
+  // there is an invisible collider inside a tree line, because a forest edge
+  // built to seal perfectly is a fence with leaves on. The village is the
+  // opposite case: it has a GATE in it, and a gate standing in a gap between
+  // two trees guards nothing, so the door read as scenery left on the grass.
+  //
+  // Thin, brown and 1.2 high, which is what it was before the walls came down
+  // — the same family as the door frame beside it. A modular STONE wall was
+  // tried here and was wrong: correct, tileable, and a fortress rampart around
+  // a cartoon village with a little wooden arch in it.
   for (const [id, x, z, sx, sz] of walls) {
     ents.push({
-      id, name: id,
-      // Invisible. The trees are what you see; this is what stops you.
-      primitive: { kind: 'box', size: { x: sx, y: 1.6, z: sz }, color: '#4a4036' },
-      visible: false,
-      transform: { position: { x, y: 0.6, z } },
-      collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.8, z: sz / 2 } }, body: 'fixed' },
+      // One NAME for all five, so `merge.ts` can fold them into the mesh the
+      // rest of the village furniture is already in. The id stays unique.
+      id, name: 'village_wall',
+      primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
+      transform: { position: { x, y: 0.4, z } },
+      collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
     });
   }
+
   ents.push({
     id: 'door', name: 'door', modelAssetId: 'hub-door-open',
     transform: { position: { x: DOOR_X, y: GROUND_Y, z: -HALF - 0.6 } },

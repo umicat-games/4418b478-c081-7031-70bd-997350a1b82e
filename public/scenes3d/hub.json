@@ -26431,21 +26431,20 @@
     },
     {
       "id": "hwall_s",
-      "name": "hwall_s",
+      "name": "village_wall",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 10.4,
-          "y": 1.6,
+          "y": 1.2,
           "z": 0.4
         },
         "color": "#4a4036"
       },
-      "visible": false,
       "transform": {
         "position": {
           "x": 0,
-          "y": 0.6,
+          "y": 0.4,
           "z": 5.1
         }
       },
@@ -26454,7 +26453,7 @@
           "kind": "box",
           "halfExtents": {
             "x": 5.2,
-            "y": 0.8,
+            "y": 0.6,
             "z": 0.2
           }
         },
@@ -26463,21 +26462,20 @@
     },
     {
       "id": "hwall_w",
-      "name": "hwall_w",
+      "name": "village_wall",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 0.4,
-          "y": 1.6,
+          "y": 1.2,
           "z": 10.4
         },
         "color": "#4a4036"
       },
-      "visible": false,
       "transform": {
         "position": {
           "x": -5.1,
-          "y": 0.6,
+          "y": 0.4,
           "z": 0
         }
       },
@@ -26486,7 +26484,7 @@
           "kind": "box",
           "halfExtents": {
             "x": 0.2,
-            "y": 0.8,
+            "y": 0.6,
             "z": 5.2
           }
         },
@@ -26495,21 +26493,20 @@
     },
     {
       "id": "hwall_e",
-      "name": "hwall_e",
+      "name": "village_wall",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 0.4,
-          "y": 1.6,
+          "y": 1.2,
           "z": 10.4
         },
         "color": "#4a4036"
       },
-      "visible": false,
       "transform": {
         "position": {
           "x": 5.1,
-          "y": 0.6,
+          "y": 0.4,
           "z": 0
         }
       },
@@ -26518,7 +26515,7 @@
           "kind": "box",
           "halfExtents": {
             "x": 0.2,
-            "y": 0.8,
+            "y": 0.6,
             "z": 5.2
           }
         },
@@ -26527,21 +26524,20 @@
     },
     {
       "id": "hwall_n1",
-      "name": "hwall_n1",
+      "name": "village_wall",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 4.5,
-          "y": 1.6,
+          "y": 1.2,
           "z": 0.4
         },
         "color": "#4a4036"
       },
-      "visible": false,
       "transform": {
         "position": {
           "x": -2.95,
-          "y": 0.6,
+          "y": 0.4,
           "z": -5.1
         }
       },
@@ -26550,7 +26546,7 @@
           "kind": "box",
           "halfExtents": {
             "x": 2.25,
-            "y": 0.8,
+            "y": 0.6,
             "z": 0.2
           }
         },
@@ -26559,21 +26555,20 @@
     },
     {
       "id": "hwall_n2",
-      "name": "hwall_n2",
+      "name": "village_wall",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 4.5,
-          "y": 1.6,
+          "y": 1.2,
           "z": 0.4
         },
         "color": "#4a4036"
       },
-      "visible": false,
       "transform": {
         "position": {
           "x": 2.95,
-          "y": 0.6,
+          "y": 0.4,
           "z": -5.1
         }
       },
@@ -26582,7 +26577,7 @@
           "kind": "box",
           "halfExtents": {
             "x": 2.25,
-            "y": 0.8,
+            "y": 0.6,
             "z": 0.2
           }
         },
