@@ -518,11 +518,25 @@ and `instanceColor` is per-instance.
 ### The atlas
 
 `public/vfx/particles.png` is a 4×4 sheet of 256px cells cut from Kenney's
-Particle Pack (CC0): four lightning bolts, two arcs, two rings, a rune circle,
-a flare, a sparkle, a star burst, a scorch, a burst, a twirl and a slash.
-`FRAME` names them. **One texture, loaded once** — a texture per effect is a
-texture per cast, and the whole point of one sheet is that every spell in the
-game can share a single material.
+Particle Pack (CC0), and **`tools/pack-vfx-atlas.py` (`npm run atlas`) is what
+cuts it** — the mapping from cell to source file lives in that script's table
+and nowhere else. It exists because the first packing script was not kept, and
+recovering which cell was which meant comparing all sixteen against ninety-odd
+source files pixel by pixel. That is an afternoon to answer what a table
+answers.
+
+`FRAME` indexes the sheet BY POSITION, so the table and `FRAME` change together
+or every effect in the game silently draws something else.
+
+Four cells originally held `arcA`/`arcB`/`twirl`/`slash` and nothing ever drew
+one. They are `flameA`, `flameB`, `iceShard` and `frostRing` now: fire and ice
+needed shapes of their own far more than the atlas needed four unused ones.
+Regenerating reproduced the twelve surviving cells pixel-for-pixel (measured —
+mean difference 0.00), so nothing that was already drawn changed.
+
+**One texture, loaded once** — a texture per effect is a texture per cast, and
+the whole point of one sheet is that every spell in the game can share a single
+material.
 
 `quads(vfx, list, opts)` draws any number of textured quads as ONE mesh: one
 `BufferGeometry` of four verts and two triangles per quad, rewritten every frame
@@ -533,7 +547,25 @@ from the quad list. Three modes, which is the whole vocabulary:
 - `beam` — stretched from `at` to `to` and rolled to keep its flat side towards
   the camera. Bolts, and anything that runs between two points.
 
-`lightning(vfx, at, opts)` composes them into the staff's strike: five `beam`
+Three composites, one per element, each ONE `quads` call — `flames`, `frost` and
+`lightning`. They differ in MOTION, which is most of what an element is: flame
+climbs and widens and leaves a scorch that outlives it, frost races out and
+holds, lightning strikes and is gone.
+
+**Additive over bright grass eats colour, and area is the answer, not alpha.**
+Measured against a no-cast control (the scene animates either way, so a bare
+before/after measures enemies walking): fire at alpha 0.9 shifted the picture by
+(+4.6,+3.1,+4.1) — a neutral grey, because an additive white sprite clips every
+channel and takes the hue with it. The same cast at 0.62, with more tongues to
+make up the presence, shifts it (+30,+15,+8), which is orange. Ice reads
+(+25,+42,+75) and the bolts (+20,+26,+38).
+
+**A burst is a GROUND effect and is cast at y 0**, not at the target's own
+height. Casting it on a flying enemy put the scorch, the rings and the crystals
+two metres up where nothing could see them; the bolts never showed this because
+they run sky-to-ground and reach the floor whatever height they start from.
+
+`lightning(vfx, at, opts)` composes them into the storm staff's strike: five `beam`
 bolts scattered inside the damage radius, a `ground` glow that races out to
 exactly where the damage ends, a turning rune, and a flare and star at the
 centre. The bolts re-pick their frame and re-jitter their heads every 45ms,

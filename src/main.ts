@@ -12,11 +12,11 @@ import { createAudio, MUSIC, SFX } from './audio';
 import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, lightning, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, lightning, flames, frost, preloadAtlas, FRAME } from './vfx';
 import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import {
-  WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
+  WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
   type Weapon, type WeaponLevels,
 } from './weapons';
 import { NO_BONUS, type TownBonus } from './town';
@@ -1211,13 +1211,23 @@ export async function startLevel(
    *  The ring's size is the RANGE, not a decoration — it ends exactly where
    *  the damage does, so one cast teaches the radius better than any number
    *  in the HUD could. */
+  const _burstAt = new THREE.Vector3();
   const castBurst = (at: THREE.Vector3): void => {
     const t = kind.tint;
-    // Bolts only for the storm staff. Fire and ice throw the same arcs otherwise,
-    // and three elements that all look like lightning are one element in three
-    // colours.
-    if (kind.status === 'chain') lightning(vfx, at, { radius: burstRadius(), bolts: 5, life: 0.46 });
-    else ringVfx(vfx, at, { color: t?.mote ?? 0x6aa9ff, from: 0.25, to: burstRadius(), life: 0.4, opacity: 0.75 });
+    // One effect per element, each its own ONE draw call — the same budget the
+    // bolts have always had. Three elements that all throw lightning would be
+    // one element in three colours; fire climbs and scorches, frost goes out
+    // and holds, and the storm still strikes.
+    const r = burstRadius();
+    // On the GROUND, under the target — not at the target's own height. A burst
+    // is an area effect, and casting it on a FLYING enemy put the scorch, the
+    // rings and the crystals two metres up in the air where nothing could see
+    // them. The bolts never showed this because they run sky-to-ground and
+    // reach the floor whatever height they start from.
+    const floor = _burstAt.set(at.x, 0, at.z);
+    if (kind.status === 'burn') flames(vfx, floor, { radius: r, color: t?.mote, life: 0.6 });
+    else if (kind.status === 'chill') frost(vfx, floor, { radius: r, color: t?.mote, life: 0.55 });
+    else lightning(vfx, floor, { radius: r, bolts: 5, life: 0.46 });
     motes(vfx, at, {
       count: 14, color: t?.mote ?? 0x6aa9ff, color2: t?.mote2 ?? 0xdceaff, frame: FRAME.sparkle,
       // Fire rises, ice settles. The same particles with a different rise read
@@ -1709,11 +1719,17 @@ export async function startLevel(
     void showSummary(didWin, reached);
   };
 
+  /** The `?dev` weapon-cycle key, if this is a sandbox run. Declared here so
+   *  `tearDown` can take it off the window — a keydown listener that outlives
+   *  its level is one that swaps the weapon of the NEXT one. */
+  let devCycle: ((e: KeyboardEvent) => void) | null = null;
+
   /** Take the level apart. Its scene, its physics and its listeners would
    *  otherwise keep running behind the hub for the rest of the session. */
   const tearDown = (): void => {
     renderer.setAnimationLoop(null);
     window.removeEventListener('resize', resize);
+    if (devCycle) { window.removeEventListener('keydown', devCycle); devCycle = null; }
     input.dispose();
     banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
     debug.dispose();
@@ -2068,6 +2084,24 @@ export async function startLevel(
   // Whatever was picked up in the hub. Also the only thing that hides the
   // other two: they are all attached, and all visible until told otherwise.
   setWeapon(startWeapon);
+
+  // DEV ONLY: cycle the weapon mid-fight with `\`.
+  //
+  // A run carries ONE weapon, on purpose — which weapon to take is most of what
+  // the Armory is for. But comparing three staves that way means three runs and
+  // three walks back to the rack, and what you are trying to judge is how a
+  // burn feels against a chill on the SAME wave. `?dev` already unlocks
+  // everything and saves nothing, so this belongs there and nowhere near a real
+  // run. It also announces itself, or you cannot tell which one you are holding.
+  if (DEV) {
+    devCycle = (e: KeyboardEvent): void => {
+      if (e.code !== 'Backquote' && e.code !== 'Backslash') return;
+      const order = WEAPONS.map((w) => w.id);
+      setWeapon(order[(order.indexOf(weapon) + 1) % order.length]);
+      flashBanner(`${kind.icon} ${kind.name.toUpperCase()}`);
+    };
+    window.addEventListener('keydown', devCycle);
+  }
   renderHud();
   // Everything is loaded, warmed and placed; the next frame is a real one.
   hideLoading();

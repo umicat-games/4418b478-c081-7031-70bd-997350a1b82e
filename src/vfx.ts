@@ -250,11 +250,17 @@ export function setFrameUv(geom: THREE.BufferGeometry, frame: number): void {
   uv[6] = u1; uv[7] = v0;
   geom.attributes.uv.needsUpdate = true;
 }
+/** The atlas, by position. `tools/pack-vfx-atlas.py` builds the PNG from this
+ *  same order and names each source file — the two must be changed together,
+ *  because a frame index is the only thing tying a drawing to a picture. */
 export const FRAME = {
   boltA: 0, boltB: 1, strandA: 2, strandB: 3,
-  arcA: 4, arcB: 5, glowRing: 6, runeRing: 7,
+  // Cells 4, 5, 14 and 15 held `arcA`/`arcB`/`twirl`/`slash`, which nothing
+  // ever drew. Fire and ice needed shapes of their own far more than the atlas
+  // needed four unused ones.
+  flameA: 4, flameB: 5, glowRing: 6, runeRing: 7,
   runeCircle: 8, flare: 9, sparkle: 10, starBurst: 11,
-  scorch: 12, burst: 13, twirl: 14, slash: 15,
+  scorch: 12, burst: 13, iceShard: 14, frostRing: 15,
 } as const;
 
 /** One textured rectangle inside an effect. */
@@ -457,6 +463,166 @@ const UP_AXIS = new THREE.Vector3(0, 1, 0);
  *
  * One draw call for all of it.
  */
+/**
+ * Fire: tongues that climb, and a scorch that stays behind.
+ *
+ * The staves had to be as loud as each other. Storm got `lightning` when it was
+ * the only magic in the game; fire and ice opened with a ring and a handful of
+ * specks, which read — correctly — as the cheap ones. Same budget: ONE `quads`
+ * call each, exactly what the bolts cost.
+ *
+ * The tongues are `flameA`/`flameB` — Kenney's `flame_05`/`flame_06`, actual
+ * fire with a curling tip — and they are TALL and never rolled. Two passes got
+ * this wrong first: 0.75-square quads spun on their own axis (a pinwheel of
+ * orange smudges), then the muzzle flash stretched to twice its height, which
+ * reads as a searchlight. The atlas had four cells nothing drew; two of them
+ * are flames now.
+ *
+ * What makes it fire rather than orange lightning is the MOTION. Bolts strike
+ * down and vanish; flame climbs, widens and thins, and leaves a mark that
+ * outlives it — the mark says something BURNED here, which is what the weapon
+ * actually did to everything standing in it.
+ */
+export function flames(
+  vfx: Vfx,
+  at: THREE.Vector3,
+  opts: { radius: number; tongues?: number; color?: number; life?: number },
+): void {
+  const n = opts.tongues ?? 13;
+  const life = opts.life ?? 0.6;
+  const list: Quad[] = [];
+
+  // The scorch first, so it draws under the rest of the same mesh.
+  list.push({ at: new THREE.Vector3(at.x, at.y + 0.03, at.z), frame: FRAME.scorch,
+              w: opts.radius * 2.1, h: opts.radius * 2.1, mode: 'ground' });
+  list.push({ at: new THREE.Vector3(at.x, at.y + 0.05, at.z), frame: FRAME.glowRing,
+              w: opts.radius * 1.3, h: opts.radius * 1.3, mode: 'ground' });
+
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
+    const r = opts.radius * (0.1 + Math.random() * 0.75);
+    const h = 1.3 + Math.random() * 1.0;
+    list.push({
+      at: new THREE.Vector3(at.x + Math.cos(a) * r, at.y + h * 0.45, at.z + Math.sin(a) * r),
+      frame: i % 2 ? FRAME.flameA : FRAME.flameB,
+      // Broader than tall-and-thin: a flame is a body of fire, and the pair of
+      // source sprites already carry the taper.
+      w: h * (0.62 + Math.random() * 0.2), h, mode: 'face',
+    });
+  }
+  list.push({ at: new THREE.Vector3(at.x, at.y + 0.5, at.z), frame: FRAME.flare,
+              w: 2.6, h: 2.6, mode: 'face' });
+
+  quads(vfx, list, {
+    life,
+    // Additive over green grass walks any orange towards yellow-white, so the
+    // tint has to start deeper than the fire should look — 0xff8a3c arrived as
+    // pale lemon. This lands orange.
+    color: opts.color ?? 0xff3606,
+    // Hot at once, then guttering. An even fade is a light on a dimmer.
+    // 0.62, not 1, and MORE tongues to make up the presence. Measured against a
+    // no-cast control: at 0.9 the fire shifted the picture by (+4.6,+3.1,+4.1) —
+    // a neutral grey, because an additive white sprite over bright grass clips
+    // every channel and takes the hue with it. At 0.62 the same cast shifts it
+    // (+28.7,+14.9,+8.8), which is orange. Area at low alpha buys colour; alpha
+    // buys white.
+    alpha: (k) => (k < 0.12 ? 0.62 : Math.max(0, 0.62 * (1 - ((k - 0.12) / 0.88) ** 0.55))),
+    step: (qs, _k, dt) => {
+      for (let i = 2; i < qs.length - 1; i++) {
+        // Climb, widen, thin. Widening while the alpha drops is what reads as
+        // smoke at the end rather than a flame being shrunk.
+        qs[i].at.y += dt * 1.9;
+        qs[i].w += dt * 0.85;
+        qs[i].h += dt * 0.5;
+      }
+      const flare = qs[qs.length - 1];
+      flare.w = Math.max(0.2, flare.w - dt * 3.6);
+      flare.h = flare.w;
+    },
+  });
+}
+
+/**
+ * Ice: spikes thrown outward along the ground, crystals over them, and a ring
+ * that races out and then HOLDS.
+ *
+ * The opposite motion to fire, deliberately. Flame climbs and widens; frost
+ * goes out and stops — it arrives, settles, and sits there, which is what the
+ * chill does to the wave standing in it. `strandA`/`strandB` are thin tapered
+ * threads, which as flat beams from the middle outward read as spikes of frost
+ * that GREW along the ground; `iceShard` is a hard X of spikes standing at the
+ * tip of every other one, so the rim ends in something solid instead of a
+ * taper. The crescents tried first are swooshes, and a swoosh is a thing that
+ * moved past rather than a thing that froze. Same one-draw budget as the
+ * other two.
+ */
+export function frost(
+  vfx: Vfx,
+  at: THREE.Vector3,
+  opts: { radius: number; shards?: number; color?: number; life?: number },
+): void {
+  const n = opts.shards ?? 14;
+  const life = opts.life ?? 0.55;
+  const list: Quad[] = [];
+
+  // Two rings: a soft one that carries the colour and a crisp one that draws
+  // the EDGE. `frostRing` alone is a hairline once it is stretched to three
+  // metres across — a 256px ring at that size is a pencil line, which is how
+  // the first pass ended up as a white speck on the grass.
+  list.push({ at: new THREE.Vector3(at.x, at.y + 0.04, at.z), frame: FRAME.glowRing,
+              w: opts.radius, h: opts.radius, mode: 'ground' });
+  list.push({ at: new THREE.Vector3(at.x, at.y + 0.05, at.z), frame: FRAME.frostRing,
+              w: opts.radius, h: opts.radius, mode: 'ground' });
+
+  // Crystals lying FLAT around the rim, each turned to point outward. Flat on
+  // the ground they read as frost spreading over it; the first pass ran thin
+  // `strand` threads out as beams, and a thread stretched across three metres
+  // is a hair.
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.2;
+    const r = opts.radius * (0.45 + Math.random() * 0.5);
+    const size = 1.5 + Math.random() * 0.9;
+    list.push({
+      at: new THREE.Vector3(at.x + Math.cos(a) * r, at.y + 0.06, at.z + Math.sin(a) * r),
+      frame: FRAME.iceShard, w: size, h: size, mode: 'ground', roll: -a,
+    });
+  }
+  // A few standing up, so it has height as well as a footprint.
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.4;
+    const r = opts.radius * (0.35 + Math.random() * 0.4);
+    const size = 1.3 + Math.random() * 0.7;
+    list.push({
+      at: new THREE.Vector3(at.x + Math.cos(a) * r, at.y + 0.5, at.z + Math.sin(a) * r),
+      frame: FRAME.iceShard, w: size, h: size, mode: 'face',
+    });
+  }
+  list.push({ at: new THREE.Vector3(at.x, at.y + 0.45, at.z), frame: FRAME.starBurst,
+              w: 2.4, h: 2.4, mode: 'face' });
+
+  quads(vfx, list, {
+    life,
+    // Deeper than the ice it tints. Additive over grass walks everything
+    // towards white, so a pale blue arrives as a white smudge — the colour has
+    // to start further from white than it should end.
+    color: opts.color ?? 0x3fb0ff,
+    // Holds, THEN goes. Frost that starts fading on the first frame never
+    // looks like it settled on anything.
+    alpha: (k) => (k < 0.5 ? 0.92 : Math.max(0, 0.92 * (1 - (k - 0.5) / 0.5))),
+    step: (qs, k, dt) => {
+      // Both rings race out to where the chill actually reaches, and stop
+      // there — the edge of the ring IS the edge of the effect.
+      const grow = opts.radius * 2 * (0.3 + 0.7 * Math.min(1, k / 0.28));
+      qs[0].w = grow; qs[0].h = grow;
+      qs[1].w = grow; qs[1].h = grow;
+      qs[1].roll = (qs[1].roll ?? 0) + dt * 0.5;
+      const flash = qs[qs.length - 1];
+      flash.w = Math.max(0.2, flash.w - dt * 3.4);
+      flash.h = flash.w;
+    },
+  });
+}
+
 export function lightning(
   vfx: Vfx,
   at: THREE.Vector3,

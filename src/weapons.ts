@@ -107,7 +107,7 @@ export const WEAPONS: WeaponKind[] = [
     cooldown: 1.7,
     effect: [2, 3.5, 5],   // damage per second
     effectSeconds: 3.5,
-    tint: { gem: 0xff7a3a, glow: 0xd63a10, mote: 0xff9a3c, mote2: 0xffe1a8 },
+    tint: { gem: 0xff7a3a, glow: 0xd63a10, mote: 0xff3606, mote2: 0xffc07a },
   },
   {
     id: 'ice',
@@ -128,7 +128,7 @@ export const WEAPONS: WeaponKind[] = [
     cooldown: 1.7,
     effect: [0.55, 0.42, 0.3], // how much of their speed is LEFT — lower is colder
     effectSeconds: 3,
-    tint: { gem: 0x7fd4ff, glow: 0x2aa7d6, mote: 0x8fd8ff, mote2: 0xe6f7ff },
+    tint: { gem: 0x7fd4ff, glow: 0x2aa7d6, mote: 0x3fb0ff, mote2: 0xcdefff },
   },
   {
     id: 'bolt',
