@@ -1,5 +1,5 @@
 import type { Progress } from './main';
-import type { Weapon } from './main';
+import { WEAPON_BY_ID, WEAPONS, WEAPON_MAX_LEVEL, type Weapon } from './weapons';
 import { LEVELS } from './levels';
 import { TOWN_MAX_LEVEL, TOWN } from './town';
 
@@ -55,7 +55,7 @@ export const DEV = PARAM !== null || stored !== null;
 export function toggleDev(): void {
   try {
     if (DEV) sessionStorage.removeItem(KEY);
-    else sessionStorage.setItem(KEY, 'staff');
+    else sessionStorage.setItem(KEY, 'bolt');
   } catch { /* private mode: the URL parameter still works */ }
   location.reload();
 }
@@ -63,7 +63,10 @@ export function toggleDev(): void {
 /** Which weapon `?dev=<name>` asked for, if it named one. */
 export const DEV_WEAPON: Weapon | null = ((): Weapon | null => {
   const w = PARAM ?? stored;
-  return w === 'sword' || w === 'bow' || w === 'staff' ? w : null;
+  // `staff` was the one magic weapon before it split into three; a bookmarked
+  // sandbox link should still open something rather than nothing.
+  const asked = w === 'staff' ? 'bolt' : w;
+  return asked && WEAPON_BY_ID.has(asked as Weapon) ? asked as Weapon : null;
 })();
 
 /** Everything a sandbox run should be handed, folded over the real save.
@@ -82,6 +85,11 @@ export function devProgress(p: Progress): Progress {
     cleared: Math.max(p.cleared ?? 0, LEVELS.length),
     store: { gold: 99999, wood: 99999, stone: 99999 },
     town,
+    // The whole rack, made and improved. "Unlocks everything" has to include
+    // the weapons now that they are bought rather than handed over — a sandbox
+    // that makes you forge before you can look at a spell is a sandbox with a
+    // shopping trip in front of it.
+    weapons: Object.fromEntries(WEAPONS.map((w) => [w.id, WEAPON_MAX_LEVEL])),
     weapon: DEV_WEAPON ?? p.weapon,
   };
 }

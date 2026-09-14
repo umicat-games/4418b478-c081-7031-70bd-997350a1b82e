@@ -814,6 +814,10 @@ function buildHub() {
       models: ['town-stall-green', 'town-cart', 'town-watermill'] },
     { id: 'range', x: 3.5, z: 2.2, yaw: -Math.PI / 2,
       models: ['bld-tower-a', 'bld-tower-b', 'town-windmill'] },
+    // The armory stands behind the weapon rack, facing the room. It is the only
+    // plot off the corners, because the rack in front of it is what it is for.
+    { id: 'armory', x: -2.0, z: -3.0, yaw: 0,
+      models: ['town-stall-red', 'bld-house-c', 'bld-tower-b'] },
   ];
   for (const b of TOWN) {
     // A foundation, so an empty plot is obviously a PLOT and not a patch of
@@ -883,13 +887,20 @@ function buildHub() {
     });
   }
 
-  // Three weapons on the ground, each on its own pedestal. Standing at one and
-  // pressing the action button takes it — the same verb as building a tower
-  // and reading the sign, so the hub teaches the level's only interaction.
+  // The weapon rack: five pedestals in a row, in front of the armory. Standing
+  // at one and pressing the action button forges it, takes it, or improves it —
+  // the same verb as building a tower and reading the sign, so the hub teaches
+  // the level's only interaction and the armory needs no menu.
+  //
+  // Spacing is 1.25, which is more than the 0.9 that counts as "standing at"
+  // something: at 1.0 you are at two pedestals at once and the prompt flickers
+  // between them as you breathe.
   const PICKUPS = [
-    ['sword', -1.4, 0.2],
-    ['bow', 0, 0.2],
-    ['staff', 1.4, 0.2],
+    ['sword', -2.5, 0.2],
+    ['bow', -1.25, 0.2],
+    ['fire', 0, 0.2],
+    ['ice', 1.25, 0.2],
+    ['bolt', 2.5, 0.2],
   ];
   for (const [id, x, z] of PICKUPS) {
     ents.push({

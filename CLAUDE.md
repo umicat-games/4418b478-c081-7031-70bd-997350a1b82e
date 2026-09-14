@@ -31,7 +31,8 @@ to the host. Each half tears its own scene down before handing over.
 | file | what |
 | --- | --- |
 | `src/levels.ts` | **the three boards**: wave tables, gold, lives, caps, ice |
-| `src/town.ts` | the four buildings in the hub and what they are worth |
+| `src/town.ts` | the five buildings in the hub and what they are worth |
+| `src/weapons.ts` | **the five weapons**: what they cost, what they hit for, what they leave behind |
 | `src/progress.ts` | drops, materials, the level curve — all of it arithmetic |
 | `src/vfx.ts` | short-lived visual things, and the one loop that owns them |
 | `src/main.ts` | the level engine: towers, the hero, crates, the frame loop |
@@ -302,7 +303,7 @@ could reach before.
 
 ## The town
 
-Four plots in the hub, bought with gold, wood and stone the same way as everything else in
+Five plots in the hub, bought with gold, wood and stone the same way as everything else in
 this game: walk to it, press the action button. No menu. Each is three levels,
 and each level is a bigger building, so the hub visibly grows as you play.
 
@@ -312,6 +313,7 @@ and each level is a bigger building, so the hub visibly grows as you play.
 | Clinic ❤ | +25 max health |
 | Market 💰 | +50 starting gold |
 | Range 🏹 | +1 damage on **every** weapon, not just the sword |
+| Armory ⚔ | weapons can be forged and improved to this level |
 
 They are things you can plan a run around rather than percentages you take on
 faith — "+1 tower" changes what you build, "+8% damage" changes nothing you can
@@ -405,6 +407,64 @@ What it has found, none of it visible by reading the wave table:
   hard-coded after the game grew a fourth tower level, so it sat on 1700 gold
   reporting that a board could not be held — by a defence it had declined to
   finish.
+
+## The weapons
+
+Five, made at the Armory: sword, bow, and three staves — fire, ice and storm.
+Each levels on its own to 3, and the **Armory's level is the cap**, so improving
+the building opens the next tier of everything at once rather than unlocking one
+more thing from a list.
+
+They used to arrive on a timer — sword at zero finished levels, bow at one,
+staff at two. That is a schedule, not a decision: it happens TO you, in the same
+order, whatever you did with the run. Now the whole rack is visible from the
+first visit and most of it is empty, which asks the question the town asks —
+what is this run for?
+
+**The three staves share a cast and differ in what they leave behind.** One
+"magic" that bursts a group is a delivery method; these are three answers to a
+board:
+
+| staff | what it leaves |
+| --- | --- |
+| Fire 🔥 | a **burn** — the only damage in the game that lands while you are somewhere else |
+| Ice ❄ | a **chill**, and the widest burst: a wave that arrives late arrives into towers that have reloaded |
+| Storm ⚡ | an **arc** to nearby enemies, each hop worth `CHAIN_FALLOFF` of the last |
+
+**The storm staff is not new.** The staff was already a lightning spell before
+the rack existed, so it keeps the reach, the damage and the bolts it had — Lv1 is
+exactly what it always did, and what it gains is the arc. Mapping the old
+`staff` to fire would have handed someone a different weapon and called it
+theirs; `migrateWeapons` maps it to storm.
+
+Three rules the combat code holds to:
+
+- **A status REFRESHES, it does not stack.** Two casts on one enemy should mean
+  it burns for longer, not twice as fast — stacking makes "cast it again" the
+  only tactic there is. The stronger chill wins, so a levelled staff is never
+  worse than the cast before it.
+- **A burn is QUIET.** It ticks every `BURN_TICK` on everything it caught; at the
+  fight's own volume ten burning enemies are a wall of noise, and the hit flash
+  would hide the hits you actually landed. It still flashes, in its own colour,
+  because damage arriving from somewhere you are not has to be visible.
+- **Chilled things LOOK chilled.** A slow that is only visible in the arithmetic
+  is a slow nobody believes in, so the tint lasts as long as the effect does.
+
+Forging is the same verb as everything else: walk to the pedestal, press the
+button. One button, in the order you would want it — **make it, pick it up, make
+it better** — which is what lets the Armory have no menu. Forging also equips,
+because making a weapon and then being asked to pick it up is a second press for
+nothing.
+
+**The rack's positions live in two files** (`RACK` in `hub.ts`, `PICKUPS` in
+`tools/gen-scene.mjs`) and must agree — one stands the pedestals, the other
+decides what you are standing at. Spacing is 1.25 against a 0.9 "standing at"
+radius: at 1.0 you are at two pedestals at once and the prompt flickers between
+them as you breathe.
+
+**The Armory is off the hub's centre line.** At x 0 its Lv3 building stood
+squarely in front of the exit door and hid it, and the one thing in the hub a
+player has to be able to find is the way out.
 
 ## The sword
 
@@ -564,7 +624,8 @@ doors, the ice), `verify-3d-lanes` (the fork, the gates, the boss),
 `verify-3d-crates-unlocks`, `verify-3d-hub`, `verify-3d-td`,
 `verify-3d-feedback`, `verify-3d-endscreen`, `verify-3d-audio`,
 `verify-3d-audio-engines`, `verify-3d-jump-touch`, `verify-3d-balance`,
-`verify-3d-town`, `verify-3d-dev`.
+`verify-3d-town`, `verify-3d-armory` (forging, the Armory cap, and that a save
+from before it keeps the weapons it had earned), `verify-3d-dev`.
 
 Getting from the hub into a board lives in **`pw-level.mjs`**, once. It was
 copied into every probe with a comment saying it was shared "so that when the

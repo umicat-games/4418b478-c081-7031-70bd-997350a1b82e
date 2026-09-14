@@ -49,7 +49,7 @@ export const TOWN: TownBuilding[] = [
       { gold: 400, wood: 50, stone: 35 },
       { gold: 900, wood: 110, stone: 90 },
     ],
-    x: -4.2, z: -1.0, yaw: Math.PI / 2,
+    x: -3.5, z: -1.6, yaw: Math.PI / 2,
   },
   {
     id: 'clinic',
@@ -62,7 +62,7 @@ export const TOWN: TownBuilding[] = [
       { gold: 320, wood: 60, stone: 25 },
       { gold: 750, wood: 120, stone: 70 },
     ],
-    x: -4.2, z: 2.6, yaw: Math.PI / 2,
+    x: -3.5, z: 2.2, yaw: Math.PI / 2,
   },
   {
     id: 'market',
@@ -75,7 +75,7 @@ export const TOWN: TownBuilding[] = [
       { gold: 300, wood: 40, stone: 40 },
       { gold: 700, wood: 90, stone: 95 },
     ],
-    x: 4.2, z: -1.0, yaw: -Math.PI / 2,
+    x: 3.5, z: -1.6, yaw: -Math.PI / 2,
   },
   {
     id: 'range',
@@ -88,7 +88,28 @@ export const TOWN: TownBuilding[] = [
       { gold: 450, wood: 70, stone: 30 },
       { gold: 1000, wood: 130, stone: 80 },
     ],
-    x: 4.2, z: 2.6, yaw: -Math.PI / 2,
+    x: 3.5, z: 2.2, yaw: -Math.PI / 2,
+  },
+  {
+    id: 'armory',
+    name: 'Armory',
+    effect: 'forge and improve weapons',
+    icon: '⚔',
+    // Behind the weapon rack, which is its frontage: the rack is what you walk
+    // along, and this is the building that explains why the rack can do
+    // anything. Deliberately not another corner plot — the four of those are a
+    // shape, and a fifth corner would have been a fifth of the same thing.
+    //
+    // OFF the centre line, though. At x 0 the Lv3 building stood squarely in
+    // front of the exit door and hid it: the one thing in the hub a player has
+    // to be able to find is the way out.
+    models: ['town-stall-red', 'bld-house-c', 'bld-tower-b'],
+    costs: [
+      { gold: 180, wood: 30, stone: 10 },
+      { gold: 480, wood: 60, stone: 45 },
+      { gold: 1050, wood: 120, stone: 110 },
+    ],
+    x: -2.0, z: -3.0, yaw: 0,
   },
 ];
 
@@ -107,6 +128,7 @@ export function townNow(id: string, town: Record<string, number> | undefined): s
     case 'clinic': return b.hearts ? `+${b.hearts} health` : '';
     case 'market': return b.gold ? `+${b.gold} starting gold` : '';
     case 'range': return b.heroDamage ? `+${b.heroDamage} damage on every weapon` : '';
+    case 'armory': return b.weaponCap ? `weapons up to Lv${b.weaponCap}` : '';
     default: return '';
   }
 }
@@ -133,6 +155,10 @@ export function shortfall(have: Materials, cost: Materials): string {
 /** What the town is worth on the next run. */
 export interface TownBonus {
   towerCap: number;
+  /** How good a weapon this town can make. The Armory's level IS the cap, so
+   *  upgrading it is what opens the next tier of every weapon at once rather
+   *  than unlocking one more thing from a list. */
+  weaponCap: number;
   hearts: number;
   gold: number;
   heroDamage: number;
@@ -143,7 +169,7 @@ export interface TownBonus {
 }
 
 export const NO_BONUS: TownBonus =
-  { towerCap: 0, hearts: 0, gold: 0, heroDamage: 0, smithy: 0 };
+  { towerCap: 0, hearts: 0, gold: 0, heroDamage: 0, smithy: 0, weaponCap: 0 };
 
 /** Levels bought, by building id, turned into the numbers a run cares about.
  *
@@ -153,6 +179,7 @@ export function bonusesFrom(town: Record<string, number> | undefined): TownBonus
   const lv = (id: string): number => Math.min(town?.[id] ?? 0, TOWN_MAX_LEVEL);
   return {
     towerCap: lv('smithy'),
+    weaponCap: lv('armory'),
     smithy: lv('smithy'),
     hearts: lv('clinic') * 25,
     gold: lv('market') * 50,

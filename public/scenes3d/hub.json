@@ -27310,6 +27310,175 @@
       }
     },
     {
+      "id": "plot_armory",
+      "name": "plot",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 1.8,
+          "y": 0.14,
+          "z": 1.8
+        },
+        "color": "#9a8f7d"
+      },
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0.07,
+          "z": -3
+        }
+      },
+      "castShadow": false
+    },
+    {
+      "id": "plot_armory_sign",
+      "name": "plot_sign",
+      "modelAssetId": "hub-sign",
+      "transform": {
+        "position": {
+          "x": -0.8,
+          "y": 0,
+          "z": -3.85
+        },
+        "rotation": [
+          0,
+          -0.7071067811865475,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "plot_armory_lantern",
+      "name": "plot_lantern",
+      "modelAssetId": "town-lantern",
+      "transform": {
+        "position": {
+          "x": -0.8999999999999999,
+          "y": 0.14,
+          "z": -2.15
+        }
+      }
+    },
+    {
+      "id": "plot_armory_marker",
+      "name": "plot_marker",
+      "modelAssetId": "td-selection",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0.14,
+          "z": -3
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "town_armory_1",
+      "name": "town_building",
+      "modelAssetId": "town-stall-red",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0.12,
+          "z": -3
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.55,
+            "y": 0.7,
+            "z": 0.55
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.7,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "town_armory_2",
+      "name": "town_building",
+      "modelAssetId": "bld-house-c",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0.12,
+          "z": -3
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.55,
+            "y": 0.7,
+            "z": 0.55
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.7,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "town_armory_3",
+      "name": "town_building",
+      "modelAssetId": "bld-tower-b",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0.12,
+          "z": -3
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.55,
+            "y": 0.7,
+            "z": 0.55
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.7,
+          "z": 0
+        }
+      }
+    },
+    {
       "id": "sign",
       "name": "sign",
       "modelAssetId": "hub-sign",
@@ -29664,7 +29833,7 @@
       },
       "transform": {
         "position": {
-          "x": -1.4,
+          "x": -2.5,
           "y": 0.11,
           "z": 0.2
         }
@@ -29676,7 +29845,7 @@
       "modelAssetId": "td-selection",
       "transform": {
         "position": {
-          "x": -1.4,
+          "x": -2.5,
           "y": 0.02,
           "z": 0.2
         }
@@ -29697,7 +29866,7 @@
       },
       "transform": {
         "position": {
-          "x": 0,
+          "x": -1.25,
           "y": 0.11,
           "z": 0.2
         }
@@ -29709,7 +29878,7 @@
       "modelAssetId": "td-selection",
       "transform": {
         "position": {
-          "x": 0,
+          "x": -1.25,
           "y": 0.02,
           "z": 0.2
         }
@@ -29717,7 +29886,7 @@
       "visible": false
     },
     {
-      "id": "pedestal_staff",
+      "id": "pedestal_fire",
       "name": "pedestal",
       "primitive": {
         "kind": "cylinder",
@@ -29730,19 +29899,85 @@
       },
       "transform": {
         "position": {
-          "x": 1.4,
+          "x": 0,
           "y": 0.11,
           "z": 0.2
         }
       }
     },
     {
-      "id": "pickup_marker_staff",
+      "id": "pickup_marker_fire",
       "name": "pickup_marker",
       "modelAssetId": "td-selection",
       "transform": {
         "position": {
-          "x": 1.4,
+          "x": 0,
+          "y": 0.02,
+          "z": 0.2
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "pedestal_ice",
+      "name": "pedestal",
+      "primitive": {
+        "kind": "cylinder",
+        "size": {
+          "x": 0.46,
+          "y": 0.22,
+          "z": 0.46
+        },
+        "color": "#6f6a5c"
+      },
+      "transform": {
+        "position": {
+          "x": 1.25,
+          "y": 0.11,
+          "z": 0.2
+        }
+      }
+    },
+    {
+      "id": "pickup_marker_ice",
+      "name": "pickup_marker",
+      "modelAssetId": "td-selection",
+      "transform": {
+        "position": {
+          "x": 1.25,
+          "y": 0.02,
+          "z": 0.2
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "pedestal_bolt",
+      "name": "pedestal",
+      "primitive": {
+        "kind": "cylinder",
+        "size": {
+          "x": 0.46,
+          "y": 0.22,
+          "z": 0.46
+        },
+        "color": "#6f6a5c"
+      },
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0.11,
+          "z": 0.2
+        }
+      }
+    },
+    {
+      "id": "pickup_marker_bolt",
+      "name": "pickup_marker",
+      "modelAssetId": "td-selection",
+      "transform": {
+        "position": {
+          "x": 2.5,
           "y": 0.02,
           "z": 0.2
         }

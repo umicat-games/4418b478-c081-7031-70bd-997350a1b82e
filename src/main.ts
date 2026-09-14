@@ -15,6 +15,10 @@ import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, lightning, preloadAtlas, FRAME } from './vfx';
 import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
+import {
+  WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
+  type Weapon, type WeaponLevels,
+} from './weapons';
 import { NO_BONUS, type TownBonus } from './town';
 import {
   NO_MATERIALS, rollDrop, xpFromRun, applyXp, xpToNext,
@@ -41,7 +45,11 @@ export interface Progress {
   best?: number;
   quality?: number;
   weapon?: Weapon;
-  /** Levels finished — what the hub unlocks weapons from. */
+  /** Which weapons are made, and how far. Absent on a save from before the
+   *  Armory; `migrateWeapons` reconstructs one from `runs`. */
+  weapons?: WeaponLevels;
+  /** Levels finished. It used to be what unlocked weapons — they are forged
+   *  now — and it is still the run counter the summary writes. */
   runs?: number;
   /** How many boards have been WON, in order. Level `i` is open when
    *  `cleared >= i`, so clearing Meadow opens Frostfall. */
@@ -124,6 +132,10 @@ const SWING_ARC = 1.35;
  *  carry. */
 const SWING_CUT = 0.62;
 const HERO_ATTACK_DAMAGE = 2;
+/** How often a burn actually bites. Half a second: often enough that the bar
+ *  visibly drains while you walk away, rare enough that ten burning enemies are
+ *  not twenty damage events a frame. */
+const BURN_TICK = 0.5;
 const HERO_INVINCIBLE_SECONDS = 1.1;
 
 // --- enemies --------------------------------------------------------------
@@ -332,6 +344,11 @@ interface Enemy {
   mixer?: THREE.AnimationMixer;
   actions?: Map<string, THREE.AnimationAction>;
   clip?: string;
+  /** Left alight by the fire staff. `tick` paces the damage: applying dps every
+   *  frame would mean sixty hit-sounds a second per burning enemy. */
+  burn?: { dps: number; left: number; tick: number };
+  /** Chilled by the ice staff — `mult` is how much of its speed is LEFT. */
+  chill?: { mult: number; left: number };
   ground: boolean;
   facesTravel: boolean;
   ammo: string;
@@ -422,7 +439,10 @@ export interface Shared {
   audio: GameAudio;
 }
 
-export type Weapon = 'sword' | 'bow' | 'staff';
+// The weapon table lives in `weapons.ts` now — what each one costs, what it
+// does, and what it leaves behind. Re-exported because half the game imports
+// the type from here.
+export type { Weapon };
 
 /** Runs one level. Resolves when the player walks back out through the exit
  *  door — so the caller can hand control to the hub and start the loop again. */
@@ -431,7 +451,7 @@ export interface LevelResult { won: boolean; wave: number; level: number; banked
 
 export async function startLevel(
   shared: Shared, startWeapon: Weapon = 'sword', levelIndex = 0,
-  bonus: TownBonus = NO_BONUS,
+  bonus: TownBonus = NO_BONUS, weaponLevels: WeaponLevels = { sword: 1 },
 ): Promise<LevelResult> {
   const level: LevelDef = LEVELS[Math.max(0, Math.min(levelIndex, LEVELS.length - 1))];
   const WAVES = level.waves;
@@ -541,15 +561,18 @@ export async function startLevel(
 
   /** A staff, also built rather than loaded — a shaft and the kit's own
    *  crystal, which is already the right art for "this thing is magic". */
+  /** One staff, three gems. Fire, ice and storm share a carved stick and differ
+   *  at the end of it, which is what makes them read as a family — three
+   *  separate models would have been three unrelated objects on the rack. */
+  let staffGem: THREE.MeshStandardMaterial | null = null;
   const makeStaff = (): THREE.Object3D => {
     const g = new THREE.Object3D();
     const shaft = new THREE.Mesh(
       new THREE.CylinderGeometry(0.016, 0.02, 0.42, 6),
       new THREE.MeshStandardMaterial({ color: 0x6d4a2f, roughness: 0.9 }));
-    const gem = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.055),
-      new THREE.MeshStandardMaterial({
-        color: 0x9b6cff, emissive: 0x6a3fd6, emissiveIntensity: 0.9, roughness: 0.3 }));
+    staffGem = new THREE.MeshStandardMaterial({
+      color: 0x9b6cff, emissive: 0x6a3fd6, emissiveIntensity: 0.9, roughness: 0.3 });
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.055), staffGem);
     gem.position.y = 0.24;
     g.add(shaft, gem);
     g.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
@@ -644,14 +667,25 @@ export async function startLevel(
     aimBlade(_dir.set(fx * 0.22, 1, fz * 0.22), _edge.set(fx, 0, fz));
   }
 
-  /** The hero carries all three and shows one. */
+  /** The hero carries all of them and shows one. */
   let weapon: Weapon = startWeapon;
+  let kind = WEAPON_BY_ID.get(weapon) ?? WEAPON_BY_ID.get('sword')!;
+  let weaponLevel = Math.max(1, levelOf(weaponLevels, weapon));
   /** Called once, with whatever came through the door. Not a control. */
   const setWeapon = (w: Weapon): void => {
     weapon = w;
-    if (sword) sword.visible = w === 'sword';
-    if (bow) bow.visible = w === 'bow';
-    if (staff) staff.visible = w === 'staff';
+    kind = WEAPON_BY_ID.get(w) ?? WEAPON_BY_ID.get('sword')!;
+    // A weapon you are holding is at least level 1 — arriving with a 0 would
+    // mean a hero swinging something that does no damage, which reads as the
+    // weapon being broken rather than the save being wrong.
+    weaponLevel = Math.max(1, levelOf(weaponLevels, w));
+    if (sword) sword.visible = kind.cast === 'melee';
+    if (bow) bow.visible = kind.cast === 'arrow';
+    if (staff) staff.visible = kind.cast === 'burst';
+    if (staffGem && kind.tint) {
+      staffGem.color.setHex(kind.tint.gem);
+      staffGem.emissive.setHex(kind.tint.glow);
+    }
     if (lockRing) lockRing.visible = false;
   };
 
@@ -1178,16 +1212,54 @@ export async function startLevel(
    *  the damage does, so one cast teaches the radius better than any number
    *  in the HUD could. */
   const castBurst = (at: THREE.Vector3): void => {
-    lightning(vfx, at, { radius: STAFF_RADIUS, bolts: 5, life: 0.46 });
+    const t = kind.tint;
+    // Bolts only for the storm staff. Fire and ice throw the same arcs otherwise,
+    // and three elements that all look like lightning are one element in three
+    // colours.
+    if (kind.status === 'chain') lightning(vfx, at, { radius: burstRadius(), bolts: 5, life: 0.46 });
+    else ringVfx(vfx, at, { color: t?.mote ?? 0x6aa9ff, from: 0.25, to: burstRadius(), life: 0.4, opacity: 0.75 });
     motes(vfx, at, {
-      count: 14, color: 0x6aa9ff, color2: 0xdceaff, frame: FRAME.sparkle,
-      radius: 0.7, rise: 1.7, spin: 3.4, life: 0.55, size: 0.24,
+      count: 14, color: t?.mote ?? 0x6aa9ff, color2: t?.mote2 ?? 0xdceaff, frame: FRAME.sparkle,
+      // Fire rises, ice settles. The same particles with a different rise read
+      // as two different things happening, which is most of what an element is.
+      radius: 0.7, rise: kind.status === 'chill' ? 0.5 : 1.7, spin: 3.4, life: 0.55, size: 0.24,
     });
     // A real light, for the quarter-second it is worth one. Its intensity is
     // driven rather than the light being added and removed — adding a light to
     // a three scene recompiles every lit material in it, which is a stutter
     // exactly when the screen is busiest.
     spellFlash = 1;
+  };
+
+  /** Mark where an arc landed.
+   *
+   *  It does not DRAW the arc. A connected beam between two moving points needs
+   *  a primitive this game does not have, and the draw budget for a whole level
+   *  is about twenty — so each hop flashes at the enemy it reached, and the
+   *  sequence reads as a chain because it arrives in order.
+   */
+  const arc = (_from: THREE.Vector3, to: THREE.Vector3): void => {
+    lightning(vfx, to, { radius: 0.42, bolts: 2, life: 0.26, height: 1.6 });
+  };
+
+  /** Leave the held staff's status on something it just hit.
+   *
+   *  Re-applying REFRESHES rather than stacks: two casts on the same enemy
+   *  should mean it burns for longer, not that it burns twice as fast — stacking
+   *  turns "cast it again" into the only tactic there is. The stronger chill
+   *  wins, so a levelled staff is never worse than the cast before it.
+   */
+  const applyStatus = (e: Enemy): void => {
+    const n = weaponEffect(weapon, weaponLevel);
+    const secs = kind.effectSeconds ?? 0;
+    if (kind.status === 'burn') {
+      e.burn = { dps: Math.max(n, e.burn?.dps ?? 0), left: secs, tick: 0 };
+    } else if (kind.status === 'chill') {
+      e.chill = { mult: Math.min(n, e.chill?.mult ?? 1), left: secs };
+      // Chilled things LOOK chilled, for as long as they are: a slow that is
+      // only visible in the arithmetic is a slow nobody believes in.
+      flashTint(e.obj, { color: 0x8fd8ff, ms: secs * 1000 });
+    }
   };
 
   /** Light lifting off an upgraded tower.
@@ -1219,7 +1291,11 @@ export async function startLevel(
   interface Arrow { obj: THREE.Object3D; vel: THREE.Vector3; life: number; }
   const arrows: Arrow[] = [];
   const ARROW_SPEED = 11;
-  const ARROW_DAMAGE = 3 + bonus.heroDamage;
+  /** What the held weapon hits for at its level, plus what the Range bought.
+   *  A function, not a constant: the weapon is chosen before the level starts
+   *  but the Range bonus and the weapon table both want to be read in one
+   *  place, and a constant computed above `setWeapon` would be the wrong one. */
+  const weaponHit = (): number => weaponDamage(weapon, weaponLevel) + bonus.heroDamage;
   const ARROW_LIFE = 1.6;
   const ARROW_HIT = 0.42;
   /** How far the bow finds a target on its own. Auto-aim, because picking a
@@ -1229,9 +1305,7 @@ export async function startLevel(
   const BOW_RANGE = 4.6;
   /** The staff hits everything around you at once, so it is on a real
    *  cooldown rather than just the animation's length. */
-  const STAFF_RADIUS = 2.6;
-  const STAFF_DAMAGE = 4 + bonus.heroDamage;
-  const STAFF_COOLDOWN = 1.7;
+  const burstRadius = (): number => kind.radius ?? 2.6;
   let staffCooldown = 0;
   let lockTarget: Enemy | null = null;
   /** Where the mouse is, in clip space, or null on a device without one.
@@ -1834,9 +1908,9 @@ export async function startLevel(
   const heroAttack = (): void => {
     if (!running || animator.busy) return;
 
-    if (weapon === 'staff') {
+    if (kind.cast === 'burst') {
       if (staffCooldown > 0) return;
-      staffCooldown = STAFF_COOLDOWN;
+      staffCooldown = kind.cooldown ?? 1.7;
       animator.play('interact');
       audio.play('upgrade');
       // Centred on what you have locked, not on yourself. A burst that always
@@ -1848,20 +1922,49 @@ export async function startLevel(
       if (lockTarget?.alive) {
         hero.rotation.y = Math.atan2(at.x - hero.position.x, at.z - hero.position.z);
       }
+      const hit = withBuff(weaponHit());
+      const r = burstRadius();
       let struck = 0;
+      const caught: Enemy[] = [];
       for (const e of enemies) {
         if (!e.alive) continue;
         const d = Math.hypot(e.obj.position.x - at.x, e.obj.position.z - at.z);
-        if (d > STAFF_RADIUS) continue;
+        if (d > r) continue;
         struck += 1;
-        damage(e, withBuff(STAFF_DAMAGE));
+        caught.push(e);
+        damage(e, hit);
+        applyStatus(e);
       }
-      hitCrates(at.x, at.z, STAFF_RADIUS, 2);
+      // The storm staff's point: it leaves the burst and goes looking. Each hop
+      // is worth less than the last, or it is simply the best weapon on a full
+      // board rather than the one that answers a crowd.
+      if (kind.status === 'chain' && caught.length) {
+        let from = caught[0];
+        let power = hit;
+        const struckSet = new Set<Enemy>(caught);
+        const hops = Math.round(weaponEffect(weapon, weaponLevel));
+        for (let i = 0; i < hops; i++) {
+          let next: Enemy | null = null, best = CHAIN_HOP;
+          for (const e of enemies) {
+            if (!e.alive || struckSet.has(e)) continue;
+            const d = Math.hypot(e.obj.position.x - from.obj.position.x, e.obj.position.z - from.obj.position.z);
+            if (d < best) { best = d; next = e; }
+          }
+          if (!next) break;
+          power *= CHAIN_FALLOFF;
+          struckSet.add(next);
+          arc(from.obj.position, next.obj.position);
+          damage(next, power);
+          struck += 1;
+          from = next;
+        }
+      }
+      hitCrates(at.x, at.z, r, 2);
       if (struck) audio.play('enemy-die');
       return;
     }
 
-    if (weapon === 'bow') {
+    if (kind.cast === 'arrow') {
       animator.play('holdBothShoot');
       audio.play('enemy-shot');
       const arrow = spawnFrom('td-ammo-arrow');
@@ -1894,7 +1997,7 @@ export async function startLevel(
       const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
       if (d > HERO_ATTACK_RANGE) continue;
       connected = true;
-      damage(e, withBuff(heroDamage));
+      damage(e, withBuff(weaponHit()));
     }
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
@@ -1902,10 +2005,14 @@ export async function startLevel(
     if (connected) audio.play('sword-hit');
   };
 
-  const damage = (e: Enemy, amount: number): void => {
+  const damage = (e: Enemy, amount: number, quiet = false): void => {
     e.hp -= amount;
-    flashTint(e.obj, { color: 0xff3020, ms: 160 });
-    if (e.hp > 0) { audio.play('hit-enemy'); return; }
+    // A burn ticks twice a second on every enemy it caught; at the fight's own
+    // volume that is a wall of noise, and the flash would hide the hits you
+    // actually landed. It still FLASHES — in its own colour, so damage arriving
+    // from somewhere you are not is visible.
+    if (!quiet || !isTinted(e.obj)) flashTint(e.obj, { color: quiet ? 0xff8a2a : 0xff3020, ms: quiet ? 220 : 160 });
+    if (e.hp > 0) { if (!quiet) audio.play('hit-enemy'); return; }
     audio.play('enemy-die');
     e.alive = false;
     if (e.boss) {
@@ -2193,7 +2300,24 @@ export async function startLevel(
       for (const e of enemies) if (e.alive && e.windup > 0 && !e.boss) shooters += 1;
       for (const e of enemies) {
         if (!e.alive) continue;
-        e.t += (e.speed * dt);
+        // Burn first: something that dies to it should not also get a step.
+        if (e.burn) {
+          e.burn.left -= dt;
+          e.burn.tick -= dt;
+          if (e.burn.tick <= 0) {
+            e.burn.tick = BURN_TICK;
+            damage(e, e.burn.dps * BURN_TICK, true);
+            if (!e.alive) continue;
+          }
+          if (e.burn.left <= 0) e.burn = undefined;
+        }
+        let speed = e.speed;
+        if (e.chill) {
+          e.chill.left -= dt;
+          if (e.chill.left <= 0) e.chill = undefined;
+          else speed *= e.chill.mult;
+        }
+        e.t += (speed * dt);
         e.mixer?.update(dt);
         if (e.t >= ROUTES[e.route].length - 1) {
           // It reached the gate. That is what the towers were for.
@@ -2359,7 +2483,7 @@ export async function startLevel(
           if (!segmentHitsSphere(prevPos, a.obj.position, e.obj.position, ARROW_HIT)) continue;
           hit = e; break;
         }
-        if (hit) damage(hit, withBuff(ARROW_DAMAGE));
+        if (hit) damage(hit, withBuff(weaponHit()));
         const brokeCrate = !hit && hitCrates(a.obj.position.x, a.obj.position.z, ARROW_HIT, 1);
         if (hit || brokeCrate || a.life <= 0 || Math.abs(a.obj.position.x) > 7 || Math.abs(a.obj.position.z) > 7) {
           world.scene.remove(a.obj);
@@ -2640,7 +2764,7 @@ async function boot(): Promise<void> {
     showLoading(`Entering ${LEVELS[choice.level].name}`);
     // The summary writes the save — level, experience, the store, what was
     // cleared and how far. Doing it here as well double-counted the run.
-    await startLevel(shared, choice.weapon, choice.level, choice.bonus);
+    await startLevel(shared, choice.weapon, choice.level, choice.bonus, choice.weapons);
   }
 }
 

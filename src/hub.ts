@@ -5,13 +5,17 @@ import {
   CharacterController3D, CharacterAnimator, Input3D,
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
-import type { Shared, Weapon, Progress } from './main';
+import type { Shared, Progress } from './main';
 import { patchSave, readSave } from './main';
 import { DEV, toggleDev } from './dev';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createDebugHud } from './debughud';
 import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, townNow, townAfter, type TownBonus } from './town';
+import {
+  WEAPON_BY_ID, WEAPON_MAX_LEVEL, levelOf, nextCost, migrateWeapons,
+  weaponDamage, effectText, type Weapon, type WeaponLevels,
+} from './weapons';
 import type { Materials } from './progress';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
@@ -90,20 +94,30 @@ export async function submitScore(umicat: Shared['umicat'], wave: number): Promi
  *  no models anywhere in the asset library, so both are built — see
  *  `makeBow`/`makeStaff` in the level, which this mirrors deliberately: the
  *  thing on the pedestal has to be the thing you end up holding. */
-/** The weapons on the ground, and how many finished levels each one takes.
+/** The rack in front of the Armory. Five pedestals, in the order they cost.
  *
- *  You start with the sword and nothing else. A hub with all three laid out on
- *  the first visit asks a new player to choose between three things they have
- *  never used; one weapon at a time makes each arrival back from a level the
- *  moment something new is waiting. */
-const PICKUPS: { id: Weapon; x: number; z: number; label: string; runs: number }[] = [
-  { id: 'sword', x: -1.4, z: 0.2, label: '🗡 Sword — hits everything close', runs: 0 },
-  { id: 'bow', x: 0, z: 0.2, label: '🏹 Bow — locks on at range', runs: 1 },
-  { id: 'staff', x: 1.4, z: 0.2, label: '🔮 Staff — bursts a whole group', runs: 2 },
+ *  They used to arrive on a schedule — sword at zero finished levels, bow at
+ *  one, staff at two — so the whole rack was visible from the first visit and
+ *  none of it was a choice. Now every pedestal is always there and most of them
+ *  are empty, which asks the same question the town does: what is this run for?
+ *
+ *  Positions must match `PICKUPS` in `tools/gen-scene.mjs`, which stands the
+ *  pedestals and the rings. */
+const RACK: { id: Weapon; x: number; z: number }[] = [
+  { id: 'sword', x: -2.5, z: 0.2 },
+  { id: 'bow', x: -1.25, z: 0.2 },
+  { id: 'fire', x: 0, z: 0.2 },
+  { id: 'ice', x: 1.25, z: 0.2 },
+  { id: 'bolt', x: 2.5, z: 0.2 },
 ];
 
 /** What the player chose on the way out of the hub. */
-export interface HubChoice { weapon: Weapon; level: number; bonus: TownBonus; }
+export interface HubChoice {
+  weapon: Weapon; level: number; bonus: TownBonus;
+  /** How far each weapon is made — the level needs the equipped one's level to
+   *  know what it hits for. */
+  weapons: WeaponLevels;
+}
 
 export async function runHub(shared: Shared): Promise<HubChoice> {
   const { umicat, renderer, canvas, hudEl, audio } = shared;
@@ -163,13 +177,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const held: Partial<Record<Weapon, THREE.Object3D>> = {};
   const progress = await readSave(shared.umicat);
   const runs = progress.runs ?? 0;
-  /** What is on the ground this visit. */
-  const available = PICKUPS.filter((p) => p.runs <= runs);
-  /** Anything unlocked by the level just finished — worth saying out loud. */
-  const justUnlocked = PICKUPS.find((p) => p.runs === runs && p.runs > 0) ?? null;
-  /** How many boards have been WON. Weapons come from finishing a level either
-   *  way, because being handed a bow for losing is kind; a new board comes from
-   *  clearing the one before it, because otherwise the order means nothing. */
+  /** How many boards have been WON. A new board comes from clearing the one
+   *  before it, because otherwise the order means nothing. */
   const cleared = progress.cleared ?? 0;
   const levelOpen = (i: number): boolean => i <= cleared;
   /** What is in the store, and what it has been spent on. */
@@ -180,11 +189,13 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   };
   const level = progress.level ?? 1;
   const town: Record<string, number> = { ...(progress.town ?? {}) };
-  const saved = progress.weapon;
-  // Never hand back a weapon that is no longer on the ground — a save from a
-  // future version, or a cleared progress, should not leave you carrying
-  // something the hub cannot show you putting down.
-  let weapon: Weapon = available.some((p) => p.id === saved) ? saved! : 'sword';
+  // A save from before the Armory has no rack — reconstruct one from the
+  // finished-level count, so nobody is charged again for a weapon they earned.
+  const migrated = migrateWeapons(progress.weapons, runs, progress.weapon);
+  const weapons: WeaponLevels = migrated.weapons;
+  let weapon: Weapon = migrated.weapon;
+  /** How far the Armory can make a weapon. Its level IS the cap. */
+  const weaponCap = (): number => town.armory ?? 0;
 
   const makeBow = (): THREE.Object3D => {
     const g = new THREE.Object3D();
@@ -197,54 +208,62 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     g.add(limb, string);
     return g;
   };
-  const makeStaff = (): THREE.Object3D => {
+  /** One carved stick, three gems — the same staff the level builds, so what is
+   *  on the pedestal is what ends up in your hand. */
+  const makeStaff = (gem = 0x9b6cff, glow = 0x6a3fd6): THREE.Object3D => {
     const g = new THREE.Object3D();
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, 0.42, 6),
       new THREE.MeshStandardMaterial({ color: 0x6d4a2f, roughness: 0.9 }));
-    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.055),
-      new THREE.MeshStandardMaterial({ color: 0x9b6cff, emissive: 0x6a3fd6,
+    const head = new THREE.Mesh(new THREE.OctahedronGeometry(0.055),
+      new THREE.MeshStandardMaterial({ color: gem, emissive: glow,
         emissiveIntensity: 0.9, roughness: 0.3 }));
-    gem.position.y = 0.24;
-    g.add(shaft, gem);
+    head.position.y = 0.24;
+    g.add(shaft, head);
     return g;
   };
 
+  /** The display and the held copy are built the same way. Built TWICE rather
+   *  than cloned: a clone would share a transform with something parented to a
+   *  bone, which breaks the first time anyone rotates one. */
+  const buildWeapon = async (id: Weapon): Promise<THREE.Object3D> => {
+    const k = WEAPON_BY_ID.get(id)!;
+    if (k.cast === 'melee') return (await loadModelAsset(manifest, 'sword', { assetBase: '' })).object;
+    if (k.cast === 'arrow') return makeBow();
+    return makeStaff(k.tint?.gem, k.tint?.glow);
+  };
+
   if (handRight) {
-    const loaded = await loadModelAsset(manifest, 'sword', { assetBase: '' });
-    held.sword = loaded.object;
-    held.bow = makeBow();
-    held.staff = makeStaff();
-    for (const w of ['sword', 'bow', 'staff'] as const) {
-      held[w]!.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
-      attachToSocket(hero, handRight, held[w]!);
+    for (const r of RACK) {
+      held[r.id] = await buildWeapon(r.id);
+      held[r.id]!.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
+      attachToSocket(hero, handRight, held[r.id]!);
     }
   }
   const showWeapon = (): void => {
-    for (const w of ['sword', 'bow', 'staff'] as const) {
-      if (held[w]) held[w]!.visible = w === weapon;
-    }
+    for (const r of RACK) if (held[r.id]) held[r.id]!.visible = r.id === weapon;
   };
   showWeapon();
 
-  // The same three things again, standing on the pedestals. Built twice rather
-  // than cloned from the held ones: cloning would make the display copy share
-  // a transform with something parented to a bone, which is a bug waiting for
-  // the first time anyone rotates one.
-  // Only the ones that have been earned. The empty pedestals stay: a bare
-  // plinth beside the sword says something goes there, which is the point of
-  // unlocking them one at a time. The ring under an empty one never lights.
-  for (const pick of PICKUPS) {
-    const ring = world.entities.get(`pickup_marker_${pick.id}`);
-    if (!available.includes(pick)) { if (ring) ring.visible = false; continue; }
-    const display = pick.id === 'sword'
-      ? (await loadModelAsset(manifest, 'sword', { assetBase: '' })).object
-      : pick.id === 'bow' ? makeBow() : makeStaff();
-    display.position.set(pick.x, 0.42, pick.z);
+  // A weapon stands on its pedestal once it has been made. An empty plinth is
+  // not a gap — it is the thing you are saving for, which is why all five are
+  // there from the first visit.
+  const displays = new Map<Weapon, THREE.Object3D>();
+  for (const r of RACK) {
+    const display = await buildWeapon(r.id);
+    display.position.set(r.x, 0.42, r.z);
     display.rotation.z = Math.PI * 0.12;
     display.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
     display.userData.spin = true;
+    display.visible = levelOf(weapons, r.id) > 0;
     world.scene.add(display);
+    displays.set(r.id, display);
   }
+  const showRack = (): void => {
+    for (const r of RACK) {
+      const d = displays.get(r.id);
+      if (d) d.visible = levelOf(weapons, r.id) > 0;
+    }
+  };
 
   // Open doors where you may go, shut ones where you may not. Both are in the
   // scene already: swapping a model at runtime means loading it at runtime, and
@@ -362,19 +381,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   renderPurse();
   hudEl.append(title, purse); // the prompt is a card over the building now, not a line up here
 
-  // Something new on the ground is the reward for the level just finished, and
-  // it is easy to miss: it appears while the screen is still fading in, two
-  // metres from where you were already standing. So it says so.
-  if (justUnlocked) {
-    const news = document.createElement('div');
-    news.style.cssText = 'font: 700 16px/1.6 system-ui, sans-serif; color: #ffd45e;'
-      + 'text-shadow: 0 1px 2px rgba(0,0,0,.55); transition: opacity .6s;';
-    news.textContent = `NEW · ${justUnlocked.label}`;
-    hudEl.append(news);
-    audio.play('coin');
-    setTimeout(() => { news.style.opacity = '0'; }, 7000);
-    setTimeout(() => news.remove(), 7800);
-  }
+  // There is no "NEW ·" banner any more. It announced the weapon the finished
+  // level had handed over, and nothing is handed over now — what is waiting on
+  // the rack is what you decide to pay for.
 
   // The leaderboard panel. Above the controls layer, for the reason every
   // other panel in this game is: they are a full-screen layer at z-index 10.
@@ -416,6 +425,18 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // projected off the top edge and was clamped there, which put it as far from
   // the building as the corner it replaced.
   const PLOT_CARD_Y = 1.8;
+  /** The single thing the action button does at this pedestal, if anything.
+   *
+   *  One button, in the order you would want it: make it, pick it up, make it
+   *  better. That ordering is what lets the armory have no menu — "press again
+   *  to improve it" is a rule you learn once. */
+  const rackAction = (id: Weapon): 'forge' | 'take' | 'improve' | null => {
+    const lvl = levelOf(weapons, id);
+    if (lvl === 0) return 'forge';
+    if (weapon !== id) return 'take';
+    return lvl < Math.min(WEAPON_MAX_LEVEL, weaponCap()) ? 'improve' : null;
+  };
+
   const cardAnchor = new THREE.Vector3();
   /** Put the card over a world point, clamped so it never hangs off the screen. */
   const placeCard = (x: number, y: number, z: number): void => {
@@ -565,8 +586,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       marker.visible = atSign && !panelOpen;
 
       // Which weapon you are standing at, if any.
-      let atPickup: typeof PICKUPS[number] | null = null;
-      for (const pick of available) {
+      let atPickup: typeof RACK[number] | null = null;
+      for (const pick of RACK) {
         const near = Math.hypot(hero.position.x - pick.x, hero.position.z - pick.z) < NEAR;
         const ring = world.entities.get(`pickup_marker_${pick.id}`);
         if (ring) ring.visible = near && !panelOpen;
@@ -604,15 +625,52 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           canAfford(store, cost) ? `⚔ build Lv${lv + 1}` : `needs ${shortfall(store, cost)}`);
       };
 
+      /** A weapon, at whatever stage it is in. The lines change with the stage
+       *  because what you want to know changes with it: an empty pedestal is a
+       *  price, a made weapon is a number you are about to take into a fight. */
+      const rackCard = (id: Weapon): void => {
+        const k = WEAPON_BY_ID.get(id)!;
+        const lvl = levelOf(weapons, id);
+        const cap = Math.min(WEAPON_MAX_LEVEL, weaponCap());
+        const lines: string[] = [k.blurb];
+        if (lvl > 0) {
+          lines.push(`Now: ${weaponDamage(id, lvl)} damage${effectText(id, lvl) ? ` · ${effectText(id, lvl)}` : ''}`);
+        }
+        const cost = nextCost(id, lvl);
+        const canStep = lvl < cap && cost;
+        if (canStep) {
+          const step = lvl + 1;
+          lines.push(`Lv${step}: ${weaponDamage(id, step)} damage${effectText(id, step) ? ` · ${effectText(id, step)}` : ''}`);
+          lines.push(`Cost: ${priceOf(cost)}`);
+        } else if (lvl === 0) {
+          // The one dead end worth explaining: the weapon exists, the money may
+          // even be there, and the reason nothing happens is a building.
+          lines.push(weaponCap() === 0 ? 'The Armory has not been built' : `Needs Armory Lv${lvl + 1}`);
+        } else if (lvl >= WEAPON_MAX_LEVEL) {
+          lines.push('Fully forged');
+        } else {
+          lines.push(`Improving needs Armory Lv${lvl + 1}`);
+        }
+
+        const act = rackAction(id);
+        let action: string | undefined;
+        if (act === 'take') action = '⚔ take';
+        else if (act === 'forge' || act === 'improve') {
+          if (!canStep) action = undefined;
+          else action = canAfford(store, cost!)
+            ? (act === 'forge' ? '⚔ forge' : `⚔ improve to Lv${lvl + 1}`)
+            : `needs ${shortfall(store, cost!)}`;
+        } else if (id === weapon) action = 'equipped';
+        showCard(`${k.icon} ${k.name}${lvl ? ` · Lv${lvl}` : ''}`, lines, action);
+      };
+
       if (panelOpen) {
         card.style.display = 'none';
       } else if (atPlot) {
         plotCard(atPlot);
         placeCard(atPlot.x, PLOT_CARD_Y, atPlot.z);
       } else if (atPickup) {
-        const equipped = atPickup.id === weapon;
-        showCard(`⚔ ${atPickup.label}`, [equipped ? 'Equipped' : 'On the ground'],
-          equipped ? undefined : '⚔ take');
+        rackCard(atPickup.id);
         placeCard(atPickup.x, 1.1, atPickup.z);
       } else if (atSign) {
         showCard('🏆 Leaderboard', ['Best runs, by board'], '⚔ read');
@@ -640,10 +698,31 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
             void patchSave(shared.umicat, { store, town });
           }
         } else if (atPickup) {
-          weapon = atPickup.id;
-          showWeapon();
-          audio.play('build');
-          void patchSave(shared.umicat, { weapon });
+          const id = atPickup.id;
+          const act = rackAction(id);
+          const lvl = levelOf(weapons, id);
+          if (act === 'take') {
+            weapon = id;
+            showWeapon();
+            audio.play('build');
+            void patchSave(shared.umicat, { weapon });
+          } else if (act === 'forge' || act === 'improve') {
+            const cost = lvl < Math.min(WEAPON_MAX_LEVEL, weaponCap()) ? nextCost(id, lvl) : null;
+            if (!cost || !canAfford(store, cost)) { audio.play('denied'); }
+            else {
+              store.gold -= cost.gold; store.wood -= cost.wood; store.stone -= cost.stone;
+              weapons[id] = lvl + 1;
+              showRack();
+              renderPurse();
+              audio.play(SFX.upgradeTower);
+              // Forging it also puts it in your hand. Making a weapon and then
+              // being asked to pick it up is a second press for nothing.
+              if (lvl === 0) { weapon = id; showWeapon(); }
+              void patchSave(shared.umicat, { store, weapons, weapon });
+            }
+          } else {
+            audio.play('denied');
+          }
         } else if (atSign) {
           audio.play('build');
           void openPanel();
@@ -674,7 +753,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           // than merely invisible — and it is the difference a probe can see.
           world.scene.clear();
           delete (window as unknown as Record<string, unknown>).__hub;
-          resolve({ weapon, level: pick, bonus: bonusesFrom(town) });
+          resolve({ weapon, level: pick, bonus: bonusesFrom(town), weapons });
         });
         // Step back out of the doorway, so closing the list does not
         // immediately reopen it.
@@ -688,10 +767,17 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
     Object.assign(window as unknown as Record<string, unknown>, {
       __hub: { world, character, input, hero, openPanel, weapon: () => weapon,
-               /** Which weapons are on the ground this visit — the question the
-                *  unlock is really about. Reading the scene for models would
-                *  answer "is something drawn there", which is not the same. */
-               available: () => available.map((p) => p.id),
+               /** The save API itself, so a probe can put the game into a state
+                *  a player would take several runs to reach — through the same
+                *  door the game uses, rather than by guessing at how the SDK
+                *  spells a localStorage key. */
+               umicat,
+               /** Which weapons have been MADE, and how far. Reading the scene
+                *  for models would answer "is something drawn there", which is
+                *  not the same question. */
+               weapons: () => ({ ...weapons }),
+               weaponCap: () => weaponCap(),
+               rackAction: (id: string) => rackAction(id as Weapon),
                runs, cleared,
                THREE,
                /** How much of the scene got folded into how few meshes. The
