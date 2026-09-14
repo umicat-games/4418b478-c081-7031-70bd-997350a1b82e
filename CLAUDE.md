@@ -999,6 +999,15 @@ standing still in exactly the case the option exists for.
   unplayable because the thumbstick was underneath it. The row is
   `pointer-events: none` with `auto` on the cells, never wraps, and
   `verify-3d-jump-touch` now checks that the stick is reachable.
+- **The hotbar dodges the buttons SIDEWAYS, and only climbs as a last resort.**
+  Climbing is the wrong first move because the button cluster WRAPS: clearing
+  the bottom row lands you in the row above it. The same seven cells that caused
+  the wrap above then caused this — a thirteen-pixel horizontal overlap sent the
+  bar two hundred pixels up the screen, into the middle of the board, and it
+  looked for all the world like a layout that changed its mind about where the
+  hotbar goes. Sideways costs nothing: the left half of the screen belongs to
+  the thumbstick ZONE, which is half the screen and has no edges to collide
+  with. It stays centred whenever centred fits.
 - **Never copy one kit's `Textures/` over another's.** `cmp` first. Doing it
   once turned the grass orange and every check still passed.
 - **An element created, updated and never appended is invisible and silent.**

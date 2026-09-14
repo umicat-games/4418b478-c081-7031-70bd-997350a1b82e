@@ -1786,7 +1786,10 @@ export async function startLevel(
   // weapon is the thing hotbars exist to avoid.
   const hotbar = document.createElement('div');
   hotbar.style.cssText = `
-    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    /* The left offset is set in px by placeHotbar, which centres the bar only
+       when centred fits beside the platform's buttons. (No backticks in here:
+       this is a template literal, and one closes it.) */
+    position: fixed; left: 0; bottom: 14px;
     display: flex; gap: 6px; z-index: 30;
     /* NONE on the row, AUTO on the cells. The row is as wide as the screen and
        mostly empty; taking pointer events on it swallowed everything behind. */
@@ -1811,31 +1814,64 @@ export async function startLevel(
    *
    *  Arithmetic about someone else's CSS is a guess. Their rectangle is a
    *  fact, so: sit at the bottom, and only climb if that actually collides. */
-  /** How wide a cell can be and still leave all of them on one row. */
-  const cellWidthNow = (): number =>
-    Math.max(40, Math.min(62,
-      Math.floor((window.innerWidth * 0.96 - 6 * KINDS.length) / KINDS.length)));
+  const CELL_MIN = 40;
+  const CELL_MAX = 62;
+  const CELL_GAP = 6;
+  const EDGE = 8;
+  const barWidth = (cell: number): number =>
+    KINDS.length * cell + (KINDS.length - 1) * CELL_GAP;
 
+  /**
+   *  MOVE SIDEWAYS, then shrink, and only climb if neither worked.
+   *
+   *  This used to climb, full stop — and climbing is the wrong first answer,
+   *  because the cluster of buttons WRAPS. Clearing the bottom row lands you in
+   *  the row above it, so the bar goes from the bottom of the screen to halfway
+   *  up in one step. It did exactly that the day the smithy took the hotbar
+   *  from four cells to seven: the wider bar overlapped the buttons by about
+   *  thirteen pixels, and the remedy was a two-hundred-pixel jump.
+   *
+   *  Sideways costs nothing. The left half of the screen belongs to the
+   *  thumbstick ZONE, which is not a thing a hotbar can collide with — it is
+   *  half the screen and it has no edges — so there is almost always room to
+   *  slide. The bar stays centred whenever centred FITS, which is the case
+   *  this was fine in all along.
+   */
   const placeHotbar = (): void => {
     hotbar.style.bottom = '14px';
-    // Re-measured, because rotating the phone changes how much room there is —
-    // the same reason the bar's POSITION is re-measured rather than computed
-    // once from vmin.
-    const w = cellWidthNow();
-    for (const c of hotbar.children) (c as HTMLElement).style.width = `${w}px`;
+    hotbar.style.transform = 'none';
+
     const layer = document.querySelector('[data-umicat-touch]');
-    if (!layer) return;
-    const controls = [...layer.querySelectorAll('div')]
-      .filter((d) => getComputedStyle(d).pointerEvents === 'auto')
-      .map((d) => d.getBoundingClientRect())
-      // The move and look zones are half the screen each; they are not what a
-      // hotbar can collide with in any useful sense.
-      .filter((r) => r.height < window.innerHeight * 0.5 && r.width > 10);
+    const controls = layer
+      ? [...layer.querySelectorAll('div')]
+        .filter((d) => getComputedStyle(d).pointerEvents === 'auto')
+        .map((d) => d.getBoundingClientRect())
+        // The move and look zones are half the screen each; they are not what a
+        // hotbar can collide with in any useful sense.
+        .filter((r) => r.height < window.innerHeight * 0.5 && r.width > 10)
+      : [];
+    // The buttons sit bottom-right, so what limits the bar is their left edge.
+    const wall = controls.length
+      ? Math.min(...controls.map((r) => r.left)) - EDGE
+      : window.innerWidth - EDGE;
+    const room = Math.max(0, wall - EDGE);
+
+    // Widest cells that fit the room, then the screen, then the cap.
+    const cell = Math.max(CELL_MIN, Math.min(CELL_MAX,
+      Math.floor((Math.min(room, window.innerWidth * 0.96) - (KINDS.length - 1) * CELL_GAP)
+        / KINDS.length)));
+    for (const c of hotbar.children) (c as HTMLElement).style.width = `${cell}px`;
+    const w = barWidth(cell);
+
+    // Centred if it fits; otherwise slid left until it does.
+    let left = Math.round((window.innerWidth - w) / 2);
+    if (left + w > wall) left = Math.round(wall - w);
+    left = Math.max(EDGE, left);
+    hotbar.style.left = `${left}px`;
+
+    // Only now, and only if it STILL overlaps — which means even the narrowest
+    // cells do not fit beside the buttons, on a screen that small.
     if (!controls.length) return;
-    // Climb until it is clear, re-measuring each time. One lift is not enough:
-    // clearing the bottom row of buttons lands the bar in the row above it,
-    // because the cluster wraps. Four passes is more than any layout needs and
-    // still terminates.
     for (let pass = 0; pass < 4; pass++) {
       const bar = hotbar.getBoundingClientRect();
       const hits = controls.filter((r) =>
@@ -1858,9 +1894,10 @@ export async function startLevel(
   // halfway through is a run where the choice never cost anything.
   const cells = KINDS.map((kind, i) => {
     const cell = document.createElement('button');
-    // Narrow enough that all of them fit one row on the narrowest phone.
+    // A starting width only. `placeHotbar` sets the real one, from the room
+    // that is actually left beside the platform's buttons.
     cell.style.cssText = `
-      width: ${cellWidthNow()}px; padding: 6px 3px 5px; border-radius: 12px; border: 2px solid transparent;
+      width: ${CELL_MAX}px; padding: 6px 3px 5px; border-radius: 12px; border: 2px solid transparent;
       pointer-events: auto;
       background: rgba(0,0,0,.42); color: #fff; font: inherit; cursor: pointer;
       display: flex; flex-direction: column; align-items: center; gap: 2px;
