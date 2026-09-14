@@ -971,6 +971,14 @@ A probe must not hard-code a tuning number. Several asserted `heroHp === 6` and
 `lives === 10`, so raising either broke them without saying anything about the
 game; they read the board's own numbers now.
 
+**Run a probe with the machine to itself.** The warning below is written under
+the balance bot, but it is not about the bot: anything measured in GAME time
+gets slower when the box is busy, because `dt` is clamped. Running a second
+browser alongside `verify-3d-elements` took an effect's life from "still on
+screen at 0.8s" to "nothing there", and the storm's arcs from eight effects to
+two — three red checks describing a machine, not a game. The same run alone was
+green.
+
 **A probe that never builds now waits for ever.** The teaching board holds its
 first wave until a tower is up, and five probes walked straight into it: the
 town probe reported that the Range bonus did nothing (there was nothing to hit),
