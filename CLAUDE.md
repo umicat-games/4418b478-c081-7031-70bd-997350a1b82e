@@ -199,6 +199,14 @@ walking, and a modal has to disable the touch layer and cover the field while
 the enemies keep coming. It would also be a THIRD button on a control layer
 this game has already drawn over five times.
 
+**A release past the dead zone does NOTHING.** On a tower the button has three
+outcomes, not two: under the dead zone is an upgrade, past it but before full is
+a CANCEL, and full is a sale. An early release used to fall through to the
+upgrade — "just a slow tap" — so holding halfway, thinking better of it and
+letting go bought an upgrade nobody asked for, which puts the two gestures back
+on top of each other. Off a tower there is no hold to cancel, so a slow press
+there really is just a slow tap and still builds.
+
 **There is a DEAD ZONE at the start of the press.** The same button upgrades on
 a tap and sells on a hold, and the sell ring and the word appeared from the
 first frame of any press — so every upgrade flashed the destructive reading of
@@ -221,11 +229,16 @@ Four things it has to get right:
 - **The hold is measured in REAL time, not game time.** `dt` is clamped at 0.05,
   so a struggling phone would otherwise want the button held for a second and a
   half. A hold is a thing a finger does, not a thing happening in the world.
-- **A probe measuring a TAP must sample cheaply.** The first version of that
-  check walked the scene looking for the ring on every sample, and 1400 objects
-  a sample took long enough that the tap being measured became a hold — it sold
-  the tower and then reported that the dead zone was missing. It reads
-  `sellProgress()` and one `data-sell-tag` query on rAF instead.
+- **A probe cannot TIME a tap on a slow scene.** At eight frames a second every
+  timer is late by up to a whole frame, so neither `rAF` nor `setTimeout` can
+  produce a press shorter than the 200ms dead zone — a "140ms tap" measured as
+  315ms, which is a cancel, and the probe reported the upgrade broken. A real
+  fast tap is press and release in the SAME TICK, and the latch is what makes
+  that work: a press that begins and ends between two frames is still seen.
+- **And it must sample cheaply.** The first version walked the scene looking for
+  the ring on every sample, and 1400 objects a sample took long enough that the
+  tap being measured became a hold — it sold the tower and then reported the
+  dead zone missing. It reads `sellProgress()` and one `data-sell-tag` query.
 
 **The feedback is ON THE TOWER**, all of it. A ring sweeps clockwise round the
 cell as the hold fills, with the unfilled part behind it, and the word and the

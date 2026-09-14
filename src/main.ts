@@ -2252,9 +2252,23 @@ export async function startLevel(
       pressPending = false;
       return;
     }
-    // Released. A long press that was let go early is just a slow tap.
     if (!down) {
       pressPending = false;
+      // Released. On a TOWER there are THREE outcomes, not two.
+      //
+      //   under the dead zone  -> upgrade. A tap, and it showed nothing.
+      //   past it, before full -> NOTHING. The ring was on screen; letting go
+      //                           is a cancel, and a cancel must cancel.
+      //   full                 -> sold, handled above.
+      //
+      // It used to treat any early release as "just a slow tap" and upgrade —
+      // so holding halfway, thinking better of it and letting go bought an
+      // upgrade nobody asked for. That puts the two gestures back on top of
+      // each other, which is the whole thing the dead zone was added to stop.
+      //
+      // Off a tower there is no hold to cancel: the button only builds, and a
+      // slow press there IS just a slow tap.
+      if (standingOn && heldMs >= SELL_ARM_MS) return;
       tryBuild();
     }
   };
