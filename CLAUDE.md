@@ -499,6 +499,41 @@ it better** — which is what lets the Armory have no menu. Forging also equips,
 because making a weapon and then being asked to pick it up is a second press for
 nothing.
 
+### Making one, exactly
+
+You always have the sword, and it is the only one with no forge cost — you are
+never weaponless, so the Armory is somewhere to GO rather than something you
+must visit before the game will start. Everything else is bought out of the same
+`store` of gold, wood and stone the town is bought with, and the purchase writes
+the save on the spot.
+
+**Nothing can be forged until the Armory is built.** Its level is the ceiling:
+`min(WEAPON_MAX_LEVEL, town.armory)`, so a Lv2 Armory makes and improves every
+weapon to Lv2 and refuses the third for all of them together.
+
+`rackAction(id)` is the whole rule, and the order matters more than it looks:
+
+| you are standing at | it offers |
+| --- | --- |
+| a weapon not yet made | **forge** — and forging equips it too |
+| a made weapon you are NOT holding | **take** |
+| the weapon you ARE holding, under the cap | **improve** |
+| anything else | nothing; the button denies |
+
+The consequence worth knowing: **you improve the weapon you are carrying.** Walk
+to a staff you do not hold and the first press takes it; the second improves it.
+That is what makes one button enough, and it is also why forging equips — a
+freshly made weapon is already the one the next press improves.
+
+Costs live in `weapons.ts`: `forge` for the first step, `upgrades[0]` and
+`upgrades[1]` for the two after it. `nextCost(id, level)` is the one function
+that answers for both, because from the player's side making and improving are
+the same act — walk up and pay.
+
+The card is the only place the game explains a button that will not work, so it
+names the reason rather than going quiet: *The Armory has not been built* ·
+*Needs Armory LvN* · *Fully forged* · or what materials are still missing.
+
 **The rack's positions live in two files** (`RACK` in `hub.ts`, `PICKUPS` in
 `tools/gen-scene.mjs`) and must agree — one stands the pedestals, the other
 decides what you are standing at. Spacing is 1.25 against a 0.9 "standing at"
