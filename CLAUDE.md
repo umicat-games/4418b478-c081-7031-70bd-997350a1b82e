@@ -344,6 +344,33 @@ wide enough to need a hop; the probe had to be arranged CORRECTLY twice first,
 because a tight knot inside the blast radius is also a cast with nothing to hop
 to, and that looks identical.
 
+**Nothing is selected when a run starts, and the placement ring belongs to the
+selection.** Tap a weapon in the bar to choose it, tap it again to un-choose;
+the gold ring on the ground is drawn exactly while something is chosen.
+
+The ring used to be drawn whenever the cell under you was buildable, which on a
+board with sixty build spots is ALWAYS — a circle trailing the hero everywhere
+with nothing on screen tying it to anything, and read by more than one person as
+the staff's blast radius. The first fix was "show it only once you stand still",
+which removed the trail and explained nothing: a circle that appears when you
+stop still never says what it is ABOUT. Tying it to the hotbar does, in both
+directions — it appears because you chose that, and it goes when you un-choose
+it — and it needs no timer, no fade and no frame-rate reasoning.
+
+Starting empty is the other half. A default is a decision the game makes for
+you and then charges you for, and with one pre-selected there was a ring on the
+grass from the first frame of every run with nothing to connect it to. Pressing
+build with nothing chosen says so out loud, because a button that does nothing
+in silence is a button that looks broken.
+
+The corner brackets still mark every buildable cell the whole time. That is the
+division: the brackets say "you can build here", which is cheap and always
+wanted; the ring says "and THIS is how far the thing you picked reaches".
+
+**A tower you are standing ON keeps its green ring at all times.** That is a
+real object's real reach rather than a hypothetical, and nobody mistakes it for
+a spell.
+
 **Crates** drop on the back field — cells that are neither road nor a place to
 build — and pay gold or a heart when broken with any weapon. A heart only when
 one is missing: a crate that pays nothing is a worse crate than one that pays
@@ -513,6 +540,32 @@ paid for none of it. The probe checks it is GONE rather than that it works.
 **No greeting.** "Welcome, <name>" was the first thing on screen every single
 time. A line that tells you something you already knew is a line you stop
 reading, and it takes the line beside it — the purse — down with it.
+
+## The card over a building
+
+One shape, CENTRED, with a rule under the name — the same for a town plot and a
+weapon on the rack:
+
+```
+              NAME
+    ─────────────────────────
+           what level it is
+
+        what it does for you
+
+    what the next level costs
+       the button that does it
+```
+
+It was a left-aligned stack of `Now: …` / `Lv2: …` / `Cost: …`, which reads as
+a form rather than as a sign over a building: three colons down the left edge
+and the actual numbers never in the same place twice.
+
+The body says what the NEXT level gives you, not what this one already does —
+standing at a building you are deciding whether to pay, and what you are paying
+for is the step. The weapon card keeps its blurb and its blocker in different
+slots: "Locks on at range · The Armory has not been built" was one sentence
+made of two unrelated thoughts.
 
 ## The town
 

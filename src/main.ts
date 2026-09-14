@@ -1030,7 +1030,18 @@ export async function startLevel(
   // arriving used to mean taking fire before the first tower was up, which is
   // damage for nothing the player did.
   let invincible = 4;
-  let selected = 0;             // which tower kind the build button places
+  /** Which tower kind the build button places, or NOTHING.
+   *
+   *  Starts empty, and tapping a cell that is already chosen empties it again.
+   *  That is what makes the range ring explicable: it appears because you
+   *  CHOSE something and goes when you un-choose it, so the circle on the
+   *  ground is visibly about the bar at the bottom of the screen.
+   *
+   *  It used to start on the ballista, which meant a ring was on the grass from
+   *  the first frame of every run with nothing on screen tying it to anything —
+   *  and several people read it as the staff's blast radius. A default is also
+   *  a decision the game makes for you and then charges you for. */
+  let selected: number | null = null;
   /** The fork alternates, so both gates stay under pressure all wave. */
   let nextRoute = 0;
   let buildCell: [number, number] | null = null;
@@ -1195,17 +1206,44 @@ export async function startLevel(
     sellTag.style.top = `${(-_tagAt.y * 0.5 + 0.5) * window.innerHeight}px`;
   };
 
-  const showRange = (at: [number, number] | null, radius: number, colour: number): void => {
+  const RING_RING_ALPHA = 0.9;
+  const RING_FILL_ALPHA = 0.09;
+
+  /**
+   * What the square under your feet can reach.
+   *
+   * It used to be drawn any time the cell was buildable, which on a board with
+   * sixty build spots means ALWAYS: a white circle following the hero
+   * everywhere, with nothing on screen tying it to anything — several people
+   * read it as the STAFF's blast radius rather than as a preview of a tower
+   * that does not exist yet.
+   *
+   * It is tied to the hotbar instead. Nothing is selected when a run starts;
+   * tapping a weapon selects it and tapping it again un-selects it, and the
+   * ring is drawn exactly while something is selected. That makes the circle
+   * EXPLICABLE — it appeared because you chose that, and it goes when you
+   * un-choose it — which "it appears when you stop walking" never was.
+   *
+   * A tower you are standing ON is different and always shown: that is a real
+   * object's real reach, not a hypothetical, and nobody mistakes it for a spell.
+   */
+  const showRange = (
+    at: [number, number] | null, radius: number, colour: number,
+  ): void => {
     const on = at !== null;
     rangeRing.visible = on;
     rangeFill.visible = on;
-    if (!on) return;
+    if (!on || !at) return;
     rangeRing.position.set(at[0], 0.035, at[1]);
     rangeFill.position.set(at[0], 0.03, at[1]);
     rangeRing.scale.setScalar(radius);
     rangeFill.scale.setScalar(radius);
-    (rangeRing.material as THREE.MeshBasicMaterial).color.setHex(colour);
-    (rangeFill.material as THREE.MeshBasicMaterial).color.setHex(colour);
+    const ringMat = rangeRing.material as THREE.MeshBasicMaterial;
+    const fillMat = rangeFill.material as THREE.MeshBasicMaterial;
+    ringMat.color.setHex(colour);
+    fillMat.color.setHex(colour);
+    ringMat.opacity = RING_RING_ALPHA;
+    fillMat.opacity = RING_FILL_ALPHA;
   };
 
   /** Short-lived visual things. The camera is read fresh each frame because a
@@ -1941,7 +1979,11 @@ export async function startLevel(
     cell.innerHTML =
       `<img alt="${kind.label}" style="width:76%;aspect-ratio:1;object-fit:contain;display:block">`
       + `<span class="cost" style="opacity:.85">${kind.cost}g</span>`;
-    cell.onclick = () => { selected = i; refreshHotbar(); audio.play('build'); renderHud(); };
+    // Tap to choose, tap again to un-choose.
+    cell.onclick = () => {
+      selected = selected === i ? null : i;
+      refreshHotbar(); audio.play('build'); renderHud();
+    };
     hotbar.appendChild(cell);
     return cell;
   });
@@ -1997,7 +2039,10 @@ export async function startLevel(
 
   window.addEventListener('keydown', (e) => {
     const n = Number(e.key);
-    if (n >= 1 && n <= KINDS.length) { selected = n - 1; refreshHotbar(); renderHud(); }
+    if (n >= 1 && n <= KINDS.length) {
+      selected = selected === n - 1 ? null : n - 1;
+      refreshHotbar(); renderHud();
+    }
   });
 
   /** The one line of prompt, as a shape and some words. */
@@ -2057,8 +2102,8 @@ export async function startLevel(
     } else if (atCrate) {
       prompt('sword', ' break open');
     } else if (buildCell) {
-      const kind = KINDS[selected];
-      prompt('build', ` ${kind.label} · ${kind.cost}g`);
+      if (selected === null) prompt(null, 'Choose a weapon from the bar');
+      else prompt('build', ` ${KINDS[selected].label} · ${KINDS[selected].cost}g`);
     } else {
       prompt(null, '');
     }
@@ -2113,6 +2158,14 @@ export async function startLevel(
       done: () => hero.position.distanceTo(startedAt) > 2.2,
     },
     {
+      // Nothing is chosen when a run starts, so this is the first thing a
+      // player has to do — and it is the step that makes the gold circle mean
+      // something, because the circle appears the moment this is done.
+      text: `Tap a weapon in the bar below · ${KINDS[0].label} is ${KINDS[0].cost}g`,
+      done: () => selected !== null || towers.length > 0,
+      gateWaves: true,
+    },
+    {
       // The marker is already drawn under your feet on a buildable cell, so
       // this names a thing that is visibly happening rather than describing it.
       text: 'Stand on one of the pale squares beside the road',
@@ -2120,7 +2173,7 @@ export async function startLevel(
       gateWaves: true,
     },
     {
-      text: `${iconHtml('build')} Build a ${KINDS[0].label} · ${KINDS[0].cost}g`,
+      text: `${iconHtml('build')} Build it`,
       done: () => towers.length > 0,
       gateWaves: true,
     },
@@ -2434,6 +2487,14 @@ export async function startLevel(
     }
 
     if (!buildCell) return;
+    if (selected === null) {
+      // Nothing chosen. Saying so is the whole reason the bar starts empty:
+      // the button does nothing, and a button that does nothing in silence is
+      // a button that looks broken.
+      audio.play('denied');
+      flashBanner('Choose a weapon from the bar');
+      return;
+    }
     const kind = KINDS[selected];
     if (towers.length >= maxTowers) {
       audio.play('denied');
@@ -2837,11 +2898,18 @@ export async function startLevel(
       // otherwise standing on your own tower looks like standing on grass.
       marker.visible = canBuild || !!here;
       if (marker.visible) marker.position.set(cell[0], 0.03, cell[1]);
-      // What the thing under your feet can reach. Green for a tower that is
-      // already there, white for the one you are about to put down.
+      // What the thing under your feet can reach. GREEN for a tower that is
+      // already there — a real object's real reach, shown whenever you are on
+      // it. GOLD for the one you are about to put down, and only once you have
+      // GREEN for a tower that is already there — a real object's real reach,
+      // shown whenever you are standing on it. GOLD for the one you are about
+      // to put down, and only while something is CHOSEN: gold is this game's
+      // colour for "the thing selected in the hotbar", which white was not, and
+      // white is what people read as a spell.
       if (here) showRange(here.cell, levelRange(here), 0x8effa0);
-      else if (canBuild) showRange(cell, KINDS[selected].range, 0xffffff);
-      else showRange(null, 0, 0);
+      else if (canBuild && selected !== null) {
+        showRange(cell, KINDS[selected].range, 0xffd76a);
+      } else showRange(null, 0, 0);
       const nearCrate = crates.some((c) =>
         c.hp > 0 && Math.hypot(c.obj.position.x - hero.position.x, c.obj.position.z - hero.position.z) < 1.0);
       const changed = before !== `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`
@@ -3348,7 +3416,11 @@ export async function startLevel(
         return BUILDABLE.has(k) && !occupied.has(k);
       },
       /** Pick a tower kind, the same way the number keys do. */
-      select: (i: number) => { selected = Math.max(0, Math.min(i, KINDS.length - 1)); renderHud(); },
+      select: (i: number | null) => {
+        selected = i === null ? null : Math.max(0, Math.min(i, KINDS.length - 1));
+        refreshHotbar(); renderHud();
+      },
+      selected: () => selected,
       kinds: () => KINDS.map((k) => ({ id: k.id, mount: k.mount, cost: k.cost, range: k.range })),
       /** three itself, and the tint predicate. Probes need to measure the scene
        *  (where is this, how big is it), and reaching for a Box3 should not mean

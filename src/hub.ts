@@ -465,28 +465,59 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  here — building names, weapon names, prices — and player text must never
    *  be routed through it — nothing in this hub shows player text at all now
    *  that the leaderboard is gone, and that is the reason this is safe. */
-  const showCard = (title: string, lines: string[], action?: string,
-                    glyph?: IconName): void => {
+  /** What the card over a building or a weapon says.
+   *
+   *  One shape, CENTRED, with a rule under the name:
+   *
+   *      NAME
+   *      ────────────────
+   *      what level it is
+   *
+   *      what it does for you
+   *
+   *      what the next level costs
+   *      the button that does it
+   *
+   *  It was a left-aligned stack of `Now: …` / `Lv2: …` / `Cost: …` lines,
+   *  which reads as a form rather than as a sign over a building, and put the
+   *  label before the thing in every row — three colons down the left edge and
+   *  the actual numbers never in the same place twice.
+   *
+   *  `level`, `body` and `cost` are HTML, because prices carry icons and an
+   *  icon is an element. Everything reaching this is authored here; nothing in
+   *  this hub shows player text at all, which is the only reason that is safe.
+   */
+  interface Card {
+    title: string;
+    glyph?: IconName;
+    /** "Lv2", or "Not built yet". */
+    level?: string;
+    /** What it does. One line, in plain words. */
+    body?: string;
+    /** What the next level costs, or what is missing. */
+    cost?: string;
+    /** The button, in gold. */
+    action?: string;
+  }
+  const showCard = (c: Card): void => {
     card.innerHTML = '';
-    const t = document.createElement('div');
-    t.style.cssText = 'font: 700 15px/1.4 system-ui, sans-serif; margin-bottom: 2px;'
-      + 'display: flex; align-items: center; gap: 7px;';
-    t.innerHTML = (glyph ? iconHtml(glyph) : '') + escapeHtml(title);
-    card.append(t);
-    for (const line of lines) {
-      if (!line) continue;
+    const add = (html: string, css: string): void => {
+      if (!html) return;
       const d = document.createElement('div');
-      d.style.cssText = 'opacity: .82;';
-      d.innerHTML = line;
+      d.style.cssText = css;
+      d.innerHTML = html;
       card.append(d);
-    }
-    if (action) {
-      const a = document.createElement('div');
-      a.style.cssText = 'margin-top: 7px; font: 700 13px/1.4 system-ui, sans-serif;'
-        + 'color: #ffd76a; display: flex; align-items: center; gap: 6px;';
-      a.innerHTML = action;
-      card.append(a);
-    }
+    };
+    add((c.glyph ? `${iconHtml(c.glyph)} ` : '') + escapeHtml(c.title),
+      'font: 800 17px/1.35 system-ui, sans-serif; text-align: center;'
+      + 'display: flex; align-items: center; justify-content: center; gap: 8px;'
+      + 'padding-bottom: 7px; border-bottom: 1px solid rgba(255,255,255,.22);');
+    add(c.level ?? '', 'text-align: center; opacity: .66; margin-top: 6px; font-size: 12px;');
+    add(c.body ?? '', 'text-align: center; margin-top: 10px; opacity: .92;');
+    add(c.cost ?? '', 'text-align: center; margin-top: 10px; opacity: .92;');
+    add(c.action ?? '',
+      'text-align: center; margin-top: 8px; color: #ffd76a;'
+      + 'font: 700 13px/1.4 system-ui, sans-serif;');
     card.style.display = 'block';
   };
 
@@ -618,22 +649,30 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       // MISSING, which is a thing you can go and do something about.
       const plotCard = (b: typeof TOWN[number]): void => {
         const lv = town[b.id] ?? 0;
-        const now = townNow(b.id, town);
         if (lv >= TOWN_MAX_LEVEL) {
-          showCard(`${b.name} · Lv${lv}`, [now, 'Fully built'], undefined, b.icon);
+          showCard({
+            title: b.name, glyph: b.icon,
+            level: `Lv${lv} · fully built`,
+            body: townNow(b.id, town),
+          });
           return;
         }
         const cost = b.costs[lv];
-        const next = townAfter(b.id, town, lv + 1);
-        const lines = [
-          lv ? `Now: ${now}` : b.effect,
-          `Lv${lv + 1}: ${next}`,
-          `Cost: ${priceOf(cost)}`,
-        ];
-        showCard(`${b.name}${lv ? ` · Lv${lv}` : ''}`, lines,
-          canAfford(store, cost)
+        showCard({
+          title: b.name,
+          glyph: b.icon,
+          level: lv ? `Lv${lv}` : 'Not built yet',
+          // What the NEXT level gives you, not what this one already does.
+          // Standing at a building you are deciding whether to pay, and what
+          // you are paying for is the step, not the state.
+          body: lv ? townAfter(b.id, town, lv + 1) : b.effect,
+          cost: canAfford(store, cost)
+            ? priceOf(cost)
+            : `needs ${shortfall(store, cost)}`,
+          action: canAfford(store, cost)
             ? `${iconHtml('build')} build Lv${lv + 1}`
-            : `needs ${shortfall(store, cost)}`);
+            : undefined,
+        });
       };
 
       /** A weapon, at whatever stage it is in. The lines change with the stage
@@ -643,38 +682,53 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         const k = WEAPON_BY_ID.get(id)!;
         const lvl = levelOf(weapons, id);
         const cap = Math.min(WEAPON_MAX_LEVEL, weaponCap());
-        const lines: string[] = [k.blurb];
-        if (lvl > 0) {
-          lines.push(`Now: ${weaponDamage(id, lvl)} damage${effectText(id, lvl) ? ` · ${effectText(id, lvl)}` : ''}`);
-        }
         const cost = nextCost(id, lvl);
         const canStep = lvl < cap && cost;
+        const at = (n: number): string =>
+          `${weaponDamage(id, n)} damage${effectText(id, n) ? ` · ${effectText(id, n)}` : ''}`;
+        // WHAT IT DOES, in one line — the blurb until it is made, its numbers
+        // once it is. Not both, and never glued to why you cannot buy it: those
+        // are two different thoughts and the `·` between them read as one.
+        const body = lvl > 0 ? at(lvl) : k.blurb;
+        // WHAT STANDS BETWEEN YOU AND THE NEXT LEVEL: a price, or the building
+        // that has to exist first. The one dead end worth explaining is that
+        // the weapon exists, the money may even be there, and the reason
+        // nothing happens is a building.
+        let gate: string | undefined;
         if (canStep) {
-          const step = lvl + 1;
-          lines.push(`Lv${step}: ${weaponDamage(id, step)} damage${effectText(id, step) ? ` · ${effectText(id, step)}` : ''}`);
-          lines.push(`Cost: ${priceOf(cost)}`);
+          gate = canAfford(store, cost!)
+            ? `Lv${lvl + 1} · ${at(lvl + 1)}<br>${priceOf(cost!)}`
+            : `needs ${shortfall(store, cost!)}`;
         } else if (lvl === 0) {
-          // The one dead end worth explaining: the weapon exists, the money may
-          // even be there, and the reason nothing happens is a building.
-          lines.push(weaponCap() === 0 ? 'The Armory has not been built' : `Needs Armory Lv${lvl + 1}`);
+          gate = weaponCap() === 0 ? 'The Armory has not been built' : `Needs Armory Lv${lvl + 1}`;
         } else if (lvl >= WEAPON_MAX_LEVEL) {
-          lines.push('Fully forged');
+          gate = 'Fully forged';
         } else {
-          lines.push(`Improving needs Armory Lv${lvl + 1}`);
+          gate = `Improving needs Armory Lv${lvl + 1}`;
         }
 
         const act = rackAction(id);
         let action: string | undefined;
         if (act === 'take') action = `${iconHtml('build')} take`;
         else if (act === 'forge' || act === 'improve') {
-          if (!canStep) action = undefined;
-          else action = canAfford(store, cost!)
-            ? (act === 'forge'
-              ? `${iconHtml('build')} forge`
-              : `${iconHtml('build')} improve to Lv${lvl + 1}`)
-            : `needs ${shortfall(store, cost!)}`;
+          if (canStep) {
+            action = canAfford(store, cost!)
+              ? (act === 'forge'
+                ? `${iconHtml('build')} forge`
+                : `${iconHtml('build')} improve to Lv${lvl + 1}`)
+              : undefined;
+          }
         } else if (id === weapon) action = 'equipped';
-        showCard(`${k.name}${lvl ? ` · Lv${lvl}` : ''}`, lines, action, k.icon);
+        // Same shape as a building: name, rule, level, what it does, what the
+        // step costs.
+        showCard({
+          title: k.name,
+          glyph: k.icon,
+          level: lvl ? `Lv${lvl}` : 'Not forged yet',
+          body,
+          cost: gate,
+          action,
+        });
       };
 
       if (panelOpen) {
@@ -686,7 +740,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         rackCard(atPickup.id);
         placeCard(atPickup.x, 1.1, atPickup.z);
       } else if (nearDoor) {
-        showCard('The road out', ['Choose which board to take'], 'walk through', 'gate');
+        showCard({ title: 'The road out', glyph: 'gate',
+          body: 'Choose which board to take', action: 'walk through' });
         placeCard(DOOR_AT.x, 2.0, DOOR_AT.z);
       } else {
         card.style.display = 'none';
