@@ -17,6 +17,7 @@ import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
 import { skyWithClouds } from './sky';
+import { readoutPlate } from './hud';
 import { icon, setIconText, iconHtml, type IconName } from './icons';
 import { createThumbMaker } from './thumbs';
 import { ICON, WEAPON_ICON } from './icons';
@@ -1328,7 +1329,9 @@ export async function startLevel(
   const buttons = document.createElement('div');
   buttons.style.cssText = 'display: flex; align-items: center; pointer-events: auto;';
   buttons.append(muteBtn, qualityBtn);
-  hudEl.append(line1, line2, line3, buttons);
+  // The BUTTONS stay outside the plate — they carry their own backgrounds, and
+  // a plate behind them would be a panel with two holes in it.
+  hudEl.append(readoutPlate(line1, line2, line3), buttons);
 
   const banner = document.createElement('div');
   banner.style.cssText = `
@@ -2000,6 +2003,9 @@ export async function startLevel(
   /** The one line of prompt, as a shape and some words. */
   const prompt = (glyph: IconName | null, text: string): void => {
     line3.textContent = '';
+    // Collapsed when there is nothing to say. Empty, it was an invisible blank
+    // line; inside a panel it is a stripe of padding with nothing in it.
+    line3.style.display = glyph || text ? 'block' : 'none';
     if (glyph) line3.append(icon(glyph, HUD_ICON));
     line3.append(document.createTextNode(text));
   };

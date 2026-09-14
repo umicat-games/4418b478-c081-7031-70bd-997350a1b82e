@@ -1097,6 +1097,18 @@ standing still in exactly the case the option exists for.
   with. It stays centred whenever centred fits.
 - **Never copy one kit's `Textures/` over another's.** `cmp` first. Doing it
   once turned the grass orange and every check still passed.
+- **The readout sits on a PLATE** (`src/hud.ts`, shared by the hub and the
+  levels). White text on a white cloud is not text: the HUD had a shadow, which
+  is enough over grass and snow and nothing like enough over the clouds that
+  arrived in the sky — the top-left corner, which is where the lives, the gold
+  and the wave are, went unreadable at certain camera angles. No
+  `backdrop-filter`: a blur is a read-modify-write of every pixel under it, and
+  this game is drawn on phones.
+
+  A plate turns two things that used to be invisible into visible holes.
+  `opacity: 0` still occupies its row — the hub's greeting fades after five
+  seconds and left a permanent blank stripe — and an empty prompt line is a
+  stripe of padding with nothing in it. Both collapse now.
 - **An element created, updated and never appended is invisible and silent.**
   The tower counter and the effect readout had their text set every frame for a
   day before anyone noticed they were not in the document. Same shape as a

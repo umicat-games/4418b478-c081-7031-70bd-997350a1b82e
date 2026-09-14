@@ -9,6 +9,7 @@ import type { Shared, Progress } from './main';
 import { patchSave, readSave } from './main';
 import { DEV, toggleDev } from './dev';
 import { skyWithClouds } from './sky';
+import { readoutPlate } from './hud';
 import { iconHtml, type IconName } from './icons';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
@@ -418,9 +419,15 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const title = document.createElement('div');
   title.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
   title.textContent = umicat.user ? `Welcome, ${umicat.user.name}` : 'Playing as a guest';
-  // A greeting, not a readout. It goes away.
+  // A greeting, not a readout. It goes away — and then it gets out of the way.
+  // Fading to `opacity: 0` leaves the row occupying its full height, which was
+  // invisible when the HUD was bare text and is a permanent blank stripe now
+  // that the readout sits on a plate.
   title.style.transition = 'opacity .8s';
-  setTimeout(() => { title.style.opacity = '0'; }, 5000);
+  setTimeout(() => {
+    title.style.opacity = '0';
+    setTimeout(() => { title.style.display = 'none'; }, 900);
+  }, 5000);
   const purse = document.createElement('div');
   purse.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
   const renderPurse = (): void => {
@@ -436,7 +443,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     ].filter(Boolean).join('   ');
   };
   renderPurse();
-  hudEl.append(title, purse); // the prompt is a card over the building now, not a line up here
+  // Same plate as a level's readout: this is the same white text in the same
+  // corner over the same sky.
+  hudEl.append(readoutPlate(title, purse));
 
   // There is no "NEW ·" banner any more. It announced the weapon the finished
   // level had handed over, and nothing is handed over now — what is waiting on
