@@ -265,6 +265,15 @@ Only GOLD is spendable during a run. Wood and stone have nothing to buy on a
 board, which is what makes them come home in full while the gold is a choice
 between a tower now and a building later.
 
+**The storm's chain sets off from the enemy FURTHEST from the blast**, not from
+whichever came first in the array. The burst reaches 2.6 and a hop reaches 2.4,
+so everything within a hop of the middle is already in the struck set — a chain
+starting from a central enemy has nowhere to go and silently does nothing, which
+was most casts. `verify-3d-elements` found it by arranging a line of enemies
+wide enough to need a hop; the probe had to be arranged CORRECTLY twice first,
+because a tight knot inside the blast radius is also a cast with nothing to hop
+to, and that looks identical.
+
 **Crates** drop on the back field — cells that are neither road nor a place to
 build — and pay gold or a heart when broken with any weapon. A heart only when
 one is missing: a crate that pays nothing is a worse crate than one that pays

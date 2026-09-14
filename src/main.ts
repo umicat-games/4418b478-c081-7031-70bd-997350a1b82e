@@ -2226,7 +2226,21 @@ export async function startLevel(
       // is worth less than the last, or it is simply the best weapon on a full
       // board rather than the one that answers a crowd.
       if (kind.status === 'chain' && caught.length) {
+        // Start from the one FURTHEST OUT, not from whichever happened to come
+        // first in the array.
+        //
+        // The burst reaches 2.6 and a hop reaches 2.4, so everything within a
+        // hop of the middle of the blast is already in the struck set — a chain
+        // that sets off from a central enemy has nowhere to go and silently
+        // does nothing, which is most casts. Setting off from the edge is the
+        // only way the arc ever leaves the blast, and "it leaves the burst and
+        // goes looking" is the whole point of this staff.
         let from = caught[0];
+        let far = -1;
+        for (const c of caught) {
+          const d = Math.hypot(c.obj.position.x - at.x, c.obj.position.z - at.z);
+          if (d > far) { far = d; from = c; }
+        }
         let power = hit;
         const struckSet = new Set<Enemy>(caught);
         const hops = Math.round(weaponEffect(weapon, weaponLevel));
