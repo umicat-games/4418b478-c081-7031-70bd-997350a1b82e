@@ -1282,9 +1282,6 @@ export async function startLevel(
   const line2 = document.createElement('div');
   const line3 = document.createElement('div');
   line3.style.opacity = '0.85';
-  // The prompt carries two lines when a tower is under you. A `\n` in
-  // `textContent` is whitespace and nothing else without this.
-  line3.style.whiteSpace = 'pre-line';
   // Gold lives in its own element because a coin flying to the counter needs a
   // rectangle to aim at, and "somewhere in that line of text" is not one.
   const buffEl = document.createElement('span');
@@ -1966,16 +1963,17 @@ export async function startLevel(
     // sentence nobody reads twice and everybody looks past.
     if (standingOn) {
       const t = standingOn;
-      const up = t.level >= MAX_LEVEL
+      // ONE line. Selling used to be named here too, on the argument that a
+      // hold is invisible until something names it — but the teaching board
+      // teaches it now, once, and a permanent second line reminding you of a
+      // gesture you already know is the wall of explanatory text this game
+      // took off the screen in the first place.
+      //
+      // The price still appears before you commit to it: it is on the label
+      // over the tower, which shows up as soon as the hold arms.
+      line3.textContent = t.level >= MAX_LEVEL
         ? `${t.kind.label} Lv${MAX_LEVEL} · max`
         : `🔨 Lv${t.level + 1} · ${upgradeCost(t)}g`;
-      // Two lines, because there are two verbs on the one button and the
-      // second one is the one nobody would find by pressing things. A hold is
-      // invisible until it is named, and the prompt line is where this game
-      // already teaches — it is the only text on screen and it is only there
-      // when the button does something.
-      // NAMES the gesture; the progress of it is drawn on the tower.
-      line3.textContent = `${up}\n↩ hold to sell · +${sellValue(t)}g`;
     } else if (atCrate) {
       line3.textContent = '⚔ break open';
     } else if (buildCell) {

@@ -274,9 +274,16 @@ belong to that square. And `RingGeometry`'s fourth argument is `phiSegments`,
 not the start angle — dropping it type-checks perfectly, because every
 parameter is a number.
 
-The prompt line still NAMES the gesture (`↩ hold to sell · +87g`), because a
-hold is invisible until it is named. Desktop gets `X`, because holding a KEY
-reads as a stuck key rather than a gesture.
+**The corner prompt says nothing about selling.** It named the gesture on a
+second row for a while, on the argument that a hold is invisible until
+something names it — and then the teaching board started teaching it, once, at
+which point a permanent reminder of a gesture you already know is the wall of
+explanatory text this game took off the screen in the first place. The price is
+still shown before you commit: it is on the label over the tower, which appears
+the moment the hold arms.
+
+Desktop gets `X`, because holding a KEY reads as a stuck key rather than a
+gesture.
 
 `dissolve()` in `src/vfx.ts` takes the object OVER — the caller must already
 have taken it out of its own list, or the game keeps shooting with a tower that
