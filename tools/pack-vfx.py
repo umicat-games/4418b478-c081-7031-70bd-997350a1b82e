@@ -38,8 +38,8 @@ FRAMES = [
     ('boltB',      'spark_06.png'),   # ditto, a different fork
     ('strandA',    'trace_03.png'),   # a thin strand, for the in-between frames
     ('strandB',    'trace_04.png'),
-    ('arcA',       'spark_01.png'),   # a ragged sheet of discharge
-    ('arcB',       'spark_02.png'),
+    ('flameA',     'flame_05.png'),   # a real tongue of fire, tip curling
+    ('flameB',     'flame_06.png'),
     ('glowRing',   'light_02.png'),   # soft ring — the shockwave on the ground
     ('runeRing',   'magic_01.png'),   # pentagon with nodes
     ('runeCircle', 'magic_02.png'),   # circle with nodes — the spell circle
@@ -48,9 +48,16 @@ FRAMES = [
     ('starBurst',  'magic_05.png'),
     ('scorch',     'scorch_01.png'),  # a mark left behind
     ('burst',      'muzzle_01.png'),  # a short cone, for muzzles and impacts
-    ('twirl',      'twirl_01.png'),
-    ('slash',      'slash_01.png'),   # a crescent, for melee arcs
+    ('iceShard',   'star_08.png'),    # a hard X of spikes: frost, not a sparkle
+    ('frostRing',  'circle_03.png'),  # a CRISP ring, where glowRing is a soft one
 ]
+
+# Cells 4, 5, 14 and 15 held `arcA`/`arcB` (spark_01/02, sheet discharge) and
+# `twirl`/`slash`, and nothing in the game ever drew one of them. Fire and ice
+# needed shapes of their own far more than the atlas needed four unused ones —
+# three elements that all throw lightning are one element in three colours.
+# Repacking reproduced the twelve surviving cells pixel-for-pixel (mean
+# difference 0.00), so nothing that was already drawn changed.
 
 
 def main() -> int:

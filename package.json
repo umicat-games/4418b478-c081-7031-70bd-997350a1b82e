@@ -10,8 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "scene": "node tools/gen-scene.mjs",
-    "vfx": "python3 tools/pack-vfx.py",
-    "atlas": "python3 tools/pack-vfx-atlas.py"
+    "vfx": "python3 tools/pack-vfx.py"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",

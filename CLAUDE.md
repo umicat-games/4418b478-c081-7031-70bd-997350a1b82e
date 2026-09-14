@@ -518,7 +518,7 @@ and `instanceColor` is per-instance.
 ### The atlas
 
 `public/vfx/particles.png` is a 4×4 sheet of 256px cells cut from Kenney's
-Particle Pack (CC0), and **`tools/pack-vfx-atlas.py` (`npm run atlas`) is what
+Particle Pack (CC0), and **`tools/pack-vfx.py` (`npm run vfx`) is what
 cuts it** — the mapping from cell to source file lives in that script's table
 and nowhere else. It exists because the first packing script was not kept, and
 recovering which cell was which meant comparing all sixteen against ninety-odd
