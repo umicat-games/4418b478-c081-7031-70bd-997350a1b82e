@@ -224,7 +224,15 @@ that reaches three weapons of four looks broken to whoever notices.
 ## Progression
 
 `td-progress` in `umicat.saves`:
-`{ best, quality, weapon, runs, cleared, bests, store, level, xp, town }`.
+`{ best, quality, weapon, weapons, runs, cleared, bests, store, level, xp, town }`.
+
+`weapons` is `{ [id]: level }` — which are forged and how far, `weapon` being
+whichever is in hand. A save from before the Armory has no such field, and
+`migrateWeapons` rebuilds one from `runs` (bow at one finished level, storm
+staff at two) rather than charging anyone again for what they had earned. The
+old `staff` becomes `bolt`, because the staff was already a lightning spell —
+mapping it to fire would have handed someone a different weapon and called it
+theirs.
 
 A run ends into a **summary panel**: the level bar filling (one level at a time,
 so the moment it wraps is visible), and what the run earned by material. The
@@ -243,8 +251,9 @@ built village is 4500 / 660 / 490 — eight to twelve runs, weighted to the late
 boards. `verify-3d-balance` measures the FIGHT; measuring the economy the same
 way would cost hours per tweak, and this is a thing to tune by playing.
 
-- `runs` — levels FINISHED, win or lose. Unlocks weapons: sword at 0, bow at 1,
-  staff at 2. Being handed a bow for losing is kind.
+- `runs` — levels FINISHED, win or lose. It used to unlock weapons on a
+  schedule; they are forged at the Armory now, and this is the run counter and
+  the input to the one-time migration above.
 - `cleared` — boards WON, in order. Board `i` is open when `cleared >= i`.
   Otherwise the order means nothing.
 - `store` — gold, wood and stone carried home, spent in the town.
@@ -254,11 +263,18 @@ way would cost hours per tweak, and this is a thing to tune by playing.
 
 ## The sandbox — `?dev`
 
-`?dev` unlocks everything; `?dev=staff` (or `sword`/`bow`) also puts that weapon
-in your hand. **On a phone, three taps on the frame counter** does the same and
-reloads. All three weapons on the pedestals, all four boards in the list,
-every village building at level three — so the tower mounts exist — and a store
-with enough in it to buy anything.
+`?dev` unlocks everything; `?dev=fire` (or `sword`/`bow`/`ice`/`bolt`, and
+`staff` still works and means `bolt`) also puts that weapon in your hand. **On a
+phone, three taps on the frame counter** does the same and reloads. The whole
+weapon rack forged and improved to Lv3, all four boards in the list, every
+village building at level three — so the tower mounts and the Armory's cap both
+exist — and a store with enough in it to buy anything.
+
+**In a sandbox run, `` ` `` or `\` cycles the weapon mid-fight** and names what
+you are now holding. A real run carries ONE weapon on purpose — which to take is
+most of what the Armory is for — but comparing three staves that way is three
+runs and three walks back to the rack, and what you are judging is how a burn
+feels against a chill on the SAME wave.
 
 **It never writes.** `patchSave` returns immediately while it is on, so a
 sandbox session cannot put `cleared: 4` into a real save. Open it on the same
@@ -268,7 +284,7 @@ there is a probe that does exactly that and compares the save byte for byte.
 It exists because the parts of this game that most need looking at are the ones
 furthest from the start: a lightning spell you cannot see until you have won two
 boards is a lightning spell nobody checks, and "play three levels first" is a
-tax on every change to the staff, the mounts, the later boards and the village.
+tax on every change to the staves, the mounts, the later boards and the village.
 
 `src/dev.ts` is the whole of it, and everything that reads progress goes through
 `readSave()` — a second reader that talks to `saves.get` directly is half the
@@ -353,6 +369,33 @@ at 1, staff at 2. The empty pedestals stay visible, which is the point.
 to write `{best, quality}` wholesale and erase the weapon the hub had just
 written — a field written by one screen and deleted by the next, with nothing
 anywhere reporting a problem.
+
+## Where the weapons work was left (2026-09-13)
+
+Built and verified: the Armory, the rack, forging and improving, the three
+elements and their statuses, the effects, and the card that hangs over a
+building. `verify-3d-armory` and `verify-3d-town` pass, as do `-hub`, `-td`,
+`-feedback` and `-levels`; `npx tsc --noEmit` is clean.
+
+**Not playtested.** Every number in `weapons.ts` is arithmetic against what a
+run pays — Meadow ~550 gold, Crossroads ~2150 — so the rack is a second sink
+beside the town rather than a second grind. Whether a burn is worth giving up a
+chill for is a question nobody has answered by playing yet. The table is one
+file; tune it there.
+
+Other things left open, in the order they will be noticed:
+
+- **The elements have no sound of their own.** All three cast on `upgrade`.
+- **A chill's tint and a burn's flash share one emissive slot.** `flashTint`
+  writes the material's emissive outright, so an enemy that is both burning and
+  chilled shows whichever fired last. The burn's quiet path yields on purpose
+  (`!quiet || !isTinted`) rather than strobing orange over a blue enemy twice a
+  second — which means a chilled enemy gives no visual sign that it is also
+  burning. A real status system would need its own colour channel, or to blend
+  them; this picks the cheaper wrong answer knowingly.
+- **A dish of numbers nobody has checked against the fight:** `CHAIN_FALLOFF`
+  and `CHAIN_HOP` were picked so that the storm staff is worst against one
+  enemy and best against a crowd. That is the intent, not a measurement.
 
 ## Balance is measured, not chosen
 
