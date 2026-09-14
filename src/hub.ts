@@ -435,9 +435,43 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     z-index: 40; display: none; min-width: 260px; max-width: 82vw;
     background: rgba(18,22,28,.92); color: #fff; border-radius: 16px; padding: 18px 22px;
     font: 600 14px/1.7 system-ui, sans-serif; pointer-events: auto;
+    flex-direction: column; max-height: 92vh; max-height: 92svh;
   `;
+
+  /** Close is a corner, not a row at the bottom.
+   *
+   *  A phone in landscape is 393 CSS pixels tall. The shop is taller than that,
+   *  so a Close button below the content sat BELOW THE SCREEN — no scrollbar to
+   *  hint at it, no way to dismiss the panel except the hardware back gesture.
+   *  A corner button cannot be pushed off by content, and it is where every
+   *  other app on the device puts it.
+   *
+   *  Outside the body, so it survives the innerHTML the panels rewrite on every
+   *  render, and stays put while the body scrolls under it. `svh` (with a `vh`
+   *  fallback line above it) so the browser chrome sliding in and out does not
+   *  change the panel's height under the player. */
+  const panelClose = document.createElement('button');
+  panelClose.type = 'button';
+  panelClose.setAttribute('aria-label', 'Close');
+  panelClose.dataset.panelClose = '';
+  panelClose.style.cssText = `
+    position: absolute; top: 10px; right: 10px; width: 32px; height: 32px;
+    border: 0; border-radius: 999px; background: rgba(255,255,255,.14);
+    color: #fff; font: 700 17px/1 system-ui; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  `;
+  panelClose.textContent = '\u00d7';
+
+  /** Everything the panels render. It scrolls; the close button does not.
+   *
+   *  `padding-right` leaves the corner clear — a title centred in the full
+   *  width would run under the button on a narrow screen. */
+  const panelBody = document.createElement('div');
+  panelBody.style.cssText = 'overflow: auto; min-height: 0; padding-right: 26px;';
+  panel.append(panelClose, panelBody);
   document.body.appendChild(panel);
   let panelOpen = false;
+  panelClose.onclick = () => closePanel();
 
   // --- the sign that hangs over whatever you are standing at ---------------
   //
@@ -594,7 +628,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const showShop = (): void => {
     panelOpen = true;
     input.setEnabled(false);
-    panel.style.display = 'block';
+    panel.style.display = 'flex';
     // A real page, not a tooltip that grew. A catalogue has two columns and
     // wants room for both; the board-list panel beside it is a short menu and
     // should stay the size of its own contents.
@@ -626,10 +660,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                      border-bottom:1px solid rgba(255,255,255,.22)">
            ${iconHtml(sel.icon, '1.2em')}${escapeHtml(sel.name)}</div>
          ${shot ? `<img alt="${escapeHtml(sel.name)}" src="${shot}" style="
-             display:block; margin:12px auto 0; width:min(190px, 40vh);
+             display:block; margin:10px auto 0; width:min(190px, 28vh); width:min(190px, 28svh);
              aspect-ratio:1; object-fit:contain;
              background:rgba(255,255,255,.06); border-radius:16px">` : ''}
-         <div style="margin-top:14px; opacity:.92">${escapeHtml(sel.effect)}</div>
+         <div style="margin-top:10px; opacity:.92">${escapeHtml(sel.effect)}</div>
          <div style="margin-top:16px">${priceOf(sel.costs[0])}</div>
          <button id="shop-buy" ${canAfford(store, sel.costs[0]) ? '' : 'disabled'} style="
            margin-top:18px; padding:11px 26px; border:0; border-radius:999px; cursor:pointer;
@@ -640,21 +674,17 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
          </button>`
       : '<div style="opacity:.7">Everything in the village is built.</div>';
 
-    panel.innerHTML =
+    panelBody.innerHTML =
       `<div style="font:800 18px/1.6 system-ui; margin-bottom:10px">Shop</div>
        <div style="display:flex; gap:20px; align-items:stretch">
          <div style="width:180px; max-height:52vh; overflow:auto">${rows}</div>
          <div style="flex:1; min-width:210px; text-align:center;
                      border-left:1px solid rgba(255,255,255,.14); padding-left:20px">
            ${detail}</div>
-       </div>
-       <button data-back="1" style="margin-top:16px; padding:8px 18px; border:0;
-         border-radius:999px; font:700 14px system-ui;
-         background:rgba(255,255,255,.18); color:#fff; cursor:pointer">Close</button>`;
+       </div>`;
 
-    for (const el of panel.querySelectorAll<HTMLButtonElement>('button')) {
+    for (const el of panelBody.querySelectorAll<HTMLButtonElement>('button')) {
       el.onclick = () => {
-        if (el.dataset.back) { closePanel(); return; }
         if (el.dataset.pick) { shopPick = Number(el.dataset.pick); showShop(); return; }
         if (el.id === 'shop-buy' && sel && canAfford(store, sel.costs[0])) {
           const c = sel.costs[0];
@@ -686,7 +716,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const chooseLevel = (onPick: (i: number) => void): void => {
     panelOpen = true;
     input.setEnabled(false);
-    panel.style.display = 'block';
+    panel.style.display = 'flex';
     const rows = LEVELS.map((lv, i) => ({ lv, i })).filter(({ i }) => levelOpen(i)).map(({ lv, i }) => {
       const best = progress.bests?.[lv.id] ?? 0;
       const note = best
@@ -706,13 +736,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     const more = cleared + 1 < LEVELS.length
       ? `<div style="opacity:.55;font:600 12px/2 system-ui">Clear ${escapeHtml(LEVELS[cleared].name)} to find the next one.</div>`
       : '';
-    panel.innerHTML =
-      '<div style="font:700 17px/1.8 system-ui">Where to?</div>' + rows + more
-      + `<button data-back="1" style="margin-top:10px;padding:8px 18px;border:0;border-radius:999px;
-          font:700 14px system-ui;background:rgba(255,255,255,.18);color:#fff;cursor:pointer">Back</button>`;
-    for (const el of panel.querySelectorAll<HTMLButtonElement>('button')) {
+    panelBody.innerHTML =
+      '<div style="font:700 17px/1.8 system-ui">Where to?</div>' + rows + more;
+    for (const el of panelBody.querySelectorAll<HTMLButtonElement>('button')) {
       el.onclick = () => {
-        if (el.dataset.back) { closePanel(); return; }
         const i = Number(el.dataset.level);
         if (!levelOpen(i)) return;
         closePanel();

@@ -1333,3 +1333,26 @@ Measuring the GLBs to pick replacements — bounds come straight out of the JSON
 chunk, no loader needed — turned up a second one: `bld-tower-a` is 2.5 tall and
 `bld-tower-b` is 1.89, so the Range got SHORTER when you upgraded it to level
 two. Chains are now ordered by measured size, not by the letter in the filename.
+
+### Panels close in the corner, and must fit a 393px screen
+
+Every panel that uses the hub's `panel` element (the shop, the board list) now
+has one persistent `[data-panel-close]` button pinned to its top-right, outside
+the scrolling body so the `innerHTML` each panel rewrites cannot destroy it.
+
+This started as a report that the shop had no close button on a phone. It had
+one — under the content, which on a landscape phone (**852x393 CSS pixels**) put
+it below the screen edge with no scrollbar to hint at it. The panel was a trap.
+Height is now `92svh` with a `92vh` line above it as the fallback, so the
+browser chrome sliding in and out does not resize the panel under the player.
+
+Fixing it moved the problem one element down: the **Buy** button, the entire
+point of the panel, was then the thing hanging off the bottom. Whatever is at
+the end of a panel is what a short screen eats — check the control you came to
+press, not just the exit.
+
+**And check it with `elementFromPoint`, not `getBoundingClientRect`.** The rect
+version PASSED while a screenshot showed the button sliced in half by the panel
+edge: a rect is where an element would be, and knows nothing about an ancestor
+with `overflow: auto` having scrolled it out of sight. Hit-test both the top and
+the bottom edge — half a button is not a button.
