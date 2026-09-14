@@ -492,10 +492,18 @@ game is meant to keep getting boards and weapons. Four rows with three padlocks
 is a progress bar with a known end, and adding a fifth board later would visibly
 move the finish line.
 
-What IS shown is everything you have plus exactly one step past it — the next
-plinth, so there is somewhere to walk to forge, and a line at the bottom of the
-list saying which board opens the next one. It promises there is more without
-promising how much.
+What IS shown is everything you have, plus one step past it. For boards that is
+the next one you can play, and a line at the bottom saying which board opens the
+next; for weapons it is **as many empty plinths as the Armory has earned** —
+one before you build it, one more per level after.
+
+The first version showed exactly the NEXT unforged weapon, which quietly turned
+the rack into a QUEUE: you could no longer save for the storm staff and skip the
+bow, and choosing what a run is for is the entire point of the Armory. It also
+broke forging outright for anything but the next one, and `verify-3d-armory`
+caught it. Tying the count to the building keeps the choice, gives the upgrade
+something visible to do, and a sixth weapon added later appears at a higher
+Armory level rather than lengthening a catalogue.
 
 `pedestal` is deliberately **not** in `merge.ts`'s `CASTS` set. An entity folded
 into a merged mesh has no visibility left to turn off, and plinths now appear
@@ -953,6 +961,27 @@ per board and there were seventeen.
 A probe must not hard-code a tuning number. Several asserted `heroHp === 6` and
 `lives === 10`, so raising either broke them without saying anything about the
 game; they read the board's own numbers now.
+
+**A probe that never builds now waits for ever.** The teaching board holds its
+first wave until a tower is up, and five probes walked straight into it: the
+town probe reported that the Range bonus did nothing (there was nothing to hit),
+the crates probe reported that double-strike did nothing (same), and the tower
+probe reported that a leak does not cost a life — on a board where, with nothing
+built, nothing spawns. Build one, or use a later board. `verify-3d-td` uses the
+second board for exactly this, because "with NOTHING built" is the whole point
+of that check.
+
+**A probe outlives the mechanic it tests.** `available()` went when weapons
+stopped arriving on a schedule and started being forged, and three probes were
+still calling it; `'staff'` went when the one magic weapon split into fire, ice
+and storm, and `setWeapon('staff')` does not throw — it leaves the hero holding
+what it had, so the check read as "the buff does not reach the staff". Grep for
+a removed name across `playwright/` in the same commit that removes it.
+
+**Warning about a trap is not the same as not falling into it.** The town probe
+carried a comment saying `undefined` damage would read as "the bonus does not
+work" when the truth was "there was nothing to hit" — and then reported exactly
+that, because the guard was prose rather than a check. It exits loudly now.
 
 They ask about **effect**, not existence. "Is there a health bar" passed for a
 bar worn at hip height; "is there a wave counter" passed for a game that could

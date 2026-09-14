@@ -244,7 +244,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   };
   showWeapon();
 
-  /** Which plinths exist at all: everything MADE, plus the next one along.
+  /** Which plinths exist at all: everything MADE, plus what the ARMORY opens.
    *
    *  All five used to stand there from the first visit, on the argument that an
    *  empty plinth is the thing you are saving for. That reads well with five
@@ -254,8 +254,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  catalogue with a known end, and adding a sixth later would visibly move
    *  it.
    *
-   *  The NEXT one is always shown, or there would be nowhere to walk to forge
-   *  anything and the rack would be a display case.
+   *  How many is the Armory's business: one empty plinth before you have built
+   *  it, and one more per level after. A first version showed exactly the NEXT
+   *  unforged weapon, which quietly turned the rack into a QUEUE — you could no
+   *  longer save for the storm staff and skip the bow, and choosing what a run
+   *  is for is the whole point of the Armory. Tying it to the building keeps
+   *  the choice, gives the upgrade something visible to do, and a sixth weapon
+   *  added later just appears at a higher level rather than lengthening a
+   *  catalogue.
    *
    *  Declared BEFORE `showRack`, which reads it. A `const` reached by a
    *  function called earlier than the line that defines it is the temporal dead
@@ -278,13 +284,15 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     displays.set(r.id, display);
   }
   const showRack = (): void => {
-    // Recomputed every time, not captured once: forging one weapon is what
-    // makes the NEXT plinth appear, and the point is that it happens while you
+    // Recomputed every time, not captured once: forging a weapon and upgrading
+    // the Armory both change this, and the point is that it happens while you
     // are standing there watching.
-    const next = RACK.findIndex((r) => levelOf(weapons, r.id) === 0);
+    const offers = weaponCap() === 0 ? 1 : 1 + weaponCap();
+    let offered = 0;
     for (const r of RACK) {
       const made = levelOf(weapons, r.id) > 0;
-      const shown = made || (next >= 0 && RACK[next].id === r.id);
+      const shown = made || offered < offers;
+      if (!made && shown) offered += 1;
       visibleRack.set(r.id, shown);
       const d = displays.get(r.id);
       if (d) d.visible = made;
