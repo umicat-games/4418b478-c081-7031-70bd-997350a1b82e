@@ -23,16 +23,48 @@ import { TOWN_MAX_LEVEL, TOWN } from './town';
  * `?dev` unlocks. `?dev=staff` (or `sword`/`bow`) also puts that weapon in your
  * hand, so testing a spell is one URL rather than a walk to a pedestal.
  *
+ * On a phone there is no URL to edit, so THREE TAPS ON THE FRAME COUNTER does
+ * the same thing and reloads. That is the only way in inside the iOS app,
+ * which builds the game's URL itself and passes nothing through.
+ *
  * It says so on screen. A build that is quietly in god mode is a build whose
  * measurements are all wrong, and the frame counter is already up there.
  */
 const PARAM = new URLSearchParams(location.search).get('dev');
 
-export const DEV = PARAM !== null;
+/** The same switch, without a keyboard.
+ *
+ *  On a phone `?dev=staff` means typing a CDN URL into Safari, and inside the
+ *  iOS app it means nothing at all — the app builds the game's URL itself
+ *  (`Game.previewURL`, `?v=<stamp>` and nothing else), so a query parameter
+ *  cannot reach the game without shipping a new build. Three taps on the frame
+ *  counter does reach it, everywhere: Safari, the app's WebView, and the
+ *  editor's preview pane.
+ *
+ *  SESSION storage, not local: a cheat that outlives the tab it was turned on
+ *  in is a cheat you forget is on. */
+const KEY = 'balaboo-dev';
+const stored = ((): string | null => {
+  try { return sessionStorage.getItem(KEY); } catch { return null; }
+})();
+
+export const DEV = PARAM !== null || stored !== null;
+
+/** Turn it on or off and reload, because the hub reads progress once at boot
+ *  and every unlock in the game comes out of that one read. */
+export function toggleDev(): void {
+  try {
+    if (DEV) sessionStorage.removeItem(KEY);
+    else sessionStorage.setItem(KEY, 'staff');
+  } catch { /* private mode: the URL parameter still works */ }
+  location.reload();
+}
 
 /** Which weapon `?dev=<name>` asked for, if it named one. */
-export const DEV_WEAPON: Weapon | null =
-  PARAM === 'sword' || PARAM === 'bow' || PARAM === 'staff' ? PARAM : null;
+export const DEV_WEAPON: Weapon | null = ((): Weapon | null => {
+  const w = PARAM ?? stored;
+  return w === 'sword' || w === 'bow' || w === 'staff' ? w : null;
+})();
 
 /** Everything a sandbox run should be handed, folded over the real save.
  *

@@ -13,7 +13,7 @@ import { runHub, submitScore } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, lightning, preloadAtlas, FRAME } from './vfx';
-import { DEV, devProgress } from './dev';
+import { DEV, devProgress, toggleDev } from './dev';
 import { LEVELS, type LevelDef, type Wave } from './levels';
 import { NO_BONUS, type TownBonus } from './town';
 import {
@@ -1966,7 +1966,7 @@ export async function startLevel(
   hideLoading();
 
   const debug = createDebugHud(renderer, hudEl,
-    DEV ? '\u2605 DEV \u2014 all unlocked, nothing saved' : undefined);
+    DEV ? '\u2605 DEV \u2014 all unlocked, nothing saved' : undefined, toggleDev);
   const shadowOf = (): string => {
     const d = world.scene.children.find((c) => (c as THREE.DirectionalLight).isDirectionalLight) as THREE.DirectionalLight | undefined;
     return d ? `${d.shadow.mapSize.width}` : 'none';

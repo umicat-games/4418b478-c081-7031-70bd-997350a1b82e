@@ -254,7 +254,8 @@ way would cost hours per tweak, and this is a thing to tune by playing.
 ## The sandbox — `?dev`
 
 `?dev` unlocks everything; `?dev=staff` (or `sword`/`bow`) also puts that weapon
-in your hand. All three weapons on the pedestals, all four boards in the list,
+in your hand. **On a phone, three taps on the frame counter** does the same and
+reloads. All three weapons on the pedestals, all four boards in the list,
 every village building at level three — so the tower mounts exist — and a store
 with enough in it to buy anything.
 
@@ -279,6 +280,25 @@ judge a fight.
 
 It says `★ DEV` in the frame counter. A build quietly in god mode is a build
 whose every measurement is wrong.
+
+**The tap route is the only way in on a phone, and the only way in at all
+inside the iOS app.** The app builds the game's URL itself — `Game.previewURL`
+in umicat-ios, which appends `?v=<stamp>` and nothing else — so no query
+parameter reaches the game there without shipping a new build. The gesture goes
+through Safari, the app's WebView and the editor's preview pane alike, and
+typing a CDN URL on a phone keyboard was never the answer anyway.
+
+It is SESSION storage, so it dies with the tab. A cheat that outlives the tab
+it was turned on in is a cheat you forget is on.
+
+Three taps on the READOUT toggles the sandbox; three taps on the HUD BEHIND it
+still hides the readout. Different targets — the readout is `pointer-events:
+auto` and stops the event, so the HUD's listener never sees a tap that landed on
+it. Making the readout tappable at all is the sixth thing this game has drawn
+over the platform's touch layer, so `verify-3d-jump-touch` was re-run and
+`verify-3d-dev` checks with `elementFromPoint` that the readout is what is
+actually under its own middle — "is it there" has passed for a button nothing
+could reach before.
 
 ## The town
 

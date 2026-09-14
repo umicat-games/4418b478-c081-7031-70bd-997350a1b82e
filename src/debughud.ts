@@ -30,12 +30,18 @@ export function createDebugHud(
   /** A banner that is always shown, above the numbers. `?dev` uses it, because
    *  a build quietly in god mode is a build whose every impression is wrong. */
   banner?: string,
+  /** Three taps ON THE READOUT ITSELF. The hide gesture is three taps on the
+   *  HUD BEHIND it, which is a different target and cannot be confused with
+   *  this one — the readout is `pointer-events: auto` and the HUD's own
+   *  listener never sees a tap that lands on it. */
+  onTripleTap?: () => void,
 ): DebugHud {
   const el = document.createElement('div');
   el.style.cssText = `position: fixed; left: 50%; top: 8px; transform: translateX(-50%);
     z-index: 60; font: 600 11px/1.4 ui-monospace, monospace; color: #fff;
     text-align: center; background: rgba(0,0,0,.45); padding: 5px 9px;
-    border-radius: 8px; pointer-events: none; white-space: pre;`;
+    border-radius: 8px; white-space: pre;
+    pointer-events: ${onTripleTap ? 'auto' : 'none'}; touch-action: manipulation;`;
   el.style.display = new URLSearchParams(location.search).get('debug') === '0' ? 'none' : 'block';
   document.body.appendChild(el);
 
@@ -50,6 +56,18 @@ export function createDebugHud(
     if (taps >= 3) { taps = 0; el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
   };
   hudEl.addEventListener('pointerdown', onTap);
+
+  // The readout's own three taps, for the switch that has no keyboard.
+  let own = 0;
+  let ownAt = 0;
+  const onOwnTap = (e: PointerEvent): void => {
+    e.stopPropagation();
+    const t = performance.now();
+    own = t - ownAt < 700 ? own + 1 : 1;
+    ownAt = t;
+    if (own >= 3) { own = 0; onTripleTap?.(); }
+  };
+  if (onTripleTap) el.addEventListener('pointerdown', onOwnTap);
 
   let frames = 0;
   let since = performance.now();
@@ -75,6 +93,7 @@ export function createDebugHud(
     },
     dispose(): void {
       hudEl.removeEventListener('pointerdown', onTap);
+      el.removeEventListener('pointerdown', onOwnTap);
       el.remove();
     },
   };
