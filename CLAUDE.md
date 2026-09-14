@@ -229,7 +229,16 @@ Four things it has to get right:
 - **The hold is measured in REAL time, not game time.** `dt` is clamped at 0.05,
   so a struggling phone would otherwise want the button held for a second and a
   half. A hold is a thing a finger does, not a thing happening in the world.
-- **A probe cannot TIME a tap on a slow scene.** At eight frames a second every
+- **A probe's page must be the one in FRONT, and its run must still be running.**
+Chromium throttles a background tab's `requestAnimationFrame` almost to a stop,
+so a probe that opens a second page and then measures the first is reading a
+frame loop that has barely run — stale positions, a frozen ring, a `buildCell`
+from minutes ago. And a page left alone while another one works has had waves
+arriving unattended the whole time: its run is over, and everything computed
+only while `running` reads as absent rather than as finished. `verify-3d-td`
+opens a fresh page for the placement-ring checks rather than reusing its first.
+
+**A probe cannot TIME a tap on a slow scene.** At eight frames a second every
   timer is late by up to a whole frame, so neither `rAF` nor `setTimeout` can
   produce a press shorter than the 200ms dead zone — a "140ms tap" measured as
   315ms, which is a cancel, and the probe reported the upgrade broken. A real
