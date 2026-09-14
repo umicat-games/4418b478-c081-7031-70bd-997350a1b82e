@@ -15,7 +15,8 @@ import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createDebugHud } from './debughud';
-import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, townNow, townAfter, type TownBonus } from './town';
+import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, townNow, townAfter,
+  type TownBonus, type TownBuilding } from './town';
 import {
   WEAPON_BY_ID, WEAPON_MAX_LEVEL, levelOf, nextCost, migrateWeapons,
   weaponDamage, effectText, type Weapon, type WeaponLevels,
@@ -524,7 +525,111 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const closePanel = (): void => {
     panelOpen = false;
     panel.style.display = 'none';
+    // The shop widens it; the board list must not inherit that.
+    panel.style.width = '';
+    panel.style.maxWidth = '82vw';
     input.setEnabled(true);
+  };
+
+  /** The shop, opened at the stall.
+   *
+   *  A full panel rather than another floating card: it is a CATALOGUE — a
+   *  list on the left, what that one is on the right — and a catalogue in a
+   *  card over someone's head is a card with a scrollbar in it.
+   *
+   *  It sells the FIRST level of a thing and nothing else. Upgrading stays
+   *  where it was: you walk to the building and press the button in front of
+   *  it. Buying is a one-off choice between things you do not have, which is
+   *  what a list is for; upgrading is a repeated decision about a thing you can
+   *  see, which is what standing in front of it is for.
+   *
+   *  The four empty plots are gone with it. They told a new player exactly how
+   *  many buildings this game has — the same objection as four board rows with
+   *  three padlocks and five weapon plinths — and this game is meant to keep
+   *  getting buildings.
+   */
+  /** A price, as icons and numbers. Shared by the shop and the cards over the
+   *  buildings — the same three materials should not be written twice. */
+  const priceOf = (c: Materials): string =>
+    [c.gold && `${iconHtml('coin')} ${c.gold}`,
+     c.wood && `${iconHtml('wood')} ${c.wood}`,
+     c.stone && `${iconHtml('stone')} ${c.stone}`]
+      .filter(Boolean).join('  ');
+
+  let shopPick = 0;
+  const shopStock = (): TownBuilding[] => TOWN.filter((b) => (town[b.id] ?? 0) === 0);
+
+  const showShop = (): void => {
+    panelOpen = true;
+    input.setEnabled(false);
+    panel.style.display = 'block';
+    // A real page, not a tooltip that grew. A catalogue has two columns and
+    // wants room for both; the board-list panel beside it is a short menu and
+    // should stay the size of its own contents.
+    panel.style.width = 'min(860px, 86vw)';
+    panel.style.maxWidth = '86vw';
+    const stock = shopStock();
+    shopPick = Math.min(shopPick, Math.max(0, stock.length - 1));
+    const sel = stock[shopPick];
+
+    const rows = stock.length
+      ? stock.map((b, i) => {
+        const on = i === shopPick;
+        const afford = canAfford(store, b.costs[0]);
+        return `<button data-pick="${i}" style="
+            display:flex; align-items:center; gap:10px; width:100%; margin:4px 0;
+            padding:9px 12px; border:0; border-radius:11px; cursor:pointer;
+            font:700 14px/1.4 system-ui; text-align:left;
+            background:${on ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.10)'};
+            color:${on ? '#1b2026' : '#fff'}; opacity:${afford || on ? 1 : 0.55}">
+            ${iconHtml(b.icon, '1.3em')}<span style="flex:1">${escapeHtml(b.name)}</span>
+          </button>`;
+      }).join('')
+      : '<div style="opacity:.7;padding:10px 2px">Nothing left to buy.</div>';
+
+    const detail = sel
+      ? `<div style="font:800 19px/1.4 system-ui; display:flex; align-items:center;
+                     justify-content:center; gap:9px; padding-bottom:9px;
+                     border-bottom:1px solid rgba(255,255,255,.22)">
+           ${iconHtml(sel.icon, '1.2em')}${escapeHtml(sel.name)}</div>
+         <div style="margin-top:14px; opacity:.92">${escapeHtml(sel.effect)}</div>
+         <div style="margin-top:16px">${priceOf(sel.costs[0])}</div>
+         <button id="shop-buy" ${canAfford(store, sel.costs[0]) ? '' : 'disabled'} style="
+           margin-top:18px; padding:11px 26px; border:0; border-radius:999px; cursor:pointer;
+           font:800 15px system-ui;
+           background:${canAfford(store, sel.costs[0]) ? '#ffd76a' : 'rgba(255,255,255,.16)'};
+           color:${canAfford(store, sel.costs[0]) ? '#241b00' : 'rgba(255,255,255,.5)'}">
+           ${canAfford(store, sel.costs[0]) ? 'Buy' : `needs ${shortfall(store, sel.costs[0])}`}
+         </button>`
+      : '<div style="opacity:.7">Everything in the village is built.</div>';
+
+    panel.innerHTML =
+      `<div style="font:800 18px/1.6 system-ui; margin-bottom:10px">Shop</div>
+       <div style="display:flex; gap:20px; align-items:stretch">
+         <div style="width:180px; max-height:52vh; overflow:auto">${rows}</div>
+         <div style="flex:1; min-width:210px; text-align:center;
+                     border-left:1px solid rgba(255,255,255,.14); padding-left:20px">
+           ${detail}</div>
+       </div>
+       <button data-back="1" style="margin-top:16px; padding:8px 18px; border:0;
+         border-radius:999px; font:700 14px system-ui;
+         background:rgba(255,255,255,.18); color:#fff; cursor:pointer">Close</button>`;
+
+    for (const el of panel.querySelectorAll<HTMLButtonElement>('button')) {
+      el.onclick = () => {
+        if (el.dataset.back) { closePanel(); return; }
+        if (el.dataset.pick) { shopPick = Number(el.dataset.pick); showShop(); return; }
+        if (el.id === 'shop-buy' && sel && canAfford(store, sel.costs[0])) {
+          const c = sel.costs[0];
+          store.gold -= c.gold; store.wood -= c.wood; store.stone -= c.stone;
+          town[sel.id] = 1;
+          renderPurse();
+          audio.play(SFX.placeTower);
+          void patchSave(shared.umicat, { store, town });
+          showShop();
+        }
+      };
+    }
   };
 
   /** The list of boards, opened by walking through the door.
@@ -608,6 +713,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       // player the door is a door before they walk into it, and which board is
       // behind it.
       // Which plot you are standing at, if any.
+      const shopAt = { x: 1.6, z: 3.0 };
+      const atShop = Math.hypot(hero.position.x - shopAt.x, hero.position.z - shopAt.z) < NEAR + 0.3;
+      const shopRing = world.entities.get('shop_marker');
+      if (shopRing) shopRing.visible = atShop && !panelOpen;
+
       let atPlot: typeof TOWN[number] | null = null;
       for (const b of TOWN) {
         const near = Math.hypot(hero.position.x - b.x, hero.position.z - b.z) < 1.9;
@@ -639,11 +749,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
       // Only when there is something to say, and then briefly. A line of
       // narration that is always on screen is one nobody reads.
-      const priceOf = (c: Materials): string =>
-        [c.gold && `${iconHtml('coin')} ${c.gold}`,
-         c.wood && `${iconHtml('wood')} ${c.wood}`,
-         c.stone && `${iconHtml('stone')} ${c.stone}`]
-          .filter(Boolean).join('  ');
       // What the card says about a plot: where it is now, what the next level
       // changes, and what that costs — or, when it cannot be paid for, what is
       // MISSING, which is a thing you can go and do something about.
@@ -739,6 +844,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       } else if (atPickup) {
         rackCard(atPickup.id);
         placeCard(atPickup.x, 1.1, atPickup.z);
+      } else if (atShop) {
+        const left = shopStock().length;
+        showCard({
+          title: 'Shop', glyph: 'coin',
+          body: left ? `${left} thing${left > 1 ? 's' : ''} to buy` : 'Nothing left to buy',
+          action: left ? `${iconHtml('build')} open` : undefined,
+        });
+        placeCard(shopAt.x, 1.5, shopAt.z);
       } else if (nearDoor) {
         showCard({ title: 'The road out', glyph: 'gate',
           body: 'Choose which board to take', action: 'walk through' });
@@ -748,7 +861,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       }
 
       if (!panelOpen && input.consume('use')) {
-        if (atPlot) {
+        if (atShop) {
+          if (shopStock().length) { audio.play('build'); showShop(); }
+          else audio.play('denied');
+        } else if (atPlot) {
           const lv = town[atPlot.id] ?? 0;
           const cost = lv < TOWN_MAX_LEVEL ? atPlot.costs[lv] : null;
           if (!cost || !canAfford(store, cost)) { audio.play('denied'); }

@@ -868,6 +868,31 @@ function buildHub() {
     { id: 'armory', x: -2.0, z: -3.0, yaw: 0,
       models: ['town-stall-red', 'bld-house-c', 'bld-tower-b'] },
   ];
+  // --- the shop ---------------------------------------------------------
+  //
+  // A stall you WALK TO, not a button in the corner. Standing at a thing and
+  // pressing the action button is this game's one verb — it builds a tower,
+  // takes a weapon, upgrades a building — and the shop reaching for a different
+  // one would be a second interface to learn.
+  //
+  // It cannot be one of the things it sells, so it is always there.
+  ents.push({
+    id: 'shop', name: 'shop', modelAssetId: 'town-cart',
+    // Clear of every plot and of the rack. At (2.6, -3.0) it was a metre from
+    // the Market's plot, and the plot's card won the priority chain — so the
+    // shop had a prompt that never appeared.
+    transform: { position: { x: 1.6, y: GROUND_Y, z: 3.0 }, rotation: yaw(Math.PI) },
+    collider: {
+      shape: { kind: 'box', halfExtents: { x: 0.5, y: 0.5, z: 0.7 } },
+      body: 'fixed', offset: { x: 0, y: 0.5, z: 0 },
+    },
+  });
+  ents.push({
+    id: 'shop_marker', name: 'shop_marker', modelAssetId: 'td-selection',
+    transform: { position: { x: 1.6, y: GROUND_Y + 0.02, z: 3.0 } },
+    visible: false,
+  });
+
   for (const b of TOWN) {
     // A foundation, so an empty plot is obviously a PLOT and not a patch of
     // grass someone forgot. It stays under the building once there is one.

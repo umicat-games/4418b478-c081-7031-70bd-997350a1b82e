@@ -576,6 +576,29 @@ for is the step. The weapon card keeps its blurb and its blocker in different
 slots: "Locks on at range · The Armory has not been built" was one sentence
 made of two unrelated thoughts.
 
+## The shop
+
+A stall you WALK TO, in the middle of the village. Standing at a thing and
+pressing the action button is this game's one verb — it builds a tower, takes a
+weapon, upgrades a building — and a shop reaching for a different one would be
+a second interface to learn. It cannot be one of the things it sells, so it is
+always there.
+
+**It sells the FIRST level of a thing and nothing else.** Upgrading stays where
+it was: walk to the building and press the button in front of it. Buying is a
+one-off choice between things you do not have, which is what a list is for;
+upgrading is a repeated decision about a thing you can SEE, which is what
+standing in front of it is for.
+
+The panel is a page — a list on the left, what that one is on the right — at
+`min(860px, 86vw)`. A catalogue wants room for two columns, and a catalogue
+inside a card over someone's head is a card with a scrollbar in it. The board
+list beside it is a short menu and keeps its own width, which is why
+`closePanel` puts the width back.
+
+It also goes in the same direction as everything else the hub stopped showing:
+a bought thing leaves the list, so the shop never offers what you already own.
+
 ## The town
 
 Five plots in the hub, bought with gold, wood and stone the same way as everything else in

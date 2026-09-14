@@ -26629,6 +26629,53 @@
       }
     },
     {
+      "id": "shop",
+      "name": "shop",
+      "modelAssetId": "town-cart",
+      "transform": {
+        "position": {
+          "x": 1.6,
+          "y": 0,
+          "z": 3
+        },
+        "rotation": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ]
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.7
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "shop_marker",
+      "name": "shop_marker",
+      "modelAssetId": "td-selection",
+      "transform": {
+        "position": {
+          "x": 1.6,
+          "y": 0.02,
+          "z": 3
+        }
+      },
+      "visible": false
+    },
+    {
       "id": "plot_smithy",
       "name": "plot",
       "primitive": {
