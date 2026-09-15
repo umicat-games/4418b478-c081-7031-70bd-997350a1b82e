@@ -2091,6 +2091,11 @@ export class GameScene extends Phaser.Scene {
       this.locked = false; // touch → no desktop cursor
       this.touchLastAt = this.time.now;
       this.confirmJustActed = false; // fresh gesture
+      // Modal confirm / travel picker sits ON TOP of any open menu (a tutorial step prompt shows over
+      // the chest, etc.) → check them BEFORE the menu, matching the mouse handler, or the ✓ press never
+      // begins while a menu is open (the touch ✓-does-nothing bug).
+      if (this.confirmOpen) { const cb = this.confirmButtonAt(pointer.x, pointer.y); if (cb) this.beginConfirmPress(cb); return; }
+      if (this.travelOpen) { const tb = this.travelButtonAt(pointer.x, pointer.y); if (tb) this.beginTravelPress(tb); return; } // island picker (touch)
       // Unified menu: touch scrolls via a SWIPE (handled in MenuScene) — no rail drag here.
       // A finger on a Settings volume slider starts a drag (pointermove scrubs it).
       if (this.menuOpen) {
@@ -2101,9 +2106,6 @@ export class GameScene extends Phaser.Scene {
         if (sk) { this.beginStepperPress(sk); return; }
         return;
       }
-      // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (same as mouse); tap outside swallowed.
-      if (this.confirmOpen) { const cb = this.confirmButtonAt(pointer.x, pointer.y); if (cb) this.beginConfirmPress(cb); return; }
-      if (this.travelOpen) { const tb = this.travelButtonAt(pointer.x, pointer.y); if (tb) this.beginTravelPress(tb); return; } // island picker (touch)
       // TOUCH coop-move: tap the floating ✓ = confirm-on-release; anywhere else = grab the coop there
       // (then drag). No long-press wheel while moving.
       if (this.movingCoop && this.coopDragCell) {
