@@ -16,6 +16,7 @@ import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createWayfinder } from './wayfinder';
+import { createSeeThrough } from './seethrough';
 import { createDebugHud } from './debughud';
 import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, townNow, townAfter,
   type TownBonus, type TownBuilding } from './town';
@@ -619,11 +620,20 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  wall being shown are the five that are enabled. Getting only half of this
    *  right gives you either a wall you walk through or a wall that is not
    *  there — both silent. */
+  /** The five sides of the wall that is currently up. Rebuilt by `showLand`. */
+  const walls: THREE.Mesh[] = [];
+  /** Whatever is between the camera and the hero gets out of the way. */
+  const seeThrough = createSeeThrough();
   const showLand = (): void => {
+    walls.length = 0;
     for (let i = 0; i < LAND.length; i++) {
-      const mesh = world.scene.getObjectByName(`wall_${i}`);
-      if (mesh) mesh.visible = i === land;
       for (const part of ['west', 'east', 'back', 'front_l', 'front_r']) {
+        const mesh = world.scene.getObjectByName(`wall_${i}_${part}`);
+        if (mesh) {
+          mesh.visible = i === land;
+          // The sides of the ring you own, for the see-through pass.
+          if (i === land) walls.push(mesh as THREE.Mesh);
+        }
         const body = world.bodies.get(`w${i}_${part}`);
         if (body) body.setEnabled(i === land);
       }
@@ -633,6 +643,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       const trees = world.scene.getObjectByName(`forest_claim_${i}`);
       if (trees) trees.visible = land < i;
     }
+    seeThrough.watch(walls);
   };
   showLand();
 
@@ -1219,6 +1230,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       }
 
       wayfinder.update(hero.position.x, hero.position.z, guideTo(), now);
+      seeThrough.update(world.camera, hero.position, dt);
 
       // Turn a just-placed building solid as soon as the player is out of it.
       if (settling) {
@@ -1543,6 +1555,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           window.removeEventListener('resize', resize);
           input.dispose();
           wayfinder.dispose();
+          seeThrough.dispose();
           panel.remove();
           card.remove();
           hudEl.textContent = '';
@@ -1600,6 +1613,19 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                 *  pointing — "is there an arrow" and "does it point at the
                 *  gate" are different questions. */
                guiding: () => ({ showing: wayfinder.showing(), to: guideTo() }),
+               /** The see-through pass, and a switch to turn it off — showing
+                *  that a wall fades is half the claim; the other half is that
+                *  it was standing in the way in the first place. */
+               glass: (next?: boolean) => {
+                 if (next !== undefined) seeThrough.setEnabled(next);
+                 return {
+                   on: seeThrough.enabled(),
+                   walls: walls.map((m) => ({
+                     name: m.name,
+                     opacity: +((m.material as THREE.Material & { opacity: number }).opacity).toFixed(2),
+                   })),
+                 };
+               },
                standingAt: () => standingAt,
                /** How much of the village has been bought, and the bounds that
                 *  buys — so a probe walks to the wall rather than to a number

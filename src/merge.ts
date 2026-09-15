@@ -65,7 +65,7 @@ const FAR = new Set(['forest_far']);
  *  @returns whether the mesh casts and receives shadows, or undefined if the
  *  name is not one that gets a mesh to itself. */
 const ownMesh = (name: string): boolean | undefined => {
-  if (/^wall_\d+$/.test(name)) return true;
+  if (/^wall_\d+_/.test(name)) return true;
   if (/^forest_claim_\d+$/.test(name)) return false;
   return undefined;
 };
@@ -152,11 +152,16 @@ export function mergeStatic(
         byLook.set(key, slot);
       });
     }
+    const own = ownMesh(group.name) !== undefined;
     let mergedHere = 0;
     for (const { mat, geos } of byLook.values()) {
       const combined = mergeGeometries(geos, false);
       if (!combined) continue;      // mismatched attributes: leave those alone
-      const mesh = new THREE.Mesh(combined, mat);
+      // A mesh that gets switched, faded or tinted on its own needs a material
+      // of its own. `byLook` keys on how a thing LOOKS, so every wall in the
+      // village — all three rings, all five sides — arrives here pointing at
+      // one material object, and fading one side would fade the lot.
+      const mesh = new THREE.Mesh(combined, own ? mat.clone() : mat);
       // Named, because after this the individual pieces are gone and this is
       // the only thing left that knows where the board is.
       mesh.name = group.name;

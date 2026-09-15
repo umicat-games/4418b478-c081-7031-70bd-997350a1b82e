@@ -26431,7 +26431,7 @@
     },
     {
       "id": "w0_west",
-      "name": "wall_0",
+      "name": "wall_0_west",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26463,7 +26463,7 @@
     },
     {
       "id": "w0_east",
-      "name": "wall_0",
+      "name": "wall_0_east",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26495,7 +26495,7 @@
     },
     {
       "id": "w0_back",
-      "name": "wall_0",
+      "name": "wall_0_back",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26527,7 +26527,7 @@
     },
     {
       "id": "w0_front_l",
-      "name": "wall_0",
+      "name": "wall_0_front_l",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26559,7 +26559,7 @@
     },
     {
       "id": "w0_front_r",
-      "name": "wall_0",
+      "name": "wall_0_front_r",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26591,7 +26591,7 @@
     },
     {
       "id": "w1_west",
-      "name": "wall_1",
+      "name": "wall_1_west",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26623,7 +26623,7 @@
     },
     {
       "id": "w1_east",
-      "name": "wall_1",
+      "name": "wall_1_east",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26655,7 +26655,7 @@
     },
     {
       "id": "w1_back",
-      "name": "wall_1",
+      "name": "wall_1_back",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26687,7 +26687,7 @@
     },
     {
       "id": "w1_front_l",
-      "name": "wall_1",
+      "name": "wall_1_front_l",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26719,7 +26719,7 @@
     },
     {
       "id": "w1_front_r",
-      "name": "wall_1",
+      "name": "wall_1_front_r",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26751,7 +26751,7 @@
     },
     {
       "id": "w2_west",
-      "name": "wall_2",
+      "name": "wall_2_west",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26783,7 +26783,7 @@
     },
     {
       "id": "w2_east",
-      "name": "wall_2",
+      "name": "wall_2_east",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26815,7 +26815,7 @@
     },
     {
       "id": "w2_back",
-      "name": "wall_2",
+      "name": "wall_2_back",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26847,7 +26847,7 @@
     },
     {
       "id": "w2_front_l",
-      "name": "wall_2",
+      "name": "wall_2_front_l",
       "primitive": {
         "kind": "box",
         "size": {
@@ -26879,7 +26879,7 @@
     },
     {
       "id": "w2_front_r",
-      "name": "wall_2",
+      "name": "wall_2_front_r",
       "primitive": {
         "kind": "box",
         "size": {

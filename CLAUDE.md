@@ -1663,3 +1663,52 @@ Both harnesses wrap it — `pw-engines.mjs` AND `pw-prod.mjs`. Doing only the
 first left `verify-3d-td` hanging, because game probes import their engine from
 the platform harness too (28 of them do). `verify-3d-title` imports `chromiumRaw`
 instead, being the one probe the screen is the subject of.
+
+## Walls between the camera and the player turn to glass
+
+`src/seethrough.ts`. The camera follows from BEHIND, so walking up to anything
+near a wall puts the wall between the two — 1.2m of masonry across the bottom
+third of a phone screen with the hero behind it. Moving the shop to the gate
+dodged it for the one place a player must keep returning to; **every building
+they put at the back has the same problem, and they place those themselves.**
+
+### The test is in the ground plane, and that is the whole trick
+
+A ray from the camera to the hero's chest **sails clean over** a 1.2m wall —
+measured: the camera sits at y 3.6 and the ray cleared the wall's top edge by
+90cm, so nothing ever faded and the first version looked like it did nothing.
+The wall is not hiding the HERO. It is standing between the camera and the
+village.
+
+So the question is: does the line from where the camera is standing to where the
+player is standing cross this wall's footprint, in x/z? That is exactly "the
+camera ended up on the far side of it". Slab method, box padded by 0.35 so a
+wall the line passes a hand's width from still counts and the test does not
+flicker as the player walks along it.
+
+### Three things that had to be true first
+
+- **A mesh per SIDE, not per ring** (`wall_<level>_<side>`). Fading the ring
+  ghosts the far side too, and you end up looking at the forest through the
+  whole enclosure.
+- **A material per own-mesh group.** `byLook` in `merge.ts` keys on how a thing
+  LOOKS, so all fifteen wall boxes arrived pointing at one material object —
+  fading one side faded the lot. Own-mesh groups now get `mat.clone()`.
+- **`needsUpdate` when `transparent` flips.** Setting it on a material that has
+  already been drawn needs the program rebuilt, and without it the material
+  reports `opacity: 0.22` when you ask it while contributing nothing whatever to
+  the pixels.
+
+Opacity eases exponentially (`1 - exp(-dt/EASE)`) so it is frame-rate
+independent; a fixed step per frame fades twice as fast at 120fps.
+
+`__hub.glass(false)` turns the pass off, which is how `verify-3d-glass` proves
+the other half of the claim: that the wall **was in the way**. It samples the
+pixel where the hero's FEET are — his head shows over the top of a 1.2m wall, so
+a chest sample comes back skin-coloured for a hero buried to the neck — through
+a screenshot decoded in the page, because `readPixels` returns transparent black
+once a frame has been presented.
+
+**Still open:** buildings do not do this yet. They are GLB clones that share
+materials between entities (the `flashTint` problem), so each would need its own
+material before it could fade alone.

@@ -850,7 +850,11 @@ function buildHub() {
     ];
     for (const [id, x, z, sx, sz] of walls) {
       ents.push({
-        id, name: `wall_${li}`,
+        // A name per SIDE, not per ring: each side becomes its own mesh so the
+        // one standing between the camera and the player can be faded on its
+        // own. Fading the ring would ghost the far side too, and you would be
+        // looking at the forest through the whole enclosure.
+        id, name: `wall_${li}_${id.split('_').slice(1).join('_')}`,
         primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
         transform: { position: { x, y: 0.4, z } },
         collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
