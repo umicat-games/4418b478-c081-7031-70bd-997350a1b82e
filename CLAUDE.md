@@ -1563,3 +1563,50 @@ the player, and one that interrupts someone mid-placement is worse than none.
 `verify-3d-wayfinder` checks the chevrons' world positions PROJECT onto the
 hero→gate line: "is there a trail" passes on one pointing the wrong way, and
 `group.visible` passes on five meshes at zero opacity.
+
+## The title screen
+
+One save, written as you play, and two questions: is there something to come
+back to, and do you want to keep it. **Slots exist so a player who saves by hand
+can keep more than one run; a game that never asks them to save has nothing to
+put in a second slot.**
+
+- **Continue says what you are going back TO** — `Lv 6 · Frostfall cleared · 2
+  buildings`. "Continue" alone is a button you press to find out what it does.
+- **It only appears when there is progress.** Not "does the save key exist":
+  every session writes something, and a save holding nothing but defaults would
+  light up Continue and drop the player into a village they have never seen
+  having been told they were resuming.
+- **New game asks first, and only when there is something to lose.** It destroys
+  the only save there is. A confirmation over an empty save is a question about
+  nothing.
+- It wipes through `saves.set`, not `patchSave` — patching MERGES over what is
+  there, and the one thing this must do is leave nothing behind.
+- Skipped entirely under `?dev`, which overrides the save anyway.
+
+It is also the session's first TAP, which is what unlocks audio on iOS. Nothing
+tries to make a sound before it.
+
+Two bugs it was born with, both worth remembering:
+
+- **`hidden` loses to an inline `display`.** The confirm dialog carried
+  `display: flex` inline and `hidden` is a user-agent `display: none` rule, so
+  it sat open over the whole title from the first frame. Toggle `style.display`.
+- **A button's action must not be derived from how it looks.** `data-act` was
+  `primary ? 'go' : 'new'`, which tagged "Start" on a fresh save as a Continue,
+  because it is the primary button when there is nothing to continue.
+
+### It broke every other probe, and the fix is in the harness
+
+`window.__hub` does not exist until somebody presses something, so all 41 probes
+hung. `pw-title.mjs` wraps an engine so every page gets an init script that
+presses through the title — **an init script, because it also covers the reloads
+in the MIDDLE of a probe**, which a line after `goto` does not. It presses
+CONTINUE where there is one: pressing New game would wipe the save the probe had
+just written, and the probe would then test a fresh village while reporting on a
+prepared one.
+
+Both harnesses wrap it — `pw-engines.mjs` AND `pw-prod.mjs`. Doing only the
+first left `verify-3d-td` hanging, because game probes import their engine from
+the platform harness too (28 of them do). `verify-3d-title` imports `chromiumRaw`
+instead, being the one probe the screen is the subject of.

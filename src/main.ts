@@ -11,6 +11,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { createAudio, MUSIC, SFX } from './audio';
 import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
+import { showTitle } from './title';
 import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
@@ -3502,6 +3503,17 @@ async function boot(): Promise<void> {
   const hudEl = document.getElementById('hud')!;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   const shared: Shared = { umicat, renderer, canvas, hudEl, audio: createAudio() };
+
+  // The title, once, before any of it. It reads the save and either leaves it
+  // alone or wipes it, so everything below can go on reading progress the way
+  // it always has and never learn that this screen exists.
+  //
+  // It is also the session's first TAP, which is what unlocks audio on iOS.
+  // Nothing has tried to make a sound before this point.
+  if (!DEV) {
+    hideLoading();
+    await showTitle(shared);
+  }
 
   // The hub, then the level. `runHub` resolves when the player walks through
   // the door, and tears its own scene down first — one renderer, one context,
