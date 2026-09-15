@@ -17,6 +17,7 @@ import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
 import { createWayfinder } from './wayfinder';
 import { createSeeThrough } from './seethrough';
+import { makeResourceIcons } from './resicons';
 import { createDebugHud } from './debughud';
 import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, townNow, townAfter,
   type TownBonus, type TownBuilding } from './town';
@@ -106,6 +107,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   world.scene.background = skyWithClouds({
     horizon: `#${(world.scene.background as THREE.Color | null)?.getHexString?.() ?? '9fd4ef'}`,
   });
+
+  // Gold, wood and stone, photographed from the things they are. Before any HUD
+  // is built, because an icon that arrives after the purse has been rendered is
+  // a purse that stays monochrome until the next time it changes.
+  await makeResourceIcons(renderer, manifest);
 
   const hero = world.entities.get('hero')!;
   shared.audio.setMusic(MUSIC.lobby);

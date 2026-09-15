@@ -43,14 +43,42 @@ const PNG = new Set<IconName>(['audioOn', 'audioOff']);
 const URL_OF = (name: IconName): string =>
   `icons/${name}.${PNG.has(name) ? 'png' : 'svg'}`;
 
+/** Icons that have been PHOTOGRAPHED from the game's own models, by name.
+ *
+ *  A silhouette is right for a button — it has to read at a glance, at one
+ *  colour, over whatever is behind it. It is wrong for gold and wood and stone,
+ *  which are things rather than actions: those want to look like what they are.
+ *
+ *  Kept as a registry keyed by the SAME names, so every call site — the purse,
+ *  the prices in the shop, the cards over buildings, the summary after a run —
+ *  turns colour at once without any of them knowing this happened. The action
+ *  buttons keep their silhouettes because they ask for different names. */
+const photos = new Map<IconName, string>();
+
+/** Hand over a rendered icon. Called once, from wherever has a renderer. */
+export function setPhotoIcon(name: IconName, dataUrl: string): void {
+  photos.set(name, dataUrl);
+}
+export function hasPhotoIcon(name: IconName): boolean {
+  return photos.has(name);
+}
+
 /** What an element needs to BE this icon. Shared by the DOM helper and the HTML
  *  one, so a panel built from a string and a span built from code cannot
  *  drift apart. */
 export function iconStyle(name: IconName, size = '1em'): string {
+  const photo = photos.get(name);
+  // A photograph gets a little more room than a glyph asking for the same size.
+  // A silhouette is a solid shape filling its box; a rendered object is lit,
+  // shaded and surrounded by its own air, so at the same em it reads smaller
+  // and fainter. Done HERE so no call site has to know which kind it asked for.
+  const box = `display:inline-block;width:${size};height:${size};`
+    + `vertical-align:-0.14em;flex:0 0 auto;${photo ? `scale:1.22;margin:0 .1em;` : ''}`;
+  // A photograph is drawn, not masked: a mask would throw away the colour,
+  // which is the entire reason it is a photograph.
+  if (photo) return `${box}background:url('${photo}') center/contain no-repeat;`;
   const u = `url('${URL_OF(name)}')`;
-  return `display:inline-block;width:${size};height:${size};`
-    + 'vertical-align:-0.14em;flex:0 0 auto;'
-    + 'background-color:currentColor;'
+  return `${box}background-color:currentColor;`
     + `-webkit-mask:${u} center/contain no-repeat;mask:${u} center/contain no-repeat;`;
 }
 

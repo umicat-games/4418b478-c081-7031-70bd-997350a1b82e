@@ -21,6 +21,7 @@ import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { icon, setIconText, iconHtml, type IconName } from './icons';
 import { createThumbMaker } from './thumbs';
+import { makeResourceIcons } from './resicons';
 import { ICON, WEAPON_ICON } from './icons';
 import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
@@ -535,6 +536,9 @@ export async function startLevel(
 
   // --- Fold the board into a handful of draws ---
   //
+  // The boards show prices and drops too. Idempotent — the hub has almost
+  // always paid for these already, and whichever runs first does.
+  await makeResourceIcons(renderer, manifest);
   const folded = mergeStatic(world, scene3d, manifest);
   // Clouds. AFTER the scene is loaded, and not as entities: the SDK fits every
   // shadow camera to the bounds of what it loaded, so anything far away costs

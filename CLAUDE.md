@@ -1741,3 +1741,41 @@ moves an object into the transparent pass, which is the extra call.
 The merged-mesh count went 18 → 24, because a wall ring had to become five
 meshes to fade one side at a time. Two thirds of those are rings you have not
 bought — hidden, never drawn.
+
+## Materials are photographed; actions stay silhouettes
+
+A silhouette is right for a BUTTON: it has to read at a glance, at one colour,
+over whatever the camera is pointing at. It is wrong for gold, wood and stone,
+which are things you are carrying rather than actions — a white outline of a
+coin is a worse picture of a coin than a coin is.
+
+`src/resicons.ts` renders them once per session and registers them with
+`setPhotoIcon`. **The registry is keyed by the same `IconName`s**, so the purse,
+the prices in the shop, the cards over buildings and the run summary all turned
+colour without a single call site knowing it happened, and the action buttons
+kept their silhouettes because they ask for different names.
+
+### Only the coin comes from a model
+
+The kits have nothing for "wood" or "stone" that survives being sixteen pixels
+across. `td-rocks` is a flat scatter and photographs as a pale smudge;
+`td-detail-rocks-large` is **mossy** — bright green, a fine boulder at the edge
+of a board and a nonsense icon for stone; the trees and crates read as scenery
+and cargo, not timber. So wood is three cut logs and stone is three blocks,
+built from primitives in the game's palette and shaped to be legible small,
+which is the one thing an icon has to be.
+
+Cut faces get their own material — a log is just a brown cylinder until you can
+see it has been sawn — and the stone is flat-topped and angular so it cannot be
+mistaken for the logs next to it at a glance.
+
+### Photos get more room than glyphs
+
+`iconStyle` adds `scale: 1.22` to a photo. A silhouette is a solid shape filling
+its box; a rendered object is lit, shaded and surrounded by its own air, so at
+the same em it reads smaller and fainter. Done in `iconStyle` so no call site
+has to know which kind it asked for.
+
+`verify-3d-icons` checks how each one is PAINTED — a photo draws a background
+image, a silhouette masks `currentColor` — and that the three are three
+different pictures, since one shared render would satisfy everything else.
