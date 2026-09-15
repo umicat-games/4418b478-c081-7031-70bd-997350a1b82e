@@ -50,10 +50,15 @@ import { hideLoading } from './loading';
  *  no room to say how far you had got on each. Walking through now opens the
  *  list, and the choosing happens there. */
 const DOOR_AT = { x: 0, z: -5.1 };
-/** The stall. It has to sit inside the SMALLEST village — it sells the land
- *  that makes the village bigger, so a shop you cannot reach until you have
- *  bought more room is a lock with its key inside. Must match `tools/gen-scene.mjs`. */
-const SHOP_AT = { x: -2.6, z: 1.9 };
+/** The stall, by the gate.
+ *
+ *  Two things pin it there. It has to be inside the SMALLEST village, because
+ *  it sells the land that makes the village bigger and a shop you cannot reach
+ *  until you have bought more room is a lock with its key inside it. And it has
+ *  to be at the FRONT, because the camera follows from behind: standing at a
+ *  stall near the back wall puts the camera outside that wall, which then fills
+ *  a third of the screen. Must match `tools/gen-scene.mjs`. */
+const SHOP_AT = { x: -2.9, z: -3.9 };
 const DOOR_HALF_WIDTH = 0.7;
 const NEAR = 0.9;             // how close counts as "standing at" something
 /** The rack in front of the Armory. Five pedestals, in the order they cost.

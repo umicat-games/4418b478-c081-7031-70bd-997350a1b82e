@@ -26959,9 +26959,9 @@
       "modelAssetId": "town-cart",
       "transform": {
         "position": {
-          "x": -2.6,
+          "x": -2.9,
           "y": 0,
-          "z": 1.9
+          "z": -3.9
         },
         "rotation": [
           0,
@@ -26993,9 +26993,9 @@
       "modelAssetId": "td-selection",
       "transform": {
         "position": {
-          "x": -2.6,
+          "x": -2.9,
           "y": 0.02,
-          "z": 1.9
+          "z": -3.9
         }
       },
       "visible": false
@@ -29775,9 +29775,9 @@
       "modelAssetId": "td-rocks",
       "transform": {
         "position": {
-          "x": -2.5,
+          "x": -2.6,
           "y": 0,
-          "z": -3.5
+          "z": 1.9
         }
       }
     },

@@ -910,11 +910,19 @@ function buildHub() {
   // It cannot be one of the things it sells, so it is always there.
   ents.push({
     id: 'shop', name: 'shop', modelAssetId: 'town-cart',
-    // Inside the SMALLEST village. It sells the land that makes the village
-    // bigger, so a stall you cannot reach until you have bought more room is a
-    // lock with its key inside it. At (1.6, 3.0) it stood outside the starting
-    // back wall. Must match `SHOP_AT` in `src/hub.ts`.
-    transform: { position: { x: -2.6, y: GROUND_Y, z: 1.9 }, rotation: yaw(Math.PI) },
+    // By the GATE, at the front.
+    //
+    // It has to be inside the smallest village — it sells the land that makes
+    // the village bigger, and a stall you cannot reach until you have bought
+    // more room is a lock with its key inside it. At (1.6, 3.0) it was outside
+    // the starting back wall entirely.
+    //
+    // Moving it just inside that wall fixed the reachability and left the real
+    // problem: the camera follows from BEHIND, so standing at a stall near the
+    // back wall puts the camera outside it and the wall fills a third of the
+    // screen. At the front the camera is always over open village. Must match
+    // `SHOP_AT` in `src/hub.ts`.
+    transform: { position: { x: -2.9, y: GROUND_Y, z: -3.9 }, rotation: yaw(Math.PI) },
     collider: {
       shape: { kind: 'box', halfExtents: { x: 0.5, y: 0.5, z: 0.7 } },
       body: 'fixed', offset: { x: 0, y: 0.5, z: 0 },
@@ -922,7 +930,7 @@ function buildHub() {
   });
   ents.push({
     id: 'shop_marker', name: 'shop_marker', modelAssetId: 'td-selection',
-    transform: { position: { x: -2.6, y: GROUND_Y + 0.02, z: 1.9 } },
+    transform: { position: { x: -2.9, y: GROUND_Y + 0.02, z: -3.9 } },
     visible: false,
   });
 
@@ -952,7 +960,7 @@ function buildHub() {
   // Scenery, off the walking line between spawn and door.
   const props = [
     ['td-tree', -3.5, -2.5], ['td-tree', 3.5, -2.5], ['td-tree', -3.5, 3.5],
-    ['td-rocks', 3.5, 3.5], ['td-crystal', 2.5, -3.5], ['td-rocks', -2.5, -3.5],
+    ['td-rocks', 3.5, 3.5], ['td-crystal', 2.5, -3.5], ['td-rocks', -2.6, 1.9],
     ['hub-crate', 2.5, 1.5], ['hub-crate', 3.2, 1.5], ['hub-crate', 2.85, 1.5],
     ['hub-barrel', 1.6, 2.6], ['hub-barrel', -1.6, -2.6],
   ];

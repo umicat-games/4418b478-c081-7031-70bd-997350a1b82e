@@ -1451,6 +1451,12 @@ where trees that were never going to be enclosed had been cleared anyway.
   makes the village bigger; a shop you cannot reach until you have bought more
   room is a lock with its key inside it. `SHOP_AT` and the generator must agree,
   and probes should read `__hub.shopAt()` rather than write it down.
+  **Then it had to move again, to the front.** Being inside the wall fixed
+  reachability and left the real problem: the camera follows from BEHIND, so
+  standing at anything near the back wall puts the camera OUTSIDE that wall and
+  the masonry fills a third of the screen. By the gate the camera is always over
+  open village. This applies to any building placed at the back too — the stall
+  is just the one place a player has to keep going back to.
 - **The stall wins over what is in your hands.** Its keep-out radius is wider
   than the distance at which you count as standing at it, so a building can
   never be placed there — and a player holding a building with nowhere to put
