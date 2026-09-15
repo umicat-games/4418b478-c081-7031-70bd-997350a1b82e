@@ -24,8 +24,15 @@ function ensure(): HTMLElement {
     color: #fff; font: 700 20px/1.4 system-ui, sans-serif;
     transition: opacity 220ms ease-out; opacity: 1;
   `;
-  // The same word, the same size, the same colour, in the same place as the
+  // The same word, the same size, the same colour, in the same PLACE as the
   // title screen's.
+  //
+  // Both stacks are centred vertically, so the taller one pushes its heading
+  // up: the title's buttons are 58px more than this bar, which put BALABOO 29
+  // pixels higher and made the handover a jump rather than a dissolve. The
+  // spacer below makes the two stacks the same height. Measured, not guessed:
+  // the flex `gap` applies to the spacer too, so the heading moves by
+  // (spacer + gap) / 2 — 58 overshot by seven pixels before 44 landed it.
   //
   // It used to be flat blue with dark letters, and the title screen that came
   // after it was a different colour with different letters — so the handover
@@ -39,6 +46,7 @@ function ensure(): HTMLElement {
       <div class="bar" style="width:38%;height:100%;border-radius:99px;background:#ffd76a;
         animation: slide 1.1s ease-in-out infinite"></div>
     </div>
+    <div style="height:44px"></div>
     <style>@keyframes slide { 0%{transform:translateX(-110%)} 100%{transform:translateX(320%)} }</style>
   `;
   document.body.appendChild(d);

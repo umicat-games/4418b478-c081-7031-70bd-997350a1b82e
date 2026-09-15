@@ -1587,30 +1587,30 @@ put in a second slot.**
 It is also the session's first TAP, which is what unlocks audio on iOS. Nothing
 tries to make a sound before it.
 
-### One screen, which gains a background
+### One loading screen, and the title appears finished
 
-The title goes up IMMEDIATELY and the clearing fades in behind it. Waiting for
-the scene first produced exactly what it was reported as: the loading screen —
-a flat panel with BALABOO on it — held, went away leaving **a black canvas with
-nothing over it**, and then a second BALABOO screen appeared. Two title screens
-with a gap between them.
+**The clearing loads behind the loading screen**, which is already up and stays
+up — the same loader the hub and the boards hand each other. The title then
+appears COMPLETE. There is no moment where it is a flat panel waiting for a
+background, because the background is what it was waiting for.
 
-Three things follow from fixing it:
+Reported as "a flash of a flat title, then a black gap, then the real one", and
+all three were one bug. Three things came out of fixing it:
 
-- `hideLoading()` is called by the title, right after it appends itself. Hiding
-  it from `boot()` and then awaiting a title that fetches a scene is what opened
-  the black gap. It was a blink on localhost and seconds over a CDN — **and
-  every probe here waited long enough to miss it**, which is why the check for
-  it is throttled to a phone's bandwidth and samples every 250ms.
-- The backdrop starts DARK and the wash it fades to is dark, so nothing on top
-  has to change colour when the trees arrive.
-- The loading screen wears the same gold BALABOO, same size, same place. It used
-  to be flat blue with dark letters, so the handover read as two screens rather
-  than one screen finishing loading. The only thing that changes now is the
-  progress bar becoming buttons.
-
-Start is pressable before the clearing has loaded, so `titleScene` has to cope
-with being disposed before it resolves.
+- **`hideLoading()` belongs to the title**, called right after it appends
+  itself. Hiding it in `boot()` and then awaiting a scene left a black canvas
+  with nothing over it for as long as the load took. It was a blink on localhost
+  and seconds over a CDN — **and every probe here waited long enough to miss
+  it**, which is why the check is throttled to a phone's bandwidth and samples
+  every 250ms.
+- **The title sits UNDER the loader** (z 95 against 100), so hiding it dissolves
+  into a finished title rather than cutting to one.
+- **The loading screen wears the same gold BALABOO, in the same place.** It was
+  flat blue with dark letters, so the handover read as two title screens. Both
+  stacks are centred, so the taller one pushes its heading up: the title's
+  buttons were worth 29 pixels, and the loader carries a 44px spacer to match.
+  Measured, not guessed — the flex `gap` applies to the spacer too, so the
+  heading moves by `(spacer + gap) / 2`, and 58 overshot before 44 landed.
 
 ### It stands in a clearing
 

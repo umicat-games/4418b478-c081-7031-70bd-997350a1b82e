@@ -23,8 +23,9 @@ import { hideLoading } from './loading';
  * iOS — a title screen is the one moment in a game where a press is guaranteed.
  */
 
-/** Before the clearing loads, and where it stays if it never does. Dark, so
- *  that nothing on top of it has to change colour when the trees arrive. */
+/** Where the title stays if the clearing never loads. Dark, like the wash over
+ *  the clearing, so the fallback is a dimmer version of the same screen rather
+ *  than a different one with differently-coloured words on it. */
 const BACKDROP = 'linear-gradient(#26414f 0%, #233a44 48%, #1d3327 48%, #182a1e 100%)';
 /** Over the clearing. A wash rather than a colour instead of it: the words have
  *  to stay legible against trees, and trees are busy. */
@@ -55,16 +56,19 @@ export async function showTitle(shared: Shared): Promise<void> {
   const saves = shared.umicat.saves;
   const save = (await saves.get<Progress>('td-progress')) ?? null;
   const resume = hasProgress(save);
+  // Behind the loading screen, which is already up and stays up. The title
+  // appears COMPLETE — there is no moment where it is a flat panel waiting for
+  // its background, because the background is what it was waiting for.
+  const scene = await titleScene(shared);
 
   const el = document.createElement('div');
   el.dataset.title = '';
   el.style.cssText = `
-    position: fixed; inset: 0; z-index: 110; display: flex;
+    position: fixed; inset: 0; z-index: 95; display: flex;
     align-items: center; justify-content: center; flex-direction: column;
     gap: 18px; padding: 24px; box-sizing: border-box;
     color: #fff; font: 600 15px/1.5 system-ui, sans-serif; text-align: center;
-    background: ${BACKDROP};
-    transition: background 600ms ease-out;
+    background: ${scene ? WASH : BACKDROP};
   `;
 
   // What a button DOES is passed in, not derived from how it looks. Deriving it
@@ -109,26 +113,11 @@ export async function showTitle(shared: Shared): Promise<void> {
     </div>
   `;
   document.body.appendChild(el);
+  // UNDER the loading screen — z 95 against its 100 — so hiding it DISSOLVES
+  // into a finished title instead of cutting to one. And only from here: hiding
+  // it in `boot()` and then awaiting the scene left a black canvas with nothing
+  // over it for as long as the load took.
   hideLoading();
-
-  // The clearing arrives BEHIND a title that is already up, rather than the
-  // title waiting for it.
-  //
-  // Waiting meant the loading screen — which is a flat panel with BALABOO on it
-  // — held for a second, went away, and a second title screen appeared. Two
-  // title screens with a gap between them, which is exactly what it looked
-  // like. Now there is one, and it gains a background.
-  //
-  // Which is also why the backdrop starts DARK and the wash it fades to is
-  // dark: if it started as a light sky the text and buttons would have to flip
-  // colour the moment the trees showed up.
-  let scene: { dispose: () => void } | null = null;
-  let dropped = false;
-  void titleScene(shared).then((s) => {
-    if (dropped) { s?.dispose(); return; }
-    scene = s;
-    if (s) el.style.background = WASH;
-  });
 
   await new Promise<void>((resolve) => {
     const confirm = el.querySelector<HTMLElement>('[data-confirm]')!;
@@ -137,9 +126,6 @@ export async function showTitle(shared: Shared): Promise<void> {
       // there, and the one thing this must do is leave nothing behind.
       if (wipe) await saves.set('td-progress', {});
       el.remove();
-      // The clearing may still be loading — pressing Start before it arrives
-      // must not leave a render loop running over the hub.
-      dropped = true;
       scene?.dispose();
       resolve();
     };
