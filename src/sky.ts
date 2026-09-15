@@ -59,12 +59,34 @@ export function skyWithClouds(
    *  crown and a greyer underside. A single blob reads as a smudge. */
   const cloud = (cx: number, cy: number, scale: number, alpha: number): void => {
     const puffs = 5 + Math.floor(rand() * 4);
+    // Shapes first, painting second. A cloud near the left or right edge has to
+    // be painted TWICE — once where it is and once a full width away — because
+    // this is an equirectangular map and its two edges are the same meridian.
+    // Painting it a second time by calling this function again would consume
+    // more random numbers and produce a DIFFERENT cloud, so the seam would have
+    // half a cloud on one side and a different half on the other.
+    //
+    // It only showed once the title screen orbited the camera all the way
+    // round; the hub never turns far enough to look at that meridian.
+    const shape: { px: number; py: number; r: number }[] = [];
     for (let i = 0; i < puffs; i++) {
       const t = i / (puffs - 1) - 0.5;
       const r = scale * (0.55 + 0.75 * (1 - Math.abs(t) * 1.6)) * (0.7 + rand() * 0.6);
       if (r <= 1) continue;
-      const px = cx + t * scale * 2.4 + (rand() - 0.5) * scale * 0.3;
-      const py = cy + (rand() - 0.5) * scale * 0.35 - Math.abs(t) * scale * 0.1;
+      shape.push({
+        px: cx + t * scale * 2.4 + (rand() - 0.5) * scale * 0.3,
+        py: cy + (rand() - 0.5) * scale * 0.35 - Math.abs(t) * scale * 0.1,
+        r,
+      });
+    }
+    const widest = Math.max(0, ...shape.map((q) => q.r)) + scale * 2.4;
+    const copies = [0];
+    if (cx < widest) copies.push(W);
+    if (cx > W - widest) copies.push(-W);
+    for (const dx of copies) for (const q of shape) {
+      const px = q.px + dx;
+      const py = q.py;
+      const r = q.r;
       // Transform FIRST, then build the gradient in the local space it will be
       // filled in. A canvas gradient is resolved in whatever user space is
       // current when the fill happens — so a gradient built at (px, py) and

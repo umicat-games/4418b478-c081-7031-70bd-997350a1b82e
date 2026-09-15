@@ -1021,6 +1021,104 @@ function buildHub() {
   };
 }
 
+/**
+ * The clearing behind the title screen.
+ *
+ * Its own scene, not the hub seen from an angle. The hub is a village with a
+ * player's things in it — their buildings, wherever they put them, at whatever
+ * size they bought — and a title screen that shows a save it has not asked
+ * about yet is showing the answer before the question. A clearing is the same
+ * world with nothing of theirs in it.
+ *
+ * No hero, no walls, no colliders: nothing here is stood on or walked into. It
+ * is a picture, and the camera drifts across it.
+ *
+ * The models are the ones the hub already uses, so the second load is the
+ * browser's cache rather than the network.
+ */
+function buildTitle() {
+  const ents = [];
+  const HALF = 5;
+  const OUT = 13;
+  const rand = rng(91);
+
+  ents.push({
+    id: 'ground_skirt', name: 'ground_skirt',
+    primitive: { kind: 'box', size: { x: 2 * OUT + 2, y: 0.4, z: 2 * OUT + 2 }, color: '#3f6b38' },
+    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
+    castShadow: false,
+  });
+  for (let gx = -OUT; gx <= OUT; gx += 1) {
+    for (let gz = -OUT; gz <= OUT; gz += 1) {
+      ents.push({
+        id: `tgrass_${gx}_${gz}`.replace(/[.-]/g, '_'),
+        name: 'forest_ground', modelAssetId: 'td-tile',
+        transform: {
+          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
+          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
+        },
+        castShadow: false,
+      });
+      // The clearing itself, and a gap on one side so the eye has somewhere to
+      // go. A ring of trees with no way out of it reads as a wall.
+      const r = Math.hypot(gx, gz);
+      if (r < HALF) continue;
+      if (gx > HALF * 0.4 && Math.abs(gz) < 2.4) continue;
+      const depth = r - HALF;
+      const chance = Math.min(0.95, 0.55 + depth * 0.11);
+      const roll = rand();
+      const n = roll < chance ? (roll < chance * 0.45 ? 2 : 1) : 0;
+      for (let k = 0; k < n; k++) {
+        ents.push({
+          id: `tforest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'),
+          name: depth > 3 ? 'forest_far' : 'forest',
+          modelAssetId: rand() < 0.26 ? 'td-detail-tree-large' : 'td-tree',
+          transform: {
+            position: {
+              x: gx + (rand() - 0.5) * 0.8, y: GROUND_Y, z: gz + (rand() - 0.5) * 0.8,
+            },
+            rotation: yaw(rand() * Math.PI * 2),
+            scale: { x: 0.9 + rand() * 0.6, y: 0.9 + rand() * 0.7, z: 0.9 + rand() * 0.6 },
+          },
+          castShadow: false,
+        });
+      }
+    }
+  }
+
+  // A few things in the clearing so it is a place rather than a lawn.
+  const props = [
+    ['td-rocks', -2.4, 1.6], ['td-crystal', 2.2, -1.9], ['td-tree', -3.4, -2.8],
+    ['hub-barrel', 1.4, 2.2], ['hub-crate', 2.9, 1.4], ['td-rocks', 3.1, -3.2],
+  ];
+  for (const [i, [m, x, z]] of props.entries()) {
+    ents.push({
+      id: `tprop_${i}`, name: 'scenery', modelAssetId: m,
+      transform: { position: { x, y: GROUND_Y, z }, rotation: yaw(rand() * Math.PI * 2) },
+    });
+  }
+
+  return {
+    schemaVersion: 1,
+    id: 'title',
+    name: 'Balaboo',
+    environment: { background: '#9fd4ef' },
+    gravity: { x: 0, y: -4.1692, z: 0 },
+    lights: [
+      { id: 'sky', kind: 'hemisphere', color: '#ffffff', groundColor: '#8fa08a', intensity: 2.1 },
+      { id: 'sun', kind: 'directional', color: '#fff6e0', intensity: 2.0,
+        position: { x: 3, y: 7, z: 4 }, castShadow: false },
+    ],
+    // `fixed` so the SDK leaves it alone — the schema has no place to put a
+    // position or a look-at, and the title aims it every frame anyway.
+    camera: { kind: 'fixed', fov: 50 },
+    entities: ents,
+  };
+}
+
 writeFileSync(new URL('../public/scenes3d/hub.json', import.meta.url),
   JSON.stringify(buildHub(), null, 2) + '\n');
 console.log(`hub: ${buildHub().entities.length} entities`);
+writeFileSync(new URL('../public/scenes3d/title.json', import.meta.url),
+  JSON.stringify(buildTitle(), null, 2) + '\n');
+console.log(`title: ${buildTitle().entities.length} entities`);

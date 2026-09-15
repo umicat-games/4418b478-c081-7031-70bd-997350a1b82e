@@ -1,6 +1,10 @@
+import * as THREE from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
+import { loadScene3D, type Manifest3D, type Scene3D } from '@umicat/three-sdk';
 import type { Shared } from './main';
 import type { Progress } from './main';
-import { LEVELS } from './levels';
+import { mergeStatic } from './merge';
+import { skyWithClouds } from './sky';
 
 /**
  * The title screen: Continue, or start again.
@@ -32,21 +36,6 @@ function hasProgress(p: Progress | null): boolean {
     || (p.store?.gold ?? 0) > 0;
 }
 
-/** What you would be going back to, in one line. "Continue" on its own is a
- *  button you press to find out what it does. */
-function summary(p: Progress): string {
-  const bits = [`Lv ${p.level ?? 1}`];
-  const cleared = p.cleared ?? 0;
-  if (cleared > 0) {
-    bits.push(cleared >= LEVELS.length
-      ? 'every board cleared'
-      : `${LEVELS[cleared - 1].name} cleared`);
-  }
-  const built = Object.keys(p.town ?? {}).length;
-  if (built > 0) bits.push(`${built} building${built > 1 ? 's' : ''}`);
-  return bits.join(' · ');
-}
-
 /**
  * Put the title up and wait for a choice.
  *
@@ -58,6 +47,7 @@ export async function showTitle(shared: Shared): Promise<void> {
   const saves = shared.umicat.saves;
   const save = (await saves.get<Progress>('td-progress')) ?? null;
   const resume = hasProgress(save);
+  const scene = await titleScene(shared);
 
   const el = document.createElement('div');
   el.dataset.title = '';
@@ -65,8 +55,12 @@ export async function showTitle(shared: Shared): Promise<void> {
     position: fixed; inset: 0; z-index: 110; display: flex;
     align-items: center; justify-content: center; flex-direction: column;
     gap: 18px; padding: 24px; box-sizing: border-box;
-    background: linear-gradient(#8fc9e8 0%, #a8d9ee 46%, #6fae63 46%, #4f9245 100%);
-    color: #23313c; font: 600 15px/1.5 system-ui, sans-serif; text-align: center;
+    color: #fff; font: 600 15px/1.5 system-ui, sans-serif; text-align: center;
+    background: ${scene
+      // A wash over the clearing rather than a colour instead of it: the words
+      // have to stay legible against trees, and trees are busy.
+      ? 'linear-gradient(rgba(12,22,30,.10) 0%, rgba(12,22,30,.34) 52%, rgba(12,22,30,.62) 100%)'
+      : 'linear-gradient(#8fc9e8 0%, #a8d9ee 46%, #6fae63 46%, #4f9245 100%)'};
   `;
 
   // What a button DOES is passed in, not derived from how it looks. Deriving it
@@ -76,17 +70,19 @@ export async function showTitle(shared: Shared): Promise<void> {
     <button data-act="${act}" style="
       display:block; width:min(280px, 74vw); margin:0 auto; padding:14px 22px;
       border:0; border-radius:999px; cursor:pointer; font:800 16px/1.2 system-ui;
-      background:${primary ? '#ffd76a' : 'rgba(35,49,60,.14)'};
-      color:${primary ? '#241b00' : '#23313c'};">
+      background:${primary ? '#ffd76a' : 'rgba(255,255,255,.18)'};
+      color:${primary ? '#241b00' : '#fff'};
+      backdrop-filter:${primary ? 'none' : 'blur(2px)'};">
       ${label}${note ? `<div style="font:600 12px/1.6 system-ui;opacity:.72">${note}</div>` : ''}
     </button>`;
 
   el.innerHTML = `
     <div style="font:800 min(13vw, 54px)/1 system-ui; letter-spacing:.2em;
                 color:#ffd76a; text-shadow:0 3px 0 #b8892b, 0 6px 14px rgba(0,0,0,.28)">BALABOO</div>
-    <div style="opacity:.8; letter-spacing:.06em; margin-top:-4px">Defend the village</div>
+    <div style="opacity:.92; letter-spacing:.06em; margin-top:-4px;
+                text-shadow:0 1px 6px rgba(0,0,0,.55)">Defend the village</div>
     <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px">
-      ${resume ? btn('go', 'Continue', true, summary(save!)) : ''}
+      ${resume ? btn('go', 'Continue', true) : ''}
       ${btn('new', resume ? 'New game' : 'Start', !resume)}
     </div>
     <div data-confirm style="
@@ -117,6 +113,7 @@ export async function showTitle(shared: Shared): Promise<void> {
       // there, and the one thing this must do is leave nothing behind.
       if (wipe) await saves.set('td-progress', {});
       el.remove();
+      scene?.dispose();
       resolve();
     };
     el.onclick = (e) => {
@@ -134,4 +131,85 @@ export async function showTitle(shared: Shared): Promise<void> {
       void done(act === 'new' || act === 'wipe');
     };
   });
+}
+
+/**
+ * The clearing behind the words.
+ *
+ * Its own scene, not the hub from an angle: the hub is a village with the
+ * player's buildings in it, wherever they put them, at whatever size they
+ * bought — and showing that before asking "Continue?" is showing the answer
+ * before the question. The models are the ones the hub uses, so loading the
+ * hub afterwards is the browser's cache rather than the network.
+ *
+ * Returns null rather than throwing if anything about it fails. A title screen
+ * that cannot start because its BACKGROUND did not load is a game that cannot
+ * start; the flat gradient is a fine second best.
+ */
+async function titleScene(
+  shared: Shared,
+): Promise<{ dispose: () => void } | null> {
+  try {
+    const [manifest, scene3d] = await Promise.all([
+      fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
+      fetch('scenes3d/title.json').then((r) => r.json() as Promise<Scene3D>),
+    ]);
+    const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
+    mergeStatic(world, scene3d, manifest);
+    world.scene.background = skyWithClouds({ horizon: '#9fd4ef' });
+
+    const { renderer } = shared;
+    renderer.shadowMap.enabled = false;
+    const dpr = window.devicePixelRatio ?? 1;
+    renderer.setPixelRatio(Math.min(dpr, 2));
+    const resize = (): void => {
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      world.camera.aspect = window.innerWidth / window.innerHeight;
+      world.camera.updateProjectionMatrix();
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    // A slow drift around the clearing. Not a spin: a title that moves fast
+    // enough to notice is a title you wait for rather than read.
+    const look = new THREE.Vector3(0, 0.2, 0);
+    const t0 = performance.now();
+    let frames = 0;
+    let meshes = 0;
+    world.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes += 1; });
+    // What the clearing IS, for probes. Reading the canvas back cannot answer
+    // this: WebGL clears the drawing buffer once the frame is presented, so
+    // `readPixels` from outside the loop returns transparent black on a scene
+    // that is plainly on screen in a screenshot.
+    (window as unknown as Record<string, unknown>).__title =
+      () => ({ meshes, frames, camera: world.camera.position.toArray().map((n) => +n.toFixed(2)) });
+    renderer.setAnimationLoop(() => {
+      frames += 1;
+      const t = (performance.now() - t0) / 1000;
+      const a = 0.5 + t * 0.028;
+      // Higher, and looking further down: at eye level the treeline sat across
+      // the middle of the frame and the title had to be read against it. From
+      // up here the horizon drops, the words are over sky and the clearing is
+      // the thing you see rather than a strip of grass under the buttons.
+      world.camera.position.set(Math.sin(a) * 7.0, 3.9 + Math.sin(t * 0.21) * 0.3, Math.cos(a) * 7.0);
+      world.camera.lookAt(look);
+      renderer.render(world.scene, world.camera);
+    });
+
+    return {
+      dispose: () => {
+        // Stop the loop BEFORE the scene goes: the hub sets its own loop a
+        // moment later, and a frame rendered in between would be drawing a
+        // scene that had just been emptied.
+        renderer.setAnimationLoop(null);
+        delete (window as unknown as Record<string, unknown>).__title;
+        window.removeEventListener('resize', resize);
+        world.dispose();
+        world.scene.clear();
+      },
+    };
+  } catch (err) {
+    console.warn('[title] no 3d background', err);
+    return null;
+  }
 }

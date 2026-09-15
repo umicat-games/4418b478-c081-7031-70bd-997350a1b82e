@@ -1587,6 +1587,34 @@ put in a second slot.**
 It is also the session's first TAP, which is what unlocks audio on iOS. Nothing
 tries to make a sound before it.
 
+### It stands in a clearing
+
+`title.json` is its OWN scene, not the hub from a nice angle. The hub is a
+village with the player's buildings in it, wherever they put them, at whatever
+size they bought — showing that before asking "Continue?" is showing the answer
+before the question. The models are the ones the hub uses, so loading the hub
+afterwards comes out of the browser's cache.
+
+It falls back to the flat gradient if anything about it fails, silently on
+purpose: **a title screen that cannot start because its BACKGROUND did not load
+is a game that cannot start.** `verify-3d-title` is what stops that fallback
+quietly becoming the thing everyone sees.
+
+Two things this exposed:
+
+- **You cannot `readPixels` the canvas to ask whether it drew.** WebGL clears
+  the drawing buffer once a frame is presented, so a read from outside the loop
+  returns transparent black for a scene that is plainly there in a screenshot.
+  The title publishes `window.__title()` — meshes loaded, frames drawn, where
+  the camera is — and the probe reads that.
+- **The sky texture had a seam.** Clouds near the canvas edge were clipped, and
+  an equirectangular map's two edges are the same meridian, so the cut showed as
+  a vertical band. Each cloud now builds its shape first and paints it a second
+  time a full width across when it is near an edge — calling the draw function
+  again would consume more random numbers and paint a DIFFERENT cloud, leaving
+  half of one on each side. It only ever showed because the title orbits the
+  camera the whole way round; the hub never turns far enough to look at it.
+
 Two bugs it was born with, both worth remembering:
 
 - **`hidden` loses to an inline `display`.** The confirm dialog carried
