@@ -2870,20 +2870,16 @@ export class GameScene extends Phaser.Scene {
     // The BACKPACK is the portable store you carry + Use things from: seeds + gathered goods. The
     // everyday tools (hoe/watering-can/axe/pickaxe/fishing-rod) are NOT here — they're a default,
     // always-owned kit summoned from the tool wheel (see findOwnedTool), never shown/removable.
-    const starterCrops = STARTER_CROPS.filter((c) => c in CROPS) as CropName[];
+    // A brand-new game starts almost BARE so the tutorial isn't drowned in clickable stuff: the
+    // backpack is EMPTY, and the chest holds only a few of Jamin's seed packets. (The shop stocks the
+    // rest; a returning save overwrites both stores in applySave, so this only shapes a new game.)
+    const jaminSeeds = (['carrot', 'corn', 'tomato'] as CropName[]).filter((c) => c in CROPS);
     this.backpackStore = [
-      ...starterCrops.map((c) => makeSeed(c, 10)),
       // DEBUG: a coop of each colour to test placement before the shop flow lands (devTools only).
       ...(CATO_DEBUG_TILL ? COOP_COLORS.map((c) => makePlaceable('coop', 1, `small-${c}`)) : []),
     ];
-    // The bulk starter kit lives in the CHEST (storage) — Take what you need into the backpack:
-    // spare seed stacks + plantables (trees/bushes).
     this.mailboxStore = [];
-    this.chestStore = [
-      ...starterCrops.map((c) => makeSeed(c, 20)),
-      ...TREE_TYPES.map((t) => makePlaceable('tree', 10, t.id)),
-      ...BERRY_TYPES.map((b) => makePlaceable('bush', 10, b)),
-    ];
+    this.chestStore = jaminSeeds.map((c) => makeSeed(c, 5));
     this.chestSeeded = true; // fresh game already has the seeds
 
     this.hotbarSelected = -1;
@@ -10980,7 +10976,7 @@ export class GameScene extends Phaser.Scene {
     this.setDialogueSpotlight(null);
     const step = TUTORIAL_STEPS[n];
     if (!step) { this.tutorialFinish(); return; }
-    this.promptAlert(t(`tut_${step.id}_body`), t('tut_heading'), () => this.tutorialActivateStep(n));
+    this.promptAlert(t(`tut_${step.id}_body`), t(`tut_${step.id}_head`), () => this.tutorialActivateStep(n));
   }
 
   private tutorialActivateStep(n: number): void {
@@ -10999,8 +10995,8 @@ export class GameScene extends Phaser.Scene {
     let done = false;
     switch (id) {
       case 'open-chest': done = kind === 'chest-open'; break;
-      case 'take-seeds': done = kind === 'take' && arg === this.tutorialSeed; break;
-      case 'use-seed': done = kind === 'use' && arg === this.tutorialSeed; break;
+      case 'take-seeds': done = kind === 'take' && typeof arg === 'string' && arg.endsWith('-seed'); break; // any seed packet
+      case 'use-seed': done = kind === 'use' && typeof arg === 'string' && arg.endsWith('-seed'); break;
       case 'move-cam': done = kind === 'camera-centered'; break;
       case 'till': done = kind === 'till' && atPlot; break;
       case 'plant': done = kind === 'plant' && atPlot; break;
