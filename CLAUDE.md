@@ -1694,10 +1694,19 @@ flicker as the player walks along it.
 - **A material per own-mesh group.** `byLook` in `merge.ts` keys on how a thing
   LOOKS, so all fifteen wall boxes arrived pointing at one material object —
   fading one side faded the lot. Own-mesh groups now get `mat.clone()`.
-- **`needsUpdate` when `transparent` flips.** Setting it on a material that has
-  already been drawn needs the program rebuilt, and without it the material
-  reports `opacity: 0.22` when you ask it while contributing nothing whatever to
-  the pixels.
+- **Nothing special when `transparent` flips.** There was a `needsUpdate = true`
+  here for a while on the theory that a drawn material needs its program
+  rebuilt. It does not, and the line is gone — three.js reads `transparent` when
+  it buckets the object and when it sets blending, both per draw. Removing it
+  changes nothing at the same pixel: 84,72,59 solid and 152,92,64 faded either
+  way.
+
+  It is worth recording because of how it got written: the wall looked like it
+  was not drawing, so a plausible fix went in and **a lesson was written down
+  that had never been tested.** The wall was drawing fine; the pixels being
+  sampled were BELOW its projection. The bug was in the measurement, and a
+  speculative fix that survives next to the real one is worse than no fix — it
+  reads as knowledge.
 
 Opacity eases exponentially (`1 - exp(-dt/EASE)`) so it is frame-rate
 independent; a fixed step per frame fades twice as fast at 120fps.

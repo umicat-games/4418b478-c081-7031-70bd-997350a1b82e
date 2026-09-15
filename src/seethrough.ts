@@ -97,14 +97,20 @@ export function createSeeThrough(): SeeThrough {
   let watched: Watched[] = [];
   let on = true;
 
-  /** Setting `transparent` on a material that has already been drawn needs the
-   *  program rebuilt — without `needsUpdate` the wall keeps its opaque shader
-   *  and the opacity is simply ignored. Which is silent: the material reports
-   *  0.22 when you ask it, and contributes nothing whatever to the pixels. */
+  /** Flipping `transparent` is enough on its own.
+   *
+   *  There was a `needsUpdate = true` here for a while, on the theory that a
+   *  material already drawn needs its program rebuilt. It does not — three.js
+   *  reads `transparent` when it buckets the object and sets blending, both per
+   *  draw. Taking the line out changes nothing about what reaches the screen,
+   *  measured at the same pixel: 84,72,59 solid and 152,92,64 faded either way.
+   *
+   *  It went in because the wall looked like it was not drawing at all. It was:
+   *  the pixels being sampled were BELOW the wall's projection, and the fix
+   *  belonged in the measurement rather than in here. */
   const setBlend = (mat: THREE.Material, on: boolean): void => {
     if (mat.transparent === on) return;
     mat.transparent = on;
-    mat.needsUpdate = true;
   };
 
   const restore = (w: Watched): void => {
