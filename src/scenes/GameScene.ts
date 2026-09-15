@@ -10954,6 +10954,7 @@ export class GameScene extends Phaser.Scene {
   }
   private tutorialSeed = 'carrot-seed';                 // Jamin's gift the tutorial guides you to plant
   private tutorialClosingMenu = false;                  // true while tutorialShowStep closes a menu on purpose (so the recovery doesn't re-fire)
+  private tutorialCamStart?: { x: number; y: number };  // camera scroll when the move-camera step began (require an actual pan)
   private tutorialPlot?: { cx: number; cy: number };    // the empty grass cell right of the house (the plot)
   private tutorialBushKey?: string;                     // the pre-placed ripe strawberry bush cell
 
@@ -10973,9 +10974,17 @@ export class GameScene extends Phaser.Scene {
     if (!home) return;
     const plantable = (cx: number, cy: number): boolean => {
       const key = `${cx},${cy}`, tile = this.islandLayer!.getTileAt(cx, cy);
-      return !!tile && !tile.collides && !this.cellBlocksTill(key) && !this.isDefaultHouseCell(key) && !this.tilledCells.has(key) && !this.bushes.has(key);
+      if (!tile || tile.collides || this.cellBlocksTill(key) || this.isDefaultHouseCell(key) || this.tilledCells.has(key) || this.bushes.has(key)) return false;
+      if (this.treeOrStoneOverCell(cx, cy)) return false; // a tree/stone sprite covers it
+      const w = this.islandLayer!.tileToWorldXY(cx, cy); if (!w) return false;
+      if (this.craftStation?.getBounds().contains(w.x + TILE / 2, w.y + TILE / 2)) return false; // hidden BEHIND the work station
+      return true;
     };
-    for (let dx = 3; dx <= 10 && !this.tutorialPlot; dx++) { const cx = Math.floor(home.x) + dx, cy = Math.floor(home.y); if (plantable(cx, cy)) this.tutorialPlot = { cx, cy }; }
+    // Start well to the RIGHT of the house + work station so it's OPEN ground AND off the initial view
+    // (the move-camera step must require an actual pan). Try the house row, then a couple rows out.
+    outer: for (const dy of [0, -1, 1, -2, 2]) {
+      for (let dx = 7; dx <= 16; dx++) { const cx = Math.floor(home.x) + dx, cy = Math.floor(home.y) + dy; if (plantable(cx, cy)) { this.tutorialPlot = { cx, cy }; break outer; } }
+    }
     if (!this.tutorialPlot) return;
     for (let dx = 2; dx <= 5; dx++) { const bx = this.tutorialPlot.cx + dx, by = this.tutorialPlot.cy; if (plantable(bx, by)) { this.restoreBush(`${bx},${by}`, 'strawberry', 2); const b = this.bushes.get(`${bx},${by}`); if (b) { b.sceneWired = true; this.tutorialBushKey = `${bx},${by}`; } break; } } // sceneWired → not saved/torn down
   }
@@ -10996,6 +11005,7 @@ export class GameScene extends Phaser.Scene {
     if (this.tutorialStep !== n) return;
     this.tutorialActive = true;
     if (TUTORIAL_STEPS[n].id === 'water') { this.waterLevel = 0; this.publishToolHud(); } // force a refill at the water's edge
+    if (TUTORIAL_STEPS[n].id === 'move-cam') this.tutorialCamStart = { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY };
     const map: Record<string, string> = { 'open-chest': 'world:chest', 'take-seeds': 'world:chest', 'use-seed': 'hud:backpack', 'till': 'world:plot', 'plant': 'world:plot', 'collect': 'world:bush', 'view-backpack': 'hud:backpack', 'message-cato': 'hud:portrait' };
     this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null);
   }
@@ -11061,7 +11071,10 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const sx = (w.x + TILE / 2 - cam.worldView.x) * cam.zoom, sy = (w.y + TILE / 2 - cam.worldView.y) * cam.zoom;
     const cx = this.scale.width / 2, cy = this.scale.height / 2;
-    if (Math.abs(sx - cx) < this.scale.width * 0.28 && Math.abs(sy - cy) < this.scale.height * 0.28) this.tutorialNotify('camera-centered', 'move-cam');
+    // Require an ACTUAL pan (camera moved a fifth of a screen) so the step can't auto-complete just
+    // because the plot happened to start near centre.
+    const moved = !this.tutorialCamStart || (Math.abs(cam.scrollX - this.tutorialCamStart.x) + Math.abs(cam.scrollY - this.tutorialCamStart.y)) * cam.zoom > 30;
+    if (moved && Math.abs(sx - cx) < this.scale.width * 0.28 && Math.abs(sy - cy) < this.scale.height * 0.28) this.tutorialNotify('camera-centered', 'move-cam');
   }
 
   /** After the save loads, play the intro ONCE on a brand-new save. */
