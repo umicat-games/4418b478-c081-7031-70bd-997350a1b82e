@@ -829,6 +829,7 @@ interface SaveBlob {
   ownedTools?: ToolId[];              // v29: tools in the 工具 tab (undeletable; workbench-crafted append here)
   equippedTools?: (ToolId | null)[];  // v29: the 5 wheel ring slots (null = unequipped)
   waterLevel?: number;                // v30: watering-can water (0-6)
+  onboarding?: boolean;               // v31: new player mid-onboarding → the tutorial replays until finished
 }
 
 export class GameScene extends Phaser.Scene {
@@ -9590,6 +9591,7 @@ export class GameScene extends Phaser.Scene {
    *  true if a chore was started. */
   private tryAutoChore(): boolean {
     if (this.exhausted || this.catoTask || this.catoCurious || this.dialogOpen || !this.islandLayer || !this.child) return false;
+    if (this.tutorialStep >= 0) return false; // during the tutorial Cato stays put — no wandering off to harvest
     const layer = this.islandLayer;
     const task = (type: string, queue: Array<{ cx: number; cy: number }>, crop: string) => {
       this.catoTask = { type, queue, crop, cooldown: 0, strikes: 0, walkMs: 0, walkDist: Infinity, stand: null, path: null } as typeof this.catoTask;
@@ -10937,6 +10939,9 @@ export class GameScene extends Phaser.Scene {
   //    and the camera is locked unless the step allows 'camera'. Fleshed out in the tutorial section. ──
   private tutorialActive = false;
   private tutorialStep = -1;
+  // Persisted: a new player is mid-onboarding (intro + tutorial). Set when a new game starts, cleared
+  // when the tutorial finishes — so exiting mid-tutorial replays the tutorial from the start on reload.
+  private onboardingActive = false;
   /** True if the current tutorial step permits interaction `kind` (or the tutorial isn't gating). */
   private tutStepAllows(kind: string): boolean {
     if (!this.tutorialActive) return true;
@@ -10949,7 +10954,7 @@ export class GameScene extends Phaser.Scene {
   /** Play the forced tutorial ONCE after the intro cinematic, on a brand-new game. */
   private maybeStartTutorial(): void {
     if (this.tutorialStep >= 0) return; // already running
-    if (!isDebug('replayIntro') && (!this.isNewGame || this.dialogueSeen.has('tutorial'))) return;
+    if (!isDebug('replayIntro') && !this.onboardingActive) return; // finished (or a veteran save) → skip
     this.setupTutorialProps();
     this.tutorialShowStep(0);
   }
@@ -11018,6 +11023,7 @@ export class GameScene extends Phaser.Scene {
     this.tutorialStep = -1;
     this.setDialogueSpotlight(null);
     this.dialogueSeen.add('tutorial');
+    this.onboardingActive = false; // onboarding complete → never replays
     this.scheduleSave();
   }
 
@@ -11506,7 +11512,7 @@ export class GameScene extends Phaser.Scene {
     this.loadingOverlay = undefined;
     // Framing: a brand-new game opens on the house (Cato at the door); a returning
     // save centres the camera on the restored Cato.
-    if (this.isNewGame) this.frameNewGameStart();
+    if (this.isNewGame) { this.frameNewGameStart(); this.onboardingActive = true; this.scheduleSave(); } // new game → begin onboarding (persisted, so a mid-tutorial exit resumes)
     else if (this.child) this.cameras.main.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
     // New-game intro: snap into the cinematic framing NOW (camera on Cato + letterbox) so the
     // paw opens onto the already-composed shot — but HOLD Cato's dialogue box until the paw has
@@ -11518,6 +11524,9 @@ export class GameScene extends Phaser.Scene {
     // closed showing "Loading") reveals the ready game directly (no reveal-time overlay).
     finishTransition(this, () => {
       if (playIntro) this.playIntroDialogue();
+      // Returning MID-onboarding (exited before finishing the tutorial) → restart the tutorial from the
+      // top (no intro re-play; they've seen the welcome). New games reach it via the intro's end instead.
+      else if (this.onboardingActive) this.time.delayedCall(800, () => this.maybeStartTutorial());
       // The mail reminder does NOT compose upfront like the intro — the game reveals into
       // NORMAL play, then after a calm beat the reminder cinematic takes over (a gentle transition).
       else if (playMail) this.scheduleMailReminder();
@@ -11734,12 +11743,13 @@ export class GameScene extends Phaser.Scene {
     // Snapshot the island we're standing on into the per-island map (the others keep their last state).
     this.islandSaves[this.sceneId] = this.serializeIsland();
     return {
-      v: 30,
+      v: 31,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       ownedTools: [...this.ownedTools],           // v29: 工具 tab list
       equippedTools: [...this.equippedTools],     // v29: wheel loadout
       waterLevel: this.waterLevel,                // v30: watering-can water
+      onboarding: this.onboardingActive || undefined, // v31: mid-onboarding (tutorial not finished)
       currentIsland: this.sceneId, // cold-boot resumes on this island
       islands: this.islandSaves,   // per-island farm state (all islands)
       money: this.money,
@@ -11987,6 +11997,7 @@ export class GameScene extends Phaser.Scene {
         this.equippedTools = eq;
       }
       this.waterLevel = typeof s.waterLevel === 'number' ? Phaser.Math.Clamp(Math.round(s.waterLevel), 0, WATER_MAX) : WATER_MAX; // v30 (old saves start full)
+      this.onboardingActive = !!s.onboarding; // v31: resume/replay the tutorial if it wasn't finished
       // Mailbox + chest contents (v7). Older saves (no field) keep the seeded test
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
