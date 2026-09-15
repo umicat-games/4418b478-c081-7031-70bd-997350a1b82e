@@ -10976,6 +10976,9 @@ export class GameScene extends Phaser.Scene {
     this.setDialogueSpotlight(null);
     const step = TUTORIAL_STEPS[n];
     if (!step) { this.tutorialFinish(); return; }
+    // Close any open menu so the next step starts on a clean surface (e.g. shut the chest before
+    // "open your backpack"). EXCEPT take-seeds, which needs the chest kept open from open-chest.
+    if (this.menuOpen && step.id !== 'take-seeds') this.closeMenu();
     this.promptAlert(t(`tut_${step.id}_body`), t(`tut_${step.id}_head`), () => this.tutorialActivateStep(n));
   }
 
