@@ -1468,3 +1468,25 @@ placed takes a 3x3 of its neighbours with it. The assertion is on buildings that
 fit, because the free-cell count says more about which size of village you are
 looking at than about whether there is a choice. Land has to be breathing room,
 not a toll: everything the shop sells must fit in the village it starts with.
+
+## Two sandboxes, because unlocking everything hides the shop
+
+`?dev` unlocks: every board, every weapon, a full store, and **every building at
+max level** — which is exactly what the shop cannot be looked at with. Nothing
+left to buy, no building to carry and put down, no land to expand into.
+
+`?dev=shop` is the other half: the materials and the weapons, and the village
+taken AWAY — empty, at its starting size, everything still for sale. It writes
+`town: {}`, `spots: {}`, `land: 0` explicitly rather than leaving them alone,
+because it has to override a REAL save; the whole point is to look at buying
+things on an account that already bought them.
+
+The rule they share: **the grind goes, the thing under test stays.** A sandbox
+that skips the feature you opened it to look at is worse than no sandbox,
+because it looks like it worked.
+
+Three taps on the frame counter **cycles** — off, everything, rich-and-empty,
+off. Two modes and one gesture, because inside the iOS app that gesture is the
+only way in (the app builds the game's URL itself and passes nothing through),
+and a mode you cannot reach from it does not exist on a phone. The banner says
+which one is on: they hand you opposite villages.

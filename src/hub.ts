@@ -7,7 +7,7 @@ import {
 } from '@umicat/three-sdk';
 import type { Shared, Progress } from './main';
 import { patchSave, readSave } from './main';
-import { DEV, toggleDev } from './dev';
+import { DEV, DEV_BANNER, toggleDev } from './dev';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { createThumbMaker } from './thumbs';
@@ -1047,7 +1047,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // The same readout the levels have. The hub is eleven hundred objects of
   // forest now and it was the one place with no way to see what that cost.
   const debug = createDebugHud(renderer, hudEl,
-    DEV ? '\u2605 DEV \u2014 all unlocked, nothing saved' : undefined, toggleDev);
+    DEV ? DEV_BANNER : undefined, toggleDev);
 
   // --- the loop ---
   return await new Promise<HubChoice>((resolve) => {
