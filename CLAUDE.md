@@ -1490,3 +1490,38 @@ off. Two modes and one gesture, because inside the iOS app that gesture is the
 only way in (the app builds the game's URL itself and passes nothing through),
 and a mode you cannot reach from it does not exist on a phone. The banner says
 which one is on: they hand you opposite villages.
+
+## A building you cannot put down is a trap, not a purchase
+
+The village fills up. At its smallest, **three badly-placed buildings can leave
+no legal cell at all** — so "buy a building, then find nowhere to put it" is
+reachable, and before this it meant holding it for good.
+
+**Stopped at the shop.** A building is refused when there is nowhere to put it
+(`roomForOne`, which scans rather than reasons — the answer depends on the size
+of the village, where the other buildings ended up, and where the stall and rack
+are, and all of those move), and also when something is already in your hands.
+One at a time means there is never a queue of bought-but-unplaced buildings, so
+"is there room for one more" stays a question about one building.
+
+The refusal is shown **instead of the price**. "You cannot afford it" and "you
+have nowhere to put it" are different problems and a run only fixes one of them.
+
+**Land is exempt from both refusals.** It is the thing that fixes having nowhere
+to put something, so it has to stay buyable in exactly the state where
+everything else is not.
+
+**And a save already in the corner can still get out.** Holding the action
+button with something in your hands puts it back:
+
+- picked up → back where it stood. Lifting a building frees its own cell and
+  `blockedAt` ignores the building being asked about, so its old spot is always
+  somewhere it may go. This is why picking one up can never strand you, and why
+  only BUYING needed guarding.
+- just bought → back on the shelf, materials returned **in full**. Nothing was
+  spent on it, and charging for undoing a corner the game walked you into is
+  charging for our own mistake.
+
+The card offers "hold to put it back" only while the cell is refused — a player
+standing somewhere legal does not need it, and a permanent version of that line
+is the corner hint we already took off the screen once.

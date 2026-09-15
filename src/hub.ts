@@ -258,9 +258,29 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     return null;
   };
 
+  /** Is there anywhere at all to put one more building?
+   *
+   *  Scanned rather than reasoned about: the answer depends on the size of the
+   *  village, where the other buildings ended up and where the stall and the
+   *  rack are, and every one of those moves. Nineteen squared integer tests
+   *  once per shop render is nothing. */
+  const roomForOne = (): boolean => {
+    for (let z = -9; z <= 9; z++) {
+      for (let x = -9; x <= 9; x++) if (blockedAt(x, z, '') === null) return true;
+    }
+    return false;
+  };
+
   /** Where the thing in your hands would land: the cell you are standing on.
    *  The same rule as building a tower — stand where you want it. */
   const ghostAt = { x: 0, z: 0 };
+  /** Where the thing in your hands was STANDING before you picked it up, or
+   *  null if you have just bought it and it has never stood anywhere.
+   *
+   *  This is what makes "put it back" always possible. Lifting a building frees
+   *  its own cell and `blockedAt` ignores the building being asked about, so
+   *  the place you took it from is always somewhere it may go. */
+  let cameFrom: { x: number; z: number } | null = null;
   /** A building just put down, whose collider is held off until the player has
    *  stepped out of it. Cleared by the frame loop, not by a timer — what makes
    *  it safe to turn on is the hero being elsewhere, not a second having passed. */
@@ -508,6 +528,43 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  each frame, and that is handled separately, because moving fifteen rigid
    *  bodies sixty times a second to set them back where they already were is
    *  work for nothing. */
+  /** Put down what you are carrying, whatever the village looks like.
+   *
+   *  This is the guarantee that you cannot be stuck. Two cases, one gesture:
+   *
+   *   - you picked it up, so it goes back where it stood. Lifting a building
+   *     frees its own cell and `blockedAt` ignores the building being asked
+   *     about, so its old spot is always somewhere it may go.
+   *   - you just bought it and it has never stood anywhere, so it goes back on
+   *     the shelf and you get the materials back. In FULL: nothing was spent on
+   *     it, and charging for undoing a corner the game walked you into is
+   *     charging for our own mistake.
+   *
+   *  The shop refuses to sell into either corner in the first place. This is
+   *  for the save that is already in one. */
+  const undoCarry = (): void => {
+    const b = carrying;
+    if (!b) return;
+    if (cameFrom) {
+      spots[b.id] = { ...cameFrom };
+      settling = b.id;
+      cameFrom = null;
+      carrying = null;
+      showTown();
+      audio.play(SFX.upgradeTower);
+      void patchSave(shared.umicat, { spots });
+    } else {
+      const c = b.costs[0];
+      store.gold += c.gold; store.wood += c.wood; store.stone += c.stone;
+      delete town[b.id];
+      carrying = null;
+      showTown();
+      renderPurse();
+      audio.play('build');
+      void patchSave(shared.umicat, { store, town, spots });
+    }
+  };
+
   /** The ring under whatever you are carrying.
    *
    *  Green where it may go, red where it may not. The ring is the answer to
@@ -837,6 +894,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     effect: string;
     cost: Materials;
     shot?: string;
+    /** Why this cannot be bought right now, whatever the price. Shown in place
+     *  of the price, because "you cannot afford it" and "you have nowhere to
+     *  put it" are different problems and only one of them is fixed by a run. */
+    refuse?: string;
     buy: () => void;
   }
 
@@ -899,18 +960,36 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         },
       });
     }
+    // A building you cannot put down is not a purchase, it is a trap. Two
+    // things stop one being sold:
+    //
+    //  - nowhere to put it. The village fills up, and at its smallest three
+    //    badly-placed buildings can leave no legal cell at all.
+    //  - something already in your hands. One at a time keeps the whole thing
+    //    analysable: there is never a queue of bought-but-unplaced buildings,
+    //    and "is there room for one more" is a question about one building.
+    //
+    // Land is exempt from both. It is the thing that FIXES having nowhere to
+    // put something, so it must stay buyable in exactly the state where
+    // everything else is refused.
+    const noRoom = !roomForOne();
     for (const b of TOWN) {
       if ((town[b.id] ?? 0) !== 0) continue;
       items.push({
         id: b.id, name: b.name, icon: b.icon, effect: b.effect,
         cost: b.costs[0], shot: shopShot.get(b.id),
+        refuse: carrying
+          ? `Put down the ${carrying.name} first`
+          : (noRoom ? 'Nowhere left to put it — buy more land' : undefined),
         buy: () => {
           town[b.id] = 1;
+          cameFrom = null;
           void patchSave(shared.umicat, { store, town });
           // It goes straight into your hands and the shop gets out of the way.
           // Buying a building and then being told to find somewhere to press
           // again is a second errand for one decision.
-          if (!carrying) { carrying = b; closePanel(); } else showShop();
+          carrying = b;
+          closePanel();
         },
       });
     }
@@ -957,13 +1036,19 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
              background:rgba(255,255,255,.06); border-radius:16px">` : ''}
          <div style="margin-top:10px; opacity:.92">${escapeHtml(sel.effect)}</div>
          <div style="margin-top:16px">${priceOf(sel.cost)}</div>
-         <button id="shop-buy" ${canAfford(store, sel.cost) ? '' : 'disabled'} style="
-           margin-top:18px; padding:11px 26px; border:0; border-radius:999px; cursor:pointer;
-           font:800 15px system-ui;
-           background:${canAfford(store, sel.cost) ? '#ffd76a' : 'rgba(255,255,255,.16)'};
-           color:${canAfford(store, sel.cost) ? '#241b00' : 'rgba(255,255,255,.5)'}">
-           ${canAfford(store, sel.cost) ? 'Buy' : `needs ${shortfall(store, sel.cost)}`}
-         </button>`
+         ${(() => {
+    // Three states, and the refusal outranks the price: being told what it
+    // costs when the problem is that you have nowhere to put it sends you off
+    // to earn materials that will not help.
+    const can = !sel.refuse && canAfford(store, sel.cost);
+    const label = sel.refuse ?? (can ? 'Buy' : `needs ${shortfall(store, sel.cost)}`);
+    return `<button id="shop-buy" ${can ? '' : 'disabled'} style="
+             margin-top:18px; padding:11px 26px; border:0; border-radius:999px;
+             cursor:${can ? 'pointer' : 'default'}; font:800 15px system-ui;
+             max-width:100%; white-space:normal;
+             background:${can ? '#ffd76a' : 'rgba(255,255,255,.16)'};
+             color:${can ? '#241b00' : 'rgba(255,255,255,.55)'}">${label}</button>`;
+  })()}`
       : '<div style="opacity:.7">Nothing left to buy.</div>';
 
     panelBody.innerHTML =
@@ -978,7 +1063,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     for (const el of panelBody.querySelectorAll<HTMLButtonElement>('button')) {
       el.onclick = () => {
         if (el.dataset.pick) { shopPick = Number(el.dataset.pick); showShop(); return; }
-        if (el.id === 'shop-buy' && sel && canAfford(store, sel.cost)) {
+        if (el.id === 'shop-buy' && sel && !sel.refuse && canAfford(store, sel.cost)) {
           // Paying is the same for everything on the shelf; what the purchase
           // DOES belongs to the item.
           const c = sel.cost;
@@ -1253,7 +1338,13 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           // The reason, when there is one. "You cannot put it here" without
           // saying why is a button that does nothing.
           body: blocked ?? 'Stand where you want it',
-          action: blocked ? undefined : `${iconHtml('build')} put it down`,
+          // The way out is offered exactly when it is needed. A permanent
+          // "hold to put it back" is the corner hint we already took off the
+          // screen once; a player standing somewhere legal does not need it,
+          // and a player who cannot put it down anywhere does.
+          action: blocked
+            ? `${iconHtml('build')} hold to put it back`
+            : `${iconHtml('build')} put it down`,
         });
         placeCard(ghostAt.x, 2.1, ghostAt.z);
       } else if (atPlot) {
@@ -1287,11 +1378,22 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       if (!panelOpen && input.consume('use')) { pressAt = now; pressLive = true; holdDone = false; }
       if (panelOpen) { pressLive = false; }
 
+      // A hold means "undo whatever this is": at a building, pick it up; with
+      // something in your hands, PUT IT BACK. The second is what guarantees you
+      // can never be stuck holding a building — see `undoCarry`.
+      const holdOn: 'plot' | 'carry' | null = carrying ? 'carry' : (atPlot ? 'plot' : null);
       /** How far through a hold, 0 until it has outlived a tap. */
-      const holdK = pressLive && useDown && atPlot && !holdDone
+      const holdK = pressLive && useDown && holdOn && !holdDone
         ? Math.max(0, Math.min(1, (now - pressAt - MOVE_ARM_MS) / (MOVE_HOLD_MS - MOVE_ARM_MS)))
         : 0;
-      if (holdK > 0 && atPlot) {
+      if (holdK > 0 && holdOn === 'carry') {
+        placeRing.position.set(ghostAt.x, 0.03, ghostAt.z);
+        (placeRing.material as THREE.MeshBasicMaterial).color.setHex(0xe0a53a);
+        placeRing.geometry.dispose();
+        placeRing.geometry = new THREE.RingGeometry(
+          0.62, 0.86, 48, 1, -Math.PI / 2 - holdK * Math.PI * 2, holdK * Math.PI * 2,
+        ).rotateX(-Math.PI / 2);
+      } else if (holdK > 0 && atPlot) {
         // The sweep rides the same ring the carried building uses — you cannot
         // be carrying one and standing at another at the same time.
         const at = spots[atPlot.id]!;
@@ -1302,24 +1404,31 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         placeRing.geometry = new THREE.RingGeometry(
           0.62, 0.86, 48, 1, -Math.PI / 2 - holdK * Math.PI * 2, holdK * Math.PI * 2,
         ).rotateX(-Math.PI / 2);
+      } else if (placeRing.userData.swept) {
+        // Back to a whole ring. The sweep is baked into the geometry, so there
+        // is nothing to reset but the geometry itself.
+        placeRing.geometry.dispose();
+        placeRing.geometry = new THREE.RingGeometry(0.62, 0.86, 48).rotateX(-Math.PI / 2);
+        if (!carrying) placeRing.visible = false;
       } else if (!carrying) {
-        if (placeRing.userData.swept) {
-          placeRing.geometry.dispose();
-          placeRing.geometry = new THREE.RingGeometry(0.62, 0.86, 48).rotateX(-Math.PI / 2);
-        }
         placeRing.visible = false;
       }
       placeRing.userData.swept = holdK > 0;
 
-      // Held long enough, on a building: lift it.
-      if (pressLive && useDown && !holdDone && atPlot && now - pressAt >= MOVE_HOLD_MS) {
+      // Held long enough. On a building, lift it; holding what you are already
+      // carrying puts it back.
+      if (pressLive && useDown && !holdDone && holdOn && now - pressAt >= MOVE_HOLD_MS) {
         holdDone = true;
-        const b = atPlot;
-        delete spots[b.id];
-        carrying = b;
-        showTown();
-        audio.play('build');
-        void patchSave(shared.umicat, { spots });
+        if (holdOn === 'carry') undoCarry();
+        else if (atPlot) {
+          const b = atPlot;
+          cameFrom = { ...spots[b.id]! };
+          delete spots[b.id];
+          carrying = b;
+          showTown();
+          audio.play('build');
+          void patchSave(shared.umicat, { spots });
+        }
       }
 
       const tapped = pressLive && !useDown && !holdDone;
