@@ -1587,6 +1587,31 @@ put in a second slot.**
 It is also the session's first TAP, which is what unlocks audio on iOS. Nothing
 tries to make a sound before it.
 
+### One screen, which gains a background
+
+The title goes up IMMEDIATELY and the clearing fades in behind it. Waiting for
+the scene first produced exactly what it was reported as: the loading screen —
+a flat panel with BALABOO on it — held, went away leaving **a black canvas with
+nothing over it**, and then a second BALABOO screen appeared. Two title screens
+with a gap between them.
+
+Three things follow from fixing it:
+
+- `hideLoading()` is called by the title, right after it appends itself. Hiding
+  it from `boot()` and then awaiting a title that fetches a scene is what opened
+  the black gap. It was a blink on localhost and seconds over a CDN — **and
+  every probe here waited long enough to miss it**, which is why the check for
+  it is throttled to a phone's bandwidth and samples every 250ms.
+- The backdrop starts DARK and the wash it fades to is dark, so nothing on top
+  has to change colour when the trees arrive.
+- The loading screen wears the same gold BALABOO, same size, same place. It used
+  to be flat blue with dark letters, so the handover read as two screens rather
+  than one screen finishing loading. The only thing that changes now is the
+  progress bar becoming buttons.
+
+Start is pressable before the clearing has loaded, so `titleScene` has to cope
+with being disposed before it resolves.
+
 ### It stands in a clearing
 
 `title.json` is its OWN scene, not the hub from a nice angle. The hub is a

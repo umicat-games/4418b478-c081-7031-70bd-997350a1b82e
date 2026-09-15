@@ -20,15 +20,23 @@ function ensure(): HTMLElement {
   d.style.cssText = `
     position: fixed; inset: 0; z-index: 100; display: none;
     align-items: center; justify-content: center; flex-direction: column; gap: 14px;
-    background: #8fc9e8; color: #2b3b47;
-    font: 700 20px/1.4 system-ui, sans-serif; letter-spacing: .12em;
+    background: linear-gradient(#26414f 0%, #233a44 48%, #1d3327 48%, #182a1e 100%);
+    color: #fff; font: 700 20px/1.4 system-ui, sans-serif;
     transition: opacity 220ms ease-out; opacity: 1;
   `;
+  // The same word, the same size, the same colour, in the same place as the
+  // title screen's.
+  //
+  // It used to be flat blue with dark letters, and the title screen that came
+  // after it was a different colour with different letters — so the handover
+  // read as TWO title screens rather than as one screen finishing loading. The
+  // only thing that changes now is the bar turning into buttons.
   d.innerHTML = `
-    <div style="font-size:30px;letter-spacing:.22em">BALABOO</div>
-    <div class="msg" style="font:600 14px/1.5 system-ui;letter-spacing:.06em;opacity:.75"></div>
-    <div style="width:120px;height:5px;border-radius:99px;background:rgba(0,0,0,.14);overflow:hidden">
-      <div class="bar" style="width:38%;height:100%;border-radius:99px;background:#2b3b47;
+    <div style="font:800 min(13vw, 54px)/1 system-ui; letter-spacing:.2em; color:#ffd76a;
+                text-shadow:0 3px 0 #b8892b, 0 6px 14px rgba(0,0,0,.28)">BALABOO</div>
+    <div class="msg" style="font:600 14px/1.5 system-ui;letter-spacing:.06em;opacity:.8"></div>
+    <div style="width:120px;height:5px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden">
+      <div class="bar" style="width:38%;height:100%;border-radius:99px;background:#ffd76a;
         animation: slide 1.1s ease-in-out infinite"></div>
     </div>
     <style>@keyframes slide { 0%{transform:translateX(-110%)} 100%{transform:translateX(320%)} }</style>

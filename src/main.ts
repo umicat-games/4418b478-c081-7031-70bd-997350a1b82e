@@ -3510,10 +3510,12 @@ async function boot(): Promise<void> {
   //
   // It is also the session's first TAP, which is what unlocks audio on iOS.
   // Nothing has tried to make a sound before this point.
-  if (!DEV) {
-    hideLoading();
-    await showTitle(shared);
-  }
+  // The loading screen stays up until the title is ON SCREEN. Hiding it here
+  // and then awaiting a title that loads a scene first left a BLACK SCREEN for
+  // however long that took — nothing on the canvas, nothing over it. It was a
+  // blink locally and seconds over the CDN, and the probes all waited long
+  // enough to miss it entirely.
+  if (!DEV) await showTitle(shared);
 
   // The hub, then the level. `runHub` resolves when the player walks through
   // the door, and tears its own scene down first — one renderer, one context,
