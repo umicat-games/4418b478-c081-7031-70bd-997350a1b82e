@@ -9,7 +9,10 @@ export interface ToolHudModel {
   currentKey: string; currentFrame: string | number; // the held tool's icon (or the mouse icon)
   expanded: boolean;
   items: Array<{ x: number; y: number; key: string; frame: string | number; selected: boolean }>; // the fly-out row
+  waterLevel?: number | null; // 0-6 watering-can gauge shown RIGHT of the slot; null/undefined = hide
 }
+
+const GAUGE_ATLAS = 'ui-sheet'; // all_ui_assets_on_one_sheet — blue-bar-0..6 (0 empty, 6 full)
 
 const HUD_KEY = 'toolHud';
 const SLOT_ATLAS = 'square-buttons';
@@ -27,6 +30,7 @@ const NINE: [number, number, number, number] = [6, 6, 7, 7];
 export class ToolHudScene extends Phaser.Scene {
   private slotBg?: Phaser.GameObjects.NineSlice;
   private slotIcon?: Phaser.GameObjects.Image;
+  private gauge?: Phaser.GameObjects.Image; // watering-can water-level gauge (blue-bar-*)
   private row: Array<{ bg: Phaser.GameObjects.NineSlice; icon: Phaser.GameObjects.Image }> = [];
   private shown = false; // is the fly-out currently expanded (drives the open/close tween)
 
@@ -37,6 +41,9 @@ export class ToolHudScene extends Phaser.Scene {
     this.scale.on('resize', () => applyHudDpr(this));
     this.slotBg = this.add.nineslice(0, 0, SLOT_ATLAS, SLOT_FRAME, 42, 42, ...NINE).setVisible(false);
     this.slotIcon = this.add.image(0, 0, 'cursor').setVisible(false);
+    if (this.textures.exists(GAUGE_ATLAS) && this.textures.get(GAUGE_ATLAS).has('blue-bar-6')) {
+      this.gauge = this.add.image(0, 0, GAUGE_ATLAS, 'blue-bar-6').setVisible(false);
+    }
     this.scene.bringToTop();
   }
 
@@ -44,11 +51,21 @@ export class ToolHudScene extends Phaser.Scene {
     const m = this.registry.get(HUD_KEY) as ToolHudModel | undefined;
     const bg = this.slotBg, icon = this.slotIcon;
     if (!bg || !icon) return;
-    if (!m || !m.visible) { bg.setVisible(false); icon.setVisible(false); this.row.forEach((r) => { r.bg.setVisible(false); r.icon.setVisible(false); }); return; }
+    if (!m || !m.visible) { bg.setVisible(false); icon.setVisible(false); this.gauge?.setVisible(false); this.row.forEach((r) => { r.bg.setVisible(false); r.icon.setVisible(false); }); return; }
 
     // Current-tool slot.
     bg.setVisible(true).setPosition(m.hx, m.hy).setSize(m.slot, m.slot);
     this.fitIcon(icon.setVisible(true).setPosition(m.hx, m.hy).setTexture(m.currentKey, m.currentFrame), m.slot);
+
+    // Water gauge, RIGHT of the slot — only while the watering can is held (m.waterLevel set).
+    if (this.gauge) {
+      if (m.waterLevel == null) this.gauge.setVisible(false);
+      else {
+        const lvl = Phaser.Math.Clamp(Math.round(m.waterLevel), 0, 6);
+        this.gauge.setVisible(true).setTexture(GAUGE_ATLAS, `blue-bar-${lvl}`)
+          .setPosition(m.hx + m.slot * 1.1, m.hy).setDisplaySize(m.slot, m.slot);
+      }
+    }
 
     // Fly-out row: grow/shrink the pool, render each item, animate x from the HUD slot on open.
     while (this.row.length < m.items.length) {

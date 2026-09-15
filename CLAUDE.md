@@ -492,6 +492,23 @@ the stew is drawn twice, and one copy carries a `cooing-` typo).
   frame is missing) instead of drawn rectangles. Tapping the stove plays the UI open blip (`playSfx`
   in `HouseScene.openCooking`), like every other menu open.
 
+## Watering can — a water LEVEL you refill at the water's edge (2026-09-14)
+
+The watering can now holds a limited amount of water (`waterLevel` 0-6, `WATER_MAX`; saved
+**v30**, old saves start full). Each pour on a tilled cell costs 1 (`playerWater` gates on
+`waterLevel > 0`, decrements, `publishToolHud`); at 0 nothing pours (the gauge reads empty +
+the tile cursor dims over soil). **Refill** by holding the can and clicking OPEN WATER
+(`actAt`: `watering-can` + `isWaterAt` → `refillWateringCan` → tops to `WATER_MAX` + a splash +
+`SFX_SPLASH` + a god-hand can dip). The tool WHEEL over water now offers the can (refill) beside
+the rod, and the tile cursor reads BRIGHT over water for the can (snaps to the 16px water cell,
+mirroring the fishing snap). **Cato waters unaffected** — he's a magic waterer, no can/gauge.
+- **The gauge** = the creator-tagged `blue-bar-0..6` frames on the `ui-sheet` atlas
+  (all_ui_assets_on_one_sheet, 16×16, 0 empty → 6 full — a HORIZONTAL fill bar, not the vertical
+  mockup that was referenced). `ToolHudScene` draws it RIGHT of the tool slot (`m.hx + slot*1.1`,
+  slot-sized) ONLY while the can is the held tool (`ToolHudModel.waterLevel`, null = hide). Pulled
+  via `pull-blue-bar.mjs` (merged into the existing atlas json — the sheet grew to 896² for the
+  y560 row, so the png was re-downloaded).
+
 ## Tools = a player LOADOUT: 工具 tab + wheel + workbench crafting (2026-09-13)
 
 The radial wheel used to be a FIXED set of 5 tools (see the older "Tool selection" section); it is

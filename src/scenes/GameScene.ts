@@ -407,6 +407,7 @@ const WATER_SHADOW_DEPTH = 2;
 // How long a watering stays wet (soil tint + fast growth), independent of stage
 // advances, so the damp look persists and re-watering isn't instantly consumed.
 const WET_DURATION_MS = 9000;
+const WATER_MAX = 6; // watering-can capacity (0-6, matching the blue-bar-0..6 gauge frames)
 // Watered soil looks darker/damp — the dirt tileset has no wet variant, so we
 // multiply-tint the soil sprite (cleared when it dries at the next stage-up).
 const WET_SOIL_TINT = 0xb0946a;
@@ -812,6 +813,7 @@ interface SaveBlob {
   callName?: string; // v22: how Cato addresses the player ('' / absent = account name)
   ownedTools?: ToolId[];              // v29: tools in the 工具 tab (undeletable; workbench-crafted append here)
   equippedTools?: (ToolId | null)[];  // v29: the 5 wheel ring slots (null = unequipped)
+  waterLevel?: number;                // v30: watering-can water (0-6)
 }
 
 export class GameScene extends Phaser.Scene {
@@ -1097,6 +1099,8 @@ export class GameScene extends Phaser.Scene {
   // slot (index 2) is EMPTY at start — it fills once the fishing rod is crafted + equipped. A slot
   // may be null (unequipped).
   private equippedTools: (ToolId | null)[] = ['pickaxe', 'axe', null, 'hoe', 'watering-can'];
+  // Watering-can water level (0-6). Waters cost 1; refill to full at the water's edge. Persisted.
+  private waterLevel = WATER_MAX;
   // The MAIL list (Mail tab of the unified menu). Future: AI-notification / narrative
   // inbox; a receipt opens the ReceiptScene. Saved (v9).
   private mailList: MailEntry[] = [];
@@ -2246,6 +2250,10 @@ export class GameScene extends Phaser.Scene {
     if (this.activeTool === 'fishing-rod') {
       if (this.isWaterAt(wp.x, wp.y)) this.startFishing(wp.x, wp.y);
       return;
+    }
+    // WATERING CAN → dip it in the water's edge to REFILL (only on open water).
+    if (this.activeTool === 'watering-can' && this.isWaterAt(wp.x, wp.y)) {
+      this.refillWateringCan(wp.x, wp.y); return;
     }
     // AXE chops any tree the click lands on. A tree sprite is ~3 tiles tall (its
     // canopy sits ABOVE the trunk tile), so match by sprite bounds — clicking the
@@ -3912,6 +3920,7 @@ export class GameScene extends Phaser.Scene {
     if (chopping) valid = !!treeKey || !!this.bushAtPoint(wp.x, wp.y); // axe fells trees AND bushes
     else if (mining) valid = !!stoneKey;
     else if (fishing) valid = this.isWaterAt(wp.x, wp.y); // cast onto open water
+    else if (watering && this.isWaterAt(wp.x, wp.y)) valid = true; // refill the can at the water's edge
     else if (tile) {
       const key = `${tile.x},${tile.y}`;
       if (tilling) {
@@ -3935,8 +3944,8 @@ export class GameScene extends Phaser.Scene {
         else valid = !crop || cropHarvest;
       }
       else if (planting) valid = this.tilledCells.has(key) && !this.crops.has(key);
-      // Water: any tilled soil (crop or not, wet or not) — it just wets the ground.
-      else if (watering) valid = this.tilledCells.has(key);
+      // Water: any tilled soil (crop or not, wet or not) — but only when the can HAS water.
+      else if (watering) valid = this.tilledCells.has(key) && this.waterLevel > 0;
     }
 
     // Snap to the tile centre when there's a tile; else follow the free cursor.
@@ -3945,7 +3954,7 @@ export class GameScene extends Phaser.Scene {
     if (tile) {
       const w = this.islandLayer.tileToWorldXY(tile.x, tile.y);
       if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; }
-    } else if (fishing) {
+    } else if (fishing || (watering && this.isWaterAt(wp.x, wp.y))) {
       // Over water there's no island tile — snap to the shared 16px grid cell anyway.
       const t = this.islandLayer.worldToTileXY(wp.x, wp.y);
       if (t) { const w = this.islandLayer.tileToWorldXY(t.x, t.y); if (w) { px = w.x + TILE / 2; py = w.y + TILE / 2; } }
@@ -4219,8 +4228,9 @@ export class GameScene extends Phaser.Scene {
     else if (sk) { const o = this.bigStones.get(sk); if (o) { applicable.add('pickaxe'); bbox = boxOf(this.spriteWorldSolidRect(o.sprite)); } }
     else if (fk) { const f = this.foragables.get(fk); if (f) { if (f.stage >= (FORAGABLES[f.type]?.stages ?? 1)) applicable.add('hoe'); bbox = boxOf(this.spriteWorldSolidRect(f.sprite)); } }
     else if (this.isWaterAt(wx, wy)) {
-      // Open water → the FISHING ROD applies. bbox = the 16px tile under the cursor.
+      // Open water → the FISHING ROD casts + the WATERING CAN refills. bbox = the 16px tile.
       applicable.add('fishing-rod');
+      applicable.add('watering-can');
       const tx = Math.floor(wx / TILE) * TILE, ty = Math.floor(wy / TILE) * TILE;
       bbox = { wl: tx, wt: ty, wr: tx + TILE, wb: ty + TILE };
     }
@@ -4405,6 +4415,8 @@ export class GameScene extends Phaser.Scene {
       slot: S, hx: HX + S / 2, hy: HY + S / 2,
       currentKey: cur.key, currentFrame: cur.frame,
       expanded: false, items: [],
+      // Water gauge (right of the slot) — only while the watering can is the held tool.
+      waterLevel: held?.toolId === 'watering-can' ? Phaser.Math.Clamp(this.waterLevel, 0, WATER_MAX) : null,
     });
     // Keep the slot as a swallow rect so a tap ON the indicator doesn't act on the world tile beneath it.
     this.registry.set('toolHudBounds', hidden ? [] : [{ x: HX, y: HY, w: S, h: S }]);
@@ -9243,7 +9255,10 @@ export class GameScene extends Phaser.Scene {
   /** Player waters a crop: the state change + splash + a god-hand watering-can
    *  pour (the watering analogue of the hoe swing in tillCell). */
   private playerWater(cx: number, cy: number): void {
+    if (this.waterLevel <= 0) return; // empty can → nothing pours (the gauge reads 0; refill at the water's edge)
     if (!this.waterCropAt(cx, cy) || !this.islandLayer) return;
+    this.waterLevel--; // one pour per tile
+    this.publishToolHud(); // refresh the gauge
     this.hideTileCursor(); // the crop is now watered → drop the bracket/icon at once
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (!w) return;
@@ -9262,6 +9277,23 @@ export class GameScene extends Phaser.Scene {
     const clearCan = () => { if (this.waterCan === can) this.waterCan = undefined; can.destroy(); };
     can.once(Phaser.Animations.Events.ANIMATION_COMPLETE, clearCan);
     this.time.delayedCall(950, clearCan); // safety if COMPLETE misses
+  }
+
+  /** Refill the watering can at the water's edge: dip the god-hand can in, splash, top to full. */
+  private refillWateringCan(wx: number, wy: number): void {
+    const tx = Math.floor(wx / TILE) * TILE + TILE / 2, ty = Math.floor(wy / TILE) * TILE + TILE / 2;
+    this.waterLevel = WATER_MAX;
+    this.publishToolHud(); // gauge → full
+    this.scheduleSave();
+    playSfx(this, SFX_SPLASH);
+    this.waterSplash(tx, ty + 2); // plop where the can dips in
+    this.waterCan?.destroy();
+    const can = this.add.sprite(tx + 11, ty - 10, 'tools', 0).setScale(1.5).setDepth(1e6 + 1);
+    can.play('water-pour');
+    this.waterCan = can;
+    const clearCan = () => { if (this.waterCan === can) this.waterCan = undefined; can.destroy(); };
+    can.once(Phaser.Animations.Events.ANIMATION_COMPLETE, clearCan);
+    this.time.delayedCall(950, clearCan);
   }
 
   /** Hide the tile bracket + held icon immediately (updateTileCursor re-shows it
@@ -11534,11 +11566,12 @@ export class GameScene extends Phaser.Scene {
     // Snapshot the island we're standing on into the per-island map (the others keep their last state).
     this.islandSaves[this.sceneId] = this.serializeIsland();
     return {
-      v: 29,
+      v: 30,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       ownedTools: [...this.ownedTools],           // v29: 工具 tab list
       equippedTools: [...this.equippedTools],     // v29: wheel loadout
+      waterLevel: this.waterLevel,                // v30: watering-can water
       currentIsland: this.sceneId, // cold-boot resumes on this island
       islands: this.islandSaves,   // per-island farm state (all islands)
       money: this.money,
@@ -11785,6 +11818,7 @@ export class GameScene extends Phaser.Scene {
         while (eq.length < 5) eq.push(null);
         this.equippedTools = eq;
       }
+      this.waterLevel = typeof s.waterLevel === 'number' ? Phaser.Math.Clamp(Math.round(s.waterLevel), 0, WATER_MAX) : WATER_MAX; // v30 (old saves start full)
       // Mailbox + chest contents (v7). Older saves (no field) keep the seeded test
       // stores — restore ONLY when the save actually carries them.
       if (s.mailbox) this.mailboxStore = s.mailbox.map((it) => itemFromId(it.id, it.count));
