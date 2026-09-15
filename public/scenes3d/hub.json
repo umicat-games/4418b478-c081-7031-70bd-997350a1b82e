@@ -66,9 +66,9 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 5,
+            "x": 8.1,
             "y": 0.3,
-            "z": 5
+            "z": 8.1
           }
         },
         "body": "fixed",
@@ -8127,7 +8127,7 @@
     },
     {
       "id": "hforest__5_5__4_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8151,7 +8151,7 @@
     },
     {
       "id": "hforest__5_5__4_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8194,7 +8194,7 @@
     },
     {
       "id": "hforest__5_5__3_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8237,7 +8237,7 @@
     },
     {
       "id": "hforest__5_5__2_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8299,7 +8299,7 @@
     },
     {
       "id": "hforest__5_5__0_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8342,7 +8342,7 @@
     },
     {
       "id": "hforest__5_5_0_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8366,7 +8366,7 @@
     },
     {
       "id": "hforest__5_5_0_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8409,7 +8409,7 @@
     },
     {
       "id": "hforest__5_5_1_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8433,7 +8433,7 @@
     },
     {
       "id": "hforest__5_5_1_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8476,7 +8476,7 @@
     },
     {
       "id": "hforest__5_5_2_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8519,7 +8519,7 @@
     },
     {
       "id": "hforest__5_5_3_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -8562,7 +8562,7 @@
     },
     {
       "id": "hforest__5_5_4_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8605,7 +8605,7 @@
     },
     {
       "id": "hforest__5_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8629,7 +8629,7 @@
     },
     {
       "id": "hforest__5_5_5_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -8672,7 +8672,7 @@
     },
     {
       "id": "hforest__5_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -8696,7 +8696,7 @@
     },
     {
       "id": "hforest__5_5_6_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -9493,7 +9493,7 @@
     },
     {
       "id": "hforest__4_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -9517,7 +9517,7 @@
     },
     {
       "id": "hforest__4_5_5_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -9560,7 +9560,7 @@
     },
     {
       "id": "hforest__4_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -10501,7 +10501,7 @@
     },
     {
       "id": "hforest__3_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -10525,7 +10525,7 @@
     },
     {
       "id": "hforest__3_5_5_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -10568,7 +10568,7 @@
     },
     {
       "id": "hforest__3_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -11413,7 +11413,7 @@
     },
     {
       "id": "hforest__2_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -11456,7 +11456,7 @@
     },
     {
       "id": "hforest__2_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -12109,7 +12109,7 @@
     },
     {
       "id": "hforest__1_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -12152,7 +12152,7 @@
     },
     {
       "id": "hforest__1_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -12805,7 +12805,7 @@
     },
     {
       "id": "hforest__0_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -12848,7 +12848,7 @@
     },
     {
       "id": "hforest__0_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -13544,7 +13544,7 @@
     },
     {
       "id": "hforest_0_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -13568,7 +13568,7 @@
     },
     {
       "id": "hforest_0_5_6_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -14221,7 +14221,7 @@
     },
     {
       "id": "hforest_1_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -14245,7 +14245,7 @@
     },
     {
       "id": "hforest_1_5_5_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -14288,7 +14288,7 @@
     },
     {
       "id": "hforest_1_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -14312,7 +14312,7 @@
     },
     {
       "id": "hforest_1_5_6_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -15181,7 +15181,7 @@
     },
     {
       "id": "hforest_2_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -15224,7 +15224,7 @@
     },
     {
       "id": "hforest_2_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -16093,7 +16093,7 @@
     },
     {
       "id": "hforest_3_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -16117,7 +16117,7 @@
     },
     {
       "id": "hforest_3_5_5_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -16160,7 +16160,7 @@
     },
     {
       "id": "hforest_3_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -16184,7 +16184,7 @@
     },
     {
       "id": "hforest_3_5_6_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17053,7 +17053,7 @@
     },
     {
       "id": "hforest_4_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17096,7 +17096,7 @@
     },
     {
       "id": "hforest_4_5_6_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17120,7 +17120,7 @@
     },
     {
       "id": "hforest_4_5_6_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17799,7 +17799,7 @@
     },
     {
       "id": "hforest_5_5__4_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17823,7 +17823,7 @@
     },
     {
       "id": "hforest_5_5__4_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17866,7 +17866,7 @@
     },
     {
       "id": "hforest_5_5__3_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17890,7 +17890,7 @@
     },
     {
       "id": "hforest_5_5__3_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17933,7 +17933,7 @@
     },
     {
       "id": "hforest_5_5__2_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -17976,7 +17976,7 @@
     },
     {
       "id": "hforest_5_5__1_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -18000,7 +18000,7 @@
     },
     {
       "id": "hforest_5_5__1_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18043,7 +18043,7 @@
     },
     {
       "id": "hforest_5_5__0_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18067,7 +18067,7 @@
     },
     {
       "id": "hforest_5_5__0_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -18129,7 +18129,7 @@
     },
     {
       "id": "hforest_5_5_1_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18153,7 +18153,7 @@
     },
     {
       "id": "hforest_5_5_1_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18196,7 +18196,7 @@
     },
     {
       "id": "hforest_5_5_2_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18220,7 +18220,7 @@
     },
     {
       "id": "hforest_5_5_2_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -18263,7 +18263,7 @@
     },
     {
       "id": "hforest_5_5_3_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18287,7 +18287,7 @@
     },
     {
       "id": "hforest_5_5_3_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18330,7 +18330,7 @@
     },
     {
       "id": "hforest_5_5_4_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18354,7 +18354,7 @@
     },
     {
       "id": "hforest_5_5_4_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-detail-tree-large",
       "transform": {
         "position": {
@@ -18397,7 +18397,7 @@
     },
     {
       "id": "hforest_5_5_5_5_0",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -18421,7 +18421,7 @@
     },
     {
       "id": "hforest_5_5_5_5_1",
-      "name": "forest",
+      "name": "forest_claim_2",
       "modelAssetId": "td-tree",
       "transform": {
         "position": {
@@ -26430,12 +26430,76 @@
       "castShadow": false
     },
     {
-      "id": "hwall_s",
-      "name": "village_wall",
+      "id": "w0_west",
+      "name": "wall_0",
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 10.4,
+          "x": 0.4,
+          "y": 1.2,
+          "z": 8.6
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": -4.1,
+          "y": 0.4,
+          "z": -0.9999999999999998
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 4.3
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": true
+    },
+    {
+      "id": "w0_east",
+      "name": "wall_0",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.4,
+          "y": 1.2,
+          "z": 8.6
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": 4.1,
+          "y": 0.4,
+          "z": -0.9999999999999998
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 4.3
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": true
+    },
+    {
+      "id": "w0_back",
+      "name": "wall_0",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 8.6,
           "y": 1.2,
           "z": 0.4
         },
@@ -26445,30 +26509,95 @@
         "position": {
           "x": 0,
           "y": 0.4,
-          "z": 5.1
+          "z": 3.1
         }
       },
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 5.2,
+            "x": 4.3,
             "y": 0.6,
             "z": 0.2
           }
         },
         "body": "fixed"
-      }
+      },
+      "visible": true
     },
     {
-      "id": "hwall_w",
-      "name": "village_wall",
+      "id": "w0_front_l",
+      "name": "wall_0",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 3.3999999999999995,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": -2.4,
+          "y": 0.4,
+          "z": -5.1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 1.6999999999999997,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": true
+    },
+    {
+      "id": "w0_front_r",
+      "name": "wall_0",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 3.3999999999999995,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": 2.4,
+          "y": 0.4,
+          "z": -5.1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 1.6999999999999997,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": true
+    },
+    {
+      "id": "w1_west",
+      "name": "wall_1",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 10.4
+          "z": 10.6
         },
         "color": "#4a4036"
       },
@@ -26485,21 +26614,22 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 5.2
+            "z": 5.3
           }
         },
         "body": "fixed"
-      }
+      },
+      "visible": false
     },
     {
-      "id": "hwall_e",
-      "name": "village_wall",
+      "id": "w1_east",
+      "name": "wall_1",
       "primitive": {
         "kind": "box",
         "size": {
           "x": 0.4,
           "y": 1.2,
-          "z": 10.4
+          "z": 10.6
         },
         "color": "#4a4036"
       },
@@ -26516,19 +26646,20 @@
           "halfExtents": {
             "x": 0.2,
             "y": 0.6,
-            "z": 5.2
+            "z": 5.3
           }
         },
         "body": "fixed"
-      }
+      },
+      "visible": false
     },
     {
-      "id": "hwall_n1",
-      "name": "village_wall",
+      "id": "w1_back",
+      "name": "wall_1",
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 4.5,
+          "x": 10.6,
           "y": 1.2,
           "z": 0.4
         },
@@ -26536,7 +26667,39 @@
       },
       "transform": {
         "position": {
-          "x": -2.95,
+          "x": 0,
+          "y": 0.4,
+          "z": 5.1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 5.3,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": false
+    },
+    {
+      "id": "w1_front_l",
+      "name": "wall_1",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 4.3999999999999995,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": -2.9,
           "y": 0.4,
           "z": -5.1
         }
@@ -26545,21 +26708,22 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 2.25,
+            "x": 2.1999999999999997,
             "y": 0.6,
             "z": 0.2
           }
         },
         "body": "fixed"
-      }
+      },
+      "visible": false
     },
     {
-      "id": "hwall_n2",
-      "name": "village_wall",
+      "id": "w1_front_r",
+      "name": "wall_1",
       "primitive": {
         "kind": "box",
         "size": {
-          "x": 4.5,
+          "x": 4.3999999999999995,
           "y": 1.2,
           "z": 0.4
         },
@@ -26567,7 +26731,7 @@
       },
       "transform": {
         "position": {
-          "x": 2.95,
+          "x": 2.9,
           "y": 0.4,
           "z": -5.1
         }
@@ -26576,13 +26740,174 @@
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 2.25,
+            "x": 2.1999999999999997,
             "y": 0.6,
             "z": 0.2
           }
         },
         "body": "fixed"
-      }
+      },
+      "visible": false
+    },
+    {
+      "id": "w2_west",
+      "name": "wall_2",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.4,
+          "y": 1.2,
+          "z": 12.6
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": -6.1,
+          "y": 0.4,
+          "z": 1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 6.3
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": false
+    },
+    {
+      "id": "w2_east",
+      "name": "wall_2",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.4,
+          "y": 1.2,
+          "z": 12.6
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": 6.1,
+          "y": 0.4,
+          "z": 1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.6,
+            "z": 6.3
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": false
+    },
+    {
+      "id": "w2_back",
+      "name": "wall_2",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 12.6,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0.4,
+          "z": 7.1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 6.3,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": false
+    },
+    {
+      "id": "w2_front_l",
+      "name": "wall_2",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 5.3999999999999995,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": -3.4,
+          "y": 0.4,
+          "z": -5.1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 2.6999999999999997,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": false
+    },
+    {
+      "id": "w2_front_r",
+      "name": "wall_2",
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 5.3999999999999995,
+          "y": 1.2,
+          "z": 0.4
+        },
+        "color": "#4a4036"
+      },
+      "transform": {
+        "position": {
+          "x": 3.4,
+          "y": 0.4,
+          "z": -5.1
+        }
+      },
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 2.6999999999999997,
+            "y": 0.6,
+            "z": 0.2
+          }
+        },
+        "body": "fixed"
+      },
+      "visible": false
     },
     {
       "id": "door",
@@ -26634,9 +26959,9 @@
       "modelAssetId": "town-cart",
       "transform": {
         "position": {
-          "x": 1.6,
+          "x": -2.6,
           "y": 0,
-          "z": 3
+          "z": 1.9
         },
         "rotation": [
           0,
@@ -26668,9 +26993,9 @@
       "modelAssetId": "td-selection",
       "transform": {
         "position": {
-          "x": 1.6,
+          "x": -2.6,
           "y": 0.02,
-          "z": 3
+          "z": 1.9
         }
       },
       "visible": false

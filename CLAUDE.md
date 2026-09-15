@@ -1415,3 +1415,56 @@ north of the Smithy" and pressed, which with buildings two cells apart landed
 nearer the Range and upgraded that instead; another mapped the whole village as
 buildable because `null` meant both "this cell is fine" and "there is nothing to
 place".
+
+## The village is bought, a ring at a time
+
+It starts small and grows. `LAND` in `src/hub.ts` and in `tools/gen-scene.mjs`
+are the same three sizes and **must stay in step** — the generator builds a wall
+set and tags the trees for each one, and the hub decides which is up.
+
+**The gate does not move.** Its frame and its sign are folded into a merged
+mesh, so they could not — but it is the better design regardless: the way out is
+the one landmark that should still be where you left it. The village grows
+sideways and backwards, away from the gate, and `FRONT` is a constant.
+
+### Switching a size on is two things, and half of it is silent
+
+Each wall set is its own merged mesh (`ownMesh` in `merge.ts` matches `wall_\d+`
+and `forest_claim_\d+` **by prefix** — a hardcoded list quietly folds a new one
+in with the permanent forest). So showing a size is one `visible` per mesh, and
+separately `setEnabled` on the five bodies that belong to it: merging leaves
+colliders alone, keyed by entity id. Get one right and not the other and you
+have a wall you walk through, or a wall that is not there. Nothing reports
+either. `verify-3d-land` checks the mesh and the physics as two separate lists,
+and then walks into the wall.
+
+### Trees are tagged by the size that swallows them, not by ring
+
+A tree carries the index of the first village big enough to enclose it, and
+vanishes when that land is bought. Tagging by distance-from-centre looked
+identical until the last expansion, when a bald strip appeared OUTSIDE the wall
+where trees that were never going to be enclosed had been cleared anyway.
+
+### Two things that would have trapped the player
+
+- **The stall had to move inside the smallest village.** It sells the land that
+  makes the village bigger; a shop you cannot reach until you have bought more
+  room is a lock with its key inside it. `SHOP_AT` and the generator must agree,
+  and probes should read `__hub.shopAt()` rather than write it down.
+- **The stall wins over what is in your hands.** Its keep-out radius is wider
+  than the distance at which you count as standing at it, so a building can
+  never be placed there — and a player holding a building with nowhere to put
+  it, who walks to the shop to buy the land that would make room, was told
+  "Too close to the shop" and left holding it for good.
+
+Walls only ever move OUTWARD, and the player is always inside the current one,
+so a new wall can never close on them. That is why land needs no equivalent of
+the `settling` dance that placing a building does.
+
+### Room: count what fits, not what is free
+
+The smallest village has **10 free cells but room for 5 buildings** — each one
+placed takes a 3x3 of its neighbours with it. The assertion is on buildings that
+fit, because the free-cell count says more about which size of village you are
+looking at than about whether there is a choice. Land has to be breathing room,
+not a toll: everything the shop sells must fit in the village it starts with.

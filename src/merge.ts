@@ -43,6 +43,32 @@ const CASTS = new Set([
 const OUTSIDE = new Set(['forest', 'forest_ground', 'ground_skirt']);
 /** The far rings, merged on their own so they can be switched off together. */
 const FAR = new Set(['forest_far']);
+/** Names that get a mesh of their OWN, named after them, instead of being
+ *  folded in with everything that looks like them.
+ *
+ *  The village changes size: there is a wall set per size and only one of them
+ *  is up, and the trees standing on land that can still be bought vanish when
+ *  it is. A merged entity has no visibility of its own left to turn off, so the
+ *  thing that has to be switchable is the MESH — which means it has to be the
+ *  only thing in it. Shadow behaviour follows the group it would have joined:
+ *  walls cast, trees do not.
+ *
+ *  Colliders are untouched by any of this — a collider is a body keyed by
+ *  entity id, so the hub still enables the five that belong to the wall it is
+ *  showing.
+ *
+ *  Matched by PREFIX, not by a list of names. The number of wall sets and of
+ *  clearable tree rings is decided by the scene generator, and a hardcoded list
+ *  here would quietly fold a new one in with the permanent forest — visible
+ *  only as a ring of trees standing inside your own wall.
+ *
+ *  @returns whether the mesh casts and receives shadows, or undefined if the
+ *  name is not one that gets a mesh to itself. */
+const ownMesh = (name: string): boolean | undefined => {
+  if (/^wall_\d+$/.test(name)) return true;
+  if (/^forest_claim_\d+$/.test(name)) return false;
+  return undefined;
+};
 
 export interface MergeResult {
   /** How many objects went in, and how many meshes came out. */
@@ -80,8 +106,16 @@ export function mergeStatic(
     { objs: [], cast: false, receive: false, name: 'forest' },
     { objs: [], cast: false, receive: false, name: 'forest_far' },
   ];
+  /** Look up (or start) the private group for a name that gets its own mesh. */
+  const ownGroup = (name: string, casts: boolean): typeof groups[number] => {
+    let g = groups.find((x) => x.name === name);
+    if (!g) { g = { objs: [], cast: casts, receive: casts, name }; groups.push(g); }
+    return g;
+  };
   for (const [id, obj] of world.entities) {
-    if (CASTS.has(obj.name)) groups[1].objs.push(obj);
+    const own = ownMesh(obj.name);
+    if (own !== undefined) ownGroup(obj.name, own).objs.push(obj);
+    else if (CASTS.has(obj.name)) groups[1].objs.push(obj);
     else if (FAR.has(obj.name)) groups[3].objs.push(obj);
     else if (OUTSIDE.has(obj.name)) groups[2].objs.push(obj);
     else if (FLAT.has(obj.name) || id.startsWith('path_')) groups[0].objs.push(obj);

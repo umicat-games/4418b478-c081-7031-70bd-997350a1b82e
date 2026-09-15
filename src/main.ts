@@ -76,6 +76,10 @@ export interface Progress {
    *  spot is one they are still carrying — which is also how a game closed
    *  mid-placement picks up where it left off. */
   spots?: Record<string, { x: number; z: number }>;
+  /** How much of the village has been bought: an index into the hub's `LAND`.
+   *  Absent means a save from before land was for sale, which the hub reads as
+   *  "the size the village used to be" rather than as the smallest. */
+  land?: number;
 }
 
 /** Read, change the named fields, write back.

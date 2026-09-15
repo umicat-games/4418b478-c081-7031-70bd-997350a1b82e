@@ -50,6 +50,10 @@ import { hideLoading } from './loading';
  *  no room to say how far you had got on each. Walking through now opens the
  *  list, and the choosing happens there. */
 const DOOR_AT = { x: 0, z: -5.1 };
+/** The stall. It has to sit inside the SMALLEST village — it sells the land
+ *  that makes the village bigger, so a shop you cannot reach until you have
+ *  bought more room is a lock with its key inside. Must match `tools/gen-scene.mjs`. */
+const SHOP_AT = { x: -2.6, z: 1.9 };
 const DOOR_HALF_WIDTH = 0.7;
 const NEAR = 0.9;             // how close counts as "standing at" something
 /** The rack in front of the Armory. Five pedestals, in the order they cost.
@@ -174,6 +178,31 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // A building that is paid for but has no spot is one you are CARRYING. That
   // is also what a game closed halfway through placing one looks like when it
   // comes back, so the interrupted case needs no special handling.
+  // --- how big the village is ------------------------------------------------
+  //
+  // It grows. These MUST match `LAND` in `tools/gen-scene.mjs`, which builds a
+  // wall set per size and tags the trees that each size swallows.
+  //
+  // The gate does not move — its frame and sign are folded into a merged mesh
+  // and could not — so the village grows sideways and backwards, away from it.
+  // Which is the better design regardless: the way out is the one landmark that
+  // should still be where you left it.
+  const FRONT = -5.1;
+  const LAND: { x: number; back: number }[] = [
+    { x: 4.1, back: 3.1 },
+    { x: 5.1, back: 5.1 },
+    { x: 6.1, back: 7.1 },
+  ];
+  /** What the NEXT expansion costs, indexed by the size you are at now. */
+  const LAND_COST: Materials[] = [
+    { gold: 300, wood: 60, stone: 40 },
+    { gold: 700, wood: 140, stone: 90 },
+  ];
+  // A save from before land could be bought has a village the size the hub used
+  // to be, with buildings standing where that size allowed. Starting it at the
+  // smallest would put its walls straight through them.
+  let land = progress.land ?? (Object.keys(progress.town ?? {}).length ? 1 : 0);
+
   const spots: Record<string, { x: number; z: number }> = { ...(progress.spots ?? {}) };
   // A save from before the player could choose has buildings but no spots, and
   // handing somebody their whole finished village back in their arms is not a
@@ -189,9 +218,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   /** Whole-metre cells, like the levels. Free placement looks like a mistake
    *  the moment two buildings are a hand's width out of line with each other. */
   const cell = (v: number): number => Math.round(v);
-  /** Stay off the wall: the model is fitted to 1.7 wide, and the wall is at
-   *  5.1, so a building centred past 4 has its roof inside the masonry. */
-  const BUILD_EDGE = 4;
+  /** How far a building's centre has to stay from a wall. The model is fitted
+   *  to 1.7 wide, so 1.1 leaves its roof a quarter-metre clear of the masonry. */
+  const WALL_GAP = 1.1;
   /** Cells between two buildings. At 1 they touch; 2 leaves a path. */
   const APART = 2;
 
@@ -200,7 +229,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  not wrong because of geometry, it is wrong because you walk through there. */
   const KEEPOUT: { x: number; z: number; r: number; what: string }[] = [
     { x: DOOR_AT.x, z: DOOR_AT.z, r: 2.6, what: 'the road out' },
-    { x: 1.6, z: 3.0, r: 1.8, what: 'the shop' },
+    { x: SHOP_AT.x, z: SHOP_AT.z, r: 1.8, what: 'the shop' },
     ...RACK.map((r) => ({ x: r.x, z: r.z, r: 1.4, what: 'the weapon rack' })),
   ];
 
@@ -210,7 +239,12 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  button that does nothing, and the only thing more annoying than being told
    *  no is not being told why. */
   const blockedAt = (x: number, z: number, me: string): string | null => {
-    if (Math.abs(x) > BUILD_EDGE || Math.abs(z) > BUILD_EDGE) return 'Too close to the wall';
+    // Read off the CURRENT size of the village, not a constant. The whole point
+    // of buying land is that the edge moves.
+    const l = LAND[land];
+    if (Math.abs(x) > l.x - WALL_GAP || z > l.back - WALL_GAP || z < FRONT + WALL_GAP) {
+      return 'Too close to the wall';
+    }
     for (const k of KEEPOUT) {
       if (Math.hypot(x - k.x, z - k.z) < k.r) return `Too close to ${k.what}`;
     }
@@ -494,6 +528,31 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   placeRing.renderOrder = 4;
   world.scene.add(placeRing);
 
+  /** Show the village at the size it has been paid for.
+   *
+   *  Each wall set is its own merged mesh (see `OWN_MESH` in `merge.ts`), so
+   *  the picture is one `visible` per size. The COLLIDERS are separate: merging
+   *  leaves bodies alone, keyed by entity id, so the five that belong to the
+   *  wall being shown are the five that are enabled. Getting only half of this
+   *  right gives you either a wall you walk through or a wall that is not
+   *  there — both silent. */
+  const showLand = (): void => {
+    for (let i = 0; i < LAND.length; i++) {
+      const mesh = world.scene.getObjectByName(`wall_${i}`);
+      if (mesh) mesh.visible = i === land;
+      for (const part of ['west', 'east', 'back', 'front_l', 'front_r']) {
+        const body = world.bodies.get(`w${i}_${part}`);
+        if (body) body.setEnabled(i === land);
+      }
+      // Trees standing on ground this size of village covers. Tagged by the
+      // expansion that swallows them, so buying land clears exactly the ones
+      // that would otherwise end up inside your own wall.
+      const trees = world.scene.getObjectByName(`forest_claim_${i}`);
+      if (trees) trees.visible = land < i;
+    }
+  };
+  showLand();
+
   const showTown = (): void => {
     for (const b of TOWN) {
       const lv = town[b.id] ?? 0;
@@ -767,7 +826,96 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       .filter(Boolean).join('  ');
 
   let shopPick = 0;
-  const shopStock = (): TownBuilding[] => TOWN.filter((b) => (town[b.id] ?? 0) === 0);
+  /** Anything the stall sells. Buildings are one kind of thing it sells, not
+   *  the shape of the shop — the village's SIZE is for sale too, and the user
+   *  expects more kinds later. Each item knows its own price, its own picture
+   *  and what buying it does. */
+  interface ShopItem {
+    id: string;
+    name: string;
+    icon: IconName;
+    effect: string;
+    cost: Materials;
+    shot?: string;
+    buy: () => void;
+  }
+
+  /** A picture of what more land buys: the village you have, and the one you
+   *  would have, drawn to scale from the same numbers the walls are built from.
+   *
+   *  Drawn rather than photographed. A thumbnail of a wall is a picture of a
+   *  wall; what is actually for sale is the SHAPE getting bigger, and that is
+   *  a diagram. */
+  const landShot = (from: number): string => {
+    const S = 128;
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const g = c.getContext('2d');
+    if (!g) return '';
+    const now = LAND[from];
+    const next = LAND[from + 1];
+    const pad = 10;
+    // Both villages share their FRONT edge, because that is what happens: the
+    // gate does not move and the village grows backwards and sideways from it.
+    // Drawing them concentric made the two look almost the same size and said
+    // the wrong thing about where the new ground appears.
+    const span = Math.max(next.x * 2, next.back - FRONT);
+    const k = (S - pad * 2) / span;
+    const xOf = (x: number): number => S / 2 + x * k;
+    const yOf = (z: number): number => pad + (z - FRONT) * k;
+    const plot = (l: { x: number; back: number }, stroke: string, fill: string): void => {
+      g.beginPath();
+      g.roundRect(xOf(-l.x), yOf(FRONT), l.x * 2 * k, (l.back - FRONT) * k, 6);
+      g.fillStyle = fill; g.fill();
+      g.strokeStyle = stroke; g.lineWidth = 3; g.stroke();
+    };
+    plot(next, 'rgba(255,215,106,.95)', 'rgba(255,215,106,.18)');
+    plot(now, 'rgba(255,255,255,.7)', 'rgba(255,255,255,.12)');
+    // The gate, so the picture has a front and you can see which way it grew.
+    g.strokeStyle = '#1b2026'; g.lineWidth = 4;
+    g.beginPath(); g.moveTo(xOf(-0.7), yOf(FRONT)); g.lineTo(xOf(0.7), yOf(FRONT)); g.stroke();
+    g.strokeStyle = 'rgba(255,215,106,.95)'; g.lineWidth = 2.5;
+    g.beginPath(); g.arc(xOf(0), yOf(FRONT), 0.7 * k, Math.PI, 0); g.stroke();
+    return c.toDataURL('image/png');
+  };
+
+  const shopStock = (): ShopItem[] => {
+    const items: ShopItem[] = [];
+    // Land first. It is the thing that makes room for everything under it, and
+    // the only item whose price the player can already feel.
+    if (land < LAND.length - 1) {
+      items.push({
+        id: 'land',
+        name: 'More land',
+        icon: 'gate',
+        effect: 'Pushes the village wall out, and clears the trees behind it',
+        cost: LAND_COST[land],
+        shot: landShot(land),
+        buy: () => {
+          land += 1;
+          showLand();
+          void patchSave(shared.umicat, { land });
+          showShop();
+        },
+      });
+    }
+    for (const b of TOWN) {
+      if ((town[b.id] ?? 0) !== 0) continue;
+      items.push({
+        id: b.id, name: b.name, icon: b.icon, effect: b.effect,
+        cost: b.costs[0], shot: shopShot.get(b.id),
+        buy: () => {
+          town[b.id] = 1;
+          void patchSave(shared.umicat, { store, town });
+          // It goes straight into your hands and the shop gets out of the way.
+          // Buying a building and then being told to find somewhere to press
+          // again is a second errand for one decision.
+          if (!carrying) { carrying = b; closePanel(); } else showShop();
+        },
+      });
+    }
+    return items;
+  };
 
   const showShop = (): void => {
     panelOpen = true;
@@ -785,7 +933,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     const rows = stock.length
       ? stock.map((b, i) => {
         const on = i === shopPick;
-        const afford = canAfford(store, b.costs[0]);
+        const afford = canAfford(store, b.cost);
         return `<button data-pick="${i}" style="
             display:flex; align-items:center; gap:10px; width:100%; margin:4px 0;
             padding:9px 12px; border:0; border-radius:11px; cursor:pointer;
@@ -797,7 +945,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       }).join('')
       : '<div style="opacity:.7;padding:10px 2px">Nothing left to buy.</div>';
 
-    const shot = sel ? shopShot.get(sel.id) : undefined;
+    const shot = sel?.shot;
     const detail = sel
       ? `<div style="font:800 19px/1.4 system-ui; display:flex; align-items:center;
                      justify-content:center; gap:9px; padding-bottom:9px;
@@ -808,15 +956,15 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
              aspect-ratio:1; object-fit:contain;
              background:rgba(255,255,255,.06); border-radius:16px">` : ''}
          <div style="margin-top:10px; opacity:.92">${escapeHtml(sel.effect)}</div>
-         <div style="margin-top:16px">${priceOf(sel.costs[0])}</div>
-         <button id="shop-buy" ${canAfford(store, sel.costs[0]) ? '' : 'disabled'} style="
+         <div style="margin-top:16px">${priceOf(sel.cost)}</div>
+         <button id="shop-buy" ${canAfford(store, sel.cost) ? '' : 'disabled'} style="
            margin-top:18px; padding:11px 26px; border:0; border-radius:999px; cursor:pointer;
            font:800 15px system-ui;
-           background:${canAfford(store, sel.costs[0]) ? '#ffd76a' : 'rgba(255,255,255,.16)'};
-           color:${canAfford(store, sel.costs[0]) ? '#241b00' : 'rgba(255,255,255,.5)'}">
-           ${canAfford(store, sel.costs[0]) ? 'Buy' : `needs ${shortfall(store, sel.costs[0])}`}
+           background:${canAfford(store, sel.cost) ? '#ffd76a' : 'rgba(255,255,255,.16)'};
+           color:${canAfford(store, sel.cost) ? '#241b00' : 'rgba(255,255,255,.5)'}">
+           ${canAfford(store, sel.cost) ? 'Buy' : `needs ${shortfall(store, sel.cost)}`}
          </button>`
-      : '<div style="opacity:.7">Everything in the village is built.</div>';
+      : '<div style="opacity:.7">Nothing left to buy.</div>';
 
     panelBody.innerHTML =
       `<div style="font:800 18px/1.6 system-ui; margin-bottom:10px">Shop</div>
@@ -830,18 +978,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     for (const el of panelBody.querySelectorAll<HTMLButtonElement>('button')) {
       el.onclick = () => {
         if (el.dataset.pick) { shopPick = Number(el.dataset.pick); showShop(); return; }
-        if (el.id === 'shop-buy' && sel && canAfford(store, sel.costs[0])) {
-          const c = sel.costs[0];
+        if (el.id === 'shop-buy' && sel && canAfford(store, sel.cost)) {
+          // Paying is the same for everything on the shelf; what the purchase
+          // DOES belongs to the item.
+          const c = sel.cost;
           store.gold -= c.gold; store.wood -= c.wood; store.stone -= c.stone;
-          town[sel.id] = 1;
           renderPurse();
           audio.play(SFX.placeTower);
-          void patchSave(shared.umicat, { store, town });
-          // It goes straight into your hands and the shop gets out of the way.
-          // Buying a building and then being told to find somewhere to press
-          // again is a second errand for one decision.
-          if (!carrying) { carrying = sel; closePanel(); }
-          else showShop();
+          sel.buy();
         }
       };
     }
@@ -925,7 +1069,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       // player the door is a door before they walk into it, and which board is
       // behind it.
       // Which plot you are standing at, if any.
-      const shopAt = { x: 1.6, z: 3.0 };
+      const shopAt = SHOP_AT;
       const atShop = Math.hypot(hero.position.x - shopAt.x, hero.position.z - shopAt.z) < NEAR + 0.3;
       const shopRing = world.entities.get('shop_marker');
       if (shopRing) shopRing.visible = atShop && !panelOpen;
@@ -1182,7 +1326,16 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       if (pressLive && !useDown) { pressLive = false; }
 
       if (!panelOpen && tapped) {
-        if (carrying) {
+        // The stall wins over what is in your hands, and that is not a detail.
+        // The shop's own keep-out radius is wider than the distance at which
+        // you count as standing at it, so a building can NEVER be placed here —
+        // and a player holding a building they have nowhere to put, who walks
+        // to the shop to buy the land that would make room, would be told
+        // "Too close to the shop" and left holding it for good.
+        if (atShop) {
+          if (shopStock().length) { audio.play('build'); showShop(); }
+          else audio.play('denied');
+        } else if (carrying) {
           // Putting it down. `blocked` was computed this frame from the same
           // cell the ring is drawn on, so what you see is what is checked.
           if (blocked) { audio.play('denied'); }
@@ -1194,9 +1347,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
             audio.play(SFX.upgradeTower);
             void patchSave(shared.umicat, { spots });
           }
-        } else if (atShop) {
-          if (shopStock().length) { audio.play('build'); showShop(); }
-          else audio.play('denied');
         } else if (atPlot) {
           const lv = town[atPlot.id] ?? 0;
           const cost = lv < TOWN_MAX_LEVEL ? atPlot.costs[lv] : null;
@@ -1309,6 +1459,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                })),
                carrying: () => carrying?.id ?? null,
                standingAt: () => standingAt,
+               /** How much of the village has been bought, and the bounds that
+                *  buys — so a probe walks to the wall rather than to a number
+                *  copied out of the scene generator. */
+               land: () => ({ level: land, ...LAND[land], front: FRONT }),
+               /** Where the stall is. It has moved once already; a probe that
+                *  hardcodes it finds an empty patch of grass and reports that
+                *  the shop does not open. */
+               shopAt: () => ({ ...SHOP_AT }),
                /** Why the cell under the hero will not take what is being
                 *  carried, or null. The same call the ring and the card use.
                 *

@@ -728,6 +728,23 @@ function buildHub() {
   // The same forest the boards have. The hub is the first thing anyone sees,
   // and it was a green square in a brown box with sky behind it.
   const HUB_OUT = 7;
+
+  // --- how big the village is, and how big it can get ------------------------
+  //
+  // The gate does not move. Its frame and its sign are folded into a merged
+  // mesh, so they cannot — but it is the better design anyway: the way out is
+  // the one landmark that should be where you left it. The village grows AWAY
+  // from the gate, sideways and backwards.
+  //
+  // `LAND[0]` is where a new village starts and `LAND[2]` is the most it can
+  // ever be; the middle one is the size the hub was before any of this.
+  const FRONT = -HALF - 0.6;       // the gate wall, fixed
+  const LAND = [
+    { x: 4.1, back: 3.1 },
+    { x: 5.1, back: 5.1 },
+    { x: 6.1, back: 7.1 },
+  ];
+  const LAND_MAX = Math.max(...LAND.map((l) => Math.max(l.x, l.back)));
   const OUTER = HALF + HUB_OUT;
   const rand = rng(5);
 
@@ -738,7 +755,10 @@ function buildHub() {
     visible: false,
     transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
     collider: {
-      shape: { kind: 'box', halfExtents: { x: HALF + 0.5, y: 0.3, z: HALF + 0.5 } },
+      // Sized for the BIGGEST the village can get, not for its starting size.
+      // The walls are what stop you; a floor that ends at the first wall would
+      // drop the player into nothing the moment they bought more land.
+      shape: { kind: 'box', halfExtents: { x: LAND_MAX + 1, y: 0.3, z: LAND_MAX + 1 } },
       body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
     },
     castShadow: false,
@@ -767,6 +787,12 @@ function buildHub() {
       // Open in front of the door, so the way out is visible from the middle.
       if (Math.abs(gx) < 2 && gz < -HALF) continue;
       const depth = Math.max(Math.abs(gx), Math.abs(gz)) - HALF;
+      // Which expansion, if any, puts this tile inside the walls. -1 is forest
+      // for good. The front is fixed, so nothing in front of the gate is ever
+      // claimed however much land is bought.
+      const claim = LAND.findIndex(
+        (l) => Math.abs(gx) <= l.x && gz <= l.back && gz >= FRONT,
+      );
       // Denser still than a board's: the hub is small, so its clearing has to
       // read as a clearing from the middle of it.
       const chance = Math.min(0.97, 0.8 + depth * 0.04);
@@ -775,7 +801,14 @@ function buildHub() {
       for (let k = 0; k < n; k++) {
         ents.push({
           id: `hforest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'),
-          name: depth >= 4 && depth < HUB_OUT ? 'forest_far' : 'forest',
+          // A tree is tagged with the size of village that would swallow it,
+          // and vanishes when that land is bought. Tagging by RING instead
+          // looked the same until you bought the last expansion and a bald
+          // strip appeared outside the wall, where trees that were never going
+          // to be enclosed had been cleared anyway.
+          name: claim > 0
+            ? `forest_claim_${claim}`
+            : (depth >= 4 && depth < HUB_OUT ? 'forest_far' : 'forest'),
           modelAssetId: rand() < 0.22 ? 'td-detail-tree-large' : 'td-tree',
           transform: {
             position: {
@@ -797,39 +830,34 @@ function buildHub() {
   // through this one opens a list of what has been played, and the choosing
   // happens there.
   const DOOR_X = 0;
-  const walls = [
-    ['hwall_s', 0, HALF + 0.6, 2 * HALF + 1.4, 0.4],
-    ['hwall_w', -HALF - 0.6, 0, 0.4, 2 * HALF + 1.4],
-    ['hwall_e', HALF + 0.6, 0, 0.4, 2 * HALF + 1.4],
-    // The gap is the door's width, not a doorway-sized hole: you used to be
-    // able to walk in anywhere along the front and the level would start,
-    // which taught that the door was decoration.
-    // The front wall runs -5.2..5.2 with a 1.4 gap in the middle for the door.
-    ['hwall_n1', -(0.7 + HALF + 0.7) / 2, -HALF - 0.6, HALF + 0.7 - 0.7, 0.4],
-    ['hwall_n2', (0.7 + HALF + 0.7) / 2, -HALF - 0.6, HALF + 0.7 - 0.7, 0.4],
-  ];
-  // VISIBLE again, and it is the same box that stops you rather than a model
-  // standing in front of one.
+  // A wall set per size. Each set has its OWN name, so `merge.ts` folds it into
+  // a mesh of its own that the hub can switch on or off in one go — and the
+  // colliders survive merging, keyed by entity id, so the hub enables the five
+  // bodies that belong to the size it is showing.
   //
-  // The boards are a CLEARING and deliberately have no wall — what stops you
-  // there is an invisible collider inside a tree line, because a forest edge
-  // built to seal perfectly is a fence with leaves on. The village is the
-  // opposite case: it has a GATE in it, and a gate standing in a gap between
-  // two trees guards nothing, so the door read as scenery left on the grass.
-  //
-  // Thin, brown and 1.2 high, which is what it was before the walls came down
-  // — the same family as the door frame beside it. A modular STONE wall was
-  // tried here and was wrong: correct, tileable, and a fortress rampart around
-  // a cartoon village with a little wooden arch in it.
-  for (const [id, x, z, sx, sz] of walls) {
-    ents.push({
-      // One NAME for all five, so `merge.ts` can fold them into the mesh the
-      // rest of the village furniture is already in. The id stays unique.
-      id, name: 'village_wall',
-      primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
-      transform: { position: { x, y: 0.4, z } },
-      collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
-    });
+  // The gap in the front wall is the door's width, not a doorway-sized hole:
+  // you used to be able to walk in anywhere along the front and the level would
+  // start, which taught that the door was decoration.
+  const GAP = 0.7;
+  for (const [li, land] of LAND.entries()) {
+    const depth = land.back - FRONT;
+    const walls = [
+      [`w${li}_west`, -land.x, (FRONT + land.back) / 2, 0.4, depth + 0.4],
+      [`w${li}_east`, land.x, (FRONT + land.back) / 2, 0.4, depth + 0.4],
+      [`w${li}_back`, 0, land.back, 2 * land.x + 0.4, 0.4],
+      [`w${li}_front_l`, -(GAP + land.x) / 2, FRONT, land.x - GAP, 0.4],
+      [`w${li}_front_r`, (GAP + land.x) / 2, FRONT, land.x - GAP, 0.4],
+    ];
+    for (const [id, x, z, sx, sz] of walls) {
+      ents.push({
+        id, name: `wall_${li}`,
+        primitive: { kind: 'box', size: { x: sx, y: 1.2, z: sz }, color: '#4a4036' },
+        transform: { position: { x, y: 0.4, z } },
+        collider: { shape: { kind: 'box', halfExtents: { x: sx / 2, y: 0.6, z: sz / 2 } }, body: 'fixed' },
+        // Only the size you have bought is up. The hub turns the right one on.
+        visible: li === 0,
+      });
+    }
   }
 
   ents.push({
@@ -882,10 +910,11 @@ function buildHub() {
   // It cannot be one of the things it sells, so it is always there.
   ents.push({
     id: 'shop', name: 'shop', modelAssetId: 'town-cart',
-    // Clear of every plot and of the rack. At (2.6, -3.0) it was a metre from
-    // the Market's plot, and the plot's card won the priority chain — so the
-    // shop had a prompt that never appeared.
-    transform: { position: { x: 1.6, y: GROUND_Y, z: 3.0 }, rotation: yaw(Math.PI) },
+    // Inside the SMALLEST village. It sells the land that makes the village
+    // bigger, so a stall you cannot reach until you have bought more room is a
+    // lock with its key inside it. At (1.6, 3.0) it stood outside the starting
+    // back wall. Must match `SHOP_AT` in `src/hub.ts`.
+    transform: { position: { x: -2.6, y: GROUND_Y, z: 1.9 }, rotation: yaw(Math.PI) },
     collider: {
       shape: { kind: 'box', halfExtents: { x: 0.5, y: 0.5, z: 0.7 } },
       body: 'fixed', offset: { x: 0, y: 0.5, z: 0 },
@@ -893,7 +922,7 @@ function buildHub() {
   });
   ents.push({
     id: 'shop_marker', name: 'shop_marker', modelAssetId: 'td-selection',
-    transform: { position: { x: 1.6, y: GROUND_Y + 0.02, z: 3.0 } },
+    transform: { position: { x: -2.6, y: GROUND_Y + 0.02, z: 1.9 } },
     visible: false,
   });
 
