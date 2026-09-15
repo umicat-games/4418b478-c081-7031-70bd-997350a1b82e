@@ -579,13 +579,15 @@ export class MenuScene extends Phaser.Scene {
     const yName = 0.28 * H, yImg = 0.47 * H, yDesc = 0.64 * H;
     if (!it) return;
     // Name — white with a dark outline (mirrors the grid slot count style). No animation.
-    const name = this.T(cx, yName, it.label ?? it.id ?? '', H * 0.032, '#ffffff', 0.5);
-    name.setStroke('#2b1d0e', Math.max(2, H * 0.005));
+    const name = this.T(cx, yName, it.label ?? it.id ?? '', H * 0.042, '#ffffff', 0.5);
+    name.setStroke('#2b1d0e', Math.max(2, H * 0.006));
     c.add(name);
-    // Image (centred, below the name) — POPS in (scale from small around its centre).
+    // Image (centred, below the name) — POPS in (scale from small around its centre). Cap by BOTH
+    // width and HEIGHT: on a wide landscape phone 0.18·W alone made the image tall enough to overlap
+    // the name above + the description below (the "区域重合" bug). 0.22·H keeps it inside the gap.
     if (this.textures.exists(it.iconKey)) {
       const img = this.add.image(cx, yImg, it.iconKey, this.fitFrame(it.iconKey, it.iconFrame));
-      const s = (0.18 * W) / Math.max(img.width, img.height);
+      const s = Math.min(0.18 * W, 0.22 * H) / Math.max(img.width, img.height);
       c.add(img);
       img.setScale(s * 0.2);
       this.tweens.add({ targets: img, scale: s, duration: 240, ease: 'Back.easeOut' });
@@ -593,7 +595,7 @@ export class MenuScene extends Phaser.Scene {
     // Description (centred, below the image). No animation.
     if (it.desc) {
       const desc = this.add.text(cx, yDesc, it.desc, {
-        fontFamily: dialogFont(), fontSize: Math.round(H * 0.022) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: 0.36 * W },
+        fontFamily: dialogFont(), fontSize: Math.round(H * 0.03) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: 0.36 * W },
       }).setOrigin(0.5, 0);
       c.add(desc);
     }

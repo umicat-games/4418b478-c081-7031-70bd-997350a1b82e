@@ -240,6 +240,35 @@ export class BootMenuScene extends Phaser.Scene {
     } catch { return false; }
   }
 
+  /** Does THIS device already know the player is returning? (instant, localStorage). The cloud
+   *  probe (`saveExists`) is the authority; this is the immediate hint so the title can show
+   *  Continue without waiting for the network. */
+  hasLocalSaveHint(): boolean {
+    try { return localStorage.getItem('catopia:laptopDone') === '1'; } catch { return false; }
+  }
+
+  /** Resolves true if the signed-in account (or this device) has a save to CONTINUE. Backed by the
+   *  same probe `startGame` uses. SettingsScene calls this to decide whether to show Continue. */
+  saveExists(): Promise<boolean> {
+    return (this.cloudSaveCheck ?? Promise.resolve(false)).then((c) => c || this.hasLocalSaveHint(), () => this.hasLocalSaveHint());
+  }
+
+  /** CONTINUE — load the existing save (skip the laptop intro). */
+  continueGame(): void {
+    this.scene.stop('SettingsScene');
+    this.toGame();
+  }
+
+  /** NEW GAME — DELETE the single save + this device's intro flag, then play the "message from Cato"
+   *  cold-open fresh. The delete is awaited BEFORE the transition so GameScene can't load the old
+   *  save (which would read as a returning player, not a new one). Best-effort on any storage error. */
+  async startNewGame(): Promise<void> {
+    this.scene.stop('SettingsScene');
+    try { const u = await Umicat.init({}); await u?.saves.delete('state'); } catch { /* best-effort */ }
+    try { localStorage.removeItem('catopia:laptopDone'); } catch { /* no storage */ }
+    startTransition(this, 'LaptopScene', {}, { effect: 'paw', ms: 1050 });
+  }
+
   /** Public: SettingsScene's Play button calls this (it owns the visible buttons now). */
   startGame(): void {
     this.scene.stop('SettingsScene'); // the buttons/modal are title-screen only (hidden under the curtain)

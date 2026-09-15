@@ -44,7 +44,11 @@ const PANEL_H = 122;
 const ICON_KEY = 'ui-icons';
 const GEAR_ICON_FRAME = 4; // all_icons `setting-icon-no-border` (64,0,16,16) → 16px-grid frame 4
 const PLAY_ICON_FRAME = 57; // all_icons `play-brown` triangle (144,48) → 16px-grid frame 3*16+9
+const NEWGAME_ICON_FRAME = 229; // all_icons `white-sprout` (a fresh sprout = a new game)
+const CHECK_ICON_FRAME = 44; // ✓ dark-brown
+const CROSS_ICON_FRAME = 46; // ⊘ dark-brown
 const LANG_ARROW_FRAME = 217; // all_icons `play-brown-with-border` (144,208) → 16px-grid frame 13*16+9
+const CONFIRM_PANEL_SCALE = 3; // frame-medium 9-slice corner scale → crisp border on the confirm box
 const LABEL_COLOR = '#9a6a3f'; // dark-brown, reads on the cream button (matches Play's art)
 const LABEL_TINT = 0x9a6a3f;
 const ROW_TEXT_COLOR = '#ffffff'; // slider/row labels — white on the panel's inset
@@ -67,8 +71,21 @@ interface UiButton {
 export class SettingsScene extends Phaser.Scene {
   private open = false;
 
-  private playBtn!: UiButton;
-  private setBtn!: UiButton;
+  // Title buttons: Continue (only when a save exists) + New Game + Settings.
+  private continueBtn!: UiButton;
+  private newGameBtn!: UiButton;
+  private setBtn!: Phaser.GameObjects.Image; // square gear button (icon-buttons `settings`), bottom-right corner
+  private hasSave = false; // a save exists to Continue (async-resolved from BootMenuScene)
+
+  // "Start a new game?" overwrite-warning overlay (only when a save exists).
+  private confirm!: Phaser.GameObjects.Container;
+  private confirmOpen = false;
+  private confirmDim!: Phaser.GameObjects.Rectangle;
+  private confirmPanel!: Phaser.GameObjects.NineSlice;
+  private confirmHead!: Phaser.GameObjects.Text;
+  private confirmBody!: Phaser.GameObjects.Text;
+  private confirmYes!: UiButton;
+  private confirmNo!: UiButton;
 
   // modal
   private modal!: Phaser.GameObjects.Container;
@@ -89,9 +106,22 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   create(): void {
-    // ── The two title buttons (same construction) ────────────────────────────
-    this.playBtn = this.buildButton(PLAY_ICON_FRAME, t('start_play'), () => this.startGame());
-    this.setBtn = this.buildButton(GEAR_ICON_FRAME, t('tab_settings'), () => this.toggle());
+    // ── The title buttons (same construction): Continue · New Game · Settings ──
+    this.continueBtn = this.buildButton(PLAY_ICON_FRAME, t('title_continue'), () => this.onContinue());
+    this.newGameBtn = this.buildButton(NEWGAME_ICON_FRAME, t('title_new_game'), () => this.onNewGame());
+    this.continueBtn.container.setVisible(false); // shown once we know a save exists
+
+    // Settings — the SQUARE gear button the game uses (icon-buttons `settings` / `-pressed-down`),
+    // bottom-right corner, no text. Press-swaps the frame like the in-game HUD buttons.
+    this.setBtn = this.add.image(0, 0, 'icon-buttons', 'settings').setInteractive({ useHandCursor: true }).setDepth(10);
+    const setRelease = (over: boolean): void => { this.setBtn.setFrame('settings'); if (over) { playSfx(this); this.toggle(); } };
+    this.setBtn.on('pointerdown', () => this.setBtn.setFrame('settings-pressed-down'));
+    this.setBtn.on('pointerup', () => setRelease(true));
+    this.setBtn.on('pointerupoutside', () => setRelease(true));
+    this.setBtn.on('pointerout', () => this.setBtn.setFrame('settings'));
+
+    // ── Overwrite-warning overlay for New Game (built hidden) ────────────────
+    this.buildConfirm();
 
     // ── Modal (dim + panel + slider), hidden until opened ────────────────────
     this.dim = this.add.rectangle(0, 0, 10, 10, 0x14212e, 0.55).setOrigin(0, 0).setInteractive();
@@ -115,6 +145,13 @@ export class SettingsScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => { if (this.open) this.close(); });
 
     this.layout();
+
+    // Decide whether to offer Continue: an instant local hint, corrected by the cloud probe.
+    // (After the modal is built, since setHasSave → layout() touches the modal parts.)
+    const boot = this.scene.get('BootMenuScene') as BootMenuScene | undefined;
+    this.setHasSave(!!boot?.hasLocalSaveHint());
+    boot?.saveExists().then((h) => this.setHasSave(h)).catch(() => {});
+
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
@@ -182,7 +219,8 @@ export class SettingsScene extends Phaser.Scene {
     b.text.setStroke(LABEL_COLOR, Math.max(1, bh * 0.028));
     const iconW = 16 * b.icon.scaleX;
     const gap = bh * 0.1;
-    const totalW = iconW + gap + b.text.width;
+    const hasText = b.text.text.length > 0;
+    const totalW = iconW + (hasText ? gap + b.text.width : 0); // icon-only (Settings corner) → centre the icon alone
     const startX = -totalW / 2;
     const dy = faceY + (b.pressed ? b.pressDepth : 0);
     b.icon.setPosition(startX + iconW / 2, dy);
@@ -239,6 +277,8 @@ export class SettingsScene extends Phaser.Scene {
     this.langRight.setScale(arrowScale).setPosition(rightX, lrY);
     this.langValueText.setFontSize(Math.round(7 * ps)).setOrigin(1, 0.5).setPosition(rightX - aHalf - gap, lrY);
     this.langLeft.setScale(arrowScale).setPosition(this.langValueText.x - this.langValueText.displayWidth - gap - aHalf, lrY);
+
+    this.layoutConfirm(W, H);
   };
 
   /** Build one slider (label + N ticks + knob + a transparent drag hit-rect). */
@@ -284,8 +324,13 @@ export class SettingsScene extends Phaser.Scene {
 
   /** Re-fetch every visible label in the (new) language + reflow (widths changed). */
   private refreshTexts(): void {
-    this.playBtn.text.setText(t('start_play'));
-    this.setBtn.text.setText(t('tab_settings'));
+    this.continueBtn.text.setText(t('title_continue'));
+    this.newGameBtn.text.setText(t('title_new_game'));
+    // setBtn is icon-only (corner) — no label.
+    this.confirmHead.setText(t('title_newgame_head'));
+    this.confirmBody.setText(t('title_newgame_body'));
+    this.confirmYes.text.setText(t('title_newgame_yes'));
+    this.confirmNo.text.setText(t('title_newgame_no'));
     this.langLabelText.setText(t('settings_language'));
     this.langValueText.setText(langDisplayName(getLang()));
     for (const s of this.sliders) s.labelText.setText(t(s.labelKey));
@@ -320,16 +365,43 @@ export class SettingsScene extends Phaser.Scene {
       playCY = H * 0.62;
     }
 
-    const { bh } = this.styleButton(this.playBtn, s);
-    this.playBtn.container.setPosition(cx, playCY);
+    // Main stack: [Continue?] · New Game, from the anchor DOWN (Continue sits at the old single-Play
+    // spot — clear of the title — with New Game just below). Settings moved to a corner icon so the
+    // stack is only 2 tall and never reaches up into the logo.
+    const stack: UiButton[] = this.hasSave ? [this.continueBtn, this.newGameBtn] : [this.newGameBtn];
+    const { bh } = this.styleButton(stack[0], s);
+    const gap = bh * 0.22;
+    let y = playCY;
+    for (let i = 0; i < stack.length; i++) {
+      this.styleButton(stack[i], s);
+      if (i > 0) y += bh + gap;
+      stack[i].container.setPosition(cx, y);
+    }
+    if (!this.hasSave) this.styleButton(this.continueBtn, s); // keep hidden Continue sized for when it appears
 
-    this.styleButton(this.setBtn, s);
-    this.setBtn.container.setPosition(cx, playCY + bh + bh * 0.28); // Play below-edge + gap + Settings half
+    // Settings — the square gear button, sized ≈ a main button's height, in the bottom-right corner.
+    this.setBtn.setScale((bh * 0.9) / 32); // `settings` frame is 32×32
+    const sz = this.setBtn.displayWidth;
+    const margin = Math.min(W, H) * 0.045;
+    this.setBtn.setPosition(W - margin - sz / 2, H - margin - sz / 2);
   }
 
-  private startGame(): void {
+  private onContinue(): void {
+    (this.scene.get('BootMenuScene') as BootMenuScene | undefined)?.continueGame();
+  }
+
+  /** New Game: warn before overwriting an existing save; go straight to a fresh game if there is none. */
+  private onNewGame(): void {
     const boot = this.scene.get('BootMenuScene') as BootMenuScene | undefined;
-    boot?.startGame();
+    if (this.hasSave) this.openConfirm();
+    else void boot?.startNewGame();
+  }
+
+  private setHasSave(has: boolean): void {
+    if (this.hasSave === has && this.continueBtn.container.visible === has) return;
+    this.hasSave = has;
+    this.continueBtn.container.setVisible(has);
+    this.layout();
   }
 
   private setVolFromX(s: Slider, px: number): void {
@@ -364,5 +436,55 @@ export class SettingsScene extends Phaser.Scene {
     this.open = false;
     this.dragSlider = null;
     this.modal.setVisible(false);
+  }
+
+  // ── New-game overwrite confirm ─────────────────────────────────────────────
+
+  /** Build the "Start a new game?" overlay (dim + frame-medium panel + heading/body + Yes/No),
+   *  hidden until New Game is pressed while a save exists. */
+  private buildConfirm(): void {
+    this.confirmDim = this.add.rectangle(0, 0, 10, 10, 0x14212e, 0.6).setOrigin(0, 0).setInteractive();
+    this.confirmDim.on('pointerdown', () => this.closeConfirm()); // tap outside = cancel
+    this.confirmPanel = this.add.nineslice(0, 0, 'inventory', 'frame-medium', 100, 100, 10, 10, 11, 11).setScale(CONFIRM_PANEL_SCALE);
+    this.confirmPanel.setInteractive();
+    this.confirmPanel.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => ev.stopPropagation());
+    this.confirmHead = this.add.text(0, 0, t('title_newgame_head'), { fontFamily: dialogFont(), color: '#3a2a12', fontStyle: 'bold' }).setOrigin(0.5);
+    this.confirmBody = this.add.text(0, 0, t('title_newgame_body'), { fontFamily: dialogFont(), color: '#5b4327', align: 'center' }).setOrigin(0.5, 0);
+    this.confirmYes = this.buildButton(CHECK_ICON_FRAME, t('title_newgame_yes'), () => {
+      this.closeConfirm();
+      void (this.scene.get('BootMenuScene') as BootMenuScene | undefined)?.startNewGame();
+    });
+    this.confirmNo = this.buildButton(CROSS_ICON_FRAME, t('title_newgame_no'), () => this.closeConfirm());
+    this.confirm = this.add.container(0, 0, [this.confirmDim, this.confirmPanel, this.confirmHead, this.confirmBody, this.confirmYes.container, this.confirmNo.container]).setDepth(30).setVisible(false);
+  }
+
+  private layoutConfirm(W: number, H: number): void {
+    this.confirmDim.setPosition(0, 0).setSize(W, H);
+    const cpw = Math.min(W * 0.6, 620), cph = Math.min(H * 0.56, 380);
+    this.confirmPanel.setPosition(W / 2, H / 2).setSize(cpw / CONFIRM_PANEL_SCALE, cph / CONFIRM_PANEL_SCALE);
+    const top = H / 2 - cph / 2;
+    this.confirmHead.setPosition(W / 2, top + cph * 0.17).setFontSize(Math.round(cph * 0.12)).setStroke('#3a2a12', Math.max(1, cph * 0.005));
+    this.confirmBody.setPosition(W / 2, top + cph * 0.32).setFontSize(Math.round(cph * 0.08));
+    this.confirmBody.setWordWrapWidth(cpw * 0.82);
+    // Yes/No side by side near the bottom.
+    const s = Math.min((cpw * 0.42) / 96, (cph * 0.26) / 32);
+    const { bh } = this.styleButton(this.confirmYes, s);
+    this.styleButton(this.confirmNo, s);
+    const by = top + cph - bh * 0.5 - cph * 0.13;
+    const dx = cpw * 0.23;
+    this.confirmNo.container.setPosition(W / 2 - dx, by);
+    this.confirmYes.container.setPosition(W / 2 + dx, by);
+  }
+
+  private openConfirm(): void {
+    this.confirmOpen = true;
+    this.layout(); // position for the current size before showing
+    this.confirm.setVisible(true);
+  }
+
+  private closeConfirm(): void {
+    if (!this.confirmOpen) return;
+    this.confirmOpen = false;
+    this.confirm.setVisible(false);
   }
 }

@@ -414,13 +414,11 @@ const WATER_MAX = 6; // watering-can capacity (0-6, matching the blue-bar-0..6 g
 const TUTORIAL_STEPS: Array<{ id: string; allow: string[] }> = [
   { id: 'open-chest', allow: ['chest'] },
   { id: 'take-seeds', allow: ['chest'] },
-  { id: 'use-seed', allow: ['backpackBtn'] },
   { id: 'move-cam', allow: ['camera'] },
   { id: 'till', allow: ['wheel', 'till'] },
-  { id: 'plant', allow: ['backpackBtn', 'plant'] }, // re-grab the seed from the backpack (the hoe cleared it), then plant
-  { id: 'water', allow: ['wheel', 'water', 'waterEdge'] },
-  { id: 'collect', allow: ['wheel', 'collect'] },
-  { id: 'view-backpack', allow: ['backpackBtn'] },
+  { id: 'plant', allow: ['backpackBtn', 'plant'] }, // open the backpack, Use the seed to hold it, then plant (first time we teach Use — after tilling, not before, so it isn't taught twice)
+  { id: 'water', allow: ['wheel', 'water'] }, // can starts full — no refill trek (the camera's locked, so a water-edge trip is unreachable)
+  { id: 'collect', allow: ['wheel', 'collect'] }, // the picked berries auto-bank to the backpack — the prompt says so, no separate "open backpack" step
   { id: 'message-cato', allow: ['portrait', 'chat'] },
 ];
 // Watered soil looks darker/damp — the dirt tileset has no wet variant, so we
@@ -1953,11 +1951,15 @@ export class GameScene extends Phaser.Scene {
    *  photo-frame (bottom-left anchor, 64x64, 16px safe-area). Live screen dims so
    *  it tracks the frame when the canvas resizes (RESIZE mode). */
   private layoutFindCatButton(): void {
-    const BW = 64; const BH = 64;
-    const bx = 16 + BW / 2;
-    const by = this.scale.height - 16 - BH / 2;
-    this.findCatBounds.setTo(bx - BW / 2, by - BH / 2, BW, BH);
-    this.findCatHit?.setPosition(bx, by);
+    // The portrait FRAME is 64×64 logical at inset 16 from the bottom-left (game-hud.json photo-frame
+    // + ChatterScene PORTRAIT). findCatBounds is consumed in DEVICE px (tap coords + the zoom-1
+    // DialogueScene spotlight ring), so scale the logical geometry ×dpr — else on retina the box is
+    // half-size and jammed in the corner (the mis-placed portrait spotlight bug).
+    const dpr = hudDpr(this);
+    const size = 64 * dpr, inset = 16 * dpr;
+    const cx = inset + size / 2, cy = this.scale.height - inset - size / 2;
+    this.findCatBounds.setTo(cx - size / 2, cy - size / 2, size, size);
+    this.findCatHit?.setPosition(48, this.scale.height - 48); // hover helper — unchanged from before
   }
 
   // ── Pointer lock + custom cursor ──────────────────────────────────────
@@ -2874,10 +2876,7 @@ export class GameScene extends Phaser.Scene {
     // backpack is EMPTY, and the chest holds only a few of Jamin's seed packets. (The shop stocks the
     // rest; a returning save overwrites both stores in applySave, so this only shapes a new game.)
     const jaminSeeds = (['carrot', 'corn', 'tomato'] as CropName[]).filter((c) => c in CROPS);
-    this.backpackStore = [
-      // DEBUG: a coop of each colour to test placement before the shop flow lands (devTools only).
-      ...(CATO_DEBUG_TILL ? COOP_COLORS.map((c) => makePlaceable('coop', 1, `small-${c}`)) : []),
-    ];
+    this.backpackStore = []; // a brand-new game starts with an EMPTY backpack (no debug coops — they cluttered the new-game/tutorial start)
     this.mailboxStore = [];
     this.chestStore = jaminSeeds.map((c) => makeSeed(c, 5));
     this.chestSeeded = true; // fresh game already has the seeds
@@ -2887,8 +2886,8 @@ export class GameScene extends Phaser.Scene {
 
     // No hotbar / number keys anymore. The bottom-right sprout button opens the BACKPACK (things you
     // carry + Use); E/I open the CHEST (storage).
-    this.input.keyboard?.on('keydown-E', () => (this.menuOpen ? this.closeMenu() : this.openMenu(1)));
-    this.input.keyboard?.on('keydown-I', () => (this.menuOpen ? this.closeMenu() : this.openMenu(1)));
+    this.input.keyboard?.on('keydown-E', () => { if (this.tutorialActive) return; this.menuOpen ? this.closeMenu() : this.openMenu(1); });
+    this.input.keyboard?.on('keydown-I', () => { if (this.tutorialActive) return; this.menuOpen ? this.closeMenu() : this.openMenu(1); });
     // TAB: open the tool wheel at the cursor — works EVEN while holding a tool, so it's the desktop
     // way to switch/cancel (pick the mouse circle) without conflicting with click-to-use. Capture
     // it so the browser doesn't move focus. A second Tab closes it.
@@ -7294,6 +7293,7 @@ export class GameScene extends Phaser.Scene {
       this.menuOpen = true;
       this.hideHotbar(true);
     }
+    this.refreshDialogueSpotlight(); // hide the tutorial ring while the panel covers its target
     this.publishMenu(true);
   }
 
@@ -7322,6 +7322,7 @@ export class GameScene extends Phaser.Scene {
     playSfx(this); // close blip
     this.craftReplace = null; // closing without picking a slot → the crafted item is discarded
     this.menuOpen = false;
+    this.refreshDialogueSpotlight(); // panel gone → restore the step's ring (if any)
     // TUTORIAL: the player closed a menu mid-step (NOT a programmatic step-transition close) → re-show
     // the step prompt so they're never stranded (e.g. closed the chest before taking a seed).
     if (this.tutorialActive && !this.tutorialClosingMenu) this.time.delayedCall(450, () => { if (this.tutorialActive && !this.menuOpen && !this.confirmOpen) this.tutorialShowStep(this.tutorialStep); });
@@ -8254,11 +8255,11 @@ export class GameScene extends Phaser.Scene {
     }
     // Close button (top-right).
     const cb = this.registry.get('menuCloseBtn') as { x: number; y: number; w: number; h: number } | null;
-    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) { this.closeMenuViaX(); return true; }
+    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) { if (!this.tutorialActive) this.closeMenuViaX(); return true; } // TUTORIAL: X is dead — only the step action closes the menu
     // Tab switch.
     const tabs = this.registry.get('menuTabs') as Array<{ x: number; y: number; w: number; h: number; tab: number }> | null;
     const tabHit = tabs?.find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
-    if (tabHit) { if (tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet, SFX_TAB); return true; } // tab switch → the tab-select sound, keep the tab bar
+    if (tabHit) { if (!this.tutorialActive && tabHit.tab !== this.menuTab) this.openMenu(tabHit.tab, this.menuTabSet, SFX_TAB); return true; } // tab switch → the tab-select sound, keep the tab bar (TUTORIAL: locked to the opened tab, so they can't wander into 工具)
     // Any item grid (Chest / Cato-bag / Backpack / mailbox 取货 + 待售): tap an item → select it
     // (right detail) AND open its action menu.
     // Craft-replace mode: a full backpack, waiting for the player to pick a slot to overwrite with a
@@ -8320,8 +8321,9 @@ export class GameScene extends Phaser.Scene {
         return true;
       }
     }
-    // Tap outside the panel → close.
-    if (!this.overPanel('menuPanel', x, y)) this.closeMenu();
+    // Tap outside the panel → close. (TUTORIAL: swallow it — the player can't dismiss the menu, only
+    // the step's own action advances + closes it, so they can never get stranded.)
+    if (!this.tutorialActive && !this.overPanel('menuPanel', x, y)) this.closeMenu();
     return true;
   }
 
@@ -8615,8 +8617,13 @@ export class GameScene extends Phaser.Scene {
     if (!it || !isHotbarUsable(it)) return;
     const id = it.id;
     this.holdExternal(store, it);
-    this.tutorialNotify('use', id); // tutorial: "use the seed" step — BEFORE closeMenu so the completion doesn't trip the close-recovery
-    this.closeMenu();
+    this.tutorialNotify('use', id); // tutorial hook (no step consumes 'use' now, but kept for future)
+    // PLANT step: now that the seed is held, move the spotlight from the backpack to the PLOT — that's
+    // where they tap next. (setDialogueSpotlight stores it; publishes on the closeMenu below.)
+    if (this.tutorialActive && TUTORIAL_STEPS[this.tutorialStep]?.id === 'plant' && id.endsWith('-seed')) this.setDialogueSpotlight('world:plot');
+    // Using the seed is a LEGITIMATE mid-step action (the plant step's first move), so suppress the
+    // close-recovery re-prompt — the player now HOLDS the seed and taps the plot to finish the step.
+    this.tutorialClosingMenu = true; this.closeMenu(); this.tutorialClosingMenu = false;
     playSfx(this);
   }
 
@@ -10962,8 +10969,21 @@ export class GameScene extends Phaser.Scene {
   private maybeStartTutorial(): void {
     if (this.tutorialStep >= 0) return; // already running
     if (!isDebug('replayIntro') && !this.onboardingActive) return; // finished (or a veteran save) → skip
+    this.resetOnboardingStores();
     this.setupTutorialProps();
     this.tutorialShowStep(0);
+  }
+
+  /** Force the CLEAN onboarding start: chest = ONLY Jamin's seed packets, backpack EMPTY. Runs on
+   *  every tutorial (re)start (onboarding replays from step 0), so a resumed save's accumulated
+   *  clutter — stray trees/bushes/items in the chest — is cleared, and the take-seeds step always has
+   *  a seed. A genuine new game already looks like this; this just makes a messy save match. */
+  private resetOnboardingStores(): void {
+    const jaminSeeds = (['carrot', 'corn', 'tomato'] as CropName[]).filter((c) => c in CROPS);
+    this.chestStore = jaminSeeds.map((c) => makeSeed(c, 5));
+    this.backpackStore = [];
+    this.publishInventory();
+    if (this.menuOpen) this.publishMenu();
   }
 
   /** Place the farm plot (a walkable grass cell right of the house) + a ripe strawberry bush for the
@@ -11004,9 +11024,11 @@ export class GameScene extends Phaser.Scene {
   private tutorialActivateStep(n: number): void {
     if (this.tutorialStep !== n) return;
     this.tutorialActive = true;
-    if (TUTORIAL_STEPS[n].id === 'water') { this.waterLevel = 0; this.publishToolHud(); } // force a refill at the water's edge
+    if (TUTORIAL_STEPS[n].id === 'water') { this.waterLevel = WATER_MAX; this.publishToolHud(); } // can starts FULL — the player waters straight away, no refill trek
     if (TUTORIAL_STEPS[n].id === 'move-cam') this.tutorialCamStart = { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY };
-    const map: Record<string, string> = { 'open-chest': 'world:chest', 'take-seeds': 'world:chest', 'use-seed': 'hud:backpack', 'till': 'world:plot', 'plant': 'world:plot', 'collect': 'world:bush', 'view-backpack': 'hud:backpack', 'message-cato': 'hud:portrait' };
+    // plant starts on the backpack (open it, Use the seed) → moves to the plot once the seed is held
+    // (menuUse re-points it). water/till spotlight the same plot cell.
+    const map: Record<string, string> = { 'open-chest': 'world:chest', 'take-seeds': 'world:chest', 'till': 'world:plot', 'plant': 'hud:backpack', 'water': 'world:plot', 'collect': 'world:bush', 'message-cato': 'hud:portrait' };
     this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null);
   }
 
@@ -11019,13 +11041,11 @@ export class GameScene extends Phaser.Scene {
     switch (id) {
       case 'open-chest': done = kind === 'chest-open'; break;
       case 'take-seeds': done = kind === 'take' && typeof arg === 'string' && arg.endsWith('-seed'); break; // any seed packet
-      case 'use-seed': done = kind === 'use' && typeof arg === 'string' && arg.endsWith('-seed'); break;
       case 'move-cam': done = kind === 'camera-centered'; break;
       case 'till': done = kind === 'till' && atPlot; break;
       case 'plant': done = kind === 'plant' && atPlot; break;
       case 'water': done = kind === 'water' && atPlot; break;
       case 'collect': done = kind === 'collect' && arg === 'fruit-strawberry'; break;
-      case 'view-backpack': done = kind === 'backpack-open'; break;
       case 'message-cato': done = kind === 'chat-sent'; break;
     }
     if (done) {
@@ -11385,7 +11405,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Point DialogueScene at a named UI target ('hotbar:<toolId>' | 'hotbar:seed' | null). */
+  private dialogueSpotTarget: string | null = null;
   private setDialogueSpotlight(target: string | null): void {
+    this.dialogueSpotTarget = target;
+    this.refreshDialogueSpotlight();
+  }
+  /** (Re)publish the spotlight ring — HIDDEN while a menu/craft is open (the target is a world object
+   *  or a HUD button now covered by the panel, so the ring would float uselessly over the grid). */
+  private refreshDialogueSpotlight(): void {
+    const target = this.menuOpen || this.craftOpen ? null : this.dialogueSpotTarget;
     const rect = target ? this.spotlightRect(target) : null;
     this.registry.set('dialogueSpotlight', rect ? { ...rect, rev: (this.registry.get('dialogueSpotlight')?.rev ?? 0) + 1 } : null);
   }
