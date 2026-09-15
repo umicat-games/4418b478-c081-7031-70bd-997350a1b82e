@@ -9259,6 +9259,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.waterCropAt(cx, cy) || !this.islandLayer) return;
     this.waterLevel--; // one pour per tile
     this.publishToolHud(); // refresh the gauge
+    playSfx(this, SFX_SPLASH); // water sound — same as drawing water at the edge
     this.hideTileCursor(); // the crop is now watered → drop the bracket/icon at once
     const w = this.islandLayer.tileToWorldXY(cx, cy);
     if (!w) return;
