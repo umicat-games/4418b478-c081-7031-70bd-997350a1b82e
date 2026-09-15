@@ -15,6 +15,7 @@ import { iconHtml, type IconName } from './icons';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
+import { createWayfinder } from './wayfinder';
 import { createDebugHud } from './debughud';
 import { TOWN, TOWN_MAX_LEVEL, bonusesFrom, canAfford, shortfall, townNow, townAfter,
   type TownBonus, type TownBuilding } from './town';
@@ -568,6 +569,26 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       audio.play('build');
       void patchSave(shared.umicat, { store, town, spots });
     }
+  };
+
+  /** The trail that tells a brand new player where to go.
+   *
+   *  There is no tutorial in the village. A first-time player spawns here with
+   *  a sword, an empty purse and a shop that cannot sell them anything yet, and
+   *  nothing says that the gate is the whole of what there is to do. */
+  const wayfinder = createWayfinder(world.scene);
+
+  /** Where the trail points, or null for nobody being told anything.
+   *
+   *  It only ever runs before the first run. After that the player has walked
+   *  through the gate once and knows where it is, and a permanent arrow is the
+   *  game not trusting them. */
+  const guideTo = (): { x: number; z: number } | null => {
+    if (runs > 0 || panelOpen) return null;
+    // What is in your hands outranks it: a player carrying a building is in the
+    // middle of something, and pointing them at the door is an interruption.
+    if (carrying) return null;
+    return DOOR_AT;
   };
 
   /** The ring under whatever you are carrying.
@@ -1197,6 +1218,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         }
       }
 
+      wayfinder.update(hero.position.x, hero.position.z, guideTo(), now);
+
       // Turn a just-placed building solid as soon as the player is out of it.
       if (settling) {
         const at = spots[settling];
@@ -1519,6 +1542,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           renderer.setAnimationLoop(null);
           window.removeEventListener('resize', resize);
           input.dispose();
+          wayfinder.dispose();
           panel.remove();
           card.remove();
           hudEl.textContent = '';
@@ -1572,6 +1596,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                  x: spots[b.id]?.x ?? null, z: spots[b.id]?.z ?? null,
                })),
                carrying: () => carrying?.id ?? null,
+               /** Whether the new-player trail is on screen, and where it is
+                *  pointing — "is there an arrow" and "does it point at the
+                *  gate" are different questions. */
+               guiding: () => ({ showing: wayfinder.showing(), to: guideTo() }),
                standingAt: () => standingAt,
                /** How much of the village has been bought, and the bounds that
                 *  buys — so a probe walks to the wall rather than to a number

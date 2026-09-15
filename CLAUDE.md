@@ -1531,3 +1531,35 @@ button with something in your hands puts it back:
 The card offers "hold to put it back" only while the cell is refused — a player
 standing somewhere legal does not need it, and a permanent version of that line
 is the corner hint we already took off the screen once.
+
+## The trail to the gate
+
+A first-time player spawned in the village with a sword, an empty purse and a
+shop that could not sell them anything yet, and **nothing said the gate was the
+whole of what there is to do** — the village has no tutorial; `src/tutorial.ts`
+is the first board's.
+
+`src/wayfinder.ts` lays a line of chevrons along the ground from the hero to the
+target. Along the ground rather than an arrow over the hero's head, because a
+floating arrow says which way and nothing else — a trail says which way **and
+how far**, and is read without being looked at.
+
+- **Drawn from the hero's live position every frame**, not baked as a route at
+  spawn, so it survives the player wandering off. No pathfinding: the village is
+  open ground inside a wall, so the straight line IS the route.
+- **A dark chevron under a white one.** White alone is legible on grass in a
+  screenshot and much less so on a phone outdoors, and this village is almost
+  entirely bright green.
+- **A material per chevron**, because they fade in at the near end and out at
+  the far one; one shared material fades all five together and the trail blinks
+  instead of flowing.
+- It shortens rather than overshoots when the target is close — a trail running
+  past what it points at reads as pointing at something further away.
+
+It runs **only before the first run**, and not while a panel is open or a
+building is in your hands. An arrow that never leaves is the game not trusting
+the player, and one that interrupts someone mid-placement is worse than none.
+
+`verify-3d-wayfinder` checks the chevrons' world positions PROJECT onto the
+hero→gate line: "is there a trail" passes on one pointing the wrong way, and
+`group.visible` passes on five meshes at zero opacity.
