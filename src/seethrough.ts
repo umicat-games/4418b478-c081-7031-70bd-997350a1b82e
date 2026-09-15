@@ -32,12 +32,15 @@ const FADED = 0.22;
 const EASE = 0.07;
 
 interface Watched {
-  mesh: THREE.Mesh;
-  mat: THREE.MeshStandardMaterial;
-  /** What it was before any of this, to put back. */
-  was: { transparent: boolean; opacity: number; depthWrite: boolean };
-  /** Its footprint, in world x/z. Merged geometry is already baked into world
-   *  space, so this is read once and never moves. */
+  object: THREE.Object3D;
+  /** Every material under it. A wall is one box; a building is a GLB with a
+   *  handful of parts, and all of them have to fade together or it turns into
+   *  a roof floating over a solid wall. */
+  mats: THREE.Material[];
+  /** What they were before any of this, to put back. */
+  was: { transparent: boolean; opacity: number; depthWrite: boolean }[];
+  /** Its footprint, in world x/z. Read when `watch` is called, which is also
+   *  when anything that can move has just moved. */
   box: { x0: number; x1: number; z0: number; z1: number };
   k: number;
 }
@@ -71,14 +74,20 @@ function crosses(
 }
 
 export interface SeeThrough {
-  /** The meshes that may need to get out of the way. Safe to call whenever the
-   *  set changes — a wall ring is swapped for a bigger one when land is bought. */
-  watch(meshes: THREE.Mesh[]): void;
+  /** The things that may need to get out of the way, and where they are now.
+   *  Call it whenever the set OR their positions change — a wall ring is swapped
+   *  for a bigger one when land is bought, and buildings are carried around. */
+  watch(objects: THREE.Object3D[]): void;
   update(camera: THREE.Camera, target: THREE.Vector3, dt: number): void;
   /** Turn the whole thing off, for an A/B. Proving the wall fades is only half
    *  the claim; the other half is that it was in the way to begin with. */
   setEnabled(on: boolean): void;
   enabled(): boolean;
+  /** What is being watched and how faded each one is. Reported from HERE rather
+   *  than from the caller's list: the first version of the handle printed the
+   *  walls the hub had collected, which stayed five items after buildings were
+   *  added and hid the fact that nothing had changed. */
+  state(): { name: string; opacity: number }[];
   dispose(): void;
 }
 
@@ -99,22 +108,47 @@ export function createSeeThrough(): SeeThrough {
   };
 
   const restore = (w: Watched): void => {
-    setBlend(w.mat, w.was.transparent);
-    w.mat.opacity = w.was.opacity;
-    w.mat.depthWrite = w.was.depthWrite;
+    w.mats.forEach((mat, i) => {
+      setBlend(mat, w.was[i].transparent);
+      mat.opacity = w.was[i].opacity;
+      mat.depthWrite = w.was[i].depthWrite;
+    });
+  };
+
+  /** Give an object materials of its own, once.
+   *
+   *  A GLB loaded twice hands back two objects pointing at ONE material — the
+   *  same thing that made `flashTint` turn five enemies red for one hit. Fading
+   *  the Clinic would fade the Armory, which is built from the same stall. */
+  const ownMaterials = (object: THREE.Object3D): THREE.Material[] => {
+    const out: THREE.Material[] = [];
+    object.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      if (!mesh.userData.ownMat) {
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map((m) => m.clone())
+          : mesh.material.clone();
+        mesh.userData.ownMat = true;
+      }
+      if (Array.isArray(mesh.material)) out.push(...mesh.material);
+      else out.push(mesh.material);
+    });
+    return out;
   };
 
   return {
-    watch(meshes) {
+    watch(objects) {
       for (const w of watched) restore(w);
-      watched = meshes.map((mesh) => {
-        const raw = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-        const mat = raw as THREE.MeshStandardMaterial;
-        bounds.setFromObject(mesh);
+      watched = objects.map((object) => {
+        const mats = ownMaterials(object);
+        bounds.setFromObject(object);
         return {
-          mesh,
-          mat,
-          was: { transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite },
+          object,
+          mats,
+          was: mats.map((m) => ({
+            transparent: m.transparent, opacity: m.opacity, depthWrite: m.depthWrite,
+          })),
           box: { x0: bounds.min.x, x1: bounds.max.x, z0: bounds.min.z, z1: bounds.max.z },
           k: 0,
         };
@@ -126,6 +160,11 @@ export function createSeeThrough(): SeeThrough {
       if (!on) for (const w of watched) { w.k = 0; restore(w); }
     },
     enabled: () => on,
+    state: () => watched.map((w) => ({
+      // The entity id first: every building's scene NAME is `town_building`.
+      name: (w.object.userData.entityId as string) || w.object.name || '?',
+      opacity: +((w.mats[0] as THREE.Material & { opacity: number })?.opacity ?? 1).toFixed(2),
+    })),
 
     update(camera, target, dt) {
       if (!on || !watched.length) return;
@@ -137,11 +176,13 @@ export function createSeeThrough(): SeeThrough {
         const want = crosses(w.box, from.x, from.z, target.x, target.z) ? 1 : 0;
         w.k += (want - w.k) * step;
         if (w.k < 0.01) { restore(w); continue; }
-        setBlend(w.mat, true);
-        w.mat.opacity = w.was.opacity * (1 - w.k) + FADED * w.k;
-        // A faded wall that still writes depth hides whatever is behind it just
-        // as well as a solid one — the hero would be a hole in the masonry.
-        w.mat.depthWrite = w.k < 0.05;
+        w.mats.forEach((mat, i) => {
+          setBlend(mat, true);
+          mat.opacity = w.was[i].opacity * (1 - w.k) + FADED * w.k;
+          // Something faded that still writes depth hides what is behind it as
+          // well as a solid thing would — the hero would be a hole in it.
+          mat.depthWrite = w.k < 0.05;
+        });
       }
     },
 

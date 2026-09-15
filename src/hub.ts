@@ -622,6 +622,19 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  there — both silent. */
   /** The five sides of the wall that is currently up. Rebuilt by `showLand`. */
   const walls: THREE.Mesh[] = [];
+  /** Everything the camera might end up behind: the wall that is up, and every
+   *  building that is standing. NOT the one in your hands — it rides above your
+   *  head, moves every frame, and the camera is never behind it. */
+  const blockers = (): THREE.Object3D[] => {
+    const out: THREE.Object3D[] = [...walls];
+    for (const b of TOWN) {
+      const lv = town[b.id] ?? 0;
+      if (!lv || !spots[b.id]) continue;
+      const o = world.entities.get(`town_${b.id}_${lv}`);
+      if (o) out.push(o);
+    }
+    return out;
+  };
   /** Whatever is between the camera and the hero gets out of the way. */
   const seeThrough = createSeeThrough();
   const showLand = (): void => {
@@ -643,7 +656,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       const trees = world.scene.getObjectByName(`forest_claim_${i}`);
       if (trees) trees.visible = land < i;
     }
-    seeThrough.watch(walls);
+    seeThrough.watch(blockers());
   };
   showLand();
 
@@ -687,6 +700,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         }
       }
     }
+    // The buildings have just been put where the save says they are, so this is
+    // the moment their footprints are known to be current. They MOVE — a
+    // footprint read once at startup would be wrong the first time one is
+    // picked up and put down somewhere else.
+    seeThrough.watch(blockers());
   };
   showTown();
 
@@ -1618,13 +1636,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                 *  it was standing in the way in the first place. */
                glass: (next?: boolean) => {
                  if (next !== undefined) seeThrough.setEnabled(next);
-                 return {
-                   on: seeThrough.enabled(),
-                   walls: walls.map((m) => ({
-                     name: m.name,
-                     opacity: +((m.material as THREE.Material & { opacity: number }).opacity).toFixed(2),
-                   })),
-                 };
+                 return { on: seeThrough.enabled(), walls: seeThrough.state() };
                },
                standingAt: () => standingAt,
                /** How much of the village has been bought, and the bounds that

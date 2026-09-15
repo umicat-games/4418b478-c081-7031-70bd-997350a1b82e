@@ -1709,6 +1709,26 @@ a chest sample comes back skin-coloured for a hero buried to the neck — throug
 a screenshot decoded in the page, because `readPixels` returns transparent black
 once a frame has been presented.
 
-**Still open:** buildings do not do this yet. They are GLB clones that share
-materials between entities (the `flashTint` problem), so each would need its own
-material before it could fade alone.
+### Buildings too
+
+They are taller than the wall and the player puts them where they like, so
+walking past one buries you behind it. `blockers()` hands the pass the wall that
+is up plus every building that is STANDING — not the one in your hands, which
+rides above your head, moves every frame, and never has the camera behind it.
+
+`ownMaterials()` clones a material per object once. A GLB loaded twice hands
+back two objects pointing at ONE material — the same thing that made `flashTint`
+turn five enemies red for one hit — and the Clinic and the Armory are built from
+the same stall, so fading one would fade the other.
+
+**Footprints are re-read in `showTown`**, not once at startup: buildings move.
+
+### What it costs
+
+Measured, not asserted. Draw calls **46 → 47** with a wall faded, **57 → 58**
+with a full village; the per-frame work is ten box-versus-line tests. Fading
+moves an object into the transparent pass, which is the extra call.
+
+The merged-mesh count went 18 → 24, because a wall ring had to become five
+meshes to fade one side at a time. Two thirds of those are rings you have not
+bought — hidden, never drawn.
