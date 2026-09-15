@@ -503,11 +503,12 @@ the tile cursor dims over soil). **Refill** by holding the can and clicking OPEN
 the rod, and the tile cursor reads BRIGHT over water for the can (snaps to the 16px water cell,
 mirroring the fishing snap). **Cato waters unaffected** — he's a magic waterer, no can/gauge.
 - **The gauge** = the creator-tagged `blue-bar-0..6` frames on the `ui-sheet` atlas
-  (all_ui_assets_on_one_sheet, 16×16, 0 empty → 6 full — a HORIZONTAL fill bar, not the vertical
-  mockup that was referenced). `ToolHudScene` draws it RIGHT of the tool slot (`m.hx + slot*1.1`,
-  slot-sized) ONLY while the can is the held tool (`ToolHudModel.waterLevel`, null = hide). Pulled
-  via `pull-blue-bar.mjs` (merged into the existing atlas json — the sheet grew to 896² for the
-  y560 row, so the png was re-downloaded).
+  (all_ui_assets_on_one_sheet, 16×16, 0 empty → 6 full). The art is a HORIZONTAL fill bar, so
+  `ToolHudScene` **rotates it -90° (CCW)** to stand VERTICAL and fill BOTTOM→up like a rising water
+  level (the frame's native width becomes the height → scale = `slot / width`), sits it right of the
+  tool slot (`m.hx + slot*0.95`), and shows it ONLY while the can is held (`ToolHudModel.waterLevel`,
+  null = hide). Pulled via `pull-blue-bar.mjs` (merged into the atlas json — the sheet grew to 896²
+  for the y560 row, so the png was re-downloaded).
 
 ## Tools = a player LOADOUT: 工具 tab + wheel + workbench crafting (2026-09-13)
 

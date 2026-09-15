@@ -63,12 +63,11 @@ export class ToolHudScene extends Phaser.Scene {
       else {
         const lvl = Phaser.Math.Clamp(Math.round(m.waterLevel), 0, 6);
         this.gauge.setVisible(true).setTexture(GAUGE_ATLAS, `blue-bar-${lvl}`);
-        // Preserve the frame's native aspect (works for a TALL/vertical gauge or a wide one):
-        // scale to the slot HEIGHT, then sit the gauge just right of the slot with a small gap.
-        const scale = m.slot / (this.gauge.height || 1);
-        this.gauge.setScale(scale);
-        const gw = (this.gauge.width || 1) * scale;
-        this.gauge.setPosition(m.hx + m.slot / 2 + m.slot * 0.12 + gw / 2, m.hy);
+        // The blue-bar art is a HORIZONTAL bar (fills left→right); rotate it -90° (CCW) so it stands
+        // VERTICAL and fills BOTTOM→up like a rising water level. Scale to the slot height (the bar's
+        // long axis is now vertical), sit it just right of the slot.
+        const scale = m.slot / (this.gauge.width || 1); // the bar's LENGTH (native width) becomes the height
+        this.gauge.setScale(scale).setAngle(-90).setPosition(m.hx + m.slot * 0.95, m.hy);
       }
     }
 
