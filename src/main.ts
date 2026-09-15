@@ -72,6 +72,10 @@ export interface Progress {
   xp?: number;
   /** Which town buildings have been paid for, and to what level. */
   town?: Record<string, number>;
+  /** Where the player put each one. A building that is paid for but has no
+   *  spot is one they are still carrying — which is also how a game closed
+   *  mid-placement picks up where it left off. */
+  spots?: Record<string, { x: number; z: number }>;
 }
 
 /** Read, change the named fields, write back.

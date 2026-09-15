@@ -1362,3 +1362,56 @@ version PASSED while a screenshot showed the button sliced in half by the panel
 edge: a rect is where an element would be, and knows nothing about an ancestor
 with `overflow: auto` having scrolled it out of sight. Hit-test both the top and
 the bottom edge — half a button is not a button.
+
+## Buildings are placed by the player
+
+There are no plots. Four patches of dirt announced how many buildings the game
+would ever have, and pinned every village to the same shape. You buy a building
+from the shop, it goes into your HANDS, and you walk it to wherever you want it.
+
+The save has `spots: { smithy: {x, z} }`. **A building that is paid for but has
+no spot is one you are carrying** — which is also exactly what a game closed
+halfway through placing one looks like when it comes back, so the interrupted
+case needs no code of its own.
+
+The gesture is the one the levels already use: **tap** the action button to act
+on the thing you are standing at, **hold** it to take that thing away. Tap is
+resolved on RELEASE, because otherwise a hold would fire the tap first.
+
+### What placing one on your own feet does
+
+You place a building on the cell you are STANDING on — the same rule as building
+a tower. Switching its collider on at that moment shuts a solid box around the
+hero: measured, not guessed, the character then could not move a single
+centimetre. A placed building's body is held disabled until the player is 1.4m
+clear of it (`settling`), and the frame loop clears that by looking at where the
+hero IS, not by waiting a second.
+
+Two more that only showed up when run:
+
+- **Remember the ground height before anything lifts it.** Carrying raises the
+  model; putting it back down by reusing whatever `y` it happens to have leaves
+  the building placed, solid, and hovering a metre off the grass.
+- **The nearest building, not the last one in the table.** Buildings can be two
+  cells apart and the reach is 1.9, so the zones overlap — the old loop assigned
+  `atPlot` to whichever match came later in `TOWN`, which meant standing between
+  the Smithy and the Clinic upgraded the Clinic.
+
+`blockedAt` returns the REASON, not a boolean, and the card prints it. A refusal
+the player cannot read is a button that does nothing.
+
+### Room to choose
+
+An empty village has **42 of 81 cells** free. That number is asserted, because
+keep-out zones are easy to add one at a time until there are six legal cells
+left and choosing where a building goes is a formality.
+
+### The handle says where you are
+
+`__hub.standingAt()` names the building the hero can act on, and
+`__hub.blockedHere()` returns `'nothing in hand'` — not null — when you are
+carrying nothing. Both exist because probes got this wrong: one walked "1.2m
+north of the Smithy" and pressed, which with buildings two cells apart landed
+nearer the Range and upgraded that instead; another mapped the whole village as
+buildable because `null` meant both "this cell is fine" and "there is nothing to
+place".

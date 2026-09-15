@@ -848,12 +848,16 @@ function buildHub() {
 
   // --- the town ---
   //
-  // Four plots. Every level's building is placed and hidden; the hub shows the
-  // one you own. Swapping a model at runtime means loading it at runtime, and a
-  // building that pops in a second after the hub does reads as a glitch.
+  // Every level of every building is placed and hidden; the hub shows the one
+  // you own, at the spot the player chose for it. Swapping a model at runtime
+  // means loading it at runtime, and a building that pops in a second after the
+  // hub does reads as a glitch — so all fifteen are here from the start and the
+  // hub moves the right one.
+  //
+  // The x/z below are only a parking space. What the player sees is whatever
+  // `spots` in the save says, and an unplaced building is not visible at all.
   // The hub is a 9x9 board with its walls at +/-5.1 — NOT the 13x13 the levels
-  // use. The first layout put these at +/-4.2 with a 1.9 foundation, which ran
-  // the plots into the wall and the buildings through it.
+  // use.
   const TOWN = [
     { id: 'smithy', x: -3.5, z: -1.6, yaw: Math.PI / 2,
       models: ['bld-house-a', 'bld-house-b', 'bld-house-c'] },
@@ -893,33 +897,12 @@ function buildHub() {
     visible: false,
   });
 
+  // No plots. Four rectangles of bare dirt told a new player exactly how many
+  // buildings this game will ever have, which is the same objection as five
+  // weapon plinths with four empty — and the shop replaced the counting with a
+  // list. Buildings now stand wherever the player puts them; the models are
+  // parked here and moved into place at runtime from the save.
   for (const b of TOWN) {
-    // A foundation, so an empty plot is obviously a PLOT and not a patch of
-    // grass someone forgot. It stays under the building once there is one.
-    ents.push({
-      id: `plot_${b.id}`, name: 'plot',
-      primitive: { kind: 'box', size: { x: 1.8, y: 0.14, z: 1.8 }, color: '#9a8f7d' },
-      transform: { position: { x: b.x, y: GROUND_Y + 0.07, z: b.z } },
-      castShadow: false,
-    });
-    // A signpost, like the ones beside the doors. A bare rectangle on the grass
-    // reads as a mud patch; a rectangle with a sign beside it reads as a plot.
-    ents.push({
-      id: `plot_${b.id}_sign`, name: 'plot_sign', modelAssetId: 'hub-sign',
-      transform: {
-        position: { x: b.x + (b.x < 0 ? 1.2 : -1.2), y: GROUND_Y, z: b.z - 0.85 },
-        rotation: yaw(b.x < 0 ? -Math.PI / 2 : Math.PI / 2),
-      },
-    });
-    ents.push({
-      id: `plot_${b.id}_lantern`, name: 'plot_lantern', modelAssetId: 'town-lantern',
-      transform: { position: { x: b.x + (b.x < 0 ? 1.1 : -1.1), y: GROUND_Y + 0.14, z: b.z + 0.85 } },
-    });
-    ents.push({
-      id: `plot_${b.id}_marker`, name: 'plot_marker', modelAssetId: 'td-selection',
-      transform: { position: { x: b.x, y: GROUND_Y + 0.14, z: b.z } },
-      visible: false,
-    });
     b.models.forEach((m, i) => {
       ents.push({
         id: `town_${b.id}_${i + 1}`, name: 'town_building', modelAssetId: m,
