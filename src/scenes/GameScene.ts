@@ -408,6 +408,21 @@ const WATER_SHADOW_DEPTH = 2;
 // advances, so the damp look persists and re-watering isn't instantly consumed.
 const WET_DURATION_MS = 9000;
 const WATER_MAX = 6; // watering-can capacity (0-6, matching the blue-bar-0..6 gauge frames)
+// The forced new-game tutorial's steps, in order. `allow` = the interaction KINDS the tutorial input
+// gate permits while that step is live (see tutStepAllows). Menus/wheels, once open, route through
+// their own handlers (not gated). Completion of each step is checked by tutorialNotify.
+const TUTORIAL_STEPS: Array<{ id: string; allow: string[] }> = [
+  { id: 'open-chest', allow: ['chest'] },
+  { id: 'take-seeds', allow: ['chest'] },
+  { id: 'use-seed', allow: ['backpackBtn'] },
+  { id: 'move-cam', allow: ['camera'] },
+  { id: 'till', allow: ['wheel', 'till'] },
+  { id: 'plant', allow: ['backpackBtn', 'plant'] }, // re-grab the seed from the backpack (the hoe cleared it), then plant
+  { id: 'water', allow: ['wheel', 'water', 'waterEdge'] },
+  { id: 'collect', allow: ['wheel', 'collect'] },
+  { id: 'view-backpack', allow: ['backpackBtn'] },
+  { id: 'message-cato', allow: ['portrait', 'chat'] },
+];
 // Watered soil looks darker/damp — the dirt tileset has no wet variant, so we
 // multiply-tint the soil sprite (cleared when it dries at the next stage-up).
 const WET_SOIL_TINT = 0xb0946a;
@@ -1464,7 +1479,7 @@ export class GameScene extends Phaser.Scene {
       panGesture.on('pan', (p: { dx: number; dy: number; pointer?: Phaser.Input.Pointer }) => {
         const pointer = p.pointer ?? this.input.activePointer;
         if (!pointer.wasTouch) return; // mouse → edge-scroll, not drag
-        if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen) return; // don't pan behind a modal
+        if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen || !this.tutStepAllows('camera')) return; // don't pan behind a modal / against a tutorial camera lock
         if (this.movingCoop && this.coopDragCell) return; // dragging a coop → the finger moves the coop, not the camera
         if (this.movingPen && this.penTouchCell) return;  // dragging the pen → the finger moves the pen, not the camera
         this.cameraFollow = false; // manual pan wins over follow-Cato
@@ -1482,7 +1497,7 @@ export class GameScene extends Phaser.Scene {
       // direction — natural vs traditional — is respected as-is. Guarded so it never fights a modal's
       // own wheel-scroll (menus/cook own the wheel while open) or pans behind the house.
       const onWheelPan = (e: WheelEvent): void => {
-        if (!this.gameReady || this.inHouse) return;
+        if (!this.gameReady || this.inHouse || !this.tutStepAllows('camera')) return; // tutorial locks the camera unless allowed
         if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen || this.confirmOpen
             || this.travelOpen || this.toolPaletteOpen || this.coopWheel || this.penWheel) return;
         e.preventDefault();
@@ -1875,6 +1890,8 @@ export class GameScene extends Phaser.Scene {
     // he refuses). Works both on the island AND inside the house now that GameScene stays active
     // (its openDialog HUD tweens run), so you can chat with Cato inside on a rainy day.
     if (this.catoIndoors && this.catoIndoorsReason === 'sleep') return;
+    if (this.cinematic) return; // the opening cinematic owns the screen — the portrait is inert
+    if (this.tutorialActive && !this.tutStepAllows('portrait')) return; // tutorial: only when this step wants it
     this.closeOpenModal(); // close the unified menu first → chat replaces it
     if (!this.inHouse) this.followCato(); // in the house the island camera is frozen — don't move it
     this.openDialog();
@@ -2228,15 +2245,17 @@ export class GameScene extends Phaser.Scene {
     // Contextual tool palette open → a button equips that tool, a miss dismisses it.
     if (this.handleToolPaletteClick(x, y)) return;
     // Bottom-right corner buttons: tablet → Shop, sprout → backpack, paw → menu/Settings.
-    if (this.overShopButton(x, y)) { this.pressShopThenOpen(); return; }
-    if (this.overBackpackButton(x, y)) { this.pressBackpackThenOpen(); return; }
-    if (this.overSettingsButton(x, y)) { this.pressSettingsThenOpen(); return; }
+    // (TUTORIAL gates each: only the backpack is ever an allowed step target.)
+    if (this.overShopButton(x, y) && this.tutStepAllows('shopBtn')) { this.pressShopThenOpen(); return; }
+    if (this.overBackpackButton(x, y) && this.tutStepAllows('backpackBtn')) { this.pressBackpackThenOpen(); return; }
+    if (this.overSettingsButton(x, y) && this.tutStepAllows('pawBtn')) { this.pressSettingsThenOpen(); return; }
+    if (this.tutorialActive && (this.overShopButton(x, y) || this.overBackpackButton(x, y) || this.overSettingsButton(x, y))) return; // a blocked HUD button → swallow
     // Inside the house: only the HUD above (chat / backpack / shop / paw menu + open modals) is
     // interactive — the frozen island underneath (hotbar tools, world tiles, Cato, objects) is not.
     if (this.inHouse) return;
-    // Hotbar slot → select that tool; elsewhere over the bar → swallow.
+    // Hotbar slot → select that tool; elsewhere over the bar → swallow. (Tutorial: no hotbar switching.)
     const slot = this.hotbarSlotAt(x, y);
-    if (slot !== null) { this.selectHotbarSlot(slot); return; }
+    if (slot !== null && !this.tutorialActive) { this.selectHotbarSlot(slot); return; }
     if (this.overHotbarAt(x, y)) return;
 
     // Fishing in progress → this click reels: CATCH if the fish is hooked (exclamation), else miss.
@@ -2245,6 +2264,8 @@ export class GameScene extends Phaser.Scene {
     // World-tile actions (validity computed here, so touch works without a hover
     // cursor). Harvest takes priority; only the hoe / empty hand harvests.
     const wp = this.cameras.main.getWorldPoint(x, y);
+    // TUTORIAL: while a step is live, only this step's world target is interactive; swallow the rest.
+    if (this.tutorialActive && !this.tutorialTapAllowed(wp, x, y)) return;
     const tile = this.islandLayer?.getTileAtWorldXY(wp.x, wp.y);
     // FISHING ROD → cast onto open water (starts the fishing flow).
     if (this.activeTool === 'fishing-rod') {
@@ -4255,6 +4276,7 @@ export class GameScene extends Phaser.Scene {
    *  with no applicable tool here — so you can switch/cancel anytime, even holding a tool; a plain
    *  empty-hand CLICK only opens when at least one tool applies (else it falls through). */
   private openToolWheelAt(wx: number, wy: number, force = false): boolean {
+    if (this.tutorialActive && !this.tutStepAllows('wheel')) return false; // tutorial: wheel only on wheel steps
     const w = this.toolWheelAt(wx, wy);
     if (!w || (!force && w.applicable.size === 0)) return false;
     this.toolPaletteOpen = w;
@@ -4504,8 +4526,8 @@ export class GameScene extends Phaser.Scene {
   /** Pop a modal one-button NOTICE (ConfirmScene, single centred ✓, no cancel) — for a message the
    *  player just needs to acknowledge (e.g. "背包满了" when Taking from the mailbox with a full bag,
    *  where the old inline flash was hidden behind the item grid). ✓ just dismisses. */
-  private promptAlert(body: string, heading?: string): void {
-    this.pendingConfirm = undefined; // ✓ only dismisses
+  private promptAlert(body: string, heading?: string, onOk?: () => void): void {
+    this.pendingConfirm = onOk; // ✓ runs onOk (if any) then dismisses — used by the tutorial step prompts
     this.confirmOpen = true;
     this.registry.set('confirm', { visible: true, title: body, heading, alert: true, rev: ++this.confirmRev });
     this.scene.bringToTop('ConfirmScene'); // above the open menu
@@ -6328,6 +6350,7 @@ export class GameScene extends Phaser.Scene {
     this.publishInventory();
     this.setBushStage(bush, 1); // back to full + no berries; regrows to ripe
     this.scheduleSave();
+    if (bush.type === 'strawberry') this.tutorialNotify('collect', 'fruit-strawberry'); // tutorial: "collect the strawberry" step
   }
 
   private removeBush(cx: number, cy: number): void {
@@ -7229,6 +7252,7 @@ export class GameScene extends Phaser.Scene {
   /** Door chest clicked → play its open swing, THEN open the menu on Chest; closing plays close. */
   private openChestViaDoor(): void {
     this.openMenuViaObject(this.chest, 'chest-open-front', 'chest-close-front', 1);
+    this.tutorialNotify('chest-open');
   }
 
   /** Play `sprite`'s open animation, then open the unified menu on `tab`; remember the
@@ -7343,6 +7367,7 @@ export class GameScene extends Phaser.Scene {
   private openBackpack(): void {
     if (this.menuOpen) { this.closeMenu(); return; }
     this.openMenu(TAB_BACKPACK, BACKPACK_TABS); // 物品 + 工具 tab bar
+    this.tutorialNotify('backpack-open');
   }
 
   /** The 工具 tab's items = the owned tools (synthesized stacks; never mutated — tools are
@@ -8408,8 +8433,9 @@ export class GameScene extends Phaser.Scene {
       if (it?.toolId && !this.equippedTools.includes(it.toolId)) opts.push({ action: 'equip', label: t('action_to_wheel') });
       return opts;
     }
-    // USE = hold this item straight from the store as the active tool / seed / material.
-    if (it && isHotbarUsable(it)) opts.push({ action: 'use', label: t(it.place ? 'action_place' : 'action_use') }); // placeables read "摆放/Place" (same use action → placement mode)
+    // USE = hold this item straight from the store as the active tool / seed / material — BACKPACK ONLY
+    // (you carry the backpack; the chest is storage, so take it out first, then use it).
+    if (this.menuTab === TAB_BACKPACK && it && isHotbarUsable(it)) opts.push({ action: 'use', label: t(it.place ? 'action_place' : 'action_use') }); // placeables read "摆放/Place" (same use action → placement mode)
     if (this.menuTab === TAB_BACKPACK) { // Backpack: use / feed / 上架 / store→chest / delete
       if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed Cato from the shared bag
       if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_list') }); // list for sale → 待售 bin
@@ -8562,6 +8588,7 @@ export class GameScene extends Phaser.Scene {
     else if (action === 'take') { // chest → backpack
       if (!this.backpackHasSpaceFor(it.id)) { this.promptAlert(t('bag_full')); return; }
       this.addToStore(this.backpackStore, { ...it, count: n });
+      this.tutorialNotify('take', it.id); // tutorial: "take Jamin's seeds" step
     }
     it.count -= n;
     if (it.count <= 0) src.splice(index, 1);
@@ -8578,9 +8605,11 @@ export class GameScene extends Phaser.Scene {
     const store = this.menuStore();
     const it = store[index];
     if (!it || !isHotbarUsable(it)) return;
+    const id = it.id;
     this.holdExternal(store, it);
     this.closeMenu();
     playSfx(this);
+    this.tutorialNotify('use', id); // tutorial: "use the seed" step
   }
 
   /** Which action (if any) is under a tap on the unified menu's action menu. */
@@ -9028,6 +9057,7 @@ export class GameScene extends Phaser.Scene {
     this.settleLoosened(cx, cy); // planting cancels any pending "hoed once" furrows
     this.dirtBurst(footX, footY); // little poof as the seed goes in
     this.scheduleSave();
+    this.tutorialNotify('plant', key); // tutorial: "plant the seed" step
     return true;
   }
 
@@ -9257,6 +9287,7 @@ export class GameScene extends Phaser.Scene {
   private playerWater(cx: number, cy: number): void {
     if (this.waterLevel <= 0) return; // empty can → nothing pours (the gauge reads 0; refill at the water's edge)
     if (!this.waterCropAt(cx, cy) || !this.islandLayer) return;
+    this.tutorialNotify('water', `${cx},${cy}`); // tutorial: "water the plot" step
     this.waterLevel--; // one pour per tile
     this.publishToolHud(); // refresh the gauge
     playSfx(this, SFX_SPLASH); // water sound — same as drawing water at the edge
@@ -9320,6 +9351,7 @@ export class GameScene extends Phaser.Scene {
     // Mark it tilled NOW so the cursor leaves this cell + a double-click can't
     // re-till it mid-swing.
     this.tilledCells.add(key);
+    this.tutorialNotify('till', key); // tutorial: "till the plot" step
 
     // God-hand hoe swing; when it lands, flip the cell to soil + re-autotile this
     // cell and its 4 neighbours (a new tilled cell changes their edges).
@@ -10898,6 +10930,122 @@ export class GameScene extends Phaser.Scene {
   private cineExiting = false; // exit glide in progress → reveal the game on arrival
   private cutsceneLift = 0; // px the dialog box is raised in a cutscene (to clear the visible hotbar)
   private moreIconRestY?: number; // captured anchored y of the "more" arrow (lifted with the box)
+  // ── Forced new-game tutorial (runs AFTER the intro cinematic). A step is "live" once the player
+  //    OKs its overlay prompt; while live, input is gated to that step's `allow` set (see tutStepAllows)
+  //    and the camera is locked unless the step allows 'camera'. Fleshed out in the tutorial section. ──
+  private tutorialActive = false;
+  private tutorialStep = -1;
+  /** True if the current tutorial step permits interaction `kind` (or the tutorial isn't gating). */
+  private tutStepAllows(kind: string): boolean {
+    if (!this.tutorialActive) return true;
+    return TUTORIAL_STEPS[this.tutorialStep]?.allow.includes(kind) ?? false;
+  }
+  private tutorialSeed = 'carrot-seed';                 // Jamin's gift the tutorial guides you to plant
+  private tutorialPlot?: { cx: number; cy: number };    // the empty grass cell right of the house (the plot)
+  private tutorialBushKey?: string;                     // the pre-placed ripe strawberry bush cell
+
+  /** Play the forced tutorial ONCE after the intro cinematic, on a brand-new game. */
+  private maybeStartTutorial(): void {
+    if (this.tutorialStep >= 0) return; // already running
+    if (!isDebug('replayIntro') && (!this.isNewGame || this.dialogueSeen.has('tutorial'))) return;
+    this.setupTutorialProps();
+    this.tutorialShowStep(0);
+  }
+
+  /** Place the farm plot (a walkable grass cell right of the house) + a ripe strawberry bush for the
+   *  collect step. New-game only (props aren't saved). */
+  private setupTutorialProps(): void {
+    if (!this.islandLayer) return;
+    const c = this.houseCenter(), home = this.islandLayer.worldToTileXY(c.x, c.y);
+    if (!home) return;
+    const plantable = (cx: number, cy: number): boolean => {
+      const key = `${cx},${cy}`, tile = this.islandLayer!.getTileAt(cx, cy);
+      return !!tile && !tile.collides && !this.cellBlocksTill(key) && !this.isDefaultHouseCell(key) && !this.tilledCells.has(key) && !this.bushes.has(key);
+    };
+    for (let dx = 3; dx <= 10 && !this.tutorialPlot; dx++) { const cx = Math.floor(home.x) + dx, cy = Math.floor(home.y); if (plantable(cx, cy)) this.tutorialPlot = { cx, cy }; }
+    if (!this.tutorialPlot) return;
+    for (let dx = 2; dx <= 5; dx++) { const bx = this.tutorialPlot.cx + dx, by = this.tutorialPlot.cy; if (plantable(bx, by)) { this.restoreBush(`${bx},${by}`, 'strawberry', 2); const b = this.bushes.get(`${bx},${by}`); if (b) { b.sceneWired = true; this.tutorialBushKey = `${bx},${by}`; } break; } } // sceneWired → not saved/torn down
+  }
+
+  private tutorialShowStep(n: number): void {
+    this.tutorialActive = false;
+    this.tutorialStep = n;
+    this.setDialogueSpotlight(null);
+    const step = TUTORIAL_STEPS[n];
+    if (!step) { this.tutorialFinish(); return; }
+    this.promptAlert(t(`tut_${step.id}_body`), t('tut_heading'), () => this.tutorialActivateStep(n));
+  }
+
+  private tutorialActivateStep(n: number): void {
+    if (this.tutorialStep !== n) return;
+    this.tutorialActive = true;
+    if (TUTORIAL_STEPS[n].id === 'water') { this.waterLevel = 0; this.publishToolHud(); } // force a refill at the water's edge
+    const map: Record<string, string> = { 'open-chest': 'world:chest', 'use-seed': 'hud:backpack', 'till': 'world:plot', 'plant': 'world:plot', 'collect': 'world:bush', 'view-backpack': 'hud:backpack', 'message-cato': 'hud:portrait' };
+    this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null);
+  }
+
+  /** Advance a tutorial step when its completion `kind` (+ optional arg) matches the LIVE step. */
+  private tutorialNotify(kind: string, arg?: unknown): void {
+    if (!this.tutorialActive) return;
+    const id = TUTORIAL_STEPS[this.tutorialStep]?.id, p = this.tutorialPlot;
+    const atPlot = !!p && arg === `${p.cx},${p.cy}`;
+    let done = false;
+    switch (id) {
+      case 'open-chest': done = kind === 'chest-open'; break;
+      case 'take-seeds': done = kind === 'take' && arg === this.tutorialSeed; break;
+      case 'use-seed': done = kind === 'use' && arg === this.tutorialSeed; break;
+      case 'move-cam': done = kind === 'camera-centered'; break;
+      case 'till': done = kind === 'till' && atPlot; break;
+      case 'plant': done = kind === 'plant' && atPlot; break;
+      case 'water': done = kind === 'water' && atPlot; break;
+      case 'collect': done = kind === 'collect' && arg === 'fruit-strawberry'; break;
+      case 'view-backpack': done = kind === 'backpack-open'; break;
+      case 'message-cato': done = kind === 'chat-sent'; break;
+    }
+    if (done) {
+      this.tutorialActive = false;
+      this.setDialogueSpotlight(null);
+      const next = this.tutorialStep + 1;
+      if (next < TUTORIAL_STEPS.length) this.time.delayedCall(320, () => this.tutorialShowStep(next));
+      else this.tutorialFinish();
+    }
+  }
+
+  private tutorialFinish(): void {
+    this.tutorialActive = false;
+    this.tutorialStep = -1;
+    this.setDialogueSpotlight(null);
+    this.dialogueSeen.add('tutorial');
+    this.scheduleSave();
+  }
+
+  /** actAt gate: while a step is live, a world/HUD tap is honoured only if it hits an allowed target. */
+  private tutorialTapAllowed(wp: { x: number; y: number }, sx: number, sy: number): boolean {
+    const allow = TUTORIAL_STEPS[this.tutorialStep]?.allow ?? [];
+    if (allow.includes('chest') && this.chestContains(wp.x, wp.y)) return true;
+    if (allow.includes('backpackBtn') && this.overBackpackButton(sx, sy)) return true;
+    if (allow.includes('portrait') && Phaser.Geom.Rectangle.Contains(this.findCatBounds, sx, sy)) return true;
+    const p = this.tutorialPlot, cell = this.cellAt(wp);
+    if (p && (allow.includes('till') || allow.includes('plant') || allow.includes('water')) && cell === `${p.cx},${p.cy}`) return true;
+    if (allow.includes('waterEdge') && this.isWaterAt(wp.x, wp.y)) return true;
+    if (allow.includes('collect') && this.tutorialBushKey && cell === this.tutorialBushKey) return true;
+    return false;
+  }
+
+  private cellAt(wp: { x: number; y: number }): string | null {
+    const t = this.islandLayer?.worldToTileXY(wp.x, wp.y);
+    return t ? `${Math.floor(t.x)},${Math.floor(t.y)}` : null;
+  }
+
+  /** Per-frame: the move-camera step completes once the plot cell is near screen centre. */
+  private updateTutorialCamera(): void {
+    if (!this.tutorialActive || TUTORIAL_STEPS[this.tutorialStep]?.id !== 'move-cam' || !this.tutorialPlot || !this.islandLayer) return;
+    const w = this.islandLayer.tileToWorldXY(this.tutorialPlot.cx, this.tutorialPlot.cy); if (!w) return;
+    const cam = this.cameras.main;
+    const sx = (w.x + TILE / 2 - cam.worldView.x) * cam.zoom, sy = (w.y + TILE / 2 - cam.worldView.y) * cam.zoom;
+    const cx = this.scale.width / 2, cy = this.scale.height / 2;
+    if (Math.abs(sx - cx) < this.scale.width * 0.28 && Math.abs(sy - cy) < this.scale.height * 0.28) this.tutorialNotify('camera-centered', 'move-cam');
+  }
 
   /** After the save loads, play the intro ONCE on a brand-new save. */
   /** Whether the new-game scripted intro should play: only a brand-new game (no save) — or the
@@ -10993,8 +11141,9 @@ export class GameScene extends Phaser.Scene {
     this.snapCameraToCato();   // open ALREADY zoomed on Cato
   }
 
-  /** The cinematic zoom = 1.7× the gameplay zoom (clamped). */
-  private cineZoom(): number { return Math.min(MAX_ZOOM * hudDpr(this), this.preCineZoom * 1.7); }
+  /** The cinematic zoom — a bit WIDER than a tight close-up (1.25× gameplay, clamped) so Cato's dialog
+   *  box doesn't cover the subject (a recurring phone problem when it was 1.7×). */
+  private cineZoom(): number { return Math.min(MAX_ZOOM * hudDpr(this), this.preCineZoom * 1.25); }
 
   /** A camera target that frames `sprite` at screen ratio (rx,ry) at `zoom` (rx>0.5 =
    *  right-of-centre, ry<0.5 = higher). Phaser zooms around the screen centre, so the
@@ -11023,7 +11172,8 @@ export class GameScene extends Phaser.Scene {
     const cato = target === 'cato' || target == null;
     const sprite = cato ? this.child : (this.focusTarget(target) ?? this.child);
     if (!sprite) return;
-    this.cineCamTarget = this.cineFrame(sprite, cato ? 0.66 : 0.6, cato ? 0.42 : 0.44, this.cineZoom());
+    // A focused OBJECT sits HIGHER on screen (ry 0.34) so Cato's bottom dialog box doesn't cover it.
+    this.cineCamTarget = this.cineFrame(sprite, cato ? 0.66 : 0.6, cato ? 0.42 : 0.34, this.cineZoom());
     this.cinePlayObjectAnim(cato ? null : target); // loop the tool's animation while it's in focus
   }
 
@@ -11201,7 +11351,7 @@ export class GameScene extends Phaser.Scene {
     this.cutscene = false;
     this.setDialogueSpotlight(null);
     if (this.dialogOpen) this.closeDialog();
-    if (this.cinematic) this.exitCinematic(); // intro over → retract bars, zoom back, show hotbar
+    if (this.cinematic) { this.exitCinematic(); this.time.delayedCall(1500, () => this.maybeStartTutorial()); } // intro over → retract bars, zoom back; then the forced tutorial (new game only)
   }
 
   /** Point DialogueScene at a named UI target ('hotbar:<toolId>' | 'hotbar:seed' | null). */
@@ -11210,8 +11360,23 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('dialogueSpotlight', rect ? { ...rect, rev: (this.registry.get('dialogueSpotlight')?.rev ?? 0) + 1 } : null);
   }
 
-  /** Resolve a spotlight target to a screen rect (P1: hotbar slots by tool). */
+  /** Resolve a spotlight target to a SCREEN rect (device px): hotbar slots, HUD buttons, or a
+   *  projected world object/cell (used by the tutorial). */
   private spotlightRect(target: string): { x: number; y: number; w: number; h: number } | null {
+    // HUD buttons — already in screen px.
+    if (target === 'hud:backpack') return (this.registry.get('backpackBtnBounds') as { x: number; y: number; w: number; h: number } | undefined) ?? null;
+    if (target === 'hud:portrait') { const r = this.findCatBounds; return r.width ? { x: r.x, y: r.y, w: r.width, h: r.height } : null; }
+    // World object / cell → project to screen via the camera (the tutorial locks the camera during
+    // these steps, so a one-time projection stays put).
+    if (target.startsWith('world:')) {
+      const cam = this.cameras.main, kind = target.slice(6);
+      let b: Phaser.Geom.Rectangle | null = null;
+      if (kind === 'chest' && this.chest) b = this.chest.getBounds();
+      else if (kind === 'bush' && this.tutorialBushKey) { const bu = this.bushes.get(this.tutorialBushKey); if (bu) b = bu.base.getBounds(); }
+      else if (kind === 'plot' && this.tutorialPlot && this.islandLayer) { const w = this.islandLayer.tileToWorldXY(this.tutorialPlot.cx, this.tutorialPlot.cy); if (w) b = new Phaser.Geom.Rectangle(w.x, w.y, TILE, TILE); }
+      if (!b) return null;
+      return { x: (b.x - cam.worldView.x) * cam.zoom, y: (b.y - cam.worldView.y) * cam.zoom, w: b.width * cam.zoom, h: b.height * cam.zoom };
+    }
     const bounds = this.registry.get('hotbarBounds') as
       | { slots?: Array<{ x: number; y: number; w: number; h: number }> }
       | undefined;
@@ -11936,6 +12101,7 @@ export class GameScene extends Phaser.Scene {
   private async submitDialog(text: string): Promise<void> {
     const t = text.trim();
     if (!t || this.aiBusy || !this.dialogOpen) return;
+    this.tutorialNotify('chat-sent'); // tutorial: "message Cato" final step (fires on send, not on reply)
     this.aiBusy = true;
     this.setImmediateDialog('Hmm…'); // Cato's own "thinking" beat, not a description
     try {
@@ -12157,7 +12323,7 @@ export class GameScene extends Phaser.Scene {
    *  a key keeps scrolling; pressing one releases any Cato camera-follow so the
    *  player takes manual control. Frozen while chatting / in the backpack. */
   private updateCameraKeys(delta: number): void {
-    if (this.dialogOpen || this.inventoryOpen) return;
+    if (this.dialogOpen || this.inventoryOpen || !this.tutStepAllows('camera')) return; // tutorial locks the camera unless the step allows it
     const k = this.keys;
     if (!k) return;
     let dx = 0;
@@ -12295,6 +12461,7 @@ export class GameScene extends Phaser.Scene {
     // room). GameScene stays active only so its input drives the kept HUD (chat / backpack / shop /
     // menu); the whole world sim is skipped. HUD scenes have their own update loops.
     if (this.inHouse) return;
+    if (this.tutorialActive) this.updateTutorialCamera(); // the "move camera to the plot" step completes here
     this.updateEdgeScroll(delta);
     this.updateSoil(delta); // count down soil wetness (dry out over time)
     this.updateCrops(delta); // grow planted crops through their stages
