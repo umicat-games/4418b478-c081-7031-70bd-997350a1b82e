@@ -225,7 +225,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   'tut_open-chest_head': { en: 'Open the chest', 'zh-CN': '打开储物箱' },
   'tut_open-chest_body': { en: "Tap the storage chest by the house to open it — Jamin's seeds are inside.", 'zh-CN': '点一下房子旁边的储物箱打开它——Jamin 送的种子就在里面。' },
   'tut_take-seeds_head': { en: 'Take some seeds', 'zh-CN': '拿出种子' },
-  'tut_take-seeds_body': { en: 'Tap a seed packet, then choose Take to move it into your backpack.', 'zh-CN': '点一包种子，选「取出」把它放进背包。' },
+  'tut_take-seeds_body': { en: 'In the chest, tap a seed packet and choose Take to move it into your backpack. (Tap the chest to open it again if it closed.)', 'zh-CN': '在储物箱里点一包种子，选「取出」放进背包。(要是箱子关了，点一下高亮的箱子再打开。)' },
   'tut_use-seed_head': { en: 'Hold the seeds', 'zh-CN': '拿在手上' },
   'tut_use-seed_body': { en: 'Open your backpack (bottom-right), tap the seeds and choose Use to hold them.', 'zh-CN': '打开背包（右下角），点种子选「使用」把它拿在手上。' },
   'tut_move-cam_head': { en: 'Move the camera', 'zh-CN': '移动镜头' },

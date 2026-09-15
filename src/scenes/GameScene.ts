@@ -7322,6 +7322,9 @@ export class GameScene extends Phaser.Scene {
     playSfx(this); // close blip
     this.craftReplace = null; // closing without picking a slot → the crafted item is discarded
     this.menuOpen = false;
+    // TUTORIAL: the player closed a menu mid-step (NOT a programmatic step-transition close) → re-show
+    // the step prompt so they're never stranded (e.g. closed the chest before taking a seed).
+    if (this.tutorialActive && !this.tutorialClosingMenu) this.time.delayedCall(450, () => { if (this.tutorialActive && !this.menuOpen && !this.confirmOpen) this.tutorialShowStep(this.tutorialStep); });
     if (this.menuStepperHeld) { this.menuStepperHeld = null; this.registry.set('menuStepperHeld', null); } // don't leave a stepper stuck pressed
     this.closeMenuItemMenu();
     this.closeReceipt();
@@ -8413,6 +8416,12 @@ export class GameScene extends Phaser.Scene {
   private menuItemOptions(index: number): Array<{ action: MenuItemAction; label: string }> {
     const it = this.menuStore()[index];
     const opts: Array<{ action: MenuItemAction; label: string }> = [];
+    // TUTORIAL: keep the item menu to the ONE action the tutorial teaches, so the player can't
+    // derail into Sell/Delete (which don't advance the step, and can bin the seed).
+    if (this.tutorialActive) {
+      if (this.menuTab === TAB_CHEST) return [{ action: 'take', label: t('action_take') }];
+      if (this.menuTab === TAB_BACKPACK) return it && isHotbarUsable(it) ? [{ action: 'use', label: t(it.place ? 'action_place' : 'action_use') }] : [];
+    }
     // Mailbox 取货 (delivered orders) → Take to backpack / Delete.
     if (this.menuTab === TAB_PICKUP) {
       opts.push({ action: 'take', label: t('action_take') });
@@ -8606,9 +8615,9 @@ export class GameScene extends Phaser.Scene {
     if (!it || !isHotbarUsable(it)) return;
     const id = it.id;
     this.holdExternal(store, it);
+    this.tutorialNotify('use', id); // tutorial: "use the seed" step — BEFORE closeMenu so the completion doesn't trip the close-recovery
     this.closeMenu();
     playSfx(this);
-    this.tutorialNotify('use', id); // tutorial: "use the seed" step
   }
 
   /** Which action (if any) is under a tap on the unified menu's action menu. */
@@ -10944,6 +10953,7 @@ export class GameScene extends Phaser.Scene {
     return TUTORIAL_STEPS[this.tutorialStep]?.allow.includes(kind) ?? false;
   }
   private tutorialSeed = 'carrot-seed';                 // Jamin's gift the tutorial guides you to plant
+  private tutorialClosingMenu = false;                  // true while tutorialShowStep closes a menu on purpose (so the recovery doesn't re-fire)
   private tutorialPlot?: { cx: number; cy: number };    // the empty grass cell right of the house (the plot)
   private tutorialBushKey?: string;                     // the pre-placed ripe strawberry bush cell
 
@@ -10978,7 +10988,7 @@ export class GameScene extends Phaser.Scene {
     if (!step) { this.tutorialFinish(); return; }
     // Close any open menu so the next step starts on a clean surface (e.g. shut the chest before
     // "open your backpack"). EXCEPT take-seeds, which needs the chest kept open from open-chest.
-    if (this.menuOpen && step.id !== 'take-seeds') this.closeMenu();
+    if (this.menuOpen && step.id !== 'take-seeds') { this.tutorialClosingMenu = true; this.closeMenu(); this.tutorialClosingMenu = false; }
     this.promptAlert(t(`tut_${step.id}_body`), t(`tut_${step.id}_head`), () => this.tutorialActivateStep(n));
   }
 
@@ -10986,7 +10996,7 @@ export class GameScene extends Phaser.Scene {
     if (this.tutorialStep !== n) return;
     this.tutorialActive = true;
     if (TUTORIAL_STEPS[n].id === 'water') { this.waterLevel = 0; this.publishToolHud(); } // force a refill at the water's edge
-    const map: Record<string, string> = { 'open-chest': 'world:chest', 'use-seed': 'hud:backpack', 'till': 'world:plot', 'plant': 'world:plot', 'collect': 'world:bush', 'view-backpack': 'hud:backpack', 'message-cato': 'hud:portrait' };
+    const map: Record<string, string> = { 'open-chest': 'world:chest', 'take-seeds': 'world:chest', 'use-seed': 'hud:backpack', 'till': 'world:plot', 'plant': 'world:plot', 'collect': 'world:bush', 'view-backpack': 'hud:backpack', 'message-cato': 'hud:portrait' };
     this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null);
   }
 
