@@ -19,6 +19,7 @@ import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
 import { createScript, ringActionButton, type Script } from './scripted';
 import { createWayfinder } from './wayfinder';
+import { createAim } from './aim';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { icon, setIconText, iconHtml, type IconName } from './icons';
@@ -1627,6 +1628,36 @@ export async function startLevel(
   /** The staff hits everything around you at once, so it is on a real
    *  cooldown rather than just the animation's length. */
   const burstRadius = (): number => kind.radius ?? 2.6;
+  /** Drag to place a spell. Built here, where the hero, the camera and the
+   *  cast all are; it owns only the gesture and the two rings. */
+  const aim = createAim({
+    scene: world.scene,
+    camera: world.camera,
+    from: () => hero.position,
+    reach: () => castReach(),
+    radius: () => burstRadius(),
+    enabled: () => aimsByDrag() && running,
+    cast: (at) => heroAttack(at),
+  });
+
+  /** Whether the weapon in hand is placed rather than pointed. */
+  const aimsByDrag = (): boolean => kind.cast === 'burst';
+  /** How far from the hero a placed spell may go.
+   *
+   *  Its own blast radius, twice over. Far enough that choosing a patch of
+   *  ground is a real choice and not a nudge; short enough that the staff is
+   *  still something you walk into position for rather than a turret. */
+  const castReach = (): number => burstRadius() * 2;
+  /** The on-screen attack button, found by the picture it is wearing. The SDK
+   *  gives its controls no id; this is the same match the tutorial uses. */
+  const attackButton = (): HTMLElement | null =>
+    [...document.querySelectorAll<HTMLElement>('[data-umicat-touch] div')]
+      .filter((d) => d.style.borderRadius === '50%')
+      .find((d) => {
+        const g = d.querySelector<HTMLElement>('span');
+        const m = g ? (g.style.webkitMask || g.style.mask || '') : '';
+        return m.includes(`${WEAPON_ICON[weapon] ?? ''}`.replace(/^.*\//, ''));
+      }) ?? null;
   let staffCooldown = 0;
   let lockTarget: Enemy | null = null;
   /** Where the mouse is, in clip space, or null on a device without one.
@@ -2620,6 +2651,7 @@ export async function startLevel(
     vfx.clear();
     script?.dispose();
     scriptTrail.dispose();
+    aim.dispose();
     ringActionButton(null);
     world.dispose();
     world.scene.clear();
@@ -2939,7 +2971,11 @@ export async function startLevel(
   // --- combat --------------------------------------------------------------
   const tmp = new THREE.Vector3();
   const _q = new THREE.Quaternion();
-  const heroAttack = (): void => {
+  /** Where a dragged cast wants the blast, or null for "wherever the staff
+   *  would have put it". Set for the one call and cleared inside. */
+  let placedCast: THREE.Vector3 | null = null;
+  const heroAttack = (at: THREE.Vector3 | null = null): void => {
+    placedCast = at;
     if (!running || animator.busy) return;
 
     if (kind.cast === 'burst') {
@@ -2952,7 +2988,12 @@ export async function startLevel(
       // Centred on what you have locked, not on yourself. A burst that always
       // goes off underfoot makes the spell about walking into a crowd; one you
       // can place makes it about choosing which crowd.
-      const at = lockTarget?.alive ? lockTarget.obj.position : hero.position;
+      // Placed by hand beats the lock, and the lock beats standing on it. A
+      // dragged circle is the player saying which patch of ground; overruling
+      // that with the nearest enemy would make the drag decorative.
+      const at = placedCast
+        ?? (lockTarget?.alive ? lockTarget.obj.position : hero.position);
+      placedCast = null;
       spellLamp.position.set(at.x, at.y + 0.9, at.z);
       castBurst(at);
       if (lockTarget?.alive) {
@@ -3219,7 +3260,18 @@ export async function startLevel(
     animator.update(character.state);
 
     if (running) {
-      if (input.consume('attack')) heroAttack();
+      // Hooked BEFORE the decision below, not after: on the first frame of a
+      // session the controller would otherwise be judged on a button it had not
+      // been handed yet, and swallow a press it could not act on.
+      aim.watch(attackButton());
+      // A staff is aimed, not fired. The drag owns the press for those, so the
+      // latch is only spent here by weapons that have no aim — otherwise every
+      // hold would cast once on the way down and again on release.
+      if (aim.aiming() || (aimsByDrag() && aim.canAim() && input.held('attack'))) {
+        input.consume('attack');
+      }
+      else if (input.consume('attack')) heroAttack();
+      aim.update(pointerNdc, input.held('attack'));
       readBuildButton();
       if (invincible > 0) invincible -= dt;
       if (staffCooldown > 0) staffCooldown -= dt;
@@ -3719,6 +3771,10 @@ export async function startLevel(
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
       umicat, world, character, input, animator, renderer,
+      /** The hero's own object. The hub exposes one and the boards did not, so
+       *  a probe that works in the village fell over in a level on the same
+       *  line. */
+      hero,
       /** Freeze the loop and render one frame from wherever you like. For
        *  LOOKING at things — the follow camera overwrites its own transform
        *  every frame, so a probe that moves it sees nothing. */
@@ -3790,6 +3846,14 @@ export async function startLevel(
       /** The attack button, and the end of the run. The real ones — a probe
        *  that calls its own copy is testing its own copy. */
       attack: () => heroAttack(),
+      /** Put a different weapon in hand, for a probe that wants to check how a
+       *  sword behaves without replaying the board with one. */
+      equip: (w: string) => setWeapon(w as Weapon),
+      /** The drag-to-place gesture: whether it is open and where the blast is
+       *  standing. A probe cannot see a circle; it can see where the circle
+       *  says it is. */
+      aim: () => ({ aiming: aim.aiming(), at: aim.at(),
+                    drags: aimsByDrag(), reach: castReach(), radius: burstRadius() }),
       /** Pose the blade by hand, for finding the numbers. The rest pose and the
        *  arc are three angles each and guessing them from a bone's local frame
        *  is how a sword ends up through a shoulder. */

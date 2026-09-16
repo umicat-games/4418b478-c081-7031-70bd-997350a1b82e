@@ -2058,3 +2058,48 @@ at once it reads as the game expecting you to want out, and it is the first
 thing a skimming player presses. It ends the board as a WIN, so it comes with
 the same grant — a skip into an empty purse is a skip into the dead end the
 grant exists to prevent.
+
+## A staff is placed, not pointed
+
+Tap the attack button and the staff does what it always did: picks the nearest
+thing in range and goes off there. **Hold** it and a circle opens that you steer
+with the same finger; letting go casts where it stands. Let go back over the
+button and nothing happens — the only cancel a thumb already on the button can
+reach.
+
+The spell was already a circle on a patch of GROUND rather than a hit on an
+enemy, and the code had already reasoned its way to why: *"a burst that always
+goes off underfoot makes the spell about walking into a crowd; one you can place
+makes it about choosing which crowd."* The only thing missing was the player
+choosing. Each staff already carried its own radius (fire 2.2, ice 3.2, bolt
+2.6); the reach is twice that.
+
+### It needs nothing from the SDK, and that was measured first
+
+The on-screen buttons are the SDK's divs with no id on them. Before writing any
+of this: `pointerdown` on one plus `setPointerCapture` keeps every subsequent
+move — eight of eight, out to the far side of the screen — and **the right-half
+look-drag does not steal the gesture** (camera yaw moved `0.0000` across the
+whole drag). Without that second fact the camera would spin while you aimed.
+
+### Two things that would have made the staff dead
+
+- **The press is swallowed only when the gesture can actually start**
+  (`aim.canAim()`: there is a button to drag from, or a mouse to steer with).
+  Swallowing the attack latch for a gesture with no way to begin leaves a staff
+  that does nothing at all.
+- **The button is hooked BEFORE that decision, not after.** On the first frame
+  of a session the controller would otherwise be judged on a button it had not
+  been handed yet.
+
+### The check that matters is that it can MISS
+
+"A ring appears" passes on a drag that draws a circle and then casts at the
+nearest enemy anyway. `verify-3d-aim` stands next to one enemy and taps — 10 hp
+to 1.87 — then holds, drags to empty ground 4.39 away, and releases: 10 hp to
+10. Being able to miss is the same statement as being able to aim.
+
+It does NOT check "90ms in, the circle has not opened yet". The arm threshold is
+200ms and a headless frame is ninety, so that sample lands on either side of it
+depending on the machine. What a tap DOES is an outcome; when it does it is a
+stopwatch reading.
