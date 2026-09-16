@@ -2370,7 +2370,12 @@ export async function startLevel(
       },
       {
         // The arrow does the pointing; the words say why that square.
-        text: 'Stand on the marked square — they come out of the gate beside it',
+        // Two lines, and the second one is not an aside. "Stand here" is the
+        // instruction; "enemies come out of the gate beside it" is the REASON,
+        // and a dash joining them makes one long sentence that has to be read
+        // twice. Named, too: "they" is a pronoun for something the player has
+        // not seen yet.
+        text: 'Stand on the marked square<br>Enemies come out of the gate beside it',
         at: () => ({ x: spot[0], z: spot[1] }),
         enter: () => { onlyBuildAt = spot; },
         done: () => !!buildCell && buildCell[0] === spot[0] && buildCell[1] === spot[1],
