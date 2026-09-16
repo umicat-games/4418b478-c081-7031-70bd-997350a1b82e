@@ -1912,6 +1912,23 @@ instruction was "stand on your weapon".
 A step with no `ready` never dims at all. The last one is a chase, and there is
 no moment during it when the player should be unable to move.
 
+### The chase step locks the bar, and that is not about fairness
+
+Nothing may be built and no weapon may be chosen on the last step. The obvious
+reason is that a tower short-circuits the lesson — you sold the weapon, and the
+point is that there is nothing left to do it for you.
+
+The real reason is that it **sticks**. The step finishes on `heroHits > 0` AND
+an empty board, so an enemy killed by a TOWER empties the board with no hero
+hit, and nothing spawns another — `onScriptLeak` only fires on a leak. The
+tutorial would sit there forever holding up an instruction it had made
+impossible.
+
+It also un-chooses the weapon selected four steps earlier. Locking the bar
+leaves the old selection standing, which keeps drawing its range ring around a
+player who cannot build: a circle saying "this is what it would cover" for a
+weapon there is no way to place.
+
 ### A step with no text
 
 `text` is optional. A step without it is pure staging — spawn something, open a

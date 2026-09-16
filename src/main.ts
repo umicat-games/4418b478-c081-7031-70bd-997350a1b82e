@@ -2487,9 +2487,25 @@ export async function startLevel(
           + ' button on the right<br>Nothing is guarding the road now',
         button: () => 'sword',
         enter: () => {
+          // Nothing may be built, and no weapon may be chosen.
+          //
+          // Not just because it short-circuits the lesson — you sold the
+          // weapon, so the point is that there is nothing to do it for you —
+          // but because it STICKS. This step is done when `heroHits > 0` and
+          // the board is empty, so an enemy killed by a tower empties the board
+          // with no hero hit, and nothing spawns another: the tutorial sits
+          // there forever with an instruction it has made impossible.
+          //
+          // -1 is no slot: the bar has four, numbered from zero.
           onlyBuildAt = null;
-          onlyKind = null;
-          allow.build = true; allow.upgrade = true; allow.sell = true;
+          onlyKind = -1;
+          allow.build = false; allow.upgrade = false; allow.sell = false;
+          // And un-choose what is still chosen from four steps ago. Locking the
+          // bar leaves the old selection standing, which keeps drawing its
+          // range ring around a player who cannot build — a circle saying "this
+          // is what it would cover" for a weapon there is no way to place.
+          selected = null;
+          refreshHotbar();
           spawnScripted();
           // If it walks the whole way, send another and say it again. On this
           // board a leak costs nothing, which is what makes that safe.
