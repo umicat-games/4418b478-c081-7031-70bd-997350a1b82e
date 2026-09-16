@@ -89,6 +89,9 @@ export function createAim(opts: AimOpts): Aim {
   /** The pointer that started on the button, so a second finger on the walking
    *  stick cannot move the circle. */
   let pointerId: number | null = null;
+  /** Where the press began, and where the finger is now. The DELTA between
+   *  them is the whole input; neither on its own means anything. */
+  let origin: { x: number; y: number } | null = null;
   let screen: { x: number; y: number } | null = null;
   let armed = false;
   const target = new THREE.Vector3();
@@ -99,22 +102,52 @@ export function createAim(opts: AimOpts): Aim {
    *  has no on-screen button — one of the two has to be there. */
   let hasMouse = false;
 
-  /** Where a screen point lands on the ground, clamped to the reach. */
-  const place = (sx: number, sy: number): boolean => {
-    const el = (opts.camera as THREE.Camera & { userData?: unknown });
-    void el;
-    ndcTmp.set((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1);
-    ray.setFromCamera(ndcTmp, opts.camera as THREE.PerspectiveCamera);
-    if (!ray.ray.intersectPlane(plane, hitPoint)) return false;
+  /** How far the finger travels to push the circle the whole reach.
+   *
+   *  A fraction of the SHORTER side of the screen, not a pixel count: the same
+   *  thumb movement should mean the same thing on a phone and on a desktop
+   *  window. About a hundred and sixty pixels on a landscape phone, which is a
+   *  comfortable thumb arc without lifting. */
+  const FULL_DRAG = (): number => Math.min(window.innerWidth, window.innerHeight) * 0.42;
+
+  const fwd = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  const UP = new THREE.Vector3(0, 1, 0);
+
+  /** Where the circle goes for a drag of (dx, dy) SCREEN pixels from where the
+   *  press began.
+   *
+   *  Relative to the caster, not to the finger. Mapping the finger straight
+   *  onto the ground put the circle wherever the thumb happened to be — which
+   *  is on the button, in the bottom corner — and then slid it out from there.
+   *  The spell comes out of the HERO, so the gesture has to read as pushing it
+   *  away from the hero. It is also the only model a directional spell could
+   *  ever use: a line or a cone needs an origin and a direction, and an
+   *  absolute finger position is neither.
+   *
+   *  The screen delta is turned into a world one through the CAMERA, so "drag
+   *  up" means away from you whichever way the camera has been swung. */
+  const place = (dx: number, dy: number): boolean => {
+    const cam = opts.camera as THREE.PerspectiveCamera;
+    cam.getWorldDirection(fwd);
+    fwd.y = 0;
+    if (fwd.lengthSq() < 1e-6) return false;
+    fwd.normalize();
+    right.crossVectors(fwd, UP).normalize();
+
     const from = opts.from();
-    const dx = hitPoint.x - from.x;
-    const dz = hitPoint.z - from.z;
-    const d = Math.hypot(dx, dz);
     const r = opts.reach();
+    const scale = r / FULL_DRAG();
+    // Screen y grows downward, so dragging UP is forward.
+    const wx = right.x * dx + fwd.x * -dy;
+    const wz = right.z * dx + fwd.z * -dy;
+    let ox = wx * scale;
+    let oz = wz * scale;
+    const d = Math.hypot(ox, oz);
     // Clamped, not refused. A circle that vanishes past the edge of the reach
     // reads as a bug; one that slides along the edge reads as a rule.
-    if (d > r) { target.set(from.x + (dx / d) * r, 0, from.z + (dz / d) * r); }
-    else target.set(hitPoint.x, 0, hitPoint.z);
+    if (d > r) { ox = (ox / d) * r; oz = (oz / d) * r; }
+    target.set(from.x + ox, 0, from.z + oz);
     haveTarget = true;
     return true;
   };
@@ -137,6 +170,7 @@ export function createAim(opts: AimOpts): Aim {
     armed = false;
     haveTarget = false;
     pointerId = null;
+    origin = null;
     screen = null;
     show(false);
     if (cancelled) { cancelled = false; return; }
@@ -153,6 +187,7 @@ export function createAim(opts: AimOpts): Aim {
     armed = false;
     cancelled = false;
     pressedAt = performance.now();
+    origin = { x: e.clientX, y: e.clientY };
     screen = { x: e.clientX, y: e.clientY };
     try { button?.setPointerCapture(e.pointerId); } catch { /* capture is a nicety */ }
   };
@@ -200,6 +235,10 @@ export function createAim(opts: AimOpts): Aim {
         cancelled = false;
         pressedAt = performance.now();
         pointerId = -1;
+        origin = {
+          x: (ndc.x * 0.5 + 0.5) * window.innerWidth,
+          y: (-ndc.y * 0.5 + 0.5) * window.innerHeight,
+        };
       }
       if (down && pointerId === -1) {
         if (!keyHeld) { finish(); return; }
@@ -213,7 +252,10 @@ export function createAim(opts: AimOpts): Aim {
       if (!down) { show(false); return; }
       if (!armed && performance.now() - pressedAt >= ARM_MS) armed = true;
       if (!armed) { show(false); return; }
-      if (screen) place(screen.x, screen.y);
+      // Zero drag puts it on the caster — a hold with no movement casts at your
+      // own feet, which is a real choice and not a mistake.
+      if (screen && origin) place(screen.x - origin.x, screen.y - origin.y);
+      else if (!haveTarget) place(0, 0);
       show(haveTarget);
     },
 

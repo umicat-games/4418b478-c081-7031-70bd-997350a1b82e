@@ -2074,6 +2074,24 @@ makes it about choosing which crowd."* The only thing missing was the player
 choosing. Each staff already carried its own radius (fire 2.2, ice 3.2, bolt
 2.6); the reach is twice that.
 
+### The circle comes out of the HERO, not out of your thumb
+
+The drag is **relative**. Where the press began and where the finger is now are
+both meaningless on their own; the DELTA between them pushes the circle away
+from the caster, through the camera, so "drag up" is away from you whichever way
+the camera has been swung. Zero drag leaves it on the hero — a hold with no
+movement casts at your own feet, which is a real choice.
+
+Mapping the finger straight onto the ground put the circle wherever the thumb
+was, which is on the button in the bottom corner, and slid it out from there.
+
+And it is the only model a **directional** spell could ever use. A line or a
+cone needs an origin and a direction; an absolute finger position is neither.
+
+A full-reach push is 0.42 of the screen's shorter side — about 160px on a
+landscape phone, a comfortable thumb arc without lifting — so the same movement
+means the same thing on a phone and in a desktop window.
+
 ### It needs nothing from the SDK, and that was measured first
 
 The on-screen buttons are the SDK's divs with no id on them. Before writing any
