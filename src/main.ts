@@ -2309,7 +2309,10 @@ export async function startLevel(
   /** The ground trail, for the steps that name a square to stand on. Built
    *  whether or not this is the tutorial board, because building it lazily
    *  inside a step means building it mid-frame in the render loop. */
-  const scriptTrail = createWayfinder(world.scene);
+  // Cyan, like the rings. The trail, the ring on the ground and the ring on the
+  // button are ONE instruction — a white trail beside two cyan marks reads as
+  // three separate things that happen to be on screen at the same time.
+  const scriptTrail = createWayfinder(world.scene, { color: 0x4fd2ff });
   /** The square a step is pointing at. Pulses, so it is not mistaken for the
    *  build marker that follows the hero around. */
   const scriptRing = new THREE.Mesh(

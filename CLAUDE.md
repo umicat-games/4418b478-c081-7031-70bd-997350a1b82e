@@ -1858,6 +1858,16 @@ starts: a sweep that fills and then does nothing is a control that lied.
 
 ### The tutorial points in CYAN, and it breathes
 
+The trail points too, and in the same colour. `createWayfinder` takes a colour;
+the village's stays white — it is the only thing pointing at anything there, so
+it only has to be legible — and the tutorial's is the pointing cyan. **The
+trail, the ring on the ground and the ring on the button are ONE instruction**,
+and three colours make them three things that happen to be on screen together.
+
+The upgrade step already had the trail; it was simply white, so it did not read
+as part of what the panel had just said.
+
+
 **Not gold.** Gold already means "chosen" in this game — the selected hotbar
 cell wears a `#ffd54a` border — so a gold ring around the button the tutorial
 was pointing at read as a second selection, and the two were indistinguishable

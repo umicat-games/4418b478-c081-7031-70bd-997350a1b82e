@@ -48,7 +48,16 @@ export interface Wayfinder {
   dispose(): void;
 }
 
-export function createWayfinder(scene: THREE.Scene): Wayfinder {
+/** What colour the trail is.
+ *
+ *  The village's is white: it is the only thing pointing at anything there, so
+ *  it only has to be legible. The tutorial's is the same cyan as its rings —
+ *  the trail, the ring on the ground and the ring on the button are ONE
+ *  instruction, and three colours make them three things that happen to be on
+ *  screen together. */
+export interface WayfinderOpts { color?: number }
+
+export function createWayfinder(scene: THREE.Scene, opts: WayfinderOpts = {}): Wayfinder {
   // Two shapes, one inside the other: a dark chevron with a white one on top
   // of it. White alone is legible on grass in a screenshot and much less so on
   // a phone outdoors, and this village is almost entirely bright green — the
@@ -69,7 +78,7 @@ export function createWayfinder(scene: THREE.Scene): Wayfinder {
     const at = new THREE.Group();
     const mats: THREE.MeshBasicMaterial[] = [];
     for (const [geo, color, y, order] of [
-      [edge, 0x1d2a18, 0.03, 5], [face, 0xffffff, 0.04, 6],
+      [edge, 0x10242c, 0.03, 5], [face, opts.color ?? 0xffffff, 0.04, 6],
     ] as const) {
       const mat = new THREE.MeshBasicMaterial({
         color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
