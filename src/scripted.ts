@@ -49,6 +49,52 @@ function breatheStyle(): HTMLStyleElement {
   return st;
 }
 
+/** The scrim, with a hole in it where the thing to press is.
+ *
+ *  `clip-path` rather than a z-index sandwich: the buttons belong to the SDK's
+ *  own touch layer and the hotbar to the game's, each its own stacking context,
+ *  and lifting a child out of one of those above a full-screen overlay is not
+ *  something a child can do. A hole in the overlay needs no cooperation from
+ *  either.
+ *
+ *  It also takes the pointer events with it — a `clip-path` clips hit-testing,
+ *  not just paint — so everything outside the hole is dimmed AND dead, which is
+ *  the point. `evenodd` is what makes the inner subpath a hole rather than a
+ *  second island.
+ */
+function makeScrim(): HTMLElement {
+  const el = document.createElement('div');
+  el.dataset.scrim = '';
+  el.style.cssText = `
+    position: fixed; inset: 0; z-index: 28; display: none;
+    background: rgba(6,10,14,.62); pointer-events: auto;
+  `;
+  return el;
+}
+
+/** Punch the hole over `el`, or take the scrim down if there is nothing to
+ *  point at. Rounded, and a little larger than the thing itself, so the ring
+ *  breathing around it is inside the hole rather than cut in half by it. */
+function spotlight(scrim: HTMLElement, el: HTMLElement | null): void {
+  if (!el) { scrim.style.display = 'none'; return; }
+  const r = el.getBoundingClientRect();
+  if (r.width < 1) { scrim.style.display = 'none'; return; }
+  const pad = 10;
+  const x = r.left - pad, y = r.top - pad;
+  const w = r.width + pad * 2, h = r.height + pad * 2;
+  const rad = Math.min(w, h) / 2;
+  const W = window.innerWidth, H = window.innerHeight;
+  // Outer rectangle, then the hole as its own subpath. Arcs, so a round button
+  // gets a round hole and a hotbar cell a rounded-rectangle one.
+  const hole = `M ${x + rad} ${y}`
+    + ` H ${x + w - rad} A ${rad} ${rad} 0 0 1 ${x + w} ${y + rad}`
+    + ` V ${y + h - rad} A ${rad} ${rad} 0 0 1 ${x + w - rad} ${y + h}`
+    + ` H ${x + rad} A ${rad} ${rad} 0 0 1 ${x} ${y + h - rad}`
+    + ` V ${y + rad} A ${rad} ${rad} 0 0 1 ${x + rad} ${y} Z`;
+  scrim.style.clipPath = `path(evenodd, '${`M 0 0 H ${W} V ${H} H 0 Z ${hole}`}')`;
+  scrim.style.display = 'block';
+}
+
 /** Ring the on-screen button a step is telling you to press.
  *
  *  The SDK draws the action buttons and gives them no id, so they are found by
@@ -57,16 +103,19 @@ function breatheStyle(): HTMLStyleElement {
  *  attribute in the SDK the next time it is published; today it is the only way
  *  a game can point at its own button.
  */
-export function ringActionButton(icon: string | null): void {
+export function ringActionButton(icon: string | null): HTMLElement | null {
   const buttons = [...document.querySelectorAll<HTMLElement>('[data-umicat-touch] div')]
     .filter((d) => d.style.borderRadius === '50%');
+  let lit: HTMLElement | null = null;
   for (const b of buttons) {
     const glyph = b.querySelector<HTMLElement>('span');
     const mask = glyph ? (glyph.style.webkitMask || glyph.style.mask || '') : '';
     const wanted = !!icon && mask.includes(`${icon}.svg`);
     b.classList.toggle('umicat-point', wanted);
     if (!wanted) b.style.boxShadow = '';
+    else lit = b;
   }
+  return lit;
 }
 
 export interface ScriptStep {
@@ -111,6 +160,8 @@ export interface Script {
   slot(): number | null;
   /** Which action button to ring this frame, by icon name. */
   button(): string | null;
+  /** Dim everything except this element. `null` takes the scrim down. */
+  focus(el: HTMLElement | null): void;
   done(): boolean;
   dispose(): void;
 }
@@ -157,6 +208,8 @@ export function createScript(
   hudEl.append(box);
   const style = breatheStyle();
   hudEl.append(style);
+  const scrim = makeScrim();
+  hudEl.append(scrim);
   const line = box.querySelector<HTMLElement>('[data-line]')!;
 
   /** A way out.
@@ -246,8 +299,9 @@ export function createScript(
     target: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].at?.() ?? null : null),
     slot: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
     button: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),
+    focus: (el) => spotlight(scrim, el),
     done: () => i < 0,
-    dispose: () => { box.remove(); skip.remove(); style.remove(); },
+    dispose: () => { box.remove(); skip.remove(); style.remove(); scrim.remove(); },
   };
 }
 

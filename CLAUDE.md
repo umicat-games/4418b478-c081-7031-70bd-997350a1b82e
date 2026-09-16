@@ -1883,6 +1883,25 @@ instruction rather than two.
 A ring that sits there is furniture. A ring that breathes is asking to be
 pressed.
 
+### Everything but the thing to press goes grey
+
+A full-screen scrim with a **hole** in it, `clip-path: path(evenodd, …)`.
+
+Not a z-index sandwich: the action buttons belong to the SDK's touch layer and
+the hotbar to the game's, each its own stacking context, and lifting a child out
+of one of those above a full-screen overlay is not something a child can do. A
+hole needs no cooperation from either.
+
+`clip-path` clips **hit-testing**, not just paint, so the hole is the only live
+part of the screen — everything else is dimmed AND dead. A scrim that only dims
+still lets a lost player press the wrong thing, so the probe checks both: that
+the button is reachable through the hole, and that the middle of the board is
+not.
+
+**Only for steps that name a CONTROL.** "Stand on the marked square" points at
+the world, and the trail and the ring doing the pointing are IN it — a sheet
+over the board would cover the only two things the player is meant to look at.
+
 ### A step with no text
 
 `text` is optional. A step without it is pure staging — spawn something, open a

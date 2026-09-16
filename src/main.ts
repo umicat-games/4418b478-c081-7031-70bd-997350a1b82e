@@ -3218,6 +3218,7 @@ export async function startLevel(
           c.classList.toggle('umicat-point', i === want);
           if (i !== want) c.style.boxShadow = '';
         });
+        let spot: HTMLElement | null = want === null ? null : cells[want] ?? null;
         // And the button on the right, for the steps that name one.
         //
         // `'action'` rather than an icon name. The buttons are found by the
@@ -3225,7 +3226,15 @@ export async function startLevel(
         // are standing — so the sell step, which asked for `build`, rang
         // nothing at all: by then the button was wearing `upgrade`.
         const wantBtn = script.button();
-        ringActionButton(wantBtn === 'action' ? currentActionIcon() : wantBtn);
+        const litBtn = ringActionButton(wantBtn === 'action' ? currentActionIcon() : wantBtn);
+        if (litBtn) spot = litBtn;
+        // Everything but the thing to press goes grey.
+        //
+        // Only for a step that names a CONTROL. The step that says "stand on
+        // the marked square" points at the world, and the trail and the ring
+        // that do the pointing are in it — a scrim over the board would cover
+        // the only two things the player is meant to be looking at.
+        script.focus(spot);
         // The square the step is pointing at, marked in the world. The trail
         // shows the WAY there and goes out once you arrive, which left the last
         // two metres — and the arrival — unmarked.
