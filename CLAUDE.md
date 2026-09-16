@@ -1885,6 +1885,22 @@ And no counting. "Two hits" was a number to verify rather than a thing to watch,
 and it goes stale the day the weapon is rebalanced. The pacing still depends on
 `scriptEnemyHp` deriving it — the pacing is felt, not read.
 
+### An instruction names the button, where it is, and what it will look like
+
+"Put it down" with an icon in front of it is a puzzle: the player has not met
+that picture yet and has to work out which of the four circles on the right it
+matches. Every step now says **"press the ⟨icon⟩ button on the right"**.
+
+And the icon in the text is the one the button will be **WEARING** when they
+press it. The upgrade step showed the `build` hand — the picture that button
+stops wearing the very moment you stand on your own weapon, which is what the
+same instruction told you to do. An instruction pointing at nothing.
+
+The sell step carries BOTH: *hold the ⟨upgrade⟩ button until it turns to
+⟨sell⟩*. The change is the gesture, so the change is what it shows. That is also
+why `withIcon` is gone — a helper that puts one icon in front of a sentence
+could not say it.
+
 ### The ring follows what the button is WEARING
 
 The on-screen buttons are found by their icon, and that icon now changes with

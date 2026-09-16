@@ -17,7 +17,7 @@ import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, f
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
-import { createScript, withIcon, ringActionButton, type Script } from './scripted';
+import { createScript, ringActionButton, type Script } from './scripted';
 import { createWayfinder } from './wayfinder';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
@@ -2376,7 +2376,10 @@ export async function startLevel(
         done: () => !!buildCell && buildCell[0] === spot[0] && buildCell[1] === spot[1],
       },
       {
-        text: withIcon('build', 'Put it down'),
+        // Names the button AND where it is. An icon on its own is a puzzle:
+        // the player has not met it yet and has to find which of the four
+        // circles on the right it matches.
+        text: `Press the ${iconHtml('build', '1.25em')} button on the right to put it down`,
         // Long enough to watch it land before being told the next thing.
         after: 1.6,
         at: () => ({ x: spot[0], z: spot[1] }),
@@ -2409,7 +2412,12 @@ export async function startLevel(
       {
         // The same button, doing something else because of where you are
         // standing. That is the lesson, so the step names the place first.
-        text: withIcon('build', 'Stand on your weapon and press again to upgrade it'),
+        // The UPGRADE icon, not the build one. By the time they press it the
+        // button has changed — it changes because they are standing on their
+        // own weapon — and an instruction showing the picture the button used
+        // to wear is an instruction pointing at nothing.
+        text: `Stand on your weapon, then press the ${iconHtml('upgrade', '1.25em')}`
+          + ' button on the right',
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
         enter: () => {
@@ -2438,7 +2446,10 @@ export async function startLevel(
       {
         // Hold, not tap. The button becomes the sell icon while you hold it,
         // which is the only warning the gesture gets.
-        text: withIcon('sell', 'Hold the button down to sell it back'),
+        // Both pictures, because the change IS the gesture: you hold the one
+        // and let go when it has become the other.
+        text: `Hold the ${iconHtml('upgrade', '1.25em')} button on the right until it`
+          + ` turns to ${iconHtml('sell', '1.25em')} and the ring fills`,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
         enter: () => {
@@ -2453,7 +2464,8 @@ export async function startLevel(
       {
         // The board is empty now, on purpose: you sold the thing that was
         // doing the work, so the last lesson is that you can do it yourself.
-        text: withIcon('sword', 'Nothing is guarding the road. Chase it down and swing.'),
+        text: 'Nothing is guarding the road. Chase it down and press the '
+          + `${iconHtml('sword', '1.25em')} button on the right`,
         button: () => 'sword',
         enter: () => {
           onlyBuildAt = null;

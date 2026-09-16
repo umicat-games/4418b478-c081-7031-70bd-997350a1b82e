@@ -1,4 +1,3 @@
-import { iconHtml } from './icons';
 
 /**
  * The tutorial board's script.
@@ -238,8 +237,6 @@ export function createScript(
   };
 }
 
-/** The instruction text, with the button it names drawn into it. A step that
- *  says "press the build button" and does not show which button is a step that
- *  has to be read twice. */
-export const withIcon = (icon: Parameters<typeof iconHtml>[0], text: string): string =>
-  `${iconHtml(icon, '1.25em')} ${text}`;
+// `withIcon` lived here. The steps build their own lines now, because several
+// of them carry TWO pictures — "hold the one until it becomes the other" — and
+// a helper that puts one icon in front of a sentence could not say that.
