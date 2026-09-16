@@ -17,7 +17,7 @@ import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, f
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
-import { createScript, withIcon, type Script } from './scripted';
+import { createScript, withIcon, ringActionButton, type Script } from './scripted';
 import { createWayfinder } from './wayfinder';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
@@ -2279,6 +2279,18 @@ export async function startLevel(
    *  whether or not this is the tutorial board, because building it lazily
    *  inside a step means building it mid-frame in the render loop. */
   const scriptTrail = createWayfinder(world.scene);
+  /** The square a step is pointing at. Pulses, so it is not mistaken for the
+   *  build marker that follows the hero around. */
+  const scriptRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.34, 0.5, 40).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd76a, transparent: true, opacity: 0.7,
+      depthWrite: false, side: THREE.DoubleSide,
+    }),
+  );
+  scriptRing.visible = false;
+  scriptRing.renderOrder = 6;
+  world.scene.add(scriptRing);
   /** The square the script wants the tower on: the second build spot along the
    *  road from where the enemies come out.
    *
@@ -2287,11 +2299,19 @@ export async function startLevel(
    *  spot — that one is level with the gate, and a tower there has the enemy in
    *  range for a moment before it is walking away. */
   const scriptCell = (): [number, number] => {
-    const gate = ROUTES[0][0];
-    const byGate = [...pathData.spots].sort((a, b) =>
-      (Math.hypot(a[0] - gate[0], a[1] - gate[1]))
-      - (Math.hypot(b[0] - gate[0], b[1] - gate[1])));
-    return byGate[Math.min(1, byGate.length - 1)];
+    // A THIRD of the way along, not the first square past the gate.
+    //
+    // Beside the gate, the enemy spawns already inside the tower's range: it
+    // was shot on its first frame and died a second and a half later having
+    // moved half a tile, so the step that says "it shoots on its own, two hits"
+    // was over before it could be read. From here it comes out, walks into
+    // range and is shot in front of you — which is the lesson.
+    const route = ROUTES[0];
+    const aim = route[Math.floor(route.length / 3)];
+    const byAim = [...pathData.spots].sort((a, b) =>
+      (Math.hypot(a[0] - aim[0], a[1] - aim[1]))
+      - (Math.hypot(b[0] - aim[0], b[1] - aim[1])));
+    return byAim[0];
   };
 
   if (scripted) {
@@ -2326,6 +2346,7 @@ export async function startLevel(
       {
         text: withIcon('build', 'Put it down'),
         at: () => ({ x: spot[0], z: spot[1] }),
+        button: () => 'build',
         done: () => towers.length > 0,
       },
       {
@@ -2336,7 +2357,11 @@ export async function startLevel(
         done: () => kills > placedAt,
       },
       {
-        text: 'Walk over what it dropped',
+        // A statement, not an instruction. The magnet fetches what they drop
+        // from three tiles away, so "walk over it" is telling the player to do
+        // something that has already happened — it completed in a second flat
+        // and read as a step being skipped.
+        text: 'Its gold comes to you',
         done: () => pickedUp > 0,
       },
       {
@@ -2344,6 +2369,7 @@ export async function startLevel(
         // standing. That is the lesson, so the step names the place first.
         text: withIcon('build', 'Stand on your weapon and press again to upgrade it'),
         at: () => ({ x: spot[0], z: spot[1] }),
+        button: () => 'build',
         enter: () => {
           upgradedAt = kills;
           // Make sure it can be paid for. The board hands out 25g, the weapon
@@ -2366,6 +2392,7 @@ export async function startLevel(
         // which is the only warning the gesture gets.
         text: withIcon('build', 'Hold the button to sell it back'),
         at: () => ({ x: spot[0], z: spot[1] }),
+        button: () => 'build',
         enter: () => { soldAt = towers.length; },
         done: () => towers.length === 0,
       },
@@ -2373,6 +2400,7 @@ export async function startLevel(
         // The board is empty now, on purpose: you sold the thing that was
         // doing the work, so the last lesson is that you can do it yourself.
         text: withIcon('sword', 'Nothing is guarding the road. Chase it down and swing.'),
+        button: () => 'sword',
         enter: () => {
           onlyBuildAt = null;
           onlyKind = null;
@@ -2481,6 +2509,7 @@ export async function startLevel(
     vfx.clear();
     script?.dispose();
     scriptTrail.dispose();
+    ringActionButton(null);
     world.dispose();
     world.scene.clear();
     // The handle goes with it. A debug handle that outlives the thing it
@@ -3077,6 +3106,20 @@ export async function startLevel(
           c.style.boxShadow = i === want
             ? '0 0 0 3px #ffd76a, 0 0 18px rgba(255,215,106,.7)' : '';
         });
+        // And the button on the right, for the steps that name one. Half the
+        // script is about that button doing three different things.
+        ringActionButton(script.button());
+        // The square the step is pointing at, marked in the world. The trail
+        // shows the WAY there and goes out once you arrive, which left the last
+        // two metres — and the arrival — unmarked.
+        const aim = script.target();
+        scriptRing.visible = !!aim;
+        if (aim) {
+          scriptRing.position.set(aim.x, 0.045, aim.z);
+          const pulse = 1 + Math.sin(now / 260) * 0.08;
+          scriptRing.scale.setScalar(pulse);
+          (scriptRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(now / 260) * 0.2;
+        }
         // The board ends when the script does, not when a wave table runs out —
         // there is no wave table on this board.
         if (script.done() && running) endRun(true);

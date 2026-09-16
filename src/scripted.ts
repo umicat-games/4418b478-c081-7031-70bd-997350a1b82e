@@ -22,6 +22,25 @@ import { iconHtml } from './icons';
  *     instructions is not a tutorial.
  */
 
+/** Ring the on-screen button a step is telling you to press.
+ *
+ *  The SDK draws the action buttons and gives them no id, so they are found by
+ *  the icon they are currently wearing — each one's glyph is a `<span>` masked
+ *  with that action's SVG. Fragile, and worth replacing with a `data-action`
+ *  attribute in the SDK the next time it is published; today it is the only way
+ *  a game can point at its own button.
+ */
+export function ringActionButton(icon: string | null): void {
+  const buttons = [...document.querySelectorAll<HTMLElement>('[data-umicat-touch] div')]
+    .filter((d) => d.style.borderRadius === '50%');
+  for (const b of buttons) {
+    const glyph = b.querySelector<HTMLElement>('span');
+    const mask = glyph ? (glyph.style.webkitMask || glyph.style.mask || '') : '';
+    const wanted = !!icon && mask.includes(`${icon}.svg`);
+    b.style.boxShadow = wanted ? '0 0 0 3px #ffd76a, 0 0 22px rgba(255,215,106,.85)' : '';
+  }
+}
+
 export interface ScriptStep {
   /** The instruction. One thing to do. */
   text: string;
@@ -34,6 +53,8 @@ export interface ScriptStep {
   at?: () => { x: number; z: number } | null;
   /** A hotbar slot to ring, if any. */
   slot?: () => number | null;
+  /** Which on-screen action button to ring, by the icon it is wearing. */
+  button?: () => string | null;
 }
 
 export interface Script {
@@ -45,6 +66,8 @@ export interface Script {
   target(): { x: number; z: number } | null;
   /** Which hotbar slot to ring this frame. */
   slot(): number | null;
+  /** Which action button to ring this frame, by icon name. */
+  button(): string | null;
   done(): boolean;
   dispose(): void;
 }
@@ -58,8 +81,14 @@ export interface Script {
 function makeBox(): HTMLElement {
   const el = document.createElement('div');
   el.dataset.script = '';
+  // TOP of the screen, not the bottom.
+  //
+  // It started above the hotbar, which put it across the middle of the play
+  // area — over the hero, over the square the step was pointing at, and over
+  // the enemy the step was telling you to watch. Translucent did not save it:
+  // the thing an instruction is about is the one thing it must not cover.
   el.style.cssText = `
-    position: fixed; left: 50%; transform: translateX(-50%); bottom: 116px;
+    position: fixed; left: 50%; transform: translateX(-50%); top: 14px;
     z-index: 30; max-width: min(520px, 84vw); pointer-events: none;
     background: rgba(12,17,23,.82); color: #fff; border-radius: 14px;
     padding: 11px 18px; text-align: center; opacity: 0;
@@ -102,6 +131,7 @@ export function createScript(steps: ScriptStep[], hudEl: HTMLElement): Script {
     text: () => (i >= 0 && i < steps.length ? steps[i].text : null),
     target: () => (i >= 0 && i < steps.length ? steps[i].at?.() ?? null : null),
     slot: () => (i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
+    button: () => (i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),
     done: () => i < 0,
     dispose: () => box.remove(),
   };

@@ -1829,6 +1829,35 @@ loads the models its wave table names, and an empty table made the first
 scripted spawn throw. `firstWaveDelay: 999` keeps the wave loop from ever
 reaching it.
 
+### What testing it on a phone found
+
+Four things, and three of them were the same mistake: the board was telling the
+player where to look and then standing in front of it.
+
+- **The box belongs at the TOP.** Above the hotbar put it across the middle of
+  the play area — over the hero, over the square the step pointed at, and over
+  the enemy the step said to watch. Translucent did not save it.
+- **The square a step names is ringed in the world.** The trail shows the WAY
+  there and goes out once you arrive, which left the arrival unmarked.
+- **So is the on-screen button.** Half the script is about that one button doing
+  three different things. The SDK gives its buttons no id, so they are found by
+  the icon they are wearing — worth replacing with a `data-action` attribute
+  next time the SDK is published.
+- **The enemy was invisible.** Put beside the gate, the tower had it in range on
+  its first frame: it spawned already at 1.4 of 3.4 health, moved half a tile
+  and died — the whole "it shoots on its own, two hits" lesson over in a second
+  and a half, behind the box. The build square is now a third of the way along
+  the road, so it comes out, walks into range, and is shot in front of you.
+
+And "walk over what it dropped" became a statement rather than an instruction:
+the magnet fetches it from three tiles away, so the step completed in a second
+and read as one being skipped.
+
+**The button glow only exists on a phone.** The SDK mounts the on-screen
+controls only where there is a touch screen, so a desktop probe checking for it
+passes by finding nothing — `verify-3d-tutorial-script` boots a second, touch
+context for exactly that check.
+
 ### It broke every level probe
 
 `enterLevel` boots a fresh save, so all of them walked out and landed on the
