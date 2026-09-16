@@ -207,6 +207,41 @@ export function createAim(opts: AimOpts): Aim {
     finish();
   };
 
+  /** Everything that can end the gesture, beyond the button's own `pointerup`.
+   *
+   *  It has to be beyond it, because that one event goes missing. Reproduced
+   *  with two fingers down — the walking thumb on the stick and the casting
+   *  thumb on the button — and lifting the casting one left the circle up and
+   *  the attack button dead for the rest of the run, with BOTH this and the
+   *  SDK's own latch still believing it was held.
+   *
+   *  A gesture whose only way out is one event is a gesture that gets stuck,
+   *  and "stuck" here means the weapon stops working for good. */
+  const onWindowUp = (e: PointerEvent): void => {
+    if (!down || e.pointerId !== pointerId) return;
+    onUp(e);
+  };
+  const onTouchEnd = (e: TouchEvent): void => {
+    if (!down || pointerId === -1) return;
+    // Is anything still down near where the finger was? If nothing is, the
+    // finger that was steering has gone, whatever the pointer events said.
+    const last = screen;
+    if (!last) { cancelled = false; finish(); return; }
+    for (const t of Array.from(e.touches)) {
+      if (Math.hypot(t.clientX - last.x, t.clientY - last.y) < 60) return;
+    }
+    cancelled = false;
+    finish();
+  };
+  const onGone = (): void => { if (down) { cancelled = true; finish(); } };
+  window.addEventListener('pointerup', onWindowUp, true);
+  window.addEventListener('pointercancel', onWindowUp, true);
+  window.addEventListener('touchend', onTouchEnd, true);
+  window.addEventListener('touchcancel', onTouchEnd, true);
+  // Backgrounded or focus lost: nobody is holding anything.
+  window.addEventListener('blur', onGone);
+  document.addEventListener('visibilitychange', onGone);
+
   return {
     watch(btn) {
       if (btn === button) return;
@@ -226,7 +261,14 @@ export function createAim(opts: AimOpts): Aim {
 
     update(ndc, keyHeld) {
       if (ndc) hasMouse = true;
-      if (!opts.enabled()) { show(false); return; }
+      if (!opts.enabled()) { if (down) { cancelled = true; finish(); } show(false); return; }
+      // The SDK's own latch as a second opinion. If IT says the button is not
+      // held, the finger is gone whatever arrived at this element.
+      if (down && pointerId !== -1 && !keyHeld) { finish(); return; }
+      // And a last resort. Nobody holds a button for twelve seconds; a gesture
+      // that has been open that long is one whose release was lost, and a
+      // wrong cancel is recoverable where a dead attack button is not.
+      if (down && performance.now() - pressedAt > 12000) { cancelled = true; finish(); return; }
       // The keyboard path, for a desktop that has no on-screen button: hold the
       // key and steer with the mouse, which is already an aiming device.
       if (!down && keyHeld && ndc) {
@@ -263,6 +305,12 @@ export function createAim(opts: AimOpts): Aim {
     canAim: () => button !== null || hasMouse,
     at: () => (haveTarget && armed ? { x: target.x, z: target.z } : null),
     dispose() {
+      window.removeEventListener('pointerup', onWindowUp, true);
+      window.removeEventListener('pointercancel', onWindowUp, true);
+      window.removeEventListener('touchend', onTouchEnd, true);
+      window.removeEventListener('touchcancel', onTouchEnd, true);
+      window.removeEventListener('blur', onGone);
+      document.removeEventListener('visibilitychange', onGone);
       this.watch(null);
       for (const m of [reachRing, blastRing]) {
         opts.scene.remove(m);

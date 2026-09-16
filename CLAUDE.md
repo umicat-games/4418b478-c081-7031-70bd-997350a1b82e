@@ -2121,3 +2121,30 @@ It does NOT check "90ms in, the circle has not opened yet". The arm threshold is
 200ms and a headless frame is ninety, so that sample lands on either side of it
 depending on the machine. What a tap DOES is an outcome; when it does it is a
 stopwatch reading.
+
+### The gesture must have more than one way out
+
+Reported from a phone: the circle stayed up with no finger on the screen, and
+the attack button did nothing for the rest of the run. **That is one fault, not
+two** — a gesture that believes it is still open swallows every press.
+
+It was not reproduced. Three candidates were tested and cleared: a correct
+two-finger sequence (walking thumb down, casting thumb lifted) ends cleanly, a
+resize does not rebuild the SDK's button, and the first "repro" was a probe bug
+— CDP's `touchEnd` names the points being RELEASED, so it was lifting the
+walking finger and leaving the casting one down, and the game was right to keep
+aiming.
+
+So the fix is not aimed at a cause. It is that **a gesture whose only exit is
+one event is a gesture that gets stuck**, and here "stuck" means the weapon
+stops working for good. Every other exit is now wired:
+
+- `pointerup` / `pointercancel` on the WINDOW, capture phase, so a release that
+  lands somewhere else still ends it;
+- `touchend` / `touchcancel` on the window, ending it when nothing is still
+  down near where the finger was;
+- `blur` and `visibilitychange` — backgrounded means nobody is holding anything;
+- the SDK's own latch as a second opinion each frame: if IT says the button is
+  not held, the finger is gone whatever arrived at this element;
+- and twelve seconds as a last resort. Nobody holds a button that long, and a
+  wrong cancel is recoverable where a dead attack button is not.
