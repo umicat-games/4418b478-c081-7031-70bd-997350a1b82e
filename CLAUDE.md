@@ -2148,3 +2148,20 @@ stops working for good. Every other exit is now wired:
   not held, the finger is gone whatever arrived at this element;
 - and twelve seconds as a last resort. Nobody holds a button that long, and a
   wrong cancel is recoverable where a dead attack button is not.
+
+### The wait was already there; it was invisible
+
+All three staffs have had a 1.7-second cooldown from the start, and
+`heroAttack` returned early during it **silently** — no sound, no dimming, no
+count. **A silent cooldown is indistinguishable from a broken button**, which is
+a bad thing for a control to be mistaken for even once, and it is exactly what
+"pressing it does nothing" looks like.
+
+`src/cooldown.ts` draws the sweep every MOBA draws, and the same way round: a
+dark wedge that UNWINDS, because the dark part is what is left. One that fills
+up reads as charging, and this is the opposite — the weapon is ready when the
+dark is gone.
+
+Drawn as an overlay tracking the button's rectangle, not as a child of it. The
+buttons belong to the SDK, and hanging a child on one breaks the next time it
+rebuilds its controls.

@@ -20,6 +20,7 @@ import { createTutorial, type Tutorial } from './tutorial';
 import { createScript, ringActionButton, type Script } from './scripted';
 import { createWayfinder } from './wayfinder';
 import { createAim } from './aim';
+import { createCooldownDial } from './cooldown';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { icon, setIconText, iconHtml, type IconName } from './icons';
@@ -1640,6 +1641,10 @@ export async function startLevel(
     cast: (at) => heroAttack(at),
   });
 
+  /** The sweep over the attack button while the staff recharges. The wait was
+   *  already there and entirely invisible. */
+  const dial = createCooldownDial(hudEl);
+
   /** Whether the weapon in hand is placed rather than pointed. */
   const aimsByDrag = (): boolean => kind.cast === 'burst';
   /** How far from the hero a placed spell may go.
@@ -2652,6 +2657,7 @@ export async function startLevel(
     script?.dispose();
     scriptTrail.dispose();
     aim.dispose();
+    dial.dispose();
     ringActionButton(null);
     world.dispose();
     world.scene.clear();
@@ -3272,6 +3278,9 @@ export async function startLevel(
       }
       else if (input.consume('attack')) heroAttack();
       aim.update(pointerNdc, input.held('attack'));
+      // Only the staffs wait; a sword has nothing to show.
+      dial.show(aimsByDrag() ? attackButton() : null,
+                aimsByDrag() ? staffCooldown / (kind.cooldown ?? 1.7) : 0);
       readBuildButton();
       if (invincible > 0) invincible -= dt;
       if (staffCooldown > 0) staffCooldown -= dt;
