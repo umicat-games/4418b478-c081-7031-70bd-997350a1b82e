@@ -2393,9 +2393,49 @@ export async function startLevel(
       spawnOne({ ...level.waves[0], count: 1, hp: scriptEnemyHp() });
     };
     const alive = (): number => enemies.filter((e) => e.alive).length;
+    const nearestAway = (): number => {
+      const live = enemies.filter((e) => e.alive);
+      if (!live.length) return Infinity;
+      return Math.min(...live.map((e) =>
+        Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z)));
+    };
+    /** The staff the tutorial hands over for its last two steps.
+     *
+     *  Handed over, not earned: it is gone the moment the board ends, because
+     *  what the player owns lives in the save and this board writes none of it.
+     *  Fire is the first one they will actually forge. */
+    const TAUGHT_STAFF: Weapon = 'fire';
+    /** An enemy that one cast kills.
+     *
+     *  Derived, like the tower's: the fire staff does ONE damage — its point is
+     *  the burn, not the hit — so the enemy the towers were sized against would
+     *  take four casts, and "press it and watch" would be a lie four times over.
+     */
+    /** Seconds since the board last emptied, so a replacement is sent with a
+     *  beat rather than the instant the last one falls. */
+    let emptyFor = 0;
+    /** Keep something on the board for a step that is waiting for a kill of a
+     *  particular kind. Without it, killing it the ORDINARY way finishes
+     *  nothing and nothing else arrives. */
+    const keepOne = (send: () => void) => (): void => {
+      if (alive() > 0) { emptyFor = 0; return; }
+      emptyFor += 1;
+      // About a second and a half at sixty frames, and longer on a slow one —
+      // which is the right way round, since a slow frame means a slow fight.
+      if (emptyFor > 90) { emptyFor = 0; send(); }
+    };
+    const spawnForStaff = (): void => {
+      spawnOne({
+        ...level.waves[0], count: 1,
+        hp: weaponDamage(TAUGHT_STAFF, weaponLevel),
+      });
+    };
     let placedAt = -1;
     let upgradedAt = -1;
     let soldAt = -1;
+    let staffKills = -1;
+    let placedKills = -1;
+    let placedCasts = -1;
 
     script = createScript([
       {
@@ -2548,6 +2588,41 @@ export async function startLevel(
           onScriptLeak = () => { if (alive() === 0) spawnScripted(); };
         },
         done: () => heroHits > 0 && alive() === 0,
+        tick: keepOne(spawnScripted),
+        after: 1.6,
+      },
+      {
+        // The staff, tapped. Same button, a weapon that does not need to touch
+        // them — which is the whole of what a staff is.
+        text: `You have a fire staff now. Get close and press the `
+          + `${iconHtml('fire', '1.25em')} button on the right`,
+        button: () => 'attack',
+        ready: () => nearestAway() < 2.6,
+        enter: () => {
+          setWeapon(TAUGHT_STAFF);
+          staffKills = kills;
+          spawnForStaff();
+        },
+        done: () => kills > staffKills,
+        tick: keepOne(spawnForStaff),
+        after: 1.8,
+      },
+      {
+        // And placed. Far enough away that the staff's own lock cannot reach —
+        // which is what makes the drag the only way to land it, rather than a
+        // flourish over a tap that would have worked anyway.
+        text: 'Now stay back from this one<br>'
+          + `Hold the ${iconHtml('fire', '1.25em')} button, slide your finger to aim, then let go`,
+        button: () => 'attack',
+        enter: () => {
+          placedKills = kills;
+          placedCasts = aimedCasts;
+          spawnForStaff();
+        },
+        // A TAP kills it too — the enemy is sized to one cast — and that
+        // satisfies half of this and none of the lesson. So another one comes.
+        done: () => kills > placedKills && aimedCasts > placedCasts,
+        tick: keepOne(spawnForStaff),
       },
     ], hudEl, () => {
       // Skipping ends the board the same way finishing it does — a win, with
@@ -2980,6 +3055,12 @@ export async function startLevel(
   /** Where a dragged cast wants the blast, or null for "wherever the staff
    *  would have put it". Set for the one call and cleared inside. */
   let placedCast: THREE.Vector3 | null = null;
+  /** How many casts were PLACED by dragging rather than aimed by the staff.
+   *
+   *  The tutorial's last step is satisfied by a kill AND one of these: without
+   *  it, walking up and tapping finishes a step whose whole subject is the
+   *  drag. */
+  let aimedCasts = 0;
   const heroAttack = (at: THREE.Vector3 | null = null): void => {
     placedCast = at;
     if (!running || animator.busy) return;
@@ -2999,6 +3080,7 @@ export async function startLevel(
       // that with the nearest enemy would make the drag decorative.
       const at = placedCast
         ?? (lockTarget?.alive ? lockTarget.obj.position : hero.position);
+      if (placedCast) aimedCasts += 1;
       placedCast = null;
       spellLamp.position.set(at.x, at.y + 0.9, at.z);
       castBurst(at);

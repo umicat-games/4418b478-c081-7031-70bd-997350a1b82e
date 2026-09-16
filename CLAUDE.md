@@ -1912,6 +1912,33 @@ instruction was "stand on your weapon".
 A step with no `ready` never dims at all. The last one is a chase, and there is
 no moment during it when the player should be unable to move.
 
+### Two more steps: the staff, tapped and then placed
+
+After the sword, the board hands over a **fire staff** — handed over, not
+earned; it is gone when the board ends, because nothing here writes to the save
+— and teaches the two ways it is used. Get close and TAP: the same button, a
+weapon that does not need to touch them. Then stay back and HOLD, slide, let go.
+
+The second one is only a lesson if the drag is the only way to land it, so the
+step wants a kill **and** a placed cast. Tapping from close by finishes nothing.
+
+**Its enemy's health is derived too**, and differently: `weaponDamage(staff)`
+rather than the tower's. The fire staff does ONE damage — its point is the burn,
+not the hit — so an enemy sized against a tower would take four casts and "press
+it and watch" would be a lie four times over.
+
+### A step waiting for a particular kill must keep something to kill
+
+`tick` on a step, called every frame while it is live. Twice now a step has
+waited for something to be killed a particular way and had its subject killed
+the ordinary way instead — a tower killing the enemy the sword step was about,
+and a tap killing the one the drag step was about. Both left a step that could
+never finish, with nothing sending another.
+
+`keepOne` sends a replacement about a second and a half after the board empties.
+Longer on a slow machine, which is the right way round: a slow frame means a
+slow fight.
+
 ### The chase step locks the bar, and that is not about fairness
 
 Nothing may be built and no weapon may be chosen on the last step. The obvious

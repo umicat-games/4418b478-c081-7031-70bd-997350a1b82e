@@ -132,6 +132,14 @@ export interface ScriptStep {
   /** Fired once, when this step is CONFIRMED. Where the script spawns enemies
    *  and opens and closes the gates on what is allowed. */
   enter?: () => void;
+  /** Called every frame while this step is the live one.
+   *
+   *  For keeping a step POSSIBLE. A step that waits for something to be killed
+   *  in a particular way can have its subject killed the ordinary way — and
+   *  then it waits forever, because nothing sends another. Twice now: a tower
+   *  killing the enemy the sword step was about, and a tap killing the one the
+   *  drag step was about. */
+  tick?: () => void;
   /** Seconds to wait after this step is done before the next instruction.
    *
    *  What a step teaches is usually the RESULT — the weapon landing, the enemy
@@ -300,6 +308,7 @@ export function createScript(
         }
         return;
       }
+      steps[i].tick?.();
       if (steps[i].done()) {
         phase = 'read';            // stop watching; the panel is not up yet
         settleUntil = performance.now() + (steps[i].after ?? 0) * 1000;
