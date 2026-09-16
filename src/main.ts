@@ -2315,7 +2315,8 @@ export async function startLevel(
   const scriptRing = new THREE.Mesh(
     new THREE.RingGeometry(0.34, 0.5, 40).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({
-      color: 0xffd76a, transparent: true, opacity: 0.7,
+      // Cyan, like everything else the tutorial points with.
+      color: 0x4fd2ff, transparent: true, opacity: 0.8,
       depthWrite: false, side: THREE.DoubleSide,
     }),
   );
@@ -2376,6 +2377,8 @@ export async function startLevel(
       },
       {
         text: withIcon('build', 'Put it down'),
+        // Long enough to watch it land before being told the next thing.
+        after: 1.6,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
         enter: () => { allow.build = true; allow.upgrade = false; allow.sell = false; },
@@ -2384,9 +2387,14 @@ export async function startLevel(
       {
         // One enemy. It takes two hits, and the health it takes them with is
         // derived from the tower's damage — see `scriptEnemyHp`.
-        text: 'It shoots on its own. Two hits.',
+        // No counting. "Two hits" is a number the player has to verify rather
+        // than a thing to watch, and it goes stale the day the weapon is
+        // rebalanced — the pacing still depends on it (see `scriptEnemyHp`),
+        // but the pacing is felt, not read.
+        text: 'It shoots on its own. Watch.',
         enter: () => { placedAt = kills; spawnScripted(); },
         done: () => kills > placedAt,
+        after: 1.8,
       },
       {
         // A statement, not an instruction. The magnet fetches what they drop
@@ -2395,6 +2403,8 @@ export async function startLevel(
         // and read as a step being skipped.
         text: 'Its gold comes to you',
         done: () => pickedUp > 0,
+        // The coin's flight IS the lesson here.
+        after: 1.4,
       },
       {
         // The same button, doing something else because of where you are
@@ -2416,11 +2426,14 @@ export async function startLevel(
           if (t && gold < upgradeCost(t)) { gold = upgradeCost(t); renderHud(); }
         },
         done: () => towers.some((t) => t.level > 1),
+        // Watch it grow before being told what that bought.
+        after: 1.6,
       },
       {
-        text: 'Now one hit.',
+        text: 'Now watch it again.',
         enter: () => { upgradedAt = kills; spawnScripted(); },
         done: () => kills > upgradedAt,
+        after: 1.8,
       },
       {
         // Hold, not tap. The button becomes the sell icon while you hold it,
@@ -2435,6 +2448,7 @@ export async function startLevel(
           soldAt = towers.length;
         },
         done: () => towers.length === 0,
+        after: 1.4,
       },
       {
         // The board is empty now, on purpose: you sold the thing that was
@@ -3170,10 +3184,13 @@ export async function startLevel(
         // Ring the hotbar slot the step is talking about. A bar of five cells
         // and an instruction saying "the weapon below" is a sentence with five
         // possible referents.
+        // The same breathing cyan the buttons use. NOT gold: the selected cell
+        // already wears a gold border, so a gold ring around the cell the
+        // tutorial is pointing at read as a second selection.
         const want = script.slot();
         cells.forEach((c, i) => {
-          c.style.boxShadow = i === want
-            ? '0 0 0 3px #ffd76a, 0 0 18px rgba(255,215,106,.7)' : '';
+          c.classList.toggle('umicat-point', i === want);
+          if (i !== want) c.style.boxShadow = '';
         });
         // And the button on the right, for the steps that name one.
         //
@@ -3190,9 +3207,11 @@ export async function startLevel(
         scriptRing.visible = !!aim;
         if (aim) {
           scriptRing.position.set(aim.x, 0.045, aim.z);
-          const pulse = 1 + Math.sin(now / 260) * 0.08;
-          scriptRing.scale.setScalar(pulse);
-          (scriptRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(now / 260) * 0.2;
+          // Breathing, on the same 1.25s as the buttons, so the ring on the
+          // ground and the ring on the button read as one instruction.
+          const breath = Math.sin((now / 1250) * Math.PI * 2);
+          scriptRing.scale.setScalar(1 + breath * 0.12);
+          (scriptRing.material as THREE.MeshBasicMaterial).opacity = 0.72 + breath * 0.22;
         }
         // The board ends when the script does, not when a wave table runs out —
         // there is no wave table on this board.

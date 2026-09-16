@@ -1856,6 +1856,35 @@ wrong way, and both ways were reachable:
 `sellProgress()` returns 0 when selling is not allowed, so the ring never even
 starts: a sweep that fills and then does nothing is a control that lied.
 
+### The tutorial points in CYAN, and it breathes
+
+**Not gold.** Gold already means "chosen" in this game — the selected hotbar
+cell wears a `#ffd54a` border — so a gold ring around the button the tutorial
+was pointing at read as a second selection, and the two were indistinguishable
+sitting beside each other. `POINT` is `#4fd2ff`, used nowhere else, and it holds
+up on green grass and on the dark grey of the controls.
+
+The breathing is **one stylesheet and a class**, not a per-frame write: sixty
+`boxShadow` assignments a second is sixty style recalculations, and the browser
+animates a keyframe off the main thread. The ring on the ground breathes on the
+same 1.25s, so the mark on the floor and the mark on the button read as one
+instruction rather than two.
+
+A ring that sits there is furniture. A ring that breathes is asking to be
+pressed.
+
+### A beat after each result
+
+`after` on a step: seconds to wait once it is done, before the next instruction.
+**What a step teaches is usually the RESULT** — the weapon landing, the enemy
+falling, the gold flying to you — and all of that happens in the second after
+the step completes. A panel that opens the instant it is satisfied covers its
+own lesson.
+
+And no counting. "Two hits" was a number to verify rather than a thing to watch,
+and it goes stale the day the weapon is rebalanced. The pacing still depends on
+`scriptEnemyHp` deriving it — the pacing is felt, not read.
+
 ### The ring follows what the button is WEARING
 
 The on-screen buttons are found by their icon, and that icon now changes with

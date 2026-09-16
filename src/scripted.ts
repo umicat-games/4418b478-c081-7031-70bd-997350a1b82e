@@ -22,6 +22,34 @@ import { iconHtml } from './icons';
  *     instructions is not a tutorial.
  */
 
+/** The colour the tutorial points with, and only the tutorial.
+ *
+ *  NOT gold. Gold already means "chosen" in this game: the selected hotbar cell
+ *  wears a `#ffd54a` border, so a gold tutorial ring around the button read as
+ *  a second selection rather than as an instruction, and the two were
+ *  indistinguishable sitting next to each other.
+ *
+ *  Cyan is unused anywhere else, and it holds up both on green grass and on the
+ *  dark grey of the controls. */
+const POINT = '#4fd2ff';
+
+/** The breathing, as one stylesheet rather than a per-frame write.
+ *
+ *  A ring that sits there is furniture; a ring that breathes is something
+ *  asking to be pressed. Done in CSS so the browser animates it off the main
+ *  thread — sixty `boxShadow` writes a second is sixty style recalculations. */
+function breatheStyle(): HTMLStyleElement {
+  const st = document.createElement('style');
+  st.textContent = `
+    @keyframes umicat-point {
+      0%, 100% { box-shadow: 0 0 0 3px ${POINT}, 0 0 10px rgba(79,210,255,.45); }
+      50%      { box-shadow: 0 0 0 5px ${POINT}, 0 0 26px rgba(79,210,255,.95); }
+    }
+    .umicat-point { animation: umicat-point 1.25s ease-in-out infinite; }
+  `;
+  return st;
+}
+
 /** Ring the on-screen button a step is telling you to press.
  *
  *  The SDK draws the action buttons and gives them no id, so they are found by
@@ -37,7 +65,8 @@ export function ringActionButton(icon: string | null): void {
     const glyph = b.querySelector<HTMLElement>('span');
     const mask = glyph ? (glyph.style.webkitMask || glyph.style.mask || '') : '';
     const wanted = !!icon && mask.includes(`${icon}.svg`);
-    b.style.boxShadow = wanted ? '0 0 0 3px #ffd76a, 0 0 22px rgba(255,215,106,.85)' : '';
+    b.classList.toggle('umicat-point', wanted);
+    if (!wanted) b.style.boxShadow = '';
   }
 }
 
@@ -46,9 +75,16 @@ export interface ScriptStep {
   text: string;
   /** True once the player has done it. Asked every frame. */
   done: () => boolean;
-  /** Fired once, when this step becomes the current one. Where the script
-   *  spawns enemies and opens and closes the gates on what is allowed. */
+  /** Fired once, when this step is CONFIRMED. Where the script spawns enemies
+   *  and opens and closes the gates on what is allowed. */
   enter?: () => void;
+  /** Seconds to wait after this step is done before the next instruction.
+   *
+   *  What a step teaches is usually the RESULT — the weapon landing, the enemy
+   *  falling, the gold flying to you — and all of that happens in the second
+   *  after the step completes. A panel that opens the instant it is satisfied
+   *  covers its own lesson. */
+  after?: number;
   /** Where to point the ground trail, if anywhere. */
   at?: () => { x: number; z: number } | null;
   /** A hotbar slot to ring, if any. */
@@ -114,6 +150,8 @@ export function createScript(
 ): Script {
   const box = makeBox();
   hudEl.append(box);
+  const style = breatheStyle();
+  hudEl.append(style);
   const line = box.querySelector<HTMLElement>('[data-line]')!;
 
   /** A way out.
@@ -147,6 +185,8 @@ export function createScript(
    *  buttons may do are opened, and none of that should be happening behind a
    *  panel the player is still reading. */
   let phase: 'read' | 'do' = 'read';
+  /** When the beat after a finished step runs out, or null if none is running. */
+  let settleUntil: number | null = null;
 
   const enter = (n: number): void => {
     i = n;
@@ -170,11 +210,21 @@ export function createScript(
       // Offered once someone has been here long enough to want it, and never
       // over the instruction panel.
       skip.style.opacity = phase === 'do' && performance.now() - shownAt > 45000 ? '1' : '0';
-      // Nothing is being watched for while the instruction is still up.
-      if (phase === 'read') return;
+      // Nothing is being watched for while the instruction is still up — except
+      // the beat, which runs with the panel down.
+      if (phase === 'read' && settleUntil === null) return;
+      // Waiting out the beat after a finished step, so its result can be seen.
+      if (settleUntil !== null) {
+        if (performance.now() >= settleUntil) {
+          settleUntil = null;
+          if (i + 1 >= steps.length) { i = -1; box.style.display = 'none'; return; }
+          enter(i + 1);
+        }
+        return;
+      }
       if (steps[i].done()) {
-        if (i + 1 >= steps.length) { i = -1; box.style.display = 'none'; return; }
-        enter(i + 1);
+        phase = 'read';            // stop watching; the panel is not up yet
+        settleUntil = performance.now() + (steps[i].after ?? 0) * 1000;
       }
     },
     index: () => i,
@@ -184,7 +234,7 @@ export function createScript(
     slot: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
     button: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),
     done: () => i < 0,
-    dispose: () => { box.remove(); skip.remove(); },
+    dispose: () => { box.remove(); skip.remove(); style.remove(); },
   };
 }
 
