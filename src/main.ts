@@ -2149,6 +2149,10 @@ export async function startLevel(
    *  second weapon on the one you are standing on" is a rule of the game, not a
    *  tutorial flourish, so this is not scoped to the tutorial board. */
   let actionIcon: string | null = null;
+  /** The icon the action button is wearing right now, by name. What the script
+   *  needs in order to point at that button whatever it currently looks like. */
+  const currentActionIcon = (): string | null =>
+    (actionIcon ? (actionIcon.match(/icons\/(\w+)\.svg/) ?? [])[1] ?? null : null);
   const showActionIcon = (): void => {
     const want = sellProgress() > 0 ? ICON.sell
       : standingOn && standingOn.level < MAX_LEVEL ? ICON.upgrade
@@ -2210,6 +2214,14 @@ export async function startLevel(
   let onlyBuildAt: [number, number] | null = null;
   /** The only hotbar slot that may be chosen, or null for all of them. */
   let onlyKind: number | null = null;
+  /** What the action button is allowed to DO right now.
+   *
+   *  The button does three things depending on where you stand and how long you
+   *  hold it, and a scripted step means exactly one of them. Without this, the
+   *  step that says "press to upgrade" can be answered by HOLDING — selling the
+   *  weapon the next three steps are about — and the step that says "sell it"
+   *  leaves you free to drop a new one on the square the moment it is empty. */
+  const allow = { build: true, upgrade: true, sell: true };
 
   /** An enemy for the script: one, on the road, with its health DERIVED.
    *
@@ -2365,7 +2377,8 @@ export async function startLevel(
       {
         text: withIcon('build', 'Put it down'),
         at: () => ({ x: spot[0], z: spot[1] }),
-        button: () => 'build',
+        button: () => 'action',
+        enter: () => { allow.build = true; allow.upgrade = false; allow.sell = false; },
         done: () => towers.length > 0,
       },
       {
@@ -2388,8 +2401,11 @@ export async function startLevel(
         // standing. That is the lesson, so the step names the place first.
         text: withIcon('build', 'Stand on your weapon and press again to upgrade it'),
         at: () => ({ x: spot[0], z: spot[1] }),
-        button: () => 'build',
+        button: () => 'action',
         enter: () => {
+          // Upgrade only. A step that says "press to upgrade" answered by a
+          // HOLD sells the weapon the next three steps are about.
+          allow.build = false; allow.upgrade = true; allow.sell = false;
           upgradedAt = kills;
           // Make sure it can be paid for. The board hands out 25g, the weapon
           // costs 25 and the upgrade 20, and what the first enemy leaves is a
@@ -2409,10 +2425,15 @@ export async function startLevel(
       {
         // Hold, not tap. The button becomes the sell icon while you hold it,
         // which is the only warning the gesture gets.
-        text: withIcon('build', 'Hold the button to sell it back'),
+        text: withIcon('sell', 'Hold the button down to sell it back'),
         at: () => ({ x: spot[0], z: spot[1] }),
-        button: () => 'build',
-        enter: () => { soldAt = towers.length; },
+        button: () => 'action',
+        enter: () => {
+          // Sell only. Otherwise the square is free the instant it is sold and
+          // a new weapon can be dropped on it, which is not the next lesson.
+          allow.build = false; allow.upgrade = false; allow.sell = true;
+          soldAt = towers.length;
+        },
         done: () => towers.length === 0,
       },
       {
@@ -2423,6 +2444,7 @@ export async function startLevel(
         enter: () => {
           onlyBuildAt = null;
           onlyKind = null;
+          allow.build = true; allow.upgrade = true; allow.sell = true;
           spawnScripted();
           // If it walks the whole way, send another and say it again. On this
           // board a leak costs nothing, which is what makes that safe.
@@ -2437,6 +2459,7 @@ export async function startLevel(
       onScriptLeak = null;
       onlyBuildAt = null;
       onlyKind = null;
+      allow.build = true; allow.upgrade = true; allow.sell = true;
       if (running) endRun(true);
     });
     void soldAt;
@@ -2691,7 +2714,7 @@ export async function startLevel(
     const down = input.held('build');
     const heldMs = performance.now() - pressAt;
 
-    if (standingOn && down && heldMs >= SELL_HOLD_MS) {
+    if (allow.sell && standingOn && down && heldMs >= SELL_HOLD_MS) {
       sellTower(standingOn);
       pressPending = false;
       return;
@@ -2721,6 +2744,9 @@ export async function startLevel(
    *  held. The HUD and the tower both read it — the feedback belongs on the
    *  thing being sold, not on the finger doing it. */
   const sellProgress = (): number => {
+    // Zero rather than "held but refused", so the ring never even starts. A
+    // sweep that fills and then does nothing is a control that lied.
+    if (!allow.sell) return 0;
     if (!pressPending || !standingOn || !input.held('build')) return 0;
     const held = performance.now() - pressAt;
     // Nothing at all until the press has outlived a tap. Then 0 to 1 over what
@@ -2776,6 +2802,7 @@ export async function startLevel(
 
     if (standingOn) {
       const t = standingOn;
+      if (!allow.upgrade) { audio.play('denied'); return; }
       if (t.level >= MAX_LEVEL) { audio.play('denied'); flashBanner(`${t.kind.label} is fully upgraded`); return; }
       const cost = upgradeCost(t);
       if (gold < cost) { audio.play('denied'); flashBanner(`Upgrade costs ${cost}g`); return; }
@@ -2795,6 +2822,7 @@ export async function startLevel(
       return;
     }
 
+    if (!allow.build) { audio.play('denied'); return; }
     if (!buildCell) return;
     if (selected === null) {
       // Nothing chosen. Saying so is the whole reason the bar starts empty:
@@ -3147,9 +3175,14 @@ export async function startLevel(
           c.style.boxShadow = i === want
             ? '0 0 0 3px #ffd76a, 0 0 18px rgba(255,215,106,.7)' : '';
         });
-        // And the button on the right, for the steps that name one. Half the
-        // script is about that button doing three different things.
-        ringActionButton(script.button());
+        // And the button on the right, for the steps that name one.
+        //
+        // `'action'` rather than an icon name. The buttons are found by the
+        // picture they are wearing, and that picture now CHANGES with where you
+        // are standing — so the sell step, which asked for `build`, rang
+        // nothing at all: by then the button was wearing `upgrade`.
+        const wantBtn = script.button();
+        ringActionButton(wantBtn === 'action' ? currentActionIcon() : wantBtn);
         // The square the step is pointing at, marked in the world. The trail
         // shows the WAY there and goes out once you arrive, which left the last
         // two metres — and the arrival — unmarked.
@@ -3794,8 +3827,9 @@ export async function startLevel(
        *  pointing. A probe driving a scripted sequence has to know which
        *  instruction is on screen, not merely that one is. */
       script: () => (script
-        ? { step: script.index(), text: script.text(), at: script.target(),
-            slot: script.slot(), done: script.done() }
+        ? { step: script.index(), phase: script.phase(), text: script.text(),
+            at: script.target(), slot: script.slot(), button: script.button(),
+            done: script.done() }
         : null),
       teaching: () => (tutorial
         ? { step: tutorial.step(), line: tutorial.line(), holding: tutorial.holdsWaves() }

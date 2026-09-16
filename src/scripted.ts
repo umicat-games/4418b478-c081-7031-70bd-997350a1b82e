@@ -61,6 +61,8 @@ export interface Script {
   update(): void;
   /** Which step is current, for probes. -1 once it is over. */
   index(): number;
+  /** `read` while the panel is up, `do` once it has been dismissed. */
+  phase(): 'read' | 'do';
   text(): string | null;
   /** Where the trail should point this frame. */
   target(): { x: number; z: number } | null;
@@ -81,19 +83,28 @@ export interface Script {
 function makeBox(): HTMLElement {
   const el = document.createElement('div');
   el.dataset.script = '';
-  // TOP of the screen, not the bottom.
+  // Middle of the screen, and it goes away when you have read it.
   //
-  // It started above the hotbar, which put it across the middle of the play
-  // area — over the hero, over the square the step was pointing at, and over
-  // the enemy the step was telling you to watch. Translucent did not save it:
-  // the thing an instruction is about is the one thing it must not cover.
+  // It was at the bottom first, which put it over the hero and over the square
+  // it was pointing at. Moving it to the top put it over the health bar and the
+  // purse. There is nowhere on a phone in landscape that is out of the way of
+  // everything — so instead of hunting for a gap, it takes the middle, is
+  // READ, and then is not there at all. What is left afterwards is the
+  // highlights, which is what the player is supposed to be looking at.
   el.style.cssText = `
-    position: fixed; left: 50%; transform: translateX(-50%); top: 14px;
-    z-index: 30; max-width: min(520px, 84vw); pointer-events: none;
-    background: rgba(12,17,23,.82); color: #fff; border-radius: 14px;
-    padding: 11px 18px; text-align: center; opacity: 0;
-    font: 700 15px/1.45 system-ui, sans-serif;
-    transition: opacity 220ms ease-out;
+    position: fixed; inset: 0; z-index: 35; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    box-sizing: border-box; pointer-events: auto;
+    background: rgba(8,12,17,.45);
+  `;
+  el.innerHTML = `
+    <div style="max-width:min(460px,86vw); background:rgba(16,22,29,.97); color:#fff;
+                border-radius:16px; padding:20px 22px; text-align:center;
+                box-shadow:0 14px 44px rgba(0,0,0,.42)">
+      <div data-line style="font:700 16px/1.5 system-ui, sans-serif"></div>
+      <button data-ok style="margin-top:16px; border:0; border-radius:999px; cursor:pointer;
+        padding:9px 30px; font:800 14px system-ui; background:#ffd76a; color:#241b00">OK</button>
+    </div>
   `;
   return el;
 }
@@ -103,6 +114,7 @@ export function createScript(
 ): Script {
   const box = makeBox();
   hudEl.append(box);
+  const line = box.querySelector<HTMLElement>('[data-line]')!;
 
   /** A way out.
    *
@@ -128,38 +140,49 @@ export function createScript(
   hudEl.append(skip);
   const shownAt = performance.now();
   let i = -1;
-  let shown: string | null = null;
+  /** `read` while the instruction is up, `do` once it has been dismissed.
+   *
+   *  The step's own `enter` fires on the DISMISS, not when the step becomes
+   *  current: it is where enemies are spawned and where the gates on what the
+   *  buttons may do are opened, and none of that should be happening behind a
+   *  panel the player is still reading. */
+  let phase: 'read' | 'do' = 'read';
 
   const enter = (n: number): void => {
     i = n;
-    if (n >= 0 && n < steps.length) steps[n].enter?.();
+    if (n < 0 || n >= steps.length) { box.style.display = 'none'; return; }
+    phase = 'read';
+    line.innerHTML = steps[n].text;
+    box.style.display = 'flex';
   };
+  const confirm = (): void => {
+    if (phase !== 'read' || i < 0 || i >= steps.length) return;
+    phase = 'do';
+    box.style.display = 'none';
+    steps[i].enter?.();
+  };
+  box.querySelector<HTMLElement>('[data-ok]')!.onclick = confirm;
   enter(0);
 
   return {
     update() {
       if (i < 0 || i >= steps.length) return;
-      // The text FIRST, then the completion test, so a step that is already
-      // true when it arrives still gets its instruction on screen for a frame
-      // rather than flashing past unread.
-      const step = steps[i];
-      if (step.text !== shown) {
-        shown = step.text;
-        box.innerHTML = step.text;
-        box.style.opacity = '1';
-      }
-      // Offered once someone has been here long enough to want it.
-      skip.style.opacity = performance.now() - shownAt > 45000 ? '1' : '0';
-      if (step.done()) {
-        if (i + 1 >= steps.length) { i = -1; box.style.opacity = '0'; return; }
+      // Offered once someone has been here long enough to want it, and never
+      // over the instruction panel.
+      skip.style.opacity = phase === 'do' && performance.now() - shownAt > 45000 ? '1' : '0';
+      // Nothing is being watched for while the instruction is still up.
+      if (phase === 'read') return;
+      if (steps[i].done()) {
+        if (i + 1 >= steps.length) { i = -1; box.style.display = 'none'; return; }
         enter(i + 1);
       }
     },
     index: () => i,
+    phase: () => phase,
     text: () => (i >= 0 && i < steps.length ? steps[i].text : null),
-    target: () => (i >= 0 && i < steps.length ? steps[i].at?.() ?? null : null),
-    slot: () => (i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
-    button: () => (i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),
+    target: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].at?.() ?? null : null),
+    slot: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
+    button: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),
     done: () => i < 0,
     dispose: () => { box.remove(); skip.remove(); },
   };

@@ -1829,6 +1829,40 @@ loads the models its wave table names, and an empty table made the first
 scripted spawn throw. `firstWaveDelay: 999` keeps the wave loop from ever
 reaching it.
 
+### The instruction is a panel you dismiss, not a line in a gap
+
+It sat at the bottom first, over the hero and the square it was pointing at.
+Moved to the top, it sat over the health bar and the purse. **There is no gap on
+a phone in landscape.** So it takes the middle, is READ, and is then not there
+at all — and what is left is the highlights, which is what the player is meant
+to be looking at.
+
+The step's own `enter` fires **on the dismiss**, not when the step becomes
+current: that is where enemies are spawned and where the gates below are opened,
+and none of it should be happening behind a panel someone is still reading. The
+highlights are null while the panel is up for the same reason.
+
+### What the button is allowed to DO, per step
+
+`allow = { build, upgrade, sell }`. Without it the script can be answered the
+wrong way, and both ways were reachable:
+
+- the step that says "press to upgrade" could be answered with a HOLD, selling
+  the weapon the next three steps are about;
+- the step that says "sell it" left the square free the instant it was sold, so
+  a fresh weapon could go straight back on it — while the next instruction says
+  nothing is guarding the road.
+
+`sellProgress()` returns 0 when selling is not allowed, so the ring never even
+starts: a sweep that fills and then does nothing is a control that lied.
+
+### The ring follows what the button is WEARING
+
+The on-screen buttons are found by their icon, and that icon now changes with
+where you stand. The sell step asked for `build` and rang **nothing at all**,
+because by then the button said `upgrade`. Steps ask for `'action'` and the
+level resolves it to whatever the button currently shows.
+
 ### What testing it on a phone found
 
 Four things, and three of them were the same mistake: the board was telling the
