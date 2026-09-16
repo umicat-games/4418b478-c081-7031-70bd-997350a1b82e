@@ -2219,17 +2219,25 @@ one is where it lands. A directional spell is the case that wants a line drawn �
 an origin and a direction is exactly what a line is — and that is a different
 shape from this.
 
-### The first board must not teach it all again
+### There is one tutorial, and `src/tutorial.ts` is gone
 
-Meadow carries its own light-touch tutorial (`src/tutorial.ts`), gated on
-"nothing cleared yet" — and the tutorial board does not count as cleared. So a
-player walked out of the scripted board and was immediately told to stand on
-their tower and press to upgrade, ten seconds after being taught exactly that.
+Meadow used to carry its own light-touch tutorial — a line at a time, gated on
+"nothing cleared yet". The tutorial board does not count as cleared, so a player
+walked out of the scripted board and was immediately told to stand on their
+tower and press to upgrade, ten seconds after being taught exactly that.
 
-`taught` in the save turns it off. **Set only by PLAYING the board through**,
-not by skipping: skipping should cost the hand-holding, not the explanation, and
-someone who pressed Skip and then arrived at a board with no idea what the
-bottom bar is has been punished for using a button the game offered them.
+It is deleted: the module, the `teaches` flag on `LevelDef`, the teaching line
+element, and the `holdsWaves` hook in the wave loop. **Two tutorials covering
+the same ground means one of them is wrong**, and the worse one was the one that
+could not show a button or highlight anything.
 
-So the two tutorials are not duplicates — they are the two halves of one
-decision the player made.
+Skipping the scripted board now means skipping it. A settings page explaining
+the controls, readable any time, is the right home for "what does this button
+do" — not a second tutorial that only a skipper ever sees.
+
+`verify-3d-tutorial.mjs` became `verify-3d-first-look.mjs`, keeping the half
+that was never about the tutorial: the hub does not advertise the boards and
+weapons you do not have. Its board-list checks need a save with `runs >= 1`,
+because a fresh one walks straight out to the tutorial without opening the list
+— and its RACK checks deliberately stay on a fresh save, because what they are
+about is what a brand new player is shown.

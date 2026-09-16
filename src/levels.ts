@@ -57,11 +57,6 @@ const boss = (hp: number, bounty: number, label: string): Wave => ({
 export interface LevelDef {
   id: string;
   name: string;
-  /** Teach on this board, while it is still unbeaten. One board carries the
-   *  tutorial rather than a fifth board existing to be one: a separate tutorial
-   *  level is a level you play once, and this is the level everyone plays
-   *  first anyway. */
-  teaches?: boolean;
   /** One line, shown on the door in the hub. Not a paragraph. */
   blurb: string;
   waves: Wave[];
@@ -133,7 +128,6 @@ export const LEVELS: LevelDef[] = [
     id: 'meadow',
     name: 'Meadow',
     blurb: 'Open ground',
-    teaches: true,
     startGold: 60,
     lives: 10,
     spawnGap: 1.1,

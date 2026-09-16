@@ -16,7 +16,6 @@ import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
-import { createTutorial, type Tutorial } from './tutorial';
 import { createScript, ringActionButton, type Script } from './scripted';
 import { createWayfinder } from './wayfinder';
 import { createAim } from './aim';
@@ -82,9 +81,6 @@ export interface Progress {
    *  spot is one they are still carrying — which is also how a game closed
    *  mid-placement picks up where it left off. */
   spots?: Record<string, { x: number; z: number }>;
-  /** Whether the scripted tutorial board was PLAYED through. Skipping does not
-   *  set it, so the first board still explains itself to someone who skipped. */
-  taught?: boolean;
   /** How much of the village has been bought: an index into the hub's `LAND`.
    *  Absent means a save from before land was for sale, which the hub reads as
    *  "the size the village used to be" rather than as the smallest. */
@@ -2212,42 +2208,6 @@ export async function startLevel(
     window.matchMedia?.('(pointer: coarse)').matches === true
     && window.matchMedia?.('(any-pointer: fine)').matches !== true;
 
-  /** The teaching line, above the hotbar and never interactive.
-   *
-   *  Its own element rather than a fourth line in the corner HUD: an
-   *  instruction has to be where the eye is, and the eye is on the middle of
-   *  the board and the two buttons under it. `pointer-events: none`, because
-   *  this game has drawn over the platform's control layer five times. */
-  const teachEl = document.createElement('div');
-  teachEl.style.cssText = `position: fixed; left: 50%; bottom: 86px;
-    transform: translateX(-50%); z-index: 29; pointer-events: none;
-    max-width: min(92vw, 460px); text-align: center;
-    font: 700 15px/1.45 system-ui, sans-serif; color: #fff;
-    background: rgba(20,26,38,.72); padding: 8px 16px; border-radius: 999px;
-    text-shadow: 0 1px 2px rgba(0,0,0,.5); display: none;`;
-  document.body.appendChild(teachEl);
-
-  /** The board that teaches does it here.
-   *
-   *  Every step ends when the PLAYER has done the thing, not when a timer runs
-   *  out and not when a "next" button is pressed — pressing a button to dismiss
-   *  an instruction about pressing buttons teaches the wrong button.
-   *
-   *  It runs while Meadow is unbeaten rather than on a first visit: losing your
-   *  first run and coming back to no help is the moment help was for.
-   */
-  /** The first board's own light-touch tutorial — a line at a time, no panels.
-   *
-   *  It is NOT for someone who has just been through the scripted board: they
-   *  were taught all of this properly ten seconds ago, and being told again is
-   *  the game not having noticed. That is what `taught` records.
-   *
-   *  It is still here for someone who SKIPPED that board. Skipping should cost
-   *  the hand-holding, not the explanation — a player who pressed Skip and then
-   *  arrives at a board with no idea what the bottom bar is has been punished
-   *  for using a button the game offered them. */
-  const teaching = level.teaches && (saveNow.cleared ?? 0) < 1 && !saveNow.taught;
-
   // --- what the scripted tutorial drives ------------------------------------
   //
   // The tutorial board's enemies arrive because a STEP finished, not because a
@@ -2257,8 +2217,6 @@ export async function startLevel(
    *  step wants exactly that to happen — it is how a player who never swings
    *  gets another chance instead of a dead board. */
   let onScriptLeak: (() => void) | null = null;
-  /** Whether the scripted board was left by pressing Skip rather than finished. */
-  let scriptSkipped = false;
   /** The only cell a tower may go on right now, or null for the usual rules.
    *  The script names one square and highlights it; letting the player build
    *  anywhere while an arrow points at one square is an arrow that lies. */
@@ -2296,10 +2254,6 @@ export async function startLevel(
     }
     return lv2;
   };
-  let startedAt = hero.position.clone();
-  /** What the teaching line last said, so it is not rebuilt sixty times a
-   *  second — an `innerHTML` write per frame re-parses the icons with it. */
-  let lastTaught: string | null = null;
   /** Put ONE enemy of this kind on the road.
    *
    *  Lifted out of the wave loop so the tutorial can spawn its own. Its script
@@ -2649,7 +2603,6 @@ export async function startLevel(
       // Skipping ends the board the same way finishing it does — a win, with
       // the materials the village needs. A skip that drops you into an empty
       // purse is a skip into the dead end the grant exists to prevent.
-      scriptSkipped = true;
       onScriptLeak = null;
       onlyBuildAt = null;
       onlyKind = null;
@@ -2659,56 +2612,6 @@ export async function startLevel(
     void soldAt;
   }
 
-  const tutorial: Tutorial | null = teaching ? createTutorial([
-    {
-      text: touchLikely()
-        ? 'Drag the left of the screen to walk'
-        : 'WASD or the arrow keys to walk',
-      done: () => hero.position.distanceTo(startedAt) > 2.2,
-    },
-    {
-      // Nothing is chosen when a run starts, so this is the first thing a
-      // player has to do — and it is the step that makes the gold circle mean
-      // something, because the circle appears the moment this is done.
-      text: `Tap a weapon in the bar below · ${KINDS[0].label} is ${KINDS[0].cost}g`,
-      done: () => selected !== null || towers.length > 0,
-      gateWaves: true,
-    },
-    {
-      // The marker is already drawn under your feet on a buildable cell, so
-      // this names a thing that is visibly happening rather than describing it.
-      text: 'Stand on one of the pale squares beside the road',
-      done: () => buildCell !== null || towers.length > 0,
-      gateWaves: true,
-    },
-    {
-      text: `${iconHtml('build')} Build it`,
-      done: () => towers.length > 0,
-      gateWaves: true,
-    },
-    {
-      text: 'It shoots on its own. They come through the gate.',
-      done: () => kills > 0,
-      expires: 30,
-    },
-    {
-      // The one rule of this game that nothing else in it would tell you.
-      text: 'Nothing pays itself in — walk over what they drop',
-      done: () => pickedUp > 0,
-      expires: 45,
-    },
-    {
-      text: `Stand on your tower · ${iconHtml('build')} upgrades it`
-        + ` · hold ${iconHtml('build')} sells it`,
-      done: () => towers.some((t) => t.level > 1) || towers.length === 0,
-      expires: 40,
-    },
-    {
-      text: `${iconHtml('sword')} swings at anything close. Crates too.`,
-      done: () => heroHits > 0,
-      expires: 30,
-    },
-  ]) : null;
 
   const endRun = (didWin: boolean): void => {
     // Once. A run can plausibly end twice in the same breath — the last life
@@ -2747,7 +2650,7 @@ export async function startLevel(
     banner.remove(); hotbar.remove(); toast.remove(); hitFlash.remove();
     // An element created and never removed outlives the run and sits over the
     // summary. Every other one on this line learned that the hard way.
-    teachEl.remove(); sellTag.remove();
+    sellTag.remove();
     debug.dispose();
     hudEl.textContent = '';
     vfx.clear();
@@ -2797,9 +2700,6 @@ export async function startLevel(
     }
     await patchSave(umicat, {
       level: after.level, xp: after.xp, store, quality, best: bestWave,
-      // Taught only by PLAYING it. Skipping leaves this false on purpose, so
-      // the first board still explains itself to someone who skipped.
-      ...(scripted && didWin && !scriptSkipped ? { taught: true } : {}),
       runs: (prev.runs ?? 0) + 1,
       cleared: didWin ? Math.max(prev.cleared ?? 0, levelIndex + 1) : prev.cleared,
       bests: { ...(prev.bests ?? {}), [level.id]: Math.max(prev.bests?.[level.id] ?? 0, reached) },
@@ -3442,15 +3342,6 @@ export async function startLevel(
         if (script.done() && running) endRun(true);
       }
 
-      if (tutorial) {
-        tutorial.update(realDt);
-        const line = tutorial.line();
-        teachEl.style.display = line ? 'block' : 'none';
-        // HTML, so a step can SHOW the button it is talking about. Authored
-        // here, never player text.
-        if (line !== lastTaught) { teachEl.innerHTML = line ?? ''; lastTaught = line; }
-      }
-
       // The tower being sold is what shows the hold — not the button, which is
       // on the platform's control layer and under the player's own thumb. It
       // sinks and pales as the hold fills, so letting go is visibly "it came
@@ -3550,7 +3441,7 @@ export async function startLevel(
       // wave waits until there is something on the board to meet it; after
       // that the lessons run alongside the fight, which is where they mean
       // anything.
-      if (wavesPaused || tutorial?.holdsWaves()) { /* held */ }
+      if (wavesPaused) { /* held */ }
       else if (toSpawn > 0) {
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
@@ -4085,9 +3976,6 @@ export async function startLevel(
         ? { step: script.index(), phase: script.phase(), text: script.text(),
             at: script.target(), slot: script.slot(), button: script.button(),
             done: script.done() }
-        : null),
-      teaching: () => (tutorial
-        ? { step: tutorial.step(), line: tutorial.line(), holding: tutorial.holdsWaves() }
         : null),
       locomotion: () => animator.action || character.state,
     } as unknown,
