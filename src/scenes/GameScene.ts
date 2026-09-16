@@ -8710,7 +8710,7 @@ export class GameScene extends Phaser.Scene {
     this.tutorialNotify('use', id); // tutorial hook (no step consumes 'use' now, but kept for future)
     // PLANT step: now that the seed is held, move the spotlight from the backpack to the PLOT — that's
     // where they tap next. (setDialogueSpotlight stores it; publishes on the closeMenu below.)
-    if (this.tutorialActive && TUTORIAL_STEPS[this.tutorialStep]?.id === 'plant' && id.endsWith('-seed')) this.setDialogueSpotlight('world:plot');
+    if (this.tutorialActive && TUTORIAL_STEPS[this.tutorialStep]?.id === 'plant' && id.endsWith('-seed')) this.setDialogueSpotlight('world:plot', true);
     // Using the seed is a LEGITIMATE mid-step action (the plant step's first move), so suppress the
     // close-recovery re-prompt — the player now HOLDS the seed and taps the plot to finish the step.
     this.tutorialClosingMenu = true; this.closeMenu(); this.tutorialClosingMenu = false;
@@ -10900,6 +10900,7 @@ export class GameScene extends Phaser.Scene {
   private openDialog(seed?: string, cutscene = false, sign?: { text: string; name: string }): void {
     if (this.dialogOpen || (!this.child && !sign)) return;
     this.dialogOpen = true;
+    this.refreshDialogueSpotlight(); // chat covers the screen → drop the tutorial dim/ring (message-Cato)
     this.cutscene = cutscene; // scripted cutscene: keeps the hotbar VISIBLE (for spotlights), no input field
     this.signDialog = !!sign; // a read-only sign note (custom avatar + name, no input)
     this.clearChatter(); // any proactive chip is replaced by the real conversation
@@ -10990,6 +10991,7 @@ export class GameScene extends Phaser.Scene {
   private closeDialog(): void {
     if (!this.dialogOpen) return;
     this.dialogOpen = false;
+    this.refreshDialogueSpotlight(); // chat closed without sending → restore the step's dim/ring
     this.cutscene = false;
     this.chatVoice?.showMic(false); // hide the mic + cancel any in-progress recording
     if (this.signDialog) { this.publishCatoName(); this.signDialog = false; } // sign note → put Cato's name back in the box
@@ -11119,7 +11121,10 @@ export class GameScene extends Phaser.Scene {
     // plant starts on the backpack (open it, Use the seed) → moves to the plot once the seed is held
     // (menuUse re-points it). water/till spotlight the same plot cell.
     const map: Record<string, string> = { 'open-chest': 'world:chest', 'take-seeds': 'world:chest', 'till': 'world:plot', 'plant': 'hud:backpack', 'water': 'world:plot', 'collect': 'world:bush', 'message-cato': 'hud:portrait' };
-    this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null);
+    // Dim-with-cutout on the steps that are a single "tap THIS button/icon" (the target isn't
+    // surrounded by the tool wheel) — a full-screen dim there would black out the wheel.
+    const DIM_STEPS = new Set(['open-chest', 'plant', 'message-cato']);
+    this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null, DIM_STEPS.has(TUTORIAL_STEPS[n].id));
   }
 
   /** Advance a tutorial step when its completion `kind` (+ optional arg) matches the LIVE step. */
@@ -11496,16 +11501,38 @@ export class GameScene extends Phaser.Scene {
 
   /** Point DialogueScene at a named UI target ('hotbar:<toolId>' | 'hotbar:seed' | null). */
   private dialogueSpotTarget: string | null = null;
-  private setDialogueSpotlight(target: string | null): void {
+  private dialogueSpotDim = false; // dim-with-cutout (the "tap THIS button/icon" steps) vs ring-only
+  private setDialogueSpotlight(target: string | null, dim = false): void {
     this.dialogueSpotTarget = target;
+    this.dialogueSpotDim = dim;
     this.refreshDialogueSpotlight();
   }
-  /** (Re)publish the spotlight ring — HIDDEN while a menu/craft is open (the target is a world object
-   *  or a HUD button now covered by the panel, so the ring would float uselessly over the grid). */
+  /** (Re)publish the spotlight — HIDDEN while a menu/craft/dialog is open (the target is a world
+   *  object or a HUD button now covered by the panel / chat box, so the ring would float uselessly
+   *  over the grid, and the dim mask would black out the open UI). `dim` cuts a hole in a full-screen
+   *  dim; false = the gold ring only. */
   private refreshDialogueSpotlight(): void {
-    const target = this.menuOpen || this.craftOpen ? null : this.dialogueSpotTarget;
+    const target = this.menuOpen || this.craftOpen || this.dialogOpen ? null : this.dialogueSpotTarget;
     const rect = target ? this.spotlightRect(target) : null;
-    this.registry.set('dialogueSpotlight', rect ? { ...rect, rev: (this.registry.get('dialogueSpotlight')?.rev ?? 0) + 1 } : null);
+    this.registry.set('dialogueSpotlight', rect ? { ...rect, dim: this.dialogueSpotDim, rev: (this.registry.get('dialogueSpotlight')?.rev ?? 0) + 1 } : null);
+    // A dim-with-cutout must cover the HUD too (so the ONLY lit spot is the target), so lift
+    // DialogueScene above every HUD scene while it's active — its transparent hole then reveals the
+    // target HUD button/world object sitting underneath. Restore the normal order otherwise.
+    this.elevateDialogueForDim(!!rect && this.dialogueSpotDim);
+  }
+  private dialogueElevated = false;
+  private elevateDialogueForDim(on: boolean): void {
+    if (on === this.dialogueElevated) return;
+    this.dialogueElevated = on;
+    if (on) {
+      this.scene.bringToTop('DialogueScene'); // above the whole HUD so the dim blacks it all out…
+      this.scene.bringToTop('CursorScene');   // …except the pixel cursor, which stays topmost
+    } else {
+      // Put the scenes that normally sit ABOVE DialogueScene back on top of it.
+      for (const k of ['BackpackButtonScene', 'ToolHudScene', 'HoverScene', 'CursorScene']) {
+        if (this.scene.isActive(k)) this.scene.bringToTop(k);
+      }
+    }
   }
 
   /** Resolve a spotlight target to a SCREEN rect (device px): hotbar slots, HUD buttons, or a
