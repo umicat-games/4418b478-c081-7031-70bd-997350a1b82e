@@ -2165,3 +2165,22 @@ dark is gone.
 Drawn as an overlay tracking the button's rectangle, not as a child of it. The
 buttons belong to the SDK, and hanging a child on one breaks the next time it
 rebuilds its controls.
+
+### Not a trail from the hero to the circle
+
+Tried and dropped. Three reasons, the last two found by looking at it:
+
+- **The chevron trail already means "walk this way"** — it is what the village
+  points a new player at the gate with. Giving one glyph two meanings is the
+  same mistake the gold highlight made when it meant both "chosen" and "press
+  this".
+- **It cannot reach the circle.** The wayfinder stops 2.2m short of its target
+  by design (it points at somewhere you WALK to, and goes out when you arrive),
+  and the blast radius is also 2.2 — so it stopped at the ring's edge and read
+  as broken rather than as pointing.
+- **It vanishes at close range**, which is where most casts are placed.
+
+The two rings already say it: the faint one is centred on the caster, the bright
+one is where it lands. A directional spell is the case that wants a line drawn —
+an origin and a direction is exactly what a line is — and that is a different
+shape from this.
