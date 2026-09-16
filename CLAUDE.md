@@ -1902,6 +1902,16 @@ not.
 the world, and the trail and the ring doing the pointing are IN it — a sheet
 over the board would cover the only two things the player is meant to look at.
 
+**And only once the player is in position** (`ready` on the step). The scrim
+eats every touch outside its hole, *including the movement stick*. Raised on a
+step that still requires walking somewhere, it pins the player in place staring
+at a button that does nothing from where they are standing — which is exactly
+what the upgrade step did: it names a button, so the scrim went up, and the
+instruction was "stand on your weapon".
+
+A step with no `ready` never dims at all. The last one is a chase, and there is
+no moment during it when the player should be unable to move.
+
 ### A step with no text
 
 `text` is optional. A step without it is pure staging — spawn something, open a

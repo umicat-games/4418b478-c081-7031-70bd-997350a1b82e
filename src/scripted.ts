@@ -145,6 +145,17 @@ export interface ScriptStep {
   slot?: () => number | null;
   /** Which on-screen action button to ring, by the icon it is wearing. */
   button?: () => string | null;
+  /** Whether the player is in position to do this step RIGHT NOW.
+   *
+   *  The scrim only goes up when this is true, and that is the whole of what it
+   *  is for. The scrim eats every touch outside its hole — including the
+   *  movement stick — so raising it on a step that still requires WALKING
+   *  somewhere pins the player in place, staring at a button that does nothing
+   *  from where they are standing.
+   *
+   *  Absent means never dim: the last step is a chase, and there is no moment
+   *  during it when the player should be unable to move. */
+  ready?: () => boolean;
 }
 
 export interface Script {
@@ -160,7 +171,8 @@ export interface Script {
   slot(): number | null;
   /** Which action button to ring this frame, by icon name. */
   button(): string | null;
-  /** Dim everything except this element. `null` takes the scrim down. */
+  /** Dim everything except this element. `null` takes the scrim down. Ignored
+   *  unless the current step says it is ready to be acted on. */
   focus(el: HTMLElement | null): void;
   done(): boolean;
   dispose(): void;
@@ -299,7 +311,10 @@ export function createScript(
     target: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].at?.() ?? null : null),
     slot: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
     button: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),
-    focus: (el) => spotlight(scrim, el),
+    focus: (el) => spotlight(
+      scrim,
+      phase === 'do' && i >= 0 && i < steps.length && steps[i].ready?.() ? el : null,
+    ),
     done: () => i < 0,
     dispose: () => { box.remove(); skip.remove(); style.remove(); scrim.remove(); },
   };

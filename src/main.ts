@@ -2369,6 +2369,8 @@ export async function startLevel(
         text: 'Tap the weapon in the bar below',
         enter: () => { onlyKind = 0; },
         slot: () => 0,
+        // Nothing to walk to: the bar is under your thumb wherever you are.
+        ready: () => true,
         done: () => selected !== null,
       },
       {
@@ -2392,6 +2394,7 @@ export async function startLevel(
         after: 1.6,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
+        ready: () => !!buildCell && buildCell[0] === spot[0] && buildCell[1] === spot[1],
         enter: () => { allow.build = true; allow.upgrade = false; allow.sell = false; },
         done: () => towers.length > 0,
       },
@@ -2428,6 +2431,7 @@ export async function startLevel(
           + ' button on the right',
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
+        ready: () => !!standingOn,
         enter: () => {
           // Upgrade only. A step that says "press to upgrade" answered by a
           // HOLD sells the weapon the next three steps are about.
@@ -2461,6 +2465,7 @@ export async function startLevel(
           + ` turns to ${iconHtml('sell', '1.25em')} and the ring fills`,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
+        ready: () => !!standingOn,
         enter: () => {
           // Sell only. Otherwise the square is free the instant it is sold and
           // a new weapon can be dropped on it, which is not the next lesson.
