@@ -70,8 +70,14 @@ export function ringActionButton(icon: string | null): void {
 }
 
 export interface ScriptStep {
-  /** The instruction. One thing to do. */
-  text: string;
+  /** The instruction. One thing to do.
+   *
+   *  OPTIONAL. A step with no text is pure staging — it spawns something, opens
+   *  a gate, waits for a result — and runs with nothing on screen. Not every
+   *  beat of a script needs narrating: a weapon that starts shooting the moment
+   *  an enemy walks into range does not need a panel saying that it will, and a
+   *  panel covers the very thing it is describing. */
+  text?: string;
   /** True once the player has done it. Asked every frame. */
   done: () => boolean;
   /** Fired once, when this step is CONFIRMED. Where the script spawns enemies
@@ -190,8 +196,16 @@ export function createScript(
   const enter = (n: number): void => {
     i = n;
     if (n < 0 || n >= steps.length) { box.style.display = 'none'; return; }
+    const t = steps[n].text;
+    if (!t) {
+      // Nothing to read, so nothing to dismiss: the step begins at once.
+      phase = 'do';
+      box.style.display = 'none';
+      steps[n].enter?.();
+      return;
+    }
     phase = 'read';
-    line.innerHTML = steps[n].text;
+    line.innerHTML = t;
     box.style.display = 'flex';
   };
   const confirm = (): void => {
@@ -228,7 +242,7 @@ export function createScript(
     },
     index: () => i,
     phase: () => phase,
-    text: () => (i >= 0 && i < steps.length ? steps[i].text : null),
+    text: () => (i >= 0 && i < steps.length ? steps[i].text ?? null : null),
     target: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].at?.() ?? null : null),
     slot: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
     button: () => (phase === 'do' && i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),

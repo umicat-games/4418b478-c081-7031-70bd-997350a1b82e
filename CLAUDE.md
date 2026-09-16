@@ -1873,6 +1873,27 @@ instruction rather than two.
 A ring that sits there is furniture. A ring that breathes is asking to be
 pressed.
 
+### A step with no text
+
+`text` is optional. A step without it is pure staging — spawn something, open a
+gate, wait for a result — and runs with nothing on screen.
+
+Two of the nine are silent, and both were panels before: an enemy walks out of
+the gate and the weapon shoots it, and the coin flies to the hero. **A box
+saying "it shoots on its own" states the obvious and covers the thing it is
+describing.** The player is not stupid; they can see a weapon shooting. The
+steps still exist — they are what spawn the enemy and what give the coin's
+flight a second and a half with nobody talking over it.
+
+Six panels survive, and every one of them is an instruction:
+
+    Tap the weapon in the bar below
+    Stand on the marked square / Enemies come out of the gate beside it
+    Press the ⟨build⟩ button on the right to put it down
+    Stand on your weapon, then press the ⟨upgrade⟩ button on the right
+    Hold the ⟨upgrade⟩ button on the right until it turns to ⟨sell⟩…
+    Nothing is guarding the road. Chase it down and press the ⟨sword⟩ button…
+
 ### A beat after each result
 
 `after` on a step: seconds to wait once it is done, before the next instruction.

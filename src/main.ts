@@ -2395,23 +2395,23 @@ export async function startLevel(
       {
         // One enemy. It takes two hits, and the health it takes them with is
         // derived from the tower's damage — see `scriptEnemyHp`.
-        // No counting. "Two hits" is a number the player has to verify rather
-        // than a thing to watch, and it goes stale the day the weapon is
-        // rebalanced — the pacing still depends on it (see `scriptEnemyHp`),
-        // but the pacing is felt, not read.
-        text: 'It shoots on its own. Watch.',
+        // NO panel. An enemy walks out of the gate and the weapon starts
+        // shooting it — a box saying "it shoots on its own" both states the
+        // obvious and covers the thing it is describing. The step still exists
+        // to spawn the enemy and wait for the kill; it just says nothing.
+        //
+        // The pacing is still derived (see `scriptEnemyHp`): two hits, then one
+        // after the upgrade. Felt, not read.
         enter: () => { placedAt = kills; spawnScripted(); },
         done: () => kills > placedAt,
         after: 1.8,
       },
       {
-        // A statement, not an instruction. The magnet fetches what they drop
-        // from three tiles away, so "walk over it" is telling the player to do
-        // something that has already happened — it completed in a second flat
-        // and read as a step being skipped.
-        text: 'Its gold comes to you',
+        // Also no panel, for the same reason as the fight above it: the coin
+        // visibly flies to you, and by the time a box could say so it has
+        // already arrived. The step stays as a BEAT — it is what gives the
+        // flight a second and a half of nobody talking over it.
         done: () => pickedUp > 0,
-        // The coin's flight IS the lesson here.
         after: 1.4,
       },
       {
@@ -2443,7 +2443,8 @@ export async function startLevel(
         after: 1.6,
       },
       {
-        text: 'Now watch it again.',
+        // Same again: the upgrade's whole point is visible in how fast the
+        // next one falls.
         enter: () => { upgradedAt = kills; spawnScripted(); },
         done: () => kills > upgradedAt,
         after: 1.8,
