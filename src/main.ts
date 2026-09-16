@@ -2623,6 +2623,12 @@ export async function startLevel(
         // satisfies half of this and none of the lesson. So another one comes.
         done: () => kills > placedKills && aimedCasts > placedCasts,
         tick: keepOne(spawnForStaff),
+        // The LAST step needs a beat too, and it is the one that had none —
+        // `after ?? 0` on the final step meant the summary panel landed on the
+        // same frame as the kill, over the body that was still falling. Every
+        // other step in the script waits for its own result to be seen; the one
+        // that ends the board should not be the exception.
+        after: 2.2,
       },
     ], hudEl, () => {
       // Skipping ends the board the same way finishing it does — a win, with

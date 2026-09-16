@@ -1977,6 +1977,13 @@ Six panels survive, and every one of them is an instruction:
     Hold the ⟨upgrade⟩ button on the right until it turns to ⟨sell⟩…
     Nothing is guarding the road. Chase it down and press the ⟨sword⟩ button…
 
+### The LAST step needs a beat too
+
+`after` on the final step had never been set, and `after ?? 0` meant the summary
+panel landed **on the same frame as the kill**, over a body that was still
+falling. Every other step waits for its own result to be seen; the one that ends
+the board should not be the exception. 2.2 seconds, measured from the kill.
+
 ### A beat after each result
 
 `after` on a step: seconds to wait once it is done, before the next instruction.
