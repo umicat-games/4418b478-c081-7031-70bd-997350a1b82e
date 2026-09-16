@@ -26,7 +26,7 @@ import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
 import { crossToBgm, setBgmVolume, setBgmDuck, BGM_START_FADE_MS } from '../bgm';
-import { playSfx, setSfxVolume, getSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB, SFX_COW, SFX_CHICKEN } from '../sfx';
+import { playSfx, setSfxVolume, getSfxVolume, SFX_CLICK, SFX_SCROLL, SFX_HOE, SFX_CHOP, SFX_TREE_FALL, SFX_HOVER, SFX_COLLECT, SFX_NIBBLE, SFX_SPLASH, SFX_SWING, SFX_GETITEM, SFX_DOOR, SFX_TAB, SFX_COW, SFX_CHICKEN, SFX_HIT_ROCK } from '../sfx';
 import { coverAndReload, coverAndHandoff, finishTransition } from '../transition';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { DialogueRunner, trDialogue, type DialogueScript, type DialogueHost } from '../dialogue';
@@ -231,17 +231,24 @@ const TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_CATO = 9, TAB_COOP = 10; // TAB_CO
 const MENU_SYSTEM_TABS = [TAB_CATO, TAB_CALENDAR, TAB_SETTINGS];
 // The door MAILBOX opens a 3-tab menu: 信 (mail) + 取货 (pickup grid) + 待售 (for-sale bin).
 const TAB_MAIL = 0, TAB_CHEST = 1, TAB_SHOP = 3, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8;
+const TAB_CAPACITY = 13; // shop 容量 sub-tab: buy chest/backpack capacity upgrades (appended TAB_DEFS entry)
 const MAILBOX_TABS = [TAB_MAIL, TAB_PICKUP, TAB_FORSALE];
-const SHOP_TABS = [TAB_SHOP, TAB_HOUSE, TAB_COOP]; // the shop opens with three folder tabs: 物品 + 房子 + 牧场(coops)
+const SHOP_TABS = [TAB_SHOP, TAB_HOUSE, TAB_COOP, TAB_CAPACITY]; // the shop opens with four folder tabs: 物品 + 房子 + 牧场 + 容量
 
 // Inventory grid (Stardew-style): a backpack of INV_ROWS × INV_COLS cells. Row 0
 // IS the hotbar (always visible); pressing E opens the full grid. Growing the
 // backpack later = bump INV_ROWS. Stackable items merge up to MAX_STACK per cell.
 const INV_COLS = 8;
 const INV_ROWS = 5; // 1 hotbar row + 4 backpack rows (bumped 4→5 for foragables/stones)
-const CHEST_SLOTS = 60; // chest capacity (distinct stacks) — buying a NEW item type needs a free slot
 const CATO_BAG_SLOTS = 12; // Cato's bag is SMALL (distinct stacks) — a new item type needs a free slot
-const BACKPACK_SLOTS = 35; // the player's carried backpack (distinct stacks). The menu grid renders exactly this many cells (gridCap→renderGrid) so empty cells == real free slots. Debug 'smallBag' shrinks it to 12 for testing the full-bag flow.
+// Chest + backpack capacity is UPGRADEABLE (bought on the shop 容量 tab): one upgrade = one row = 7
+// slots (CAP_COLS = the menu grid's column count). Chest starts 4 rows (28), backpack 2 rows (14);
+// each caps at a max, and every upgrade costs more (geometric: base × mult^(rows bought)).
+const CAP_COLS = 7;
+const CHEST_ROWS_INIT = 4, CHEST_ROWS_MAX = 12;      // 28 → up to 84 slots
+const BACKPACK_ROWS_INIT = 2, BACKPACK_ROWS_MAX = 8; // 14 → up to 56 slots
+const CAP_BASE = { chest: 150, backpack: 250 };      // price of the FIRST upgrade past the initial rows
+const CAP_MULT = { chest: 1.7, backpack: 1.8 };      // each further upgrade × this
 // Only these crops' seeds are GIVEN at the start (backpack + chest); the rest (cauliflower, lettuce,
 // wheat, parsnip, beet, cucumber, star fruit, blue tulip, red flower) are earned by BUYING them in
 // the shop. Keeps the starter backpack from being pre-stuffed (was seeding all 14 → nearly full).
@@ -636,12 +643,18 @@ const SWAY_FORAGABLES = new Set<string>(['grass', 'wild-flower', 'sunflower']);
  *  back a `ready` when it hits 0). `emptyKnocks` counts knocks while empty (2 → break). */
 interface BigStoneObj {
   tier: number;
-  ready: number;
-  regen: number[];
-  emptyKnocks: number;
+  ready: number;        // legacy (old regen mining) — unused by the tree-style mechanic, kept for save-compat
+  regen: number[];      // legacy
+  emptyKnocks: number;  // legacy
   sprite: Phaser.GameObjects.Image;
   body?: Phaser.GameObjects.Sprite; // invisible solid collider (Cato can't walk through)
   sceneWired?: boolean; // placed in the editor (scene data) → NOT saved; re-wired each load
+  // Tree-style mining (like trees): the first 3 strikes/day drop a small-stone, a 4th shakes, a 5th
+  // breaks it into 3 big-stones. Transient (resets on reload, like the tree branch state).
+  stoneDay?: number;    // dayIndex() the small-stone count was last reset
+  stoneStrikes?: number; // small-stone drops on THIS stone today (cap 3/day)
+  breakStage?: number;  // post-branch break combo (0 → 1 on the 4th strike → 2 breaks on the 5th)
+  breakTimer?: Phaser.Time.TimerEvent; // combo window (breakStage resets if you stop)
 }
 
 /** A planted berry bush at a cell. `stage` 0=small / 1=full / 2=ripe (bears 3
@@ -828,6 +841,8 @@ interface SaveBlob {
   equippedTools?: (ToolId | null)[];  // v29: the 5 wheel ring slots (null = unequipped)
   waterLevel?: number;                // v30: watering-can water (0-6)
   onboarding?: boolean;               // v31: new player mid-onboarding → the tutorial replays until finished
+  chestRows?: number;                 // v32: chest capacity in rows (× 7 = slots), upgradeable on the shop 容量 tab
+  backpackRows?: number;              // v32: backpack capacity in rows
 }
 
 export class GameScene extends Phaser.Scene {
@@ -1090,6 +1105,9 @@ export class GameScene extends Phaser.Scene {
   private menuSliderDrag: 'bgm' | 'sfx' | null = null; // dragging a Settings-tab volume slider
   private menuShopSel?: string; // selected catalog id on the 物品 tab (→ right detail + stepper)
   private menuHouseSel?: string; // selected house tier id on the 房子 tab
+  private chestRows = CHEST_ROWS_INIT;       // chest capacity in ROWS (× CAP_COLS = slots) — upgradeable, saved
+  private backpackRows = BACKPACK_ROWS_INIT; // backpack capacity in ROWS — upgradeable, saved
+  private menuCapSel: 'chest' | 'backpack' = 'chest'; // 容量/EXPANSION tab: selected list row → right detail + buy
   // When the menu was opened by clicking a physical door object (mailbox / chest), the
   // object plays its OPEN anim first; closing the menu plays its CLOSE anim.
   private menuSourceSprite?: Phaser.GameObjects.Sprite;
@@ -2880,6 +2898,8 @@ export class GameScene extends Phaser.Scene {
     this.mailboxStore = [];
     this.chestStore = jaminSeeds.map((c) => makeSeed(c, 5));
     this.chestSeeded = true; // fresh game already has the seeds
+    this.chestRows = CHEST_ROWS_INIT;       // new game: chest starts at 4 rows (28 slots)
+    this.backpackRows = BACKPACK_ROWS_INIT; // backpack starts at 2 rows (14 slots)
 
     this.hotbarSelected = -1;
     this.publishInventory();
@@ -3924,7 +3944,7 @@ export class GameScene extends Phaser.Scene {
     if (tilling) icon.setTexture('tools_and_meterials', 'hoe');
     else if (watering) icon.setTexture('tools_and_meterials', 'watering-can');
     else if (chopping) icon.setTexture('tools_and_meterials', 'axe');
-    else if (mining) icon.setTexture('pickaxe');
+    else if (mining) icon.setTexture('item-atlas', 'item-pixaxe-with-border'); // the bordered toolbox pickaxe
     else if (fishing) icon.setTexture('wheel-fishing-rod'); // the wheel's bordered rod icon
     else if (this.activeSeed) icon.setTexture('farming_plants_items', `${this.activeSeed}-seed-bag`);
 
@@ -6548,11 +6568,11 @@ export class GameScene extends Phaser.Scene {
     // bottom-left and the metal head up-right, so pivot on the grip and swing the
     // head down onto the stone (rear back → strike), like the hoe.
     const pick = this.add
-      .sprite(centerX - 3, centerY - TILE / 2 - 2, 'pickaxe')
-      .setOrigin(0.2, 0.82) // pivot at the bottom-left grip
-      // 1.3, not the hoe's 1.5: the pickaxe art fills its 16×16 frame edge-to-edge
-      // (the hoe frame has padding), so a smaller scale matches the hoe's on-screen size.
-      .setScale(1.3)
+      .sprite(centerX - 3, centerY - TILE / 2 - 2, 'pickaxe-tool')
+      .setOrigin(0.25, 0.81) // pivot at the bottom-left grip (pickaxe-tool.png content bbox x[4..12] y[4..12])
+      // pickaxe-tool's art is 8×8 within its 16px frame (padded). 1.7 → ~13.6px on-screen, matching
+      // the hoe swing's ~13.5px content (tools frame 28 content 9×6 × 1.5) so the tools look consistent.
+      .setScale(1.7)
       .setDepth(1e6 + 1)
       .setAngle(-35); // reared back (head up)
     this.hoeSwing = pick; // suppress the tile cursor while it swings (shared flag)
@@ -6569,45 +6589,54 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(1200, strike); // safety
   }
 
-  /** The landed knock: white dust + shake. If a stone is ready → collect one (it
-   *  regenerates after regenSec). If empty → 1st knock does nothing, a 2nd empty
-   *  knock breaks the rock apart for the +breakBonus. */
+  /** The landed knock — TREE-STYLE mining (mirrors onChopStrike): the first 3 strikes on this stone
+   *  TODAY each drop a small-stone (pop → bounce → fly to the collector), a 4th just shakes (no drop),
+   *  and a 5th breaks the rock into 3 big-stones + removes it. */
   private onKnockStrike(cx: number, cy: number): void {
     const key = `${cx},${cy}`;
     const stone = this.bigStones.get(key);
     if (!stone) return;
     if (!this.backpackHasSpaceFor('stone')) { this.notifyBagFull(); return; } // full → can't mine (stone stays)
-    const def = BIG_STONES[stone.tier] ?? BIG_STONES[1]!;
     const sx = stone.sprite.x, topY = stone.sprite.y - stone.sprite.displayHeight * 0.55;
+    playSfx(this, SFX_HIT_ROCK); // pick thunk on each real strike (mirrors the tree's SFX_CHOP)
     this.whiteBurst(sx, topY);
-    // a quick left-right jitter to sell the impact
-    this.tweens.add({ targets: stone.sprite, x: sx + 1.5, duration: 45, yoyo: true, repeat: 1, onComplete: () => { stone.sprite.x = sx; } });
-    if (stone.ready > 0) {
-      stone.ready -= 1;
-      stone.emptyKnocks = 0;
-      stone.regen.push(def.regenMs);
-      this.playPopOut(sx, topY, 'forage', 'small-stone-6');
+    this.tweens.add({ targets: stone.sprite, x: sx + 1.5, duration: 45, yoyo: true, repeat: 1, onComplete: () => { stone.sprite.x = sx; } }); // impact jitter
+
+    // First 3 strikes on THIS stone TODAY drop a small-stone (like a tree's branches). Resets daily.
+    const day = this.dayIndex();
+    if (stone.stoneDay !== day) { stone.stoneDay = day; stone.stoneStrikes = 0; stone.breakStage = 0; }
+    if ((stone.stoneStrikes ?? 0) < 3) {
+      stone.stoneStrikes = (stone.stoneStrikes ?? 0) + 1;
+      this.playChopDrop(sx, topY, 'tools_and_meterials', 'small-stone'); // pop → bounce → fly to collector
       this.collect(makeStone(1));
       this.publishInventory();
       this.scheduleSave();
-    } else {
-      stone.emptyKnocks += 1;
-      if (stone.emptyKnocks >= 2) this.breakBigStone(cx, cy);
+      return;
+    }
+
+    // Small-stones done for today → the break combo: a 4th strike just shakes (no drop), a 5th (within
+    // the window) breaks it. If you stop, breakStage resets and the next strike is a 4th again.
+    stone.breakStage = stone.breakTimer ? Math.min((stone.breakStage ?? 0) + 1, 2) : 1;
+    stone.breakTimer?.remove();
+    stone.breakTimer = this.time.delayedCall(TREE_CHOP_WINDOW_MS, () => { stone.breakStage = 0; stone.breakTimer = undefined; });
+    if ((stone.breakStage ?? 0) >= 2) {
+      stone.breakTimer.remove(); stone.breakTimer = undefined;
+      this.breakBigStone(cx, cy);
     }
   }
 
-  /** The rock is knocked apart: pop the +breakBonus stones, bank them, remove it. */
+  /** The rock is knocked apart (the 5th strike): 3 big-stones pop out + fly to the collector, +3 stone
+   *  banked, and the big-stone is removed. */
   private breakBigStone(cx: number, cy: number): void {
     const key = `${cx},${cy}`;
     const stone = this.bigStones.get(key);
     if (!stone) return;
-    const def = BIG_STONES[stone.tier] ?? BIG_STONES[1]!;
     const sx = stone.sprite.x, topY = stone.sprite.y - stone.sprite.displayHeight * 0.55;
-    const byCato = this.catoActing; // capture NOW — the stone pops below are DEFERRED, past the flag reset
-    for (let i = 0; i < def.breakBonus; i++) {
-      this.time.delayedCall(i * 110, () => this.playPopOut(sx, topY, 'forage', 'small-stone-6', byCato));
+    const byCato = this.catoActing; // capture NOW — the pops below are DEFERRED, past the flag reset
+    for (let i = 0; i < 3; i++) {
+      this.time.delayedCall(i * 110, () => this.playChopDrop(sx + Phaser.Math.Between(-7, 7), topY, 'tools_and_meterials', 'big-stone', byCato));
     }
-    if (def.breakBonus > 0) { this.collect(makeStone(def.breakBonus)); }
+    this.collect(makeStone(3));
     this.removeBigStone(cx, cy);
     this.scheduleSave();
   }
@@ -7285,6 +7314,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.menuShopSel || !cat.some((e) => e.id === this.menuShopSel)) this.menuShopSel = cat[0]?.id; // reset if the sel isn't in this tab's catalog
     }
     if (tab === TAB_HOUSE) { this.shopMsg = ''; if (!this.menuHouseSel) this.menuHouseSel = HOME_TIERS.find((h) => h.price > 0)?.id; } // 房子 tab defaults
+    if (tab === TAB_CAPACITY) this.shopMsg = ''; // 容量 tab: clear any stale buy message
     if (!this.menuOpen) {
       // Fresh open → no source object by default (E/I / order button / backpack button).
       // openMenuViaObject sets the source AFTER this so a door-open still animates on close.
@@ -7358,7 +7388,7 @@ export class GameScene extends Phaser.Scene {
   private menuStoreCap(): number {
     return this.menuTab === TAB_BACKPACK ? this.backpackCap()
       : this.menuTab === TAB_TOOLS ? this.ownedTools.length
-      : this.menuTab === TAB_CHEST ? CHEST_SLOTS
+      : this.menuTab === TAB_CHEST ? this.chestCap()
       : this.menuTab === 2 ? CATO_BAG_SLOTS
       : this.menuTab === TAB_PICKUP ? PICKUP_SLOTS
       : this.menuTab === TAB_FORSALE ? SALE_SLOTS
@@ -7375,12 +7405,20 @@ export class GameScene extends Phaser.Scene {
 
   /** The 工具 tab's items = the owned tools (synthesized stacks; never mutated — tools are
    *  non-consumable). `equipToolToWheel` / 使用 read them by index. */
+  // 工具 tab item icons: the creator's consolidated `item_atlas` (bordered per-tool art). One region
+  // per tool; each replaces that tool's default inventory icon in the 工具 tab.
+  private static TOOL_ITEM_ICON: Partial<Record<ToolId, string>> = {
+    axe: 'item-axe-with-border', hoe: 'item-hoe-with-border', 'watering-can': 'item-water-can-with-border',
+    pickaxe: 'item-pixaxe-with-border', 'fishing-rod': 'item-fishing-rod-with-border',
+  };
   private toolItems(): ItemStack[] {
     return this.ownedTools.map((tid) => {
       const it = itemFromId(tid, 1);
-      // Use the bordered "item" art for the pickaxe in the 工具 tab (item-pixaxe-with-border,
-      // loaded as `wheel-pickaxe`) so it reads as a nicer inventory icon.
-      if (tid === 'pickaxe') { it.iconKey = 'wheel-pickaxe'; it.iconFrame = 0; }
+      // Prefer the creator's bordered `item_atlas` art for the 工具 tab; fall back to the default icon.
+      const frame = GameScene.TOOL_ITEM_ICON[tid];
+      if (frame && this.textures.exists('item-atlas') && this.textures.get('item-atlas').has(frame)) {
+        it.iconKey = 'item-atlas'; it.iconFrame = frame;
+      }
       return it;
     });
   }
@@ -7395,6 +7433,18 @@ export class GameScene extends Phaser.Scene {
       ? HOME_TIERS.filter((h) => h.price > 0).map((h) => ({
           id: h.id, name: t(h.nameKey), desc: t(h.descKey), preview: h.preview, price: h.price,
           owned: this.currentHome === h.id, pending: this.pendingHome?.id === h.id,
+        }))
+      : undefined;
+    // 容量 tab: chest + backpack capacity upgrades (current slots + next-upgrade price).
+    const capacity = this.menuTab === TAB_CAPACITY
+      ? (['chest', 'backpack'] as const).map((which) => ({
+          id: which,
+          name: t(which === 'chest' ? 'cap_chest' : 'cap_backpack'),
+          slots: which === 'chest' ? this.chestCap() : this.backpackCap(),
+          rows: which === 'chest' ? this.chestRows : this.backpackRows,
+          price: this.capUpgradePrice(which),
+          maxed: this.capMaxed(which),
+          desc: t(which === 'chest' ? 'cap_chest_desc' : 'cap_backpack_desc'),
         }))
       : undefined;
     // Mail tab: resolve the selected mail's receipt for the RIGHT detail pane FIRST (it may
@@ -7425,6 +7475,7 @@ export class GameScene extends Phaser.Scene {
       mailSelected: this.menuMailSel ?? undefined, mailDetail,
       catalog, shopSelected: this.menuShopSel, money: this.money, buyQty: this.menuBuyQty, shopMsg: this.shopMsg,
       houses, houseSelected: this.menuHouseSel,
+      capacity, capacitySelected: this.menuCapSel,
       catoInfo, calendar,
       replaceHint: this.craftReplace && this.menuTab === TAB_BACKPACK ? t('craft_replace_hint') : undefined, // backpack-full craft replace
     });
@@ -7472,6 +7523,11 @@ export class GameScene extends Phaser.Scene {
   /** House-catalog row (房子 tab) under (x,y) → its tier id. */
   private menuHouseRowAt(x: number, y: number): string | null {
     const rows = this.registry.get('menuHouseRows') as Array<{ x: number; y: number; w: number; h: number; id: string }> | null;
+    const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    return hit ? hit.id : null;
+  }
+  private menuCapRowAt(x: number, y: number): 'chest' | 'backpack' | null {
+    const rows = this.registry.get('menuCapRows') as Array<{ x: number; y: number; w: number; h: number; id: 'chest' | 'backpack' }> | null;
     const hit = rows?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
     return hit ? hit.id : null;
   }
@@ -7543,10 +7599,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Does the chest have room for `id`? A stackable item that already has a stack merges
-   *  (always fits); a new item needs a free slot (chest capped at CHEST_SLOTS). */
+   *  (always fits); a new item needs a free slot (chest capped at chestCap()). */
   private chestHasSpaceFor(id: string): boolean {
     if (this.chestStore.some((s) => s.id === id)) return true;
-    return this.chestStore.length < CHEST_SLOTS;
+    return this.chestStore.length < this.chestCap();
+  }
+
+  /** Chest distinct-stack capacity = its upgraded row count × 7 (bought on the shop 容量 tab). */
+  private chestCap(): number { return this.chestRows * CAP_COLS; }
+
+  /** Price of the NEXT capacity upgrade for `which` (geometric escalation), or 0 if maxed. */
+  private capUpgradePrice(which: 'chest' | 'backpack'): number {
+    const rows = which === 'chest' ? this.chestRows : this.backpackRows;
+    const init = which === 'chest' ? CHEST_ROWS_INIT : BACKPACK_ROWS_INIT;
+    const bought = Math.max(0, rows - init);
+    return Math.round(CAP_BASE[which] * Math.pow(CAP_MULT[which], bought));
+  }
+  private capMaxed(which: 'chest' | 'backpack'): boolean {
+    return (which === 'chest' ? this.chestRows : this.backpackRows) >= (which === 'chest' ? CHEST_ROWS_MAX : BACKPACK_ROWS_MAX);
+  }
+
+  /** Buy one capacity upgrade (+1 row = +7 slots) for the chest or backpack. */
+  private buyCapacity(which: 'chest' | 'backpack'): boolean {
+    if (this.capMaxed(which)) return false;
+    const price = this.capUpgradePrice(which);
+    if (this.money < price) { this.flashShopMsg(t('shop_no_coins')); return false; }
+    this.addMoney(-price);
+    if (which === 'chest') this.chestRows++; else this.backpackRows++;
+    playSfx(this, SFX_CLICK);
+    this.flashShopMsg(t('cap_upgraded'));
+    this.scheduleSave();
+    if (this.menuOpen) this.publishMenu(); // refresh the tab prices + the grid caps
+    return true;
   }
 
   /** Does Cato's (small) bag have room for `id`? Merges into an existing stack, else needs
@@ -7556,10 +7640,10 @@ export class GameScene extends Phaser.Scene {
     return this.catoBagStore.length < CATO_BAG_SLOTS;
   }
 
-  /** The backpack's distinct-stack capacity — normally `BACKPACK_SLOTS` (35), but the `smallBag`
+  /** The backpack's distinct-stack capacity — now `backpackRows`×7, but the `smallBag`
    *  debug toggle shrinks it to 12 so the full-bag / can't-take flow is easy to test. */
   private backpackCap(): number {
-    return isDebug('smallBag') ? 12 : BACKPACK_SLOTS;
+    return isDebug('smallBag') ? 12 : this.backpackRows * CAP_COLS;
   }
 
   /** Does the player's backpack have room for `id`? Merges into an existing stack, else a free
@@ -8300,6 +8384,12 @@ export class GameScene extends Phaser.Scene {
       if (hb && x >= hb.x && x <= hb.x + hb.w && y >= hb.y && y <= hb.y + hb.h) { if (this.menuHouseSel) this.buyHouse(this.menuHouseSel); return true; }
       const hid = this.menuHouseRowAt(x, y);
       if (hid) { this.menuHouseSel = hid; this.shopMsg = ''; this.publishMenu(); return true; }
+    } else if (this.menuTab === TAB_CAPACITY) {
+      // 容量/EXPANSION tab (2-pane like 房子): a BUY button buys the SELECTED item; a list row selects it.
+      const cb = this.registry.get('menuCapBuy') as { x: number; y: number; w: number; h: number } | null;
+      if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) { this.buyCapacity(this.menuCapSel); return true; }
+      const cid = this.menuCapRowAt(x, y);
+      if (cid) { this.menuCapSel = cid; this.shopMsg = ''; this.publishMenu(); return true; }
     } else if (this.menuTab === 4) {
       // Settings: tap/drag the volume bar to set the level; tap 返回标题 to go back.
       const slider = this.menuSliderAt(x, y);
@@ -11793,13 +11883,14 @@ export class GameScene extends Phaser.Scene {
     // Snapshot the island we're standing on into the per-island map (the others keep their last state).
     this.islandSaves[this.sceneId] = this.serializeIsland();
     return {
-      v: 31,
+      v: 32,
       inventory: this.inventory.map((c) => (c ? { id: c.id, count: c.count } : null)),
       selected: this.hotbarSelected,
       ownedTools: [...this.ownedTools],           // v29: 工具 tab list
       equippedTools: [...this.equippedTools],     // v29: wheel loadout
       waterLevel: this.waterLevel,                // v30: watering-can water
       onboarding: this.onboardingActive || undefined, // v31: mid-onboarding (tutorial not finished)
+      chestRows: this.chestRows, backpackRows: this.backpackRows, // v32: upgradeable capacity
       currentIsland: this.sceneId, // cold-boot resumes on this island
       islands: this.islandSaves,   // per-island farm state (all islands)
       money: this.money,
@@ -12062,6 +12153,11 @@ export class GameScene extends Phaser.Scene {
       // Tools are a default always-owned kit now (findOwnedTool), never in the bag — strip any that
       // an OLD save persisted into the backpack so they no longer show up / can't be dropped.
       if (s.backpack) this.backpackStore = s.backpack.map((it) => itemFromId(it.id, it.count)).filter((it) => !it.toolId);
+      // v32: upgradeable capacity (rows × 7). A pre-v32 save has no field → default init rows; and
+      // never let the cap fall BELOW the actual stored item count (a pre-v32 chest could hold up to 60
+      // items — grandfather its rows up so nothing is hidden). Applied AFTER the stores are restored.
+      this.chestRows = Math.max(s.chestRows ?? CHEST_ROWS_INIT, Math.ceil(this.chestStore.length / CAP_COLS), CHEST_ROWS_INIT);
+      this.backpackRows = Math.max(s.backpackRows ?? BACKPACK_ROWS_INIT, Math.ceil(this.backpackStore.length / CAP_COLS), BACKPACK_ROWS_INIT);
       // Grant missing starter items INTO THE CHEST — AFTER it's restored (else the
       // restore above would wipe the grants). Building materials are idempotent; the
       // spare seeds are one-time (chestSeeded flag) so they don't refill after use.

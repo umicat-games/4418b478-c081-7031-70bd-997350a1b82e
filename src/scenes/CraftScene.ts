@@ -125,8 +125,16 @@ export class CraftScene extends Phaser.Scene {
     // Close button (top-right).
     const closeSz = ph * 0.09, closeX = pw / 2 - closeSz * 0.75, closeY = top + closeSz * 0.75;
     const closeBtn = this.add.container(closeX, closeY);
-    closeBtn.add(this.add.nineslice(0, 0, BTN, BTN_FRAME, closeSz, closeSz, 6, 6, 7, 7));
-    if (this.textures.exists(ICONS)) { const ic = this.add.image(0, 0, ICONS, ICON_CLOSE); ic.setScale((closeSz * 0.5) / Math.max(ic.width, ic.height)); closeBtn.add(ic); }
+    // Match the chest / backpack close button: the self-contained `icon-buttons` `close-light-big` X
+    // (not a square-button + ⊘ icon). Falls back to the old composite if the atlas frame is missing.
+    if (this.textures.exists('icon-buttons') && this.textures.get('icon-buttons').has('close-light-big')) {
+      const x = this.add.image(0, 0, 'icon-buttons', 'close-light-big');
+      x.setScale((closeSz * 1.15) / Math.max(x.width, x.height));
+      closeBtn.add(x);
+    } else {
+      closeBtn.add(this.add.nineslice(0, 0, BTN, BTN_FRAME, closeSz, closeSz, 6, 6, 7, 7));
+      if (this.textures.exists(ICONS)) { const ic = this.add.image(0, 0, ICONS, ICON_CLOSE); ic.setScale((closeSz * 0.5) / Math.max(ic.width, ic.height)); closeBtn.add(ic); }
+    }
     box.add(closeBtn);
 
     // ── LEFT: recipe list ──

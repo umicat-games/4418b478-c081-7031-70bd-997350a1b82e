@@ -1,0 +1,41 @@
+{
+  "frames": {
+    "item-axe-with-border": {
+      "frame": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "rotated": false, "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "sourceSize": { "w": 16, "h": 16 }
+    },
+    "item-hoe-with-border": {
+      "frame": { "x": 16, "y": 0, "w": 16, "h": 16 },
+      "rotated": false, "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "sourceSize": { "w": 16, "h": 16 }
+    },
+    "item-water-can-with-border": {
+      "frame": { "x": 32, "y": 0, "w": 16, "h": 16 },
+      "rotated": false, "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "sourceSize": { "w": 16, "h": 16 }
+    },
+    "item-fishing-rod-with-border": {
+      "frame": { "x": 0, "y": 16, "w": 16, "h": 16 },
+      "rotated": false, "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "sourceSize": { "w": 16, "h": 16 }
+    },
+    "item-pixaxe-with-border": {
+      "frame": { "x": 16, "y": 16, "w": 16, "h": 16 },
+      "rotated": false, "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "sourceSize": { "w": 16, "h": 16 }
+    }
+  },
+  "meta": {
+    "app": "catopia-hand-authored",
+    "image": "item_atlas.png",
+    "format": "RGBA8888",
+    "size": { "w": 48, "h": 32 },
+    "scale": "1"
+  }
+}

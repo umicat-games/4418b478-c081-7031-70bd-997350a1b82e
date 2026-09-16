@@ -45,6 +45,8 @@ export const SFX_COOK = 'sfx-cooking';
 /** Occasional daytime farm-animal ambience — a moo / cluck when a cow pen / coop has animals. */
 export const SFX_COW = 'sfx-cow';
 export const SFX_CHICKEN = 'sfx-chicken';
+/** A pick striking a big-stone — plays on each real mining strike (mirrors SFX_CHOP for trees). */
+export const SFX_HIT_ROCK = 'sfx-hit-rock';
 
 function readVolume(): number {
   try {

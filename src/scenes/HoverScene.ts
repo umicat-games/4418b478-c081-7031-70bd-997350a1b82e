@@ -153,7 +153,11 @@ export class HoverScene extends Phaser.Scene {
       if (empty || !b.iconKey) { p.icon.setVisible(false); return; }
       p.icon.setVisible(true).setPosition(b.x, b.y).setTexture(b.iconKey, b.iconFrame);
       p.icon.clearTint().setAlpha(disabled ? 0.4 : 1); // inapplicable tool → just faded (no ugly grey tint)
-      const fill = b.kind === 'close' ? 0.56 : 0.78; // tools fill more of the circle so the bordered art reads clearly
+      // Tools fill more of the circle so the bordered art reads clearly. The PICKAXE art is diagonal
+      // (grip → head, corner to corner), so its bounding box's corners exceed the circle at 0.78 —
+      // scale it to the inscribed-square limit (~0.7) so the diagonal stays inside the ring.
+      const isPick = b.iconKey === 'wheel-pickaxe' || b.iconKey === 'pickaxe';
+      const fill = b.kind === 'close' ? 0.56 : isPick ? 0.68 : 0.78;
       p.icon.setScale((b.size * fill) / Math.max(p.icon.width, p.icon.height || 1));
       this.children.bringToTop(p.icon);
     });

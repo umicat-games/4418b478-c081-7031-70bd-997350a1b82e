@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { dialogFont, t, getLang, setLang, supportedLangs, langDisplayName, type Lang } from '../i18n';
 import { getBgmVolume, setBgmVolume } from '../bgm';
 import { playSfx, getSfxVolume, setSfxVolume, SFX_SCROLL } from '../sfx';
+import { hudDpr } from '../dpi';
 import type { BootMenuScene } from './BootMenuScene';
 
 /** One volume slider in the title modal (Music or SFX). */
@@ -214,9 +215,10 @@ export class SettingsScene extends Phaser.Scene {
     const iconH = bh * 0.42;
     b.icon.setScale(iconH / 16);
     b.text.setFontSize(Math.round(bh * 0.34));
-    // zpix has no real bold weight (faux-bold barely renders), so thicken the glyphs
-    // with a matching-colour stroke sized to the font — a crisp "bold" for pixel text.
-    b.text.setStroke(LABEL_COLOR, Math.max(1, bh * 0.028));
+    // zpix has no real bold weight (faux-bold barely renders), so a THIN matching-colour stroke
+    // firms up the glyphs. Keep it small — `bh·0.028` was thick enough to bleed adjacent letters
+    // together on the big title buttons (crisp on the small confirm buttons only because bh was less).
+    b.text.setStroke(LABEL_COLOR, Math.max(1, bh * 0.012));
     const iconW = 16 * b.icon.scaleX;
     const gap = bh * 0.1;
     const hasText = b.text.text.length > 0;
@@ -460,7 +462,10 @@ export class SettingsScene extends Phaser.Scene {
 
   private layoutConfirm(W: number, H: number): void {
     this.confirmDim.setPosition(0, 0).setSize(W, H);
-    const cpw = Math.min(W * 0.6, 620), cph = Math.min(H * 0.56, 380);
+    // W/H are DEVICE px (this scene is native-px @ zoom 1), so scale the absolute cap by dpr —
+    // otherwise a plain 620px cap renders the dialog at ~half size on a retina/high-res canvas.
+    const dpr = hudDpr(this);
+    const cpw = Math.min(W * 0.64, 640 * dpr), cph = Math.min(H * 0.6, 420 * dpr);
     this.confirmPanel.setPosition(W / 2, H / 2).setSize(cpw / CONFIRM_PANEL_SCALE, cph / CONFIRM_PANEL_SCALE);
     const top = H / 2 - cph / 2;
     this.confirmHead.setPosition(W / 2, top + cph * 0.17).setFontSize(Math.round(cph * 0.12)).setStroke('#3a2a12', Math.max(1, cph * 0.005));

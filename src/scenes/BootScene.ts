@@ -95,6 +95,7 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('sfx-hoe', 'uploaded/shovle.mp3'); // dig thunk on the player's hoe strike
     this.load.audio('sfx-chop', 'uploaded/chop-wood-new.mp3'); // short axe thunk on each tree strike
     this.load.audio('sfx-tree-fall', 'uploaded/tree_falls_down.mp3'); // tree toppling over, with the tree-fall anim
+    this.load.audio('sfx-hit-rock', 'uploaded/hit-rock-sound.mp3'); // pick thunk on each big-stone mining strike
     this.load.audio('sfx-hover', 'uploaded/click_003.ogg'); // soft blip when the mouse highlights an item cell
     this.load.audio('rain-loop', 'uploaded/raining.mp3'); // looping rain ambience while it's raining (387KB)
     this.load.audio('night-cricket', 'uploaded/night-cricket-sound.mp3'); // occasional cricket chirp on clear nights
@@ -252,6 +253,7 @@ export class BootScene extends Phaser.Scene {
     // included (`mashroom`, and a `cooing-` duplicate of the stew art); `DISH_FRAME` in
     // GameScene maps clean `dish-*` ids onto them so the misspellings stop at that one line.
     this.load.atlas('cooking-items', 'uploaded/cooking-items_atlas.png', 'uploaded/cooking-items_atlas.json');
+    this.load.atlas('item-atlas', 'uploaded/item_atlas.png', 'uploaded/item_atlas.json'); // bordered tool item icons (工具 tab)
     // Berry BUSHES (Sprout Lands "Trees, stumps and bushes") — region-tagged (not a
     // uniform grid), so loaded as an image + the named frames registered in create():
     // grow stages `empty-bush-small`/`empty-bush` + one berry overlay per type
@@ -282,6 +284,7 @@ export class BootScene extends Phaser.Scene {
     for (const c of ['yellow', 'purple', 'pink', 'green', 'blue', 'grey']) this.load.image(`bubble-${c}`, `uploaded/bubble-${c}.png`);
     // Pickaxe tool icon (knocks big-stones).
     this.load.image('pickaxe', 'uploaded/pickaxe.png');
+    this.load.image('pickaxe-tool', 'uploaded/pickaxe-tool.png'); // the mining SWING art (replaces `pickaxe` in pickSwingAt)
     this.load.image('toolbox-icon', 'uploaded/toolbox-icon.png'); // 工具 tab icon (16×16)
     // Decorative fish (16×16, 15-frame top-down swim/turn) — swim in circles in the water.
     this.load.spritesheet('fish', 'uploaded/fish-spritesheet.png', { frameWidth: 16, frameHeight: 16 });

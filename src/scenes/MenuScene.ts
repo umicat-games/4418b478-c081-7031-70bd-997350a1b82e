@@ -51,7 +51,7 @@ const DETAIL = { imgCx: 0.79, imgCy: 0.34, imgMax: 0.22, panelX: 0.62, panelY: 0
 // (245), For-sale = whilte-out [sic, backend typo] (294, arrow-out-of-box), Chest =
 // white-sprout (229), Shop = white-shopping-cart (262), Settings = white-settings (164,
 // gear). `iconKey` can override the texture if a future tab needs a non-ui-icons image.
-const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string }> = [
+const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; title: string; angle?: number }> = [
   { key: 'mail', frame: 245, title: '邮件' },
   { key: 'chest', frame: 229, title: '箱子' },
   { key: 'catobag', frame: 310, title: '猫包' }, // white-cat-claw (all_icons region @96,304)
@@ -65,16 +65,17 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'coop', frame: 261, title: '牧场' },     // shop 牧场 sub-tab: placeable buildings (coops). Placeholder icon; retag later.
   { key: 'backpack', frame: 229, title: '物品' }, // 11 = TAB_BACKPACK: the backpack items tab (white-sprout placeholder)
   { key: 'tools', iconKey: 'toolbox-icon', frame: 0, title: '工具' }, // 12 = TAB_TOOLS: owned tools (toolbox icon)
+  { key: 'capacity', frame: 213, angle: -90, title: '容量' }, // 13 = TAB_CAPACITY: `play-white-with-border` triangle rotated to point UP
 ];
 // NB: TAB_DEFS is indexed by position → these ids MUST match. TAB_BACKPACK is a special standalone
 // view id kept ABOVE the TAB_DEFS range so appending real tabs never collides with it.
-const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_COOP = 10, TAB_BACKPACK = 11, TAB_TOOLS = 12;
+const TAB_MAIL = 0, TAB_CHEST = 1, TAB_CATOBAG = 2, TAB_SHOP = 3, TAB_SETTINGS = 4, TAB_CALENDAR = 5, TAB_PICKUP = 6, TAB_FORSALE = 7, TAB_HOUSE = 8, TAB_CATO = 9, TAB_COOP = 10, TAB_BACKPACK = 11, TAB_TOOLS = 12, TAB_CAPACITY = 13;
 
 // Stylized header shown centred at the top of each frame (title text + the title-bar underneath),
 // keyed by TAB_DEFS key. "<CATEGORY> • <SECTION>" so the shop/mail sub-tabs read as one family.
 // Cato + Calendar draw their own header, so they're omitted here. Edit these strings freely.
 const SCREEN_TITLE: Record<string, string> = {
-  shop: 'SHOP • ITEMS', coop: 'SHOP • RANCH', house: 'SHOP • HOUSE',
+  shop: 'SHOP • ITEMS', coop: 'SHOP • RANCH', house: 'SHOP • HOUSE', capacity: 'SHOP • EXPANSION',
   mail: 'MAIL • LETTERS', pickup: 'MAIL • INBOX', forsale: 'MAIL • OUTBOX',
   chest: 'CHEST', catobag: "CATO'S BAG", settings: 'SETTINGS',
 };
@@ -103,6 +104,8 @@ export interface MenuModel {
   shopSelected?: string;        // selected catalog id → right detail + buy
   houses?: Array<{ id: string; name: string; desc: string; preview?: string; price: number; owned: boolean; pending: boolean }>; // 房子 tab
   houseSelected?: string;       // selected house tier id → right detail + buy
+  capacity?: Array<{ id: 'chest' | 'backpack'; name: string; slots: number; rows: number; price: number; maxed: boolean; desc: string }>; // 容量/EXPANSION tab
+  capacitySelected?: 'chest' | 'backpack'; // selected list row → right detail + buy
   money?: number;               // coin balance (shop footer)
   buyQty?: number;              // how many to buy (right-side stepper)
   shopMsg?: string;             // transient warning ("金币不够" / "箱子满了")
@@ -305,7 +308,7 @@ export class MenuScene extends Phaser.Scene {
     // for-sale / SHOP) share ONE full-width frame, split by a dashed divider — instead of two
     // frames. Settings / Calendar are full-width too (no right detail).
     const hasDetail = m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_TOOLS
-      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP || m.tab === TAB_HOUSE || m.tab === TAB_COOP;
+      || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE || m.tab === TAB_MAIL || m.tab === TAB_SHOP || m.tab === TAB_HOUSE || m.tab === TAB_COOP || m.tab === TAB_CAPACITY;
     const wideFrame = hasDetail || m.tab === TAB_SETTINGS || m.tab === TAB_CALENDAR || m.tab === TAB_CATO;
     const frameWFrac = wideFrame ? 1 - 2 * L.x : L.w;
     const lx = L.x * W, ly = L.y * H, lw = frameWFrac * W, lh = L.h * H;
@@ -345,6 +348,7 @@ export class MenuScene extends Phaser.Scene {
         // every tab icon lands at the same on-screen height.
         ic = this.add.image(slotCx(pos), cy - OVERLAP / 2, iconTex, TAB_DEFS[tabIdx]!.frame);
         ic.setScale(((tabH - OVERLAP) * 0.7) / Math.max(ic.width, ic.height));
+        if (TAB_DEFS[tabIdx]!.angle) ic.setAngle(TAB_DEFS[tabIdx]!.angle!); // e.g. 容量: play triangle rotated to point up
         tabIcons.push(ic);
       }
       if (active) activeIcon = ic;
@@ -398,6 +402,7 @@ export class MenuScene extends Phaser.Scene {
     }
     else if (m.tab === TAB_SHOP || m.tab === TAB_COOP) this.renderShop(content, m); // 牧场 reuses the shop 2-pane + buy UI
     else if (m.tab === TAB_HOUSE) this.renderHouse(content, m);
+    else if (m.tab === TAB_CAPACITY) this.renderCapacity(content, m);
     else this.renderGrid(content, m.items ?? [], m.selected, m.tab === TAB_CATOBAG ? CATOBAG_ROWS : GRID.rows, m.gridCap); // chest / cato-bag / backpack / 取货 / 待售
     if (m.tab === TAB_CHEST || m.tab === TAB_CATOBAG || m.tab === TAB_BACKPACK || m.tab === TAB_TOOLS || m.tab === TAB_PICKUP || m.tab === TAB_FORSALE) {
       // Detail in its OWN container so hover can re-draw JUST the detail (no grid rebuild).
@@ -1075,6 +1080,67 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuHouseBuy', { x: cx - btnW / 2, y: buyCy - btnH / 2, w: btnW, h: btnH });
     if (msg) c.add(this.T(cx, STEP.msgY * H, msg, H * 0.022, '#b5533a'));
     else if (h.price > money) c.add(this.T(cx, STEP.msgY * H, t('shop_no_coins'), H * 0.02, '#b5896a'));
+  }
+
+  /** 容量/EXPANSION tab — SAME 2-pane layout as 房子 (house): LEFT = a Chest/Backpack list, RIGHT =
+   *  the selected item's detail (a slot-grid preview image + title + price + desc + Buy). */
+  private renderCapacity(c: Phaser.GameObjects.Container, m: MenuModel): void {
+    this.renderCapacityList(c, m);
+    const caps = m.capacity ?? [];
+    this.renderCapacityDetail(c, caps.find((cap) => cap.id === m.capacitySelected) ?? caps[0], m.money ?? 0, m.shopMsg ?? '');
+  }
+  private renderCapacityList(c: Phaser.GameObjects.Container, m: MenuModel): void {
+    const W = this.scale.width, H = this.scale.height;
+    const caps = m.capacity ?? [];
+    const selId = m.capacitySelected;
+    const gx = GRID.x * W, gy = GRID.y * H, gw = GRID.w * W;
+    const rowH = 0.10 * H, step = rowH + SHOP.gapPx;
+    const rowBounds: Array<{ x: number; y: number; w: number; h: number; id: 'chest' | 'backpack' }> = [];
+    caps.forEach((cap, k) => {
+      const ry = gy + k * step, sel = cap.id === selId;
+      const bar = this.add.graphics();
+      bar.fillStyle(sel ? 0xf3ead1 : 0xe7dcc2, 1); bar.fillRoundedRect(gx, ry, gw, rowH, 8);
+      bar.lineStyle(sel ? 3 : 2, sel ? 0xb89a5e : 0xd2be95, 1); bar.strokeRoundedRect(gx, ry, gw, rowH, 8); c.add(bar);
+      c.add(this.T(gx + rowH * 0.3, ry + rowH * 0.5, cap.name, H * 0.026, INK, 0));
+      c.add(this.T(gx + gw - rowH * 0.3, ry + rowH * 0.5, cap.maxed ? t('cap_max') : String(cap.price), H * 0.024, cap.maxed ? '#6f8f4e' : '#7a5a34', 1));
+      rowBounds.push({ x: gx, y: ry, w: gw, h: rowH, id: cap.id });
+    });
+    this.registry.set('menuCapRows', rowBounds);
+    c.add(this.T(gx, SHOP.footY * H, `${t('shop_balance')} ${m.money ?? 0}`, H * 0.026, INK, 0));
+  }
+  private renderCapacityDetail(c: Phaser.GameObjects.Container, cap: NonNullable<MenuModel['capacity']>[number] | undefined, money: number, msg: string): void {
+    const W = this.scale.width, H = this.scale.height;
+    const cx = 0.76 * W, regionW = 0.40 * W;
+    this.registry.set('menuCapBuy', null);
+    if (!cap) return;
+    // Preview IMAGE = a `frame-medium` container holding a mini grid of slot cells (visualises the
+    // capacity). Rows shown grow with upgrades, capped at 4 so it stays legible at 12 rows.
+    const imgCy = 0.34 * H, cols = 7, dispRows = Math.max(1, Math.min(cap.rows, 4));
+    const cell = Math.min((regionW * 0.62) / cols, (0.15 * H) / dispRows);
+    const gw2 = cols * cell, gh2 = dispRows * cell, pad = cell * 0.6;
+    const fw = gw2 + pad * 2, fh = gh2 + pad * 2;
+    const frame = this.add.nineslice(cx, imgCy, ATLAS, PANEL_FRAME, fw / PANEL_SCALE, fh / PANEL_SCALE, PANEL_SLICE.l, PANEL_SLICE.r, PANEL_SLICE.t, PANEL_SLICE.b).setScale(PANEL_SCALE);
+    c.add(frame);
+    for (let r = 0; r < dispRows; r++) for (let cc = 0; cc < cols; cc++) {
+      const sx = cx - gw2 / 2 + cc * cell + cell / 2, sy = imgCy - gh2 / 2 + r * cell + cell / 2;
+      const sl = this.add.nineslice(sx, sy, ATLAS, SLOT_FRAME, (cell - cell * 0.14) / SLOT_SCALE, (cell - cell * 0.14) / SLOT_SCALE, SLOT_SLICE.l, SLOT_SLICE.r, SLOT_SLICE.t, SLOT_SLICE.b).setScale(SLOT_SCALE);
+      c.add(sl);
+    }
+    let nameY = imgCy + fh / 2 + H * 0.05;
+    c.add(this.T(cx, nameY, cap.name, H * 0.028, INK));
+    c.add(this.T(cx, nameY + 0.045 * H, t('cap_slots').replace('{n}', String(cap.slots)).replace('{rows}', String(cap.rows)), H * 0.023, '#7a5a34'));
+    const desc = this.add.text(cx, nameY + 0.08 * H, cap.desc, {
+      fontFamily: dialogFont(), fontSize: Math.round(H * 0.02) + 'px', color: SUB, resolution: RES, align: 'center', wordWrap: { width: regionW * 0.84 },
+    }).setOrigin(0.5, 0); c.add(desc);
+    const buyCy = STEP.buyY * H, btnH = STEP.btn * H * 1.05, btnW = regionW * 0.62;
+    if (cap.maxed) { c.add(this.T(cx, buyCy, t('cap_max'), H * 0.028, '#6f8f4e')); return; }
+    const has = this.textures.exists('square-buttons') && this.textures.get('square-buttons').has('grey-button');
+    const bg = has ? this.add.nineslice(cx, buyCy, 'square-buttons', 'grey-button', btnW, btnH, 6, 6, 6, 6)
+      : this.add.rectangle(cx, buyCy, btnW, btnH, 0xd8c39a).setStrokeStyle(2, 0x5b3a1e);
+    c.add(bg); c.add(this.T(cx, buyCy, t('cap_buy').replace('{price}', String(cap.price)), H * 0.026, '#5b4327'));
+    this.registry.set('menuCapBuy', { x: cx - btnW / 2, y: buyCy - btnH / 2, w: btnW, h: btnH });
+    if (msg) c.add(this.T(cx, STEP.msgY * H, msg, H * 0.022, '#b5533a'));
+    else if (cap.price > money) c.add(this.T(cx, STEP.msgY * H, t('shop_no_coins'), H * 0.02, '#b5896a'));
   }
 
   private renderMenu(m: ActionMenuModel): void {
