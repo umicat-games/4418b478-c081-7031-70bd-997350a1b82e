@@ -15,8 +15,10 @@ import { showTitle } from './title';
 import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
-import { LEVELS, type LevelDef, type Wave } from './levels';
+import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createTutorial, type Tutorial } from './tutorial';
+import { createScript, withIcon, type Script } from './scripted';
+import { createWayfinder } from './wayfinder';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { icon, setIconText, iconHtml, type IconName } from './icons';
@@ -513,7 +515,13 @@ export async function startLevel(
   shared: Shared, startWeapon: Weapon = 'sword', levelIndex = 0,
   bonus: TownBonus = NO_BONUS, weaponLevels: WeaponLevels = { sword: 1 },
 ): Promise<LevelResult> {
-  const level: LevelDef = LEVELS[Math.max(0, Math.min(levelIndex, LEVELS.length - 1))];
+  /** The tutorial board is entered as index -1. It is not in `LEVELS` because
+   *  it is not a board you choose — it is the first two minutes of the game,
+   *  once — and a list entry would leave it sitting there for good. */
+  const scripted = levelIndex < 0;
+  const level: LevelDef = scripted
+    ? TUTORIAL
+    : LEVELS[Math.max(0, Math.min(levelIndex, LEVELS.length - 1))];
   const WAVES = level.waves;
   const SPAWN_GAP = level.spawnGap;
   const WAVE_GAP = level.waveGap;
@@ -1968,6 +1976,9 @@ export async function startLevel(
   // halfway through is a run where the choice never cost anything.
   const cells = KINDS.map((kind, i) => {
     const cell = document.createElement('button');
+    // Which slot this is, so a probe driving the tutorial can press the one the
+    // script is pointing at rather than guessing from the text inside it.
+    cell.dataset.slot = String(i);
     // A starting width only. `placeHotbar` sets the real one, from the room
     // that is actually left beside the platform's buttons.
     cell.style.cssText = `
@@ -1994,6 +2005,11 @@ export async function startLevel(
       + `<span class="cost" style="opacity:.85">${kind.cost}g</span>`;
     // Tap to choose, tap again to un-choose.
     cell.onclick = () => {
+      // While the script is on a step that names one weapon, the others do
+      // nothing. Silently, rather than with a refusal: there is an instruction
+      // on screen saying which one, and arguing with it is not a conversation
+      // worth having.
+      if (onlyKind !== null && i !== onlyKind) { audio.play('denied'); return; }
       selected = selected === i ? null : i;
       refreshHotbar(); audio.play('build'); renderHud();
     };
@@ -2159,10 +2175,218 @@ export async function startLevel(
    *  first run and coming back to no help is the moment help was for.
    */
   const teaching = level.teaches && (saveNow.cleared ?? 0) < 1;
+
+  // --- what the scripted tutorial drives ------------------------------------
+  //
+  // The tutorial board's enemies arrive because a STEP finished, not because a
+  // timer did. These are the handles the script pulls; everything else about
+  // the board is the ordinary game.
+  /** Called when an enemy walks the whole road on this board. The script's last
+   *  step wants exactly that to happen — it is how a player who never swings
+   *  gets another chance instead of a dead board. */
+  let onScriptLeak: (() => void) | null = null;
+  /** The only cell a tower may go on right now, or null for the usual rules.
+   *  The script names one square and highlights it; letting the player build
+   *  anywhere while an arrow points at one square is an arrow that lies. */
+  let onlyBuildAt: [number, number] | null = null;
+  /** The only hotbar slot that may be chosen, or null for all of them. */
+  let onlyKind: number | null = null;
+
+  /** An enemy for the script: one, on the road, with its health DERIVED.
+   *
+   *  The script says "two hits, then one hit after you upgrade". Writing 3 here
+   *  would be writing down today's sword damage — the tower does [2, 3, 5], and
+   *  the day that table changes the dialog starts lying with nothing to catch
+   *  it. So the health IS the upgraded damage, which makes both claims true by
+   *  construction as long as one upgrade is worth less than a second hit.
+   */
+  const scriptEnemyHp = (): number => {
+    const k = KINDS[0];
+    const lv1 = k.damage * DAMAGE_BY_LEVEL[0];
+    const lv2 = k.damage * DAMAGE_BY_LEVEL[1];
+    // If this ever stops holding, the script cannot be told truthfully and the
+    // board should SAY so rather than quietly teach the wrong number of hits.
+    // It needs one upgrade to be worth more than the first shot and less than
+    // two of them: that is what makes "twice, then once" true.
+    if (!(lv1 < lv2 && lv2 <= lv1 * 2)) {
+      console.warn('[tutorial] tower damage no longer fits the script',
+                   k.id, lv1, lv2);
+    }
+    return lv2;
+  };
   let startedAt = hero.position.clone();
   /** What the teaching line last said, so it is not rebuilt sixty times a
    *  second — an `innerHTML` write per frame re-parses the icons with it. */
   let lastTaught: string | null = null;
+  /** Put ONE enemy of this kind on the road.
+   *
+   *  Lifted out of the wave loop so the tutorial can spawn its own. Its script
+   *  says one enemy, then another, then another, each after a step is done —
+   *  that is not a wave table, and expressing it as one would mean a table that
+   *  is really a state machine written sideways. */
+  const spawnOne = (w: Wave): void => {
+    const obj = spawnFrom(w.model);
+    obj.scale.setScalar(w.scale);
+    // Measured before anything is hung off it — a bar inside the box it
+    // is being placed from is a number that chases itself.
+    const top = localTop(obj);
+    const { group: bar, fill: barFill } = makeHealthBar();
+    obj.add(bar);
+    // The bar is a CHILD, so it inherits the scale — a 2.1x boss would
+    // wear a 2.1x health bar, and the tiny scouts an unreadable one.
+    // `top` is already in the model's own units; only the MARGIN needs
+    // converting. Dividing the whole thing by the scale is how the boss
+    // ended up wearing its bar at hip height.
+    bar.position.y = top + 0.24 / w.scale;
+    // Same world size for everything, so a bar means the same thing
+    // wherever it is — except the boss's, which is the run's progress
+    // bar and gets to be twice the size of a scout's.
+    bar.scale.setScalar((w.boss ? 1.9 : 1) / w.scale);
+    const e: Enemy = {
+      obj, hp: w.hp, maxHp: w.hp, speed: w.speed, bounty: w.bounty,
+      armed: w.armed, bar, barFill,
+      // Alternate, rather than choose at random. Both lanes stay live all
+      // wave, which is the point of the fork; randomness would sometimes
+      // send fifteen of sixteen down one side and read as a bug.
+      t: 0, route: nextRoute, alive: true, shootCooldown: 1, windup: 0,
+      ground: w.ground ?? false, facesTravel: w.facesTravel ?? false,
+      ammo: w.ammo ?? 'td-bullet', damage: w.damage ?? BULLET_DAMAGE, boss: w.boss ?? false,
+    };
+    nextRoute = (nextRoute + 1) % ROUTES.length;
+    if (w.model === 'boss-orc' && bossClips.length) {
+      // A rig needs a mixer or it renders in its bind pose and slides —
+      // silently, looking exactly like a model that has no animation.
+      e.mixer = new THREE.AnimationMixer(obj);
+      e.actions = new Map(bossClips.map((c) => [c.name, e.mixer!.clipAction(c)]));
+      playEnemyClip(e, 'walk');
+    }
+    if (w.boss) {
+      flashBanner(w.label ?? 'BOSS');
+      audio.play('wave');
+      if (bar) bar.visible = true;   // always up: it is the run's clock
+    }
+    posAt(e.route, 0, e.ground ? 0 : ENEMY_FLY_HEIGHT, obj.position);
+    enemies.push(e);
+    tinted.push(obj);
+  };
+
+  // --- the scripted tutorial -------------------------------------------------
+  //
+  // Built after the hotbar and the towers exist, because half of it points at
+  // them. The board is entered as index -1 and nothing else runs this.
+  let script: Script | null = null;
+  /** The ground trail, for the steps that name a square to stand on. Built
+   *  whether or not this is the tutorial board, because building it lazily
+   *  inside a step means building it mid-frame in the render loop. */
+  const scriptTrail = createWayfinder(world.scene);
+  /** The square the script wants the tower on: the second build spot along the
+   *  road from where the enemies come out.
+   *
+   *  Chosen from the board's own spot list rather than written down, so a
+   *  change to the lane cannot leave the arrow pointing at grass. Not the FIRST
+   *  spot — that one is level with the gate, and a tower there has the enemy in
+   *  range for a moment before it is walking away. */
+  const scriptCell = (): [number, number] => {
+    const gate = ROUTES[0][0];
+    const byGate = [...pathData.spots].sort((a, b) =>
+      (Math.hypot(a[0] - gate[0], a[1] - gate[1]))
+      - (Math.hypot(b[0] - gate[0], b[1] - gate[1])));
+    return byGate[Math.min(1, byGate.length - 1)];
+  };
+
+  if (scripted) {
+    const spot = scriptCell();
+    const spawnScripted = (): void => {
+      // From the board's OWN wave entry, so the model is one this level
+      // preloaded. Only the health is the script's, and it is derived.
+      spawnOne({ ...level.waves[0], count: 1, hp: scriptEnemyHp() });
+    };
+    const alive = (): number => enemies.filter((e) => e.alive).length;
+    let placedAt = -1;
+    let upgradedAt = -1;
+    let soldAt = -1;
+
+    script = createScript([
+      {
+        // The bottom bar first, because nothing else on this board can be done
+        // until something is chosen, and the ring it draws under your feet is
+        // the explanation for every step after this one.
+        text: 'Tap the weapon in the bar below',
+        enter: () => { onlyKind = 0; },
+        slot: () => 0,
+        done: () => selected !== null,
+      },
+      {
+        // The arrow does the pointing; the words say why that square.
+        text: 'Stand on the marked square — they come out of the gate beside it',
+        at: () => ({ x: spot[0], z: spot[1] }),
+        enter: () => { onlyBuildAt = spot; },
+        done: () => !!buildCell && buildCell[0] === spot[0] && buildCell[1] === spot[1],
+      },
+      {
+        text: withIcon('build', 'Put it down'),
+        at: () => ({ x: spot[0], z: spot[1] }),
+        done: () => towers.length > 0,
+      },
+      {
+        // One enemy. It takes two hits, and the health it takes them with is
+        // derived from the tower's damage — see `scriptEnemyHp`.
+        text: 'It shoots on its own. Two hits.',
+        enter: () => { placedAt = kills; spawnScripted(); },
+        done: () => kills > placedAt,
+      },
+      {
+        text: 'Walk over what it dropped',
+        done: () => pickedUp > 0,
+      },
+      {
+        // The same button, doing something else because of where you are
+        // standing. That is the lesson, so the step names the place first.
+        text: withIcon('build', 'Stand on your weapon and press again to upgrade it'),
+        at: () => ({ x: spot[0], z: spot[1] }),
+        enter: () => {
+          upgradedAt = kills;
+          // Make sure it can be paid for. The board hands out 25g, the weapon
+          // costs 25 and the upgrade 20, and what the first enemy leaves is a
+          // roll — so a run of bad luck turns an instruction into a wall. A
+          // scripted step that cannot be completed is the one failure this
+          // whole board exists to avoid.
+          const t = towers[0];
+          if (t && gold < upgradeCost(t)) { gold = upgradeCost(t); renderHud(); }
+        },
+        done: () => towers.some((t) => t.level > 1),
+      },
+      {
+        text: 'Now one hit.',
+        enter: () => { upgradedAt = kills; spawnScripted(); },
+        done: () => kills > upgradedAt,
+      },
+      {
+        // Hold, not tap. The button becomes the sell icon while you hold it,
+        // which is the only warning the gesture gets.
+        text: withIcon('build', 'Hold the button to sell it back'),
+        at: () => ({ x: spot[0], z: spot[1] }),
+        enter: () => { soldAt = towers.length; },
+        done: () => towers.length === 0,
+      },
+      {
+        // The board is empty now, on purpose: you sold the thing that was
+        // doing the work, so the last lesson is that you can do it yourself.
+        text: withIcon('sword', 'Nothing is guarding the road. Chase it down and swing.'),
+        enter: () => {
+          onlyBuildAt = null;
+          onlyKind = null;
+          spawnScripted();
+          // If it walks the whole way, send another and say it again. On this
+          // board a leak costs nothing, which is what makes that safe.
+          onScriptLeak = () => { if (alive() === 0) spawnScripted(); };
+        },
+        done: () => heroHits > 0 && alive() === 0,
+      },
+    ], hudEl);
+    void soldAt;
+  }
+
   const tutorial: Tutorial | null = teaching ? createTutorial([
     {
       text: touchLikely()
@@ -2255,6 +2479,8 @@ export async function startLevel(
     debug.dispose();
     hudEl.textContent = '';
     vfx.clear();
+    script?.dispose();
+    scriptTrail.dispose();
     world.dispose();
     world.scene.clear();
     // The handle goes with it. A debug handle that outlives the thing it
@@ -2703,6 +2929,9 @@ export async function startLevel(
   };
 
   const hurtHero = (amount = BULLET_DAMAGE): void => {
+    // Nor can the hero die on it. The last step is a melee fight, and a new
+    // player losing it would be sent back to a village they have not seen yet.
+    if (scripted) return;
     if (invincible > 0 || !running) return;
     if (buff?.kind.id === 'shield') { flashTint(hero, { color: 0x6ec8ff, ms: 200 }); return; }
     invincible = HERO_INVINCIBLE_SECONDS;
@@ -2836,6 +3065,23 @@ export async function startLevel(
       if (invincible > 0) invincible -= dt;
       if (staffCooldown > 0) staffCooldown -= dt;
 
+      if (script) {
+        script.update();
+        // The same trail the village uses to point a new player at the gate.
+        scriptTrail.update(hero.position.x, hero.position.z, script.target(), now);
+        // Ring the hotbar slot the step is talking about. A bar of five cells
+        // and an instruction saying "the weapon below" is a sentence with five
+        // possible referents.
+        const want = script.slot();
+        cells.forEach((c, i) => {
+          c.style.boxShadow = i === want
+            ? '0 0 0 3px #ffd76a, 0 0 18px rgba(255,215,106,.7)' : '';
+        });
+        // The board ends when the script does, not when a wave table runs out —
+        // there is no wave table on this board.
+        if (script.done() && running) endRun(true);
+      }
+
       if (tutorial) {
         tutorial.update(realDt);
         const line = tutorial.line();
@@ -2903,7 +3149,11 @@ export async function startLevel(
       const cell = cellOf(hero.position.x, hero.position.z);
       const key = `${cell[0]},${cell[1]}`;
       const here = occupied.get(key) ?? null;
-      const canBuild = !here && BUILDABLE.has(key);
+      // The script names ONE square while it is teaching placement. An arrow
+      // pointing at a square while the button works on every other square is an
+      // arrow that lies.
+      const allowedHere = !onlyBuildAt || (cell[0] === onlyBuildAt[0] && cell[1] === onlyBuildAt[1]);
+      const canBuild = !here && BUILDABLE.has(key) && allowedHere;
       const before = `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`;
       standingOn = here;
       buildCell = canBuild ? cell : null;
@@ -2941,50 +3191,7 @@ export async function startLevel(
         if (spawnTimer <= 0) {
           spawnTimer = SPAWN_GAP;
           toSpawn -= 1;
-          const w = WAVES[waveIndex];
-          const obj = spawnFrom(w.model);
-          obj.scale.setScalar(w.scale);
-          // Measured before anything is hung off it — a bar inside the box it
-          // is being placed from is a number that chases itself.
-          const top = localTop(obj);
-          const { group: bar, fill: barFill } = makeHealthBar();
-          obj.add(bar);
-          // The bar is a CHILD, so it inherits the scale — a 2.1x boss would
-          // wear a 2.1x health bar, and the tiny scouts an unreadable one.
-          // `top` is already in the model's own units; only the MARGIN needs
-          // converting. Dividing the whole thing by the scale is how the boss
-          // ended up wearing its bar at hip height.
-          bar.position.y = top + 0.24 / w.scale;
-          // Same world size for everything, so a bar means the same thing
-          // wherever it is — except the boss's, which is the run's progress
-          // bar and gets to be twice the size of a scout's.
-          bar.scale.setScalar((w.boss ? 1.9 : 1) / w.scale);
-          const e: Enemy = {
-            obj, hp: w.hp, maxHp: w.hp, speed: w.speed, bounty: w.bounty,
-            armed: w.armed, bar, barFill,
-            // Alternate, rather than choose at random. Both lanes stay live all
-            // wave, which is the point of the fork; randomness would sometimes
-            // send fifteen of sixteen down one side and read as a bug.
-            t: 0, route: nextRoute, alive: true, shootCooldown: 1, windup: 0,
-            ground: w.ground ?? false, facesTravel: w.facesTravel ?? false,
-            ammo: w.ammo ?? 'td-bullet', damage: w.damage ?? BULLET_DAMAGE, boss: w.boss ?? false,
-          };
-          nextRoute = (nextRoute + 1) % ROUTES.length;
-          if (w.model === 'boss-orc' && bossClips.length) {
-            // A rig needs a mixer or it renders in its bind pose and slides —
-            // silently, looking exactly like a model that has no animation.
-            e.mixer = new THREE.AnimationMixer(obj);
-            e.actions = new Map(bossClips.map((c) => [c.name, e.mixer!.clipAction(c)]));
-            playEnemyClip(e, 'walk');
-          }
-          if (w.boss) {
-            flashBanner(w.label ?? 'BOSS');
-            audio.play('wave');
-            if (bar) bar.visible = true;   // always up: it is the run's clock
-          }
-          posAt(e.route, 0, e.ground ? 0 : ENEMY_FLY_HEIGHT, obj.position);
-          enemies.push(e);
-          tinted.push(obj);
+          spawnOne(WAVES[waveIndex]);
         }
       } else if (enemies.every((e) => !e.alive)) {
         waveTimer -= dt;
@@ -3061,6 +3268,11 @@ export async function startLevel(
           // It reached the gate. That is what the towers were for.
           e.alive = false;
           e.obj.visible = false;
+          // The tutorial board cannot be lost. Its script has the player let an
+          // enemy walk the whole road on purpose — that is the step that
+          // teaches them to swing at it — and a board that punishes you for
+          // following its own instructions is not a tutorial.
+          if (scripted) { onScriptLeak?.(); continue; }
           lives -= 1;
           audio.play('leak');
           flashScreen();
@@ -3461,7 +3673,7 @@ export async function startLevel(
         waveLaunched = true;
         renderHud();
       },
-    state: () => ({ level: level.id, levelIndex, slip: level.slip,
+    state: () => ({ level: level.id, levelIndex, slip: level.slip, kills,
       gold, lives, heroHp, heroMax: heroMaxHp, waveIndex, waveCount: WAVES.length, running, won,
       buildCell, selected, maxTowers, maxLevel: MAX_LEVEL,
       routes: ROUTES.length,
@@ -3489,6 +3701,13 @@ export async function startLevel(
       sellProgress: () => sellProgress(),
       /** What the board is currently teaching, and how far through. `null` on
        *  a board that does not teach, and once the last step is done. */
+      /** The scripted tutorial: which step, what it says, and where it is
+       *  pointing. A probe driving a scripted sequence has to know which
+       *  instruction is on screen, not merely that one is. */
+      script: () => (script
+        ? { step: script.index(), text: script.text(), at: script.target(),
+            slot: script.slot(), done: script.done() }
+        : null),
       teaching: () => (tutorial
         ? { step: tutorial.step(), line: tutorial.line(), holding: tutorial.holdsWaves() }
         : null),
@@ -3530,7 +3749,9 @@ async function boot(): Promise<void> {
   for (;;) {
     showLoading('Entering the woods');
     const choice = await runHub(shared);
-    showLoading(`Entering ${LEVELS[choice.level].name}`);
+    // `-1` is the tutorial board, which is not in `LEVELS` and so has no entry
+    // to take a name from.
+    showLoading(`Entering ${(choice.level < 0 ? TUTORIAL : LEVELS[choice.level]).name}`);
     // The summary writes the save — level, experience, the store, what was
     // cleared and how far. Doing it here as well double-counted the run.
     await startLevel(shared, choice.weapon, choice.level, choice.bonus, choice.weapons);

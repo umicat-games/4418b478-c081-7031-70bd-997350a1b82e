@@ -89,6 +89,45 @@ export interface LevelDef {
   slip: number;
 }
 
+/** The board the tutorial happens on.
+ *
+ *  Deliberately NOT in `LEVELS`. It is not a board you choose, replay or place
+ *  in the order — it is the first two minutes of the game, once. Putting it in
+ *  the list would leave it sitting there for good beside the boards that are
+ *  actually boards.
+ *
+ *  Its numbers are almost all inert: the script spawns the enemies, so the wave
+ *  table is a formality, and nothing here can be lost (see `scripted` in
+ *  `startLevel`). What matters is `startGold` — enough for the one tower the
+ *  script asks for and the one upgrade, and not a coin more, because a hotbar
+ *  offering four affordable towers during a step that says "pick the first one"
+ *  is a step arguing with itself.
+ */
+export const TUTORIAL: LevelDef = {
+  id: 'tutorial',
+  name: 'The Path',
+  blurb: 'How this works',
+  startGold: 25,
+  lives: 10,
+  spawnGap: 2,
+  waveGap: 4,
+  firstWaveDelay: 999,
+  maxTowers: 1,
+  slip: 0,
+  // ONE entry, and the wave loop never reaches it — `firstWaveDelay` is longer
+  // than anyone will be here. It exists because a board preloads the models its
+  // wave table names, and the script spawns from this entry: an empty table
+  // means `spawnFrom` hands back nothing and the first scripted enemy throws.
+  //
+  // The health here is a placeholder. What actually arrives is derived from the
+  // tower's damage at spawn time, so that "two hits, then one" stays true when
+  // the tower is rebalanced. See `scriptEnemyHp`.
+  waves: [{
+    count: 1, hp: 3, speed: 0.55, model: 'td-ufo-a', bounty: 12,
+    armed: false, scale: 0.62,
+  }],
+};
+
 export const LEVELS: LevelDef[] = [
   {
     id: 'meadow',

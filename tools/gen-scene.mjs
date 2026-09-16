@@ -658,7 +658,31 @@ function buildLevel(def) {
   return { scene, path };
 }
 
-for (const def of LEVELS) {
+/** The board the tutorial happens on.
+ *
+ *  Its own board, not Meadow with hand-holding on top. The tutorial is scripted
+ *  down to how many hits an enemy takes, and a board that also has to be a
+ *  playable level is a board where every balance change is a script change.
+ *
+ *  Short and straight, one gate, no fork, and wide margins: every step of the
+ *  script names a place to stand, and a player who cannot find it is stuck.
+ */
+const TUTORIAL_SCENE = {
+  id: 'tutorial',
+  name: 'The Path',
+  theme: 'grass',
+  // A single lane across the middle. Enemies come out of the west gate and
+  // walk east, which puts the whole road in front of a hero arriving from the
+  // south door.
+  // The last leg is a BRANCH, not part of the trunk: a route is a trunk plus a
+  // branch, and a board with no branches generates no route at all.
+  trunk: [[-5.5, -0.5], [4.5, -0.5]],
+  branches: [[[4.5, -0.5], [5.5, -0.5]]],
+  gates: [{ id: 'gate_w', wall: 'w', at: -0.5 }],
+  scenerySeed: 23,
+};
+
+for (const def of [...LEVELS, TUTORIAL_SCENE]) {
   const { scene, path } = buildLevel(def);
   writeFileSync(new URL(`../public/scenes3d/${def.id}.json`, import.meta.url),
     JSON.stringify(scene, null, 2) + '\n');

@@ -1779,3 +1779,62 @@ has to know which kind it asked for.
 `verify-3d-icons` checks how each one is PAINTED — a photo draws a background
 image, a silhouette masks `currentColor` — and that the three are three
 different pictures, since one shared render would satisfy everything else.
+
+## The scripted tutorial
+
+Its own board (`TUTORIAL` in `levels.ts`, `tutorial.json`), deliberately **not
+in `LEVELS`**: it is not a board you choose, replay or place in the order — it
+is the first two minutes of the game, once. A list entry would leave it sitting
+there for good. It is entered as `levelIndex === -1`, which is why `scripted` is
+`levelIndex < 0` rather than an id comparison.
+
+**A brand new player is not shown the board list.** Walking out of the village
+with `runs === 0` goes straight in: there is one place to go, so asking is a
+question with one answer, and the first thing they would otherwise meet is a
+menu of four boards with three padlocks.
+
+### It cannot be lost, and that is load-bearing
+
+Leaks do not cost a life here and the hero takes no damage. The script
+**deliberately lets an enemy walk the whole road** — that is the step that
+teaches you to swing at it — and a board that punishes you for following its own
+instructions is not a tutorial. Both loss paths are live in the ordinary game
+(`lives -= 1` on a leak, `endRun(false)` at zero hero health), so both are
+guarded by `scripted`.
+
+### Every step has to be completable
+
+The rule the whole board exists for. Two places it nearly was not:
+
+- **The upgrade step tops up gold if it has to.** The board hands out exactly
+  the price of the weapon, the upgrade costs 20 more, and what the first enemy
+  drops is a ROLL. A bad roll turns an instruction into a wall. Measured, not
+  imagined: the first run through it sat on 0g under a step saying "press again
+  to upgrade".
+- **While a step names one square, the button does nothing anywhere else**
+  (`onlyBuildAt`), and while it names one weapon the other slots are dead
+  (`onlyKind`). An arrow pointing at one square, over a button that works on
+  every square, is an arrow that lies.
+
+### Two hits, then one — derived, not typed
+
+The script says an enemy takes two hits and one after the upgrade. Writing `3`
+would be writing down today's ballista: `DAMAGE_BY_LEVEL` makes it 2 and 3.4, and
+the day that changes the dialog starts lying with nothing to catch it. So
+`scriptEnemyHp()` returns the UPGRADED damage, which makes both claims true by
+construction, and warns if `lv1 < lv2 <= lv1 * 2` ever stops holding.
+
+The board's one wave entry exists only so the model is **preloaded** — a board
+loads the models its wave table names, and an empty table made the first
+scripted spawn throw. `firstWaveDelay: 999` keeps the wave loop from ever
+reaching it.
+
+### It broke every level probe
+
+`enterLevel` boots a fresh save, so all of them walked out and landed on the
+tutorial while reporting its numbers as Meadow's — `maxTowers: 1` surfaced as
+"a defence goes up — 1 towers". It now bumps `runs` to 1 first.
+
+**And it has to wait for the hub before asking.** `window.__hub?.runs === 0` on
+a page whose hub has not started is `undefined === 0`, which is false — so the
+guard silently skipped on exactly the pages that needed it.

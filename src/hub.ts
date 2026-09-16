@@ -1570,7 +1570,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH;
       if (!done && !panelOpen && inDoorway) {
         audio.play(SFX.door);
-        chooseLevel((pick) => {
+        // A brand new player does not get a list. There is exactly one place
+        // to go and it is the tutorial, so asking them to choose is asking a
+        // question with one answer — and the first thing they would meet would
+        // be a menu of boards, three of them locked.
+        //
+        // `-1` is the tutorial board: it is not in `LEVELS`, so it has no index
+        // to be picked by.
+        const leave = (pick: number): void => {
           done = true;
           // Tear the hub down before handing the renderer over: its scene, its
           // physics and its listeners would otherwise keep running behind the
@@ -1590,7 +1597,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           world.scene.clear();
           delete (window as unknown as Record<string, unknown>).__hub;
           resolve({ weapon, level: pick, bonus: bonusesFrom(town), weapons });
-        });
+        };
+        if (runs === 0) leave(-1);
+        else chooseLevel(leave);
         // Step back out of the doorway, so closing the list does not
         // immediately reopen it.
         character.teleport({ x: hero.position.x, y: 0.5, z: DOOR_AT.z + 0.9 });
