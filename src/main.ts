@@ -2470,8 +2470,13 @@ export async function startLevel(
       {
         // The board is empty now, on purpose: you sold the thing that was
         // doing the work, so the last lesson is that you can do it yourself.
-        text: 'Nothing is guarding the road. Chase it down and press the '
-          + `${iconHtml('sword', '1.25em')} button on the right`,
+        // "The enemy", not "it". Same reason the step before this one stopped
+        // saying "they": a pronoun stands in for something already named, and
+        // nothing here has named it.
+        //
+        // Two lines, in the order the other steps use: what to do, then why.
+        text: `Chase the enemy down and press the ${iconHtml('sword', '1.25em')}`
+          + ' button on the right<br>Nothing is guarding the road now',
         button: () => 'sword',
         enter: () => {
           onlyBuildAt = null;
