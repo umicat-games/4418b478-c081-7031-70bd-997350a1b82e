@@ -31,7 +31,7 @@ import type { Weapon } from './weapons';
 
 export type IconName =
   | 'sword' | 'bow' | 'fire' | 'ice' | 'bolt'
-  | 'build' | 'jump' | 'shield'
+  | 'build' | 'jump' | 'shield' | 'upgrade' | 'sell'
   | 'house' | 'tower' | 'gate' | 'crate'
   | 'coin' | 'wood' | 'stone' | 'heart' | 'award'
   | 'audioOn' | 'audioOff';
@@ -111,6 +111,11 @@ export function setIconText(el: HTMLElement, name: IconName, text: string, size 
 export const ICON = {
   build: URL_OF('build'),
   jump: URL_OF('jump'),
+  // What the action button becomes depending on what you are standing on. The
+  // button does three things; a button that looks the same for all three is a
+  // button you have to remember rather than read.
+  upgrade: URL_OF('upgrade'),
+  sell: URL_OF('sell'),
 } as const;
 
 /** What the attack button shows while you are holding `w`.

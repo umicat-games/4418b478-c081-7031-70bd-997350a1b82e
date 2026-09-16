@@ -98,9 +98,35 @@ function makeBox(): HTMLElement {
   return el;
 }
 
-export function createScript(steps: ScriptStep[], hudEl: HTMLElement): Script {
+export function createScript(
+  steps: ScriptStep[], hudEl: HTMLElement, onSkip?: () => void,
+): Script {
   const box = makeBox();
   hudEl.append(box);
+
+  /** A way out.
+   *
+   *  Every step here is meant to be completable from wherever you are standing,
+   *  and the board cannot be lost — but a scripted sequence with no exit is a
+   *  game you have to reinstall if any of that is ever wrong. It costs one
+   *  small button and buys the whole class of failure.
+   *
+   *  It appears after a while, not at once: offered immediately it reads as the
+   *  game expecting you to want out, and it is the first thing a player who
+   *  skims would press. */
+  const skip = document.createElement('button');
+  skip.dataset.skip = '';
+  skip.textContent = 'Skip';
+  skip.style.cssText = `
+    position: fixed; left: 50%; transform: translateX(-50%); top: 74px;
+    z-index: 30; pointer-events: auto; border: 0; cursor: pointer;
+    background: rgba(12,17,23,.55); color: rgba(255,255,255,.75);
+    border-radius: 999px; padding: 5px 16px; opacity: 0;
+    font: 700 12px/1.4 system-ui, sans-serif; transition: opacity 300ms ease-out;
+  `;
+  skip.onclick = () => onSkip?.();
+  hudEl.append(skip);
+  const shownAt = performance.now();
   let i = -1;
   let shown: string | null = null;
 
@@ -122,6 +148,8 @@ export function createScript(steps: ScriptStep[], hudEl: HTMLElement): Script {
         box.innerHTML = step.text;
         box.style.opacity = '1';
       }
+      // Offered once someone has been here long enough to want it.
+      skip.style.opacity = performance.now() - shownAt > 45000 ? '1' : '0';
       if (step.done()) {
         if (i + 1 >= steps.length) { i = -1; box.style.opacity = '0'; return; }
         enter(i + 1);
@@ -133,7 +161,7 @@ export function createScript(steps: ScriptStep[], hudEl: HTMLElement): Script {
     slot: () => (i >= 0 && i < steps.length ? steps[i].slot?.() ?? null : null),
     button: () => (i >= 0 && i < steps.length ? steps[i].button?.() ?? null : null),
     done: () => i < 0,
-    dispose: () => box.remove(),
+    dispose: () => { box.remove(); skip.remove(); },
   };
 }
 

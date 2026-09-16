@@ -1867,3 +1867,38 @@ tutorial while reporting its numbers as Meadow's — `maxTowers: 1` surfaced as
 **And it has to wait for the hub before asking.** `window.__hub?.runs === 0` on
 a page whose hub has not started is `undefined === 0`, which is false — so the
 guard silently skipped on exactly the pages that needed it.
+
+## The action button says what it will DO
+
+One button, three jobs: an empty square builds, your own weapon upgrades, and
+holding it sells. It wore the `build` picture for all three, which made that
+something to be remembered rather than read — and **"you cannot place a second
+weapon on the one you are standing on" is a rule of the game, not a tutorial
+flourish**, so `showActionIcon` runs on every board, not just the scripted one.
+
+Called per frame during a hold (it returns at once when nothing changed),
+because the hold is continuous and the icon has to follow it.
+
+`upgrade` and `sell` are drawn by hand in `tools/pack-icons.mjs`. Kenney's
+library has no bin anywhere in it, and `upgrade` is two chevrons rather than one
+arrow because `jump` is already an arrow pointing up and the two buttons sit a
+thumb-width apart.
+
+**Checked in `verify-3d-sell`, in a touch context.** The SDK mounts the
+on-screen controls only where there is a touch screen, so a desktop check for
+the right icon passes by finding no buttons at all.
+
+## What the tutorial leaves you with
+
+The village's first lesson is buying a building. The cheapest is **120 gold**
+and the tutorial board hands out 25, so without a grant the first thing a new
+player meets after it is a shop that cannot sell them anything and a gate they
+just came in by. Finishing — or skipping — floors the store at the cheapest
+building's cost, taken from `TOWN` rather than typed, so it stays true if the
+prices move.
+
+And there is a **Skip**, offered after 45 seconds rather than immediately: shown
+at once it reads as the game expecting you to want out, and it is the first
+thing a skimming player presses. It ends the board as a WIN, so it comes with
+the same grant — a skip into an empty purse is a skip into the dead end the
+grant exists to prevent.

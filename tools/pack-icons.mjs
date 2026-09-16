@@ -88,6 +88,22 @@ const DRAWN = {
     'M 15 26 L 4.6 18 L 4.6 7 L 19 19 Z',
   ].join(' '),
   jump: 'M 0 -34 L 26 -6 L 11 -6 L 11 30 Q 11 34 7 34 L -7 34 Q -11 34 -11 30 L -11 -6 L -26 -6 Z',
+
+  // The action button says what it will DO, and standing on your own weapon it
+  // will not place another one. Two chevrons rather than one arrow, because
+  // `jump` is already an arrow pointing up and these two buttons sit a
+  // thumb-width apart.
+  upgrade: [
+    'M -22 -6 L 0 -28 L 22 -6 L 22 6 L 0 -16 L -22 6 Z',
+    'M -22 20 L 0 -2 L 22 20 L 22 32 L 0 10 L -22 32 Z',
+  ].join(' '),
+  // What the same button becomes while you HOLD it. Kenney has no bin anywhere
+  // in the library — searched it for this and for the hammer that `build` does
+  // not use either.
+  sell: [
+    'M -10 -32 L 10 -32 L 10 -26 L 26 -26 L 26 -16 L -26 -16 L -26 -26 L -10 -26 Z',
+    'M -21 -10 L 21 -10 L 17 32 L -17 32 Z',
+  ].join(' '),
 };
 
 function main() {

@@ -29,7 +29,7 @@ import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
   type Weapon, type WeaponLevels,
 } from './weapons';
-import { NO_BONUS, type TownBonus } from './town';
+import { NO_BONUS, TOWN, type TownBonus } from './town';
 import {
   NO_MATERIALS, rollDrop, xpFromRun, applyXp, xpToNext,
   attackMultiplier, damageTakenMultiplier, MATERIAL_ICON,
@@ -2127,7 +2127,7 @@ export async function startLevel(
       // The price still appears before you commit to it: it is on the label
       // over the tower, which shows up as soon as the hold arms.
       if (t.level >= MAX_LEVEL) prompt(null, `${t.kind.label} Lv${MAX_LEVEL} · max`);
-      else prompt('build', ` Lv${t.level + 1} · ${upgradeCost(t)}g`);
+      else prompt('upgrade', ` Lv${t.level + 1} · ${upgradeCost(t)}g`);
     } else if (atCrate) {
       prompt('sword', ' break open');
     } else if (buildCell) {
@@ -2137,6 +2137,25 @@ export async function startLevel(
       prompt(null, '');
     }
     refreshHotbar();
+    showActionIcon();
+  };
+
+  /** The button says what it will DO, right now.
+   *
+   *  It is one button doing three things, and which one depends on where you
+   *  are standing: an empty square builds, your own weapon upgrades, and
+   *  holding it sells. Wearing the same picture for all three makes that
+   *  something to be remembered rather than read — and "you cannot place a
+   *  second weapon on the one you are standing on" is a rule of the game, not a
+   *  tutorial flourish, so this is not scoped to the tutorial board. */
+  let actionIcon: string | null = null;
+  const showActionIcon = (): void => {
+    const want = sellProgress() > 0 ? ICON.sell
+      : standingOn && standingOn.level < MAX_LEVEL ? ICON.upgrade
+        : ICON.build;
+    if (want === actionIcon) return;
+    actionIcon = want;
+    input.setActionIcon('build', want);
   };
 
   /** Whether to say "drag" or "WASD".
@@ -2411,7 +2430,15 @@ export async function startLevel(
         },
         done: () => heroHits > 0 && alive() === 0,
       },
-    ], hudEl);
+    ], hudEl, () => {
+      // Skipping ends the board the same way finishing it does — a win, with
+      // the materials the village needs. A skip that drops you into an empty
+      // purse is a skip into the dead end the grant exists to prevent.
+      onScriptLeak = null;
+      onlyBuildAt = null;
+      onlyKind = null;
+      if (running) endRun(true);
+    });
     void soldAt;
   }
 
@@ -2535,6 +2562,20 @@ export async function startLevel(
       wood: (prev.store?.wood ?? 0) + earned.wood,
       stone: (prev.store?.stone ?? 0) + earned.stone,
     };
+    // Finishing the tutorial has to leave you able to do something in the
+    // village. It teaches buying, carrying and placing a building — and the
+    // cheapest one is 150 gold, while the whole board hands out 25 and one
+    // enemy's worth of drops. Without this the first thing a new player meets
+    // after the tutorial is a shop that cannot sell them anything, and the only
+    // thing left to do is walk back out of the gate they just came in by.
+    if (scripted && didWin) {
+      const first = [...TOWN].sort((a, b) => a.costs[0].gold - b.costs[0].gold)[0];
+      if (first) {
+        store.gold = Math.max(store.gold, first.costs[0].gold);
+        store.wood = Math.max(store.wood, first.costs[0].wood);
+        store.stone = Math.max(store.stone, first.costs[0].stone);
+      }
+    }
     await patchSave(umicat, {
       level: after.level, xp: after.xp, store, quality, best: bestWave,
       runs: (prev.runs ?? 0) + 1,
@@ -3148,6 +3189,11 @@ export async function startLevel(
       // rebuilt when what is under your feet changes and is the far side of the
       // screen from both the thumb and the thing being sold.
       showSellHold(k > 0 ? standingOn : null, k);
+      // The button's own picture follows the hold: `build` becomes `upgrade`
+      // when you stand on your weapon and `sell` while you are holding it down.
+      // Per frame because the hold is a continuous thing; it returns at once
+      // when nothing has changed.
+      showActionIcon();
 
       // --- what the bow and the staff are pointed at ---
       lockTarget = null;
