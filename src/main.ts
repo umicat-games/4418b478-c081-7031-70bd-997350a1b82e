@@ -82,6 +82,9 @@ export interface Progress {
    *  spot is one they are still carrying — which is also how a game closed
    *  mid-placement picks up where it left off. */
   spots?: Record<string, { x: number; z: number }>;
+  /** Whether the scripted tutorial board was PLAYED through. Skipping does not
+   *  set it, so the first board still explains itself to someone who skipped. */
+  taught?: boolean;
   /** How much of the village has been bought: an index into the hub's `LAND`.
    *  Absent means a save from before land was for sale, which the hub reads as
    *  "the size the village used to be" rather than as the smallest. */
@@ -2233,7 +2236,17 @@ export async function startLevel(
    *  It runs while Meadow is unbeaten rather than on a first visit: losing your
    *  first run and coming back to no help is the moment help was for.
    */
-  const teaching = level.teaches && (saveNow.cleared ?? 0) < 1;
+  /** The first board's own light-touch tutorial — a line at a time, no panels.
+   *
+   *  It is NOT for someone who has just been through the scripted board: they
+   *  were taught all of this properly ten seconds ago, and being told again is
+   *  the game not having noticed. That is what `taught` records.
+   *
+   *  It is still here for someone who SKIPPED that board. Skipping should cost
+   *  the hand-holding, not the explanation — a player who pressed Skip and then
+   *  arrives at a board with no idea what the bottom bar is has been punished
+   *  for using a button the game offered them. */
+  const teaching = level.teaches && (saveNow.cleared ?? 0) < 1 && !saveNow.taught;
 
   // --- what the scripted tutorial drives ------------------------------------
   //
@@ -2244,6 +2257,8 @@ export async function startLevel(
    *  step wants exactly that to happen — it is how a player who never swings
    *  gets another chance instead of a dead board. */
   let onScriptLeak: (() => void) | null = null;
+  /** Whether the scripted board was left by pressing Skip rather than finished. */
+  let scriptSkipped = false;
   /** The only cell a tower may go on right now, or null for the usual rules.
    *  The script names one square and highlights it; letting the player build
    *  anywhere while an arrow points at one square is an arrow that lies. */
@@ -2634,6 +2649,7 @@ export async function startLevel(
       // Skipping ends the board the same way finishing it does — a win, with
       // the materials the village needs. A skip that drops you into an empty
       // purse is a skip into the dead end the grant exists to prevent.
+      scriptSkipped = true;
       onScriptLeak = null;
       onlyBuildAt = null;
       onlyKind = null;
@@ -2781,6 +2797,9 @@ export async function startLevel(
     }
     await patchSave(umicat, {
       level: after.level, xp: after.xp, store, quality, best: bestWave,
+      // Taught only by PLAYING it. Skipping leaves this false on purpose, so
+      // the first board still explains itself to someone who skipped.
+      ...(scripted && didWin && !scriptSkipped ? { taught: true } : {}),
       runs: (prev.runs ?? 0) + 1,
       cleared: didWin ? Math.max(prev.cleared ?? 0, levelIndex + 1) : prev.cleared,
       bests: { ...(prev.bests ?? {}), [level.id]: Math.max(prev.bests?.[level.id] ?? 0, reached) },

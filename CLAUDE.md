@@ -2218,3 +2218,18 @@ The two rings already say it: the faint one is centred on the caster, the bright
 one is where it lands. A directional spell is the case that wants a line drawn —
 an origin and a direction is exactly what a line is — and that is a different
 shape from this.
+
+### The first board must not teach it all again
+
+Meadow carries its own light-touch tutorial (`src/tutorial.ts`), gated on
+"nothing cleared yet" — and the tutorial board does not count as cleared. So a
+player walked out of the scripted board and was immediately told to stand on
+their tower and press to upgrade, ten seconds after being taught exactly that.
+
+`taught` in the save turns it off. **Set only by PLAYING the board through**,
+not by skipping: skipping should cost the hand-holding, not the explanation, and
+someone who pressed Skip and then arrived at a board with no idea what the
+bottom bar is has been punished for using a button the game offered them.
+
+So the two tutorials are not duplicates — they are the two halves of one
+decision the player made.
