@@ -12,6 +12,7 @@ import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { createThumbMaker } from './thumbs';
 import { iconHtml, type IconName } from './icons';
+import { pressGlyph } from './keycap';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
@@ -146,7 +147,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // The hub's one button is "use what you are standing at" — forge, take,
   // build, read the sign. A hand, not a sword: nothing here is a fight.
   const input = new Input3D({
-    actions: [{ id: 'use', icon: ICON.build, keys: ['KeyJ'] }],
+    // E is what the LEVEL calls this same act-on-what-you-are-standing-on
+    // button; J stays bound because it was here first.
+    actions: [{ id: 'use', icon: ICON.build, keys: ['KeyE', 'KeyB', 'KeyJ'] }],
     jumpIcon: ICON.jump,
   });
 
@@ -889,11 +892,15 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   }
   const showCard = (c: Card): void => {
     card.innerHTML = '';
-    const add = (html: string, css: string): void => {
+    const add = (html: string, css: string, mark?: string): void => {
       if (!html) return;
       const d = document.createElement('div');
       d.style.cssText = css;
       d.innerHTML = html;
+      // The line that says what to press is the one a probe needs to read, and
+      // finding it by its colour is how a probe ends up asserting about a
+      // heading instead.
+      if (mark) d.dataset[mark] = '1';
       card.append(d);
     };
     add((c.glyph ? `${iconHtml(c.glyph)} ` : '') + escapeHtml(c.title),
@@ -905,7 +912,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     add(c.cost ?? '', 'text-align: center; margin-top: 10px; opacity: .92;');
     add(c.action ?? '',
       'text-align: center; margin-top: 8px; color: #ffd76a;'
-      + 'font: 700 13px/1.4 system-ui, sans-serif;');
+      + 'font: 700 13px/1.4 system-ui, sans-serif;', 'prompt');
     card.style.display = 'block';
   };
 
@@ -1331,7 +1338,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
             ? priceOf(cost)
             : `needs ${shortfall(store, cost)}`,
           action: canAfford(store, cost)
-            ? `${iconHtml('build')} build Lv${lv + 1}`
+            ? `${pressGlyph('build')} build Lv${lv + 1}`
             : undefined,
         });
       };
@@ -1370,13 +1377,13 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
         const act = rackAction(id);
         let action: string | undefined;
-        if (act === 'take') action = `${iconHtml('build')} take`;
+        if (act === 'take') action = `${pressGlyph('build')} take`;
         else if (act === 'forge' || act === 'improve') {
           if (canStep) {
             action = canAfford(store, cost!)
               ? (act === 'forge'
-                ? `${iconHtml('build')} forge`
-                : `${iconHtml('build')} improve to Lv${lvl + 1}`)
+                ? `${pressGlyph('build')} forge`
+                : `${pressGlyph('build')} improve to Lv${lvl + 1}`)
               : undefined;
           }
         } else if (id === weapon) action = 'equipped';
@@ -1407,8 +1414,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           // screen once; a player standing somewhere legal does not need it,
           // and a player who cannot put it down anywhere does.
           action: blocked
-            ? `${iconHtml('build')} hold to put it back`
-            : `${iconHtml('build')} put it down`,
+            ? `${pressGlyph('build')} hold to put it back`
+            : `${pressGlyph('build')} put it down`,
         });
         placeCard(ghostAt.x, 2.1, ghostAt.z);
       } else if (atPlot) {
@@ -1422,7 +1429,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         showCard({
           title: 'Shop', glyph: 'coin',
           body: left ? `${left} thing${left > 1 ? 's' : ''} to buy` : 'Nothing left to buy',
-          action: left ? `${iconHtml('build')} open` : undefined,
+          action: left ? `${pressGlyph('build')} open` : undefined,
         });
         placeCard(shopAt.x, 1.5, shopAt.z);
       } else if (nearDoor) {

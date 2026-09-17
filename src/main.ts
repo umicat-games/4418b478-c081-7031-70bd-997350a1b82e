@@ -27,6 +27,9 @@ import { createThumbMaker } from './thumbs';
 import { makeResourceIcons } from './resicons';
 import { ICON, WEAPON_ICON } from './icons';
 import {
+  touchLikely, keyFor, keyCap, pressName, dragThing, tapWord,
+} from './keycap';
+import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
   type Weapon, type WeaponLevels,
 } from './weapons';
@@ -1342,6 +1345,7 @@ export async function startLevel(
   line1.append(hpTrack, hpText);
   const line2 = document.createElement('div');
   const line3 = document.createElement('div');
+  line3.dataset.prompt = '1';
   line3.style.opacity = '0.85';
   // Gold lives in its own element because a coin flying to the counter needs a
   // rectangle to aim at, and "somewhere in that line of text" is not one.
@@ -2115,10 +2119,24 @@ export async function startLevel(
     // Collapsed when there is nothing to say. Empty, it was an invisible blank
     // line; inside a panel it is a stripe of padding with nothing in it.
     line3.style.display = glyph || text ? 'block' : 'none';
-    if (glyph) line3.append(icon(glyph, HUD_ICON));
+    if (glyph) {
+      // A KEY on a machine that has no on-screen buttons.
+      //
+      // The SDK mounts its controls only where there is a touch screen, so on a
+      // desktop every one of these icons was a picture of a button that is not
+      // anywhere — "⟨build⟩ Ballista · 25g" with nothing to press. Reported as
+      // "I picked a weapon with the mouse and cannot place it", which is
+      // exactly what it looks like.
+      const key = keyFor(glyph);
+      if (key) line3.append(keyCap(key));
+      else line3.append(icon(glyph, HUD_ICON));
+    }
     line3.append(document.createTextNode(text));
   };
 
+  /** Which key does what this icon stands for, or null on a touch screen where
+   *  the icon IS the answer. Read from the same action list the SDK was given,
+   *  so a rebinding cannot leave the prompt telling the player the wrong key. */
   /** Icons in the HUD run a little larger than the text beside them. A
    *  silhouette needs more room than a letter of the same nominal size. */
   const HUD_ICON = '1.25em';
@@ -2204,9 +2222,7 @@ export async function startLevel(
    *  touchscreen. Asking a different question than the thing that draws the
    *  control would eventually tell somebody to drag a stick that is not there.
    */
-  const touchLikely = (): boolean =>
-    window.matchMedia?.('(pointer: coarse)').matches === true
-    && window.matchMedia?.('(any-pointer: fine)').matches !== true;
+  // (now shared with the village — see `keycap.ts`)
 
   // --- what the scripted tutorial drives ------------------------------------
   //
@@ -2411,7 +2427,7 @@ export async function startLevel(
         // The bottom bar first, because nothing else on this board can be done
         // until something is chosen, and the ring it draws under your feet is
         // the explanation for every step after this one.
-        text: 'Tap the weapon in the bar below',
+        text: `${tapWord()} the weapon in the bar below`,
         enter: () => { onlyKind = 0; },
         slot: () => 0,
         // Nothing to walk to: the bar is under your thumb wherever you are.
@@ -2434,7 +2450,7 @@ export async function startLevel(
         // Names the button AND where it is. An icon on its own is a puzzle:
         // the player has not met it yet and has to find which of the four
         // circles on the right it matches.
-        text: `Press the ${iconHtml('build', '1.25em')} button on the right to put it down`,
+        text: `Press ${pressName('build')} to put it down`,
         // Long enough to watch it land before being told the next thing.
         after: 1.6,
         at: () => ({ x: spot[0], z: spot[1] }),
@@ -2472,8 +2488,7 @@ export async function startLevel(
         // button has changed — it changes because they are standing on their
         // own weapon — and an instruction showing the picture the button used
         // to wear is an instruction pointing at nothing.
-        text: `Stand on your weapon, then press the ${iconHtml('upgrade', '1.25em')}`
-          + ' button on the right',
+        text: `Stand on your weapon, then press ${pressName('upgrade')}`,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
         ready: () => !!standingOn,
@@ -2506,8 +2521,13 @@ export async function startLevel(
         // which is the only warning the gesture gets.
         // Both pictures, because the change IS the gesture: you hold the one
         // and let go when it has become the other.
-        text: `Hold the ${iconHtml('upgrade', '1.25em')} button on the right until it`
-          + ` turns to ${iconHtml('sell', '1.25em')} and the ring fills`,
+        // On a phone the button itself becomes the sell icon while you hold
+        // it, and that change IS the gesture. On a desktop there is no button
+        // to change, so the ring is the whole of the feedback.
+        text: touchLikely()
+          ? `Hold ${pressName('upgrade')} until it turns to`
+            + ` ${iconHtml('sell', '1.25em')} and the ring fills`
+          : `Hold ${pressName('upgrade')} down until the ring fills`,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
         ready: () => !!standingOn,
@@ -2528,8 +2548,8 @@ export async function startLevel(
         // nothing here has named it.
         //
         // Two lines, in the order the other steps use: what to do, then why.
-        text: `Chase the enemy down and press the ${iconHtml('sword', '1.25em')}`
-          + ' button on the right<br>Nothing is guarding the road now',
+        text: `Chase the enemy down and press ${pressName('sword')}`
+          + '<br>Nothing is guarding the road now',
         button: () => 'sword',
         enter: () => {
           // Nothing may be built, and no weapon may be chosen.
@@ -2563,8 +2583,7 @@ export async function startLevel(
       {
         // The staff, tapped. Same button, a weapon that does not need to touch
         // them — which is the whole of what a staff is.
-        text: `You have a fire staff now. Get close and press the `
-          + `${iconHtml('fire', '1.25em')} button on the right`,
+        text: `You have a fire staff now<br>Get close and press ${pressName('fire')}`,
         button: () => 'attack',
         ready: () => nearestAway() < 2.6,
         enter: () => {
@@ -2581,7 +2600,7 @@ export async function startLevel(
         // which is what makes the drag the only way to land it, rather than a
         // flourish over a tap that would have worked anyway.
         text: 'Now stay back from this one<br>'
-          + `Hold the ${iconHtml('fire', '1.25em')} button, slide your finger to aim, then let go`,
+          + `Hold ${pressName('fire')}, ${dragThing()} to aim, then let go`,
         button: () => 'attack',
         enter: () => {
           placedKills = kills;

@@ -2241,3 +2241,69 @@ weapons you do not have. Its board-list checks need a save with `runs >= 1`,
 because a fresh one walks straight out to the tutorial without opening the list
 — and its RACK checks deliberately stay on a fresh save, because what they are
 about is what a brand new player is shown.
+
+## Desktop says the key, because there is no button there
+
+The SDK mounts its on-screen controls **only where there is a touch screen**.
+On a desktop `[data-umicat-touch]` holds no round buttons at all — measured, 0 of
+them, against 5 on a phone page. Every prompt in the game said *"press the
+⟨build⟩ button on the right"*, which on a laptop points at an empty corner.
+
+Reported as **"I picked a weapon with the mouse and I cannot place it"**, and
+that is exactly what it looks like from the outside. Nothing was actually
+broken: `build` was bound to `KeyB`/`KeyE` and `attack` to `KeyJ` from the
+start, and the aiming drag has had a mouse path since it was written. The game
+simply never said so. **A capability nobody can find is not a capability** —
+this cost nothing to fix and had been shipped for weeks.
+
+`src/keycap.ts` is the one place that decides which it is:
+
+| helper | gives you |
+| --- | --- |
+| `touchLikely()` | coarse pointer and no fine one — the same question the SDK asks before it draws the controls |
+| `keyFor(glyph)` | the key that does what the button with that glyph does, or `null` on a touch screen |
+| `pressGlyph(glyph)` | the icon, or a key cap — for `⟨icon⟩ Ballista · 25g` |
+| `pressName(glyph)` | *"the ⟨icon⟩ button on the right"* or *"the **E** key"* — for sentences |
+| `dragThing()` | `slide your finger` / `move the mouse` |
+| `tapWord()` | `Tap` / `Click` |
+
+Keyed by **glyph**, not by action id, because that is what the prompts have in
+hand — and because the one button changes glyph as you hold it (build → upgrade
+→ sell) while staying the same key. The table in `keyFor` has to stay in step
+with the `keys` of the `actions` each scene declares to the SDK.
+
+The village bound its `use` action to `KeyJ` only, while the level used `E`/`B`
+for the same act-on-what-you-are-standing-on. A prompt that names `E` in one
+place and not the other is worse than naming neither, so the village now binds
+`KeyE`, `KeyB` and `KeyJ`.
+
+The scripted tutorial goes through `pressName` too. Its scrim needs no special
+case: `ringActionButton` finds nothing on a desktop and returns `null`, and
+`spotlight(null)` hides the scrim rather than dimming the screen with no hole in
+it. No step names both a slot and a button, so a button step simply does not dim.
+
+`verify-3d-desktop.mjs` checks **both halves, because either alone is a lie**:
+that the prompt names a key, and that the key it names does the thing — E builds,
+holding E sells and refunds, J with the mouse opens the circle and the drag
+pushes it 2.87m off the hero, E opens the shop and puts a bought building down.
+Then it opens a phone page and checks the prompt is still an icon there.
+
+### Two probe bugs this turned up, both mine
+
+**The board has no fence, and the spawn is near its edge.** `verify-3d-action`
+walked north with `KeyW` for a second and a half, left the board, and reported
+`state: "fall"` for a check about attacking. There *is* a guard —
+`RESPAWN_BELOW_Y = -5` puts you back — but the fall takes about four seconds to
+reach it, and a measurement taken at y = −3.01 looks exactly like falling
+forever. It walks **inward** now.
+
+**`window.__hub.store` is a function.** `{...window.__hub.store}` spreads to
+`{}` and then banks the gold onto the function object, after which the shop
+refuses the purchase for the honest reason that you cannot afford it. Seed
+through `umicat.saves.set('td-progress', …)` and reload, as the other hub probes
+do.
+
+Also: `verify-3d-action` had been throwing since the village became the entry
+point — it looked for `window.__game` while sitting in the hub. It calls
+`enterLevel` now. **A probe that dies on line 9 is not a passing probe**, and it
+sat in the list looking like one.
