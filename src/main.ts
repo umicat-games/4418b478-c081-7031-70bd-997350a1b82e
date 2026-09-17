@@ -4139,7 +4139,7 @@ export async function startLevel(
 }
 
 async function boot(): Promise<void> {
-  showLoading('Waking up');
+  showLoading('Waking up', 'boot');
   const umicat = await ThreeUmicat.init();
   await RAPIER.init();
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -4176,11 +4176,14 @@ async function boot(): Promise<void> {
   // hands the renderer back, so this can run all evening without leaking a
   // scene per run.
   for (;;) {
-    showLoading('Entering the woods');
+    showLoading('Entering the woods', 'hub');
     const choice = await runHub(shared);
     // `-1` is the tutorial board, which is not in `LEVELS` and so has no entry
     // to take a name from.
-    showLoading(`Entering ${(choice.level < 0 ? TUTORIAL : LEVELS[choice.level]).name}`);
+    // Keyed by BOARD: they are different sizes, and a shared key would have the
+    // bar measuring Meadow against Crossroads.
+    showLoading(`Entering ${(choice.level < 0 ? TUTORIAL : LEVELS[choice.level]).name}`,
+      `level-${choice.level}`);
     // The summary writes the save — level, experience, the store, what was
     // cleared and how far. Doing it here as well double-counted the run.
     await startLevel(shared, choice.weapon, choice.level, choice.bonus, choice.weapons);

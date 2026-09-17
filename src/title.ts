@@ -87,8 +87,6 @@ export async function showTitle(shared: Shared): Promise<void> {
 
   el.innerHTML = `
     ${WORDMARK}
-    <div style="opacity:.92; letter-spacing:.06em; margin-top:-4px;
-                text-shadow:0 1px 6px rgba(0,0,0,.55)">Defend the village</div>
     <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px">
       ${resume ? btn('go', 'Continue', true) : ''}
       ${btn('new', resume ? 'New game' : 'Start', !resume)}

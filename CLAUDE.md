@@ -1665,6 +1665,65 @@ Checked by asking whether it DECODED — `complete && naturalWidth > 0`, because
 `complete` alone is true for a 404, and a broken src takes the game's name off
 its own title screen while every other check still passes.
 
+**No tagline under it.** "Defend the village" was a caption on a picture that
+already says what this is. Taking it off changed the title's stack height, which
+moved the wordmark 19 pixels DOWN — so the loader's spacer went 44 → 6 to match.
+That number is measured every time it changes, never guessed; both stacks are
+centred, so a height difference shows up halved.
+
+## The loading bar measures something, or says it cannot
+
+It was a stripe sliding on a CSS keyframe — an animation, not a measurement.
+
+The obvious replacement is three's `LoadingManager`, **and it is a trap**.
+`itemsTotal` is what the manager knows about SO FAR, and it grows as the loaders
+queue more. Measured on the real boot: the total climbed 15 → 21 → 67 → 84 → 93
+and `n === total` **five times on the way**, so a bar driven off that ratio
+reaches **100% at 254ms of a 713ms load** and then sits there. That is a worse
+lie than the stripe, because it claims to be finished.
+
+The count is deterministic per screen, though, so the honest denominator is
+**what that screen needed the last time it loaded**, kept in `localStorage`
+under `bala-load-<phase>`. Hence `showLoading(message, phaseKey)` — the boot,
+the village and each board are different sizes, and one shared key would have
+the bar measuring Meadow against Crossroads.
+
+**The first load on a device has no answer, and the bar says so by sliding.**
+An indeterminate bar means "still working"; a percentage means "this much of
+it", and inventing the second one is where a loading bar starts lying.
+
+Two more things it does not pretend about:
+
+- **It stops at 92%** (`TAIL`) once the downloads are done, because what is left
+  is the scene being built and nothing here can see it. Downloads are about nine
+  tenths of the wait — measured: 545ms of loading screen, last fetch landing at
+  498ms — so the tail is small and honest. `hideLoading` fills the bar before
+  fading, because a bar that vanishes at 92% reads as having given up.
+- **It never slips backwards inside one load.** It does reset to zero when a new
+  phase starts, and one window can hold two: the boot finishes, the title is
+  pressed through, and the village begins loading without the screen coming
+  down. `verify-3d-loading` checks monotonicity WITHIN each run for that reason
+  — its first version read the reset as a bar slipping.
+
+`THREE.DefaultLoadingManager.onProgress` is **chained, not replaced**: it is
+three's shared manager and something else may be listening.
+
+### The cover art
+
+`public/uploaded/background-cover.jpg`, from the project's assets. The gradient
+stays underneath it: the loading screen is the first thing a new player's
+browser paints, and if the image has not arrived yet the screen should be a
+deliberate colour rather than white.
+
+A **scrim** over it — white text and a thin bar on bright cartoon art is not
+text. And a **JPEG**: the upload is a 1.77MB PNG with no transparency in it, and
+at 1600 wide and q82 it is 228KB. The loading screen having a heavy dependency
+of its own is the one place that cost lands worst.
+
+`verify-3d-loading` asks whether the background actually DECODED by loading the
+URL itself — a background image reports nothing when it 404s, and the screen
+would simply be the fallback gradient with every check still green.
+
 ### It stands in a clearing
 
 `title.json` is its OWN scene, not the hub from a nice angle. The hub is a
