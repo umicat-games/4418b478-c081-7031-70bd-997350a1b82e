@@ -195,9 +195,16 @@ so each wave is a different problem rather than a larger one. The last wave is
 worth two hearts with a tell you can see from across the board. It is the only
 enemy in the game that is not a saucer.
 
-**Health is a BAR of 100, not hearts.** Eight hearts meant a hit was always an
-eighth of what you had and the run ended in eight touches; a bullet takes 10 and
-a boulder 22, so a hit can be a scratch. **Running out ends the run** — it used
+**Health is a BAR of 100, not hearts — and it is SEGMENTED**, a notch every 25.
+Eight hearts meant a hit was always an eighth of what you had and the run ended
+in eight touches; a bullet takes 10 and a boulder 22, so a hit can be a scratch.
+
+The notches are there because a bare percentage bar answers "how much is left"
+and hides the two questions that decide what you do next: **how much did that
+one cost, and how many more can I take.** A bullet is most of a segment with no
+armour and a quarter of one at the cap, and both are things you can see rather
+than work out. Drawn as a repeating gradient over the fill — no elements, and it
+does not move when the fill does. **Running out ends the run** — it used
 to cost a life and carry you back to the door, which made health a second pool
 of lives rather than the thing you are looking after.
 
@@ -205,8 +212,59 @@ of lives rather than the thing you are looking after.
 boss is exempt). Without the cap, danger scales with the size of the wave and
 twenty saucers firing every 2.4s is a wall of bullets nobody dodges.
 
-**Clearing a wave gives 25 health back**, of 100. Six hearts and no way to
-heal was survivable over eight waves and a slow death over twelve.
+**Clearing a wave gives 40 health back**, of 100 (`HEAL_WAVE`; a crate is 30
+and a drop 18). No way to heal at all was survivable over eight waves and a slow
+death over twelve. This file said 25 for a while after the number moved — every
+heal in this game is FLAT, and that is what decided the Clinic below.
+
+**Health is FIXED at 100, and the Clinic buys ARMOUR.**
+
+It used to buy +25 max health a level. The two are the same survivability and
+not the same design, and two things decided it:
+
+- **Every heal in this game is flat** — 40 a wave, 30 a crate, 18 a drop. At 175
+  max health a wave clear goes from 40% of the bar to 23%, so buying the Clinic
+  quietly devalued every healing source in the game by 43%. Armour does the
+  opposite: it makes each heal cover more hits.
+- **A percentage bar cannot show a pool growing.** It always starts full, and
+  `175/175` looks exactly like `100/100` until something hits you. Both stats
+  shrink the damage chunk identically — that was the reason offered for the
+  change, and it is the one reason that does not hold.
+
+**Flat, not a percentage.** A percentage is what player LEVEL already gives
+(`damageTakenMultiplier`, −3.5% a level capped at half): two multiplying sources
+need a combined cap, and the building becomes a duplicate of levelling up. Flat
+is a different lever — it guts a saucer's chip damage (10 → 4 at the cap) and
+barely touches the boss's boulder (22 → 16), which aims it at what the balance
+runs keep reporting.
+
+Armour is subtracted first, then the level's multiplier — a block, then a
+resistance — and the result is floored at 1. **Armour that can zero out a hit is
+immunity**, and a saucer that cannot touch you makes the walk between build
+spots free, which is this game's actual cost.
+
+Measured on Meadow, one run each, machine idle:
+
+| | wave | how it ended | hero took | per hit | upgrades |
+| --- | --- | --- | --- | --- | --- |
+| armour 0 | 7/8 | base fell | 220 over 22 hits | 10.0 | 10 |
+| armour 6 | **8/8** | **won**, 1 life | 76 over 16 hits | **4.8** | **23** |
+
+Per-hit damage halved, as the arithmetic says it must. The interesting number is
+the last column: **armour does not only keep you alive, it buys you time on the
+board.** The bot breaks off below 42% health, so taking half the damage means
+half the retreating — 23 upgrades against 10, which is a far bigger swing than
+"×2.5 effective health" suggests. A maxed Clinic is three levels of gold, wood
+and stone, so being decisive is the point; if it wants tightening, `ARMOUR_PER_LEVEL`
+is one number in `src/town.ts`.
+
+**The wave number could not see this change, and that is the lesson.** Both runs
+before the hero counter existed ended with the BASE falling — wave 7 against
+wave 6 — and armour has nothing to do with the base. A defensive change moves
+what the HERO takes and need not move the wave at all, so `verify-3d-balance`
+now reports damage taken and hits taken, and takes a Clinic level as its fifth
+argument. Without both, the bot cannot answer the only question a defensive stat
+asks.
 
 **Two kinds of emplacement.** A `ground` weapon stands on the grass: cheap,
 there from the first run, and upgrading makes it BIGGER. A `tower` mount is the
@@ -642,7 +700,7 @@ and each level is a bigger building, so the hub visibly grows as you play.
 | building | what it is worth per level |
 | --- | --- |
 | Smithy ⚒ | +1 tower you may have standing, and one tower mount unlocked |
-| Clinic ❤ | +25 max health |
+| Clinic 🛡 | **+2 armour** — points off every hit, before anything else |
 | Market 💰 | +50 starting gold |
 | Range 🏹 | +1 damage on **every** weapon, not just the sword |
 | Armory ⚔ | weapons can be forged and improved to this level |
@@ -778,6 +836,12 @@ are not kept here.
 | --- | --- | --- |
 | Meadow | wave 7 of 8, 9 of 10 lives | the HERO fell |
 | Frostfall | wave 9 of 10, 12 of 12 lives | the HERO fell |
+| Meadow, armour 0 | wave 7 of 8, 0 lives | the base fell — 220 damage over 22 hits |
+| Meadow, armour 6 | **won**, 1 life | 76 damage over 16 hits, 23 upgrades |
+
+The last two are the Clinic measurement; `verify-3d-balance <url> <level>
+<budget> <clinic>` takes the Clinic level as its fifth argument, because the bot
+clears the save and so every number above it was measured with no town at all.
 
 **Both boards end the same way, and it is not the towers.** The base is all but
 untouched in each — the hero dies on the last wave or two. That is what raised
@@ -843,6 +907,18 @@ What it has found, none of it visible by reading the wave table:
   happened, including a run that ended with seven of ten lives still up. The
   base falling is a tower problem and the hero falling is a survivability one,
   and they want opposite fixes.
+- **The wave number cannot see a DEFENSIVE change.** Armour was measured twice
+  before the hero counter existed and both runs ended with the base falling —
+  wave 7 against wave 6 — which is two samples of something armour has nothing
+  to do with, inside the documented run-to-run spread. The result line reports
+  `HERO took N damage over M hits` now. That number halved (10.0 → 4.8 per hit)
+  exactly as the arithmetic said it would, and it is the only thing in the run
+  that answered the question.
+- **A starved bot looks exactly like a hard board, and this is what it looks
+  like.** The first armour run was taken while this session was editing files
+  beside it: wave 5, twelve towers, **zero upgrades**. Run alone, the same build
+  reached wave 7 with ten upgrades. The zero is the tell — the bot had the money
+  and never got a turn to spend it.
 
 ## The weapons
 

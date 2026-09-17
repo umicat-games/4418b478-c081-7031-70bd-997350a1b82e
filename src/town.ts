@@ -7,7 +7,7 @@
  * where it goes.
  *
  * Each building changes the NEXT run in a way you can point at, rather than
- * adding a percent to a number. "+1 tower" and "+2 hearts" are things you can
+ * adding a percent to a number. "+1 tower" and "+2 armour" are things you can
  * plan a run around; "+8% damage" is a thing you take on faith.
  *
  * Buying one is the same verb as everything else in this game: walk to the
@@ -57,7 +57,7 @@ export const TOWN: TownBuilding[] = [
   {
     id: 'clinic',
     name: 'Clinic',
-    effect: '+25 health per level',
+    effect: '+2 armour per level',
     icon: 'heart',
     models: ['town-stall-red', 'town-watermill', 'bld-house-b'],
     costs: [
@@ -128,7 +128,7 @@ export function townNow(id: string, town: Record<string, number> | undefined): s
   const b = bonusesFrom(town);
   switch (id) {
     case 'smithy': return b.towerCap ? `+${b.towerCap} tower${b.towerCap > 1 ? 's' : ''} · ${b.smithy} mount${b.smithy > 1 ? 's' : ''}` : '';
-    case 'clinic': return b.hearts ? `+${b.hearts} health` : '';
+    case 'clinic': return b.armour ? `${b.armour} armour — every hit lands for ${b.armour} less` : '';
     case 'market': return b.gold ? `+${b.gold} starting gold` : '';
     case 'range': return b.heroDamage ? `+${b.heroDamage} damage on every weapon` : '';
     case 'armory': return b.weaponCap ? `weapons up to Lv${b.weaponCap}` : '';
@@ -165,7 +165,23 @@ export interface TownBonus {
    *  upgrading it is what opens the next tier of every weapon at once rather
    *  than unlocking one more thing from a list. */
   weaponCap: number;
-  hearts: number;
+  /** Points taken off EVERY hit before anything else touches it.
+   *
+   *  It was `hearts`, +25 max health a level. The two are the same
+   *  survivability and not the same design, and the deciding difference is
+   *  that every heal in this game is FLAT — 40 a wave, 30 a crate, 18 a drop.
+   *  Growing the pool to 175 turned a wave clear from 40% of the bar into 23%,
+   *  so buying the Clinic quietly devalued every healing source in the game by
+   *  43%. Armour does the opposite: it makes each heal cover more hits.
+   *
+   *  FLAT rather than a percentage, because a percentage is what player LEVEL
+   *  already gives (`damageTakenMultiplier`) — two multiplying sources need a
+   *  combined cap and make the building a duplicate of levelling up. Flat is a
+   *  different lever: it guts the chip damage a saucer does (10 → 4) and barely
+   *  touches the boss's boulder (22 → 16), which is aimed squarely at what the
+   *  balance runs keep reporting — the base untouched and the hero shot to
+   *  death walking between build spots. */
+  armour: number;
   gold: number;
   heroDamage: number;
   /** The smithy's level, which is also which tower mounts are for sale. It
@@ -175,19 +191,23 @@ export interface TownBonus {
 }
 
 export const NO_BONUS: TownBonus =
-  { towerCap: 0, hearts: 0, gold: 0, heroDamage: 0, smithy: 0, weaponCap: 0 };
+  { towerCap: 0, armour: 0, gold: 0, heroDamage: 0, smithy: 0, weaponCap: 0 };
 
 /** Levels bought, by building id, turned into the numbers a run cares about.
  *
  *  One place, so the hub can show what a purchase will do and the level can
  *  apply it without either of them knowing the other's arithmetic. */
+/** What one level of the Clinic is worth. Measured with `verify-3d-balance`,
+ *  not chosen: at 6 a saucer's shot goes from 10 to 4. */
+export const ARMOUR_PER_LEVEL = 2;
+
 export function bonusesFrom(town: Record<string, number> | undefined): TownBonus {
   const lv = (id: string): number => Math.min(town?.[id] ?? 0, TOWN_MAX_LEVEL);
   return {
     towerCap: lv('smithy'),
     weaponCap: lv('armory'),
     smithy: lv('smithy'),
-    hearts: lv('clinic') * 25,
+    armour: lv('clinic') * ARMOUR_PER_LEVEL,
     gold: lv('market') * 50,
     heroDamage: lv('range'),
   };

@@ -133,6 +133,9 @@ const HERO_SYNC_OFFSET = -(HERO_HALF_HEIGHT + HERO_RADIUS);
  *  survivability and the bar emptied in eight touches; a hundred points spends
  *  at ten or twenty a time and leaves room for a hit to be a scratch. */
 const HERO_MAX_HP = 100;
+/** One notch on the health bar. Four segments across a full bar: enough to
+ *  count at a glance, few enough that a 13px bar does not become a comb. */
+const HP_PER_SEGMENT = 25;
 /** What a saucer's bullet takes, before the level's defence is applied. */
 const BULLET_DAMAGE = 10;
 /** Healing, in the same points. A drop is worth a fifth of the bar; a crate a
@@ -1041,7 +1044,15 @@ export async function startLevel(
    *  is not a greyed-out cell — it is not there, because a row of things you
    *  cannot buy is a row you learn to look past. */
   const KINDS = TOWERS.filter((k) => (k.needsSmithy ?? 0) <= bonus.smithy);
-  const heroMaxHp = HERO_MAX_HP + bonus.hearts;
+  // FIXED. The Clinic buys armour now, not a bigger pool — see `TownBonus`.
+  // A percentage bar cannot show a pool growing anyway: it always starts full,
+  // and 175/175 looks exactly like 100/100 until something hits you.
+  const heroMaxHp = HERO_MAX_HP;
+  /** Taken off every hit before the level's multiplier. */
+  const armour = bonus.armour;
+  /** What the hero actually lost this run, and to how many hits. */
+  let tookDamage = 0;
+  let tookHits = 0;
   // Every weapon, not just the sword. The Range says "+1 to your own attacks",
   // and a bonus that silently applied to one of three would be a lie told by
   // the only line of text the player ever reads about it.
@@ -1361,15 +1372,38 @@ export async function startLevel(
   const line1 = document.createElement('div');
   line1.style.cssText = 'display:flex; align-items:center; gap:8px;';
   const hpTrack = document.createElement('div');
-  hpTrack.style.cssText = `width: 168px; height: 13px; border-radius: 7px;
+  hpTrack.style.cssText = `position: relative; width: 168px; height: 13px; border-radius: 7px;
     background: rgba(0,0,0,.42); box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
     overflow: hidden;`;
   const hpFill = document.createElement('div');
   hpFill.style.cssText = 'height:100%; width:100%; border-radius:7px; transition: width .18s;';
   hpTrack.appendChild(hpFill);
+  // SEGMENTED, one notch every 25 health.
+  //
+  // A percentage bar answers "how much is left" and hides the two questions
+  // that actually decide what you do next: how much did THAT cost, and how many
+  // more can I take. A bullet is a quarter of a segment with armour on and most
+  // of one without, and both are things you can see rather than work out.
+  //
+  // Drawn as a repeating gradient OVER the fill, so it costs no elements and
+  // does not move when the fill does.
+  const notches = document.createElement('div');
+  notches.dataset.hpNotches = '';
+  const seg = (HP_PER_SEGMENT / HERO_MAX_HP) * 100;
+  notches.style.cssText = `position:absolute; inset:0; pointer-events:none; border-radius:7px;
+    background: repeating-linear-gradient(90deg,
+      rgba(0,0,0,0) 0 calc(${seg}% - 2px), rgba(10,14,18,.55) calc(${seg}% - 2px) ${seg}%);`;
+  hpTrack.appendChild(notches);
   const hpText = document.createElement('span');
   hpText.style.cssText = 'font: 700 13px/1 system-ui, sans-serif;';
-  line1.append(hpTrack, hpText);
+  // The armour, beside the bar, only when there is any. A stat with no readout
+  // is a stat the player is asked to take on faith — and the Clinic's whole
+  // problem before was that what it bought could not be seen.
+  const armourEl = document.createElement('span');
+  armourEl.dataset.armour = '';
+  armourEl.style.cssText = 'display:none; align-items:center; gap:3px; font: 700 13px/1 system-ui;'
+    + ' color:#9fd0ff;';
+  line1.append(hpTrack, hpText, armourEl);
   const line2 = document.createElement('div');
   const line3 = document.createElement('div');
   line3.dataset.prompt = '1';
@@ -2191,6 +2225,10 @@ export async function startLevel(
     // glance nobody reads a number on a bar.
     hpFill.style.background = frac > 0.55 ? '#5fd36a' : frac > 0.28 ? '#f0b429' : '#ef4b4b';
     hpText.textContent = `${Math.max(0, Math.ceil(heroHp))}/${heroMaxHp}`;
+    if (armour > 0 && !armourEl.childNodes.length) {
+      armourEl.append(icon('shield', '13px'), document.createTextNode(String(armour)));
+      armourEl.style.display = 'inline-flex';
+    }
     const w = Math.min(waveIndex + 1, WAVES.length);
     // Shapes, and the base's own MAXIMUM alongside it. `10` on its own does not
     // say whether it is climbing or falling, and this is the number the run
@@ -3222,7 +3260,20 @@ export async function startLevel(
     if (invincible > 0 || !running) return;
     if (buff?.kind.id === 'shield') { flashTint(hero, { color: 0x6ec8ff, ms: 200 }); return; }
     invincible = HERO_INVINCIBLE_SECONDS;
-    heroHp -= Math.max(1, Math.round(amount * damageTakenMultiplier(playerLevel)));
+    // Armour first, then the level's percentage — a block, then a resistance.
+    // Never below 1: armour that can zero out a hit is immunity, and a saucer
+    // that cannot touch you at all takes the walk between build spots, which is
+    // this game's actual cost, and makes it free.
+    const through = Math.max(0, amount - armour);
+    const took = Math.max(1, Math.round(through * damageTakenMultiplier(playerLevel)));
+    heroHp -= took;
+    // Totals for the balance bot. A DEFENSIVE change cannot be measured by the
+    // wave a run reaches: armour keeps the HERO alive, and the bot's runs end
+    // with the BASE falling, so wave 7 against wave 6 was two samples of
+    // something else. Damage taken over a whole run is the thing armour acts
+    // on, and it accumulates rather than being decided by one bad wave.
+    tookDamage += took;
+    tookHits += 1;
     audio.play('hero-hurt');
     flashScreen();
     flashTint(hero, { color: 0xff2a1a, ms: 220 });
@@ -4097,7 +4148,8 @@ export async function startLevel(
       },
     state: () => ({ level: level.id, levelIndex, slip: level.slip, kills,
       gold, lives, heroHp, heroMax: heroMaxHp, waveIndex, waveCount: WAVES.length, running, won,
-      buildCell, selected, maxTowers, maxLevel: MAX_LEVEL,
+      buildCell, selected, maxTowers, maxLevel: MAX_LEVEL, armour,
+      tookDamage, tookHits,
       routes: ROUTES.length,
       /** Where each branch ends. The tiles get merged into one mesh for the
        *  sake of the phone's frame rate, so this is the only thing left that
