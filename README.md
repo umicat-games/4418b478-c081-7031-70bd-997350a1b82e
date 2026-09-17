@@ -1,29 +1,42 @@
-# umicat-template — `template-3d`
+# Balaboo
 
-The starter a **3D** game is forked from. `main` on this same repo is the 2D
-(Phaser) starter; `gitManager.templateBranchFor(runtime)` picks between them,
-and both are branches of the ONE per-user fork so clone/push/restore stay
-runtime-independent. See umicat-design/plans/3d-project-creation.md.
+A tower defence you **walk around in**. You are not a cursor over a map — you
+are a character on the board, and a tower can only be built where you are
+standing. Everything else follows from that: what a defence costs is not gold,
+it is the walk.
 
-The starter a new **3D** Umicat game is forked from — the 3D sibling of
-`umicat-template`.
+Game id `d25d06c2-0ae4-4083-8eff-ded32d3125aa`. Built on `@umicat/three-sdk`.
 
 ```
 @umicat/platform-sdk     identity · saves · gameData · rooms · ai · voice · dialogue
         ▲
-@umicat/three-sdk        scene3d format · loader · physics · character · input
+@umicat/three-sdk        scene3d · loader · physics · character · input · audio
         ▲
-   this template         one scene, one character, one crate that falls
+     Balaboo             the village, the boards, and the run between them
 ```
 
-`package.json` carries `"umicat": { "runtime": "three" }`. That marker is how
-everything downstream — project creation, workspace restore, SDK updates, the
-build and the publish path — can tell which runtime a game is, without guessing
-from its dependencies.
+```
+npm install
+npm run scene        # regenerate the boards and the village from their polylines
+npx tsc --noEmit
+npx vite build
+./deploy-preview.sh  # dist/ → S3 + CloudFront, as this game's in-editor preview
+```
 
-## Status
+`./deploy-preview.sh` is a **temporary override** of the preview: any workspace
+rebuild wipes it out, so always commit as well as deploy.
 
-**Not yet wired into project creation.** `agent-session-service` forks
-`umicat-template` unconditionally today; routing on the runtime marker is the
-next piece (see `umicat-design/plans/3d-platform-integration-experiment.md`).
-Until then this is forked by hand.
+**`CLAUDE.md` is the one to read.** It is the memory of what has been built and
+why — every decision here was made against something measured, and the reasons
+are the part that does not survive in the code. Start with *The shape of a
+session*, *The controls, as they stand*, and *Where things are*.
+
+`ASSETS.md` covers where the art comes from and what may be done with it.
+
+> This file used to be the 3D TEMPLATE's README, inherited when the game was
+> forked from it — it described this repo as "the starter a 3D game is forked
+> from", with a status section about work that had since shipped. A README that
+> describes a different repository is worse than none: it is the first thing
+> read and the last thing updated. The same thing happened to `CLAUDE.md`, which
+> described the arena brawler this game started as long after it had become a
+> tower defence.

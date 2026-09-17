@@ -60,6 +60,14 @@ corner of the screen with nothing in it.
 | `src/progress.ts` | drops, materials, the level curve — all of it arithmetic |
 | `src/vfx.ts` | short-lived visual things, and the one loop that owns them |
 | `src/main.ts` | the level engine: towers, the hero, crates, the frame loop |
+| `src/title.ts` | the title screen, and the clearing it stands in |
+| `src/scripted.ts` | the tutorial script runner: panels, highlights, the scrim |
+| `src/aim.ts` | hold-to-place casting, for a thumb and for a mouse |
+| `src/keycap.ts` | what a control is called on THIS machine — button, key or click |
+| `src/actionpad.ts` | the place button and weapon readout a desktop has no SDK buttons for |
+| `src/settings.ts` | the settings dialog, the two volumes, and the way out |
+| `src/wordmark.ts` | the game's name as a picture, shared by the title and the loader |
+| `src/config.ts` | the design size the renderer is set up against |
 | `src/hub.ts` | the hub: the weapon rack, the town plots, the door |
 | `src/audio.ts` | this game's clip table and the two music tracks |
 | `src/loading.ts` | the loading screen between scenes |
@@ -420,7 +428,9 @@ that reaches three weapons of four looks broken to whoever notices.
 ## Progression
 
 `td-progress` in `umicat.saves`:
-`{ best, quality, weapon, weapons, runs, cleared, bests, store, level, xp, town }`.
+`{ best, quality, weapon, weapons, runs, cleared, bests, coin, store, level, xp,
+town, spots, land, musicVolume, sfxVolume }`. The list below explains the ones
+that are not obvious; `Progress` in `src/main.ts` is the authority.
 
 `weapons` is `{ [id]: level }` — which are forged and how far, `weapon` being
 whichever is in hand. A save from before the Armory has no such field, and
@@ -705,31 +715,26 @@ Other things left open, in the order they will be noticed:
 
 ## Teaching
 
-The first board teaches itself, in `src/tutorial.ts` plus the steps built in
-`startLevel`. `teaches: true` on Meadow is the whole switch, and it runs while
-Meadow is UNCLEARED rather than on a first visit — losing your first run and
-coming back to no help is the moment help was for.
+**There is one tutorial and it is the scripted board** — see *The scripted
+tutorial*, further down. Meadow used to carry a second, lighter one in
+`src/tutorial.ts`: a line at a time above the hotbar, gated on "nothing cleared
+yet". It is deleted, along with the `teaches` flag and the `gateWaves` hook.
+Two tutorials covering the same ground means one of them is wrong, and a player
+walked out of the scripted board straight into being told again how to upgrade.
 
-Not a paragraph. This game's rule is that explanation happens WHERE the thing
-is, and a tutorial is that rule with an order imposed on it: one line at a time,
-above the hotbar, gone the moment it is true. There is no "next" button —
-pressing a button to dismiss an instruction about pressing buttons teaches the
-wrong button.
+Three things it learned that the scripted one still holds to:
 
-Two things hold it up:
-
-- **The first wave does not start until you have built something.** A tutorial
-  you can lose while reading it is not a tutorial. `gateWaves` on those steps.
-- **Steps that name an OPTIONAL thing expire.** "Upgrade a tower" waits for
-  something a player may reasonably not do for two minutes, and a step that
-  waits forever is not an instruction, it is a permanent banner. A probe found
-  this by doing everything except the optional thing, which is also what a
-  player does. A step that gates the waves may never expire.
-
-Timed in `realDt`, not `dt`. `dt` is clamped at 0.05 so a slow scene runs the
-world in slow motion — anything measured against a PERSON rather than against
-the world (how long a line has been readable, how long a button has been held)
-uses the unclamped one.
+- **Explanation happens WHERE the thing is.** A tutorial is that rule with an
+  order imposed on it, not a paragraph at the start.
+- **A step that can wait forever is not an instruction, it is a banner.** The
+  old one expired optional steps; the scripted one makes every step possible
+  instead — it tops up gold when the upgrade costs more than the board handed
+  out, and keeps something alive for a step that is waiting for a particular
+  kill.
+- **Timed in `realDt`, not `dt`.** `dt` is clamped at 0.05 so a slow scene runs
+  the world in slow motion, and anything measured against a PERSON rather than
+  against the world — how long a line has been readable, how long a button has
+  been held — uses the unclamped one.
 
 ## What the hub does not show
 
@@ -1264,14 +1269,27 @@ level — `?debug=0` turns it off, and so do three quick taps on the HUD. The
 numbers that decide performance questions have to come from the phone, and the
 hub was the one place with no way to see what eleven hundred trees cost.
 
-Probes live in `umicat-infra/playwright/`: `verify-3d-levels` (three boards, the
-doors, the ice), `verify-3d-lanes` (the fork, the gates, the boss),
-`verify-3d-crates-unlocks`, `verify-3d-hub`, `verify-3d-td`,
-`verify-3d-feedback`, `verify-3d-endscreen`, `verify-3d-audio`,
-`verify-3d-audio-engines`, `verify-3d-jump-touch`, `verify-3d-balance`,
-`verify-3d-town`, `verify-3d-armory` (forging, the Armory cap, and that a save
-from before it keeps the weapons it had earned), `verify-3d-dev`,
-`verify-3d-staff-audio`, `verify-3d-elements`, `verify-3d-sell`.
+Probes live in `umicat-infra/playwright/`, 48 of them named `verify-3d-*`.
+**That list is not reproduced here** — it was, and it went stale twice: it named
+`verify-3d-tutorial`, which was renamed, and omitted sixteen that had been added
+since. `ls` is the authority; what follows is the ones with a lesson attached.
+
+| probe | what it is really asking |
+| --- | --- |
+| `verify-3d-balance` | plays a whole run with a fixed strategy and reports where it got to |
+| `verify-3d-td` | building, the sell hold, the dead zone, a leak costing a life |
+| `verify-3d-armory` | forging, the Armory cap, and that an old save keeps what it earned |
+| `verify-3d-elements` | what each element LEAVES on what it hits — it arranges its own crowd |
+| `verify-3d-staff-audio` | which FILE played, by the duration of the buffer that reached the speaker |
+| `verify-3d-audio` | that turning it down turns it down — by multiplying the gains to the destination |
+| `verify-3d-jump-touch` | the desktop keys and the phone's buttons, on two pages |
+| `verify-3d-desktop` | that a prompt names a key AND that the key does the thing |
+| `verify-3d-settings` | that the pause stops the wave clock and the enemies, not just the hero |
+| `verify-3d-loading` | that the bar is not already full at the 40% mark |
+| `verify-3d-title` | the wordmark decoded, and the same picture on both screens |
+| `verify-3d-glass` | that the wall WAS in the way, by turning the pass off |
+| `verify-3d-shop` | that five buildings photograph as five different pictures |
+| `verify-3d-dev` | that a sandbox run writes nothing into a real save |
 
 `verify-3d-staff-audio` does not ask whether `play()` was called — that passes
 for a clip that 404s, and a missing audio file is silent with no error at all.
@@ -1561,8 +1579,8 @@ is the corner hint we already took off the screen once.
 
 A first-time player spawned in the village with a sword, an empty purse and a
 shop that could not sell them anything yet, and **nothing said the gate was the
-whole of what there is to do** — the village has no tutorial; `src/tutorial.ts`
-is the first board's.
+whole of what there is to do** — the village has no tutorial of its own, and the
+scripted one is on the other side of that gate.
 
 `src/wayfinder.ts` lays a line of chevrons along the ground from the hero to the
 target. Along the ground rather than an arrow over the hero's head, because a

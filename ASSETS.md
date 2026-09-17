@@ -27,6 +27,31 @@ loader fails loudly on a missing clip and lists the names the model does have.
 Same as any Umicat game — upload through the Assets tool and reference from
 `public/`. A 3D game still uses 2D images for UI and textures.
 
+### What was uploaded, and what the repo carries
+
+`public/uploaded/` holds the art that came in through the Assets tool, pulled
+down with a small script against `GET /projects/<id>/assets` (see the pull
+scripts in `umicat-infra/playwright/`). Two things live there:
+
+| file | what | drawn by |
+| --- | --- | --- |
+| `balaboo-title.png` | the game's name, on the title screen and the loading screen | the project owner |
+| `background-cover.jpg` | the cover art, behind the loading screen | the project owner |
+
+**The repo carries a DISPLAY COPY, not the upload.** The wordmark arrived at
+2164×727 and 996KB and is trimmed to its opaque bounds and resized to 880 wide
+(222KB); the cover arrived as a 1.77MB PNG with no transparency in it and is a
+1600-wide JPEG (228KB). The wordmark is drawn at most 380 CSS pixels wide, so 880 is
+better than 2x for it; the cover is a full-bleed background, so on a window
+wider than 1600 it does upscale — it is scrimmed cartoon art behind text, which
+is the case that survives that. The loading screen is the first thing a new
+player's browser paints, which is the worst possible place to carry two
+megabytes. **The full-size originals stay in the Assets tool**; re-pull from
+there rather than upscaling what is here.
+
+A JPEG for the cover because it has no alpha, a PNG for the wordmark because it
+is nothing but alpha.
+
 ## The world's unit is Kenney's, not the metre
 
 A character here is **0.72 units tall**, not 1.8. That is deliberate: Kenney
@@ -83,6 +108,10 @@ no attribution required. <https://kenney.nl>
 
 `particles.png` is a 4×4 sheet packed from sixteen of the Particle Pack's
 transparent PNGs; see the `FRAME` table in `src/vfx.ts` for which cell is what.
+
+`public/uploaded/` is **not** Kenney and not CC0 — it is the project owner's own
+art, uploaded to this project. It is theirs; it is not a library to copy into
+another game.
 
 That matters more here than it looks. A Umicat game ships its `.glb` to the
 player's browser from a public CDN, where anyone can take it — so a licence that
