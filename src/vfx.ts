@@ -812,61 +812,54 @@ export function lightning(
 }
 
 /**
- * The sword wave — a crescent thrown by the swing, from run tier 2.
+ * The blow landing — what a heavy sword hit looks like, from run tier 2.
  *
- * A RING SEGMENT, in the same family as every other ring in this game: the
- * placement ring, the sell sweep, the aiming circle. `RingGeometry` takes a
- * start angle and a length, so an arc is what it already is — and an arc
- * centred on the hero, sweeping outward, is the shape the game already uses to
- * say "this much ground".
+ * It replaced a thrown CRESCENT, and the reason is design rather than drawing:
+ * a widening arc in front of the hero and the bow's widening fan of arrows are
+ * the same picture, and two weapons that read the same are one weapon. **A
+ * sword's identity is WEIGHT, not width** — so what a tier buys is a harder
+ * hit, and this is what makes the hit look hard.
  *
- * **It was atlas sprites first, and that was wrong twice.** The atlas HAD the
- * shape this wanted — cells 4, 5, 14 and 15 held `arcA`/`arcB`/`twirl`/`slash`
- * — and they were repurposed for flame and frost precisely because nothing ever
- * drew one. Building the crescent out of `strandA` instead put seven 0.62-unit
- * quads flat on the floor, and this camera sits at y 3.6 with its top edge two
- * degrees BELOW horizontal: a small ground quad seen that close to edge-on is a
- * few pixels tall. Measured rather than guessed — the effect was created
- * (`live` went 0 to 1, one additive mesh of 28 vertices) and could not be found
- * in a screenshot.
+ * Raw damage on the sword does not break the rule that a run buys behaviour
+ * rather than damage, for one reason: melee can only reach what is next to you.
+ * The position you have to stand in is the cost, and a ranged weapon has no
+ * equivalent — which is why the staves and the bow buy shape instead.
  *
- * Plain transparency, not additive. Additive over this game's bright grass
- * washes towards grey — measured once already for the fire burst, which is why
- * that one answers with AREA rather than alpha.
+ * Three things at the point of contact, which is the whole vocabulary of an
+ * impact: a FLASH that is gone in three frames, a shock RING on the ground that
+ * says how far the blow carried, and SPARKS that outlive both. `power` runs
+ * 0..1 and scales all three, so the tier is legible without a number.
  */
-export function swordWave(
-  vfx: Vfx,
-  from: THREE.Vector3,
-  yaw: number,
-  reach: number,
-  halfWidth: number,
-): void {
-  // The arc's angular width, from the crescent the damage actually uses.
-  const half = Math.min(Math.PI * 0.42, Math.atan2(halfWidth * 1.6, reach * 0.5));
-  // A THIN band, as a fraction of the radius — the mesh is scaled up as it
-  // travels, so a band that is wide at the start is a white swathe by the end.
-  // At 0.12 of the radius it stays an arc, which is what a blade throws.
-  const inner = 0.88, outer = 1.0;
-  const geom = new THREE.RingGeometry(inner, outer, 48, 1, -half, half * 2)
-    .rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0xe8f6ff, transparent: true, opacity: 0.88,
-    side: THREE.DoubleSide, depthWrite: false,
-  });
-  const mesh = new THREE.Mesh(geom, mat);
-  mesh.position.set(from.x, 0.07, from.z);
-  // `RingGeometry` starts its sweep at local +X, and after the lie-flat rotate
-  // that is world +X. The hero faces `(sin yaw, cos yaw)`.
-  mesh.rotation.y = yaw - Math.PI / 2;
-  mesh.renderOrder = 3;
-  const grow = reach / outer;
-  vfx.add({
-    obj: mesh, t: 0, life: 0.3, own: [geom, mat],
-    step: (o, k) => {
-      // Out fast, then fading — the damage all lands on the frame it is thrown,
-      // so what this draws is the reach, not a travelling hitbox.
-      o.scale.setScalar(1 + k * (grow - 1));
-      mat.opacity = 0.88 * (1 - k * k);
+export function swordImpact(vfx: Vfx, at: THREE.Vector3, power: number): void {
+  const p = Math.max(0, Math.min(1, power));
+  const big = 0.75 + p * 0.85;
+  // The flash. `face` so it reads the same whichever way the camera is swung,
+  // and at chest height rather than on the floor — this is a blow landing on a
+  // thing, not a mark on the ground.
+  quads(vfx, [
+    { at: new THREE.Vector3(at.x, at.y + 0.42, at.z), frame: FRAME.burst,
+      w: big, h: big, mode: 'face' },
+    { at: new THREE.Vector3(at.x, at.y + 0.42, at.z), frame: FRAME.starBurst,
+      w: big * 1.25, h: big * 1.25, mode: 'face', roll: Math.PI * 0.12 },
+  ], {
+    life: 0.2,
+    color: 0xfff1cf,
+    step: (l, k) => {
+      for (const q of l) { q.w *= 1 + k * 0.02; q.h *= 1 + k * 0.02; }
     },
+    alpha: (k) => Math.min(1, (1 - k) * 2),
+  });
+  // The shock on the ground. The same expanding ring the rest of the game uses
+  // to mean "this much ground", kept SMALL: the blow lands where the hero is
+  // standing, and a wide ring would be claiming reach the sword does not have.
+  ring(vfx, new THREE.Vector3(at.x, 0.02, at.z), {
+    color: 0xffe6b0, from: 0.3, to: 0.55 + p * 0.5, life: 0.26, opacity: 0.8,
+  });
+  // And sparks, which are the part that outlives the hit. Given a FRAME, or at
+  // this size they are scraps of white paper.
+  motes(vfx, new THREE.Vector3(at.x, at.y + 0.3, at.z), {
+    count: 5 + Math.round(p * 7), color: 0xffd98a, color2: 0xfff6e0,
+    radius: 0.34, rise: 0.5, spin: 1.6, life: 0.42, size: 0.1,
+    frame: FRAME.sparkle,
   });
 }

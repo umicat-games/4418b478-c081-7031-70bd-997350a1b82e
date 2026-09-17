@@ -503,7 +503,7 @@ here is written to the save.
 
 | shape | tier 1 | tier 2 | tier 3 |
 | --- | --- | --- | --- |
-| melee | longer, harder swing | **sword wave** — a crescent thrown in front | wider wave, and it bites deeper |
+| melee | longer, harder swing | **heavy** — the blow lands with a shock | crushing — harder again |
 | arrow | carries further | two arrows, spread | three arrows |
 | burst | wider blast | shorter wait between casts | heavier blast, wider still |
 
@@ -517,9 +517,37 @@ than multiplying it. Multishot scales with how many enemies there are, which is
 precisely the axis the towers own; a spread at full damage per arrow would take
 that axis off them.
 
-**The crescent is a crescent, not a beam.** It widens with distance and reaches
-3.4 at most. A sword that clears a lane from where you stand is a sword that
-makes the towers scenery.
+**The sword is the exception that buys DAMAGE, and it has a reason.** Melee only
+reaches what is next to you, so the position you have to stand in is the price —
+a ranged weapon has no equivalent, which is why the bow and the staves buy shape
+instead.
+
+It threw a **crescent** at tier 2 for a while. It was dropped because a widening
+arc in front of the hero and the bow's widening fan of arrows are the same
+picture, and **two weapons that read the same are one weapon**. A sword's
+identity is weight, so the tier buys a harder hit and something that makes the
+hit LOOK hard.
+
+### The three weapons are three answers, and the table said otherwise
+
+| | reach | per hit | what it brings |
+| --- | --- | --- | --- |
+| sword | next to you | **highest** | nothing but the hit |
+| bow | across the board | middle | reach |
+| staves | a patch of ground | **lowest** | burn, chill, chain |
+
+That is the design. **The numbers were the other way round**: the sword did
+2/3/5 — less than the bow's 3/4/6 at every level and barely half the storm
+staff's 4/5/7 — so the one weapon you have to walk into the fire to use paid
+worst for it, and the highest per-hit damage in the game belonged to a magic
+weapon that also hits an area and chains. The sword is **4/6/9** now: three hits
+on a wave-one saucer at Lv1, two at Lv3, before the Range bonus or anything a
+run buys.
+
+The staves' side of that is still wrong — the storm staff out-damages the bow
+per target while carrying a chain and a blast radius — and it is left alone for
+now because nerfing it takes damage off a weapon players have already paid to
+forge. It wants deciding rather than sliding.
 
 ### The wave is a RING SEGMENT, not atlas sprites
 

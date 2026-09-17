@@ -80,7 +80,16 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 240, wood: 40, stone: 15 },
       { gold: 520, wood: 80, stone: 40 },
     ],
-    damage: [2, 3, 5],
+    // The HIGHEST per hit in the game, and the only weapon that has to be
+    // next to what it is hitting. That position is the price — a bow buys
+    // reach with damage, a staff buys an effect and an area with it.
+    //
+    // It was 2, 3, 5: the melee weapon hit for LESS than the bow at every level
+    // (3, 4, 6) and barely half what the storm staff did (4, 5, 7), so the one
+    // weapon you have to walk into the fire to use was the one that paid worst
+    // for it. Against a wave-one saucer's 10 health this is three hits at Lv1
+    // and two at Lv3, before the Range bonus or anything a run buys.
+    damage: [4, 6, 9],
   },
   {
     id: 'bow',

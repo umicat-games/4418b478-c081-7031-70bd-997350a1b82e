@@ -13,7 +13,7 @@ import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { showTitle } from './title';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordWave, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordImpact, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
@@ -39,7 +39,7 @@ import {
 import { NO_BONUS, TOWN, ARMOUR_PER_LEVEL, type TownBonus } from './town';
 import {
   RUN_TIERS, MAX_RUN_TIER, nextTierCost, tierLabel,
-  meleeReach, meleeBonusDamage, crescent,
+  meleeReach, meleeBonusDamage, meleeImpact,
   arrowLife, arrowShots, arrowShare, ARROW_SPREAD,
   burstRadiusBonus, burstCooldownScale, burstBonusDamage,
 } from './runtiers';
@@ -3309,30 +3309,24 @@ export async function startLevel(
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
     if (hitCrates(hero.position.x, hero.position.z, reach, 1)) connected = true;
-    // The sword wave. A CRESCENT in front of the hero rather than a beam down
-    // the lane: it is bought with the gold a tower would have cost, and a sword
-    // that clears a lane from where you stand is a sword that makes the towers
-    // scenery. Anything already hit by the swing is not hit twice.
-    const wave = crescent(runTier);
-    if (wave) {
-      const fx = Math.sin(hero.rotation.y), fz = Math.cos(hero.rotation.y);
-      swordWave(vfx, hero.position, hero.rotation.y, wave.reach, wave.halfWidth);
+    if (connected) { heroHits += 1; audio.play('sword-hit'); }
+    // What a heavy blow LOOKS like, from tier 2. Once per swing, at the nearest
+    // thing it landed on — a per-enemy effect on a weapon that can catch four
+    // at once is four effects on a whole-level budget of about twenty draws,
+    // which is the mistake the burn already made.
+    const weight = meleeImpact(runTier);
+    if (connected && weight !== null) {
+      let near: Enemy | null = null, best = Infinity;
       for (const e of enemies) {
         if (!e.alive) continue;
-        const dx = e.obj.position.x - hero.position.x;
-        const dz = e.obj.position.z - hero.position.z;
-        const along = dx * fx + dz * fz;
-        if (along <= 0 || along > wave.reach) continue;
-        // Across the line of the swing, widening with distance — a crescent,
-        // not a corridor.
-        const across = Math.abs(dx * fz - dz * fx);
-        if (across > wave.halfWidth * (0.5 + along / wave.reach)) continue;
-        if (along <= reach && across <= reach) continue;   // the swing had it
-        connected = true;
-        damage(e, withBuff(weaponHit()) * 0.7);
+        const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
+        if (d <= reach && d < best) { best = d; near = e; }
       }
+      const fx = Math.sin(hero.rotation.y), fz = Math.cos(hero.rotation.y);
+      swordImpact(vfx, near ? near.obj.position
+        : new THREE.Vector3(hero.position.x + fx * 0.7, hero.position.y, hero.position.z + fz * 0.7),
+        weight);
     }
-    if (connected) { heroHits += 1; audio.play('sword-hit'); }
   };
 
   const damage = (e: Enemy, amount: number, quiet = false): void => {
@@ -4183,7 +4177,7 @@ export async function startLevel(
                         cast: kind.cast, reach: meleeReach(HERO_ATTACK_RANGE, runTier),
                         arrows: arrowShots(runTier), radius: burstRadius(),
                         cooldown: (kind.cooldown ?? 1.7) * burstCooldownScale(runTier),
-                        crescent: crescent(runTier) }),
+                        damage: weaponHit(), impact: meleeImpact(runTier) }),
       buyTier: () => weaponCell.click(),
       arrowsInFlight: () => arrows.length,
       /** What the settings dialog has actually done to the mix. A slider that

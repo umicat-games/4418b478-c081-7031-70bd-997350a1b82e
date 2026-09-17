@@ -44,8 +44,8 @@ export interface RunTier {
 export const RUN_TIERS: Record<Cast, RunTier[]> = {
   melee: [
     { label: 'Sharper — a longer, harder swing', cost: 35 },
-    { label: 'Sword wave — the swing throws a crescent', cost: 110 },
-    { label: 'A wider wave, and it bites deeper', cost: 220 },
+    { label: 'Heavy — the blow lands with a shock', cost: 110 },
+    { label: 'Crushing — it hits harder again', cost: 220 },
   ],
   arrow: [
     { label: 'Further — the arrow carries further', cost: 35 },
@@ -74,15 +74,23 @@ export function tierLabel(cast: Cast, tier: number): string | null {
 // Functions rather than a table of numbers, because each shape scales a
 // different thing and a shared shape would be a lie about all three.
 
-/** Melee: reach, and whether the swing throws a crescent. */
+/** Melee: reach, and weight.
+ *
+ *  It threw a CRESCENT at tier 2 for a while, and a widening arc in front of
+ *  the hero is the same picture as the bow's widening fan — two weapons that
+ *  read the same are one weapon. A sword's identity is weight.
+ *
+ *  This is the one shape that buys raw damage, and the exception has a reason:
+ *  melee only reaches what is next to you, so the position you have to stand in
+ *  is the cost. A ranged weapon has no equivalent, which is why the other two
+ *  buy shape. */
 export const meleeReach = (base: number, tier: number): number =>
   base * (tier >= 1 ? 1.35 : 1);
-export const meleeBonusDamage = (tier: number): number => (tier >= 1 ? 1 : 0) + (tier >= 3 ? 1 : 0);
-/** From tier 2. `null` when the swing is just a swing. */
-export const crescent = (tier: number): { reach: number; halfWidth: number } | null =>
-  tier >= 3 ? { reach: 3.4, halfWidth: 1.15 }
-    : tier >= 2 ? { reach: 2.6, halfWidth: 0.8 }
-      : null;
+export const meleeBonusDamage = (tier: number): number =>
+  (tier >= 1 ? 1 : 0) + (tier >= 2 ? 2 : 0) + (tier >= 3 ? 3 : 0);
+/** How hard the blow LOOKS, 0..1 — `null` while the swing is just a swing. */
+export const meleeImpact = (tier: number): number | null =>
+  tier >= 3 ? 1 : tier >= 2 ? 0.45 : null;
 
 /** Arrow: how long it flies, and how many go out at once. */
 export const arrowLife = (base: number, tier: number): number => base * (tier >= 1 ? 1.5 : 1);
