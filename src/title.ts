@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WORDMARK } from './wordmark';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { loadScene3D, type Manifest3D, type Scene3D } from '@umicat/three-sdk';
 import type { Shared } from './main';
@@ -85,8 +86,7 @@ export async function showTitle(shared: Shared): Promise<void> {
     </button>`;
 
   el.innerHTML = `
-    <div style="font:800 min(13vw, 54px)/1 system-ui; letter-spacing:.2em;
-                color:#ffd76a; text-shadow:0 3px 0 #b8892b, 0 6px 14px rgba(0,0,0,.28)">BALABOO</div>
+    ${WORDMARK}
     <div style="opacity:.92; letter-spacing:.06em; margin-top:-4px;
                 text-shadow:0 1px 6px rgba(0,0,0,.55)">Defend the village</div>
     <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px">

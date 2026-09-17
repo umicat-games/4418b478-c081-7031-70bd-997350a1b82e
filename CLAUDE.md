@@ -1630,12 +1630,40 @@ all three were one bug. Three things came out of fixing it:
   every 250ms.
 - **The title sits UNDER the loader** (z 95 against 100), so hiding it dissolves
   into a finished title rather than cutting to one.
-- **The loading screen wears the same gold BALABOO, in the same place.** It was
+- **The loading screen wears the same wordmark, in the same place.** It was
   flat blue with dark letters, so the handover read as two title screens. Both
   stacks are centred, so the taller one pushes its heading up: the title's
   buttons were worth 29 pixels, and the loader carries a 44px spacer to match.
   Measured, not guessed — the flex `gap` applies to the spacer too, so the
   heading moves by `(spacer + gap) / 2`, and 58 overshot before 44 landed.
+
+### The name is a picture
+
+`src/wordmark.ts`, drawn by the player and uploaded to the project's assets —
+pulled into `public/uploaded/` the same way any annotated asset comes home. It
+replaced `BALABOO` set in the system UI font, which was a decent stand-in and a
+different typeface on every platform it ran on.
+
+**One definition, because two screens draw it.** The title loads UNDER the
+loader and the loader fades out over it, so anything that differs between the
+two turns a dissolve into a cut — which is exactly how they drifted the first
+time, and the report then was "it flashes a different title first". The probe
+now checks that both `img[alt="Balaboo"]` elements carry the SAME `src`, not
+just that each screen has one.
+
+**`aspect-ratio` on the element**, so the box exists before the picture has
+loaded. Without it the stack is 282 pixels short for the first frames and
+everything under it drops when the image arrives — on the LOADING screen, which
+is the first thing anyone sees.
+
+**The repo carries a display copy, not the upload.** The original is
+2164×727 and 996KB; trimmed to its opaque bounds and resized to 880 wide it is
+222KB, which still covers the 380px box it is drawn in at better than 2×. The
+full-size original stays in the Asset Manager.
+
+Checked by asking whether it DECODED — `complete && naturalWidth > 0`, because
+`complete` alone is true for a 404, and a broken src takes the game's name off
+its own title screen while every other check still passes.
 
 ### It stands in a clearing
 

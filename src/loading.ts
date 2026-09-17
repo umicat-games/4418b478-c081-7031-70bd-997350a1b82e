@@ -11,6 +11,7 @@
  * sits there looking like a hang. Measured at 4.4s before the hub started
  * prefetching, about a second after.
  */
+import { WORDMARK } from './wordmark';
 let el: HTMLElement | null = null;
 
 function ensure(): HTMLElement {
@@ -24,8 +25,8 @@ function ensure(): HTMLElement {
     color: #fff; font: 700 20px/1.4 system-ui, sans-serif;
     transition: opacity 220ms ease-out; opacity: 1;
   `;
-  // The same word, the same size, the same colour, in the same PLACE as the
-  // title screen's.
+  // The same wordmark, at the same size, in the same PLACE as the title
+  // screen's — one definition, in `src/wordmark.ts`, so they cannot drift.
   //
   // Both stacks are centred vertically, so the taller one pushes its heading
   // up: the title's buttons are 58px more than this bar, which put BALABOO 29
@@ -39,8 +40,7 @@ function ensure(): HTMLElement {
   // read as TWO title screens rather than as one screen finishing loading. The
   // only thing that changes now is the bar turning into buttons.
   d.innerHTML = `
-    <div style="font:800 min(13vw, 54px)/1 system-ui; letter-spacing:.2em; color:#ffd76a;
-                text-shadow:0 3px 0 #b8892b, 0 6px 14px rgba(0,0,0,.28)">BALABOO</div>
+    ${WORDMARK}
     <div class="msg" style="font:600 14px/1.5 system-ui;letter-spacing:.06em;opacity:.8"></div>
     <div style="width:120px;height:5px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden">
       <div class="bar" style="width:38%;height:100%;border-radius:99px;background:#ffd76a;
