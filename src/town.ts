@@ -55,10 +55,21 @@ export const TOWN: TownBuilding[] = [
     x: -3.5, z: -1.6, yaw: Math.PI / 2,
   },
   {
+    // The ID stays `clinic`, and it is not a leftover.
+    //
+    // It is the key this building is saved under (`town.clinic`), the key its
+    // POSITION is saved under (`spots.clinic`), and the name its meshes carry
+    // in the generated scene (`town_clinic_1`). Renaming it would take a
+    // building people had paid for off their save and leave its model standing
+    // in the village with nothing to own it. The player never sees an id.
     id: 'clinic',
-    name: 'Clinic',
-    effect: '+2 armour per level',
-    icon: 'heart',
+    name: 'Barracks',
+    // No numbers. A player does not need to know that a level is worth two
+    // points off a hit — they need to know that more of it means less damage
+    // taken. The exact figure belongs to whoever is tuning the game, not to
+    // whoever is deciding what to buy next.
+    effect: 'Train, and take less from every hit',
+    icon: 'shield',
     models: ['town-stall-red', 'town-watermill', 'bld-house-b'],
     costs: [
       { gold: 120, wood: 25, stone: 5 },
@@ -83,7 +94,7 @@ export const TOWN: TownBuilding[] = [
   {
     id: 'range',
     name: 'Range',
-    effect: '+1 to your own attacks per level',
+    effect: 'Train, and hit harder with everything',
     icon: 'bow',
     models: ['bld-tower-b', 'bld-tower-a', 'town-windmill'],
     costs: [
@@ -120,17 +131,25 @@ export const TOWN_MAX_LEVEL = 3;
 
 /** What a building is giving RIGHT NOW, phrased as a total rather than a rate.
  *
- *  `effect` says what a LEVEL is worth ("+25 health per level"), which is the
- *  right thing on a plot you have not bought yet and the wrong thing on one you
- *  have — standing at a Lv2 Clinic, the number you want is +50. Derived from
- *  `bonusesFrom` so it cannot drift from what a run actually applies. */
+ *  `effect` is the pitch for a plot you have not bought yet; this is what the
+ *  building is doing for you NOW. Derived from `bonusesFrom` so it cannot drift
+ *  from what a run actually applies.
+ *
+ *  The two STAT buildings say it in words and not in figures. A player deciding
+ *  what to buy needs to know that more defence means less damage taken — the
+ *  fact that a level is two points off a hit is a tuning number, and the card
+ *  already carries the level on the line above. The countable ones keep their
+ *  numbers: "+1 tower" and "+50 starting gold" are things you plan a run
+ *  around, not parameters. */
 export function townNow(id: string, town: Record<string, number> | undefined): string {
   const b = bonusesFrom(town);
   switch (id) {
     case 'smithy': return b.towerCap ? `+${b.towerCap} tower${b.towerCap > 1 ? 's' : ''} · ${b.smithy} mount${b.smithy > 1 ? 's' : ''}` : '';
-    case 'clinic': return b.armour ? `${b.armour} armour — every hit lands for ${b.armour} less` : '';
+    // A LEVEL, not a figure. The card already has the building's level on the
+    // line above, so this says what the level MEANS.
+    case 'clinic': return b.armour ? 'Enemies hit you for less' : '';
     case 'market': return b.gold ? `+${b.gold} starting gold` : '';
-    case 'range': return b.heroDamage ? `+${b.heroDamage} damage on every weapon` : '';
+    case 'range': return b.heroDamage ? 'Your own attacks hit harder' : '';
     case 'armory': return b.weaponCap ? `weapons up to Lv${b.weaponCap}` : '';
     default: return '';
   }

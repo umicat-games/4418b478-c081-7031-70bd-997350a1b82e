@@ -195,16 +195,17 @@ so each wave is a different problem rather than a larger one. The last wave is
 worth two hearts with a tell you can see from across the board. It is the only
 enemy in the game that is not a saucer.
 
-**Health is a BAR of 100, not hearts — and it is SEGMENTED**, a notch every 25.
-Eight hearts meant a hit was always an eighth of what you had and the run ended
-in eight touches; a bullet takes 10 and a boulder 22, so a hit can be a scratch.
+**Health is a BAR of 100, not hearts, and the bar is all there is.** Eight
+hearts meant a hit was always an eighth of what you had and the run ended in
+eight touches; a bullet takes 10 and a boulder 22, so a hit can be a scratch.
 
-The notches are there because a bare percentage bar answers "how much is left"
-and hides the two questions that decide what you do next: **how much did that
-one cost, and how many more can I take.** A bullet is most of a segment with no
-armour and a quarter of one at the cap, and both are things you can see rather
-than work out. Drawn as a repeating gradient over the fill — no elements, and it
-does not move when the fill does. **Running out ends the run** — it used
+**No `100/100` beside it**, and **no segments in it.** Both were tried. The
+digits are a second reading of the same thing in the most crowded corner of the
+screen — a bar IS the number, and most games stop there. The notches (one every
+25) were argued for on the grounds that a percentage bar hides how much one hit
+cost, and they read as clutter: four dark lines across the one element the eye
+goes to when things are going badly. What is left says how much is left, and its
+colour says how worried to be. **Running out ends the run** — it used
 to cost a life and carry you back to the door, which made health a second pool
 of lives rather than the thing you are looking after.
 
@@ -217,7 +218,15 @@ and a drop 18). No way to heal at all was survivable over eight waves and a slow
 death over twelve. This file said 25 for a while after the number moved — every
 heal in this game is FLAT, and that is what decided the Clinic below.
 
-**Health is FIXED at 100, and the Clinic buys ARMOUR.**
+**Health is FIXED at 100, and the Barracks buys ARMOUR.**
+
+It is called the Barracks because a Clinic does not train anyone to take a hit
+— the name was left over from when it sold health. **Its `id` is still
+`clinic`**, and that is deliberate: the id is the key the building is saved
+under, the key its POSITION is saved under, and the name its meshes carry in the
+generated scene. Renaming it would take a building people had paid for off their
+save and leave its model standing in the village with nothing to own it. A
+player never sees an id.
 
 It used to buy +25 max health a level. The two are the same survivability and
 not the same design, and two things decided it:
@@ -697,10 +706,21 @@ Five plots in the hub, bought with gold, wood and stone the same way as everythi
 this game: walk to it, press the action button. No menu. Each is three levels,
 and each level is a bigger building, so the hub visibly grows as you play.
 
+**The two STAT buildings say it in words, not figures.** The card reads
+*Barracks · Lv1 · Enemies hit you for less*, not "+2 armour". A player deciding
+what to buy needs to know that more defence means less damage taken; that a
+level is two points off a hit is a number for whoever is tuning the game. The
+level is already on the line above and the button already says which level it
+buys, so the progression is stated twice without the body joining in.
+
+The **countable** ones keep their numbers. "+1 tower you may have standing" and
+"+50 starting gold" are things you plan a run around rather than parameters —
+that distinction is the rule, not "no numbers anywhere".
+
 | building | what it is worth per level |
 | --- | --- |
 | Smithy ⚒ | +1 tower you may have standing, and one tower mount unlocked |
-| Clinic 🛡 | **+2 armour** — points off every hit, before anything else |
+| Barracks 🛡 | **+2 armour** — points off every hit, before anything else |
 | Market 💰 | +50 starting gold |
 | Range 🏹 | +1 damage on **every** weapon, not just the sword |
 | Armory ⚔ | weapons can be forged and improved to this level |
@@ -2698,6 +2718,16 @@ The gear is drawn, not found: Kenney has no cog in any pack this game uses, so
 quadrilaterals, and a hand-written path of them is forty numbers nobody can
 check. The bore is a second subpath and the emitted `<path>` now carries
 `fill-rule="evenodd"`, which is what makes it a hole rather than a disc.
+
+### One hook, one element
+
+The dialog's close button carries `data-settings-close`, **not**
+`data-panel-close`. It borrowed the village panel's attribute at first, on the
+grounds that both are the same control in the same corner — and
+`verify-3d-shop` then matched TWO elements, took the first, and waited for a
+hidden button to become clickable until it timed out. **A probe that hangs is
+worse than one that fails**: it reports nothing at all, and it was the shop that
+broke rather than the thing that changed.
 
 ### What the probe had to change to stay honest
 

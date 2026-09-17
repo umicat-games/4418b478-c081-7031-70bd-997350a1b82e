@@ -36,7 +36,7 @@ import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
   type Weapon, type WeaponLevels,
 } from './weapons';
-import { NO_BONUS, TOWN, type TownBonus } from './town';
+import { NO_BONUS, TOWN, ARMOUR_PER_LEVEL, type TownBonus } from './town';
 import {
   NO_MATERIALS, rollDrop, xpFromRun, applyXp, xpToNext,
   attackMultiplier, damageTakenMultiplier, MATERIAL_ICON,
@@ -133,9 +133,6 @@ const HERO_SYNC_OFFSET = -(HERO_HALF_HEIGHT + HERO_RADIUS);
  *  survivability and the bar emptied in eight touches; a hundred points spends
  *  at ten or twenty a time and leaves room for a hit to be a scratch. */
 const HERO_MAX_HP = 100;
-/** One notch on the health bar. Four segments across a full bar: enough to
- *  count at a glance, few enough that a 13px bar does not become a comb. */
-const HP_PER_SEGMENT = 25;
 /** What a saucer's bullet takes, before the level's defence is applied. */
 const BULLET_DAMAGE = 10;
 /** Healing, in the same points. A drop is worth a fifth of the bar; a crate a
@@ -1378,24 +1375,14 @@ export async function startLevel(
   const hpFill = document.createElement('div');
   hpFill.style.cssText = 'height:100%; width:100%; border-radius:7px; transition: width .18s;';
   hpTrack.appendChild(hpFill);
-  // SEGMENTED, one notch every 25 health.
-  //
-  // A percentage bar answers "how much is left" and hides the two questions
-  // that actually decide what you do next: how much did THAT cost, and how many
-  // more can I take. A bullet is a quarter of a segment with armour on and most
-  // of one without, and both are things you can see rather than work out.
-  //
-  // Drawn as a repeating gradient OVER the fill, so it costs no elements and
-  // does not move when the fill does.
-  const notches = document.createElement('div');
-  notches.dataset.hpNotches = '';
-  const seg = (HP_PER_SEGMENT / HERO_MAX_HP) * 100;
-  notches.style.cssText = `position:absolute; inset:0; pointer-events:none; border-radius:7px;
-    background: repeating-linear-gradient(90deg,
-      rgba(0,0,0,0) 0 calc(${seg}% - 2px), rgba(10,14,18,.55) calc(${seg}% - 2px) ${seg}%);`;
-  hpTrack.appendChild(notches);
-  const hpText = document.createElement('span');
-  hpText.style.cssText = 'font: 700 13px/1 system-ui, sans-serif;';
+  // NOT segmented. Notches were tried — a divider every 25 health, on the
+  // argument that a percentage bar hides how much one hit costs. They read as
+  // clutter on a 13px bar: four dark lines across the one element the eye goes
+  // to when things are going badly. The bar says how much is left, which is
+  // what it is for, and the colour says how worried to be.
+  // No `100/100` either. A bar IS the number, and most games stop there; the
+  // digits were a second reading of the same thing, in the most crowded corner
+  // of the screen.
   // The armour, beside the bar, only when there is any. A stat with no readout
   // is a stat the player is asked to take on faith — and the Clinic's whole
   // problem before was that what it bought could not be seen.
@@ -1403,7 +1390,7 @@ export async function startLevel(
   armourEl.dataset.armour = '';
   armourEl.style.cssText = 'display:none; align-items:center; gap:3px; font: 700 13px/1 system-ui;'
     + ' color:#9fd0ff;';
-  line1.append(hpTrack, hpText, armourEl);
+  line1.append(hpTrack, armourEl);
   const line2 = document.createElement('div');
   const line3 = document.createElement('div');
   line3.dataset.prompt = '1';
@@ -2224,9 +2211,11 @@ export async function startLevel(
     // Green down to amber down to red: the colour is the warning, because at a
     // glance nobody reads a number on a bar.
     hpFill.style.background = frac > 0.55 ? '#5fd36a' : frac > 0.28 ? '#f0b429' : '#ef4b4b';
-    hpText.textContent = `${Math.max(0, Math.ceil(heroHp))}/${heroMaxHp}`;
+    // The LEVEL, not the points. "Six armour" is a tuning figure; what the
+    // player set in the village is a level, and that is what they recognise.
     if (armour > 0 && !armourEl.childNodes.length) {
-      armourEl.append(icon('shield', '13px'), document.createTextNode(String(armour)));
+      armourEl.append(icon('shield', '13px'),
+        document.createTextNode(String(Math.round(armour / ARMOUR_PER_LEVEL))));
       armourEl.style.display = 'inline-flex';
     }
     const w = Math.min(waveIndex + 1, WAVES.length);

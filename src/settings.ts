@@ -80,7 +80,12 @@ export function createSettings(opts: SettingsOpts): Settings {
   // waiting to happen, with the expensive one not ours to undo.
   const close = document.createElement('button');
   close.type = 'button';
-  close.dataset.panelClose = '';
+  // NOT `data-panel-close`. That attribute is the village panel's, and a probe
+  // that asks for it started matching two elements the moment this dialog
+  // borrowed it — Playwright took the first, which is this one with its layer
+  // hidden, and waited for a hidden button to become clickable until it timed
+  // out. A hook shared by two dialogs is a hook that names neither.
+  close.dataset.settingsClose = '';
   close.setAttribute('aria-label', 'Close');
   close.style.cssText = `
     position: absolute; top: 10px; left: 10px; width: 32px; height: 32px;
