@@ -776,6 +776,9 @@ export async function startLevel(
       staffGem.emissive.setHex(kind.tint.glow);
     }
     if (lockRing) lockRing.visible = false;
+    // Declared further down, and called on the first `setWeapon` before it
+    // exists — the guard is why this is not a crash at boot.
+    if (typeof drawWeaponChip === 'function') drawWeaponChip();
   };
 
   // Prototypes, cloned per placement. Loading inside the build handler would
@@ -1650,6 +1653,8 @@ export async function startLevel(
 
   /** Whether the weapon in hand is placed rather than pointed. */
   const aimsByDrag = (): boolean => kind.cast === 'burst';
+  /** How many spells have actually left the staff. For probes. */
+  let casts = 0;
   /** How far from the hero a placed spell may go.
    *
    *  Its own blast radius, twice over. Far enough that choosing a patch of
@@ -1939,8 +1944,11 @@ export async function startLevel(
   const CELL_MAX = 62;
   const CELL_GAP = 6;
   const EDGE = 8;
+  /** How many cells wide the row is. The weapon chip on desktop is one of them
+   *  — counting only `KINDS` left the bar off centre by half a cell. */
+  const barCells = (): number => KINDS.length + (touchLikely() ? 0 : 1);
   const barWidth = (cell: number): number =>
-    KINDS.length * cell + (KINDS.length - 1) * CELL_GAP;
+    barCells() * cell + (barCells() - 1) * CELL_GAP;
 
   /**
    *  MOVE SIDEWAYS, then shrink, and only climb if neither worked.
@@ -1978,9 +1986,9 @@ export async function startLevel(
     const room = Math.max(0, wall - EDGE);
 
     // Widest cells that fit the room, then the screen, then the cap.
+    const n = barCells();
     const cell = Math.max(CELL_MIN, Math.min(CELL_MAX,
-      Math.floor((Math.min(room, window.innerWidth * 0.96) - (KINDS.length - 1) * CELL_GAP)
-        / KINDS.length)));
+      Math.floor((Math.min(room, window.innerWidth * 0.96) - (n - 1) * CELL_GAP) / n)));
     for (const c of hotbar.children) (c as HTMLElement).style.width = `${cell}px`;
     const w = barWidth(cell);
 
@@ -2055,6 +2063,43 @@ export async function startLevel(
     hotbar.appendChild(cell);
     return cell;
   });
+
+  /** The weapon, and how long until it can be used again — for a machine with
+   *  no attack button to draw either on.
+   *
+   *  The wedge was an overlay tracking the SDK's round button, so on a desktop
+   *  it tracked nothing and the recharge was invisible again: press, nothing
+   *  happens, no reason given. That is the same bug the wedge was written to
+   *  fix, and it had simply moved to the other platform.
+   *
+   *  A READOUT, not a control: `pointer-events: none` and a key cap where a
+   *  price would be. The click that casts is on the canvas, and a chip that
+   *  looked pressable would be claiming otherwise. It sits at the end of the
+   *  hotbar because that row is already "what you can do and what it costs". */
+  const weaponChip = touchLikely() ? null : (() => {
+    const el = document.createElement('div');
+    el.dataset.weaponChip = '';
+    el.style.cssText = `
+      width: ${CELL_MAX}px; padding: 6px 3px 5px; border-radius: 12px;
+      border: 2px dashed rgba(255,255,255,.18); pointer-events: none;
+      background: rgba(0,0,0,.42); color: #fff; font: inherit;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+    `;
+    hotbar.appendChild(el);
+    return el;
+  })();
+  const drawWeaponChip = (): void => {
+    if (!weaponChip) return;
+    weaponChip.textContent = '';
+    // The weapon ID is also its icon name; `WEAPON_ICON` holds URLs, which is
+    // what the SDK's button wants and not what `icon()` does.
+    const g = icon(weapon as IconName, '58%');
+    g.style.aspectRatio = '1';
+    weaponChip.append(g);
+    const key = keyFor(weapon);
+    if (key) weaponChip.append(keyCap(key));
+  };
+  drawWeaponChip();
 
   // Photograph each tower once, now that the models are loaded.
   //
@@ -3025,6 +3070,11 @@ export async function startLevel(
       const at = placedCast
         ?? (lockTarget?.alive ? lockTarget.obj.position : hero.position);
       if (placedCast) aimedCasts += 1;
+      // Every cast, placed or not. `aimedCasts` counts only the dragged ones,
+      // which cannot tell "the click did nothing" from "the click cast the
+      // ordinary way" — and that is the difference a click-vs-hold split has to
+      // get right.
+      casts += 1;
       placedCast = null;
       spellLamp.position.set(at.x, at.y + 0.9, at.z);
       castBurst(at);
@@ -3181,10 +3231,20 @@ export async function startLevel(
 
   // Left click swings. `button`/`pointerType` checked because the right button
   // is the camera and touch already has the ⚔ button — see CLAUDE.md.
+  //
+  // Unless a STAFF is in hand, in which case the press belongs to the aiming
+  // drag and the cast happens when the button comes back up: a click casts the
+  // ordinary way from inside the gesture's own release, a hold opens the circle.
+  // Attacking here as well would fire once on the way down and again on the way
+  // up, which is the bug the touch button had before the drag owned its press.
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || e.pointerType === 'touch') return;
+    if (aimsByDrag() && aim.canAim()) return;
     heroAttack();
   });
+  // The mouse's aiming surface. The thumb aims from the button it is already
+  // on; the cursor aims from the canvas it is already over.
+  aim.watchSurface(canvas);
   canvas.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'touch') { pointerNdc = null; return; }
     pointerNdc ??= new THREE.Vector2();
@@ -3305,7 +3365,8 @@ export async function startLevel(
       else if (input.consume('attack')) heroAttack();
       aim.update(pointerNdc, input.held('attack'));
       // Only the staffs wait; a sword has nothing to show.
-      dial.show(aimsByDrag() ? attackButton() : null,
+      // The button where there is one, the chip where there is not.
+      dial.show(aimsByDrag() ? (attackButton() ?? weaponChip) : null,
                 aimsByDrag() ? staffCooldown / (kind.cooldown ?? 1.7) : 0);
       readBuildButton();
       if (invincible > 0) invincible -= dt;
@@ -3878,6 +3939,7 @@ export async function startLevel(
       /** The drag-to-place gesture: whether it is open and where the blast is
        *  standing. A probe cannot see a circle; it can see where the circle
        *  says it is. */
+      casts: () => casts,
       aim: () => ({ aiming: aim.aiming(), at: aim.at(),
                     drags: aimsByDrag(), reach: castReach(), radius: burstRadius() }),
       /** Pose the blade by hand, for finding the numbers. The rest pose and the

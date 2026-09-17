@@ -2307,3 +2307,57 @@ Also: `verify-3d-action` had been throwing since the village became the entry
 point — it looked for `window.__game` while sitting in the hub. It calls
 `enterLevel` now. **A probe that dies on line 9 is not a passing probe**, and it
 sat in the list looking like one.
+
+### The mouse aims the same way the thumb does
+
+Two things were still missing on a desktop after the key caps landed, and they
+were the same omission twice: **the aiming drag and the recharge were both drawn
+on the SDK's attack button**, and there is no such button there.
+
+**The gesture.** `aim.watchSurface(canvas)` gives the mouse the same press the
+thumb has, started somewhere else: left button down, hold past `ARM_MS` and the
+circle opens **at the hero**, drag and it slides, let go and the spell lands
+there. A quick click still casts the ordinary way — from inside the gesture's
+own release, which is why `canvas`'s `pointerdown` must NOT also call
+`heroAttack` for a staff. Casting on the way down *and* on the way up is the
+exact bug the touch button had before the drag owned its press, and it would
+have come straight back on the other platform.
+
+Left button only: the right one is the camera. Touch is excluded from the
+surface path — a touch device has the button, and aiming from the canvas there
+would fight the thumbstick for the same drag.
+
+Two guards had to learn about the new path. The SDK-latch second opinion
+(`down && pointerId !== -1 && !keyHeld → finish()`) is about the **button's**
+press; a mouse drag has nothing to do with `held('attack')` and would have been
+cancelled on the frame after it began. And the release-over-the-button cancel
+only means anything for a press that started on the button, hence `fromSurface`.
+
+**The recharge.** The wedge tracked the button's rectangle, so on a desktop it
+tracked nothing: press, nothing happens, no reason given — *the silent cooldown
+is indistinguishable from a broken button*, back again, on the platform the
+original fix never looked at. `[data-weapon-chip]` is a cell at the end of the
+hotbar carrying the weapon's glyph and its key cap, and the dial draws on it.
+
+It is a **readout, not a control**: `pointer-events: none`, a dashed border and a
+key cap where a price would be. The click that casts is on the canvas, and a
+chip that looked pressable would be claiming otherwise. `CooldownDial.show` now
+copies the host's `border-radius`, because a circular wedge over a rounded
+rectangle leaves the corners lit and reads as a rendering fault.
+
+The chip is a **cell as far as the layout is concerned** — `barCells()`, not
+`KINDS.length`. Counting only the towers left the row off centre by half a cell.
+
+`__game.casts()` counts every spell that leaves the staff; `aimedCasts` counts
+only dragged ones and cannot tell "the click did nothing" from "the click cast
+the ordinary way", which is the whole of what a click-vs-hold split has to get
+right.
+
+### And one more probe that had been failing quietly
+
+`verify-3d-no-selection` looked for the button's **one-character text label** to
+check it could not be selected. The SDK's buttons wear masked SVG glyphs and
+carry no text at all, so the lookup found nothing and the check had been red
+against a control that no longer exists. It asserts on the button and its glyph
+now. Third stale probe this week — **a probe is a claim about the system, and it
+rots the same way a comment does.**

@@ -44,6 +44,8 @@ export interface Aim {
   /** The on-screen button to hook, or null on a device that has none. Safe to
    *  call repeatedly with the same element. */
   watch(btn: HTMLElement | null): void;
+  /** The surface a mouse drags on — the canvas. Safe to call repeatedly. */
+  watchSurface(el: HTMLElement | null): void;
   /** Once a frame. `ndc` is the mouse in clip space, for the desktop path;
    *  `keyHeld` is whether the attack key is down. */
   update(ndc: THREE.Vector2 | null, keyHeld: boolean): void;
@@ -84,6 +86,13 @@ export function createAim(opts: AimOpts): Aim {
   const ndcTmp = new THREE.Vector2();
 
   let button: HTMLElement | null = null;
+  /** The big surface a MOUSE drags on. A phone aims from the button under the
+   *  thumb, because that is where the thumb already is; a mouse has no button
+   *  to start from, and the canvas is what the cursor is already over. */
+  let surface: HTMLElement | null = null;
+  /** Which of the two this gesture began on. The release-over-the-button cancel
+   *  only means anything for a press that started there. */
+  let fromSurface = false;
   let pressedAt = 0;
   let down = false;
   /** The pointer that started on the button, so a second finger on the walking
@@ -182,6 +191,7 @@ export function createAim(opts: AimOpts): Aim {
   const onDown = (e: PointerEvent): void => {
     if (!opts.enabled()) return;
     if (pointerId !== null) return;
+    fromSurface = false;
     pointerId = e.pointerId;
     down = true;
     armed = false;
@@ -191,6 +201,34 @@ export function createAim(opts: AimOpts): Aim {
     screen = { x: e.clientX, y: e.clientY };
     try { button?.setPointerCapture(e.pointerId); } catch { /* capture is a nicety */ }
   };
+  /** Left button down on the canvas.
+   *
+   *  The same gesture as the button's, and deliberately so: a click casts the
+   *  ordinary way, a hold opens the circle, dragging moves it and letting go
+   *  puts the spell there. The only difference is where the press starts.
+   *
+   *  Left only. The right button is the camera, and a middle-click has no
+   *  meaning here. Touch is excluded because a touch device has the button —
+   *  aiming from the canvas there would fight the thumbstick for the same
+   *  drag. */
+  const onSurfaceDown = (e: PointerEvent): void => {
+    if (e.button !== 0 || e.pointerType === 'touch') return;
+    if (!opts.enabled()) return;
+    if (pointerId !== null) return;
+    // A press with a mouse IS the proof that there is one, and `canAim` is
+    // asked before the first `pointermove` on a page nobody has moved over yet.
+    hasMouse = true;
+    fromSurface = true;
+    pointerId = e.pointerId;
+    down = true;
+    armed = false;
+    cancelled = false;
+    pressedAt = performance.now();
+    origin = { x: e.clientX, y: e.clientY };
+    screen = { x: e.clientX, y: e.clientY };
+    try { surface?.setPointerCapture(e.pointerId); } catch { /* a nicety */ }
+  };
+
   const onMove = (e: PointerEvent): void => {
     if (!down || e.pointerId !== pointerId) return;
     screen = { x: e.clientX, y: e.clientY };
@@ -199,7 +237,7 @@ export function createAim(opts: AimOpts): Aim {
     if (e.pointerId !== pointerId) return;
     // Let go over the button itself and nothing happens — the gesture's own
     // undo, and the only one a thumb already on the button can reach.
-    if (armed && button) {
+    if (armed && button && !fromSurface) {
       const r = button.getBoundingClientRect();
       cancelled = e.clientX >= r.left && e.clientX <= r.right
         && e.clientY >= r.top && e.clientY <= r.bottom;
@@ -259,12 +297,31 @@ export function createAim(opts: AimOpts): Aim {
       btn.addEventListener('pointercancel', onUp);
     },
 
+    watchSurface(el) {
+      if (el === surface) return;
+      if (surface) {
+        surface.removeEventListener('pointerdown', onSurfaceDown);
+        surface.removeEventListener('pointermove', onMove);
+        surface.removeEventListener('pointerup', onUp);
+        surface.removeEventListener('pointercancel', onUp);
+      }
+      surface = el;
+      if (!el) return;
+      el.addEventListener('pointerdown', onSurfaceDown);
+      el.addEventListener('pointermove', onMove);
+      el.addEventListener('pointerup', onUp);
+      el.addEventListener('pointercancel', onUp);
+    },
+
     update(ndc, keyHeld) {
       if (ndc) hasMouse = true;
       if (!opts.enabled()) { if (down) { cancelled = true; finish(); } show(false); return; }
       // The SDK's own latch as a second opinion. If IT says the button is not
       // held, the finger is gone whatever arrived at this element.
-      if (down && pointerId !== -1 && !keyHeld) { finish(); return; }
+      // The SDK's latch is a second opinion on the BUTTON's press only. A mouse
+      // drag on the canvas has nothing to do with `held('attack')`, and asking
+      // it would end the gesture on the frame after it began.
+      if (down && pointerId !== -1 && !fromSurface && !keyHeld) { finish(); return; }
       // And a last resort. Nobody holds a button for twelve seconds; a gesture
       // that has been open that long is one whose release was lost, and a
       // wrong cancel is recoverable where a dead attack button is not.

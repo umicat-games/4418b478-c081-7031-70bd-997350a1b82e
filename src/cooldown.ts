@@ -28,6 +28,9 @@ export function createCooldownDial(host: HTMLElement): CooldownDial {
     position: fixed; border-radius: 50%; pointer-events: none; display: none;
     z-index: 12; mix-blend-mode: normal;
   `;
+  // The host is a round button on a phone and a rounded-rectangle chip on a
+  // desktop. A circular wedge over a rectangle leaves the corners bright, which
+  // reads as a rendering fault rather than as a timer.
   host.append(dial);
 
   return {
@@ -39,6 +42,7 @@ export function createCooldownDial(host: HTMLElement): CooldownDial {
       dial.style.top = `${r.top}px`;
       dial.style.width = `${r.width}px`;
       dial.style.height = `${r.height}px`;
+      dial.style.borderRadius = getComputedStyle(el).borderRadius || '50%';
       // Unwinding clockwise from the top: the dark part is what is LEFT, so it
       // shrinks away rather than filling up. Filling up reads as "charging",
       // and this is the opposite — the weapon is ready when the dark is gone.
