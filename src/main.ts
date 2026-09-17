@@ -173,6 +173,13 @@ const SWORD_SCALE = 1.5;
 const SWING_SECONDS = 0.4;
 /** How far to either side the blade sweeps, measured from straight ahead. */
 const SWING_ARC = 1.35;
+/** How high above the hero's own origin the hilt is held through a cut. Chest
+ *  height on a 0.72 hero — a cut at head height reads as a parry. */
+const SWING_HEIGHT = 0.42;
+/** How far the body turns into the cut, each way. About twenty degrees: enough
+ *  to read as a shoulder turn, short of looking like the hero changed his
+ *  mind about which way he was facing. */
+const SWING_TWIST = 0.36;
 /** How much of the swing is the CUT; the rest is the blade coming back to the
  *  carry. */
 const SWING_CUT = 0.62;
@@ -660,6 +667,11 @@ export async function startLevel(
   let sword: THREE.Object3D | null = null;
   /** The sword's own pivot, between the hand socket and the blade. */
   let swordPivot: THREE.Object3D | null = null;
+  /** The pivot's local position as the socket left it. */
+  const swordBase = new THREE.Vector3();
+  const _grip = new THREE.Vector3();
+  const _lift = new THREE.Vector3();
+  const _invQ = new THREE.Quaternion();
   /** Seconds left in the current swing; 0 is at rest. */
   let swing = 0;
   let bow: THREE.Object3D | null = null;
@@ -717,6 +729,9 @@ export async function startLevel(
     swordPivot.add(blade);
     sword = swordPivot;
     attachToSocket(hero, handRight, swordPivot);
+    // Where the socket put it, kept so the levelling below can start from the
+    // same place every frame instead of accumulating its own correction.
+    swordBase.copy(swordPivot.position);
     // Not posed here: `restSword` reads vectors declared further down, and
     // calling it from up here is a reference into the temporal dead zone —
     // which throws inside an async boot and shows up as a loading screen that
@@ -765,9 +780,49 @@ export async function startLevel(
     swordPivot.quaternion.copy(_parentQ.invert().multiply(_bladeQ));
   };
 
+  /** Hold the blade at ONE HEIGHT through the cut.
+   *
+   *  The arm is playing Kenney's `attack-melee-right`, which is a vertical
+   *  chop, so the hand — and the hilt with it — rises and falls through the
+   *  swing. Measured on the blade's own tip: 0.87 of sideways travel and **0.61
+   *  of vertical**, which is why a sweep the code thought was level read as a
+   *  tap or a stab. Aiming the blade in world space fixed its DIRECTION and
+   *  could do nothing about where the hand carried it.
+   *
+   *  So the pivot is pushed back down by however far the hand went up. Only the
+   *  vertical part: the hilt keeps whatever the hand does sideways, so it stays
+   *  in the fist rather than floating beside it.
+   *
+   *  Eased in and out across the cut, because a hilt that snaps to a fixed
+   *  height on the first frame of the swing is a sword that jumps in the hand. */
+  const levelBlade = (k: number): void => {
+    if (!swordPivot?.parent) return;
+    const cut = Math.min(1, k / SWING_CUT);
+    // A PLATEAU, not a bell. `sin(cut * PI)` eased off everywhere except the
+    // exact middle, so the hilt was only half-levelled through most of the cut
+    // and the tip still moved 0.26 vertically against 0.82 sideways. Full hold
+    // across the body, easing only over the first and last tenth so the sword
+    // does not jump in the hand at either end.
+    const ease = (t: number): number => t * t * (3 - 2 * t);
+    const inK = ease(Math.min(1, cut / 0.12));
+    const outK = ease(Math.min(1, (1 - cut) / 0.12));
+    const hold = Math.min(inK, outK);
+    swordPivot.position.copy(swordBase);
+    swordPivot.parent.updateMatrixWorld(true);
+    swordPivot.updateMatrixWorld(true);
+    _grip.setFromMatrixPosition(swordPivot.matrixWorld);
+    const want = hero.position.y + SWING_HEIGHT;
+    _lift.set(0, (want - _grip.y) * hold, 0);
+    swordPivot.parent.getWorldQuaternion(_invQ).invert();
+    _lift.applyQuaternion(_invQ);
+    swordPivot.position.add(_lift);
+    swordPivot.updateMatrixWorld(true);
+  };
+
   /** Carried: blade up, leaning a little forward, edge facing out. */
   function restSword(): void {
     if (!swordPivot) return;
+    swordPivot.position.copy(swordBase);
     const yaw = hero.rotation.y;
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
     aimBlade(_dir.set(fx * 0.22, 1, fz * 0.22), _edge.set(fx, 0, fz));
@@ -4056,6 +4111,19 @@ export async function startLevel(
         const cut = Math.min(1, k / SWING_CUT);
         const e = cut * cut * (3 - 2 * cut);
         const a = SWING_ARC - 2 * SWING_ARC * e;         // right to left
+        // THE BODY TURNS INTO THE CUT.
+        //
+        // The rig has no slash — `attack-melee-right` is a chop, and
+        // `attack-melee-left` is the same chop with the other arm, so there is
+        // no clip to switch to. Levelling the blade stopped it reading as a
+        // tap; what was still missing is that a person swinging a sword turns
+        // their shoulders through it. A yaw offset that sweeps with the blade
+        // is the cheapest possible version of that, and it is most of what the
+        // eye reads as "he swung".
+        //
+        // Applied BEFORE the blade is aimed. `aimBlade` works in world space
+        // and converts back through the parent, so the blade lands where it was
+        // asked for whatever the body underneath it is doing.
         const ca = Math.cos(a), sa = Math.sin(a);
         // Level, dipping slightly as it finishes — a flat arc at chest height
         // is what "it cut at the thing" looks like from this camera.
@@ -4069,7 +4137,9 @@ export async function startLevel(
           _rest.set(fx * 0.22, 1, fz * 0.22).normalize();
           _dir.lerp(_rest, back * back * (3 - 2 * back)).normalize();
         }
+        hero.rotation.y = yaw + SWING_TWIST - 2 * SWING_TWIST * e;
         aimBlade(_dir, _edge);
+        levelBlade(k);
         if (swing === 0) restSword();
       } else {
         restSword();

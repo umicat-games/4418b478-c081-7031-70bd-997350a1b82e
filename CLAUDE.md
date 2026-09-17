@@ -1190,6 +1190,32 @@ knife), and it **slashes**. The arm is still playing Kenney's
 its own between the hand socket and the model, and sweeps level across the body
 while the arm does whatever it does. Carried upright between swings.
 
+**It reads as a chop until the HAND stops moving.** Reported as "it looks like a
+stab, or a tap — not a swing", and the measurement said why: across the cut the
+blade's tip travelled **0.87 sideways and 0.61 vertically**. Aiming the blade in
+world space fixes its DIRECTION and can do nothing about where the hand carries
+it, and the arm is playing a chop, so the hilt rose and fell through the sweep.
+
+`levelBlade` pushes the pivot back down by however far the hand went up — the
+vertical part only, so the hilt keeps whatever the hand does sideways and stays
+in the fist rather than floating beside it. A **plateau**, not a bell: the first
+version eased with `sin(cut·π)`, which is only fully on at the exact middle and
+left the tip moving 0.26 vertically. Full hold across the body, easing over the
+first and last tenth so the sword does not jump in the hand.
+
+**And the body turns into the cut.** There is no slash in the rig to switch to —
+`attack-melee-left` is the same chop with the other arm — and a person swinging
+a sword turns their shoulders through it. A yaw offset that sweeps with the
+blade is the cheapest possible version of that and it is most of what the eye
+reads as "he swung". Applied BEFORE the blade is aimed, because `aimBlade` works
+in world space and converts back through the parent: the blade lands where it
+was asked whatever the body underneath it is doing.
+
+After both: **0.76 sideways against 0.09 vertical**, with the hilt holding to
+within 0.03. `verify-3d-action` asks for sideways to beat vertical by 2.5x,
+which is the difference between a slash and a chop stated as a number rather
+than as an opinion about a screenshot.
+
 Three things that matter, all of them learned the hard way:
 
 - **Aim it in WORLD space.** The socket hangs off a bone whose frame is whatever
