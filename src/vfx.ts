@@ -814,16 +814,25 @@ export function lightning(
 /**
  * The sword wave — a crescent thrown by the swing, from run tier 2.
  *
- * Drawn as a row of `ground` quads laid across the arc rather than one stretched
- * sprite: the atlas has no crescent, and a single quad scaled wide reads as a
- * rectangle of light. Laid on the FLOOR because that is where the swing is
- * aimed and where the enemies stand, and the burst's own lesson applies — a
- * ground effect cast at head height is one nobody sees.
+ * A RING SEGMENT, in the same family as every other ring in this game: the
+ * placement ring, the sell sweep, the aiming circle. `RingGeometry` takes a
+ * start angle and a length, so an arc is what it already is — and an arc
+ * centred on the hero, sweeping outward, is the shape the game already uses to
+ * say "this much ground".
  *
- * It travels: the arc slides out to `reach` over its short life, so the thing
- * that does the damage and the thing on screen are going the same way. The
- * damage itself is applied once, on the frame it is thrown — a wave that dealt
- * damage as it travelled would be a second projectile system.
+ * **It was atlas sprites first, and that was wrong twice.** The atlas HAD the
+ * shape this wanted — cells 4, 5, 14 and 15 held `arcA`/`arcB`/`twirl`/`slash`
+ * — and they were repurposed for flame and frost precisely because nothing ever
+ * drew one. Building the crescent out of `strandA` instead put seven 0.62-unit
+ * quads flat on the floor, and this camera sits at y 3.6 with its top edge two
+ * degrees BELOW horizontal: a small ground quad seen that close to edge-on is a
+ * few pixels tall. Measured rather than guessed — the effect was created
+ * (`live` went 0 to 1, one additive mesh of 28 vertices) and could not be found
+ * in a screenshot.
+ *
+ * Plain transparency, not additive. Additive over this game's bright grass
+ * washes towards grey — measured once already for the fire burst, which is why
+ * that one answers with AREA rather than alpha.
  */
 export function swordWave(
   vfx: Vfx,
@@ -832,40 +841,32 @@ export function swordWave(
   reach: number,
   halfWidth: number,
 ): void {
-  const fx = Math.sin(yaw), fz = Math.cos(yaw);
-  // Across the direction of the swing.
-  const rx = fz, rz = -fx;
-  const n = 7;
-  const list: Quad[] = [];
-  for (let i = 0; i < n; i++) {
-    const t = (i / (n - 1)) * 2 - 1;            // -1..1 across the arc
-    const w = halfWidth * 1.9 * t;
-    // Bowed forward at the middle, so the row reads as a crescent.
-    const bow = (1 - t * t) * 0.45;
-    list.push({
-      at: new THREE.Vector3(
-        from.x + rx * w + fx * bow,
-        0.06,
-        from.z + rz * w + fz * bow,
-      ),
-      frame: FRAME.strandA,
-      w: 0.62, h: 0.62,
-      mode: 'ground',
-      roll: yaw + Math.PI / 2,
-    });
-  }
-  const start = list.map((q) => q.at.clone());
-  quads(vfx, list, {
-    life: 0.26,
-    color: 0xcfe9ff,
-    step: (l, k) => {
-      const d = k * reach;
-      for (let i = 0; i < l.length; i++) {
-        l[i].at.set(start[i].x + fx * d, 0.06, start[i].z + fz * d);
-        l[i].w = 0.62 + k * 0.35;
-        l[i].h = 0.62 + k * 0.35;
-      }
+  // The arc's angular width, from the crescent the damage actually uses.
+  const half = Math.min(Math.PI * 0.42, Math.atan2(halfWidth * 1.6, reach * 0.5));
+  // A THIN band, as a fraction of the radius — the mesh is scaled up as it
+  // travels, so a band that is wide at the start is a white swathe by the end.
+  // At 0.12 of the radius it stays an arc, which is what a blade throws.
+  const inner = 0.88, outer = 1.0;
+  const geom = new THREE.RingGeometry(inner, outer, 48, 1, -half, half * 2)
+    .rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xe8f6ff, transparent: true, opacity: 0.88,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.set(from.x, 0.07, from.z);
+  // `RingGeometry` starts its sweep at local +X, and after the lie-flat rotate
+  // that is world +X. The hero faces `(sin yaw, cos yaw)`.
+  mesh.rotation.y = yaw - Math.PI / 2;
+  mesh.renderOrder = 3;
+  const grow = reach / outer;
+  vfx.add({
+    obj: mesh, t: 0, life: 0.3, own: [geom, mat],
+    step: (o, k) => {
+      // Out fast, then fading — the damage all lands on the frame it is thrown,
+      // so what this draws is the reach, not a travelling hitbox.
+      o.scale.setScalar(1 + k * (grow - 1));
+      mat.opacity = 0.88 * (1 - k * k);
     },
-    alpha: (k) => Math.min(1, (1 - k) * 1.6),
   });
 }

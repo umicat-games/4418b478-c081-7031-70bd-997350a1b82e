@@ -521,6 +521,43 @@ that axis off them.
 3.4 at most. A sword that clears a lane from where you stand is a sword that
 makes the towers scenery.
 
+### The wave is a RING SEGMENT, not atlas sprites
+
+The magic's machinery was the obvious answer and it was wrong twice.
+
+**The atlas no longer has the shape.** Cells 4, 5, 14 and 15 held
+`arcA`/`arcB`/`twirl`/`slash`, and they were repurposed for flame and frost
+precisely because **nothing ever drew one** — so the one thing a sword wave
+wants had been packed out of the sheet by the time anything wanted it.
+
+Built out of `strandA` instead, it was **created and invisible**: seven 0.62-unit
+quads laid flat on the floor. `effects()` went from 0 to 1, the additive mesh was
+in the scene with its 28 vertices, and it could not be found in a screenshot.
+This camera sits at y 3.6 with its top edge two degrees BELOW horizontal, so a
+small quad lying on the ground is a few pixels tall.
+
+`RingGeometry` takes a start angle and a length, so **an arc is what it already
+is** — and it is the shape this game already uses to say "this much ground": the
+placement ring, the sell sweep, the aiming circle. One mesh, one draw call, no
+atlas.
+
+Two numbers that are not arbitrary. The band is **0.12 of the radius**, because
+the mesh is scaled up as it travels and a band that is wide at the start is a
+white swathe by the end — the first attempt was a solid sheet. And it is **plain
+transparency, not additive**: additive over this game's bright grass washes
+towards grey, which the fire burst already measured and answered with area
+rather than alpha.
+
+**"The effect exists" is not "the effect is visible", and the check that says so
+has to look at pixels.** `verify-3d-runtiers` freezes the swing mid-flight and
+counts pale pixels on the ground in front of the hero against the same patch
+with no swing: 1072 before, 2021 after. The scene-graph version of that check
+passed on the invisible one.
+
+`__game.freeze()` is ONE-WAY — it stops the frame loop — so the probe that
+froze to photograph was measuring a dead game from then on, and read zero arrows
+in the air three checks later. `unfreeze()` exists now.
+
 ### It is bought from a cell in the hotbar
 
 That row is already "things you buy with this run's gold, with the price on the

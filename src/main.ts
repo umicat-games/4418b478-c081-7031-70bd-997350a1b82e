@@ -3500,7 +3500,7 @@ export async function startLevel(
     go({ won: false, wave: 0, level: levelIndex, banked: 0 });
   };
 
-  renderer.setAnimationLoop((now: number) => {
+  const frame = (now: number): void => {
     // `dt` is CLAMPED so a stall cannot tunnel the physics, which means a slow
     // scene runs the world in slow motion. `realDt` is not — anything measured
     // against a person rather than against the world (how long an instruction
@@ -4083,7 +4083,8 @@ export async function startLevel(
     }
 
     renderer.render(world.scene, world.camera);
-  });
+  };
+  renderer.setAnimationLoop(frame);
 
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
@@ -4101,6 +4102,11 @@ export async function startLevel(
         renderer.setAnimationLoop(null);
         renderer.render(world.scene, world.camera);
       },
+      /** Start it again. `freeze` is one-way, and a probe that froze to
+       *  photograph something then measured anything afterwards was measuring a
+       *  dead game — an arrow probe read zero arrows in the air because the
+       *  frame loop had been off since the previous check. */
+      unfreeze: () => renderer.setAnimationLoop(frame),
       freezeAndRender: (from: [number, number, number], at: [number, number, number], fov = 35) => {
         renderer.setAnimationLoop(null);
         const cam = new THREE.PerspectiveCamera(fov, canvas.width / canvas.height, 0.05, 60);
