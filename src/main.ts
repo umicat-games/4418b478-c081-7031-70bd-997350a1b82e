@@ -21,6 +21,7 @@ import { createWayfinder } from './wayfinder';
 import { createAim } from './aim';
 import { createCooldownDial } from './cooldown';
 import { createActionPad } from './actionpad';
+import { createSettings } from './settings';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { icon, setIconText, iconHtml, type IconName } from './icons';
@@ -86,6 +87,11 @@ export interface Progress {
    *  spot is one they are still carrying — which is also how a game closed
    *  mid-placement picks up where it left off. */
   spots?: Record<string, { x: number; z: number }>;
+  /** How loud the player wants each half of the mix, 0 to 1. Absent means
+   *  "never touched it", which is not the same as zero — a missing field must
+   *  read as the default and not as silence. */
+  musicVolume?: number;
+  sfxVolume?: number;
   /** How much of the village has been bought: an index into the hub's `LAND`.
    *  Absent means a save from before land was for sale, which the hub reads as
    *  "the size the village used to be" rather than as the smallest. */
@@ -1062,6 +1068,14 @@ export async function startLevel(
   let spawnTimer = 0;
   let toSpawn = 0;
   let running = true;
+  /** Stopped by the settings dialog. NOT the same as `running`, which is about
+   *  whether the RUN is still going — a paused run is still a run, and a
+   *  finished one must not come back to life when a dialog closes. */
+  let paused = false;
+  /** What `input.setEnabled` was before the pause took it away. The summary
+   *  turns input off when the run ends, and a dialog opened on the summary must
+   *  not hand the controls back on the way out. */
+  let inputWasOn = true;
   let won = false;
   // Long enough to walk out of the doorway. A board's road can pass close to
   // the door — on Meadow the whole north strip is inside enemy range — so
@@ -1374,26 +1388,22 @@ export async function startLevel(
   // shape of bug as a button rendered under the control layer, and just as
   // invisible from the code.
   line2.append(livesEl, goldEl, waveEl, towerEl, buffEl);
-  const muteBtn = document.createElement('button');
-  const showMute = (): void => {
-    muteBtn.textContent = '';
-    muteBtn.append(icon(audio.isMuted ? 'audioOff' : 'audioOn', '17px'));
-  };
-  muteBtn.style.cssText = `
-    margin-top: 8px; width: 34px; height: 34px; border-radius: 17px; border: 0;
-    background: rgba(0,0,0,.35); color: #fff; font-size: 15px; cursor: pointer;
-    pointer-events: auto;   /* the HUD itself is click-through */
-  `;
-  muteBtn.onclick = () => {
-    audio.setMuted(!audio.isMuted);
-    showMute();
-  };
-  // And once now. A `showX` that only runs on click leaves the button empty
-  // until the first press — which is exactly as visible as a button that does
-  // not work, and exactly as silent.
-  showMute();
+  const buttons = document.createElement('div');
+  buttons.style.cssText = 'display: flex; align-items: center; pointer-events: auto;';
+  // The settings button used to be a mute switch — one control, all or nothing.
+  // See `src/settings.ts` for why it became a dialog.
+  const settings = createSettings({
+    host: buttons,
+    music: { get: () => audio.musicLevel, set: (v) => audio.setMusicVolume(v) },
+    sfx: { get: () => audio.sfxLevel, set: (v) => audio.setSfxVolume(v) },
+    save: () => void patchSave(umicat,
+      { musicVolume: audio.musicLevel, sfxVolume: audio.sfxLevel }),
+    pause: (on) => setPaused(on),
+    leave: () => quitRun(),
+  });
   const qualityBtn = document.createElement('button');
-  qualityBtn.style.cssText = muteBtn.style.cssText + 'width: auto; padding: 0 11px; margin-left: 6px;';
+  qualityBtn.style.cssText = settings.button.getAttribute('style')
+    + 'width: auto; padding: 0 11px; margin-left: 6px;';
   const labelQuality = (): void => { qualityBtn.textContent = QUALITY[quality].name; };
   qualityBtn.onclick = () => {
     quality = (quality + 1) % QUALITY.length;
@@ -1403,9 +1413,7 @@ export async function startLevel(
   };
   labelQuality();
 
-  const buttons = document.createElement('div');
-  buttons.style.cssText = 'display: flex; align-items: center; pointer-events: auto;';
-  buttons.append(muteBtn, qualityBtn);
+  buttons.append(qualityBtn);
   // The BUTTONS stay outside the plate — they carry their own backgrounds, and
   // a plate behind them would be a panel with two holes in it.
   hudEl.append(readoutPlate(line1, line2, line3), buttons);
@@ -2715,9 +2723,10 @@ export async function startLevel(
     scriptTrail.dispose();
     aim.dispose();
     dial.dispose();
-    // It lives on document.body, so it would outlive the level that made it and
-    // sit over the hub with a button wired to a disposed input.
+    // These live on document.body, so they would outlive the level that made
+    // them and sit over the hub wired to a disposed input.
     pad?.dispose();
+    settings.dispose();
     ringActionButton(null);
     world.dispose();
     world.scene.clear();
@@ -3293,6 +3302,42 @@ export async function startLevel(
   let leave: ((r: LevelResult) => void) | null = null;
   const leaving = new Promise<LevelResult>((res) => { leave = res; });
 
+  /** Freeze the world, keep drawing it.
+   *
+   *  The board carries on without you otherwise: the wave timer runs, enemies
+   *  walk, and reading the settings costs a life. Rendering continues so the
+   *  dialog sits over the game rather than over a black rectangle — this is a
+   *  pause, not a scene change. */
+  const setPaused = (on: boolean): void => {
+    if (paused === on) return;
+    paused = on;
+    if (on) {
+      inputWasOn = input.isEnabled;
+      input.setEnabled(false);
+    } else {
+      input.setEnabled(inputWasOn);
+      // Whatever was held when the dialog opened is not held now. Without this
+      // the sell-hold that opened the settings resumes on close and sells the
+      // tower the player was standing on.
+      last = performance.now();
+    }
+  };
+
+  /** Give up on the run. The village, with nothing recorded.
+   *
+   *  The summary is what writes the save, so a run abandoned here simply never
+   *  happened: no wave recorded, no materials banked, no level counted. That is
+   *  the honest reading of "leave", and it is also what stops a quit button
+   *  from being a way to bank a good first wave and try again. */
+  const quitRun = (): void => {
+    if (!leave) return;
+    const go = leave;
+    leave = null;
+    setPaused(false);
+    tearDown();
+    go({ won: false, wave: 0, level: levelIndex, banked: 0 });
+  };
+
   renderer.setAnimationLoop((now: number) => {
     // `dt` is CLAMPED so a stall cannot tunnel the physics, which means a slow
     // scene runs the world in slow motion. `realDt` is not — anything measured
@@ -3301,6 +3346,15 @@ export async function startLevel(
     const realDt = (now - last) / 1000;
     const dt = Math.min(realDt, 0.05);
     last = now;
+
+    // PAUSED: draw the frame and stop. Everything below advances something —
+    // the camera, the hero, the wave clock, the aiming gesture's own timers —
+    // and a settings panel the board keeps playing behind is a panel that costs
+    // a life to read.
+    if (paused) {
+      renderer.render(world.scene, world.camera);
+      return;
+    }
 
     const turn = input.look();
     if (turn.x || turn.y) world.orbit(turn.x, turn.y);
@@ -3954,6 +4008,11 @@ export async function startLevel(
        *  standing. A probe cannot see a circle; it can see where the circle
        *  says it is. */
       casts: () => casts,
+      /** What the settings dialog has actually done to the mix. A slider that
+       *  moves a number on screen and nothing else looks identical to one that
+       *  works. */
+      audio: () => ({ music: audio.musicLevel, sfx: audio.sfxLevel, muted: audio.isMuted }),
+      paused: () => paused,
       aim: () => ({ aiming: aim.aiming(), at: aim.at(),
                     drags: aimsByDrag(), reach: castReach(), radius: burstRadius() }),
       /** Pose the blade by hand, for finding the numbers. The rest pose and the
@@ -4087,6 +4146,15 @@ async function boot(): Promise<void> {
   const hudEl = document.getElementById('hud')!;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   const shared: Shared = { umicat, renderer, canvas, hudEl, audio: createAudio() };
+  // Whatever the player set last time, before anything can be heard. Read here
+  // rather than in the level because the audio outlives every scene — set in a
+  // level and then not applied in the village is a setting that un-sets itself
+  // on the walk home. `??` and not `||`: a deliberate zero is not "unset".
+  {
+    const saved = await readSave(umicat);
+    if (saved.musicVolume !== undefined) shared.audio.setMusicVolume(saved.musicVolume);
+    if (saved.sfxVolume !== undefined) shared.audio.setSfxVolume(saved.sfxVolume);
+  }
 
   // The title, once, before any of it. It reads the save and either leaves it
   // alone or wipes it, so everything below can go on reading progress the way

@@ -104,7 +104,39 @@ const DRAWN = {
     'M -10 -32 L 10 -32 L 10 -26 L 26 -26 L 26 -16 L -26 -16 L -26 -26 L -10 -26 Z',
     'M -21 -10 L 21 -10 L 17 32 L -17 32 Z',
   ].join(' '),
+  // A gear, for the settings button. Kenney has no cog in any of the packs
+  // this game already uses, and the button it replaces was the speaker — so
+  // "mute" had a picture and "settings" would have had none.
+  //
+  // Generated rather than typed: eight teeth is eight near-identical
+  // quadrilaterals, and a hand-written path of them is forty numbers nobody
+  // can check. The hole in the middle is a second subpath wound the other way,
+  // which `fill-rule="evenodd"` turns into a hole.
+  settings: gear(8, 34, 25, 12),
 };
+
+/** A cog: `teeth` rectangular teeth between radius `inner` and `outer`, around
+ *  a body of radius `inner`, with a bore of radius `hole`. */
+function gear(teeth, outer, inner, hole) {
+  const pts = [];
+  const step = (Math.PI * 2) / teeth;
+  // Half the angular width of a tooth at its base, and at its tip: the tip is
+  // narrower, which is what makes it read as a cog rather than as a flower.
+  const base = step * 0.30;
+  const tip = step * 0.18;
+  const at = (r, a) => `${(Math.cos(a) * r).toFixed(1)} ${(Math.sin(a) * r).toFixed(1)}`;
+  for (let i = 0; i < teeth; i++) {
+    const a = i * step;
+    pts.push(`${i === 0 ? 'M' : 'L'} ${at(inner, a - step / 2 + base)}`);
+    pts.push(`L ${at(outer, a - tip)}`);
+    pts.push(`L ${at(outer, a + tip)}`);
+    pts.push(`L ${at(inner, a + step / 2 - base)}`);
+  }
+  pts.push('Z');
+  // The bore, as a circle in two arcs — SVG has no circle inside a path.
+  pts.push(`M ${hole} 0 A ${hole} ${hole} 0 1 0 ${-hole} 0 A ${hole} ${hole} 0 1 0 ${hole} 0 Z`);
+  return pts.join(' ');
+}
 
 function main() {
   mkdirSync(OUT, { recursive: true });
@@ -126,7 +158,7 @@ function main() {
   for (const [name, d] of Object.entries(DRAWN)) {
     writeFileSync(join(OUT, `${name}.svg`),
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VIEWBOX}" width="76" height="76">`
-      + `<path fill="#FFFFFF" d="${d}"/></svg>\n`);
+      + `<path fill="#FFFFFF" fill-rule="evenodd" d="${d}"/></svg>\n`);
     names.push(name);
   }
   console.log(`${OUT} — ${names.join(', ')}`);

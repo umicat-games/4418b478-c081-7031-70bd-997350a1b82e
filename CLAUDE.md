@@ -2427,3 +2427,72 @@ always lit says nothing about where you are standing.
 Both pads are `document.body` children and are **disposed with the scene**, or
 the level's pad outlives the level and sits over the village wired to a disposed
 input.
+
+## Settings, and the first real pause
+
+The only audio control the game had was a mute switch — one button, all or
+nothing. "Turn the music down and keep hearing what is shooting at me" was not
+expressible, and neither was leaving a level you had decided against.
+
+The mute button became a **settings button** (`src/settings.ts`), and mute
+became a slider at zero, which is one control fewer to explain. Inside:
+**Music**, **Sound**, and **Leave the level**.
+
+This needed **@umicat/three-sdk 0.11.0** — `GameAudio` had no volume at all,
+only `setMuted`. Effects now run through their own gain node, so the two knobs
+reach two different places. Volume is a platform capability, not a thing each
+game rebuilds.
+
+### Opening it pauses, and the pause is real
+
+A settings panel over a live board is a panel you read while something walks
+into your base, which turns reading it into a cost. So the loop draws the frame
+and returns before anything advances — the camera, the hero, the wave clock, the
+aiming gesture's timers. Rendering continues, because this is a pause and not a
+scene change: the dialog sits over the game rather than over a black rectangle.
+
+`paused` is **not** `running`. `running` is about whether the RUN is still
+going; a paused run is still a run, and a finished one must not come back to
+life when a dialog closes. Input is switched off while paused and restored to
+**what it was**, not to "on" — the summary turns input off when a run ends, and
+a dialog opened over the summary must not hand the controls back on the way out.
+`last` is reset on resume so the first frame after is not a two-minute `dt`.
+
+### Leaving records nothing
+
+The summary is what writes the save, so a run abandoned here simply never
+happened: no wave recorded, no materials banked, no run counted. That is the
+honest reading of "leave" — and it is also what stops the button from being a
+way to bank a good first wave and try again.
+
+**Two presses**, with the second one saying what it costs rather than opening a
+second dialog on top of the first. The cost is not recoverable, and a player who
+meant to hit Close and hit this instead has lost the board.
+
+### The village has it too
+
+The mute button only ever existed in a level, so the one screen you can sit on
+indefinitely was the one with no audio control at all. The same dialog, minus
+the way out — there is nothing to leave. The levels belong to the audio and not
+to the scene, so what is set in one is what the other opens with, and they are
+persisted (`musicVolume` / `sfxVolume`, read once at boot before anything can be
+heard — `??` not `||`, since a deliberate zero is not "unset").
+
+The gear is drawn, not found: Kenney has no cog in any pack this game uses, so
+`tools/pack-icons.mjs` generates one — eight teeth is eight near-identical
+quadrilaterals, and a hand-written path of them is forty numbers nobody can
+check. The bore is a second subpath and the emitted `<path>` now carries
+`fill-rule="evenodd"`, which is what makes it a hole rather than a disc.
+
+### What the probe had to change to stay honest
+
+`verify-3d-audio` proved muting worked by asserting **no clip played**. With a
+volume knob that stops being the same question: a clip at zero gain plays
+exactly as before and is recorded exactly as before. It patches
+`AudioNode.connect` now, follows each clip to the destination and multiplies the
+gains — at full a swing arrives at 0.45, at zero it arrives at 0. **The old
+check would have passed on a slider that did nothing.**
+
+`verify-3d-settings` watched "nothing on the board moved" over a board with no
+enemies on it, and passed for the wrong reason until it was made to print how
+many it had been watching. It skips to a wave first now.

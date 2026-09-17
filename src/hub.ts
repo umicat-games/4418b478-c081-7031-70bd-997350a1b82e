@@ -14,6 +14,7 @@ import { createThumbMaker } from './thumbs';
 import { iconHtml, type IconName } from './icons';
 import { pressGlyph, touchLikely, PLACE_KEY, JUMP_KEY } from './keycap';
 import { createActionPad } from './actionpad';
+import { createSettings } from './settings';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
@@ -747,7 +748,33 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // No greeting. "Welcome, <name>" was the first thing on screen every single
   // time, and a line that says nothing you did not know is a line you stop
   // reading — which makes the one beside it, the purse, easier to miss too.
-  hudEl.append(readoutPlate(purse));
+  const hudButtons = document.createElement('div');
+  hudButtons.style.cssText = 'display: flex; align-items: center; pointer-events: auto;';
+  hudEl.append(readoutPlate(purse), hudButtons);
+
+  /** The same dialog the level has, minus the way out — there is nothing to
+   *  leave here.
+   *
+   *  The village had NO audio control at all: the mute button only ever existed
+   *  in a level, so the one screen you can sit on indefinitely was the one with
+   *  no way to turn the music down. The levels are the audio's, not the
+   *  scene's, so what is set here is what the next board opens with.
+   *
+   *  Paused the same way. Nothing in the village can kill you, but the hero
+   *  walking on behind an open dialog is the same wrongness in a smaller size —
+   *  and a settings panel that behaves differently in two places is two
+   *  settings panels. */
+  const settings = createSettings({
+    host: hudButtons,
+    music: { get: () => audio.musicLevel, set: (v) => audio.setMusicVolume(v) },
+    sfx: { get: () => audio.sfxLevel, set: (v) => audio.setSfxVolume(v) },
+    save: () => void patchSave(umicat,
+      { musicVolume: audio.musicLevel, sfxVolume: audio.sfxLevel }),
+    pause: (on) => { hubPaused = on; input.setEnabled(!on); },
+    leave: null,
+  });
+  /** Stopped by the settings dialog. */
+  let hubPaused = false;
 
   // There is no "NEW ·" banner any more. It announced the weapon the finished
   // level had handed over, and nothing is handed over now — what is waiting on
@@ -1234,6 +1261,14 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
 
+      // PAUSED by the settings dialog: draw the frame and stop. Nothing here
+      // can kill you, but a hero walking on behind an open panel is the same
+      // wrongness in a smaller size.
+      if (hubPaused) {
+        renderer.render(world.scene, world.camera);
+        return;
+      }
+
       const turn = input.look();
       if (turn.x || turn.y) world.orbit(turn.x, turn.y);
       const dir = input.direction(world.cameraYaw);
@@ -1635,6 +1670,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           wayfinder.dispose();
           seeThrough.dispose();
           pad?.dispose();
+          settings.dispose();
           panel.remove();
           card.remove();
           hudEl.textContent = '';

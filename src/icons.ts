@@ -34,7 +34,7 @@ export type IconName =
   | 'build' | 'jump' | 'shield' | 'upgrade' | 'sell'
   | 'house' | 'tower' | 'gate' | 'crate'
   | 'coin' | 'wood' | 'stone' | 'heart' | 'award'
-  | 'audioOn' | 'audioOff';
+  | 'audioOn' | 'audioOff' | 'settings';
 
 /** Two of these are PNG: the Game Icons pack ships its vectors as one sheet
  *  rather than a file per icon, and a mask reads the ALPHA channel — so a
