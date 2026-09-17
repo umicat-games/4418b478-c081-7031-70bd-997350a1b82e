@@ -26,6 +26,30 @@ to the host. Each half tears its own scene down before handing over.
 
 `boot()` in `src/main.ts` is that loop, and it is four lines. Read it first.
 
+## The controls, as they stand
+
+The game is played on two kinds of machine and they do not share a single
+control. Three sections below describe how this came to be; this table is what
+is TRUE, and `src/keycap.ts` is the one place in the code that decides it.
+
+| | touch | desktop |
+|---|---|---|
+| move | thumbstick (SDK) | `WASD` / arrows (SDK) |
+| place · upgrade · sell | the action button, held to sell | **`Space`**, held to sell — or the pad's button, `src/actionpad.ts` |
+| attack · cast | the attack button, held to aim | **left mouse button**, held to aim |
+| jump | the jump button (SDK) | **`Shift`** — Space is taken |
+| choose a tower | tap the hotbar | click the hotbar, or `1`–`4` |
+| settings · leave | the gear, top-left of the HUD | the same gear |
+
+`E`, `B` and `J` are still bound to what they always did. They are not named
+anywhere any more, because naming two keys for one thing is how a player ends up
+believing the one they tried is broken.
+
+**The SDK draws on-screen controls only where there is a touch screen** — zero
+round buttons on a desktop, five on a phone, measured. Every prompt that says
+"press the ⟨icon⟩ button" has to ask `keycap.ts` first, or it is describing a
+corner of the screen with nothing in it.
+
 ## Where things are
 
 | file | what |
@@ -1131,7 +1155,8 @@ standing still in exactly the case the option exists for.
 
   A `showX()` that only runs on click leaves its button EMPTY until the first
   press, which is exactly as visible as a button that does not work. The mute
-  button spent a build like that.
+  button spent a build like that. (It is the settings gear now — the lesson
+  outlived the button.)
 
   **An icon is an ELEMENT, so a string carrying one is HTML — and nothing types
   that.** `iconHtml(...)` into a `textContent` sink prints four hundred
@@ -2253,7 +2278,9 @@ Reported as **"I picked a weapon with the mouse and I cannot place it"**, and
 that is exactly what it looks like from the outside. Nothing was actually
 broken: `build` was bound to `KeyB`/`KeyE` and `attack` to `KeyJ` from the
 start, and the aiming drag has had a mouse path since it was written. The game
-simply never said so. **A capability nobody can find is not a capability** —
+simply never said so. (Those are the bindings AS THEY WERE — `Space` and the
+mouse came next, two sections down. The table at the top of this file is the
+current answer.) **A capability nobody can find is not a capability** —
 this cost nothing to fix and had been shipped for weeks.
 
 `src/keycap.ts` is the one place that decides which it is:
@@ -2261,21 +2288,28 @@ this cost nothing to fix and had been shipped for weeks.
 | helper | gives you |
 | --- | --- |
 | `touchLikely()` | coarse pointer and no fine one — the same question the SDK asks before it draws the controls |
-| `keyFor(glyph)` | the key that does what the button with that glyph does, or `null` on a touch screen |
-| `pressGlyph(glyph)` | the icon, or a key cap — for `⟨icon⟩ Ballista · 25g` |
-| `pressName(glyph)` | *"the ⟨icon⟩ button on the right"* or *"the **E** key"* — for sentences |
+| `pressFor(glyph)` | `{button}` · `{key}` · `{click}` — the three things an action can be performed with |
+| `keyFor(glyph)` | the key, or `null` when it is not a key at all |
+| `pressGlyph(glyph)` | the icon, a key cap, or `Click` — for `⟨press⟩ Ballista · 25g` |
+| `pressName(glyph)` | *"the ⟨icon⟩ button on the right"* · *"the **Space** key"* · *"the left mouse button"* |
 | `dragThing()` | `slide your finger` / `move the mouse` |
 | `tapWord()` | `Tap` / `Click` |
+| `PLACE_KEY` · `JUMP_KEY` | `Space` and `ShiftLeft`, so the binding and the prompt cannot drift |
 
 Keyed by **glyph**, not by action id, because that is what the prompts have in
 hand — and because the one button changes glyph as you hold it (build → upgrade
-→ sell) while staying the same key. The table in `keyFor` has to stay in step
-with the `keys` of the `actions` each scene declares to the SDK.
+→ sell) while staying the same control. The table in `pressFor` has to stay in
+step with the `keys` of the `actions` each scene declares to the SDK.
+
+**Three states, not two.** It was `key | button` at first, which forced every
+weapon on a desktop to be described as a key — and the key it named (`J`) is one
+nobody should be told to use while their left hand is on WASD. A mouse click is
+not a key cap and does not read as one.
 
 The village bound its `use` action to `KeyJ` only, while the level used `E`/`B`
-for the same act-on-what-you-are-standing-on. A prompt that names `E` in one
-place and not the other is worse than naming neither, so the village now binds
-`KeyE`, `KeyB` and `KeyJ`.
+for the same act-on-what-you-are-standing-on. A prompt that names a key in one
+place and not the other is worse than naming neither, so both scenes now bind
+the same set — `Space`, `E`, `B` and `J`.
 
 The scripted tutorial goes through `pressName` too. Its scrim needs no special
 case: `ringActionButton` finds nothing on a desktop and returns `null`, and
