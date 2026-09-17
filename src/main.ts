@@ -13,7 +13,7 @@ import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { showTitle } from './title';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordWave, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
@@ -37,6 +37,12 @@ import {
   type Weapon, type WeaponLevels,
 } from './weapons';
 import { NO_BONUS, TOWN, ARMOUR_PER_LEVEL, type TownBonus } from './town';
+import {
+  RUN_TIERS, MAX_RUN_TIER, nextTierCost, tierLabel,
+  meleeReach, meleeBonusDamage, crescent,
+  arrowLife, arrowShots, arrowShare, ARROW_SPREAD,
+  burstRadiusBonus, burstCooldownScale, burstBonusDamage,
+} from './runtiers';
 import {
   NO_MATERIALS, rollDrop, xpFromRun, applyXp, xpToNext,
   attackMultiplier, damageTakenMultiplier, MATERIAL_ICON,
@@ -1656,14 +1662,25 @@ export async function startLevel(
   // game has already been burned by.
   /** An arrow the HERO fired. Flies straight and hits the first thing it
    *  crosses — same swept test as an enemy bullet, for the same reason. */
-  interface Arrow { obj: THREE.Object3D; vel: THREE.Vector3; life: number; }
+  interface Arrow {
+    obj: THREE.Object3D; vel: THREE.Vector3; life: number;
+    /** What fraction of a hit this arrow carries. A spread splits the shot
+     *  rather than multiplying it — see `arrowShare`. Captured when it is
+     *  loosed, because the tier can change while it is still in the air. */
+    share: number;
+  }
   const arrows: Arrow[] = [];
   const ARROW_SPEED = 11;
   /** What the held weapon hits for at its level, plus what the Range bought.
    *  A function, not a constant: the weapon is chosen before the level starts
    *  but the Range bonus and the weapon table both want to be read in one
    *  place, and a constant computed above `setWeapon` would be the wrong one. */
-  const weaponHit = (): number => weaponDamage(weapon, weaponLevel) + bonus.heroDamage;
+  /** What this weapon has learned THIS RUN. Zero at the door, gone at the end:
+   *  nothing here is written to the save. */
+  let runTier = 0;
+  const weaponHit = (): number => weaponDamage(weapon, weaponLevel) + bonus.heroDamage
+    + (kind.cast === 'melee' ? meleeBonusDamage(runTier)
+      : kind.cast === 'burst' ? burstBonusDamage(runTier) : 0);
   const ARROW_LIFE = 1.6;
   const ARROW_HIT = 0.42;
   /** How far the bow finds a target on its own. Auto-aim, because picking a
@@ -1673,7 +1690,7 @@ export async function startLevel(
   const BOW_RANGE = 4.6;
   /** The staff hits everything around you at once, so it is on a real
    *  cooldown rather than just the animation's length. */
-  const burstRadius = (): number => kind.radius ?? 2.6;
+  const burstRadius = (): number => (kind.radius ?? 2.6) + burstRadiusBonus(runTier);
   /** Drag to place a spell. Built here, where the hero, the camera and the
    *  cast all are; it owns only the gesture and the two rings. */
   const aim = createAim({
@@ -1983,7 +2000,8 @@ export async function startLevel(
   const CELL_MAX = 62;
   const CELL_GAP = 6;
   const EDGE = 8;
-  const barCells = (): number => KINDS.length;
+  /** The towers, plus the weapon's own cell at the end. */
+  const barCells = (): number => KINDS.length + 1;
   const barWidth = (cell: number): number =>
     barCells() * cell + (barCells() - 1) * CELL_GAP;
 
@@ -2102,6 +2120,78 @@ export async function startLevel(
     return cell;
   });
 
+  /** The weapon's own cell, at the end of the hotbar.
+   *
+   *  The row is already "things you buy with this run's gold, with the price on
+   *  the cell" — so the weapon joins it rather than inventing a place to be
+   *  upgraded from. Tapping a tower cell CHOOSES; tapping this one SPENDS, and
+   *  it is told apart by being the weapon rather than a tower, by its price
+   *  being the only thing that changes, and by the pips above it.
+   *
+   *  It replaces the desktop-only readout that used to sit in the action pad:
+   *  one weapon cell, in the same place on both machines, with the recharge
+   *  drawn on it.
+   *
+   *  The walk is missing, and that is known. Upgrading a TOWER costs gold and
+   *  POSITION — you have to be standing on it — and this costs gold alone, from
+   *  wherever you are. The price carries the whole of that difference, which is
+   *  why a tier is several towers' worth.
+   */
+  const weaponCell = document.createElement('button');
+  weaponCell.dataset.weaponCell = '';
+  weaponCell.style.cssText = `
+    width: ${CELL_MAX}px; padding: 6px 3px 5px; border-radius: 12px;
+    border: 2px dashed rgba(255,255,255,.22); pointer-events: auto;
+    background: rgba(0,0,0,.42); color: #fff; font: inherit; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    -webkit-tap-highlight-color: transparent; position: relative;
+  `;
+  hotbar.appendChild(weaponCell);
+
+  const drawWeaponCell = (): void => {
+    const cast = kind.cast;
+    const cost = nextTierCost(cast, runTier);
+    weaponCell.textContent = '';
+    const g = icon(weapon as IconName, '52%');
+    g.style.aspectRatio = '1';
+    weaponCell.append(g);
+    // What it has learned, as pips. A number would be a level competing with
+    // the weapon's OWN level from the Armory, and they are different things.
+    const pips = document.createElement('div');
+    pips.style.cssText = 'display:flex; gap:3px; height:4px; align-items:center;';
+    for (let i = 0; i < MAX_RUN_TIER; i++) {
+      const d = document.createElement('div');
+      d.style.cssText = `width:4px; height:4px; border-radius:2px;`
+        + `background:${i < runTier ? '#8fe3ff' : 'rgba(255,255,255,.26)'};`;
+      pips.append(d);
+    }
+    weaponCell.append(pips);
+    const price = document.createElement('span');
+    price.style.cssText = 'opacity:.85; font: 600 12px/1.25 system-ui;';
+    price.textContent = cost === null ? 'max' : `${cost}g`;
+    weaponCell.append(price);
+    weaponCell.style.opacity = cost !== null && gold < cost ? '0.45' : '1';
+    weaponCell.style.cursor = cost === null ? 'default' : 'pointer';
+    weaponCell.title = cost === null
+      ? 'Nothing left to learn this run'
+      : RUN_TIERS[cast][runTier].label;
+  };
+
+  weaponCell.onclick = () => {
+    // The script locks the bar on its last step; the weapon is part of the bar.
+    if (!running || onlyKind !== null) { audio.play('denied'); return; }
+    const cost = nextTierCost(kind.cast, runTier);
+    if (cost === null || gold < cost) { audio.play('denied'); return; }
+    gold -= cost;
+    runTier += 1;
+    const label = tierLabel(kind.cast, runTier);
+    if (label) flashBanner(label, 'upgrade');
+    audio.play('upgrade');
+    drawWeaponCell();
+    refreshHotbar();
+    renderHud();
+  };
+
   /** The controls a desktop has to be given, because the SDK draws none.
    *
    *  A place button (click it, or hold it to sell) and a weapon readout with
@@ -2113,11 +2203,8 @@ export async function startLevel(
     // sell ring all mean here exactly what they mean for the key and the thumb.
     press: () => input.press(PLACE_KEY),
     release: () => input.release(PLACE_KEY),
-    withWeapon: true,
-    weaponKey: 'Click',
   });
-  const drawWeaponChip = (): void => pad?.setWeapon(weapon as IconName);
-  drawWeaponChip();
+  const drawWeaponChip = (): void => drawWeaponCell();
 
   // Photograph each tower once, now that the models are loaded.
   //
@@ -2156,6 +2243,7 @@ export async function startLevel(
   }
 
   function refreshHotbar(): void {
+    drawWeaponCell();
     cells.forEach((cell, i) => {
       const affordable = gold >= KINDS[i].cost;
       cell.style.borderColor = i === selected ? '#ffd54a' : 'transparent';
@@ -3088,7 +3176,7 @@ export async function startLevel(
 
     if (kind.cast === 'burst') {
       if (staffCooldown > 0) return;
-      staffCooldown = kind.cooldown ?? 1.7;
+      staffCooldown = (kind.cooldown ?? 1.7) * burstCooldownScale(runTier);
       animator.play('interact');
       // Each staff's own sound, and the generic one only if a weapon has not
       // been given one yet.
@@ -3175,24 +3263,34 @@ export async function startLevel(
     if (kind.cast === 'arrow') {
       animator.play('holdBothShoot');
       audio.play('enemy-shot');
-      const arrow = spawnFrom('td-ammo-arrow');
       // Towards the lock if there is one, otherwise straight ahead. Auto-aim
       // is what makes a bow usable with a thumb; the fallback keeps it from
       // being a button that does nothing when the board is empty.
-      let dirX = Math.sin(hero.rotation.y), dirZ = Math.cos(hero.rotation.y);
+      let aimX = Math.sin(hero.rotation.y), aimZ = Math.cos(hero.rotation.y);
       if (lockTarget?.alive) {
         const dx = lockTarget.obj.position.x - hero.position.x;
         const dz = lockTarget.obj.position.z - hero.position.z;
         const len = Math.hypot(dx, dz) || 1;
-        dirX = dx / len; dirZ = dz / len;
-        hero.rotation.y = Math.atan2(dirX, dirZ);
+        aimX = dx / len; aimZ = dz / len;
+        hero.rotation.y = Math.atan2(aimX, aimZ);
       }
-      arrow.position.set(hero.position.x + dirX * 0.3, hero.position.y + 0.34, hero.position.z + dirZ * 0.3);
-      arrow.lookAt(arrow.position.x + dirX, arrow.position.y, arrow.position.z + dirZ);
-      arrows.push({
-        obj: arrow, life: ARROW_LIFE,
-        vel: new THREE.Vector3(dirX * ARROW_SPEED, 0, dirZ * ARROW_SPEED),
-      });
+      // One arrow, then a spread. The middle of an odd spread flies straight,
+      // so the bow never stops being able to hit the thing you are looking at.
+      const shots = arrowShots(runTier);
+      const base = Math.atan2(aimX, aimZ);
+      const share = arrowShare(runTier);
+      for (let i = 0; i < shots; i++) {
+        const off = (i - (shots - 1) / 2) * ARROW_SPREAD;
+        const a = base + off;
+        const dirX = Math.sin(a), dirZ = Math.cos(a);
+        const arrow = spawnFrom('td-ammo-arrow');
+        arrow.position.set(hero.position.x + dirX * 0.3, hero.position.y + 0.34, hero.position.z + dirZ * 0.3);
+        arrow.lookAt(arrow.position.x + dirX, arrow.position.y, arrow.position.z + dirZ);
+        arrows.push({
+          obj: arrow, life: arrowLife(ARROW_LIFE, runTier), share,
+          vel: new THREE.Vector3(dirX * ARROW_SPEED, 0, dirZ * ARROW_SPEED),
+        });
+      }
       return;
     }
 
@@ -3200,16 +3298,40 @@ export async function startLevel(
     swing = SWING_SECONDS;
     audio.play('swing');
     let connected = false;
+    const reach = meleeReach(HERO_ATTACK_RANGE, runTier);
     for (const e of enemies) {
       if (!e.alive) continue;
       const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
-      if (d > HERO_ATTACK_RANGE) continue;
+      if (d > reach) continue;
       connected = true;
       damage(e, withBuff(weaponHit()));
     }
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
-    if (hitCrates(hero.position.x, hero.position.z, HERO_ATTACK_RANGE, 1)) connected = true;
+    if (hitCrates(hero.position.x, hero.position.z, reach, 1)) connected = true;
+    // The sword wave. A CRESCENT in front of the hero rather than a beam down
+    // the lane: it is bought with the gold a tower would have cost, and a sword
+    // that clears a lane from where you stand is a sword that makes the towers
+    // scenery. Anything already hit by the swing is not hit twice.
+    const wave = crescent(runTier);
+    if (wave) {
+      const fx = Math.sin(hero.rotation.y), fz = Math.cos(hero.rotation.y);
+      swordWave(vfx, hero.position, hero.rotation.y, wave.reach, wave.halfWidth);
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const dx = e.obj.position.x - hero.position.x;
+        const dz = e.obj.position.z - hero.position.z;
+        const along = dx * fx + dz * fz;
+        if (along <= 0 || along > wave.reach) continue;
+        // Across the line of the swing, widening with distance — a crescent,
+        // not a corridor.
+        const across = Math.abs(dx * fz - dz * fx);
+        if (across > wave.halfWidth * (0.5 + along / wave.reach)) continue;
+        if (along <= reach && across <= reach) continue;   // the swing had it
+        connected = true;
+        damage(e, withBuff(weaponHit()) * 0.7);
+      }
+    }
     if (connected) { heroHits += 1; audio.play('sword-hit'); }
   };
 
@@ -3458,7 +3580,7 @@ export async function startLevel(
       aim.update(pointerNdc, input.held('attack'));
       // Only the staffs wait; a sword has nothing to show.
       // The button where there is one, the chip where there is not.
-      dial.show(aimsByDrag() ? (attackButton() ?? pad?.weapon ?? null) : null,
+      dial.show(aimsByDrag() ? (attackButton() ?? weaponCell) : null,
                 aimsByDrag() ? staffCooldown / (kind.cooldown ?? 1.7) : 0);
       readBuildButton();
       if (invincible > 0) invincible -= dt;
@@ -3877,7 +3999,7 @@ export async function startLevel(
           if (!segmentHitsSphere(prevPos, a.obj.position, e.obj.position, ARROW_HIT)) continue;
           hit = e; break;
         }
-        if (hit) damage(hit, withBuff(weaponHit()));
+        if (hit) damage(hit, withBuff(weaponHit()) * a.share);
         const brokeCrate = !hit && hitCrates(a.obj.position.x, a.obj.position.z, ARROW_HIT, 1);
         if (hit || brokeCrate || a.life <= 0 || Math.abs(a.obj.position.x) > 7 || Math.abs(a.obj.position.z) > 7) {
           world.scene.remove(a.obj);
@@ -4048,6 +4170,16 @@ export async function startLevel(
        *  standing. A probe cannot see a circle; it can see where the circle
        *  says it is. */
       casts: () => casts,
+      /** What the weapon has learned this run, and what the next step costs.
+       *  `buyTier` goes through the CELL, not past it — a probe that called an
+       *  internal would pass on a button nobody can press. */
+      runTier: () => ({ tier: runTier, next: nextTierCost(kind.cast, runTier),
+                        cast: kind.cast, reach: meleeReach(HERO_ATTACK_RANGE, runTier),
+                        arrows: arrowShots(runTier), radius: burstRadius(),
+                        cooldown: (kind.cooldown ?? 1.7) * burstCooldownScale(runTier),
+                        crescent: crescent(runTier) }),
+      buyTier: () => weaponCell.click(),
+      arrowsInFlight: () => arrows.length,
       /** What the settings dialog has actually done to the mix. A slider that
        *  moves a number on screen and nothing else looks identical to one that
        *  works. */
@@ -4139,6 +4271,10 @@ export async function startLevel(
       gold, lives, heroHp, heroMax: heroMaxHp, waveIndex, waveCount: WAVES.length, running, won,
       buildCell, selected, maxTowers, maxLevel: MAX_LEVEL, armour,
       tookDamage, tookHits,
+      // On `state()` rather than only on its own handle, so the balance bot can
+      // read it in the poll it already makes. An extra round-trip per decision
+      // starves that bot, and a starved bot reports a hard board.
+      runTier: { tier: runTier, next: nextTierCost(kind.cast, runTier) },
       routes: ROUTES.length,
       /** Where each branch ends. The tiles get merged into one mesh for the
        *  sake of the phone's frame rate, so this is the only thing left that

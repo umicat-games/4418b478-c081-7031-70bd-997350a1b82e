@@ -810,3 +810,62 @@ export function lightning(
     },
   });
 }
+
+/**
+ * The sword wave — a crescent thrown by the swing, from run tier 2.
+ *
+ * Drawn as a row of `ground` quads laid across the arc rather than one stretched
+ * sprite: the atlas has no crescent, and a single quad scaled wide reads as a
+ * rectangle of light. Laid on the FLOOR because that is where the swing is
+ * aimed and where the enemies stand, and the burst's own lesson applies — a
+ * ground effect cast at head height is one nobody sees.
+ *
+ * It travels: the arc slides out to `reach` over its short life, so the thing
+ * that does the damage and the thing on screen are going the same way. The
+ * damage itself is applied once, on the frame it is thrown — a wave that dealt
+ * damage as it travelled would be a second projectile system.
+ */
+export function swordWave(
+  vfx: Vfx,
+  from: THREE.Vector3,
+  yaw: number,
+  reach: number,
+  halfWidth: number,
+): void {
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  // Across the direction of the swing.
+  const rx = fz, rz = -fx;
+  const n = 7;
+  const list: Quad[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / (n - 1)) * 2 - 1;            // -1..1 across the arc
+    const w = halfWidth * 1.9 * t;
+    // Bowed forward at the middle, so the row reads as a crescent.
+    const bow = (1 - t * t) * 0.45;
+    list.push({
+      at: new THREE.Vector3(
+        from.x + rx * w + fx * bow,
+        0.06,
+        from.z + rz * w + fz * bow,
+      ),
+      frame: FRAME.strandA,
+      w: 0.62, h: 0.62,
+      mode: 'ground',
+      roll: yaw + Math.PI / 2,
+    });
+  }
+  const start = list.map((q) => q.at.clone());
+  quads(vfx, list, {
+    life: 0.26,
+    color: 0xcfe9ff,
+    step: (l, k) => {
+      const d = k * reach;
+      for (let i = 0; i < l.length; i++) {
+        l[i].at.set(start[i].x + fx * d, 0.06, start[i].z + fz * d);
+        l[i].w = 0.62 + k * 0.35;
+        l[i].h = 0.62 + k * 0.35;
+      }
+    },
+    alpha: (k) => Math.min(1, (1 - k) * 1.6),
+  });
+}

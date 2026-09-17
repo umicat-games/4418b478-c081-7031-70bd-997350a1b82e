@@ -66,6 +66,7 @@ corner of the screen with nothing in it.
 | `src/keycap.ts` | what a control is called on THIS machine — button, key or click |
 | `src/actionpad.ts` | the place button and weapon readout a desktop has no SDK buttons for |
 | `src/settings.ts` | the settings dialog, the two volumes, and the way out |
+| `src/runtiers.ts` | what a weapon learns during ONE run, and what each step costs |
 | `src/wordmark.ts` | the game's name as a picture, shared by the title and the loader |
 | `src/config.ts` | the design size the renderer is set up against |
 | `src/hub.ts` | the hub: the weapon rack, the town plots, the door |
@@ -491,6 +492,89 @@ are near something to use it on, so the same crate is a different offer in a
 quiet moment and in a busy one. It never rerolls into the effect already
 running. `withBuff()` is the one place damage passes through, because a buff
 that reaches three weapons of four looks broken to whoever notices.
+
+## A weapon learns things during a run, and forgets them at the door
+
+`src/runtiers.ts`. The village decides how HARD you hit — the Armory's weapon
+level and the Range's flat bonus, both permanent. A RUN decides what the weapon
+DOES: a sword that throws a crescent, a bow that fires a spread, a staff that
+reaches further and waits less. Walk out of the board and it is gone; nothing
+here is written to the save.
+
+| shape | tier 1 | tier 2 | tier 3 |
+| --- | --- | --- | --- |
+| melee | longer, harder swing | **sword wave** — a crescent thrown in front | wider wave, and it bites deeper |
+| arrow | carries further | two arrows, spread | three arrows |
+| burst | wider blast | shorter wait between casts | heavier blast, wider still |
+
+**Two systems, two axes, on purpose.** If a run could also buy raw damage the
+towers would be competing with the hero on the one thing they are for — and the
+towers cannot move, so they would lose. The tiers are mostly SHAPE and REACH,
+with damage as a small rider.
+
+**A spread SPLITS the shot** (0.65 each at two arrows, 0.55 at three) rather
+than multiplying it. Multishot scales with how many enemies there are, which is
+precisely the axis the towers own; a spread at full damage per arrow would take
+that axis off them.
+
+**The crescent is a crescent, not a beam.** It widens with distance and reaches
+3.4 at most. A sword that clears a lane from where you stand is a sword that
+makes the towers scenery.
+
+### It is bought from a cell in the hotbar
+
+That row is already "things you buy with this run's gold, with the price on the
+cell", so the weapon joins it rather than inventing a place. Tapping a tower
+cell CHOOSES and tapping this one SPENDS — told apart by being the weapon rather
+than a tower, by the pips, and by the price being the only thing that changes.
+
+It replaced the desktop-only weapon readout that used to sit in the action pad:
+**one weapon cell, in the same place on both machines**, with the recharge drawn
+on it. That readout was a platform divergence with nothing behind it.
+
+**The walk is missing, and that is known.** Upgrading a TOWER costs gold and
+POSITION — you have to be standing on it — and this costs gold alone, from
+wherever you are. The price carries the whole of that difference.
+
+There is **one `runTier` for the run**, not one per weapon, because a run carries
+one weapon. The sandbox's weapon-cycle key carries the tier across, which is a
+sandbox convenience rather than a rule.
+
+### What the bot could say about it, and what it could not
+
+Getting the balance bot to buy tiers took three attempts, and each failure is
+worth keeping:
+
+- **The bot spends on a 25g tower the moment it can, so the purse never
+  accumulates.** The first version checked the weapon last and bought ZERO tiers
+  across a whole run while reporting the flag was on. It buys first now.
+- **An extra `p.evaluate` in that loop starves it.** The bot acts in wall-clock
+  while the game runs on real elapsed time, and one more round-trip per decision
+  cost a run nine of its ten upgrades — the starved-bot signature, produced by
+  the instrument. `runTier` rides on `state()`, which the loop already reads.
+- **A prudent gate is a gate that never fires.** "Buy when you have the price
+  plus fifty spare" never triggered in a whole run on either board, and a flag
+  that cannot fire reports "this feature changes nothing".
+
+What the runs then said, one each and inside a spread that is wider than most of
+what is being measured:
+
+| build | result |
+| --- | --- |
+| towers only (baseline) | wave 7/8, base fell, 10 upgrades |
+| weapon BEFORE any defence | **wave 2/8**, one tower up |
+| defence first, then weapon | wave 5/8, 10 towers, 1 tier |
+
+**The towers are not optional** — buying a tier before building loses the board
+outright. And the first tier started at 60 and was moved to **35**, between a
+ballista at 25 and a cannon at 45, because a defence-first bot never once
+reached 60 spare on a board that pays 550: a feature nobody can afford on the
+board that teaches the game is a feature most players never meet.
+
+What none of this says is whether a tier is WORTH buying, which is a question
+about playing rather than about arithmetic. `verify-3d-runtiers` checks that the
+machinery does what it claims; the prices are still a guess with one run behind
+each of them.
 
 ## Progression
 
