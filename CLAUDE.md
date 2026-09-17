@@ -1203,13 +1203,20 @@ version eased with `sin(cut·π)`, which is only fully on at the exact middle an
 left the tip moving 0.26 vertically. Full hold across the body, easing over the
 first and last tenth so the sword does not jump in the hand.
 
-**And the body turns into the cut.** There is no slash in the rig to switch to —
-`attack-melee-left` is the same chop with the other arm — and a person swinging
-a sword turns their shoulders through it. A yaw offset that sweeps with the
-blade is the cheapest possible version of that and it is most of what the eye
-reads as "he swung". Applied BEFORE the blade is aimed, because `aimBlade` works
-in world space and converts back through the parent: the blade lands where it
-was asked whatever the body underneath it is doing.
+**The body does NOT turn, and the attempt is worth keeping as a warning.** There
+is no slash in the rig to switch to — `attack-melee-left` is the same chop with
+the other arm — so a yaw offset sweeping with the blade went in to stand for the
+shoulder turn. It made the hero SPIN. Reported as "he turns a full circle every
+attack", and that was literal rather than a matter of taste: `yaw` is read from
+`hero.rotation.y` at the top of the swing block and the twist was written back
+into it, so every frame twisted the already-twisted facing. **Measured at 1.45
+radians of net turn out of one swing** — a quarter turn each time you attack.
+
+A non-accumulating version would need a separate base to twist from, and it is
+not worth it: the blade is level, centred on the hero and sweeping side to side
+on its own, which is the arc that was asked for. `verify-3d-action` swings four
+times and checks the hero is still facing the way he was — one frame of drift is
+invisible and four swings are a spin.
 
 **Parallel to the ground, centred on the body, left to right.** That is the
 whole specification, and each clause fixed something:

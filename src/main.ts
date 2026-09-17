@@ -176,10 +176,6 @@ const SWING_ARC = 1.35;
 /** How high above the hero's own origin the hilt is held through a cut. Chest
  *  height on a 0.72 hero — a cut at head height reads as a parry. */
 const SWING_HEIGHT = 0.42;
-/** How far the body turns into the cut, each way. About twenty degrees: enough
- *  to read as a shoulder turn, short of looking like the hero changed his
- *  mind about which way he was facing. */
-const SWING_TWIST = 0.36;
 /** How far the hilt sits from the hero's own centre during a cut. The arc is
  *  centred on the BODY, so this is the radius the hand travels on. */
 const SWING_GRIP = 0.16;
@@ -4127,19 +4123,19 @@ export async function startLevel(
         // forehand a right hand would actually throw — and this is the arc that
         // was asked for. One sign, if it ever wants to be a forehand again.
         const a = -SWING_ARC + 2 * SWING_ARC * e;
-        // THE BODY TURNS INTO THE CUT.
+        // THE BODY DOES NOT TURN, and the reason is worth keeping.
         //
-        // The rig has no slash — `attack-melee-right` is a chop, and
-        // `attack-melee-left` is the same chop with the other arm, so there is
-        // no clip to switch to. Levelling the blade stopped it reading as a
-        // tap; what was still missing is that a person swinging a sword turns
-        // their shoulders through it. A yaw offset that sweeps with the blade
-        // is the cheapest possible version of that, and it is most of what the
-        // eye reads as "he swung".
+        // A yaw offset sweeping with the blade was added here to stand in for
+        // the shoulder turn the rig has no clip for. It read as the hero
+        // SPINNING — reported as "he turns a full circle every attack", and
+        // that was literal rather than a matter of taste: `yaw` is read from
+        // `hero.rotation.y` at the top of this block and the twist was written
+        // back into it, so every frame twisted the already-twisted facing.
+        // Measured at 1.45 radians of net turn out of ONE swing.
         //
-        // Applied BEFORE the blade is aimed. `aimBlade` works in world space
-        // and converts back through the parent, so the blade lands where it was
-        // asked for whatever the body underneath it is doing.
+        // A non-accumulating version would need a separate base to twist from.
+        // It is not worth it: the blade is level, centred on the hero and
+        // sweeping side to side on its own, which is the arc that was asked for.
         const ca = Math.cos(a), sa = Math.sin(a);
         // PARALLEL TO THE GROUND. It used to dip — `-0.1 - 0.25 * e` — on the
         // theory that a finishing cut drops, and what that actually did was
@@ -4155,7 +4151,6 @@ export async function startLevel(
           _rest.set(fx * 0.22, 1, fz * 0.22).normalize();
           _dir.lerp(_rest, back * back * (3 - 2 * back)).normalize();
         }
-        hero.rotation.y = yaw - SWING_TWIST + 2 * SWING_TWIST * e;
         aimBlade(_dir, _edge);
         levelBlade(k, _dir.x, _dir.z);
         if (swing === 0) restSword();
