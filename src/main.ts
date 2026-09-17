@@ -180,6 +180,9 @@ const SWING_HEIGHT = 0.42;
  *  to read as a shoulder turn, short of looking like the hero changed his
  *  mind about which way he was facing. */
 const SWING_TWIST = 0.36;
+/** How far the hilt sits from the hero's own centre during a cut. The arc is
+ *  centred on the BODY, so this is the radius the hand travels on. */
+const SWING_GRIP = 0.16;
 /** How much of the swing is the CUT; the rest is the blade coming back to the
  *  carry. */
 const SWING_CUT = 0.62;
@@ -669,9 +672,7 @@ export async function startLevel(
   let swordPivot: THREE.Object3D | null = null;
   /** The pivot's local position as the socket left it. */
   const swordBase = new THREE.Vector3();
-  const _grip = new THREE.Vector3();
-  const _lift = new THREE.Vector3();
-  const _invQ = new THREE.Quaternion();
+  const _want = new THREE.Vector3();
   /** Seconds left in the current swing; 0 is at rest. */
   let swing = 0;
   let bow: THREE.Object3D | null = null;
@@ -795,7 +796,7 @@ export async function startLevel(
    *
    *  Eased in and out across the cut, because a hilt that snaps to a fixed
    *  height on the first frame of the swing is a sword that jumps in the hand. */
-  const levelBlade = (k: number): void => {
+  const levelBlade = (k: number, dx: number, dz: number): void => {
     if (!swordPivot?.parent) return;
     const cut = Math.min(1, k / SWING_CUT);
     // A PLATEAU, not a bell. `sin(cut * PI)` eased off everywhere except the
@@ -810,12 +811,24 @@ export async function startLevel(
     swordPivot.position.copy(swordBase);
     swordPivot.parent.updateMatrixWorld(true);
     swordPivot.updateMatrixWorld(true);
-    _grip.setFromMatrixPosition(swordPivot.matrixWorld);
-    const want = hero.position.y + SWING_HEIGHT;
-    _lift.set(0, (want - _grip.y) * hold, 0);
-    swordPivot.parent.getWorldQuaternion(_invQ).invert();
-    _lift.applyQuaternion(_invQ);
-    swordPivot.position.add(_lift);
+    // Where the hilt WANTS to be: on a circle around the hero's own centre, at
+    // one height, in the direction the blade is pointing. The pivot hangs off
+    // the hand, so left to itself the arc is centred on the HAND — a hand's
+    // width off to the right, rising and falling with the chop. Measured before
+    // this: the tip ran from +0.17 to −0.65 rather than either side of zero,
+    // which is a lopsided arc around the wrong point.
+    _want.set(
+      hero.position.x + dx * SWING_GRIP,
+      hero.position.y + SWING_HEIGHT,
+      hero.position.z + dz * SWING_GRIP,
+    );
+    // `worldToLocal`, not a rotated delta. The hero is imported at 0.35 scale
+    // and every bone carries it, so rotating a world-space offset into the
+    // bone's frame moves about a third as far as it should — the hilt came out
+    // drifting between 0.37 and 0.21 instead of sitting at 0.42. A full inverse
+    // matrix has the scale in it.
+    swordPivot.parent.worldToLocal(_want);
+    swordPivot.position.lerp(_want, hold);
     swordPivot.updateMatrixWorld(true);
   };
 
@@ -4110,7 +4123,10 @@ export async function startLevel(
         // third done.
         const cut = Math.min(1, k / SWING_CUT);
         const e = cut * cut * (3 - 2 * cut);
-        const a = SWING_ARC - 2 * SWING_ARC * e;         // right to left
+        // LEFT to RIGHT, and level. It swept right-to-left before — the
+        // forehand a right hand would actually throw — and this is the arc that
+        // was asked for. One sign, if it ever wants to be a forehand again.
+        const a = -SWING_ARC + 2 * SWING_ARC * e;
         // THE BODY TURNS INTO THE CUT.
         //
         // The rig has no slash — `attack-melee-right` is a chop, and
@@ -4125,9 +4141,11 @@ export async function startLevel(
         // and converts back through the parent, so the blade lands where it was
         // asked for whatever the body underneath it is doing.
         const ca = Math.cos(a), sa = Math.sin(a);
-        // Level, dipping slightly as it finishes — a flat arc at chest height
-        // is what "it cut at the thing" looks like from this camera.
-        _dir.set(fx * ca + rx * sa, -0.1 - 0.25 * e, fz * ca + rz * sa).normalize();
+        // PARALLEL TO THE GROUND. It used to dip — `-0.1 - 0.25 * e` — on the
+        // theory that a finishing cut drops, and what that actually did was
+        // take the one thing a level arc has going for it, which is that it is
+        // level. Zero.
+        _dir.set(fx * ca + rx * sa, 0, fz * ca + rz * sa).normalize();
         // The tip's direction of travel, which is where the edge should face.
         _edge.set(fx * sa - rx * ca, 0, fz * sa - rz * ca);
         if (k > SWING_CUT) {
@@ -4137,9 +4155,9 @@ export async function startLevel(
           _rest.set(fx * 0.22, 1, fz * 0.22).normalize();
           _dir.lerp(_rest, back * back * (3 - 2 * back)).normalize();
         }
-        hero.rotation.y = yaw + SWING_TWIST - 2 * SWING_TWIST * e;
+        hero.rotation.y = yaw - SWING_TWIST + 2 * SWING_TWIST * e;
         aimBlade(_dir, _edge);
-        levelBlade(k);
+        levelBlade(k, _dir.x, _dir.z);
         if (swing === 0) restSword();
       } else {
         restSword();

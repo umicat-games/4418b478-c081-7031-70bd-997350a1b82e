@@ -1211,10 +1211,29 @@ reads as "he swung". Applied BEFORE the blade is aimed, because `aimBlade` works
 in world space and converts back through the parent: the blade lands where it
 was asked whatever the body underneath it is doing.
 
-After both: **0.76 sideways against 0.09 vertical**, with the hilt holding to
-within 0.03. `verify-3d-action` asks for sideways to beat vertical by 2.5x,
-which is the difference between a slash and a chop stated as a number rather
-than as an opinion about a screenshot.
+**Parallel to the ground, centred on the body, left to right.** That is the
+whole specification, and each clause fixed something:
+
+- The blade **dipped** as it finished — `-0.1 - 0.25 * e`, on the theory that a
+  finishing cut drops. It took away the one thing a level arc has going for it.
+  Zero now.
+- The arc was centred on the **HAND**, which is a hand's width to the right of
+  the hero and rises and falls with the chop: the tip ran +0.17 to −0.65 rather
+  than either side of zero. `levelBlade` places the hilt on a circle around the
+  hero's own centre instead — `SWING_GRIP` is that radius.
+- It swept **right to left**, the forehand a right hand would actually throw.
+  One sign, if it ever wants to be a forehand again.
+
+**`worldToLocal`, not a rotated delta.** The hero is imported at `importScale:
+0.35` and every bone carries it, so rotating a world-space offset into the
+bone's frame moves about a third as far as it should — the hilt came out
+drifting between 0.37 and 0.21 instead of sitting still. A full inverse matrix
+has the scale in it; a quaternion does not.
+
+Measured after all of it: **1.09 sideways against 0.00 vertical**, hilt moving
+0.02 across and 0.00 up, sweeping −0.60 → +0.49. `verify-3d-action` asks for all
+four — dominance, level, centred, and side to side — because "it looks like a
+swing" is an opinion about a screenshot and these are not.
 
 Three things that matter, all of them learned the hard way:
 
