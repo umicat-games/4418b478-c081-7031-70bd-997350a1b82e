@@ -2361,3 +2361,69 @@ carry no text at all, so the lookup found nothing and the check had been red
 against a control that no longer exists. It asserts on the button and its glyph
 now. Third stale probe this week — **a probe is a claim about the system, and it
 rots the same way a comment does.**
+
+### Space places. The left hand never leaves WASD
+
+`E` was a perfectly good key and the wrong one. The hero is **walking while you
+decide where a tower goes**, so the left hand is on WASD the whole time and the
+thumb is the only finger free. `E` and `J` both ask that hand to let go of the
+keys it is steering with. The player's word for it was *反人类*, and that is the
+right word.
+
+So: **Space places, upgrades and sells** — `PLACE_KEY` in `src/keycap.ts`, bound
+in both scenes. `E`, `B` and `J` stay bound; a key that used to work and
+silently stopped is a worse surprise than an extra one nobody presses.
+
+**Attacking is the mouse.** Left click swings and casts, holding it aims. There
+is no attack key worth advertising on a machine that has a mouse in the other
+hand, so `pressFor` returns `{kind:'click'}` for every weapon glyph and the
+prompts say *"the left mouse button"* instead of naming `J` — which still works,
+and is simply not what anyone should be told to use.
+
+**Jump had to move, and this is the part to remember.** `Space` is the SDK's
+jump and it is **hardcoded** in `Input3D` — `get jump()` reads `isDown('Space')`.
+Taking Space for placing means the hero hops every time a tower goes down, and a
+hop in the middle of a sell-hold is exactly what makes a control feel broken.
+The game owns the call, though: `input.jump` is only ever *read* by
+`character.update`, so the desktop passes its own instead —
+
+```ts
+character.update(dt, move, { jump: touchLikely() ? input.jump : input.consume('hop') });
+```
+
+— with `hop` declared as a desktop-only action on `ShiftLeft`/`ShiftRight`.
+**Desktop-only because the SDK draws one button per declared action**, so a
+phone would grow a second jump button beside its own. A phone's Space and jump
+button are untouched.
+
+### The place button, because a hand on the mouse should not need the keyboard
+
+`src/actionpad.ts` mounts the controls a desktop does not otherwise get, in the
+same bottom-right corner the platform's buttons occupy on a phone:
+
+- **ACTION** — a real button. Click to build, click on a tower to upgrade, hold
+  to sell. It is also what the tutorial's spotlight rings, which the desktop had
+  been doing without.
+- **WEAPON** — a readout, not a control: the weapon in hand with its recharge
+  drawn over it, labelled `Click`. What fires it is a click on the world, and a
+  chip that looked pressable would be claiming otherwise.
+
+The button **does not call the game**. It pushes its key through the SDK's own
+latch — `input.press('Space')` on down, `input.release` on up — so a click, a
+hold, the dead zone and the sell ring all mean the same thing for the button,
+the key and the thumb. One implementation of "what a press means", not three.
+`press()` is documented in the SDK as a test seam; it latches exactly as a
+keydown does, which is precisely what is wanted here.
+
+`setPointerCapture` on the button, or sliding the cursor a few pixels mid-hold
+ends the sell. And `blur`/`visibilitychange` release it, because a button whose
+only way out is its own `pointerup` is a button that can be left held.
+
+In the village the pad **greys out when the card is offering nothing** — hence
+`Card.pressable`, set beside every `action` that is a control rather than a
+description (`walk through` and `equipped` are not buttons). A button that is
+always lit says nothing about where you are standing.
+
+Both pads are `document.body` children and are **disposed with the scene**, or
+the level's pad outlives the level and sits over the village wired to a disposed
+input.

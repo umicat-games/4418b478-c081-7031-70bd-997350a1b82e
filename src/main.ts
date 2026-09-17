@@ -20,6 +20,7 @@ import { createScript, ringActionButton, type Script } from './scripted';
 import { createWayfinder } from './wayfinder';
 import { createAim } from './aim';
 import { createCooldownDial } from './cooldown';
+import { createActionPad } from './actionpad';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { icon, setIconText, iconHtml, type IconName } from './icons';
@@ -27,7 +28,8 @@ import { createThumbMaker } from './thumbs';
 import { makeResourceIcons } from './resicons';
 import { ICON, WEAPON_ICON } from './icons';
 import {
-  touchLikely, keyFor, keyCap, pressName, dragThing, tapWord,
+  touchLikely, keyCap, pressName, dragThing, tapWord, pressFor,
+  PLACE_KEY, JUMP_KEY,
 } from './keycap';
 import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
@@ -608,7 +610,15 @@ export async function startLevel(
       // Shapes, not emoji — see `src/icons.ts`. The attack one is swapped in
       // `setWeapon` for whatever is in your hand.
       { id: 'attack', icon: WEAPON_ICON.sword, keys: ['KeyJ'] },
-      { id: 'build', icon: ICON.build, keys: ['KeyB', 'KeyE'] },
+      // SPACE places. The left hand is on WASD while the hero walks, and the
+      // thumb is the only finger free — `E` asked that hand to leave the keys it
+      // was steering with. E and B stay bound; a key that used to work and
+      // silently stopped is a worse surprise than an extra one.
+      { id: 'build', icon: ICON.build, keys: [PLACE_KEY, 'KeyB', 'KeyE'] },
+      // Jump, where Space can no longer be it. Declared only on a machine with
+      // no on-screen controls: the SDK draws a button per action, and on a
+      // phone this would be a second jump button beside the SDK's own.
+      ...(touchLikely() ? [] : [{ id: 'hop', icon: ICON.jump, keys: [JUMP_KEY, 'ShiftRight'] }]),
     ],
     jumpIcon: ICON.jump,
   });
@@ -1944,9 +1954,7 @@ export async function startLevel(
   const CELL_MAX = 62;
   const CELL_GAP = 6;
   const EDGE = 8;
-  /** How many cells wide the row is. The weapon chip on desktop is one of them
-   *  — counting only `KINDS` left the bar off centre by half a cell. */
-  const barCells = (): number => KINDS.length + (touchLikely() ? 0 : 1);
+  const barCells = (): number => KINDS.length;
   const barWidth = (cell: number): number =>
     barCells() * cell + (barCells() - 1) * CELL_GAP;
 
@@ -1990,6 +1998,7 @@ export async function startLevel(
     const cell = Math.max(CELL_MIN, Math.min(CELL_MAX,
       Math.floor((Math.min(room, window.innerWidth * 0.96) - (n - 1) * CELL_GAP) / n)));
     for (const c of hotbar.children) (c as HTMLElement).style.width = `${cell}px`;
+    pad?.setCellSize(cell);
     const w = barWidth(cell);
 
     // Centred if it fits; otherwise slid left until it does.
@@ -2064,41 +2073,21 @@ export async function startLevel(
     return cell;
   });
 
-  /** The weapon, and how long until it can be used again — for a machine with
-   *  no attack button to draw either on.
+  /** The controls a desktop has to be given, because the SDK draws none.
    *
-   *  The wedge was an overlay tracking the SDK's round button, so on a desktop
-   *  it tracked nothing and the recharge was invisible again: press, nothing
-   *  happens, no reason given. That is the same bug the wedge was written to
-   *  fix, and it had simply moved to the other platform.
-   *
-   *  A READOUT, not a control: `pointer-events: none` and a key cap where a
-   *  price would be. The click that casts is on the canvas, and a chip that
-   *  looked pressable would be claiming otherwise. It sits at the end of the
-   *  hotbar because that row is already "what you can do and what it costs". */
-  const weaponChip = touchLikely() ? null : (() => {
-    const el = document.createElement('div');
-    el.dataset.weaponChip = '';
-    el.style.cssText = `
-      width: ${CELL_MAX}px; padding: 6px 3px 5px; border-radius: 12px;
-      border: 2px dashed rgba(255,255,255,.18); pointer-events: none;
-      background: rgba(0,0,0,.42); color: #fff; font: inherit;
-      display: flex; flex-direction: column; align-items: center; gap: 3px;
-    `;
-    hotbar.appendChild(el);
-    return el;
-  })();
-  const drawWeaponChip = (): void => {
-    if (!weaponChip) return;
-    weaponChip.textContent = '';
-    // The weapon ID is also its icon name; `WEAPON_ICON` holds URLs, which is
-    // what the SDK's button wants and not what `icon()` does.
-    const g = icon(weapon as IconName, '58%');
-    g.style.aspectRatio = '1';
-    weaponChip.append(g);
-    const key = keyFor(weapon);
-    if (key) weaponChip.append(keyCap(key));
-  };
+   *  A place button (click it, or hold it to sell) and a weapon readout with
+   *  the recharge over it, bottom-right — the corner the platform's own buttons
+   *  occupy on a phone, so the two devices share one picture. */
+  const pad = touchLikely() ? null : createActionPad({
+    key: 'Space',
+    // Through the SDK's own latch, so a click, a hold, the dead zone and the
+    // sell ring all mean here exactly what they mean for the key and the thumb.
+    press: () => input.press(PLACE_KEY),
+    release: () => input.release(PLACE_KEY),
+    withWeapon: true,
+    weaponKey: 'Click',
+  });
+  const drawWeaponChip = (): void => pad?.setWeapon(weapon as IconName);
   drawWeaponChip();
 
   // Photograph each tower once, now that the models are loaded.
@@ -2172,16 +2161,17 @@ export async function startLevel(
       // anywhere — "⟨build⟩ Ballista · 25g" with nothing to press. Reported as
       // "I picked a weapon with the mouse and cannot place it", which is
       // exactly what it looks like.
-      const key = keyFor(glyph);
-      if (key) line3.append(keyCap(key));
+      // A key cap for a key, the word for a mouse click, and the button's own
+      // picture only where there is one. The crate prompt used to draw a sword
+      // icon on a desktop, which is a picture of a control that is not there.
+      const press = pressFor(glyph);
+      if (press.kind === 'key') line3.append(keyCap(press.key));
+      else if (press.kind === 'click') line3.append(keyCap('Click'));
       else line3.append(icon(glyph, HUD_ICON));
     }
     line3.append(document.createTextNode(text));
   };
 
-  /** Which key does what this icon stands for, or null on a touch screen where
-   *  the icon IS the answer. Read from the same action list the SDK was given,
-   *  so a rebinding cannot leave the prompt telling the player the wrong key. */
   /** Icons in the HUD run a little larger than the text beside them. A
    *  silhouette needs more room than a letter of the same nominal size. */
   const HUD_ICON = '1.25em';
@@ -2258,6 +2248,9 @@ export async function startLevel(
     if (want === actionIcon) return;
     actionIcon = want;
     input.setActionIcon('build', want);
+    // The desktop button wears the same picture. `ICON.*` are URLs; the pad
+    // takes icon NAMES, which is the same thing the tutorial's ring matches on.
+    pad?.setAction(((want.match(/icons\/(\w+)\.svg/) ?? [])[1] ?? null) as IconName | null);
   };
 
   /** Whether to say "drag" or "WASD".
@@ -2722,6 +2715,9 @@ export async function startLevel(
     scriptTrail.dispose();
     aim.dispose();
     dial.dispose();
+    // It lives on document.body, so it would outlive the level that made it and
+    // sit over the hub with a button wired to a disposed input.
+    pad?.dispose();
     ringActionButton(null);
     world.dispose();
     world.scene.clear();
@@ -3345,7 +3341,9 @@ export async function startLevel(
       if (!stick && Math.hypot(glide.x, glide.z) < 0.55) { glide.x = 0; glide.z = 0; }
       move.x = glide.x; move.z = glide.z;
     }
-    character.update(dt, move, { jump: input.jump });
+    // `input.jump` is Space, hardcoded in the SDK. Space places here, so on a
+    // desktop the hero would hop every time a tower went down.
+    character.update(dt, move, { jump: touchLikely() ? input.jump : input.consume('hop') });
     if (character.position.y < RESPAWN_BELOW_Y) character.teleport(SPAWN);
     character.syncTo(hero, HERO_SYNC_OFFSET);
     character.faceTowards(hero, move, dt);
@@ -3366,7 +3364,7 @@ export async function startLevel(
       aim.update(pointerNdc, input.held('attack'));
       // Only the staffs wait; a sword has nothing to show.
       // The button where there is one, the chip where there is not.
-      dial.show(aimsByDrag() ? (attackButton() ?? weaponChip) : null,
+      dial.show(aimsByDrag() ? (attackButton() ?? pad?.weapon ?? null) : null,
                 aimsByDrag() ? staffCooldown / (kind.cooldown ?? 1.7) : 0);
       readBuildButton();
       if (invincible > 0) invincible -= dt;
@@ -3397,6 +3395,22 @@ export async function startLevel(
         const wantBtn = script.button();
         const litBtn = ringActionButton(wantBtn === 'action' ? currentActionIcon() : wantBtn);
         if (litBtn) spot = litBtn;
+        // On a desktop the SDK drew no buttons to ring, so the tutorial pointed
+        // at nothing and the scrim stayed down. The pad's button is a real
+        // button and can carry both.
+        else if (pad && wantBtn) {
+          const mine = wantBtn === 'attack' || wantBtn === 'sword' || wantBtn === 'bow'
+            || wantBtn === 'fire' || wantBtn === 'ice' || wantBtn === 'bolt'
+            ? pad.weapon : pad.button;
+          if (mine) {
+            mine.classList.add('umicat-point');
+            spot = mine;
+          }
+        }
+        if (pad && !wantBtn) {
+          pad.button.classList.remove('umicat-point');
+          pad.weapon?.classList.remove('umicat-point');
+        }
         // Everything but the thing to press goes grey.
         //
         // Only for a step that names a CONTROL. The step that says "stand on

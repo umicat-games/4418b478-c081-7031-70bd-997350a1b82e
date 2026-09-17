@@ -12,7 +12,8 @@ import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { createThumbMaker } from './thumbs';
 import { iconHtml, type IconName } from './icons';
-import { pressGlyph } from './keycap';
+import { pressGlyph, touchLikely, PLACE_KEY, JUMP_KEY } from './keycap';
+import { createActionPad } from './actionpad';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
 import { mergeStatic } from './merge';
@@ -147,9 +148,15 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   // The hub's one button is "use what you are standing at" — forge, take,
   // build, read the sign. A hand, not a sword: nothing here is a fight.
   const input = new Input3D({
-    // E is what the LEVEL calls this same act-on-what-you-are-standing-on
-    // button; J stays bound because it was here first.
-    actions: [{ id: 'use', icon: ICON.build, keys: ['KeyE', 'KeyB', 'KeyJ'] }],
+    // SPACE, the same as the level's place button — the left hand is on WASD
+    // and the thumb is the only finger free. E, B and J stay bound; J was here
+    // first and E matched the level before Space did.
+    actions: [
+      { id: 'use', icon: ICON.build, keys: [PLACE_KEY, 'KeyE', 'KeyB', 'KeyJ'] },
+      // Jump, where Space can no longer be it. Desktop only: the SDK draws a
+      // button per action, and on a phone this would be a second jump button.
+      ...(touchLikely() ? [] : [{ id: 'hop', icon: ICON.jump, keys: [JUMP_KEY, 'ShiftRight'] }]),
+    ],
     jumpIcon: ICON.jump,
   });
 
@@ -889,8 +896,13 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     cost?: string;
     /** The button, in gold. */
     action?: string;
+    /** Whether that action is a control the player presses — as opposed to
+     *  "walk through", which is a description of what to do with their feet.
+     *  The desktop pad lights up for the first kind only. */
+    pressable?: boolean;
   }
   const showCard = (c: Card): void => {
+    cardPress = c.pressable === true;
     card.innerHTML = '';
     const add = (html: string, css: string, mark?: string): void => {
       if (!html) return;
@@ -915,6 +927,18 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       + 'font: 700 13px/1.4 system-ui, sans-serif;', 'prompt');
     card.style.display = 'block';
   };
+
+  /** Whether what is on the card right now is something to press. */
+  let cardPress = false;
+
+  /** The desktop's place button. The village is where buildings are actually
+   *  put down, so a machine with no on-screen controls needs one here more than
+   *  anywhere. No weapon cell: nothing is fired in the village. */
+  const pad = touchLikely() ? null : createActionPad({
+    key: 'Space',
+    press: () => input.press(PLACE_KEY),
+    release: () => input.release(PLACE_KEY),
+  });
 
   const closePanel = (): void => {
     panelOpen = false;
@@ -1213,7 +1237,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       const turn = input.look();
       if (turn.x || turn.y) world.orbit(turn.x, turn.y);
       const dir = input.direction(world.cameraYaw);
-      character.update(dt, dir, { jump: input.jump });
+      // Space is the SDK's jump and it places here now; the hero would hop
+      // every time a building went down.
+      character.update(dt, dir, { jump: touchLikely() ? input.jump : input.consume('hop') });
       character.syncTo(hero, -0.36);
       character.faceTowards(hero, dir, dt);
       animator.update(character.state);
@@ -1340,6 +1366,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           action: canAfford(store, cost)
             ? `${pressGlyph('build')} build Lv${lv + 1}`
             : undefined,
+          pressable: true,
         });
       };
 
@@ -1377,7 +1404,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
 
         const act = rackAction(id);
         let action: string | undefined;
-        if (act === 'take') action = `${pressGlyph('build')} take`;
+        // "equipped" is a statement, not a button — the pad must not light up
+        // for it. Set alongside `action` so the two cannot drift apart.
+        let pressable = false;
+        if (act === 'take') { action = `${pressGlyph('build')} take`; pressable = true; }
         else if (act === 'forge' || act === 'improve') {
           if (canStep) {
             action = canAfford(store, cost!)
@@ -1385,6 +1415,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                 ? `${pressGlyph('build')} forge`
                 : `${pressGlyph('build')} improve to Lv${lvl + 1}`)
               : undefined;
+            pressable = action !== undefined;
           }
         } else if (id === weapon) action = 'equipped';
         // Same shape as a building: name, rule, level, what it does, what the
@@ -1396,11 +1427,13 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           body,
           cost: gate,
           action,
+          pressable,
         });
       };
 
       if (panelOpen) {
         card.style.display = 'none';
+        cardPress = false;
       } else if (carrying) {
         showCard({
           title: carrying.name,
@@ -1416,6 +1449,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           action: blocked
             ? `${pressGlyph('build')} hold to put it back`
             : `${pressGlyph('build')} put it down`,
+          pressable: true,
         });
         placeCard(ghostAt.x, 2.1, ghostAt.z);
       } else if (atPlot) {
@@ -1430,6 +1464,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           title: 'Shop', glyph: 'coin',
           body: left ? `${left} thing${left > 1 ? 's' : ''} to buy` : 'Nothing left to buy',
           action: left ? `${pressGlyph('build')} open` : undefined,
+          pressable: true,
         });
         placeCard(shopAt.x, 1.5, shopAt.z);
       } else if (nearDoor) {
@@ -1438,7 +1473,12 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         placeCard(DOOR_AT.x, 2.0, DOOR_AT.z);
       } else {
         card.style.display = 'none';
+        cardPress = false;
       }
+      // The button wears what the card says it will do, and greys out when the
+      // card is offering nothing — a button that is always lit is a button that
+      // says nothing about where you are standing.
+      pad?.setAction(cardPress ? 'build' : null);
 
       // --- the action button ------------------------------------------------
       //
@@ -1594,6 +1634,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           input.dispose();
           wayfinder.dispose();
           seeThrough.dispose();
+          pad?.dispose();
           panel.remove();
           card.remove();
           hudEl.textContent = '';
