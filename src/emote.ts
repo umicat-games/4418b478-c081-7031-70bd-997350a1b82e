@@ -44,6 +44,8 @@ const MSG_FRAME = 245;
 const TALK_SCALE = 0.46;
 const TALK_DX = 0;    // centred DIRECTLY above Cato's head (same anchor as the emoji bubble)
 const TALK_DY = 0;    // same height as the emoji bubble's tail
+const MSG_ICON_SCALE = 1.7;  // the message glyph fills most of the bubble body
+const MSG_BODY_FRAC = 0.6;   // its Y (from the tail-tip origin) → centred in the rounded body, above the tail
 const FULL_SCALE = 0.52;       // the bubble's native 42×47 is too big over Cato → shrink
 const EMOJI_BODY_FRAC = 0.62;  // emoji Y = -height*this → centred in the rounded BODY (above the tail)
 const EMOJI_SCALE = 30 / 32;   // fit the 32px emoji into the bubble body (within the container)
@@ -176,8 +178,8 @@ export class EmoteController {
         const bubble = this.scene.add.image(0, 0, BUBBLE).setOrigin(0.5, 1);
         // frame 245 (all_icons "white-message") is a full-colour cream+tan message glyph — do NOT
         // tint it (a tint multiplies EVERY pixel, so it turns the cream fill into a dark blob).
-        const icon = this.scene.add.image(0, Math.round(-bubble.height * EMOJI_BODY_FRAC), MSG_KEY, MSG_FRAME)
-          .setOrigin(0.5, 0.5).setScale(0.9);
+        const icon = this.scene.add.image(0, Math.round(-bubble.height * MSG_BODY_FRAC), MSG_KEY, MSG_FRAME)
+          .setOrigin(0.5, 0.5).setScale(MSG_ICON_SCALE); // bigger + centred in the bubble body
         this.talkRoot = this.scene.add.container(0, 0, [bubble, icon]).setDepth(DEPTH).setVisible(false);
       }
       const r = this.talkRoot;
