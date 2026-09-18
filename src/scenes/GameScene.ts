@@ -12474,9 +12474,14 @@ export class GameScene extends Phaser.Scene {
       if (!spr || !spr.active || spr === cato || seen.has(spr)) return;
       seen.add(spr);
       let occ = false;
-      if (catoVisible && cRect && spr.depth > catoDepth) {
+      if (catoVisible && cr && cRect && spr.depth > catoDepth) {
         const sr = this.spriteWorldSolidRect(spr);
-        occ = sr.h >= GameScene.OCCLUDE_MIN_H && Phaser.Geom.Intersects.RectangleToRectangle(cRect, new Phaser.Geom.Rectangle(sr.x, sr.y, sr.w, sr.h));
+        // Cheap PRE-FILTER on the opaque-pixel bbox; then a PER-PIXEL refine so a tree's wide-canopy
+        // bbox doesn't fade the tree when Cato is merely beside the thin trunk (bbox overlaps, but his
+        // body isn't actually behind any leaves) — the reported false positive.
+        if (sr.h >= GameScene.OCCLUDE_MIN_H && Phaser.Geom.Intersects.RectangleToRectangle(cRect, new Phaser.Geom.Rectangle(sr.x, sr.y, sr.w, sr.h))) {
+          occ = this.occluderCoversCato(spr, cr);
+        }
       }
       const target = occ ? GameScene.OCCLUDE_ALPHA : 1;
       const a = spr.alpha;
@@ -12485,6 +12490,20 @@ export class GameScene extends Phaser.Scene {
     };
     for (const s of this.ySortSprites) consider(s); // trees, mailbox, work station, coops, cow-pen parts…
     for (const s of this.bigStones.values()) consider(s.sprite); // tall boulders (static-depth, not in ySortSprites)
+  }
+
+  /** Does `spr`'s OPAQUE art actually cover part of Cato's body rect `cr`? Samples a small grid over
+   *  his visible body and tests each point against the occluder's pixels — so a tall sprite only
+   *  counts as "hiding Cato" when his body is genuinely behind its art, not just inside its bbox. */
+  private occluderCoversCato(spr: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, cr: { x: number; y: number; w: number; h: number }): boolean {
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 4; j++) {
+        const px = cr.x + cr.w * ((i + 0.5) / 3);
+        const py = cr.y + cr.h * ((j + 0.5) / 4);
+        if (this.spritePixelHit(spr, px, py)) return true;
+      }
+    }
+    return false;
   }
 
   /** The desk pad sits ON a table, so its own foot line is HIGHER on screen than the
