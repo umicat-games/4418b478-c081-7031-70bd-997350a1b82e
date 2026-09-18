@@ -1419,6 +1419,49 @@ only through the first third (`STRIKE_FRACTION`) and hold still for the rest,
 because re-jittering at the same rate for three times as long turns a strike
 into a strobe.
 
+### What a sword hit is made of
+
+Melee feel is a stack of small things, and they are not worth the same. In the
+order they paid off here:
+
+**HITSTOP, and it is not close.** For sixty milliseconds after contact the world
+does not advance — the swing, the victim, the bullets in the air, all held. It
+reads as the blade MEETING something rather than passing through it, and it is
+the one thing on this list that cannot be seen in a screenshot. Fighting games
+live between two and eight frames; this is about four at sixty.
+
+Counted in REAL milliseconds. `dt` is clamped at 0.05, so a freeze counted in
+game time would last four times as long on a phone having a bad second — the
+same rule the sell-hold and the tutorial's panels follow. It is longer for the
+heavier run tiers, because the freeze is where weight is expressed.
+
+**Sparks at the contact point, on EVERY hit.** The base sword had nothing there
+— a red flash on the victim and a sound, which is feedback about the victim
+rather than about the blow. They are thrown along the swing rather than in a
+ball: a sphere of sparks reads as an explosion, which is a different event and
+belongs to the saucers. Skipped on a kill, because the saucer's own burst is
+about to happen in the same place and two effects on one frame is one effect
+nobody reads. One instanced draw.
+
+**A trail on the blade.** A MOTION cue, not an attack — it says how fast the
+thing went, which is the half of a swing a still frame cannot show. It shows on
+a MISS too, for the same reason. Deliberately not the crescent this game tried
+and dropped: that was thrown at enemies and read as the bow's fan.
+
+Emitted ONCE per swing, near the end of the cut, covering the whole arc. A
+ribbon emitted per frame is a draw call per frame — the same arithmetic that
+made the staff's specks nineteen draws before they were instanced.
+
+`verify-3d-feedback` measures the freeze as what it IS: a frame in which the
+world did not advance. An enemy's `t` — how far along its route it has walked —
+is the cleanest clock this game has, and it goes 0.06 per frame, then 0 on the
+frame after contact, then 0.06 again. A swing at nothing freezes nothing.
+
+**One measurement in this session was wrong before it was right**, and it is the
+familiar shape: the first version watched the enemy's `position.z` and reported
+the world frozen for 1816ms, because that enemy was flying along **x**. The
+instrument was wrong, not the game.
+
 ### A saucer comes apart, and a hit rocks it
 
 A dead one used to go `visible = false` on the frame it died — it vanished, with

@@ -918,3 +918,60 @@ export function saucerBurst(vfx: Vfx, at: THREE.Vector3, tint = 0xc08cff): void 
     frame: FRAME.sparkle,
   });
 }
+
+/**
+ * Sparks where the blade meets something. Every hit, not just a heavy one.
+ *
+ * The base sword had NOTHING at the point of contact — a red flash on the
+ * victim and a sound, which is feedback about the victim rather than about the
+ * blow. Sparks are the cheapest way to say "metal met something", and they are
+ * one instanced draw however many there are.
+ *
+ * Thrown ALONG the swing rather than in a ball: sparks that spray the way the
+ * blade was travelling read as struck, and a sphere of them reads as an
+ * explosion, which is a different event and already belongs to the saucers.
+ */
+export function hitSparks(
+  vfx: Vfx, at: THREE.Vector3, dirX: number, dirZ: number, power = 1,
+): void {
+  const n = 5 + Math.round(power * 4);
+  motes(vfx, new THREE.Vector3(at.x + dirX * 0.12, at.y, at.z + dirZ * 0.12), {
+    count: n, color: 0xfff3cf, color2: 0xffc061,
+    // Tight and fast: a wide slow scatter is a puff of smoke.
+    radius: 0.2 + power * 0.12, rise: 0.22, spin: 3.2,
+    life: 0.26, size: 0.075, frame: FRAME.sparkle,
+  });
+}
+
+/**
+ * The smear a moving blade leaves.
+ *
+ * A trail is a MOTION cue, not an attack — it says how fast the thing went,
+ * which is the half of a swing a still frame cannot show. It is deliberately
+ * NOT the crescent this game tried and dropped: that was a thing thrown at
+ * enemies and it read as the bow's fan. This follows the blade and dies with
+ * it.
+ *
+ * One `quads` call for the whole ribbon: a segment per pair of samples, each
+ * stretched between two remembered tip positions. Feeding it fewer than two
+ * points draws nothing rather than a degenerate quad.
+ */
+export function bladeTrail(vfx: Vfx, points: THREE.Vector3[], color = 0xdff0ff): void {
+  if (points.length < 2) return;
+  const list: Quad[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    if (a.distanceToSquared(b) < 1e-6) continue;
+    list.push({
+      at: a.clone(), to: b.clone(), frame: FRAME.strandA,
+      // Wider at the leading end, so the ribbon tapers back into the arc.
+      w: 0.1 + (i / points.length) * 0.16, h: 1, mode: 'beam',
+    });
+  }
+  if (!list.length) return;
+  quads(vfx, list, {
+    life: 0.16,
+    color,
+    alpha: (k) => (1 - k) * 0.7,
+  });
+}

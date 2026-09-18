@@ -13,7 +13,7 @@ import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { showTitle } from './title';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordImpact, saucerBurst, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordImpact, saucerBurst, hitSparks, bladeTrail, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
@@ -181,6 +181,10 @@ const SWING_HEIGHT = 0.42;
 const SWING_GRIP = 0.16;
 /** How long a hit rocks a flyer, and how far. Short and shallow: this fires on
  *  every landed hit, and a big slow tilt would have the whole wave lolling. */
+/** How long a connecting blow freezes the world. Sixty milliseconds is about
+ *  four frames at sixty — long enough to feel, short enough that nobody reads
+ *  it as a stutter. Fighting games live between two and eight frames. */
+const HITSTOP_MS = 60;
 const WOBBLE_SECONDS = 0.34;
 const WOBBLE_TILT = 0.30;
 /** How much of the swing is the CUT; the rest is the blade coming back to the
@@ -687,6 +691,10 @@ export async function startLevel(
   /** The pivot's local position as the socket left it. */
   const swordBase = new THREE.Vector3();
   const _want = new THREE.Vector3();
+  /** Where the blade's tip has been during this swing, for the smear it
+   *  leaves. Cleared at the start of each swing. */
+  const trailPts: THREE.Vector3[] = [];
+  let trailDone = false;
   /** Seconds left in the current swing; 0 is at rest. */
   let swing = 0;
   let bow: THREE.Object3D | null = null;
@@ -1164,6 +1172,19 @@ export async function startLevel(
   let spawnTimer = 0;
   let toSpawn = 0;
   let running = true;
+  /** Milliseconds of HITSTOP left — the freeze on a connecting blow.
+   *
+   *  The single biggest thing in melee feel, and the cheapest: for a few frames
+   *  after contact the world does not advance, so the swing, the victim and
+   *  everything around them hold still for a moment. It reads as the blade
+   *  MEETING something rather than passing through it.
+   *
+   *  Measured in REAL milliseconds, not in `dt`: `dt` is clamped at 0.05 and a
+   *  freeze counted in game time would last four times as long on a phone
+   *  having a bad second. Anything measured against a person uses the unclamped
+   *  clock — the same rule the sell-hold and the tutorial's panels follow. */
+  let hitstop = 0;
+
   /** Stopped by the settings dialog. NOT the same as `running`, which is about
    *  whether the RUN is still going — a paused run is still a run, and a
    *  finished one must not come back to life when a dialog closes. */
@@ -3418,20 +3439,36 @@ export async function startLevel(
 
     animator.play('attack');
     swing = SWING_SECONDS;
+    trailPts.length = 0;
+    trailDone = false;
     audio.play('swing');
     let connected = false;
     const reach = meleeReach(HERO_ATTACK_RANGE, runTier);
+    const swingX = Math.sin(hero.rotation.y), swingZ = Math.cos(hero.rotation.y);
     for (const e of enemies) {
       if (!e.alive) continue;
       const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
       if (d > reach) continue;
       connected = true;
+      const alive = e.hp > withBuff(weaponHit());
       damage(e, withBuff(weaponHit()));
+      // Sparks at the CONTACT POINT, on every hit and not only the heavy tiers.
+      // The base sword had nothing there at all — a red flash on the victim and
+      // a sound, which is feedback about the victim rather than about the blow.
+      // Skipped on a kill: the saucer's own burst is about to happen in the
+      // same place, and two effects on one frame is one effect nobody reads.
+      if (alive) hitSparks(vfx, e.obj.position, swingX, swingZ, meleeImpact(runTier) ?? 0);
     }
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
     if (hitCrates(hero.position.x, hero.position.z, reach, 1)) connected = true;
-    if (connected) { heroHits += 1; audio.play('sword-hit'); }
+    if (connected) {
+      heroHits += 1;
+      audio.play('sword-hit');
+      // Longer for the heavier tiers: the freeze is how weight is expressed,
+      // and a tier that hits harder should stop the world for longer.
+      hitstop = HITSTOP_MS + (meleeImpact(runTier) ?? 0) * HITSTOP_MS * 0.6;
+    }
     // What a heavy blow LOOKS like, from tier 2. Once per swing, at the nearest
     // thing it landed on — a per-enemy effect on a weapon that can catch four
     // at once is four effects on a whole-level budget of about twenty draws,
@@ -3636,6 +3673,15 @@ export async function startLevel(
     const realDt = (now - last) / 1000;
     const dt = Math.min(realDt, 0.05);
     last = now;
+
+    // HITSTOP: the same trick as the pause, for sixty milliseconds. Everything
+    // holds — the hero mid-swing, the enemy mid-flinch, the bullets in the air
+    // — which is what makes the blow land instead of pass through.
+    if (hitstop > 0) {
+      hitstop -= realDt * 1000;
+      renderer.render(world.scene, world.camera);
+      return;
+    }
 
     // PAUSED: draw the frame and stop. Everything below advances something —
     // the camera, the hero, the wave clock, the aiming gesture's own timers —
@@ -4245,6 +4291,22 @@ export async function startLevel(
         }
         aimBlade(_dir, _edge);
         levelBlade(k, _dir.x, _dir.z);
+        // The smear the blade leaves. Sampled every frame, drawn ONCE.
+        //
+        // A ribbon emitted per frame is a draw call per frame — the same
+        // arithmetic that made the staff's specks nineteen draws before they
+        // were instanced. One emission near the end of the cut covers the whole
+        // arc and costs one.
+        if (swordPivot) {
+          const blade = swordPivot.children[0];
+          if (blade) {
+            trailPts.push(new THREE.Vector3(0, 0.348, 0).applyMatrix4(blade.matrixWorld));
+          }
+        }
+        if (!trailDone && cut >= 0.75 && trailPts.length > 2) {
+          trailDone = true;
+          bladeTrail(vfx, trailPts);
+        }
         if (swing === 0) restSword();
       } else {
         restSword();
