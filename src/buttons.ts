@@ -46,9 +46,23 @@ export const LIFT = {
   danger: 'lift danger',
   /** On a white panel, where the dark chrome would be a hole. */
   plain: 'lift plain',
-  /** Chrome over the game: close crosses, the gear, the hotbar, the pad. */
+  /** Chrome over the game: close crosses and the desktop pad's button. */
   dark: 'lift dark',
 } as const;
+
+/**
+ * Flat, with a hairline rim. NOT a `lift`, and that is the point.
+ *
+ * Relief says "press me", and it was wrong on the three things it was first put
+ * on: the readout plate is not pressable at all, and a hotbar cell is SELECTED
+ * rather than pressed — the bar is a set of chips showing what you could build,
+ * and the one that is chosen says so with a thick gold edge. Raising them made
+ * the HUD look like a row of keys.
+ *
+ * A rim, not a border: it is an inset box-shadow, so it costs no layout and can
+ * go on elements whose `border` is already carrying the selection.
+ */
+export const RIM = 'rim';
 
 const CSS = `
   .lift {
@@ -101,6 +115,7 @@ const CSS = `
     box-shadow: inset 0 1px 0 var(--top), 0 2px 0 var(--slab);
     transform: none;
   }
+  .rim { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.22); }
   @media (prefers-reduced-motion: reduce) { .lift { transition: none; } }
 `;
 

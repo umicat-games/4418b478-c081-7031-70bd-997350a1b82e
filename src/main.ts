@@ -49,7 +49,7 @@ import {
   type Material, type Materials,
 } from './progress';
 import type { GameAudio } from '@umicat/three-sdk';
-import { installLiftStyles, LIFT } from './buttons';
+import { installLiftStyles, LIFT, RIM } from './buttons';
 
 /**
  * Woodland Defense — a tower defense you can walk around in.
@@ -1600,7 +1600,7 @@ export async function startLevel(
   });
   const qualityBtn = document.createElement('button');
   // The gear's CLASS does not come along with its style attribute.
-  qualityBtn.className = LIFT.dark;
+  qualityBtn.className = RIM;
   qualityBtn.style.cssText = settings.button.getAttribute('style')
     + 'width: auto; padding: 0 11px; margin-left: 6px;';
   const labelQuality = (): void => { qualityBtn.textContent = QUALITY[quality].name; };
@@ -2272,7 +2272,6 @@ export async function startLevel(
   // halfway through is a run where the choice never cost anything.
   const cells = KINDS.map((kind, i) => {
     const cell = document.createElement('button');
-    cell.className = LIFT.dark;
     // Which slot this is, so a probe driving the tutorial can press the one the
     // script is pointing at rather than guessing from the text inside it.
     cell.dataset.slot = String(i);
@@ -2332,7 +2331,6 @@ export async function startLevel(
    *  why a tier is several towers' worth.
    */
   const weaponCell = document.createElement('button');
-  weaponCell.className = LIFT.dark;
   weaponCell.dataset.weaponCell = '';
   weaponCell.style.cssText = `
     width: ${CELL_MAX}px; padding: 6px 3px 5px; border-radius: 12px;
@@ -2443,7 +2441,9 @@ export async function startLevel(
     drawWeaponCell();
     cells.forEach((cell, i) => {
       const affordable = gold >= KINDS[i].cost;
-      cell.style.borderColor = i === selected ? '#ffd54a' : 'transparent';
+      // A rim rather than nothing: the bar reads as a row of chips, and the
+      // chosen one differs by the COLOUR of its edge rather than by having one.
+      cell.style.borderColor = i === selected ? '#ffd54a' : 'rgba(255,255,255,.22)';
       cell.style.background = i === selected ? 'rgba(0,0,0,.62)' : 'rgba(0,0,0,.42)';
       // Dimmed rather than disabled: you can still select what you are saving
       // up for, and the price is the feedback.

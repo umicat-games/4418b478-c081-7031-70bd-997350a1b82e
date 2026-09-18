@@ -1,5 +1,5 @@
 import { icon } from './icons';
-import { installLiftStyles, LIFT } from './buttons';
+import { installLiftStyles, LIFT, RIM } from './buttons';
 
 /**
  * The settings dialog, and the button that opens it.
@@ -44,7 +44,7 @@ const ROW = 'display:flex; align-items:center; gap:10px; margin:14px 0 0;';
 export function createSettings(opts: SettingsOpts): Settings {
   installLiftStyles();
   const button = document.createElement('button');
-  button.className = LIFT.dark;
+  button.className = RIM;
   button.dataset.settingsButton = '';
   button.setAttribute('aria-label', 'Settings');
   button.style.cssText = `

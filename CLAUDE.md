@@ -3147,7 +3147,24 @@ atlas cell, and gives the press for free.
 button that does not go down reads as a picture of a button. That is the whole
 reason this left the style attribute. Every button takes `lift`; `quiet`,
 `danger`, `plain` and `dark` are modifiers that override custom properties
-rather than restating the shadow. Thirteen buttons across seven files use it.
+rather than restating the shadow.
+
+**Relief is for things you PRESS, and that excludes most of the HUD.** It went
+on everything first and was reported back as looking wrong on three of them, all
+for the same reason: the readout plate is not pressable at all, and a hotbar
+cell is SELECTED rather than pressed — the bar is a row of chips saying what you
+could build. Raised, the HUD read as a row of keys.
+
+Those get `RIM` instead: flat, with a hairline inset edge. A rim rather than a
+`border` because it costs no layout and can sit on an element whose `border` is
+already carrying something else — the hotbar's selection is that border, gold on
+the chosen cell and grey on the rest, which is the whole of the difference.
+
+| raised (`lift`) | flat (`RIM`) |
+| --- | --- |
+| the title's four, the tutorial's OK, the shop's Buy | the readout plate |
+| the settings dialog's close and its way out | the settings gear, the quality toggle |
+| the desktop pad's action button | the hotbar cells and the weapon cell |
 
 **It is layout-safe**: box-shadows do not take part in layout, so the hotbar —
 whose width is measured at runtime from the room left beside the platform's own
