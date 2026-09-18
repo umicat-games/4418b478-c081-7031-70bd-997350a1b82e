@@ -12457,6 +12457,36 @@ export class GameScene extends Phaser.Scene {
     this.sortPadOnDesk();
   }
 
+  private static readonly OCCLUDE_ALPHA = 0.42; // how transparent an object goes while it hides Cato
+  private static readonly OCCLUDE_MIN_H = 22;   // only TALL things fade (skip crops / rugs / short props)
+  /** Fade any TALL object that Cato is standing BEHIND to semi-transparent, so he stays visible —
+   *  the classic top-down "walk behind a tree" see-through. An object hides Cato when it draws IN
+   *  FRONT of him (higher foot-Y depth, set by applyYSort just above) AND their opaque-pixel rects
+   *  overlap. Eased so it fades in/out smoothly; a no-op for anything already at its target alpha. */
+  private updateOccludeFade(): void {
+    const cato = this.child;
+    const catoVisible = !!cato && cato.visible;
+    const cr = catoVisible ? this.spriteWorldSolidRect(cato) : null;
+    const cRect = cr ? new Phaser.Geom.Rectangle(cr.x, cr.y, cr.w, cr.h) : null;
+    const catoDepth = cato ? cato.depth : Infinity;
+    const seen = new Set<Phaser.GameObjects.GameObject>();
+    const consider = (spr?: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image): void => {
+      if (!spr || !spr.active || spr === cato || seen.has(spr)) return;
+      seen.add(spr);
+      let occ = false;
+      if (catoVisible && cRect && spr.depth > catoDepth) {
+        const sr = this.spriteWorldSolidRect(spr);
+        occ = sr.h >= GameScene.OCCLUDE_MIN_H && Phaser.Geom.Intersects.RectangleToRectangle(cRect, new Phaser.Geom.Rectangle(sr.x, sr.y, sr.w, sr.h));
+      }
+      const target = occ ? GameScene.OCCLUDE_ALPHA : 1;
+      const a = spr.alpha;
+      if (Math.abs(a - target) < 0.02) { if (a !== target) spr.setAlpha(target); return; } // settled → no-op
+      spr.setAlpha(a + (target - a) * 0.2); // ease toward target
+    };
+    for (const s of this.ySortSprites) consider(s); // trees, mailbox, work station, coops, cow-pen parts…
+    for (const s of this.bigStones.values()) consider(s.sprite); // tall boulders (static-depth, not in ySortSprites)
+  }
+
   /** The desk pad sits ON a table, so its own foot line is HIGHER on screen than the
    *  table's → plain foot-sort hides it under the desk. Keep it one above the deepest
    *  FURNITURE piece it overlaps (NOT above Cato — so he still occludes it when he walks
@@ -12768,6 +12798,7 @@ export class GameScene extends Phaser.Scene {
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     if (this.catoIndoors && this.catoIndoorsReason === 'sleep') this.registry.set('catoMoodFrame', SLEEPY_MOOD_FRAME); // sleepy Z face in the portrait while he's asleep
     this.applyYSort(); // depth = foot Y, so Cato passes before/behind props
+    this.updateOccludeFade(); // fade any tall object Cato is standing behind, so he stays visible
     // Pin the roof layer's depth every frame: the SDK's tilemap layer-sync mirrors each layer's
     // depth back to its tilemap-ref transform.depth (1) every frame, which would otherwise clobber
     // the ROOF_DEPTH we set at load — so Cato would always draw in front of the roof (north-side
