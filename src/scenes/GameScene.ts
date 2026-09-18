@@ -4303,6 +4303,7 @@ export class GameScene extends Phaser.Scene {
     this.wheelClose = null;
     playSfx(this);
     this.publishToolPalette();
+    if (this.dialogueSpotTarget) this.refreshDialogueSpotlight(); // hide the plot dim while the wheel is up
     return true;
   }
 
@@ -4315,6 +4316,7 @@ export class GameScene extends Phaser.Scene {
     this.wheelClose = null;
     this.registry.set('toolPalette', { visible: false, buttons: [] });
     this.registry.set('toolPaletteBounds', []);
+    if (this.dialogueSpotTarget) this.refreshDialogueSpotlight(); // wheel gone → restore the plot dim for the till/water tap
   }
 
   /** Start the animated exit — the open spring played in reverse (retract inward + shrink away).
@@ -8556,12 +8558,14 @@ export class GameScene extends Phaser.Scene {
       visible: true, rev: ++this.menuActionRev, x: sx, y: sy,
       options: this.menuItemOptions(index).map((o) => ({ label: o.label })),
     });
+    if (this.dialogueSpotTarget) this.refreshDialogueSpotlight(); // hide the seed dim so the Take popup isn't blacked out
   }
 
   private closeMenuItemMenu(): void {
     if (!this.menuItemMenu && !this.menuItemQty && !this.menuSlotPick && !this.toolReplace) return;
     this.menuItemMenu = null; this.menuItemQty = null; this.menuSlotPick = null; this.toolReplace = null;
     this.registry.set('menuAction', { visible: false, rev: ++this.menuActionRev });
+    if (this.dialogueSpotTarget) this.refreshDialogueSpotlight(); // popup gone → restore the seed dim
   }
 
   /** Swap the action menu for the "how many?" keypad (Sell / 给 Cato / 放回箱子 → pick a quantity). */
@@ -11120,11 +11124,12 @@ export class GameScene extends Phaser.Scene {
     if (TUTORIAL_STEPS[n].id === 'move-cam') this.tutorialCamStart = { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY };
     // plant starts on the backpack (open it, Use the seed) → moves to the plot once the seed is held
     // (menuUse re-points it). water/till spotlight the same plot cell.
-    const map: Record<string, string> = { 'open-chest': 'world:chest', 'take-seeds': 'world:chest', 'till': 'world:plot', 'plant': 'hud:backpack', 'water': 'world:plot', 'collect': 'world:bush', 'message-cato': 'hud:portrait' };
-    // Dim-with-cutout on the steps that are a single "tap THIS button/icon" (the target isn't
-    // surrounded by the tool wheel) — a full-screen dim there would black out the wheel.
-    const DIM_STEPS = new Set(['open-chest', 'plant', 'message-cato']);
-    this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null, DIM_STEPS.has(TUTORIAL_STEPS[n].id));
+    const map: Record<string, string> = { 'open-chest': 'world:chest', 'take-seeds': 'menu:seed', 'till': 'world:plot', 'plant': 'hud:backpack', 'water': 'world:plot', 'collect': 'world:bush', 'message-cato': 'hud:portrait' };
+    // Dim-with-cutout on every step that points at a discrete target — the wheel steps (till/water/
+    // collect) keep it too, but `refreshDialogueSpotlight` hides the dim WHILE the tool wheel is open
+    // (so the wheel isn't blacked out) and shows it again once a tool is picked. `move-cam` has no
+    // target (null → no dim). take-seeds dims the chest panel around the lit seed slot.
+    this.setDialogueSpotlight(map[TUTORIAL_STEPS[n].id] ?? null, true);
   }
 
   /** Advance a tutorial step when its completion `kind` (+ optional arg) matches the LIVE step. */
@@ -11512,7 +11517,15 @@ export class GameScene extends Phaser.Scene {
    *  over the grid, and the dim mask would black out the open UI). `dim` cuts a hole in a full-screen
    *  dim; false = the gold ring only. */
   private refreshDialogueSpotlight(): void {
-    const target = this.menuOpen || this.craftOpen || this.dialogOpen ? null : this.dialogueSpotTarget;
+    const t = this.dialogueSpotTarget;
+    // A `menu:` target lives INSIDE an open menu (e.g. the seed slot) → show it only while the menu
+    // is open, and HIDE it once an item-action popup (Take…) opens so that popup isn't dimmed.
+    // Every other target (world:/hud:/hotbar:) is a thing OUTSIDE menus → hide while a menu / craft /
+    // chat / tool-wheel is open (those cover it, or the wheel must stay lit).
+    const hidden = t?.startsWith('menu:')
+      ? (!this.menuOpen || !!this.menuItemMenu || !!this.menuItemQty)
+      : (this.menuOpen || this.craftOpen || this.dialogOpen || !!this.toolPaletteOpen);
+    const target = t && !hidden ? t : null;
     const rect = target ? this.spotlightRect(target) : null;
     this.registry.set('dialogueSpotlight', rect ? { ...rect, dim: this.dialogueSpotDim, rev: (this.registry.get('dialogueSpotlight')?.rev ?? 0) + 1 } : null);
     // A dim-with-cutout must cover the HUD too (so the ONLY lit spot is the target), so lift
@@ -11538,6 +11551,16 @@ export class GameScene extends Phaser.Scene {
   /** Resolve a spotlight target to a SCREEN rect (device px): hotbar slots, HUD buttons, or a
    *  projected world object/cell (used by the tutorial). */
   private spotlightRect(target: string): { x: number; y: number; w: number; h: number } | null {
+    // A slot INSIDE the open menu (the tutorial "take Jamin's seeds" step) → the seed slot's screen
+    // rect from the published `menuSlots` (device px, same hit-boxes GameScene routes taps against).
+    if (target === 'menu:seed') {
+      const store = this.menuStore();
+      const idx = store.findIndex((it) => it.id.endsWith('-seed'));
+      if (idx < 0) return null;
+      const slots = this.registry.get('menuSlots') as Array<{ x: number; y: number; w: number; h: number; index: number }> | undefined;
+      const s = slots?.find((r) => r.index === idx);
+      return s ? { x: s.x, y: s.y, w: s.w, h: s.h } : null;
+    }
     // HUD buttons — already in screen px.
     if (target === 'hud:backpack') return (this.registry.get('backpackBtnBounds') as { x: number; y: number; w: number; h: number } | undefined) ?? null;
     if (target === 'hud:portrait') { const r = this.findCatBounds; return r.width ? { x: r.x, y: r.y, w: r.width, h: r.height } : null; }
