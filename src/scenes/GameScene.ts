@@ -9424,7 +9424,6 @@ export class GameScene extends Phaser.Scene {
   private playerWater(cx: number, cy: number): void {
     if (this.waterLevel <= 0) return; // empty can → nothing pours (the gauge reads 0; refill at the water's edge)
     if (!this.waterCropAt(cx, cy) || !this.islandLayer) return;
-    this.tutorialNotify('water', `${cx},${cy}`); // tutorial: "water the plot" step
     this.waterLevel--; // one pour per tile
     this.publishToolHud(); // refresh the gauge
     playSfx(this, SFX_SPLASH); // water sound — same as drawing water at the edge
@@ -9443,7 +9442,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(1e6 + 1);
     can.play('water-pour');
     this.waterCan = can;
-    const clearCan = () => { if (this.waterCan === can) this.waterCan = undefined; can.destroy(); };
+    const clearCan = () => { if (this.waterCan === can) this.waterCan = undefined; can.destroy(); this.tutorialNotify('water', `${cx},${cy}`); }; // advance AFTER the pour finishes (idempotent if the safety also fires)
     can.once(Phaser.Animations.Events.ANIMATION_COMPLETE, clearCan);
     this.time.delayedCall(950, clearCan); // safety if COMPLETE misses
   }
@@ -9488,7 +9487,6 @@ export class GameScene extends Phaser.Scene {
     // Mark it tilled NOW so the cursor leaves this cell + a double-click can't
     // re-till it mid-swing.
     this.tilledCells.add(key);
-    this.tutorialNotify('till', key); // tutorial: "till the plot" step
 
     // God-hand hoe swing; when it lands, flip the cell to soil + re-autotile this
     // cell and its 4 neighbours (a new tilled cell changes their edges).
@@ -9500,6 +9498,7 @@ export class GameScene extends Phaser.Scene {
       this.refreshSoil(cx, cy + 1);
       this.refreshSoil(cx - 1, cy);
       this.scheduleSave();
+      this.tutorialNotify('till', key); // advance ONLY after the swing lands + the soil shows (not at the tap)
     });
   }
 
@@ -11241,7 +11240,8 @@ export class GameScene extends Phaser.Scene {
       this.tutorialActive = false;
       this.setDialogueSpotlight(null);
       const next = this.tutorialStep + 1;
-      if (next < TUTORIAL_STEPS.length) this.time.delayedCall(320, () => this.tutorialShowStep(next));
+      if (next < TUTORIAL_STEPS.length) this.time.delayedCall(550, () => this.tutorialShowStep(next)); // a beat to SEE the result before the next prompt
+
       else this.tutorialFinish();
     }
   }
