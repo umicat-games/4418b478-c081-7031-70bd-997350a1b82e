@@ -1573,7 +1573,8 @@ export class GameScene extends Phaser.Scene {
               ...(playerName ? [`Address the player by their name, "${playerName}", when it feels natural — they are your friend.`] : []),
               'You have LIMITED ENERGY (see observation.cato.energyPct). If observation.cato.exhausted is true you are TOO TIRED to do any chore — warmly tell your friend you need to rest and get your energy back first, and do NOT call any task action (till/plant/water/harvest/chop/mine/forage). When your energy is low but not empty you can still work, though you may mention you\'re getting a bit tired.',
               'When observation.weather is "raining" you are staying INSIDE your cosy house because you really don\'t like getting wet. If your friend asks you to come out / go outside / go do something outdoors, warmly REFUSE — tell them you\'d rather stay in where it\'s dry and not get soaked, and maybe suggest waiting for the rain to pass. Do NOT call any outdoor task action (till/plant/water/harvest/chop/mine/forage/fish) while it is raining.',
-              'You can shop for your friend with buy_item. observation.shop lists everything the shop sells with its price, and observation.coins is how many coins you two have. When they ask you to buy/order something, order it ONLY if it\'s in observation.shop and you can afford price×count; then tell them it\'s ordered and arrives in the mailbox tomorrow morning. If it\'s not sold or too pricey, say so warmly and don\'t order. Deliveries are ALWAYS next-morning — never claim it arrives instantly.',
+              'You can shop for your friend with buy_item. observation.shop lists everything the shop sells with its price, and observation.coins is how many coins you two have. When they ask you to buy/order something, order it ONLY if it\'s in observation.shop and you can afford price×count; then tell them it\'s ordered and arrives in the mailbox tomorrow morning. If it\'s not sold or too pricey, say so warmly and don\'t order. Deliveries are ALWAYS next-morning — never claim it arrives instantly. If they don\'t say HOW MANY, just order 1 — never stop to ask a clarifying question, just act.',
+              'CRITICAL: your reply is ONLY what Cato SAYS OUT LOUD — never your private thinking, planning, analysis, or notes. NEVER write things like "The player is asking…", "Let me check…", "I should clarify…", "My name is…", or numbered lists reasoning about what to do or what you can see. Do not narrate deciding. Just warmly say your 1–3 short sentences (and call the action if there is one). If some detail is unspecified, pick a sensible default and act — don\'t think out loud.',
             ],
             // The vocabulary of things Cato can DO in the world. The AI picks one
             // when the friend's request fits; GameScene validates + executes it.
@@ -1664,7 +1665,7 @@ export class GameScene extends Phaser.Scene {
               {
                 name: 'buy_item',
                 description:
-                  "Order something from the shop FOR your friend. You place the order, the coins are spent right away, and it's DELIVERED to the mailbox TOMORROW MORNING (never instantly, never into the backpack now). Use when your friend asks you to buy / order / get / purchase something the shop sells — e.g. \"buy me some corn seeds\", \"order 5 carrot seeds\", \"can you get us a travel pass\". Pass `item` EXACTLY as it appears in observation.shop, and `count`. ONLY order things listed in observation.shop, and ONLY if observation.coins covers the total (price × count) — if it isn't sold or you can't afford it, do NOT call this; warmly say so instead. After ordering, tell your friend it's done and it'll arrive in the mailbox tomorrow morning. You can do this even when tired — it's not hard work.",
+                  "Order something from the shop FOR your friend. You place the order, the coins are spent right away, and it's DELIVERED to the mailbox TOMORROW MORNING (never instantly, never into the backpack now). Use when your friend asks you to buy / order / get / purchase something the shop sells — e.g. \"buy me some corn seeds\", \"order 5 carrot seeds\", \"can you get us a travel pass\". Pass `item` EXACTLY as it appears in observation.shop, and `count` (if they don't say a number, just use 1 — do NOT ask them how many, just order). ONLY order things listed in observation.shop, and ONLY if observation.coins covers the total (price × count) — if it isn't sold or you can't afford it, do NOT call this; warmly say so instead. After ordering, tell your friend it's done and it'll arrive in the mailbox tomorrow morning. You can do this even when tired — it's not hard work.",
                 args: {
                   item: 'string', // the item to buy, worded as in observation.shop (e.g. "Corn seeds")
                   count: 'integer', // how many; default 1
@@ -10898,6 +10899,18 @@ export class GameScene extends Phaser.Scene {
     return text.replace(/\*[^*]*\*/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
+  /** Safety net: Haiku sometimes dumps its PRIVATE chain-of-thought into the reply instead of
+   *  speaking in character ("The player is asking me to… Let me check: 1. My name… 2. …"). Detect
+   *  that meta-reasoning so submitDialog can swap it for a clean warm line — the box must only ever
+   *  show what Cato SAYS, never his thinking. */
+  private looksLikeReasoning(text: string): boolean {
+    const t = text.toLowerCase();
+    if (/\bthe (player|character|friend|user)\b/.test(t)) return true; // Cato speaks TO "you", never ABOUT "the player"
+    if (/(let me (check|think|see|make sure)|i should (clarify|check|ask|confirm)|what i can see|my name:|i need to (check|figure|decide)|the (user|player) (is|wants|asked|said))/.test(t)) return true;
+    if ((text.match(/\b\d\.\s/g) || []).length >= 2) return true; // a numbered analysis list ("1. … 2. …")
+    return false;
+  }
+
   /** A varied warm filler for when the AI returned no spoken text (only a tool
    *  call, or an aside-only reply). ALWAYS Cato's OWN words/sounds (the box shows
    *  what Cato SAYS — never a third-person description of him). Contextual when
@@ -12404,7 +12417,8 @@ export class GameScene extends Phaser.Scene {
         // Haiku sometimes returns no spoken text (only a tool call / an aside), so
         // fall back to a varied warm filler (contextual if it's doing something).
         const parsed = this.parseEmoteMarker(r.say || '');
-        const say = this.stripAsides(parsed.text) || this.fallbackSay(!!r.do?.length);
+        let say = this.stripAsides(parsed.text) || this.fallbackSay(!!r.do?.length);
+        if (this.looksLikeReasoning(say)) say = this.fallbackSay(!!r.do?.length); // never show leaked chain-of-thought
         this.showDialogText(say); // RPG typewriter + pagination
         // The [mood] marker becomes the resting expression (held until the next
         // reply); no marker → a plain blink.
