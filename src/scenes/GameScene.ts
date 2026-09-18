@@ -9664,7 +9664,13 @@ export class GameScene extends Phaser.Scene {
 
   /** Dispatch the actions the AI chose this turn. Unknown actions are ignored
    *  (the AI can only propose from the declared vocabulary anyway). */
-  private runCatoActions(actions: Array<{ name: string; args: unknown }>): void {
+  /** Did Cato's reply ask the friend a question (so the chat should stay open for an answer)? A "?"
+   *  / "？" anywhere, or a trailing Chinese question particle (吗/呢/吧) — covers most phrasings. */
+  private replyIsQuestion(say: string): boolean {
+    return /[?？]/.test(say) || /[吗呢吧][”"'’～~!！。.\s]*$/.test(say.trim());
+  }
+
+  private runCatoActions(actions: Array<{ name: string; args: unknown }>, askedQuestion = false): void {
     // Out of energy → he can't do chores. Still honour a `set_behavior` pref, but refuse
     // the physical tasks + say he needs to rest first (safety net; the AI is also told via
     // the observation + a rule, so it usually says this itself without even calling one).
@@ -9698,9 +9704,10 @@ export class GameScene extends Phaser.Scene {
       else if (a.name === 'set_cato_name') { this.setCatoName(String((a.args as { name?: unknown })?.name ?? '')); } // friend renamed Cato in chat
       else if (a.name === 'buy_item') { this.buyItemForFriend(a.args); } // place a shop order for the friend (delivered next morning)
     }
-    // Let the friend read Cato's reply, then close the chat so he walks off to
-    // do it (he already starts moving; this just gets the box out of the way).
-    if (acted) {
+    // Let the friend read Cato's reply, then close the chat so he walks off to do it (he already
+    // starts moving; this just gets the box out of the way). BUT if Cato's reply asked the friend a
+    // QUESTION, keep the box OPEN — the friend wants to answer, and auto-closing was cutting them off.
+    if (acted && !askedQuestion) {
       this.time.delayedCall(1300, () => { if (this.dialogOpen) this.closeDialog(); });
     }
   }
@@ -12412,7 +12419,7 @@ export class GameScene extends Phaser.Scene {
         this.catoEmote = parsed.anim ?? 'blink-eye';
         this.catoTalkFor(say); // talk a beat, then settle onto catoEmote + hold
         this.addBond('chatPerDay'); // a real exchange nudges the relationship (daily-capped)
-        if (r.do?.length) { this.addBond('followedInstruction'); this.runCatoActions(r.do); } // player asked → Cato acts
+        if (r.do?.length) { this.addBond('followedInstruction'); this.runCatoActions(r.do, this.replyIsQuestion(say)); } // player asked → Cato acts (keep the box open if he asked back)
         this.markFirst('first_chat', 'Talked with Cato for the first time');
         // ③ feed the exchange (compact) into the consolidation material.
         this.pushPending(`Chat — friend: "${this.truncate(t, 80)}" · Cato: "${this.truncate(say, 80)}"`);
