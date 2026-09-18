@@ -496,10 +496,22 @@ name only means something to somebody who already knows the game. Reported as
 you cannot read in time amounts to. The banner holds 2.6s for these, because a
 player who was watching the crate was not watching the top of the screen.
 
-**And a RING under the hero for the whole twenty seconds**, in the effect's own
-colour. The corner badge — an icon and a countdown — is something you have to go
-and read; the ring is in the place the player is already looking, and it says
-"still on" without repeating the sentence. It fades over the last two seconds
+**And the words STAY for as long as the effect does.** The banner is gone in
+under three seconds, and what was left was an icon and a countdown — which only
+means anything to somebody who read the banner. *"It flashed, I missed it, and
+now there is a coloured ring under my feet and I have no idea what it is."* So
+the effect has **its own row in the readout**, carrying what it DOES and how
+long is left, in the ring's colour.
+
+Its own row rather than squeezed onto line 2: the full sentence there pushed the
+readout off a phone's screen, and the answer to that is a row, not an
+abbreviation. The plate collapses an empty row, so it costs nothing when nothing
+is running — measured, the plate is 76px tall with no effect and 96 with one, on
+a 852-wide landscape phone.
+
+**And a RING under the hero for the whole twenty seconds**, in the same colour,
+so the words and the mark on the ground are obviously one thing. The ring is in
+the place the player is already looking. It fades over the last two seconds
 rather than blinking out: an effect that ends without saying so is one you find
 out about by being hit.
 

@@ -1480,7 +1480,20 @@ export async function startLevel(
   // Gold lives in its own element because a coin flying to the counter needs a
   // rectangle to aim at, and "somewhere in that line of text" is not one.
   const buffEl = document.createElement('span');
-  buffEl.style.cssText = 'color:#ffd45e';
+  buffEl.dataset.buff = '';
+  // Its OWN row, and it says what the effect DOES for as long as it lasts.
+  //
+  // It lived on line 2 as an icon and a countdown, on the grounds that the full
+  // sentence there pushed the readout off a phone's screen — true, and the
+  // answer is a row rather than an abbreviation. An icon and "12s" is a thing
+  // the player has to have READ the banner to understand, and the banner is
+  // gone in under three seconds: "it flashed, I missed it, and now there is a
+  // coloured ring under my feet and I have no idea what it is."
+  //
+  // The plate collapses an empty row, so this costs nothing when nothing is
+  // running.
+  buffEl.style.cssText = 'display:none; align-items:center; gap:5px;'
+    + ' font: 700 13px/1.5 system-ui, sans-serif;';
   const towerEl = document.createElement('span');
   const livesEl = document.createElement('span');
   const goldEl = document.createElement('span');
@@ -1490,7 +1503,7 @@ export async function startLevel(
   // their text set every frame, and were never put in the document — the same
   // shape of bug as a button rendered under the control layer, and just as
   // invisible from the code.
-  line2.append(livesEl, goldEl, waveEl, towerEl, buffEl);
+  line2.append(livesEl, goldEl, waveEl, towerEl);
   const buttons = document.createElement('div');
   buttons.style.cssText = 'display: flex; align-items: center; pointer-events: auto;';
   // The settings button used to be a mute switch — one control, all or nothing.
@@ -1519,7 +1532,7 @@ export async function startLevel(
   buttons.append(qualityBtn);
   // The BUTTONS stay outside the plate — they carry their own backgrounds, and
   // a plate behind them would be a panel with two holes in it.
-  hudEl.append(readoutPlate(line1, line2, line3), buttons);
+  hudEl.append(readoutPlate(line1, line2, buffEl, line3), buttons);
 
   const banner = document.createElement('div');
   banner.style.cssText = `
@@ -2415,10 +2428,13 @@ export async function startLevel(
     setIconText(towerEl, 'tower', ` ${towers.length}/${maxTowers}`, HUD_ICON);
     towerEl.style.marginLeft = '1em';
     buffEl.textContent = '';
+    buffEl.style.display = buff ? 'flex' : 'none';
     if (buff) {
-      buffEl.style.marginLeft = '1em';
+      // The same colour as the ring under the hero, so the words and the mark
+      // on the ground are obviously the same thing.
+      buffEl.style.color = `#${buff.kind.color.toString(16).padStart(6, '0')}`;
       buffEl.append(icon(buff.kind.badge, HUD_ICON),
-        document.createTextNode(` ${Math.ceil(buff.left)}s`));
+        document.createTextNode(`${buff.kind.label} · ${Math.ceil(buff.left)}s`));
     }
     // A PROMPT, not narration. This line is empty unless the player is standing
     // somewhere the button does something, and then it is three or four words.
