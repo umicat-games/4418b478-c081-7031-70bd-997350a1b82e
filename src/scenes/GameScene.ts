@@ -2084,8 +2084,11 @@ export class GameScene extends Phaser.Scene {
       if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
       // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (acts on release); a tap OUTSIDE is
       // swallowed (the dialog only closes via a button).
-      if (this.confirmOpen) { const cb = this.confirmButtonAt(sx, sy); if (cb) this.beginConfirmPress(cb); return; }
-      if (this.travelOpen) { const tb = this.travelButtonAt(sx, sy); if (tb) this.beginTravelPress(tb); return; } // island picker: hold a row/close, act on release
+      // Use the RAW pointer (NOT the snapped vcursor sx/sy) so the press matches the release, which
+      // uses pointer.x/y — else a leftover cursor-snap offset made the ✓ press register on the button
+      // but the release land elsewhere → "the confirm needs many clicks" (desktop). Screen-space UI.
+      if (this.confirmOpen) { const cb = this.confirmButtonAt(pointer.x, pointer.y); if (cb) this.beginConfirmPress(cb); return; }
+      if (this.travelOpen) { const tb = this.travelButtonAt(pointer.x, pointer.y); if (tb) this.beginTravelPress(tb); return; } // island picker: hold a row/close, act on release
       if (this.craftOpen) { this.handleCraftClick(pointer.x, pointer.y); return; } // crafting modal
       if (this.menuOpen) {
         // Press on a Settings volume slider → start a DRAG (held pointer scrubs it).
