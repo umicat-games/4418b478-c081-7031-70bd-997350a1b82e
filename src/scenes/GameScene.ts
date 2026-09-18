@@ -186,6 +186,7 @@ const SPAWN_WILD = false;
 // Weather = a TIME-tinted background (fills the window) + a transparent weather icon
 // on top. Sunny only for now (decorative); the icon cycles per day for variety.
 const WEATHER_ICONS = ['sunny-no-bg', 'partial-sunny-no-bg', 'sunny-with-cloud-no-bg'];
+const WEATHER_SALT = 0x5ea50; // day-seed for the random daily weather (weatherOfDay)
 const WEATHER_BGS = ['background-morning', 'background-noon', 'background-night']; // by time of day
 // Leash: Cato stays near the CAMERA CENTRE (in view) instead of roaming the whole
 // map. The radius ADAPTS to the visible area (`wanderLeashRadius`) so he keeps in
@@ -3019,7 +3020,7 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('weatherHud', {
       visible: this.gameReady && !this.inventoryOpen,
       bgFrame: WEATHER_BGS[this.bgIndex()], // time-tinted window background
-      weatherFrame: isDebug('rain') ? 'heavy-rain-no-bg' : isDebug('lightRain') ? 'rain-no-bg' : isDebug('heavyFog') ? 'more-cloudy-no-bg' : isDebug('fog') ? 'cloudy-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length], // fog = cloud icons (1 cloud light, 2 clouds heavy)
+      weatherFrame: (() => { const w = this.weatherOfDay(); return w === 'heavy-rain' ? 'heavy-rain-no-bg' : w === 'light-rain' ? 'rain-no-bg' : w === 'heavy-fog' ? 'more-cloudy-no-bg' : w === 'fog' ? 'cloudy-no-bg' : WEATHER_ICONS[this.dayCount % WEATHER_ICONS.length]; })(), // clear → sunny variant; rain/fog → their icons
       pointerStep: this.pointerStep(),
       money: this.money,
       timeLabel: this.timeLabel(),
@@ -3354,7 +3355,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateRain(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
-    const heavy = isDebug('rain'), light = isDebug('lightRain'); // heavy wins if both on
+    const w = this.weatherOfDay(); const heavy = w === 'heavy-rain', light = w === 'light-rain';
     this.updateGrassPuddles(); // puddle tiles appear on the grass while it rains, then dry out over ~3h
     // Rain ambience: loop `rain-loop` while it's raining (heavier = louder), on the SFX bus so the
     // SFX slider controls + mutes it. 0 volume = stop.
@@ -3446,7 +3447,8 @@ export class GameScene extends Phaser.Scene {
 
   private updateFog(delta: number): void {
     if (!this.gameReady || !this.islandLayer) return;
-    const rainHeavy = isDebug('rain'), rainLight = isDebug('lightRain'), heavyFog = isDebug('heavyFog'), lightFog = isDebug('fog');
+    const w = this.weatherOfDay();
+    const rainHeavy = w === 'heavy-rain', rainLight = w === 'light-rain', heavyFog = w === 'heavy-fog', lightFog = w === 'fog';
     if (!rainHeavy && !rainLight && !heavyFog && !lightFog) {
       this.fogOverlay?.setVisible(false);
       if (this.fogBlobs) for (const b of this.fogBlobs) b.img.setVisible(false);
@@ -3494,7 +3496,7 @@ export class GameScene extends Phaser.Scene {
   }
   private updateClouds(delta: number): void {
     if (!this.gameReady || !this.islandLayer || !this.textures.exists('cloud-1')) return;
-    const on = isDebug('rain') || isDebug('lightRain') || isDebug('fog') || isDebug('heavyFog');
+    const on = this.weatherOfDay() !== 'clear';
     if (!on) { if (this.clouds) for (const c of this.clouds) c.img.setVisible(false); return; }
     const view = this.cameras.main.worldView, dt = delta / 1000;
     if (!this.clouds) {
@@ -9352,7 +9354,7 @@ export class GameScene extends Phaser.Scene {
   private updateSoil(delta: number): void {
     // Rain (either intensity) wets ALL tilled soil like watering it — keep the timer topped up so it
     // stays damp while it rains, then dries naturally once the rain stops. (Fog doesn't wet — no rain.)
-    if (isDebug('rain') || isDebug('lightRain')) {
+    if (this.isRaining()) {
       for (const key of this.tilledCells) {
         if ((this.soilWet.get(key) ?? 0) <= 0) this.setSoilWet(key, true); // just became wet → damp look
         this.soilWet.set(key, WET_DURATION_MS);
@@ -11723,7 +11725,7 @@ export class GameScene extends Phaser.Scene {
     return {
       island: 'home',
       timeOfDay: ['morning', 'morning', 'midday', 'afternoon', 'evening'][this.pointerStep() - 1],
-      weather: this.isRaining() ? 'raining' : (isDebug('fog') || isDebug('heavyFog')) ? 'foggy' : 'clear',
+      weather: this.isRaining() ? 'raining' : this.isFoggy() ? 'foggy' : 'clear',
       daysTogether: this.dayCount,
       relationship: {
         bondTier: this.bondTier(), // stranger / acquaintance / friend / close / bonded
@@ -11825,9 +11827,33 @@ export class GameScene extends Phaser.Scene {
     return h >= SLEEP_START_HOUR || h < SLEEP_END_HOUR;
   }
 
+  /** The weather for the current calendar day. The debug flags OVERRIDE it (one at a time, heavy
+   *  wins — for testing); with NO flag set it's a deterministic RANDOM weather per real day: mostly
+   *  clear, sometimes light/heavy rain or (heavy) fog. Deterministic per `dayCount` → stable all day,
+   *  fresh each day, no flicker, no save needed (same daily-seed pattern as the grass decoration). */
+  private weatherOfDay(): 'clear' | 'light-rain' | 'heavy-rain' | 'fog' | 'heavy-fog' {
+    if (isDebug('rain')) return 'heavy-rain';
+    if (isDebug('lightRain')) return 'light-rain';
+    if (isDebug('heavyFog')) return 'heavy-fog';
+    if (isDebug('fog')) return 'fog';
+    const r = this.cellHash(this.dayCount, 7, WEATHER_SALT);
+    if (r < 0.64) return 'clear';        // ~64% clear
+    if (r < 0.76) return 'light-rain';   // ~12%
+    if (r < 0.84) return 'heavy-rain';   // ~8%
+    if (r < 0.93) return 'fog';          // ~9%
+    return 'heavy-fog';                  // ~7%
+  }
+
   /** Is it raining? (heavy or light). Cato shelters indoors — he doesn't like getting wet. */
   public isRaining(): boolean {
-    return isDebug('rain') || isDebug('lightRain');
+    const w = this.weatherOfDay();
+    return w === 'light-rain' || w === 'heavy-rain';
+  }
+
+  /** Is it foggy? (light or heavy fog). */
+  private isFoggy(): boolean {
+    const w = this.weatherOfDay();
+    return w === 'fog' || w === 'heavy-fog';
   }
 
   /** Where Cato ACTUALLY is right now, for HouseScene to mirror when the player steps inside: `out` =
