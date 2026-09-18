@@ -39,7 +39,7 @@ import {
 import { NO_BONUS, TOWN, ARMOUR_PER_LEVEL, type TownBonus } from './town';
 import {
   RUN_TIERS, MAX_RUN_TIER, nextTierCost, tierLabel,
-  meleeReach, meleeBonusDamage, meleeImpact,
+  meleeReach, meleeBonusDamage, meleeImpact, tierLook,
   arrowLife, arrowShots, arrowShare, ARROW_SPREAD,
   burstRadiusBonus, burstCooldownScale, burstBonusDamage,
 } from './runtiers';
@@ -698,6 +698,23 @@ export async function startLevel(
   let swordPivot: THREE.Object3D | null = null;
   /** The pivot's local position as the socket left it. */
   const swordBase = new THREE.Vector3();
+  /** The blade's own materials, cloned so tinting it tints nothing else. */
+  const bladeMats: THREE.MeshStandardMaterial[] = [];
+  /** Paint the blade for the tier it is at.
+   *
+   *  EMISSIVE rather than the base colour: a sword whose steel is repainted
+   *  pink reads as a toy, and one that glows hotter reads as a sword with
+   *  something in it. Nothing else writes the blade's emissive, so there is no
+   *  fight of the kind the burn and the chill have over an enemy's. */
+  const paintBlade = (): void => {
+    const look = tierLook(runTier);
+    for (const m of bladeMats) {
+      if (!m.emissive) continue;
+      m.emissive.setHex(look.color);
+      m.emissiveIntensity = look.glow;
+      m.needsUpdate = true;
+    }
+  };
   const _want = new THREE.Vector3();
   /** Whether this swing has already drawn its smear. */
   let trailDone = false;
@@ -745,6 +762,23 @@ export async function startLevel(
     const loaded = await loadModelAsset(manifest, 'sword', { assetBase: '' });
     const blade = loaded.object;
     blade.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
+    // MATERIALS OF ITS OWN, before anything tints them.
+    //
+    // A GLB loaded twice hands back two objects pointing at ONE material. This
+    // game has been bitten by that twice already — `flashTint` turning five
+    // enemies red for one hit, and fading the Clinic fading the Armory because
+    // both are built from the same stall — and a sword that glows hotter as it
+    // levels would have quietly set fire to every other object sharing the
+    // kit's material.
+    blade.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((m) => m.clone())
+        : mesh.material.clone();
+      const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
+      for (const m of mats) bladeMats.push(m as THREE.MeshStandardMaterial);
+    });
     // Longer. The kit's sword is 0.45 against a 0.72 hero, which from the
     // game's camera is a knife — and a short blade held level reads as a stick.
     blade.scale.setScalar(SWORD_SCALE);
@@ -2329,6 +2363,7 @@ export async function startLevel(
     if (cost === null || gold < cost) { audio.play('denied'); return; }
     gold -= cost;
     runTier += 1;
+    paintBlade();
     const label = tierLabel(kind.cast, runTier);
     if (label) flashBanner(label, 'upgrade');
     audio.play('upgrade');
@@ -2350,6 +2385,7 @@ export async function startLevel(
     release: () => input.release(PLACE_KEY),
   });
   const drawWeaponChip = (): void => drawWeaponCell();
+  paintBlade();
 
   // Photograph each tower once, now that the models are loaded.
   //
@@ -4309,7 +4345,7 @@ export async function startLevel(
         if (!trailDone && cut >= 0.75) {
           trailDone = true;
           bladeTrail(vfx, hero.position, yaw, -SWING_ARC, a,
-            SWING_GRIP + 0.36, hero.position.y + SWING_HEIGHT, runTier);
+            SWING_GRIP + 0.36, hero.position.y + SWING_HEIGHT, tierLook(runTier));
         }
         if (swing === 0) restSword();
       } else {

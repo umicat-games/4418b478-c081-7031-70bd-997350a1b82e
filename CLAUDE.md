@@ -1466,10 +1466,26 @@ frame rate: fifteen segments on a device and TWO under the headless renderer, so
 it could not be judged on the machine the checks run on. It is generated from
 the swing's own start and end angle now.
 
-**The smear carries the sword's LEVEL.** It thickens and reddens at every run
-tier — pale pink and thin at the first, thick and hot at the top — so the
-upgrade is something you feel the next time you swing rather than something a
-banner told you about.
+**The smear carries the sword's LEVEL, and so does the BLADE.** Both thicken and
+redden at every run tier — pale pink and thin at the first, thick and hot at the
+top — so the upgrade is something you can see whether you are watching the sword
+at rest or the arc it leaves.
+
+`tierLook` in `runtiers.ts` is the one table both read. Two tables would be two
+ramps that agree until somebody edits one.
+
+The blade takes it as **emissive**, not as a new base colour: steel repainted
+pink reads as a toy, steel that glows hotter reads as a sword with something in
+it. Nothing else writes the blade's emissive, so there is none of the fight the
+burn and the chill have over an enemy's one slot.
+
+**And its materials are CLONED before anything touches them.** A GLB loaded
+twice hands back two objects pointing at one material — this game has been
+bitten twice, by `flashTint` turning five enemies red for one hit and by fading
+the Clinic fading the Armory — so a blade that glows would have quietly set fire
+to every other object built from the kit's material. `verify-3d-runtiers` does
+not ask whether the blade glows; it asks whether **only** the blade glows, and
+counts the meshes carrying those materials.
 
 That replaced a separate shock effect that fired only from tier 2. **A thing
 that appears at level three teaches nothing about levels one and two**, because

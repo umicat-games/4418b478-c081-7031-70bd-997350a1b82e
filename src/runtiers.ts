@@ -116,3 +116,26 @@ export const ARROW_SPREAD = 0.22;
 export const burstRadiusBonus = (tier: number): number => (tier >= 1 ? 0.7 : 0) + (tier >= 3 ? 0.7 : 0);
 export const burstCooldownScale = (tier: number): number => (tier >= 2 ? 0.7 : 1);
 export const burstBonusDamage = (tier: number): number => (tier >= 3 ? 1 : 0);
+
+/**
+ * What a tier LOOKS like — one table, read by two things.
+ *
+ * The blade's smear and the blade itself take the same colour, because they are
+ * the same statement: this sword is at this level. Two tables would be two
+ * ramps that agree until somebody edits one.
+ *
+ * `band` is the smear's thickness as a fraction of its radius, and `glow` is
+ * how hot the blade itself burns. Both climb, so the step is legible whether
+ * you are watching the sword or the arc it leaves.
+ */
+export interface TierLook { color: number; band: number; glow: number }
+
+const LOOKS: TierLook[] = [
+  { color: 0xffc9c2, band: 0.14, glow: 0 },
+  { color: 0xff9a8a, band: 0.21, glow: 0.22 },
+  { color: 0xff6a52, band: 0.30, glow: 0.45 },
+  { color: 0xff3a24, band: 0.40, glow: 0.75 },
+];
+
+export const tierLook = (tier: number): TierLook =>
+  LOOKS[Math.max(0, Math.min(LOOKS.length - 1, Math.round(tier)))];

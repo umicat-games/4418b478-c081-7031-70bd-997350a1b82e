@@ -937,12 +937,10 @@ export function bladeTrail(
   toAngle: number,
   radius: number,
   height: number,
-  /** 0-3. Drives the colour AND the thickness: **this is how the player feels
-   *  the sword getting stronger.** It replaced a separate shock effect that
-   *  fired only at the top tiers — a thing that appears at level three teaches
-   *  nothing about levels one and two, whereas an arc that thickens and reddens
-   *  every time is a scale you can read without being told there is one. */
-  tier = 0,
+  /** How this tier looks — see `tierLook` in `runtiers.ts`. The colour and the
+   *  thickness are **how the player feels the sword getting stronger**, and the
+   *  blade itself is tinted from the same entry so the two cannot disagree. */
+  look: { color: number; band: number } = { color: 0xffc9c2, band: 0.14 },
 ): void {
   // A RING SEGMENT, not a row of textured quads.
   //
@@ -959,12 +957,8 @@ export function bladeTrail(
   // pixels on the ground before a swing against 2907 after.
   const span = toAngle - fromAngle;
   if (Math.abs(span) < 0.05) return;
-  // Thin and pale at the bottom, thick and hot at the top.
-  const RAMP = [0xffc9c2, 0xff9a8a, 0xff6a52, 0xff3a24];
-  const BAND = [0.86, 0.79, 0.70, 0.60];
-  const t = Math.max(0, Math.min(3, Math.round(tier)));
-  const color = RAMP[t];
-  const inner = radius * BAND[t];
+  const color = look.color;
+  const inner = radius * (1 - look.band);
   const geom = new THREE.RingGeometry(
     inner, radius, 40, 1,
     Math.min(fromAngle, toAngle), Math.abs(span),
