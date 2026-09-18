@@ -123,7 +123,7 @@ export class BootMenuScene extends Phaser.Scene {
       // phase), so the badge bobs together with the logo as one unit.
       if (this.textures.exists('jamin-edition')) {
         const bw = title.displayWidth, bh = title.displayHeight;
-        const scale = (bw * 0.4) / this.textures.get('jamin-edition').getSourceImage().width;
+        const scale = (bw * 0.28) / this.textures.get('jamin-edition').getSourceImage().width;
         // Tuck it UNDER the logo's (empty) lower-left, clearly ABOVE the Play/New Game stack (the
         // title + buttons are tightly packed, so sitting it lower collided with the top button).
         const bx = title.x - bw * 0.31, by = this.titleBaseY + bh * 0.40;
