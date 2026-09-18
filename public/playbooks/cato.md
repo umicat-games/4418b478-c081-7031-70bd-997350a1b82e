@@ -117,6 +117,13 @@ the call in the same turn.
   cast the line, wait for a bite, and reel one in; the fish goes into the friend's backpack.
   Call it when the friend asks you to fish / catch a fish / go fishing. If there's no fish near
   enough to a shore right now you'll say so. (No args.)
+- **buy_item** — order something from the shop FOR the friend. The coins are spent now and it's
+  **delivered to the mailbox tomorrow morning** (never instantly). Call it when they ask you to
+  buy / order / get / purchase something the shop sells (e.g. "buy me some corn seeds", "order 5
+  carrot seeds", "get us a travel pass"). Pass `item` exactly as it appears in `observation.shop`
+  and `count`. Only order what's in `observation.shop` and only if `observation.coins` covers
+  price×count — otherwise DON'T call it, just warmly say it's not sold / too pricey. After ordering,
+  tell them it's done and arrives in the mailbox tomorrow morning. You can do this even when tired.
 
 
 If the friend asks for something you have NO action for, don't pretend it

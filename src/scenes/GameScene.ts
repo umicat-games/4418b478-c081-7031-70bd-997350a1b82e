@@ -1573,6 +1573,7 @@ export class GameScene extends Phaser.Scene {
               ...(playerName ? [`Address the player by their name, "${playerName}", when it feels natural — they are your friend.`] : []),
               'You have LIMITED ENERGY (see observation.cato.energyPct). If observation.cato.exhausted is true you are TOO TIRED to do any chore — warmly tell your friend you need to rest and get your energy back first, and do NOT call any task action (till/plant/water/harvest/chop/mine/forage). When your energy is low but not empty you can still work, though you may mention you\'re getting a bit tired.',
               'When observation.weather is "raining" you are staying INSIDE your cosy house because you really don\'t like getting wet. If your friend asks you to come out / go outside / go do something outdoors, warmly REFUSE — tell them you\'d rather stay in where it\'s dry and not get soaked, and maybe suggest waiting for the rain to pass. Do NOT call any outdoor task action (till/plant/water/harvest/chop/mine/forage/fish) while it is raining.',
+              'You can shop for your friend with buy_item. observation.shop lists everything the shop sells with its price, and observation.coins is how many coins you two have. When they ask you to buy/order something, order it ONLY if it\'s in observation.shop and you can afford price×count; then tell them it\'s ordered and arrives in the mailbox tomorrow morning. If it\'s not sold or too pricey, say so warmly and don\'t order. Deliveries are ALWAYS next-morning — never claim it arrives instantly.',
             ],
             // The vocabulary of things Cato can DO in the world. The AI picks one
             // when the friend's request fits; GameScene validates + executes it.
@@ -1659,6 +1660,15 @@ export class GameScene extends Phaser.Scene {
                 description:
                   "Go fishing at the water's edge. You walk to the nearest shore beside a fish, cast the line, wait for a bite, and reel one in — the fish goes into the friend's backpack. Use when the friend asks you to fish / catch a fish / go fishing. If no fish is close enough to a shore right now you'll say so. No arguments.",
                 args: {},
+              },
+              {
+                name: 'buy_item',
+                description:
+                  "Order something from the shop FOR your friend. You place the order, the coins are spent right away, and it's DELIVERED to the mailbox TOMORROW MORNING (never instantly, never into the backpack now). Use when your friend asks you to buy / order / get / purchase something the shop sells — e.g. \"buy me some corn seeds\", \"order 5 carrot seeds\", \"can you get us a travel pass\". Pass `item` EXACTLY as it appears in observation.shop, and `count`. ONLY order things listed in observation.shop, and ONLY if observation.coins covers the total (price × count) — if it isn't sold or you can't afford it, do NOT call this; warmly say so instead. After ordering, tell your friend it's done and it'll arrive in the mailbox tomorrow morning. You can do this even when tired — it's not hard work.",
+                args: {
+                  item: 'string', // the item to buy, worded as in observation.shop (e.g. "Corn seeds")
+                  count: 'integer', // how many; default 1
+                },
               },
               {
                 name: 'set_behavior',
@@ -9672,12 +9682,13 @@ export class GameScene extends Phaser.Scene {
     // the observation + a rule, so it usually says this itself without even calling one).
     // `set_behavior` (a standing pref) and `feel` (a feeling) are non-physical — honour them even
     // when exhausted; only the chores are refused.
-    const isPhysical = (n: string) => n !== 'set_behavior' && n !== 'feel' && n !== 'set_cato_name';
+    const isPhysical = (n: string) => n !== 'set_behavior' && n !== 'feel' && n !== 'set_cato_name' && n !== 'buy_item';
     if (this.exhausted && actions.some((a) => isPhysical(a.name))) {
       for (const a of actions) {
         if (a.name === 'set_behavior') this.setAutonomy(a.args);
         else if (a.name === 'feel') this.addBondWarmth(Number((a.args as { warmth?: unknown })?.warmth));
         else if (a.name === 'set_cato_name') this.setCatoName(String((a.args as { name?: unknown })?.name ?? ''));
+        else if (a.name === 'buy_item') this.buyItemForFriend(a.args); // ordering isn't hard work — do it even when tired
       }
       this.setImmediateDialog('Cato flops down with a tired little sigh — he needs to rest and get some energy back before he can do that.');
       return;
@@ -9697,6 +9708,7 @@ export class GameScene extends Phaser.Scene {
       else if (a.name === 'set_behavior') { this.setAutonomy(a.args); } // standing pref, not a walk-off task
       else if (a.name === 'feel') { this.addBondWarmth(Number((a.args as { warmth?: unknown })?.warmth)); } // per-turn warmth nudge, not a task
       else if (a.name === 'set_cato_name') { this.setCatoName(String((a.args as { name?: unknown })?.name ?? '')); } // friend renamed Cato in chat
+      else if (a.name === 'buy_item') { this.buyItemForFriend(a.args); } // place a shop order for the friend (delivered next morning)
     }
     // Let the friend read Cato's reply, then close the chat so he walks off to
     // do it (he already starts moving; this just gets the box out of the way).
@@ -9712,6 +9724,43 @@ export class GameScene extends Phaser.Scene {
     if (typeof a.harvest === 'boolean') this.autonomy.harvest = a.harvest;
     if (typeof a.water === 'boolean') this.autonomy.water = a.water;
     this.scheduleSave();
+  }
+
+  /** Apply an AI `buy_item` call — the friend asked Cato (in chat) to buy something. Cato places a
+   *  normal overnight SHOP ORDER (coins spent now, delivered to the mailbox next morning), same as
+   *  the shop Buy button. Cato's own spoken reply confirms it on success; on failure (item not sold /
+   *  can't afford / pen already owned) the game overrides his line with a clear reason. */
+  private buyItemForFriend(rawArgs: unknown): void {
+    const a = (rawArgs ?? {}) as { item?: unknown; count?: unknown };
+    const id = this.resolveOrderableId(String(a.item ?? ''));
+    if (!id) { this.setImmediateDialog(t('cato_buy_unknown')); return; } // shop doesn't sell it
+    if (id === 'cowpen' && (this.cowPen || this.orders.some((o) => o.id === 'cowpen'))) { this.setImmediateDialog(t('cato_buy_have_pen')); return; }
+    const n = id === 'cowpen' ? 1 : Phaser.Math.Clamp(Math.round(Number(a.count) || 1), 1, 99);
+    const cost = this.priceOf(id) * n;
+    if (cost > this.money) { this.setImmediateDialog(t('cato_buy_no_coins')); return; } // not enough coins
+    this.addMoney(-cost);                                             // pay at order time (same as menuBuy)
+    this.orders.push({ id, count: n, deliverDay: this.dayCount + 1 }); // arrives tomorrow morning
+    this.scheduleSave();
+    if (this.menuOpen && this.menuTab === TAB_SHOP) this.publishMenu(); // reflect the "N on the way" line if the shop's open
+    // Cato's spoken reply carries the confirmation ("ordered, arrives tomorrow morning" — playbook).
+  }
+
+  /** Match a free-text item name (the buy_item AI arg) to an orderable shop id — tries the id, its
+   *  spaced form, the English label, and the localized name; exact match first, then a partial. */
+  private resolveOrderableId(query: string): string | null {
+    const norm = (s: string) => s.toLowerCase().replace(/[-_]/g, ' ').replace(/seeds/g, 'seed').replace(/\s+/g, ' ').trim();
+    const nq = norm(query);
+    if (!nq) return null;
+    let partial: string | null = null;
+    for (const id of ORDERABLE_IDS) {
+      for (const name of [id, id.replace(/-/g, ' '), this.itemName(id), itemFromId(id, 1).label ?? '']) {
+        const nc = norm(String(name));
+        if (!nc) continue;
+        if (nc === nq) return id;
+        if (partial === null && (nc.includes(nq) || nq.includes(nc))) partial = id;
+      }
+    }
+    return partial;
   }
 
   /** Autonomous chores: when Cato is free + it's enabled, quietly go tend the farm
@@ -11677,6 +11726,8 @@ export class GameScene extends Phaser.Scene {
         // The last little thing Cato said on his own (the friend may be replying to it).
         ...(this.lastChatter ? { lastRemark: this.lastChatter } : {}),
       },
+      coins: this.money, // coins you two have — Cato checks this before ordering with buy_item
+      shop: this.orderCatalog().map((e) => ({ item: this.itemName(e.id), price: e.price })), // what the shop sells + prices (buy_item)
       backpack, // e.g. [{item:'Corn seeds', count:10}, {item:'Hoe', count:1}]
       farm: {
         plantedByCrop: byType, // {corn:3, carrot:2}
