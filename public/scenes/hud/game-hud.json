@@ -1,220 +1,239 @@
 {
-  "schemaVersion": 1,
-  "id": "game-hud",
-  "name": "Game HUD",
-  "type": "hud",
-  "design": {
-    "designAspectRatio": "16:9",
-    "safeArea": {
-      "top": 16,
-      "right": 16,
-      "bottom": 16,
-      "left": 16
-    }
+ "schemaVersion": 1,
+ "id": "game-hud",
+ "name": "Game HUD",
+ "type": "hud",
+ "design": {
+  "designAspectRatio": "16:9",
+  "safeArea": {
+   "top": 16,
+   "right": 16,
+   "bottom": 16,
+   "left": 16
+  }
+ },
+ "entities": [
+  {
+   "id": "e-mqvhsx7u-et6p",
+   "kind": "icon-button",
+   "anchor": {
+    "side": "bottom-left",
+    "offsetX": 0,
+    "offsetY": 0
+   },
+   "layer": "base",
+   "label": "",
+   "shape": "rounded-rect",
+   "width": 64,
+   "height": 64,
+   "fillColor": "#3b82f6",
+   "textColor": "#ffffff",
+   "backgroundAssetId": "all_ui_assets_on_one_sheet",
+   "backgroundRegion": "photo-frame-1-1",
+   "name": "photo-frame",
+   "role": "photo-frame"
   },
-  "entities": [
-    {
-      "id": "e-mqvhsx7u-et6p",
-      "kind": "icon-button",
-      "anchor": {
-        "side": "bottom-left",
-        "offsetX": 0,
-        "offsetY": 0
-      },
-      "layer": "base",
-      "label": "",
-      "shape": "rounded-rect",
-      "width": 64,
-      "height": 64,
-      "fillColor": "#3b82f6",
-      "textColor": "#ffffff",
-      "backgroundAssetId": "all_ui_assets_on_one_sheet",
-      "backgroundRegion": "photo-frame-1-1",
-      "name": "photo-frame",
-      "role": "photo-frame"
-    },
-    {
-      "id": "e-mqz70k8c-2m6d",
-      "kind": "panel",
-      "role": "chat-input",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": 0,
-        "offsetY": 0
-      },
-      "layer": "base",
-      "width": 700,
-      "height": 53,
-      "backgroundColor": "#000000",
-      "backgroundAlpha": 0.5,
-      "borderRadius": 8,
-      "borderColor": "#ffffff",
-      "borderWidth": 1,
-      "backgroundAssetId": "square_buttons_26x26",
-      "backgroundRegion": "square-button-26_26-5",
-      "name": "chat-input",
-      "visible": false
-    },
-    {
-      "id": "e-mqz71f9h-7wxk",
-      "kind": "panel",
-      "role": "chat-message",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": 0,
-        "offsetY": -60
-      },
-      "layer": "base",
-      "width": 700,
-      "height": 130,
-      "backgroundColor": "#000000",
-      "backgroundAlpha": 0.5,
-      "borderRadius": 8,
-      "borderColor": "#ffffff",
-      "borderWidth": 1,
-      "name": "chat-message",
-      "backgroundAssetId": "square_buttons_26x26",
-      "backgroundRegion": "square-button-26_26-6",
-      "visible": false
-    },
-    {
-      "id": "cato-dialog-text",
-      "kind": "text-area",
-      "role": "chat-text",
-      "name": "chat-text",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": 0,
-        "offsetY": -60
-      },
-      "layer": "overlay",
-      "width": 700,
-      "height": 130,
-      "source": {
-        "mode": "dynamic",
-        "binding": "catoDialogText",
-        "fallback": "…"
-      },
-      "fontFamily": "zpix",
-      "fontSize": 24,
-      "color": "#ffffff",
-      "align": "start",
-      "padding": 22,
-      "visible": false
-    },
-    {
-      "id": "cato-chat-field",
-      "kind": "text-input",
-      "role": "chat-input-field",
-      "name": "chat-input-field",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": -40,
-        "offsetY": 0
-      },
-      "layer": "overlay",
-      "width": 600,
-      "height": 44,
-      "fontFamily": "zpix",
-      "fontSize": 24,
-      "color": "#ffffff",
-      "align": "center",
-      "placeholder": "Talk to Cato…",
-      "maxLength": 200,
-      "visible": false
-    },
-    {
-      "id": "e-mr263q1l-h080",
-      "kind": "image",
-      "anchor": {
-        "side": "bottom-left",
-        "offsetX": 12,
-        "offsetY": -12
-      },
-      "layer": "base",
-      "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
-      "width": 40,
-      "height": 40,
-      "animation": "blink-eye"
-    },
-    {
-      "id": "cato-portrait",
-      "kind": "image",
-      "role": "cato-portrait",
-      "name": "cato-portrait",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": -170,
-        "offsetY": -191
-      },
-      "layer": "base",
-      "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
-      "width": 88,
-      "height": 88,
-      "animation": "blink-eye",
-      "visible": false
-    },
-    {
-      "id": "cato-name-frame",
-      "kind": "panel",
-      "role": "cato-name-frame",
-      "name": "cato-name-frame",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": -290,
-        "offsetY": -192
-      },
-      "layer": "base",
-      "width": 104,
-      "height": 44,
-      "backgroundColor": "#000000",
-      "backgroundAlpha": 0.5,
-      "borderRadius": 8,
-      "backgroundAssetId": "square_buttons_26x26",
-      "backgroundRegion": "square-button-26_26-6",
-      "visible": false
-    },
-    {
-      "id": "cato-name-text",
-      "kind": "text-area",
-      "role": "cato-name-text",
-      "name": "cato-name-text",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": -290,
-        "offsetY": -192
-      },
-      "layer": "overlay",
-      "width": 104,
-      "height": 44,
-      "source": {
-        "mode": "dynamic",
-        "binding": "catoName",
-        "fallback": "Cato"
-      },
-      "fontFamily": "zpix",
-      "fontSize": 22,
-      "color": "#f4e4c1",
-      "align": "center",
-      "padding": 6,
-      "visible": false
-    },
-    {
-      "id": "cato-more-icon",
-      "kind": "image",
-      "role": "cato-more-icon",
-      "name": "cato-more-icon",
-      "anchor": {
-        "side": "bottom",
-        "offsetX": 306,
-        "offsetY": -64
-      },
-      "layer": "overlay",
-      "assetId": "dialog-continue",
-      "animation": "dialog-continue",
-      "width": 72,
-      "height": 72,
-      "visible": false
-    }
-  ]
+  {
+   "id": "e-mqz70k8c-2m6d",
+   "kind": "panel",
+   "role": "chat-input",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": 0,
+    "offsetY": 0
+   },
+   "layer": "base",
+   "width": 700,
+   "height": 53,
+   "backgroundColor": "#000000",
+   "backgroundAlpha": 0.5,
+   "borderRadius": 8,
+   "borderColor": "#ffffff",
+   "borderWidth": 1,
+   "backgroundAssetId": "square_buttons_26x26",
+   "backgroundRegion": "square-button-26_26-5",
+   "name": "chat-input",
+   "visible": false
+  },
+  {
+   "id": "e-mqz71f9h-7wxk",
+   "kind": "panel",
+   "role": "chat-message",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": 0,
+    "offsetY": -60
+   },
+   "layer": "base",
+   "width": 700,
+   "height": 130,
+   "backgroundColor": "#000000",
+   "backgroundAlpha": 0.5,
+   "borderRadius": 8,
+   "borderColor": "#ffffff",
+   "borderWidth": 1,
+   "name": "chat-message",
+   "backgroundAssetId": "square_buttons_26x26",
+   "backgroundRegion": "square-button-26_26-6",
+   "visible": false
+  },
+  {
+   "id": "cato-dialog-text",
+   "kind": "text-area",
+   "role": "chat-text",
+   "name": "chat-text",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": 0,
+    "offsetY": -60
+   },
+   "layer": "overlay",
+   "width": 700,
+   "height": 130,
+   "source": {
+    "mode": "dynamic",
+    "binding": "catoDialogText",
+    "fallback": "\u2026"
+   },
+   "fontFamily": "zpix",
+   "fontSize": 24,
+   "color": "#ffffff",
+   "align": "start",
+   "padding": 22,
+   "visible": false
+  },
+  {
+   "id": "cato-chat-field",
+   "kind": "text-input",
+   "role": "chat-input-field",
+   "name": "chat-input-field",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": -40,
+    "offsetY": 0
+   },
+   "layer": "overlay",
+   "width": 600,
+   "height": 44,
+   "fontFamily": "zpix",
+   "fontSize": 24,
+   "color": "#ffffff",
+   "align": "center",
+   "placeholder": "Talk to Cato\u2026",
+   "maxLength": 200,
+   "visible": false
+  },
+  {
+   "id": "e-mr263q1l-h080",
+   "kind": "image",
+   "anchor": {
+    "side": "bottom-left",
+    "offsetX": 12,
+    "offsetY": -12
+   },
+   "layer": "base",
+   "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
+   "width": 40,
+   "height": 40,
+   "animation": "blink-eye"
+  },
+  {
+   "id": "cato-portrait",
+   "kind": "image",
+   "role": "cato-portrait",
+   "name": "cato-portrait",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": -170,
+    "offsetY": -191
+   },
+   "layer": "base",
+   "assetId": "teemo_premium_emote_animations_sprite_sheet-export",
+   "width": 88,
+   "height": 88,
+   "animation": "blink-eye",
+   "visible": false
+  },
+  {
+   "id": "cato-name-frame",
+   "kind": "panel",
+   "role": "cato-name-frame",
+   "name": "cato-name-frame",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": -290,
+    "offsetY": -192
+   },
+   "layer": "base",
+   "width": 104,
+   "height": 44,
+   "backgroundColor": "#000000",
+   "backgroundAlpha": 0.5,
+   "borderRadius": 8,
+   "backgroundAssetId": "square_buttons_26x26",
+   "backgroundRegion": "square-button-26_26-6",
+   "visible": false
+  },
+  {
+   "id": "cato-name-text",
+   "kind": "text-area",
+   "role": "cato-name-text",
+   "name": "cato-name-text",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": -290,
+    "offsetY": -192
+   },
+   "layer": "overlay",
+   "width": 104,
+   "height": 44,
+   "source": {
+    "mode": "dynamic",
+    "binding": "catoName",
+    "fallback": "Cato"
+   },
+   "fontFamily": "zpix",
+   "fontSize": 22,
+   "color": "#f4e4c1",
+   "align": "center",
+   "padding": 6,
+   "visible": false
+  },
+  {
+   "id": "cato-more-icon",
+   "kind": "image",
+   "role": "cato-more-icon",
+   "name": "cato-more-icon",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": 306,
+    "offsetY": -64
+   },
+   "layer": "overlay",
+   "assetId": "dialog-continue",
+   "animation": "dialog-continue",
+   "width": 72,
+   "height": 72,
+   "visible": false
+  },
+  {
+   "id": "cato-close-icon",
+   "kind": "icon-button",
+   "role": "cato-close-icon",
+   "name": "cato-close-icon",
+   "anchor": {
+    "side": "bottom",
+    "offsetX": 322,
+    "offsetY": -168
+   },
+   "layer": "overlay",
+   "label": "X",
+   "shape": "rounded-rect",
+   "width": 38,
+   "height": 38,
+   "fillColor": "#5b3a1e",
+   "textColor": "#f6f0e2",
+   "visible": false
+  }
+ ]
 }

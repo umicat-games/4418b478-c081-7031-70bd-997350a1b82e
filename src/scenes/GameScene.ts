@@ -1954,6 +1954,7 @@ export class GameScene extends Phaser.Scene {
     if (hud) {
       const onHudPress = (_id: string, entity?: { name?: string }): void => {
         if (entity?.name === 'photo-frame') this.focusCato();
+        else if (entity?.name === 'cato-close-icon' && this.dialogOpen) this.closeDialog(); // the chat's X — the ONLY way a tap closes it now
       };
       hud.events.on('hud:press', onHudPress);
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => hud.events.off('hud:press', onHudPress));
@@ -2082,7 +2083,7 @@ export class GameScene extends Phaser.Scene {
       // Dialog open: a canvas click (outside the HTML input, which sits on top
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
-      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (this.signDialog) { if (!this.advanceDialog()) this.closeDialog(); } else { this.advanceDialog(); } return; } // regular chat: tap only ADVANCES pages; the X button closes it (no accidental tap-close). Sign notes still tap-to-close (no X).
       // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (acts on release); a tap OUTSIDE is
       // swallowed (the dialog only closes via a button).
       // Use the RAW pointer (NOT the snapped vcursor sx/sy) so the press matches the release, which
@@ -2211,7 +2212,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
-      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (!this.advanceDialog()) this.closeDialog(); return; }
+      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (this.signDialog) { if (!this.advanceDialog()) this.closeDialog(); } else { this.advanceDialog(); } return; } // regular chat: tap only ADVANCES pages; the X button closes it (no accidental tap-close). Sign notes still tap-to-close (no X).
       if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; }
       this.actAt(pointer.x, pointer.y);
     });
@@ -11013,8 +11014,9 @@ export class GameScene extends Phaser.Scene {
     // Cutscene: hide only the text-INPUT widgets (`chat-input` panel + `chat-input-field`
     // DOM input) — Cato is speaking, the player just taps to continue. KEEP `chat-text`
     // (the text-area that shows Cato's spoken line) + `chat-message` + portrait + name.
-    let roles = GameScene.DIALOG_ROLES;
+    let roles = [...GameScene.DIALOG_ROLES];
     if (cutscene || sign) roles = roles.filter((r) => !r.startsWith('chat-input')); // no input widgets
+    else roles.push('cato-close-icon'); // the REGULAR chat gets an X close button (top-right) — a cutscene/sign is tap-to-advance
     if (sign) { roles = roles.filter((r) => r !== 'cato-portrait'); (getHudObject(this, 'cato-portrait') as unknown as { setVisible?: (v: boolean) => void } | undefined)?.setVisible?.(false); } // no avatar on a note
     // Cutscene keeps the hotbar visible (for spotlights), so LIFT the box group up to
     // clear it (both are bottom-anchored → they'd overlap). Lift = the hotbar's occupied
@@ -11095,7 +11097,7 @@ export class GameScene extends Phaser.Scene {
     this.publishInventory(); // restore the hotbar after chatting
     // Keep the game's pixel cursor as the canvas cursor (set globally in setupPointerLock) — don't
     // revert to the host arrow. Clicking the canvas re-captures the pointer and CursorScene takes over.
-    for (const role of GameScene.DIALOG_ROLES) {
+    for (const role of [...GameScene.DIALOG_ROLES, 'cato-close-icon']) {
       const go = getHudObject(this, role) as unknown as
         | { y: number; setVisible?: (v: boolean) => void }
         | undefined;
