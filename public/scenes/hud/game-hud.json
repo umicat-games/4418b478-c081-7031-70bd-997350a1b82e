@@ -215,25 +215,6 @@
    "width": 72,
    "height": 72,
    "visible": false
-  },
-  {
-   "id": "cato-close-icon",
-   "kind": "icon-button",
-   "role": "cato-close-icon",
-   "name": "cato-close-icon",
-   "anchor": {
-    "side": "bottom",
-    "offsetX": 322,
-    "offsetY": -168
-   },
-   "layer": "overlay",
-   "label": "X",
-   "shape": "rounded-rect",
-   "width": 38,
-   "height": 38,
-   "fillColor": "#5b3a1e",
-   "textColor": "#f6f0e2",
-   "visible": false
   }
  ]
 }

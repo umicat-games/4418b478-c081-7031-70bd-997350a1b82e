@@ -1290,6 +1290,7 @@ export class GameScene extends Phaser.Scene {
   private dialogTypeTimer?: Phaser.Time.TimerEvent; // per-char reveal tick
   private dialogMeasureEl?: HTMLDivElement; // hidden design-sized wrap-measurer
   private moreIconTween?: Phaser.Tweens.Tween; // the "more" icon bob
+  private chatCloseBtn?: Phaser.GameObjects.Image; // the chat's X close button (same close-light-big art as the modals), drawn on UmicatHud
 
   // ── Cato behaviours (runtime-AI `do` actions) ───────────────────────────
   // When the friend asks Cato (in chat) to prepare a plot, the AI returns a
@@ -1954,7 +1955,6 @@ export class GameScene extends Phaser.Scene {
     if (hud) {
       const onHudPress = (_id: string, entity?: { name?: string }): void => {
         if (entity?.name === 'photo-frame') this.focusCato();
-        else if (entity?.name === 'cato-close-icon' && this.dialogOpen) this.closeDialog(); // the chat's X — the ONLY way a tap closes it now
       };
       hud.events.on('hud:press', onHudPress);
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => hud.events.off('hud:press', onHudPress));
@@ -10896,6 +10896,32 @@ export class GameScene extends Phaser.Scene {
     go.setVisible?.(on);
   }
 
+  /** The chat's X close button — the SAME `icon-buttons` `close-light-big` art as the mailbox/shop
+   *  modals. Drawn as a raw interactive image ON the UmicatHud scene (the HUD widget system can't
+   *  resolve the `icon-buttons` atlas → the modals use it in code too), pinned to the chat box's
+   *  TOP-RIGHT each frame so it slides + fades with the box. Only the REGULAR chat shows it (a
+   *  cutscene / sign note stays tap-to-advance). Tapping it is the ONLY tap that closes the chat. */
+  private updateChatCloseBtn(): void {
+    const show = this.dialogOpen && !this.cutscene && !this.signDialog;
+    const box = show ? (getHudObject(this, 'chat-message') as unknown as (Phaser.GameObjects.GameObject & { getBounds?: () => Phaser.Geom.Rectangle; alpha?: number; visible?: boolean }) | undefined) : undefined;
+    if (!show || !box?.getBounds) { this.chatCloseBtn?.setVisible(false); return; }
+    if (!this.chatCloseBtn) {
+      const hud = this.game.scene.getScene('UmicatHud');
+      if (!hud) return;
+      const frame = this.textures.get('icon-buttons')?.has('close-light-big') ? 'close-light-big' : undefined;
+      this.chatCloseBtn = hud.add.image(0, 0, 'icon-buttons', frame).setDepth(1e6).setScrollFactor(0)
+        .setInteractive({ useHandCursor: true });
+      this.chatCloseBtn.on('pointerdown', () => { if (this.dialogOpen && !this.cutscene && !this.signDialog) this.closeDialog(); });
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.chatCloseBtn?.destroy(); this.chatCloseBtn = undefined; });
+    }
+    const b = box.getBounds();
+    const size = 34; // HUD-logical px, ~the modal close size
+    this.chatCloseBtn.setDisplaySize(size, size)
+      .setPosition(Math.round(b.right - size * 0.6), Math.round(b.top + size * 0.6))
+      .setAlpha(box.alpha ?? 1) // fade with the box's slide-in/out
+      .setVisible(true); // shown whenever the regular chat is open (we returned early otherwise)
+  }
+
   /** Strip *italic stage-direction* asides ("*tilts head*") from a reply — the
    *  portrait carries the mood now, so the text stays clean spoken dialogue. */
   private stripAsides(text: string): string {
@@ -11016,7 +11042,6 @@ export class GameScene extends Phaser.Scene {
     // (the text-area that shows Cato's spoken line) + `chat-message` + portrait + name.
     let roles = [...GameScene.DIALOG_ROLES];
     if (cutscene || sign) roles = roles.filter((r) => !r.startsWith('chat-input')); // no input widgets
-    else roles.push('cato-close-icon'); // the REGULAR chat gets an X close button (top-right) — a cutscene/sign is tap-to-advance
     if (sign) { roles = roles.filter((r) => r !== 'cato-portrait'); (getHudObject(this, 'cato-portrait') as unknown as { setVisible?: (v: boolean) => void } | undefined)?.setVisible?.(false); } // no avatar on a note
     // Cutscene keeps the hotbar visible (for spotlights), so LIFT the box group up to
     // clear it (both are bottom-anchored → they'd overlap). Lift = the hotbar's occupied
@@ -11097,7 +11122,7 @@ export class GameScene extends Phaser.Scene {
     this.publishInventory(); // restore the hotbar after chatting
     // Keep the game's pixel cursor as the canvas cursor (set globally in setupPointerLock) — don't
     // revert to the host arrow. Clicking the canvas re-captures the pointer and CursorScene takes over.
-    for (const role of [...GameScene.DIALOG_ROLES, 'cato-close-icon']) {
+    for (const role of GameScene.DIALOG_ROLES) {
       const go = getHudObject(this, role) as unknown as
         | { y: number; setVisible?: (v: boolean) => void }
         | undefined;
@@ -12771,6 +12796,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.loadingOverlay?.update(delta); // drift the loading-screen wallpaper while it's up
     if (this.dialogOpen && this.chatVoice) this.layoutChatVoice(); // keep the mic glued to the bar (open tween + resize)
+    this.updateChatCloseBtn(); // pin the chat's X close button to the box's top-right (before the inHouse return — chat works indoors too)
     // Inside the house the island is FROZEN (HouseScene paints black over it + drives its own
     // room). GameScene stays active only so its input drives the kept HUD (chat / backpack / shop /
     // menu); the whole world sim is skipped. HUD scenes have their own update loops.
