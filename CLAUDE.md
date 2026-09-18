@@ -1443,17 +1443,47 @@ belongs to the saucers. Skipped on a kill, because the saucer's own burst is
 about to happen in the same place and two effects on one frame is one effect
 nobody reads. One instanced draw.
 
-**A trail on the blade.** A MOTION cue, not an attack — it says how fast the
-thing went, which is the half of a swing a still frame cannot show. It shows on
-a MISS too, for the same reason. Deliberately not the crescent this game tried
-and dropped: that was thrown at enemies and read as the bow's fan.
+**A trail on the blade**, as a RING SEGMENT. A MOTION cue, not an attack — it
+says how fast the thing went, which is the half of a swing a still frame cannot
+show. It shows on a MISS too, for the same reason. It does not travel: a thing
+that flies outward is a projectile, and that is the crescent this game tried and
+dropped for reading as the bow's fan.
 
-Emitted ONCE per swing, near the end of the cut, covering the whole arc. A
-ribbon emitted per frame is a draw call per frame — the same arithmetic that
-made the staff's specks nineteen draws before they were instanced.
+Emitted ONCE per swing, near the end of the cut. A ribbon emitted per frame is a
+draw call per frame — the arithmetic that made the staff's specks nineteen draws
+before they were instanced.
 
-`verify-3d-feedback` measures the freeze as what it IS: a frame in which the
-world did not advance. An enemy's `t` — how far along its route it has walked —
+**It was invisible twice before it was a ring segment, and both times for the
+same reason.** Built from `strandA` beam quads, it drew almost nothing:
+`strandA` is a thread down the middle of a mostly empty square, so a ribbon of
+twelve segments each 0.12 long and 0.4 wide is twelve nearly-empty quads. **This
+file already carried that arithmetic** — it is why the first lightning strike
+looked like three white pencil lines — and the trail repeated it anyway, at
+0.1 wide, and then again at 0.3.
+
+It was also built from per-frame tip SAMPLES, which ties its resolution to the
+frame rate: fifteen segments on a device and TWO under the headless renderer, so
+it could not be judged on the machine the checks run on. It is generated from
+the swing's own start and end angle now.
+
+**And the camera punches**, five centimetres for a fifth of a second. The most
+noticeable thing on the list and the one left out of the first round, which is
+most of why that round came back as "I cannot really see any of it". Applied
+after everything and undone next frame — the SDK's follow camera recomputes its
+position from the target each time, so the offset cannot accumulate the way the
+hero's shoulder-turn did.
+
+**Three rounds of this were shipped before anything was actually looked at.**
+The effects were created, counted and invisible; every screenshot of them came
+back empty, and two of those empty screenshots were **the capture being wrong**
+rather than the effect: `quads` and `motes` write their vertices in the
+per-frame step, so freezing in the SAME tick as the effect is made draws it
+unpositioned. Advance one frame, then freeze.
+
+`verify-3d-feedback` counts **pale pixels** in front of the hero now — 1 before
+a swing against 357 during — because counting effects is the check that passed
+on all three invisible versions. It measures the freeze as what it IS: a frame
+in which the world did not advance. An enemy's `t` — how far along its route it has walked —
 is the cleanest clock this game has, and it goes 0.06 per frame, then 0 on the
 frame after contact, then 0.06 again. A swing at nothing freezes nothing.
 

@@ -184,7 +184,15 @@ const SWING_GRIP = 0.16;
 /** How long a connecting blow freezes the world. Sixty milliseconds is about
  *  four frames at sixty — long enough to feel, short enough that nobody reads
  *  it as a stutter. Fighting games live between two and eight frames. */
-const HITSTOP_MS = 60;
+/** Sixty was measured in a fighting game and reported here as "I cannot tell
+ *  it is happening". This swing is 400ms long and the camera is four metres
+ *  away — a freeze has to be a beat at THIS scale, not at a 1v1 one. */
+const HITSTOP_MS = 110;
+/** The camera punch on a connecting blow. Centimetres, not metres: you are
+ *  trying to stand on a particular square in this game, and a camera that
+ *  lurches is a game you cannot aim in. */
+const SHAKE_SECONDS = 0.18;
+const SHAKE_AMOUNT = 0.055;
 const WOBBLE_SECONDS = 0.34;
 const WOBBLE_TILT = 0.30;
 /** How much of the swing is the CUT; the rest is the blade coming back to the
@@ -691,9 +699,7 @@ export async function startLevel(
   /** The pivot's local position as the socket left it. */
   const swordBase = new THREE.Vector3();
   const _want = new THREE.Vector3();
-  /** Where the blade's tip has been during this swing, for the smear it
-   *  leaves. Cleared at the start of each swing. */
-  const trailPts: THREE.Vector3[] = [];
+  /** Whether this swing has already drawn its smear. */
   let trailDone = false;
   /** Seconds left in the current swing; 0 is at rest. */
   let swing = 0;
@@ -1184,6 +1190,8 @@ export async function startLevel(
    *  having a bad second. Anything measured against a person uses the unclamped
    *  clock — the same rule the sell-hold and the tutorial's panels follow. */
   let hitstop = 0;
+  /** Seconds left of the camera punch. */
+  let shake = 0;
 
   /** Stopped by the settings dialog. NOT the same as `running`, which is about
    *  whether the RUN is still going — a paused run is still a run, and a
@@ -3439,7 +3447,6 @@ export async function startLevel(
 
     animator.play('attack');
     swing = SWING_SECONDS;
-    trailPts.length = 0;
     trailDone = false;
     audio.play('swing');
     let connected = false;
@@ -3457,7 +3464,16 @@ export async function startLevel(
       // a sound, which is feedback about the victim rather than about the blow.
       // Skipped on a kill: the saucer's own burst is about to happen in the
       // same place, and two effects on one frame is one effect nobody reads.
-      if (alive) hitSparks(vfx, e.obj.position, swingX, swingZ, meleeImpact(runTier) ?? 0);
+      // Halfway to what was hit, at the height the blade is held: that is
+      // where the edge actually met it. At the enemy's own centre the sparks
+      // sat ON the saucer and read as the saucer changing colour.
+      if (alive) {
+        hitSparks(vfx, new THREE.Vector3(
+          (hero.position.x + e.obj.position.x) / 2,
+          hero.position.y + SWING_HEIGHT,
+          (hero.position.z + e.obj.position.z) / 2,
+        ), swingX, swingZ, meleeImpact(runTier) ?? 0);
+      }
     }
     // A swing that connects sounds different from one that whiffs. Without
     // that, melee is a noise you make rather than a thing you do.
@@ -3468,6 +3484,7 @@ export async function startLevel(
       // Longer for the heavier tiers: the freeze is how weight is expressed,
       // and a tier that hits harder should stop the world for longer.
       hitstop = HITSTOP_MS + (meleeImpact(runTier) ?? 0) * HITSTOP_MS * 0.6;
+      shake = SHAKE_SECONDS;
     }
     // What a heavy blow LOOKS like, from tier 2. Once per swing, at the nearest
     // thing it landed on — a per-enemy effect on a weapon that can catch four
@@ -4291,26 +4308,43 @@ export async function startLevel(
         }
         aimBlade(_dir, _edge);
         levelBlade(k, _dir.x, _dir.z);
-        // The smear the blade leaves. Sampled every frame, drawn ONCE.
+        // The smear the blade leaves, drawn ONCE per swing from the arc itself.
         //
         // A ribbon emitted per frame is a draw call per frame — the same
         // arithmetic that made the staff's specks nineteen draws before they
-        // were instanced. One emission near the end of the cut covers the whole
-        // arc and costs one.
-        if (swordPivot) {
-          const blade = swordPivot.children[0];
-          if (blade) {
-            trailPts.push(new THREE.Vector3(0, 0.348, 0).applyMatrix4(blade.matrixWorld));
-          }
-        }
-        if (!trailDone && cut >= 0.75 && trailPts.length > 2) {
+        // were instanced. And built from the ARC rather than from remembered
+        // tip positions, so its resolution does not depend on the frame rate:
+        // sampled per frame it was fifteen segments on a device and TWO under
+        // the headless renderer, which is a thing that cannot be checked.
+        if (!trailDone && cut >= 0.75) {
           trailDone = true;
-          bladeTrail(vfx, trailPts);
+          bladeTrail(vfx, hero.position, yaw, -SWING_ARC, a,
+            SWING_GRIP + 0.36, hero.position.y + SWING_HEIGHT);
         }
         if (swing === 0) restSword();
       } else {
         restSword();
       }
+    }
+
+    // A PUNCH on the camera, last of all.
+    //
+    // The most noticeable thing on the melee-feel list and the one I left out,
+    // which is why the first round of this work came back as "I cannot really
+    // see any of it". Small and short: a few centimetres, decaying over a fifth
+    // of a second. Big camera shake in a game where you are trying to stand on
+    // a particular square is a game you cannot aim in.
+    //
+    // Applied AFTER everything and undone at the top of the next frame: the
+    // SDK's follow camera recomputes its position from the target each time, so
+    // an offset added here is naturally temporary rather than accumulating —
+    // which is the trap the hero's shoulder-turn fell into.
+    if (shake > 0) {
+      shake = Math.max(0, shake - realDt);
+      const k = shake / SHAKE_SECONDS;
+      const a = performance.now() / 22;
+      world.camera.position.x += Math.sin(a) * SHAKE_AMOUNT * k;
+      world.camera.position.y += Math.cos(a * 1.3) * SHAKE_AMOUNT * 0.7 * k;
     }
 
     renderer.render(world.scene, world.camera);

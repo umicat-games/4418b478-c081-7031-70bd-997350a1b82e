@@ -934,12 +934,31 @@ export function saucerBurst(vfx: Vfx, at: THREE.Vector3, tint = 0xc08cff): void 
 export function hitSparks(
   vfx: Vfx, at: THREE.Vector3, dirX: number, dirZ: number, power = 1,
 ): void {
-  const n = 5 + Math.round(power * 4);
-  motes(vfx, new THREE.Vector3(at.x + dirX * 0.12, at.y, at.z + dirZ * 0.12), {
-    count: n, color: 0xfff3cf, color2: 0xffc061,
-    // Tight and fast: a wide slow scatter is a puff of smoke.
-    radius: 0.2 + power * 0.12, rise: 0.22, spin: 3.2,
-    life: 0.26, size: 0.075, frame: FRAME.sparkle,
+  // A FLASH first. Additive over this game's bright grass eats colour, and the
+  // answer is AREA rather than alpha — the same conclusion the fire burst
+  // reached. One bright sprite at the contact point does more than any number
+  // of specks.
+  quads(vfx, [
+    { at: at.clone(), frame: FRAME.starBurst, w: 0.75 + power * 0.3,
+      h: 0.75 + power * 0.3, mode: 'face', roll: 0.6 },
+  ], {
+    life: 0.14,
+    color: 0xfff0c8,
+    step: (l, k) => { l[0].w *= 1 + k * 0.04; l[0].h = l[0].w; },
+    alpha: (k) => Math.min(1, (1 - k) * 2.2),
+  });
+  // And a FEW, thrown wide and fast. Sixteen of them inside a third of a unit
+  // was a gold blob sitting on the saucer rather than sparks coming off it —
+  // what reads as a spark is one that is clearly LEAVING.
+  // FEWER and BIGGER. Sixteen at 0.13 across, spread over a third of a unit,
+  // sat on the saucer and read as the saucer turning gold — at four metres a
+  // 0.13 speck is about six pixels, and a dozen of them is a wash rather than
+  // a spray. Six at 0.22, thrown nearly a unit, are specks that are clearly
+  // LEAVING.
+  motes(vfx, at, {
+    count: 5 + Math.round(power * 2), color: 0xfff3cf, color2: 0xffa22a,
+    radius: 0.95 + power * 0.3, rise: 0.42, spin: 3.6,
+    life: 0.36, size: 0.22, frame: FRAME.sparkle,
   });
 }
 
@@ -956,22 +975,51 @@ export function hitSparks(
  * stretched between two remembered tip positions. Feeding it fewer than two
  * points draws nothing rather than a degenerate quad.
  */
-export function bladeTrail(vfx: Vfx, points: THREE.Vector3[], color = 0xdff0ff): void {
-  if (points.length < 2) return;
-  const list: Quad[] = [];
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1], b = points[i];
-    if (a.distanceToSquared(b) < 1e-6) continue;
-    list.push({
-      at: a.clone(), to: b.clone(), frame: FRAME.strandA,
-      // Wider at the leading end, so the ribbon tapers back into the arc.
-      w: 0.1 + (i / points.length) * 0.16, h: 1, mode: 'beam',
-    });
-  }
-  if (!list.length) return;
-  quads(vfx, list, {
-    life: 0.16,
-    color,
-    alpha: (k) => (1 - k) * 0.7,
+export function bladeTrail(
+  vfx: Vfx,
+  from: THREE.Vector3,
+  yaw: number,
+  fromAngle: number,
+  toAngle: number,
+  radius: number,
+  height: number,
+  color = 0xeaf6ff,
+): void {
+  // A RING SEGMENT, not a row of textured quads.
+  //
+  // Two attempts with the atlas failed the same way. `strandA` is a thread down
+  // the middle of a mostly empty square, so a ribbon made of twelve short beam
+  // segments — each about 0.12 long and 0.4 wide — draws almost nothing, and
+  // both versions were reported as "I cannot see it". This file already carries
+  // that arithmetic as the reason the first lightning strike looked like three
+  // white pencil lines.
+  //
+  // `RingGeometry` takes a start angle and a length, so an arc is what it
+  // already is, and a thin arc at the blade's height IS a blade smear. The same
+  // shape was measured visible when it was briefly a thrown crescent: 176 pale
+  // pixels on the ground before a swing against 2907 after.
+  const span = toAngle - fromAngle;
+  if (Math.abs(span) < 0.05) return;
+  const inner = radius * 0.82;
+  const geom = new THREE.RingGeometry(
+    inner, radius, 40, 1,
+    Math.min(fromAngle, toAngle), Math.abs(span),
+  ).rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.85,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.set(from.x, height, from.z);
+  // `RingGeometry` sweeps from local +X, which after the lie-flat rotate is
+  // world +X; the hero faces `(sin yaw, cos yaw)`.
+  mesh.rotation.y = yaw - Math.PI / 2;
+  mesh.renderOrder = 4;
+  vfx.add({
+    obj: mesh, t: 0, life: 0.24, own: [geom, mat],
+    // It does not travel. A smear says where the blade HAS BEEN; a thing that
+    // flies outward is a projectile, and that is the crescent this game tried
+    // and dropped for reading as the bow's fan.
+    step: (_o, k) => { mat.opacity = 0.85 * (1 - k * k); },
   });
 }
