@@ -661,10 +661,21 @@ what is being measured:
 | defence first, then weapon | wave 5/8, 10 towers, 1 tier |
 
 **The towers are not optional** — buying a tier before building loses the board
-outright. And the first tier started at 60 and was moved to **35**, between a
-ballista at 25 and a cannon at 45, because a defence-first bot never once
-reached 60 spare on a board that pays 550: a feature nobody can afford on the
-board that teaches the game is a feature most players never meet.
+outright.
+
+**The prices are 70 / 220 / 480, and the chain must not be completable on the
+board that teaches the game.** They were 35 / 110 / 220, which is 365 against
+the ~550 Meadow pays out — so a player could buy every step on the first board
+and still have 185 left for towers. Reported, correctly, as "the weapon upgrades
+come far too fast". At 770 the chain costs more than one Meadow run: you get at
+most two steps there, and only by spending 290 of 550 on yourself.
+
+The first step was 60 once and got cut to 35 **on a bad reading of the bot**.
+The bot builds towers by preference and only buys a tier with money it has no
+other use for, so "it never reached 60 spare" measures the most tower-heavy
+player there is — not a person who WANTS the weapon. A human bought the lot on
+the first board. **An instrument that plays one strategy cannot price a
+choice.**
 
 What none of this says is whether a tier is WORTH buying, which is a question
 about playing rather than about arithmetic. `verify-3d-runtiers` checks that the

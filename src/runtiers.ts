@@ -16,13 +16,22 @@
  * the whole point: "this lane, or me?" is a question the player answers with
  * one purse.
  *
- * **The first step is deliberately cheap — 35, between a ballista at 25 and a
- * cannon at 45.** It started at 60 and the balance bot, told to build a proper
- * defence before spending on itself, never once reached the threshold across a
- * whole Meadow run: the board pays about 550 and a full board of towers and
- * upgrades absorbs all of it. A feature nobody can afford on the board that
- * teaches the game is a feature most players never meet. The later steps stay
- * expensive — those are for the boards that pay two thousand.
+ * **The chain must not be completable on the board that teaches the game.**
+ * At 35 / 110 / 220 it cost 365 against the ~550 Meadow pays out, so a player
+ * could buy every step on the first board and still have 185 left for towers —
+ * reported, correctly, as "the weapon upgrades come far too fast".
+ *
+ * 70 / 220 / 480 is 770. On Meadow the first step is about three ballistas and
+ * the second takes most of what is left, so the second is a real decision and
+ * the third is not on offer at all. On Crossroads, which pays about 2150, the
+ * whole chain is affordable alongside a defence — which is the point: these
+ * belong to the boards you have earned your way to.
+ *
+ * The first step was 60 once and was cut to 35 because the balance BOT never
+ * reached 60 spare. That was a bad reason: the bot builds towers by preference
+ * and only ever buys a tier with money it has no other use for, so it measures
+ * the most tower-heavy player there is rather than a person who WANTS the
+ * weapon. A human bought the lot on the first board.
  *
  * The labels carry NO figures, for the same reason the town's cards stopped
  * carrying them: "the swing throws a crescent" is what a player needs, and
@@ -43,19 +52,19 @@ export interface RunTier {
 
 export const RUN_TIERS: Record<Cast, RunTier[]> = {
   melee: [
-    { label: 'Sharper — a longer, harder swing', cost: 35 },
-    { label: 'Heavy — the blow lands with a shock', cost: 110 },
-    { label: 'Crushing — it hits harder again', cost: 220 },
+    { label: 'Sharper — a longer, harder swing', cost: 70 },
+    { label: 'Heavy — the blow lands with a shock', cost: 220 },
+    { label: 'Crushing — it hits harder again', cost: 480 },
   ],
   arrow: [
-    { label: 'Further — the arrow carries further', cost: 35 },
-    { label: 'Two arrows, spread', cost: 110 },
-    { label: 'Three arrows', cost: 220 },
+    { label: 'Further — the arrow carries further', cost: 70 },
+    { label: 'Two arrows, spread', cost: 220 },
+    { label: 'Three arrows', cost: 480 },
   ],
   burst: [
-    { label: 'A wider blast', cost: 35 },
-    { label: 'A shorter wait between casts', cost: 110 },
-    { label: 'A heavier blast, wider still', cost: 220 },
+    { label: 'A wider blast', cost: 70 },
+    { label: 'A shorter wait between casts', cost: 220 },
+    { label: 'A heavier blast, wider still', cost: 480 },
   ],
 };
 
