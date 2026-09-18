@@ -32,6 +32,10 @@ export class BootMenuScene extends Phaser.Scene {
   private titleBaseY = 0;                            // the logo's resting (lowest) y — the shadow's anchor
   private titleBaseScale = 1;
   private jaminBadge?: Phaser.GameObjects.Image; // "Jamin Edition" banner at the title's lower-left
+  private jaminShadow?: Phaser.GameObjects.Image; // its drop shadow (same effect as the title's)
+  private jaminBaseY = 0;                          // the badge's resting y — the shadow's anchor
+  private jaminBaseScale = 1;
+  private jaminShadowOff = { x: 0, y: 0 };         // static shadow offset (proportional to the badge size)
   /** The authored Play button entity + its base (un-hovered) scale — SettingsScene
    *  reads these to place the "Settings" button directly BELOW Play, at Play's size. */
   playButton?: Phaser.GameObjects.Sprite;
@@ -127,6 +131,17 @@ export class BootMenuScene extends Phaser.Scene {
         // Tuck it UNDER the logo's (empty) lower-left, clearly ABOVE the Play/New Game stack (the
         // title + buttons are tightly packed, so sitting it lower collided with the top button).
         const bx = title.x - bw * 0.31, by = this.titleBaseY + bh * 0.40;
+        this.jaminBaseY = by;
+        this.jaminBaseScale = scale;
+        // Same drop-shadow effect as the logo: a deep-green copy on the "ground" that stays put
+        // while the badge floats, so the gap grows (+ a slight shrink/fade) as it rises. The static
+        // offset is scaled to the badge's OWN size using the logo's shadow ratios (2.5/284, 4/126)
+        // so it reads proportionally the same, and the lift uses the shared 5px float amplitude.
+        const dispW = 296 * scale, dispH = 100 * scale;
+        this.jaminShadowOff = { x: dispW * (2.5 / 284) + 1, y: dispH * (4 / 126) + 1.6 };
+        this.jaminShadow = this.add.image(bx, by, 'jamin-edition')
+          .setOrigin(0.5, 0.5).setScale(scale)
+          .setTint(0x2f5626).setAlpha(0.32).setDepth(title.depth - 0.5);
         this.jaminBadge = this.add.image(bx, by, 'jamin-edition').setOrigin(0.5, 0.5).setScale(scale).setDepth(title.depth);
         this.tweens.add({ targets: this.jaminBadge, y: by - 5, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
@@ -192,6 +207,13 @@ export class BootMenuScene extends Phaser.Scene {
       this.titleShadow.setPosition(this.title.x + 2.5, this.titleBaseY + 4);
       this.titleShadow.setScale(this.titleBaseScale * (1 - 0.05 * lift));
       this.titleShadow.setAlpha(0.32 - 0.12 * lift);
+    }
+    if (this.jaminBadge && this.jaminShadow) {
+      // Same effect for the "Jamin Edition" badge: shadow pinned to the ground, gap grows as it floats.
+      const lift = Phaser.Math.Clamp((this.jaminBaseY - this.jaminBadge.y) / 5, 0, 1);
+      this.jaminShadow.setPosition(this.jaminBadge.x + this.jaminShadowOff.x, this.jaminBaseY + this.jaminShadowOff.y);
+      this.jaminShadow.setScale(this.jaminBaseScale * (1 - 0.05 * lift));
+      this.jaminShadow.setAlpha(0.32 - 0.12 * lift);
     }
     if (this.cato) {
       const v = this.cameras.main.worldView;
