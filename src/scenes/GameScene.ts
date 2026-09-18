@@ -6350,6 +6350,7 @@ export class GameScene extends Phaser.Scene {
   private harvestBush(cx: number, cy: number): void {
     const bush = this.bushes.get(`${cx},${cy}`);
     if (!bush || bush.stage < 2) return;
+    if (!this.backpackHasSpaceFor(`fruit-${bush.type}`)) { this.notifyBagFull(); return; } // full → don't swing
     this.hideTileCursor();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     if (!w) { this.reapBush(cx, cy); return; }
@@ -6481,6 +6482,7 @@ export class GameScene extends Phaser.Scene {
   private harvestForagable(cx: number, cy: number): void {
     const f = this.foragables.get(`${cx},${cy}`);
     if (!f || f.stage < (FORAGABLES[f.type]?.stages ?? 1)) return;
+    if (!this.backpackHasSpaceFor(makeForage(f.type, 1).id)) { this.notifyBagFull(); return; } // full → don't swing (else the hoe swings but nothing's collected — reads as a bug)
     this.hideTileCursor();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     if (!w) { this.reapForagable(cx, cy); return; }
@@ -7715,6 +7717,21 @@ export class GameScene extends Phaser.Scene {
     if (now - this.bagFullMsgAt < 4000) return; // don't spam
     this.bagFullMsgAt = now;
     this.catoSay('chatter_pack_full');
+    this.showTextToast(t('bag_full')); // a VISIBLE bottom-centre pill too — Cato's bubble alone is easy to miss while you're looking at the crop/grass
+  }
+
+  /** Show a one-off text pill in the harvest-toast slot (bottom-centre). Used for the bag-full notice
+   *  so it's visible in the world, not just as a Cato chatter bubble by the portrait. */
+  private showTextToast(text: string): void {
+    this.toastId = ''; this.toastCount = 0; // don't let a following harvest merge into this text
+    this.toastRev += 1;
+    this.registry.set('harvestToast', { visible: true, rev: this.toastRev, text });
+    this.toastTimer?.remove();
+    this.toastTimer = this.time.delayedCall(GameScene.TOAST_HOLD_MS, () => {
+      this.toastTimer = undefined;
+      this.toastRev += 1;
+      this.registry.set('harvestToast', { visible: false, rev: this.toastRev });
+    });
   }
   private bagFullMsgAt = 0;
   private bagFullNotified = false; // Cato said "pack full" for this fill (cleared when it has room)
