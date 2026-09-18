@@ -18,7 +18,7 @@ export function readoutPlate(...rows: HTMLElement[]): HTMLDivElement {
   const el = document.createElement('div');
   el.style.cssText = `background: rgba(10,14,20,.46); border-radius: 14px;
     padding: 7px 13px 8px; width: fit-content; max-width: 100%;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);`;
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.34);`;
   el.append(...rows);
   return el;
 }

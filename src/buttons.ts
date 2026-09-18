@@ -101,7 +101,7 @@ const CSS = `
     --d: 3px; --slab: rgba(0,0,0,.40); --top: rgba(255,255,255,.20);
     --inner: 0 0 0 0 transparent;
   }
-  .lift:active:not(:disabled) {
+  .lift:active:not(:disabled), .lift.pressed:not(:disabled) {
     transform: translateY(var(--d));
     box-shadow: inset 0 2px 0 var(--top), var(--rim),
                 0 1px 0 var(--slab), 0 2px 5px rgba(0,0,0,.24);
@@ -115,7 +115,7 @@ const CSS = `
     box-shadow: inset 0 1px 0 var(--top), 0 2px 0 var(--slab);
     transform: none;
   }
-  .rim { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.22); }
+  .rim { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.34); }
   @media (prefers-reduced-motion: reduce) { .lift { transition: none; } }
 `;
 
@@ -135,4 +135,30 @@ export function installLiftStyles(): void {
   style.dataset.liftStyles = '';
   style.textContent = CSS;
   document.head.append(style);
+
+  // `:active` DOES NOT FIRE ON TOUCH, and this game is played on phones.
+  //
+  // Measured rather than assumed: the same button under a real mouse press
+  // matches `:active` and travels its 4px, and under a real touch press
+  // `matches(':active')` is false and the transform stays `none`. So the one
+  // platform the press was FOR was the one platform that never got it.
+  //
+  // Capture phase, because the layer under all of this stops propagation of
+  // its own events; `passive`, because none of this ever cancels a gesture.
+  const press = (on: boolean) => (e: Event): void => {
+    if (on) {
+      const el = (e.target as HTMLElement | null)?.closest?.('.lift');
+      if (el && !(el as HTMLButtonElement).disabled) el.classList.add('pressed');
+      return;
+    }
+    for (const el of document.querySelectorAll('.pressed')) el.classList.remove('pressed');
+  };
+  const opts = { capture: true, passive: true } as const;
+  document.addEventListener('pointerdown', press(true), opts);
+  // Every way out, not just its own release. A button whose only exit is its
+  // own `pointerup` is a button that can be left held — the same rule the
+  // aiming gesture and the action pad already follow.
+  for (const type of ['pointerup', 'pointercancel', 'blur', 'visibilitychange']) {
+    window.addEventListener(type, press(false), opts);
+  }
 }

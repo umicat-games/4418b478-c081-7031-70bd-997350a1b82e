@@ -3172,7 +3172,23 @@ controls, and which has caused two layout disasters already — did not move by 
 pixel. The only margin added is under the title's stacked pair, where the slab
 would otherwise land on the button below it.
 
-Four things that were not obvious:
+**`:active` does not fire on touch, and this game is played on phones.**
+Measured both ways with real input events: under a mouse press the button
+matches `:active` and travels its 4px; under a touch press `matches(':active')`
+is FALSE and the transform stays `none`. The platform the press was for was the
+only one that never got it. The state is driven by a delegated `pointerdown`
+adding a `pressed` class instead — capture phase, because the layer under all of
+this stops propagation of its own events, and released by `pointerup`,
+`pointercancel`, `blur` AND `visibilitychange`, since a button whose only exit
+is its own `pointerup` is a button that can be left held.
+
+**A rim over bright sky needs more than it looks like it does.** The readout
+plate started at `rgba(255,255,255,.18)` and was reported as almost invisible —
+it is a 46%-opaque dark plate against pale cloud, which is the worst case in the
+game for a white hairline. `.34` at 1.5px. The hotbar keeps `.22`, because it
+sits on grass.
+
+Four more things that were not obvious:
 
 - **An inline `transition` outranks the stylesheet's.** `actionpad.ts` carried
   `transition: opacity, background`, which would have silently killed the press
