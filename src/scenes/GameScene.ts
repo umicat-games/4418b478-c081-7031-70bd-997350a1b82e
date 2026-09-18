@@ -9742,7 +9742,10 @@ export class GameScene extends Phaser.Scene {
     this.orders.push({ id, count: n, deliverDay: this.dayCount + 1 }); // arrives tomorrow morning
     this.scheduleSave();
     if (this.menuOpen && this.menuTab === TAB_SHOP) this.publishMenu(); // reflect the "N on the way" line if the shop's open
-    // Cato's spoken reply carries the confirmation ("ordered, arrives tomorrow morning" — playbook).
+    // GUARANTEE the "ordered — arrives tomorrow morning" confirmation: the AI's own line doesn't
+    // reliably say it, and this is transactional, so the game authors the confirmation (in Cato's
+    // voice). Runs synchronously right after the AI line was set, so it cleanly replaces it.
+    this.setImmediateDialog(t('cato_buy_ordered').replace('{count}', String(n)).replace('{item}', this.itemName(id)));
   }
 
   /** Match a free-text item name (the buy_item AI arg) to an orderable shop id — tries the id, its
