@@ -761,8 +761,9 @@ export class MenuScene extends Phaser.Scene {
     // hit-rect, with a mask clipping to the visible band. Compute the extent first so we can clamp.
     const rowH = H * 0.033, gap = H * 0.009, step = rowH + gap, box = H * 0.022;
     const nFlags = DEBUG_PANEL ? DEBUG_FLAGS.length : 0;
+    const nDebugActs = DEBUG_PANEL ? 3 : 0; // camera-toggle + 1h skip + 1day skip (moved here off the main scene)
     const contentTop = 0.282 * H, contentBottom = 0.905 * H, visibleH = contentBottom - contentTop;
-    const lastBottom = nFlags > 0 ? 0.803 * H + (nFlags - 1) * step + rowH : 0.685 * H + H * 0.048 / 2;
+    const lastBottom = (nFlags + nDebugActs) > 0 ? 0.803 * H + (nFlags + nDebugActs - 1) * step + rowH : 0.685 * H + H * 0.048 / 2;
     const totalH = lastBottom - contentTop;
     // Scroll in STEP-px "rows" so the touch SWIPE (which scrolls 1 row per `scrollStepPx` of finger
     // travel, min 24px) and the wheel move a sensible amount — matching scrollStepPx=STEP gives a 1:1
@@ -796,13 +797,29 @@ export class MenuScene extends Phaser.Scene {
     c.add(this.add.text(cx, cby, t('settings_clear_data'), { fontFamily: dialogFont(), color: '#ffffff', fontStyle: 'bold', fontSize: Math.round(H * 0.022) + 'px', resolution: RES }).setOrigin(0.5, 0.5));
     this.registry.set('menuClearData', { x: cx - cbw / 2, y: cby - cbh / 2, w: cbw, h: cbh });
 
-    // ── Debug toggles (dev-only; DEBUG_PANEL=false hides before release) ──────
+    // ── Debug toggles + test-tool actions (dev-only; DEBUG_PANEL=false hides before release) ──────
     const rows: Array<{ x: number; y: number; w: number; h: number; key: string }> = [];
+    const acts: Array<{ x: number; y: number; w: number; h: number; action: string }> = [];
     if (DEBUG_PANEL) {
       c.add(this.T(cx, 0.755 * H - off, t('settings_debug'), H * 0.024, INK));
       c.add(this.T(cx, 0.782 * H - off, t('settings_debug_note'), H * 0.015, SUB));
       const rowW = lw * 0.66, rowLeft = cx - rowW / 2;
-      DEBUG_FLAGS.forEach((f, i) => {
+      // Test-tool BUTTONS (moved off the main scene): camera-mode toggle + time skips.
+      const ctrlOn = !!this.registry.get('debugControlOn');
+      [
+        { action: 'control', label: ctrlOn ? '控制模式：猫（点击切相机）' : '控制模式：相机（点击切猫）' },
+        { action: 'hour', label: '⏩ 快进 1 小时' },
+        { action: 'day', label: '⏭ 快进 1 天' },
+      ].forEach((a, i) => {
+        const ay = 0.803 * H + i * step - off;
+        const g = this.add.graphics();
+        g.fillStyle(0xcdb892, 1); g.fillRoundedRect(rowLeft, ay, rowW, rowH, 6);
+        g.lineStyle(2, 0x9a7b4f, 1); g.strokeRoundedRect(rowLeft, ay, rowW, rowH, 6); c.add(g);
+        c.add(this.T(cx, ay + rowH / 2, a.label, H * 0.019, INK));
+        acts.push({ x: rowLeft, y: ay, w: rowW, h: rowH, action: a.action });
+      });
+      DEBUG_FLAGS.forEach((f, i0) => {
+        const i = i0 + 3; // the flag checkboxes sit BELOW the 3 action buttons
         const ry = 0.803 * H + i * step - off, on = isDebug(f.key);
         const g = this.add.graphics();
         g.fillStyle(0x000000, 0.05); g.fillRoundedRect(rowLeft, ry, rowW, rowH, 6); c.add(g);
@@ -818,6 +835,7 @@ export class MenuScene extends Phaser.Scene {
       });
     }
     this.registry.set('menuDebugRows', rows);
+    this.registry.set('menuDebugActions', acts);
 
     // Clip the scrolling content to the frame band + draw the scrollbar rail (pixel units).
     if (!this.settingsMaskG) this.settingsMaskG = this.make.graphics({}, false);

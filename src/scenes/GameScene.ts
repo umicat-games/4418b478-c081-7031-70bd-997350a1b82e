@@ -938,9 +938,6 @@ export class GameScene extends Phaser.Scene {
   // RUNTIME control mode (toggled by the on-screen TEST button): true = WASD/arrows
   // drive Cato + camera follows; false = arrows/drag pan the camera + Cato wanders.
   private playerControl = PLAYER_CONTROL_DEFAULT;
-  private controlToggleBtn?: HTMLButtonElement; // the test-only DOM toggle button
-  private timeSkipBtn?: HTMLButtonElement; // the test-only DOM fast-forward-time button (+2h)
-  private daySkipBtn?: HTMLButtonElement;  // the test-only DOM skip-a-whole-day button (settles orders)
   // Shared cursor state read by CursorScene (which renders it above the HUD).
   private cursorState = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, visible: false };
   // Empty-hand inspect overlay (HoverScene) — a white ring hugging the hovered object + its name.
@@ -2840,7 +2837,9 @@ export class GameScene extends Phaser.Scene {
     // Grass decoration is rolled per real day (see updateDayClock → decorateGrass); puddles are weather-driven.
     this.puddlePhase = 'none'; this.rainStoppedMs = 0; this.puddleCells.clear();
     this.lastDecorDay = -1; this.grassDecorCells.clear();
-    this.createControlToggle(); // on-screen TEST button: drive Cato ↔ pan camera
+    // (The test tools — camera-mode toggle + time skip — now live in Settings → Debug, not on the
+    // main scene, so gameplay is clean. See MenuScene.renderSettings + the menuDebugActions routing.)
+    this.setControlMode(this.playerControl); // init the mode + publish debugControlOn for the Settings toggle
 
     // Bracket cursor (frames a 16px cell) + the held-tool icon inside it. Hidden until a tool is out
     // + hovering a farmable tile. High depth so they read over tiles + Cato. When shown, the bracket
@@ -3104,10 +3103,7 @@ export class GameScene extends Phaser.Scene {
     // Confirm on the button when an order settled (crossing midnight delivers silently otherwise) — so
     // "I fast-forwarded to the next day but got nothing" is answerable: goods go to the mailbox 取货 tab.
     const delivered = ordersBefore - this.orders.length;
-    if (this.timeSkipBtn) {
-      const label = delivered > 0 ? `✓ 送达${delivered}(取货)` : '⏩ 1小时';
-      if (delivered > 0) { this.timeSkipBtn.textContent = label; this.time.delayedCall(1600, () => { if (this.timeSkipBtn) this.timeSkipBtn.textContent = '⏩ 1小时'; }); }
-    }
+    if (delivered > 0) this.showTextToast(`✓ 送达 ${delivered}（取货）`); // goods went to the mailbox 取货 tab
   }
 
   /** DEBUG: jump to just after the NEXT local midnight so the gameplay day rolls over ONCE — the
@@ -3126,10 +3122,7 @@ export class GameScene extends Phaser.Scene {
     // Visible confirmation on the button — a debug tool should make its effect obvious, and it
     // answers "did skip-day actually deliver?" (deliveries go to the mailbox 取货 tab).
     const delivered = ordersBefore - this.orders.length;
-    if (this.daySkipBtn) {
-      this.daySkipBtn.textContent = delivered > 0 ? `✓ 送达${delivered}(取货)` : `⏭ 第${this.dayCount % 1000}天`;
-      this.time.delayedCall(1600, () => { if (this.daySkipBtn) this.daySkipBtn.textContent = '⏭ 一天'; });
-    }
+    if (delivered > 0) this.showTextToast(`✓ 送达 ${delivered}（取货）`); // goods went to the mailbox 取货 tab
   }
 
   /** Drive the full-screen day/night mask from the clock (created lazily). A single
@@ -8417,6 +8410,17 @@ export class GameScene extends Phaser.Scene {
       if (back && x >= back.x && x <= back.x + back.w && y >= back.y && y <= back.y + back.h) { this.returnToTitle(); return true; }
       const clr = this.registry.get('menuClearData') as { x: number; y: number; w: number; h: number } | null;
       if (clr && x >= clr.x && x <= clr.x + clr.w && y >= clr.y && y <= clr.y + clr.h) { void this.clearDataAndReturnToTitle(); return true; }
+      // Debug ACTION buttons (moved off the main scene): camera-mode toggle + time skips.
+      const acts = this.registry.get('menuDebugActions') as Array<{ x: number; y: number; w: number; h: number; action: string }> | null;
+      const act = acts?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+      if (act) {
+        playSfx(this);
+        if (act.action === 'control') this.setControlMode(!this.playerControl);
+        else if (act.action === 'hour') this.fastForwardTime();
+        else if (act.action === 'day') this.skipToNextDay();
+        this.publishMenu(); // re-render (updates the control-mode label)
+        return true;
+      }
       // Debug toggles: flip the flag (persists to localStorage) + re-render the checkbox.
       const dbg = this.registry.get('menuDebugRows') as Array<{ x: number; y: number; w: number; h: number; key: string }> | null;
       const row = dbg?.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
@@ -12547,78 +12551,14 @@ export class GameScene extends Phaser.Scene {
    *  while chatting / in the backpack. */
   // ── TEST control-mode toggle (on-screen button) ─────────────────────────────
 
-  /** Create the on-screen TEST button that flips between "drive Cato" and "pan the
-   *  camera" so you don't have to change the code to switch. It's a plain DOM button
-   *  over the canvas (works on touch without pointer lock; on desktop under pointer
-   *  lock press Esc first). Removed on scene shutdown so a restart won't stack it. */
-  private createControlToggle(): void {
-    if (typeof document === 'undefined' || this.controlToggleBtn) return;
-    const btn = document.createElement('button');
-    Object.assign(btn.style, {
-      position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)',
-      zIndex: '2147483647', padding: '7px 13px', font: '600 13px system-ui, sans-serif',
-      color: '#3f2c18', background: 'rgba(242,226,196,0.95)', border: '2px solid #5b3a1e',
-      borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-      userSelect: 'none', touchAction: 'manipulation',
-    } as Partial<CSSStyleDeclaration>);
-    const onClick = (e: Event) => { e.preventDefault(); e.stopPropagation(); this.setControlMode(!this.playerControl); };
-    btn.addEventListener('click', onClick);
-    (this.game.canvas?.parentElement ?? document.body).appendChild(btn);
-    this.controlToggleBtn = btn;
-    this.setControlMode(this.playerControl); // set the initial label
-    const cleanup = () => { btn.remove(); this.controlToggleBtn = undefined; };
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
-    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
-    this.createTimeSkipButton();
-  }
 
-  /** On-screen ⏩ button that fast-forwards the day clock a step per tap — the touch
-   *  equivalent of the U key (tablets have no keyboard). Sits ABOVE Cato's bottom-left
-   *  portrait (which occupies the very corner). Test-only DOM button, removed on shutdown. */
-  private createTimeSkipButton(): void {
-    if (typeof document === 'undefined' || this.timeSkipBtn) return;
-    const btn = document.createElement('button');
-    btn.textContent = '⏩ 1小时';
-    Object.assign(btn.style, {
-      position: 'fixed', bottom: '92px', left: '14px', // clears the ~80px-tall portrait in the corner
-      zIndex: '2147483647', padding: '9px 15px', font: '600 15px system-ui, sans-serif',
-      color: '#3f2c18', background: 'rgba(242,226,196,0.95)', border: '2px solid #5b3a1e',
-      borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-      userSelect: 'none', touchAction: 'manipulation',
-    } as Partial<CSSStyleDeclaration>);
-    const onClick = (e: Event) => { e.preventDefault(); e.stopPropagation(); this.fastForwardTime(); };
-    btn.addEventListener('click', onClick);
-    (this.game.canvas?.parentElement ?? document.body).appendChild(btn);
-    this.timeSkipBtn = btn;
-
-    // A second button that jumps a WHOLE day (crosses local midnight → settles orders/sales/coops/
-    // cows/home). The ⏩ +2h button can't easily reach "arrives tomorrow" — deliveries key off the
-    // real calendar day. Test-only, sits just right of the time button.
-    const dayBtn = document.createElement('button');
-    dayBtn.textContent = '⏭ 一天';
-    Object.assign(dayBtn.style, {
-      position: 'fixed', bottom: '92px', left: '128px',
-      zIndex: '2147483647', padding: '9px 15px', font: '600 15px system-ui, sans-serif',
-      color: '#3f2c18', background: 'rgba(242,226,196,0.95)', border: '2px solid #5b3a1e',
-      borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-      userSelect: 'none', touchAction: 'manipulation',
-    } as Partial<CSSStyleDeclaration>);
-    dayBtn.addEventListener('click', (e: Event) => { e.preventDefault(); e.stopPropagation(); this.skipToNextDay(); });
-    (this.game.canvas?.parentElement ?? document.body).appendChild(dayBtn);
-    this.daySkipBtn = dayBtn;
-
-    const cleanup = () => { btn.remove(); dayBtn.remove(); this.timeSkipBtn = undefined; this.daySkipBtn = undefined; };
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
-    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
-  }
-
-  /** Switch control mode + reflect it on the button. Cato mode → camera follows him;
+  /** Switch control mode (toggled from Settings → Debug now). Cato mode → camera follows him;
    *  camera mode → free pan + Cato resumes wandering (stop his residual velocity). */
   private setControlMode(on: boolean): void {
     this.playerControl = on;
     this.cameraFollow = on;
     if (!on && this.child?.body) (this.child.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    if (this.controlToggleBtn) this.controlToggleBtn.textContent = on ? '控制: 猫 (点击切到相机)' : '控制: 相机 (点击切到猫)';
+    this.registry.set('debugControlOn', on); // Settings reads this to label the toggle
   }
 
   private updatePlayerMovement(): void {
