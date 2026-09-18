@@ -164,12 +164,16 @@ export class EmoteController {
     if (on) {
       if (!this.talkRoot) {
         const bubble = this.scene.add.image(0, 0, BUBBLE).setOrigin(0.5, 1);
+        // frame 245 (all_icons "white-message") is a full-colour cream+tan message glyph — do NOT
+        // tint it (a tint multiplies EVERY pixel, so it turns the cream fill into a dark blob).
         const icon = this.scene.add.image(0, Math.round(-bubble.height * EMOJI_BODY_FRAC), MSG_KEY, MSG_FRAME)
-          .setOrigin(0.5, 0.5).setScale(0.9).setTint(0x4a3524); // dark tint so the white glyph reads on the grey bubble
+          .setOrigin(0.5, 0.5).setScale(0.9);
         this.talkRoot = this.scene.add.container(0, 0, [bubble, icon]).setDepth(DEPTH).setVisible(false);
       }
       const r = this.talkRoot;
       if (!r.visible) {
+        const t = this.target(); // position at Cato's head NOW so it never flashes at world (0,0)
+        if (t) r.setPosition(Math.round(t.x + TALK_DX), Math.round(t.y - HEAD_OFFSET + TALK_DY));
         this.scene.tweens.killTweensOf(r);
         r.setVisible(true).setScale(0);
         this.scene.tweens.add({ targets: r, scale: TALK_SCALE, duration: 220, ease: 'Back.easeOut' });
