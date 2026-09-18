@@ -31,6 +31,7 @@ export class BootMenuScene extends Phaser.Scene {
   private titleShadow?: Phaser.GameObjects.Image;   // its drop shadow (stays on the "ground")
   private titleBaseY = 0;                            // the logo's resting (lowest) y — the shadow's anchor
   private titleBaseScale = 1;
+  private jaminBadge?: Phaser.GameObjects.Image; // "Jamin Edition" banner at the title's lower-left
   /** The authored Play button entity + its base (un-hovered) scale — SettingsScene
    *  reads these to place the "Settings" button directly BELOW Play, at Play's size. */
   playButton?: Phaser.GameObjects.Sprite;
@@ -116,6 +117,19 @@ export class BootMenuScene extends Phaser.Scene {
         .setScale(title.scaleX, title.scaleY)
         .setTint(0x2f5626).setAlpha(0.32).setDepth(title.depth - 0.5);
       this.tweens.add({ targets: title, y: title.y - 5, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+      // "Jamin Edition" badge tucked at the title's LOWER-LEFT. Sized ~40% of the logo width and
+      // floated with the SAME tween params (added right after the title's, no delay → they stay in
+      // phase), so the badge bobs together with the logo as one unit.
+      if (this.textures.exists('jamin-edition')) {
+        const bw = title.displayWidth, bh = title.displayHeight;
+        const scale = (bw * 0.4) / this.textures.get('jamin-edition').getSourceImage().width;
+        // Tuck it UNDER the logo's (empty) lower-left, clearly ABOVE the Play/New Game stack (the
+        // title + buttons are tightly packed, so sitting it lower collided with the top button).
+        const bx = title.x - bw * 0.31, by = this.titleBaseY + bh * 0.40;
+        this.jaminBadge = this.add.image(bx, by, 'jamin-edition').setOrigin(0.5, 0.5).setScale(scale).setDepth(title.depth);
+        this.tweens.add({ targets: this.jaminBadge, y: by - 5, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
     }
 
     // The authored `play-button` entity is now a POSITION ANCHOR only — SettingsScene

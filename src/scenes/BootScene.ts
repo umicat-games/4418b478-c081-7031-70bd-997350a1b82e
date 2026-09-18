@@ -339,6 +339,7 @@ export class BootScene extends Phaser.Scene {
     // Order book UI — the order button (bottom-right) opens this two-page book: a
     // catalog of orderable seeds/seedlings on the left, an order summary on the right.
     this.load.image('order-book', 'uploaded/order-book.png');
+    this.load.image('jamin-edition', 'uploaded/jamin-edition.png'); // "Jamin Edition" banner under the title logo
     // Backpack (bag) UI — the hotbar's backpack button opens this bag ABOVE the hotbar
     // (so items can be dragged/placed onto the hotbar). `bag` = the backpack graphic;
     // `bag-item-bg` = a slot; `bag-zipper` = the scroll thumb.
