@@ -1712,6 +1712,20 @@ standing still in exactly the case the option exists for.
   sleeps in wall-clock is measuring something else: under the headless software
   renderer at eight frames a second, game time advances at forty per cent of
   real. Poll for the state you want; do not sleep for it.
+- **Nothing on the screen is selectable text.** `index.html` turns
+  `user-select`, `-webkit-touch-callout` and `-webkit-tap-highlight-color` off
+  globally. Left on — which is the default, and was the state for months — a
+  long press on the title's `Continue` raises iOS's selection handles and its
+  magnifier over the title screen, and a thumb that drifts while working the
+  stick can drag a highlight across the HUD. Every string here is a label on
+  something you press or a number you watch; none of it is text to be read and
+  copied. This is the same lesson the icons below already carry, finished: that
+  fix was made one element at a time.
+
+  Verified in BOTH engines, because the callout is a WebKit property and phones
+  run WebKit. Note that neither engine exposes `-webkit-touch-callout` in
+  computed style, so what can be checked is that `user-select` computes to
+  `none` and that the declaration reaches the built `index.html`.
 - **Nothing in this game's own UI is an emoji.** `src/icons.ts` and
   `public/icons/` (`npm run icons`), drawn as CSS MASKS — `mask-image` plus
   `background: currentColor` — so one file is a white button glyph, a gold coin
