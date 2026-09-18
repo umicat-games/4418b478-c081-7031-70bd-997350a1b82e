@@ -22,6 +22,33 @@ loader fails loudly on a missing clip and lists the names the model does have.
 `importScale` corrects for the fact that almost no model is authored at 1 unit
 = 1 metre. Fox is authored large; 0.035 puts it at roughly a metre tall.
 
+## Editing a model
+
+Blender, headless, scripted — `blender -b --python edit.py -- in.glb out.glb`.
+The one flag that matters is on the way out:
+
+```python
+bpy.ops.export_scene.gltf(filepath=out, export_format='GLB',
+                          export_animations=True, export_animation_mode='ACTIONS',
+                          export_nla_strips=False,
+                          export_force_sampling=False)   # <- NOT the default
+```
+
+`export_force_sampling` defaults to **True** and resamples every keyframe onto
+integer frames. On the hero that shortened six of 32 clips by about 6% and bent
+`attack-kick-right` by 0.67 in its bone matrices. With it off, all 32 clips come
+back identical to 0.00001 — and the file is smaller.
+
+Two things about the models themselves, learned on the hero:
+
+- **The meshes are not welded.** Splitting by loose parts gives 109 fragments
+  rather than the ten things you can see. Weld first (`remove_doubles` at 1e-4
+  on a COPY) and walk connected components; do not weld the real mesh, since
+  these are flat-shaded with custom split normals.
+- **The palette is a gradient chart: the column is the hue and the row is the
+  shade.** So recolouring a part is moving its UV sideways, not editing pixels —
+  and the top half of the sheet is unused black, which is where new swatches go.
+
 ## Images, audio, fonts
 
 Same as any Umicat game — upload through the Assets tool and reference from

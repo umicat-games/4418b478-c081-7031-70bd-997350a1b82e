@@ -1232,6 +1232,31 @@ them as you breathe.
 squarely in front of the exit door and hid it, and the one thing in the hub a
 player has to be able to find is the way out.
 
+## The hero's face
+
+Kenney's `character-male-b` is a bald old man with a beard, a moustache and a
+hearing aid, and the game's own icon is a round-faced boy. Edited in Blender
+(headless, scripted) rather than replaced: the rig, the 32 clips and the
+`arm-right` socket the sword hangs off are all worth keeping.
+
+The beard and moustache were 92 faces, and **underneath them was already a
+smiling mouth** — the model had had one all along, covered. What was wrong was
+the eyes: not rounded rectangles but a LEAF shape, pointed at the top with a
+notch cut into the bottom edge, which is what read as an old man squinting.
+Stretching them made it worse; they are rebuilt as upright rounded rects,
+narrower and closer together. Then an open mouth with a tongue, and blush.
+
+**The colours are four new swatches painted into the palette's unused top
+half**, which is why this is the one model in the game that EMBEDS its texture —
+see `ASSETS.md`. The geometry and the colours it points at cannot be allowed to
+drift apart.
+
+Everything on the head is weighted `head` at 1.0, so new vertices need nothing
+cleverer than that — but they do need it, and a probe that rotates the head bone
+and checks the new geometry follows is the only thing that catches getting it
+wrong. Unweighted vertices sit at the origin while the head animates, which
+looks like the face falling off.
+
 ## The sword
 
 Half again as long as the kit's (0.67 against a 0.72 hero — at 0.45 it read as a
@@ -1443,18 +1468,63 @@ belongs to the saucers. Skipped on a kill, because the saucer's own burst is
 about to happen in the same place and two effects on one frame is one effect
 nobody reads. One instanced draw.
 
-**A trail on the blade**, as a RING SEGMENT. A MOTION cue, not an attack — it
-says how fast the thing went, which is the half of a swing a still frame cannot
-show. It shows on a MISS too, for the same reason. It does not travel: a thing
-that flies outward is a projectile, and that is the crescent this game tried and
-dropped for reading as the bow's fan.
+**A trail on the blade**, as a tapered STRIP under its own shader. A MOTION cue,
+not an attack — it says how fast the thing went, which is the half of a swing a
+still frame cannot show. It shows on a MISS too, for the same reason. It does
+not travel: a thing that flies outward is a projectile, and that is the crescent
+this game tried and dropped for reading as the bow's fan.
+
+It was a flat `RingGeometry` in one colour, and **it measured 277 changed pixels
+at the play camera** — a four-pixel thread, reported as "you have to look
+carefully to see it". It is 1389 at tier 0 and 2275 at tier 3 now, counted the
+way `verify-3d-runtiers` counts: freeze, render the same frame with and without
+the smear, and diff.
+
+**Most of that came from a number that was simply wrong.** It was drawn at
+radius 0.52 — the blade TIP's sweep — while `HERO_ATTACK_RANGE` is 1.15, so the
+smear had been understating the sword's reach by more than half for as long as
+it existed. It is not drawn AT the reach either: at 1.15 it stops reading as a
+blade smear and becomes a ring on the floor, which is exactly how the thrown
+crescent failed. `SWING_SMEAR` is 0.85 — the largest that still hangs off the
+body.
+
+Three things the shader does that a flat ring cannot, all of them chosen by
+looking:
+
+- **The strip is walked tail-to-head**, so `u` runs 0 where the swing started to
+  1 where the blade is now. `RingGeometry` took `min(from,to)` and `abs(span)`,
+  which throws away WHICH END THE BLADE IS AT — fine for a uniform band, useless
+  the moment the smear wants to be thin at the start and full at the edge. The
+  outer edge stays a true circle; all the tapering is on the inside, because a
+  clean outer edge is what reads as an edge rather than a smudge.
+- **It retracts towards the blade** rather than dimming all over, and the
+  erosion does not start until 30% of the life is gone. Eating the tail from the
+  first frame read as a flicker: a 0.24s effect that is half gone by 0.14s was
+  never seen at full length.
+- **It is NOT additive.** Additive is the obvious choice for something that
+  glows and it was rejected on the evidence: over this game's grass, tier 3's
+  hot red comes out YELLOW. `tierLook`'s colour is how the player feels the
+  sword getting stronger, and additive blending takes that channel away
+  entirely. The white-hot core is driven by the tier's `glow` instead, which is
+  what keeps tier 0 pink rather than washing every tier to the same white.
+
+**`glow` was being dropped on the floor.** `tierLook` has always returned it and
+`bladeTrail`'s signature did not name it, so the smear ignored it for as long as
+it existed. It is also the blade's own `emissiveIntensity`, which is why the
+trail must not be tuned by changing it — the sword would change with it.
+
+The renderer is built with default settings, so `outputColorSpace` is sRGB and
+a `ShaderMaterial` that writes `gl_FragColor` without `#include
+<colorspace_fragment>` draws EVERYTHING TOO DARK — silently, and only visible by
+comparison with the thing it replaced. `MeshBasicMaterial` carries that chunk
+for you; a hand-written shader does not.
 
 Emitted ONCE per swing, near the end of the cut. A ribbon emitted per frame is a
 draw call per frame — the arithmetic that made the staff's specks nineteen draws
 before they were instanced.
 
-**It was invisible twice before it was a ring segment, and both times for the
-same reason.** Built from `strandA` beam quads, it drew almost nothing:
+**It was invisible twice before it was even a ring segment, and both times for
+the same reason.** Built from `strandA` beam quads, it drew almost nothing:
 `strandA` is a thread down the middle of a mostly empty square, so a ribbon of
 twelve segments each 0.12 long and 0.4 wide is twelve nearly-empty quads. **This
 file already carried that arithmetic** — it is why the first lightning strike
@@ -1610,6 +1680,19 @@ standing still in exactly the case the option exists for.
 
 ## Things that will bite
 
+- **Blender's glTF exporter SHORTENS animation by default.**
+  `export_force_sampling` is `True` out of the box and resamples keyframes onto
+  integer frames: six of the hero's 32 clips lost about 6% of their length and
+  `attack-kick-right` deviated 0.67 in its bone matrices — a kick is fast, and
+  that is a visibly clipped one. With `export_force_sampling=False` all 32 clips
+  match the original to 0.00001. Any edit to any `.glb` here needs that flag.
+
+  Checking it means sampling pose-bone matrices per clip and diffing, and there
+  are two traps in the check itself: Blender 4.4+ has **slotted actions**, so
+  assigning `animation_data.action` without also setting `action_slot` binds
+  nothing; and the pose must be **reset to rest between actions**, or bones a
+  clip does not key still carry the previous clip's pose and read as a
+  regression. Both produced false alarms before the real answer.
 - **`Box3.setFromObject` lies about skinned meshes.** It reports the space the
   bones could reach (3.44 for the boss) rather than the model anyone can see
   (1.64). Measure from `geometry.boundingBox`, and for a skinned mesh do **not**
