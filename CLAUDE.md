@@ -485,8 +485,26 @@ build — and pay gold or a heart when broken with any weapon. A heart only when
 one is missing: a crate that pays nothing is a worse crate than one that pays
 gold. They land away from everything on purpose; walking to one is the cost.
 
-**One crate in four is rare** and pays a twenty-second effect instead: double
-strike, richer bounties, a shield, or towers that reload faster. Gold and hearts
+**One crate in four is rare** and pays a twenty-second effect instead: your hits
+land twice, enemies drop more gold, nothing can hurt you, or your towers fire
+faster.
+
+**It says what it DOES, not what it is called.** The labels were names —
+"Double strike", "Shielded" — on a toast that was gone in 1.4 seconds, and a
+name only means something to somebody who already knows the game. Reported as
+*"I broke it and nothing told me what changed"*, which is exactly what a name
+you cannot read in time amounts to. The banner holds 2.6s for these, because a
+player who was watching the crate was not watching the top of the screen.
+
+**And a RING under the hero for the whole twenty seconds**, in the effect's own
+colour. The corner badge — an icon and a countdown — is something you have to go
+and read; the ring is in the place the player is already looking, and it says
+"still on" without repeating the sentence. It fades over the last two seconds
+rather than blinking out: an effect that ends without saying so is one you find
+out about by being hit.
+
+Its own mesh, shown and hidden rather than made and thrown away — `vfx` is for
+things gone in under a second, and this lives for twenty at a time. Gold and hearts
 are the same decision every time; a timed effect is only worth anything if you
 are near something to use it on, so the same crate is a different offer in a
 quiet moment and in a busy one. It never rerolls into the effect already

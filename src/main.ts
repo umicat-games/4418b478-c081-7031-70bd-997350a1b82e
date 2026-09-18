@@ -295,12 +295,24 @@ interface BuffKind {
   /** What sits in the HUD for twenty seconds. An icon and a countdown — the
    *  full sentence there pushed the readout off a phone's screen. */
   badge: IconName;
+  /** The ring under the hero while it runs. */
+  color: number;
 }
+/** What a rare crate pays.
+ *
+ *  **The label says what it DOES, not what it is called.** "Double strike" and
+ *  "Shielded" are names, and a name only means something to somebody who
+ *  already knows the game — reported as "I broke it and nothing told me what
+ *  changed", which is what a name that is gone in 1.4 seconds amounts to.
+ *
+ *  The colour is the other half. A word is on screen for a moment; the ring
+ *  under the hero is there for the whole twenty seconds, and it has to say
+ *  WHICH one without repeating the sentence. */
 const BUFFS: BuffKind[] = [
-  { id: 'strike', label: 'Double strike', badge: 'sword' },
-  { id: 'lucky', label: 'Lucky — richer bounties', badge: 'coin' },
-  { id: 'shield', label: 'Shielded', badge: 'shield' },
-  { id: 'overdrive', label: 'Overdrive — towers reload faster', badge: 'bolt' },
+  { id: 'strike', label: 'Your hits land twice', badge: 'sword', color: 0xff7a4d },
+  { id: 'lucky', label: 'Enemies drop more gold', badge: 'coin', color: 0xffd45e },
+  { id: 'shield', label: 'Nothing can hurt you', badge: 'shield', color: 0x6ec8ff },
+  { id: 'overdrive', label: 'Your towers fire faster', badge: 'bolt', color: 0xb98cff },
 ];
 
 // --- towers ---------------------------------------------------------------
@@ -1904,6 +1916,27 @@ export async function startLevel(
     tinted.push(obj);
   };
 
+  /** A ring under the hero for as long as an effect is running.
+   *
+   *  The banner says what it does, once. This says THAT IT IS STILL ON, for the
+   *  whole twenty seconds, in the place the player is already looking — which
+   *  the corner badge does not: an icon and a countdown at the top of the
+   *  screen is something you have to go and read.
+   *
+   *  Its own mesh, shown and hidden rather than made and thrown away: it lives
+   *  for twenty seconds at a time and `vfx` is for things that are gone in
+   *  under one. */
+  const buffRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.34, 0.44, 40).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.8,
+      side: THREE.DoubleSide, depthWrite: false,
+    }),
+  );
+  buffRing.visible = false;
+  buffRing.renderOrder = 3;
+  world.scene.add(buffRing);
+
   /** Anything the hero swings at, shoots or blasts also breaks crates. Called
    *  from all three weapons rather than folded into `damage`, because a crate
    *  is not an enemy: towers ignore it, it does not walk, and giving it an
@@ -1924,7 +1957,7 @@ export async function startLevel(
         const pool = BUFFS.filter((k) => k.id !== buff?.kind.id);
         const kind = pool[Math.floor(Math.random() * pool.length)];
         buff = { kind, left: BUFF_SECONDS };
-        flashBanner(kind.label, kind.badge);
+        flashBanner(kind.label, kind.badge, 2600);
         audio.play('win');
         flashTint(hero, { color: 0xffd45e, ms: 500 });
         renderHud();
@@ -3213,13 +3246,16 @@ export async function startLevel(
     padding: 8px 14px; border-radius: 999px; pointer-events: none; display: none;
   `;
   document.body.appendChild(toast);
-  function flashBanner(text: string, glyph?: IconName): void {
+  /** `hold` for the ones that are telling you something rather than confirming
+   *  it — a crate's effect has to be readable by somebody who was watching the
+   *  crate, not the top of the screen. */
+  function flashBanner(text: string, glyph?: IconName, hold = 1400): void {
     toast.textContent = '';
     if (glyph) { toast.append(icon(glyph), document.createTextNode(' ')); }
     toast.append(document.createTextNode(text));
     toast.style.display = 'block';
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 1400);
+    toastTimer = setTimeout(() => { toast.style.display = 'none'; }, hold);
   }
 
   // --- combat --------------------------------------------------------------
@@ -3641,6 +3677,19 @@ export async function startLevel(
       dial.show(aimsByDrag() ? (attackButton() ?? weaponCell) : null,
                 aimsByDrag() ? staffCooldown / (kind.cooldown ?? 1.7) : 0);
       readBuildButton();
+      // The effect ring follows the hero and breathes, so it reads as live
+      // rather than as a mark left on the grass. It fades over the last two
+      // seconds instead of blinking out — an effect that ends without saying so
+      // is one you find out about by being hit.
+      buffRing.visible = !!buff;
+      if (buff) {
+        (buffRing.material as THREE.MeshBasicMaterial).color.setHex(buff.kind.color);
+        buffRing.position.set(hero.position.x, 0.03, hero.position.z);
+        const pulse = 1 + Math.sin(performance.now() / 180) * 0.05;
+        buffRing.scale.setScalar(pulse);
+        (buffRing.material as THREE.MeshBasicMaterial).opacity =
+          0.8 * Math.min(1, buff.left / 2);
+      }
       if (invincible > 0) invincible -= dt;
       if (staffCooldown > 0) staffCooldown -= dt;
 
