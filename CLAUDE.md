@@ -1466,6 +1466,27 @@ frame rate: fifteen segments on a device and TWO under the headless renderer, so
 it could not be judged on the machine the checks run on. It is generated from
 the swing's own start and end angle now.
 
+**The smear carries the sword's LEVEL.** It thickens and reddens at every run
+tier — pale pink and thin at the first, thick and hot at the top — so the
+upgrade is something you feel the next time you swing rather than something a
+banner told you about.
+
+That replaced a separate shock effect that fired only from tier 2. **A thing
+that appears at level three teaches nothing about levels one and two**, because
+it simply is not there for them; a scale that moves at every step is a scale you
+can read without being told there is one. `meleeImpact` still drives the length
+of the freeze and the number of sparks — it is only the extra flash that is
+gone.
+
+**Everything on a hit is LIGHT RED, and that is about the snow board.** White
+and pale gold effects are invisible on Frostfall, which is the one place a hit
+most needs to read: the ground there is the same colour as the effect was. It
+does collide with a documented decision — the sell ring is "the only red in the
+interface" — and the mitigation is that the sell ring is a DARK brick
+(`0xb0342c`) drawn flat on the ground under a tower, while these are pale, in
+the air, and gone in a fraction of a second. If it ever reads as a mistake,
+orange is one constant away.
+
 **And the camera punches**, five centimetres for a fifth of a second. The most
 noticeable thing on the list and the one left out of the first round, which is
 most of why that round came back as "I cannot really see any of it". Applied

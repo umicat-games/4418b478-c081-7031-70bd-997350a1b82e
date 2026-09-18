@@ -812,59 +812,6 @@ export function lightning(
 }
 
 /**
- * The blow landing — what a heavy sword hit looks like, from run tier 2.
- *
- * It replaced a thrown CRESCENT, and the reason is design rather than drawing:
- * a widening arc in front of the hero and the bow's widening fan of arrows are
- * the same picture, and two weapons that read the same are one weapon. **A
- * sword's identity is WEIGHT, not width** — so what a tier buys is a harder
- * hit, and this is what makes the hit look hard.
- *
- * Raw damage on the sword does not break the rule that a run buys behaviour
- * rather than damage, for one reason: melee can only reach what is next to you.
- * The position you have to stand in is the cost, and a ranged weapon has no
- * equivalent — which is why the staves and the bow buy shape instead.
- *
- * Three things at the point of contact, which is the whole vocabulary of an
- * impact: a FLASH that is gone in three frames, a shock RING on the ground that
- * says how far the blow carried, and SPARKS that outlive both. `power` runs
- * 0..1 and scales all three, so the tier is legible without a number.
- */
-export function swordImpact(vfx: Vfx, at: THREE.Vector3, power: number): void {
-  const p = Math.max(0, Math.min(1, power));
-  const big = 0.75 + p * 0.85;
-  // The flash. `face` so it reads the same whichever way the camera is swung,
-  // and at chest height rather than on the floor — this is a blow landing on a
-  // thing, not a mark on the ground.
-  quads(vfx, [
-    { at: new THREE.Vector3(at.x, at.y + 0.42, at.z), frame: FRAME.burst,
-      w: big, h: big, mode: 'face' },
-    { at: new THREE.Vector3(at.x, at.y + 0.42, at.z), frame: FRAME.starBurst,
-      w: big * 1.25, h: big * 1.25, mode: 'face', roll: Math.PI * 0.12 },
-  ], {
-    life: 0.2,
-    color: 0xfff1cf,
-    step: (l, k) => {
-      for (const q of l) { q.w *= 1 + k * 0.02; q.h *= 1 + k * 0.02; }
-    },
-    alpha: (k) => Math.min(1, (1 - k) * 2),
-  });
-  // The shock on the ground. The same expanding ring the rest of the game uses
-  // to mean "this much ground", kept SMALL: the blow lands where the hero is
-  // standing, and a wide ring would be claiming reach the sword does not have.
-  ring(vfx, new THREE.Vector3(at.x, 0.02, at.z), {
-    color: 0xffe6b0, from: 0.3, to: 0.55 + p * 0.5, life: 0.26, opacity: 0.8,
-  });
-  // And sparks, which are the part that outlives the hit. Given a FRAME, or at
-  // this size they are scraps of white paper.
-  motes(vfx, new THREE.Vector3(at.x, at.y + 0.3, at.z), {
-    count: 5 + Math.round(p * 7), color: 0xffd98a, color2: 0xfff6e0,
-    radius: 0.34, rise: 0.5, spin: 1.6, life: 0.42, size: 0.1,
-    frame: FRAME.sparkle,
-  });
-}
-
-/**
  * A saucer coming apart.
  *
  * Until this, a dead one simply went `visible = false` — it vanished, on the
@@ -883,7 +830,7 @@ export function swordImpact(vfx: Vfx, at: THREE.Vector3, power: number): void {
  * towards grey — measured for the fire burst, which answered with tongues
  * rather than opacity.
  */
-export function saucerBurst(vfx: Vfx, at: THREE.Vector3, tint = 0xc08cff): void {
+export function saucerBurst(vfx: Vfx, at: THREE.Vector3, tint = 0xff8e7a): void {
   const p = at.clone();
   // `scorch` and `glowRing`, NOT `burst`.
   //
@@ -900,7 +847,9 @@ export function saucerBurst(vfx: Vfx, at: THREE.Vector3, tint = 0xc08cff): void 
     { at: p.clone(), frame: FRAME.starBurst, w: 1.5, h: 1.5, mode: 'face', roll: 0.5 },
   ], {
     life: 0.32,
-    color: 0xffd9a8,
+    // Light red, for the same reason the sparks are: on the snow board a warm
+    // white burst is a warm white burst on warm white ground.
+    color: 0xffada0,
     step: (l, k) => {
       // Out fast and then still: an explosion is an event, not an animation.
       const g = 1 + k * 0.7;
@@ -939,11 +888,16 @@ export function hitSparks(
   // reached. One bright sprite at the contact point does more than any number
   // of specks.
   quads(vfx, [
-    { at: at.clone(), frame: FRAME.starBurst, w: 0.75 + power * 0.3,
-      h: 0.75 + power * 0.3, mode: 'face', roll: 0.6 },
+    { at: at.clone(), frame: FRAME.starBurst, w: 0.9 + power * 0.35,
+      h: 0.9 + power * 0.35, mode: 'face', roll: 0.6 },
   ], {
-    life: 0.14,
-    color: 0xfff0c8,
+    life: 0.16,
+    // LIGHT RED, not warm white. White and pale gold are invisible on the snow
+    // board — the one place a hit effect most needs to read, because the ground
+    // there is the same colour as the effect. Distinct from the sell ring's
+    // `0xb0342c`, which is a dark brick red drawn flat on the ground under a
+    // tower; these are pale and in the air and gone in a sixth of a second.
+    color: 0xffb3a6,
     step: (l, k) => { l[0].w *= 1 + k * 0.04; l[0].h = l[0].w; },
     alpha: (k) => Math.min(1, (1 - k) * 2.2),
   });
@@ -956,9 +910,9 @@ export function hitSparks(
   // a spray. Six at 0.22, thrown nearly a unit, are specks that are clearly
   // LEAVING.
   motes(vfx, at, {
-    count: 5 + Math.round(power * 2), color: 0xfff3cf, color2: 0xffa22a,
+    count: 5 + Math.round(power * 2), color: 0xffc7bd, color2: 0xff6a52,
     radius: 0.95 + power * 0.3, rise: 0.42, spin: 3.6,
-    life: 0.36, size: 0.22, frame: FRAME.sparkle,
+    life: 0.4, size: 0.3, frame: FRAME.sparkle,
   });
 }
 
@@ -983,7 +937,12 @@ export function bladeTrail(
   toAngle: number,
   radius: number,
   height: number,
-  color = 0xeaf6ff,
+  /** 0-3. Drives the colour AND the thickness: **this is how the player feels
+   *  the sword getting stronger.** It replaced a separate shock effect that
+   *  fired only at the top tiers — a thing that appears at level three teaches
+   *  nothing about levels one and two, whereas an arc that thickens and reddens
+   *  every time is a scale you can read without being told there is one. */
+  tier = 0,
 ): void {
   // A RING SEGMENT, not a row of textured quads.
   //
@@ -1000,7 +959,12 @@ export function bladeTrail(
   // pixels on the ground before a swing against 2907 after.
   const span = toAngle - fromAngle;
   if (Math.abs(span) < 0.05) return;
-  const inner = radius * 0.82;
+  // Thin and pale at the bottom, thick and hot at the top.
+  const RAMP = [0xffc9c2, 0xff9a8a, 0xff6a52, 0xff3a24];
+  const BAND = [0.86, 0.79, 0.70, 0.60];
+  const t = Math.max(0, Math.min(3, Math.round(tier)));
+  const color = RAMP[t];
+  const inner = radius * BAND[t];
   const geom = new THREE.RingGeometry(
     inner, radius, 40, 1,
     Math.min(fromAngle, toAngle), Math.abs(span),

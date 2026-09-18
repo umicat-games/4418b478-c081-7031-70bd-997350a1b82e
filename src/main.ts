@@ -13,7 +13,7 @@ import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { showTitle } from './title';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordImpact, saucerBurst, hitSparks, bladeTrail, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, saucerBurst, hitSparks, bladeTrail, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
@@ -3486,23 +3486,13 @@ export async function startLevel(
       hitstop = HITSTOP_MS + (meleeImpact(runTier) ?? 0) * HITSTOP_MS * 0.6;
       shake = SHAKE_SECONDS;
     }
-    // What a heavy blow LOOKS like, from tier 2. Once per swing, at the nearest
-    // thing it landed on — a per-enemy effect on a weapon that can catch four
-    // at once is four effects on a whole-level budget of about twenty draws,
-    // which is the mistake the burn already made.
-    const weight = meleeImpact(runTier);
-    if (connected && weight !== null) {
-      let near: Enemy | null = null, best = Infinity;
-      for (const e of enemies) {
-        if (!e.alive) continue;
-        const d = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
-        if (d <= reach && d < best) { best = d; near = e; }
-      }
-      const fx = Math.sin(hero.rotation.y), fz = Math.cos(hero.rotation.y);
-      swordImpact(vfx, near ? near.obj.position
-        : new THREE.Vector3(hero.position.x + fx * 0.7, hero.position.y, hero.position.z + fz * 0.7),
-        weight);
-    }
+    // There is no separate effect for the heavy tiers any more.
+    //
+    // `swordImpact` used to add a flash, a ground ring and sparks from tier 2 —
+    // which taught nothing about tiers zero and one, because it simply was not
+    // there for them. The BLADE TRAIL carries the level instead: it thickens
+    // and reddens at every step, so the scale is legible from the first swing
+    // rather than announced at the top of it.
   };
 
   const damage = (e: Enemy, amount: number, quiet = false): void => {
@@ -4319,7 +4309,7 @@ export async function startLevel(
         if (!trailDone && cut >= 0.75) {
           trailDone = true;
           bladeTrail(vfx, hero.position, yaw, -SWING_ARC, a,
-            SWING_GRIP + 0.36, hero.position.y + SWING_HEIGHT);
+            SWING_GRIP + 0.36, hero.position.y + SWING_HEIGHT, runTier);
         }
         if (swing === 0) restSword();
       } else {
