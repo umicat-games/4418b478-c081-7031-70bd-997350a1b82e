@@ -7,6 +7,7 @@ import type { Progress } from './main';
 import { mergeStatic } from './merge';
 import { skyWithClouds } from './sky';
 import { hideLoading } from './loading';
+import { installLiftStyles, LIFT } from './buttons';
 
 /**
  * The title screen: Continue, or start again.
@@ -61,6 +62,7 @@ export async function showTitle(shared: Shared): Promise<void> {
   // appears COMPLETE — there is no moment where it is a flat panel waiting for
   // its background, because the background is what it was waiting for.
   const scene = await titleScene(shared);
+  installLiftStyles();
 
   const el = document.createElement('div');
   el.dataset.title = '';
@@ -76,8 +78,8 @@ export async function showTitle(shared: Shared): Promise<void> {
   // from `primary` tagged "Start" on a fresh save as a Continue, because it is
   // the primary button when there is nothing to continue.
   const btn = (act: string, label: string, primary: boolean, note?: string): string => `
-    <button data-act="${act}" style="
-      display:block; width:min(280px, 74vw); margin:0 auto; padding:14px 22px;
+    <button data-act="${act}" class="${primary ? LIFT.primary : LIFT.quiet}" style="
+      display:block; width:min(280px, 74vw); margin:0 auto 5px; padding:14px 22px;
       border:0; border-radius:999px; cursor:pointer; font:800 16px/1.2 system-ui;
       background:${primary ? '#ffd76a' : 'rgba(255,255,255,.18)'};
       color:${primary ? '#241b00' : '#fff'};
@@ -100,10 +102,10 @@ export async function showTitle(shared: Shared): Promise<void> {
         <div style="margin-top:8px; opacity:.8">
           This erases the village you have now. There is only one save.</div>
         <div style="display:flex; gap:10px; margin-top:18px">
-          <button data-act="cancel" style="flex:1; padding:12px; border:0; border-radius:999px;
+          <button data-act="cancel" class="${LIFT.plain}" style="flex:1; padding:12px; border:0; border-radius:999px;
             cursor:pointer; font:800 15px system-ui; background:rgba(35,49,60,.12); color:#23313c">
             Keep it</button>
-          <button data-act="wipe" style="flex:1; padding:12px; border:0; border-radius:999px;
+          <button data-act="wipe" class="${LIFT.danger}" style="flex:1; padding:12px; border:0; border-radius:999px;
             cursor:pointer; font:800 15px system-ui; background:#d0453a; color:#fff">
             Erase</button>
         </div>

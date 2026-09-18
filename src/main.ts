@@ -49,6 +49,7 @@ import {
   type Material, type Materials,
 } from './progress';
 import type { GameAudio } from '@umicat/three-sdk';
+import { installLiftStyles, LIFT } from './buttons';
 
 /**
  * Woodland Defense — a tower defense you can walk around in.
@@ -179,6 +180,17 @@ const SWING_HEIGHT = 0.42;
 /** How far the hilt sits from the hero's own centre during a cut. The arc is
  *  centred on the BODY, so this is the radius the hand travels on. */
 const SWING_GRIP = 0.16;
+/** How far out the smear is drawn.
+ *
+ *  Three different distances are in play and it is worth not confusing them:
+ *  the blade TIP sweeps at about 0.52, the hit REACH is `HERO_ATTACK_RANGE`
+ *  1.15 (and half again past tier 0), and this sits between them. Drawn at the
+ *  tip it was a four-pixel thread at the play camera — measured, 277 changed
+ *  pixels against a still frame — and drawn out at the reach it stopped being a
+ *  blade smear at all and read as a ring on the floor, which is the same way
+ *  the thrown crescent failed. 0.85 is the largest that still hangs off the
+ *  body: five times the pixels, same reading. */
+const SWING_SMEAR = 0.85;
 /** How long a hit rocks a flyer, and how far. Short and shallow: this fires on
  *  every landed hit, and a big slow tilt would have the whole wave lolling. */
 /** How long a connecting blow freezes the world. Sixty milliseconds is about
@@ -1587,6 +1599,8 @@ export async function startLevel(
     leave: () => quitRun(),
   });
   const qualityBtn = document.createElement('button');
+  // The gear's CLASS does not come along with its style attribute.
+  qualityBtn.className = LIFT.dark;
   qualityBtn.style.cssText = settings.button.getAttribute('style')
     + 'width: auto; padding: 0 11px; margin-left: 6px;';
   const labelQuality = (): void => { qualityBtn.textContent = QUALITY[quality].name; };
@@ -2258,6 +2272,7 @@ export async function startLevel(
   // halfway through is a run where the choice never cost anything.
   const cells = KINDS.map((kind, i) => {
     const cell = document.createElement('button');
+    cell.className = LIFT.dark;
     // Which slot this is, so a probe driving the tutorial can press the one the
     // script is pointing at rather than guessing from the text inside it.
     cell.dataset.slot = String(i);
@@ -2317,6 +2332,7 @@ export async function startLevel(
    *  why a tier is several towers' worth.
    */
   const weaponCell = document.createElement('button');
+  weaponCell.className = LIFT.dark;
   weaponCell.dataset.weaponCell = '';
   weaponCell.style.cssText = `
     width: ${CELL_MAX}px; padding: 6px 3px 5px; border-radius: 12px;
@@ -4345,7 +4361,7 @@ export async function startLevel(
         if (!trailDone && cut >= 0.75) {
           trailDone = true;
           bladeTrail(vfx, hero.position, yaw, -SWING_ARC, a,
-            SWING_GRIP + 0.36, hero.position.y + SWING_HEIGHT, tierLook(runTier));
+            SWING_SMEAR, hero.position.y + SWING_HEIGHT, tierLook(runTier));
         }
         if (swing === 0) restSword();
       } else {
@@ -4618,6 +4634,7 @@ export async function startLevel(
 }
 
 async function boot(): Promise<void> {
+  installLiftStyles();
   showLoading('Waking up', 'boot');
   const umicat = await ThreeUmicat.init();
   await RAPIER.init();

@@ -130,11 +130,18 @@ export const burstBonusDamage = (tier: number): number => (tier >= 3 ? 1 : 0);
  */
 export interface TierLook { color: number; band: number; glow: number }
 
+// `band` is the smear's thickness as a fraction of its radius, and it is the
+// ONLY thing here the trail reads — `color` and `glow` are shared with the
+// blade's own material, so they cannot be tuned for the smear alone.
+//
+// These were 0.14 → 0.40 and the base swing came back as "you have to look
+// carefully to see it": at the play camera that is a four-pixel thread. The
+// floor moved up rather than the top moving down, so tier 3 keeps its lead.
 const LOOKS: TierLook[] = [
-  { color: 0xffc9c2, band: 0.14, glow: 0 },
-  { color: 0xff9a8a, band: 0.21, glow: 0.22 },
-  { color: 0xff6a52, band: 0.30, glow: 0.45 },
-  { color: 0xff3a24, band: 0.40, glow: 0.75 },
+  { color: 0xffc9c2, band: 0.30, glow: 0 },
+  { color: 0xff9a8a, band: 0.36, glow: 0.22 },
+  { color: 0xff6a52, band: 0.44, glow: 0.45 },
+  { color: 0xff3a24, band: 0.54, glow: 0.75 },
 ];
 
 export const tierLook = (tier: number): TierLook =>

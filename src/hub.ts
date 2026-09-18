@@ -31,6 +31,7 @@ import {
 import type { Materials } from './progress';
 import { MUSIC, SFX } from './audio';
 import { hideLoading } from './loading';
+import { installLiftStyles, LIFT } from './buttons';
 
 /**
  * The hub — where a run starts, and where it is scored.
@@ -819,9 +820,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  render, and stays put while the body scrolls under it. `svh` (with a `vh`
    *  fallback line above it) so the browser chrome sliding in and out does not
    *  change the panel's height under the player. */
+  installLiftStyles();
   const panelClose = document.createElement('button');
   panelClose.type = 'button';
   panelClose.setAttribute('aria-label', 'Close');
+  panelClose.className = LIFT.dark;
   panelClose.dataset.panelClose = '';
   panelClose.style.cssText = `
     position: absolute; top: 10px; left: 10px; width: 32px; height: 32px;
@@ -1172,7 +1175,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     // to earn materials that will not help.
     const can = !sel.refuse && canAfford(store, sel.cost);
     const label = sel.refuse ?? (can ? 'Buy' : `needs ${shortfall(store, sel.cost)}`);
-    return `<button id="shop-buy" ${can ? '' : 'disabled'} style="
+    return `<button id="shop-buy" class="${LIFT.primary}" ${can ? '' : 'disabled'} style="
              margin-top:18px; padding:11px 26px; border:0; border-radius:999px;
              cursor:${can ? 'pointer' : 'default'}; font:800 15px system-ui;
              max-width:100%; white-space:normal;

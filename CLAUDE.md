@@ -3134,3 +3134,49 @@ check would have passed on a slider that did nothing.**
 `verify-3d-settings` watched "nothing on the board moved" over a board with no
 enemies on it, and passed for the wrong reason until it was made to print how
 many it had been watching. It skips to a wave first now.
+
+## Buttons are raised, and the relief is one stylesheet
+
+`src/buttons.ts`. Two things turn a coloured rectangle into a surface: the top
+edge catching the light, and a deeper slab of THE SAME HUE underneath. The
+colours did not change — `#ffd76a` is the yellow it always was — and no art was
+made: this is `box-shadow`, which is resolution-independent, tintable, costs no
+atlas cell, and gives the press for free.
+
+**`:active` cannot be written inline**, and the press is the point — a raised
+button that does not go down reads as a picture of a button. That is the whole
+reason this left the style attribute. Every button takes `lift`; `quiet`,
+`danger`, `plain` and `dark` are modifiers that override custom properties
+rather than restating the shadow. Thirteen buttons across seven files use it.
+
+**It is layout-safe**: box-shadows do not take part in layout, so the hotbar —
+whose width is measured at runtime from the room left beside the platform's own
+controls, and which has caused two layout disasters already — did not move by a
+pixel. The only margin added is under the title's stacked pair, where the slab
+would otherwise land on the button below it.
+
+Four things that were not obvious:
+
+- **An inline `transition` outranks the stylesheet's.** `actionpad.ts` carried
+  `transition: opacity, background`, which would have silently killed the press
+  — raised, and never moving. Grep for inline `transition` and `box-shadow` on
+  anything given a relief class.
+- **The tutorial's breathing ring animates `box-shadow` on these same
+  elements** (the hotbar cells, the desktop pad's button), and a keyframe that
+  writes box-shadow REPLACES it — the highlighted button would go flat for as
+  long as it was being pointed at. `.lift` publishes its resting shadow as
+  `--lift-rest` and `scripted.ts` APPENDS it. Measured: 5 layers plain, 7 while
+  ringed, relief intact.
+- **A slab must be darker than the face it sits under.** Settings' "Leave the
+  level" is 22% red over a near-black panel, so `danger`'s solid `#9c2f27` came
+  out BRIGHTER than the button and lit it from below. It uses `dark`; `danger`
+  is for a solid red face, which is the title's Erase.
+- **`box-shadow` is transitioned, so a synchronous `getComputedStyle` after
+  flipping a class returns the transition's STARTING value.** The disabled check
+  read the old shadow and reported the `:disabled` rule dead when it was fine.
+  Wait past the transition before measuring.
+
+**The SDK's own controls are not covered and will not be.** `Input3D`'s
+joystick and round action buttons are styled from a module-private `CONTROL`
+const with no export and no hook, so on a phone they keep their own look. How a
+button looks is each game's business; the SDK is for what every game needs.

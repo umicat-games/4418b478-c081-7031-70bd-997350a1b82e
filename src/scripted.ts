@@ -1,3 +1,4 @@
+import { installLiftStyles, LIFT } from './buttons';
 
 /**
  * The tutorial board's script.
@@ -36,13 +37,21 @@ const POINT = '#4fd2ff';
  *
  *  A ring that sits there is furniture; a ring that breathes is something
  *  asking to be pressed. Done in CSS so the browser animates it off the main
- *  thread — sixty `boxShadow` writes a second is sixty style recalculations. */
+ *  thread — sixty `boxShadow` writes a second is sixty style recalculations.
+ *
+ *  It APPENDS `--lift-rest` rather than just writing its own ring. A keyframe
+ *  that sets box-shadow replaces the whole property, and the things this points
+ *  at — the hotbar cells, the desktop pad's button — carry their relief in that
+ *  same property, so the highlighted button went flat for as long as it was
+ *  being pointed at. The fallback covers anything with no relief on it. */
 function breatheStyle(): HTMLStyleElement {
   const st = document.createElement('style');
   st.textContent = `
     @keyframes umicat-point {
-      0%, 100% { box-shadow: 0 0 0 3px ${POINT}, 0 0 10px rgba(79,210,255,.45); }
-      50%      { box-shadow: 0 0 0 5px ${POINT}, 0 0 26px rgba(79,210,255,.95); }
+      0%, 100% { box-shadow: 0 0 0 3px ${POINT}, 0 0 10px rgba(79,210,255,.45),
+                             var(--lift-rest, 0 0 0 0 transparent); }
+      50%      { box-shadow: 0 0 0 5px ${POINT}, 0 0 26px rgba(79,210,255,.95),
+                             var(--lift-rest, 0 0 0 0 transparent); }
     }
     .umicat-point { animation: umicat-point 1.25s ease-in-out infinite; }
   `;
@@ -193,6 +202,7 @@ export interface Script {
  *  box. `pointer-events: none` throughout — every step is completed by playing,
  *  never by pressing the instruction. */
 function makeBox(): HTMLElement {
+  installLiftStyles();
   const el = document.createElement('div');
   el.dataset.script = '';
   // Middle of the screen, and it goes away when you have read it.
@@ -214,7 +224,7 @@ function makeBox(): HTMLElement {
                 border-radius:16px; padding:20px 22px; text-align:center;
                 box-shadow:0 14px 44px rgba(0,0,0,.42)">
       <div data-line style="font:700 16px/1.5 system-ui, sans-serif"></div>
-      <button data-ok style="margin-top:16px; border:0; border-radius:999px; cursor:pointer;
+      <button data-ok class="${LIFT.primary}" style="margin-top:16px; border:0; border-radius:999px; cursor:pointer;
         padding:9px 30px; font:800 14px system-ui; background:#ffd76a; color:#241b00">OK</button>
     </div>
   `;

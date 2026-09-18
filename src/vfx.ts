@@ -929,6 +929,13 @@ export function hitSparks(
  * stretched between two remembered tip positions. Feeding it fewer than two
  * points draws nothing rather than a degenerate quad.
  */
+/** `smoothstep(0,1,x)` on a clamped input — the taper profile leans on it in
+ *  two places and GLSL's spelling is the one worth matching. */
+function smooth01(x: number): number {
+  const t = Math.max(0, Math.min(1, x));
+  return t * t * (3 - 2 * t);
+}
+
 export function bladeTrail(
   vfx: Vfx,
   from: THREE.Vector3,
@@ -940,7 +947,7 @@ export function bladeTrail(
   /** How this tier looks — see `tierLook` in `runtiers.ts`. The colour and the
    *  thickness are **how the player feels the sword getting stronger**, and the
    *  blade itself is tinted from the same entry so the two cannot disagree. */
-  look: { color: number; band: number } = { color: 0xffc9c2, band: 0.14 },
+  look: { color: number; band: number; glow?: number } = { color: 0xffc9c2, band: 0.14, glow: 0 },
 ): void {
   // A RING SEGMENT, not a row of textured quads.
   //
@@ -957,20 +964,108 @@ export function bladeTrail(
   // pixels on the ground before a swing against 2907 after.
   const span = toAngle - fromAngle;
   if (Math.abs(span) < 0.05) return;
-  const color = look.color;
-  const inner = radius * (1 - look.band);
-  const geom = new THREE.RingGeometry(
-    inner, radius, 40, 1,
-    Math.min(fromAngle, toAngle), Math.abs(span),
-  ).rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshBasicMaterial({
-    color, transparent: true, opacity: 0.85,
-    side: THREE.DoubleSide, depthWrite: false,
+
+  // THE ARC IS BUILT TAIL-TO-HEAD, which `RingGeometry` could not express.
+  //
+  // It took `min(from,to)` and `abs(span)`, and in doing so threw away WHICH
+  // END THE BLADE IS AT — fine for a uniform ring, useless the moment the
+  // smear wants to be thin where the swing started and full where the blade is
+  // now. So the strip is walked from `fromAngle` to `toAngle` and `u` runs 0 at
+  // the tail to 1 at the head; everything the shader does keys off that.
+  //
+  // Same placement as the ring it replaces: authored in the XZ plane with
+  // `x = r·cos θ, z = -r·sin θ`, which is where `RingGeometry(...).rotateX(-90°)`
+  // put its vertices, so `mesh.rotation.y` below is unchanged.
+  const SEG = 48;
+  const band = radius * look.band;
+  const pos = new Float32Array((SEG + 1) * 2 * 3);
+  const uvs = new Float32Array((SEG + 1) * 2 * 2);
+  const idx = new Uint16Array(SEG * 6);
+  for (let i = 0; i <= SEG; i++) {
+    const t = i / SEG;
+    const th = fromAngle + span * t;
+    // Thin at the tail, full at the head. The OUTER edge stays a true circle —
+    // that is the blade's reach, and keeping it clean is what reads as an edge
+    // rather than a smudge; all the tapering happens on the inner side.
+    // Never all the way to nothing — a tail that tapers to a true point is a
+    // tail nobody sees at tier 0, where the band is only 0.14 of the radius.
+    const grow = 0.22 + 0.78 * smooth01(t / 0.35) * (0.55 + 0.45 * smooth01((t - 0.3) / 0.7));
+    const rIn = radius - band * grow;
+    const c = Math.cos(th), sn = Math.sin(th);
+    const o = i * 2;
+    pos[o * 3] = c * rIn;     pos[o * 3 + 1] = 0; pos[o * 3 + 2] = -sn * rIn;
+    pos[o * 3 + 3] = c * radius; pos[o * 3 + 4] = 0; pos[o * 3 + 5] = -sn * radius;
+    uvs[o * 2] = t;     uvs[o * 2 + 1] = 0;
+    uvs[o * 2 + 2] = t; uvs[o * 2 + 3] = 1;
+  }
+  for (let i = 0; i < SEG; i++) {
+    idx.set([i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2], i * 6);
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geom.setIndex(new THREE.BufferAttribute(idx, 1));
+
+  // `ShaderMaterial`, NOT `MeshBasicMaterial`, and the two chunks at the end of
+  // the fragment shader are not optional: the renderer is built with default
+  // settings, so `outputColorSpace` is sRGB, and a material that writes
+  // `gl_FragColor` without `<colorspace_fragment>` draws EVERYTHING TOO DARK —
+  // silently, and only by comparison with the thing it replaced.
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(look.color) },
+      uGlow: { value: look.glow ?? 0 },
+      uK: { value: 0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uGlow;
+      uniform float uK;
+      varying vec2 vUv;
+      void main() {
+        float u = vUv.x;            // 0 tail -> 1 head
+        float v = vUv.y;            // 0 inner -> 1 outer (the cutting edge)
+
+        // Hard on the outside, feathered inward. A smear with two soft edges
+        // is a smudge; the outer edge is where the steel went.
+        float across = smoothstep(0.0, 0.62, v) * smoothstep(1.04, 0.90, v);
+        float along  = pow(clamp(u, 0.0, 1.0), 1.3);
+        float head   = smoothstep(0.78, 1.0, u);
+
+        // Dissolve from the TAIL, so the smear retracts towards the blade
+        // instead of the whole arc dimming at once. It does NOT start at once:
+        // eating the tail from frame one read as a flicker rather than a swing,
+        // because a 0.24s effect that is half gone by 0.14s was never really
+        // seen at full length.
+        float e = max(0.0, (uK - 0.3) / 0.7);
+        float erode = smoothstep(e * 1.1 - 0.2, e * 1.1 + 0.45, u);
+
+        float a = across * mix(0.52, 1.0, along) * erode * (1.0 - uK * uK * 0.25);
+
+        // The hot core: white at the leading edge and along the outer rim.
+        // It is driven by the tier's GLOW rather than being constant, which is
+        // what keeps tier 0 pink instead of washing every tier to the same
+        // white — the colour is a gameplay channel, not decoration.
+        float core = across * max(head, smoothstep(0.76, 1.0, v));
+        vec3 col = mix(uColor, vec3(1.0), clamp(core * (0.25 + uGlow * 1.1), 0.0, 1.0));
+
+        gl_FragColor = vec4(col, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
   const mesh = new THREE.Mesh(geom, mat);
   mesh.position.set(from.x, height, from.z);
-  // `RingGeometry` sweeps from local +X, which after the lie-flat rotate is
-  // world +X; the hero faces `(sin yaw, cos yaw)`.
+  // The strip sweeps from local +X; the hero faces `(sin yaw, cos yaw)`.
   mesh.rotation.y = yaw - Math.PI / 2;
   mesh.renderOrder = 4;
   vfx.add({
@@ -978,6 +1073,6 @@ export function bladeTrail(
     // It does not travel. A smear says where the blade HAS BEEN; a thing that
     // flies outward is a projectile, and that is the crescent this game tried
     // and dropped for reading as the bow's fan.
-    step: (_o, k) => { mat.opacity = 0.85 * (1 - k * k); },
+    step: (_o, k) => { mat.uniforms.uK.value = k; },
   });
 }

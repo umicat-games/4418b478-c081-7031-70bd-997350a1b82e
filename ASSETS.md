@@ -67,18 +67,28 @@ offset, light positions, the controller's capsule/step/speed — **and gravity**
 which is length per time squared, so leaving it at 9.81 in this unit makes
 everything fall as though it were tiny.
 
-## Textures are SHARED, not embedded
+## Textures are SHARED, not embedded — except the hero's
 
-`character.glb` references `Textures/colormap.png` relatively, and so does every
-other Kenney asset — one 512×512 palette for the entire library. Keep it at
-`public/assets/Textures/colormap.png`.
+A prop references `Textures/colormap.png` relatively, and a whole kit shares one
+512×512 palette. This is a deliberate exception to the "a `.glb` should be
+self-contained" rule above: embedding would put a copy of the same 8KB palette
+inside every prop, and sharing means one request and one GPU texture per kit.
+Without the file a model still loads and animates — it just renders **grey**,
+with a single console line, which is exactly the kind of failure that ships.
 
-This is a deliberate exception to the "a `.glb` should be self-contained" rule
-above. Embedding it would put a copy of the same 8KB palette inside every prop,
-and sharing it means one request and one GPU texture for the character and all
-its scenery. Without the file the model still loads and animates — it just
-renders **grey**, with a single console line, which is exactly the kind of
-failure that ships.
+**One palette per kit, not one for the library.** `public/kit/*/Textures/` holds
+five and no two are the same file.
+
+**`character.glb` is the exception — its palette is embedded.** The hero's
+palette was never shared with anything (it was the only model under
+`public/assets/`), so embedding costs no extra GPU texture, and it buys the
+thing that matters: the face is repainted using **custom swatches added to the
+palette's unused upper half** — blush, mouth and tongue reds, and a darker eye
+black. Geometry and the colours it points at now travel as one file. Dropping a
+stock Kenney `colormap.png` back in would turn the eyes, blush and mouth
+**black**, because that region is black in the original — which is exactly why
+they are no longer separable. `public/assets/Textures/colormap.png` is left in
+place as the untouched Kenney original; nothing references it any more.
 
 ## The prop kit
 
@@ -99,8 +109,8 @@ a tree's belongs around its trunk, not its canopy.
 
 ## Licensing
 
-`public/assets/character.glb`, its `Textures/colormap.png`, everything in
-`public/kit/`, and the effect sheet `public/vfx/particles.png` are from
+`public/assets/character.glb` (modified: see the face note above), its
+`Textures/colormap.png`, everything in `public/kit/`, and the effect sheet `public/vfx/particles.png` are from
 **Kenney** (Mini Characters 1, the Platformer Kit, the Tower Defense Kit, Mini
 Dungeon, Fantasy Town, Modular Buildings and the **Particle Pack**) and are
 **CC0** — public domain. Commercial use, modification and redistribution, with

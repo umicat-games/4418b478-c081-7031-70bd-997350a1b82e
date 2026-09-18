@@ -1,4 +1,5 @@
 import { icon } from './icons';
+import { installLiftStyles, LIFT } from './buttons';
 
 /**
  * The settings dialog, and the button that opens it.
@@ -41,7 +42,9 @@ export interface Settings {
 const ROW = 'display:flex; align-items:center; gap:10px; margin:14px 0 0;';
 
 export function createSettings(opts: SettingsOpts): Settings {
+  installLiftStyles();
   const button = document.createElement('button');
+  button.className = LIFT.dark;
   button.dataset.settingsButton = '';
   button.setAttribute('aria-label', 'Settings');
   button.style.cssText = `
@@ -85,6 +88,7 @@ export function createSettings(opts: SettingsOpts): Settings {
   // borrowed it — Playwright took the first, which is this one with its layer
   // hidden, and waited for a hidden button to become clickable until it timed
   // out. A hook shared by two dialogs is a hook that names neither.
+  close.className = LIFT.dark;
   close.dataset.settingsClose = '';
   close.setAttribute('aria-label', 'Close');
   close.style.cssText = `
@@ -145,6 +149,12 @@ export function createSettings(opts: SettingsOpts): Settings {
     panel.append(rule);
 
     leaveBtn = document.createElement('button');
+    // `dark`, not `danger`: the face here is 22% red over a near-black panel,
+    // so a solid red slab under it is BRIGHTER than the button it is meant to
+    // be the shadow of, and the whole thing lights from below. The red is
+    // already in the background and the text; the relief only owes it a dark
+    // edge. `danger` is for a SOLID red face — the title's Erase.
+    leaveBtn.className = LIFT.dark;
     leaveBtn.dataset.leave = '';
     leaveBtn.style.cssText = `
       display:block; width:100%; margin-top:12px; padding:11px 14px;

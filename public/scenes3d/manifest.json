@@ -10,7 +10,7 @@
   "models": [
     {
       "id": "hero",
-      "path": "assets/character.glb",
+      "path": "assets/character.glb?v=2",
       "importScale": 1,
       "animations": {
         "idle": "idle",

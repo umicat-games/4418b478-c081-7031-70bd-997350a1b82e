@@ -1,5 +1,6 @@
 import { icon, type IconName } from './icons';
 import { keyCap } from './keycap';
+import { installLiftStyles, LIFT } from './buttons';
 
 /**
  * The controls a desktop has to be given, because the SDK does not draw any.
@@ -55,6 +56,7 @@ const CELL = `
 `;
 
 export function createActionPad(opts: ActionPadOpts): ActionPad {
+  installLiftStyles();
   const pad = document.createElement('div');
   pad.dataset.actionPad = '';
   pad.style.cssText = `
@@ -64,11 +66,13 @@ export function createActionPad(opts: ActionPadOpts): ActionPad {
   `;
 
   const button = document.createElement('button');
+  button.className = LIFT.dark;
   button.dataset.actionButton = '';
   button.style.cssText = `${CELL}
     width: 62px; border: 2px solid rgba(255,255,255,.28); cursor: pointer;
     pointer-events: auto; -webkit-tap-highlight-color: transparent;
-    transition: opacity .12s linear, background .12s linear;
+    transition: opacity .12s linear, background .12s linear,
+                transform .06s ease-out, box-shadow .06s ease-out;
   `;
   const glyphBox = document.createElement('span');
   glyphBox.style.cssText = 'display:flex; align-items:center; justify-content:center; width:58%; aspect-ratio:1;';
