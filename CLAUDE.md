@@ -994,7 +994,16 @@ move the finish line.
 What IS shown is everything you have, plus one step past it. For boards that is
 the next one you can play, and a line at the bottom saying which board opens the
 next; for weapons it is **as many empty plinths as the Armory has earned** —
-one before you build it, one more per level after.
+`offers = weaponCap()`, so **none at all until the Armory is built**.
+
+A brand new rack used to stand one empty plinth beside the sword, as the thing
+to save for. Reported as *"we do not have the bow yet, so why is its base
+there?"*, and that is the right question: with no Armory there is nothing that
+plinth could ever hold, and the rule this rack runs on is what you have plus one
+STEP. With no Armory there is no next step.
+
+Building the Armory is what stands one up — which is the better moment anyway,
+because it happens while you are standing in front of it.
 
 The first version showed exactly the NEXT unforged weapon, which quietly turned
 the rack into a QUEUE: you could no longer save for the storm staff and skip the

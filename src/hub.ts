@@ -419,7 +419,18 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     // Recomputed every time, not captured once: forging a weapon and upgrading
     // the Armory both change this, and the point is that it happens while you
     // are standing there watching.
-    const offers = weaponCap() === 0 ? 1 : 1 + weaponCap();
+    // How many EMPTY plinths to stand beside what you have already made.
+    //
+    // It was `weaponCap() === 0 ? 1 : 1 + weaponCap()`, so a brand new game
+    // showed an empty stand next to the sword — and with no Armory there is
+    // nothing that stand could ever hold. Reported as "we do not have the bow
+    // yet, so why is its base there?", which is the right question: this rack's
+    // rule is what you have PLUS ONE STEP, and with no Armory there is no next
+    // step to show.
+    //
+    // Building the Armory makes one appear, which is the moment worth having —
+    // the rack grows while you are standing in front of it.
+    const offers = weaponCap();
     let offered = 0;
     for (const r of RACK) {
       const made = levelOf(weapons, r.id) > 0;
