@@ -601,6 +601,15 @@ and chest-only-crafting descriptions above where they conflict.
   (not the 3rd, which used to double up with the last branch), a plain tree shakes on chop 4 and
   falls on chop 5 (+3 wood). Branch + wood drops use `playChopDrop` (toss → ground-bounce → fly),
   not the instant `playPopOut`.
+- **Branch chops must NOT visually drop the fruit (2026-09-16 fix):** the fruit sheets shed their
+  fruit only during `shake3` (see BootScene's anim registration), but the branch path played
+  `shake${min(branchStrikes,3)}` — so the **3rd** branch chop played shake3, the fruit visibly FELL,
+  yet only the branch was banked → the tree settled back to its fruited idle frame and the fruit
+  "reappeared", needing an extra chop to actually harvest (the reported "砍果树第三下果子掉了又回到树上"
+  bug). Fix: on a fruited tree cap the branch shake at **shake2** (`maxShake = tree.hasFruit ? 2 : 3`)
+  so branch chops are a fruit-less wobble; the fruit only ever falls (and is collected) on the payoff
+  chop 4 via `harvestTree`. Plain trees still shake3 (nothing to shed). Verified headless: chops
+  1-3 = shake1/2/2, branch each, `hasFruit` stays true; chop 4 = shake3 → 3 fruit banked → plain.
 - **Check it with `node umicat-infra/playwright/verify-cooking.mjs`** (no browser): every dish
   resolves atlas → item row → i18n (both languages) → a recipe whose ingredients exist, every dish
   sells for more than it consumes, and the pending-dish reset above is pinned.

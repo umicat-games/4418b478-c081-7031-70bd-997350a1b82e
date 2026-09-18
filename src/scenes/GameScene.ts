@@ -4845,7 +4845,13 @@ export class GameScene extends Phaser.Scene {
       this.playChopDrop(tree.sprite.x, tree.sprite.y - tree.sprite.displayHeight * 0.5, 'tools_and_meterials', 'branch');
       this.collect(itemFromId('branch', 1));
       tree.sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
-      tree.sprite.play(`tree-${tree.type}-shake${Math.min(tree.branchStrikes ?? 1, 3)}`); // escalating shake for feedback
+      // A branch chop must NOT drop the fruit — the fruit is the payoff of a LATER chop. The fruit
+      // sheets only shed their fruit during `shake3`, so on a fruited tree cap the branch shake at
+      // `shake2` (a fruit-less wobble). Otherwise the 3rd branch chop played shake3 → the fruit
+      // visibly fell but only the branch was banked → the tree settled back to its fruited idle frame
+      // and the fruit "reappeared", needing an extra chop (the reported bug). Plain trees can shake3.
+      const maxShake = tree.hasFruit ? 2 : 3;
+      tree.sprite.play(`tree-${tree.type}-shake${Math.min(tree.branchStrikes ?? 1, maxShake)}`); // escalating shake for feedback
       settle();
       return;
     }
