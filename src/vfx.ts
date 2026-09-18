@@ -863,3 +863,58 @@ export function swordImpact(vfx: Vfx, at: THREE.Vector3, power: number): void {
     frame: FRAME.sparkle,
   });
 }
+
+/**
+ * A saucer coming apart.
+ *
+ * Until this, a dead one simply went `visible = false` — it vanished, on the
+ * same frame, with a sound. The boss already fell over (`corpse`) because a
+ * thousand-hit-point fight ending on a blank frame is the anticlimax of the
+ * run; the same argument applies to every other kill, at a smaller size.
+ *
+ * **Cheap, because kills come in handfuls.** A staff burst can take four at
+ * once, and an effect that costs five draws each would be twenty on a
+ * whole-level budget of about twenty — the mistake the burn already made by
+ * running per-ENEMY rather than per-cast. This is two draws: one `quads` call
+ * for the flash and one instanced `motes` for the debris, both gone in under
+ * half a second.
+ *
+ * Moderate alpha, more area. Additive over this game's bright grass washes
+ * towards grey — measured for the fire burst, which answered with tongues
+ * rather than opacity.
+ */
+export function saucerBurst(vfx: Vfx, at: THREE.Vector3, tint = 0xc08cff): void {
+  const p = at.clone();
+  // `scorch` and `glowRing`, NOT `burst`.
+  //
+  // The names in `FRAME` are approximate and the art is the authority: cell 13
+  // is called `burst` and is a vertical GEYSER — it is what the fire's tongues
+  // spray upward — while the round, spiky, radial shape an explosion wants is
+  // cell 12, called `scorch` because that is the other thing it is used for.
+  // Picked by name, the first version of this drew a thin vertical streak and
+  // read as a spark. **Look at the sheet; `tools/pack-vfx.py` and a crop of the
+  // atlas take a minute and the names do not.**
+  quads(vfx, [
+    { at: p.clone(), frame: FRAME.glowRing, w: 1.1, h: 1.1, mode: 'face' },
+    { at: p.clone(), frame: FRAME.scorch, w: 1.9, h: 1.9, mode: 'face' },
+    { at: p.clone(), frame: FRAME.starBurst, w: 1.5, h: 1.5, mode: 'face', roll: 0.5 },
+  ], {
+    life: 0.32,
+    color: 0xffd9a8,
+    step: (l, k) => {
+      // Out fast and then still: an explosion is an event, not an animation.
+      const g = 1 + k * 0.7;
+      l[0].w = 1.1 * g * 1.3; l[0].h = l[0].w;
+      l[1].w = 1.9 * g; l[1].h = l[1].w;
+      l[2].w = 1.5 * (1 + k * 0.3); l[2].h = l[2].w;
+    },
+    alpha: (k) => Math.min(1, (1 - k) * 1.8) * 0.8,
+  });
+  // The wreckage, in the saucer's own colour so it reads as the thing that was
+  // there rather than as a generic puff.
+  motes(vfx, p, {
+    count: 9, color: tint, color2: 0xfff0d0,
+    radius: 0.5, rise: 0.15, spin: 2.4, life: 0.5, size: 0.11,
+    frame: FRAME.sparkle,
+  });
+}

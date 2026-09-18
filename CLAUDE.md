@@ -1419,6 +1419,38 @@ only through the first third (`STRIKE_FRACTION`) and hold still for the rest,
 because re-jittering at the same rate for three times as long turns a strike
 into a strobe.
 
+### A saucer comes apart, and a hit rocks it
+
+A dead one used to go `visible = false` on the frame it died — it vanished, with
+a sound and nothing to look at. The boss already fell over (`corpse`) because a
+thousand-hit-point fight ending on a blank frame is the anticlimax of the run;
+the same argument applies to every other kill at a smaller size.
+
+`saucerBurst` is **two draws** — one `quads` call and one instanced `motes` —
+because kills come in HANDFULS. A staff burst takes four at once, and a per-kill
+effect worth five draws each is twenty on a board budgeted at about twenty,
+which is the mistake the burn made by running per-ENEMY. Measured: four
+simultaneous kills cost **50 → 53** draws.
+
+**The frame names are approximate; the ART is the authority.** Cell 13 is called
+`burst` and is a vertical GEYSER — it is what the fire's tongues spray upward —
+while the round spiky radial shape an explosion wants is cell 12, called
+`scorch` because that is the other thing it is used for. Picked by name, the
+first version drew a thin vertical streak and read as a spark. Crop the atlas
+and look at it; that takes a minute and the names do not.
+
+**And a hit that does not kill ROCKS it**, on Z, decaying over a third of a
+second. A thing in the air has nothing to brace against, so the knock is the
+cheapest read of "that landed", and it costs no draw calls at all.
+
+Not on a **quiet** tick. A burn fires twice a second for three and a half
+seconds, and a saucer rocking continuously is one with a motor problem rather
+than one being hit. That check failed first time round for a reason worth
+keeping: **`__game.damage` was dropping the `quiet` flag**, so a burn driven
+through the debug seam arrived as a sword hit — a seam that behaves differently
+from the thing it stands in for makes a probe report on a game nobody is
+playing.
+
 ### What an element leaves on what it hits
 
 Every element marks its victims, and for a while only one did.

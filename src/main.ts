@@ -13,7 +13,7 @@ import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { showTitle } from './title';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordImpact, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, swordImpact, saucerBurst, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
@@ -179,6 +179,10 @@ const SWING_HEIGHT = 0.42;
 /** How far the hilt sits from the hero's own centre during a cut. The arc is
  *  centred on the BODY, so this is the radius the hand travels on. */
 const SWING_GRIP = 0.16;
+/** How long a hit rocks a flyer, and how far. Short and shallow: this fires on
+ *  every landed hit, and a big slow tilt would have the whole wave lolling. */
+const WOBBLE_SECONDS = 0.34;
+const WOBBLE_TILT = 0.30;
 /** How much of the swing is the CUT; the rest is the blade coming back to the
  *  carry. */
 const SWING_CUT = 0.62;
@@ -394,6 +398,8 @@ interface Enemy {
   bounty: number;
   /** How far along the path, in cells. Fractional between waypoints. */
   t: number;
+  /** Seconds left of the rock from being hit. Flyers only. */
+  wobble: number;
   /** Which fork it took, chosen at spawn. Both gates are always live, so the
    *  question the board asks is no longer "where is the path" but "which half
    *  of it can I afford to leave thin". */
@@ -2570,7 +2576,7 @@ export async function startLevel(
     bar.scale.setScalar((w.boss ? 1.9 : 1) / w.scale);
     const e: Enemy = {
       obj, hp: w.hp, maxHp: w.hp, speed: w.speed, bounty: w.bounty,
-      armed: w.armed, bar, barFill,
+      armed: w.armed, bar, barFill, wobble: 0,
       // Alternate, rather than choose at random. Both lanes stay live all
       // wave, which is the point of the fork; randomness would sometimes
       // send fifteen of sixteen down one side and read as a bug.
@@ -3447,6 +3453,14 @@ export async function startLevel(
 
   const damage = (e: Enemy, amount: number, quiet = false): void => {
     e.hp -= amount;
+    // Knocked sideways. A thing in the AIR has nothing to brace against, so a
+    // hit that does not kill it should move it — and a flyer rocking is the
+    // cheapest possible read of "that landed".
+    //
+    // Not on a QUIET tick: a burn ticks twice a second for three and a half
+    // seconds, and a saucer rocking continuously is a saucer with a motor
+    // problem rather than one being hit.
+    if (e.hp > 0 && !quiet && !e.ground) e.wobble = WOBBLE_SECONDS;
     // A burn ticks twice a second on every enemy it caught; at the fight's own
     // volume that is a wall of noise, and the flash would hide the hits you
     // actually landed. It still FLASHES — in its own colour, so damage arriving
@@ -3468,7 +3482,11 @@ export async function startLevel(
       for (let i = 0; i < 6; i++) dropPickup(e.obj.position, share, 'gold');
       return;
     }
+    // It comes APART rather than blinking out. The boss already fell over for
+    // this reason; everything else vanished on the frame it died.
+    saucerBurst(vfx, e.obj.position, e.ground ? 0xffb066 : 0xc08cff);
     e.obj.visible = false;
+    e.obj.rotation.z = 0;
     kills += 1;
     dropPickup(e.obj.position,
       Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1)));
@@ -3984,6 +4002,15 @@ export async function startLevel(
         } else {
           e.obj.rotation.y += dt * 1.6;   // UFOs spin; it reads as "alive"
         }
+        // The rock from a hit, decaying. On Z, which tilts a disc — the spin is
+        // on Y and the two do not fight.
+        if (e.wobble > 0) {
+          e.wobble = Math.max(0, e.wobble - dt);
+          const k = e.wobble / WOBBLE_SECONDS;
+          e.obj.rotation.z = Math.sin(k * Math.PI * 6) * WOBBLE_TILT * k;
+        } else if (e.obj.rotation.z !== 0) {
+          e.obj.rotation.z = 0;
+        }
 
         // Shooting the hero. Same shape as the tower's: a wind-up you can see
         // and walk out of, rather than damage for standing nearby.
@@ -4396,7 +4423,12 @@ export async function startLevel(
       isTinted: (o: THREE.Object3D) => isTinted(o),
       /** Damage something, for a probe that needs a kill without a ten-minute
        *  siege. The real function, not a copy of it. */
-      damage: (e: Enemy, amount: number) => damage(e, amount),
+      /** `quiet` is FORWARDED. It used to be dropped here, so a burn tick
+       *  driven through this seam arrived as a sword hit — and a seam that
+       *  behaves differently from the thing it stands in for makes a probe
+       *  report on a game nobody is playing. Found by a check asking whether a
+       *  burn rocks a saucer: it does not, and through this it did. */
+      damage: (e: Enemy, amount: number, quiet = false) => damage(e, amount, quiet),
       /** Jump the wave counter. A SEAM, not a shortcut: it moves only the
        *  *when*, and the enemies it produces come out of the same spawn code as
        *  every other wave — otherwise a probe would be checking a boss that
