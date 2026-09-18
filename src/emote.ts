@@ -42,8 +42,8 @@ const EMOJI_KEY = 'emoji';
 const MSG_KEY = 'ui-icons';
 const MSG_FRAME = 245;
 const TALK_SCALE = 0.46;
-const TALK_DX = 17;   // px right of Cato's origin (clear of the centred emoji bubble)
-const TALK_DY = -4;   // a touch higher than the emoji bubble's tail
+const TALK_DX = 0;    // centred DIRECTLY above Cato's head (same anchor as the emoji bubble)
+const TALK_DY = 0;    // same height as the emoji bubble's tail
 const FULL_SCALE = 0.52;       // the bubble's native 42×47 is too big over Cato → shrink
 const EMOJI_BODY_FRAC = 0.62;  // emoji Y = -height*this → centred in the rounded BODY (above the tail)
 const EMOJI_SCALE = 30 / 32;   // fit the 32px emoji into the bubble body (within the container)
@@ -75,6 +75,7 @@ export class EmoteController {
   private staminaImg?: Phaser.GameObjects.Image; // the stamina gauge over Cato's head
   private staminaHideAt = 0;
   private talkRoot?: Phaser.GameObjects.Container; // the "he's talking" message bubble over his head
+  private talking = false; // while true, the message bubble owns the head-spot → suppress the emoji bubble
   private moodFrame = SWEET_FRAME;   // the persistent top-right mood emoji (published to registry)
   private moodExpireAt = 0;          // after this, the mood falls back to `sweet`
   private rngSeed = 1;
@@ -117,6 +118,9 @@ export class EmoteController {
     this.active = { emotion, priority: prio, until: now + duration, minShow: now + Math.min(900, duration) };
     this.lastPlay = now;
     this.nextIdle = now + IDLE_MIN_MS + (this.rngSeed % IDLE_JITTER_MS); // push ambient idle out after any real emote
+    // While the message bubble owns the head-spot, only the mood (top-right portrait) updates — don't
+    // pop the emoji bubble too (they share the exact spot now; the message bubble is the priority cue).
+    if (this.talking) return;
     // Pop IN from the tail (scale 0 → FULL_SCALE, tiny overshoot).
     const root = this.root!;
     this.scene.tweens.killTweensOf(root);
@@ -161,6 +165,12 @@ export class EmoteController {
   /** Show / hide the "Cato is saying something" message bubble over his head (driven by
    *  catoSay / clearChatter) — an attention cue for the easy-to-miss bottom-left chatter box. */
   setTalking(on: boolean, _now: number): void {
+    this.talking = on;
+    if (on && this.root?.visible) { // the message bubble takes the head-spot → clear the emoji bubble
+      this.active = null;
+      this.scene.tweens.killTweensOf(this.root);
+      this.root.setVisible(false);
+    }
     if (on) {
       if (!this.talkRoot) {
         const bubble = this.scene.add.image(0, 0, BUBBLE).setOrigin(0.5, 1);
