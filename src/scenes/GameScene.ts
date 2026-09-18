@@ -145,8 +145,7 @@ const STAMINA_DRAIN_PER_SEC = 5;    // ~20s of continuous work drains a full bar
 const STAMINA_REGEN_PER_SEC = 3.5;  // ~29s to fully recover from empty
 const STAMINA_LOW_FRAC = 0.3;       // below this WHILE WORKING → a sweat emote
 const STAMINA_RECOVER_FRAC = 0.5;   // once exhausted, must regen to this before working again
-const CATO_EAT_ANNOUNCE_MS = 1900;  // beat between "found a snack" remark and the first bite (sit & rest)
-const CHATTER_MS = 5000;            // how long Cato's proactive small-talk chip lingers before it auto-hides
+const CHATTER_MS = 8000;            // how long Cato's proactive small-talk chip lingers before it auto-hides (longer so it's not missed)
 const CATO_PLOT_SEARCH_R = 10; // tiles around Cato to search for an open plot
 const CATO_PLOT_MAX = 4;      // clamp the requested plot side (N×N)
 // Day/time HUD: one full day loops in this many ms of play; the sun-arc pointer
@@ -884,7 +883,6 @@ export class GameScene extends Phaser.Scene {
   private stamina = STAMINA_MAX_DEFAULT;
   private exhausted = false;
   private staminaSleepyAt = 0; // throttle the drowsy emote while resting exhausted
-  private catoEatAt = 0;       // cooldown between auto-eats from Cato's bag while exhausted
   // Stuck-escape: no progress while walking (wedged between tree trunks) → sidestep out.
   private wanderStuckMs = 0;
   private wanderPrev: { x: number; y: number } | null = null;
@@ -3580,33 +3578,17 @@ export class GameScene extends Phaser.Scene {
     this.cameraFollow = false;
     (this.child?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
     this.startWanderIdle();
-    // If he's carrying food, ANNOUNCE first — he notices the snack, sits down to rest, and
-    // only takes the first bite after a beat (CATO_EAT_ANNOUNCE_MS via catoEatAt); the rest
-    // branch keeps eating on a cooldown until he's recovered or out of food. No food → drowse.
-    if (this.backpackStore.some((it) => isFood(it.id))) {
-      this.catoReact('sleepy', { duration: 2400, force: true });
-      this.catoSay('chatter_found_food');
-      this.catoEatAt = this.time.now + CATO_EAT_ANNOUNCE_MS; // first bite lands after the remark
-    } else {
-      this.catoReact('sleepy', { duration: 3200, force: true });
-      this.catoSay('chatter_tired');
-    }
+    // Cato no longer helps himself to food when tired — he just drowses until he recovers (or the
+    // friend hand-feeds him a snack from the backpack). Rest + a tired remark.
+    this.catoReact('sleepy', { duration: 3200, force: true });
+    this.catoSay('chatter_tired');
     this.scheduleSave();
   }
 
-  /** Cato eats one unit of the first FOOD item in the SHARED backpack (data-table `food` value),
-   *  restoring stamina; clears `exhausted` once he's recovered enough. Returns false when
-   *  there's nothing edible. */
-  private catoEatFood(): boolean {
-    const idx = this.backpackStore.findIndex((it) => isFood(it.id));
-    if (idx < 0) return false;
-    this.consumeFood(idx);
-    return true;
-  }
-
-  /** Eat ONE unit of the food stack at `idx` in the shared backpack: restore stamina (clamped),
-   *  decrement, happy emote + "munch" remark, clear `exhausted` once recovered enough, then
-   *  refresh the open backpack + save. Shared by the auto-eat and the manual Feed action. */
+  /** The friend GIVES Cato one unit of the food/dish stack at `idx` in the backpack: he receives it
+   *  gratefully — restores stamina (clamped; `food` value, so cooked dishes give more), THANKS the
+   *  friend, and it deepens the bond. He always accepts a gift (even at full energy — it's a kind
+   *  gesture, not just fuel); the bond gain is daily-capped so it can't be farmed. */
   private consumeFood(idx: number): void {
     const it = this.backpackStore[idx];
     if (!it) return;
@@ -3614,22 +3596,21 @@ export class GameScene extends Phaser.Scene {
     it.count -= 1;
     if (it.count <= 0) this.backpackStore.splice(idx, 1);
     this.emote?.setStamina(this.stamina / this.staminaMax, this.time.now);
-    this.catoReact('happy', { duration: 2200, force: true });
-    this.catoSay('chatter_ate');
+    this.catoReact('love', { duration: 2400, force: true }); // a gift → a loving reaction
+    this.catoSay('chatter_thanks'); // "thank you!" (in the bottom-left box + the head bubble)
     if (this.stamina >= this.staminaMax * STAMINA_RECOVER_FRAC) this.exhausted = false; // fed enough → back to work
     this.addBond('fed'); // caring for Cato deepens the bond (daily-capped)
-    this.markFirst('first_feed', 'Fed Cato for the first time');
+    this.markFirst('first_feed', 'Gave Cato a treat for the first time');
     if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu(); // refresh the backpack if it's open
     this.scheduleSave();
   }
 
-  /** Manual Feed (from the backpack, food items): hand-feed Cato one unit of the picked food NOW
-   *  — works even when he isn't exhausted, to top him up before a long chore run. If he's
-   *  already at full stamina he politely declines (no waste). */
+  /** 给 Cato — the friend hands Cato the picked FOOD or DISH from the backpack (only edibles reach
+   *  this; `isFood` is true for crops/fruit/mushrooms AND cooked dishes, false for seeds/tools/etc).
+   *  He always accepts it warmly (see consumeFood). */
   private menuFeed(index: number): void {
     const it = this.backpackStore[index];
     if (!it || !isFood(it.id)) return;
-    if (this.stamina >= this.staminaMax) { this.catoSay('chatter_full'); return; }
     this.consumeFood(index);
   }
 
@@ -3642,6 +3623,7 @@ export class GameScene extends Phaser.Scene {
     this.chatterText = text;
     this.lastChatter = text; // the AI sees this as Cato's most recent remark
     this.registry.set('catoChatter', { visible: true, rev: ++this.chatterRev, text });
+    if (!this.catoIndoors) this.emote?.setTalking(true, this.time.now); // a message bubble over his head cues the easy-to-miss box
     this.chatterTimer?.remove();
     this.chatterTimer = this.time.delayedCall(CHATTER_MS, () => this.clearChatter());
   }
@@ -3649,6 +3631,7 @@ export class GameScene extends Phaser.Scene {
   private clearChatter(): void {
     this.chatterTimer?.remove(); this.chatterTimer = undefined;
     this.chatterText = null;
+    this.emote?.setTalking(false, this.time.now);
     this.registry.set('catoChatter', { visible: false, rev: ++this.chatterRev });
   }
 
@@ -8573,7 +8556,7 @@ export class GameScene extends Phaser.Scene {
     // (you carry the backpack; the chest is storage, so take it out first, then use it).
     if (this.menuTab === TAB_BACKPACK && it && isHotbarUsable(it)) opts.push({ action: 'use', label: t(it.place ? 'action_place' : 'action_use') }); // placeables read "摆放/Place" (same use action → placement mode)
     if (this.menuTab === TAB_BACKPACK) { // Backpack: use / feed / 上架 / store→chest / delete
-      if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_feed') }); // hand-feed Cato from the shared bag
+      if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_give_cato') }); // give a food / dish to Cato (isFood ⇒ edibles + dishes only)
       if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_list') }); // list for sale → 待售 bin
       opts.push({ action: 'store', label: t('action_store') });
       opts.push({ action: 'delete', label: t('action_delete') });
@@ -12889,9 +12872,9 @@ export class GameScene extends Phaser.Scene {
       if (this.wanderState !== 'idle') this.startWanderIdle();
       this.child.play(`idle-${this.faceDir}`, true);
       this.wanderStuckMs = 0; this.wanderPrev = null;
-      // Keep eating food from his bag (on a cooldown) to recover faster; else drowse.
-      if (this.time.now >= this.catoEatAt && this.catoEatFood()) this.catoEatAt = this.time.now + 1500;
-      else if (this.time.now >= this.staminaSleepyAt) { this.staminaSleepyAt = this.time.now + 3200; this.catoReact('sleepy', { duration: 2600 }); }
+      // He no longer auto-eats — just drowse now and then while the gauge slowly refills. The friend
+      // can hand-feed him a snack (backpack → 给 Cato) to top him up.
+      if (this.time.now >= this.staminaSleepyAt) { this.staminaSleepyAt = this.time.now + 3200; this.catoReact('sleepy', { duration: 2600 }); }
       return;
     }
 

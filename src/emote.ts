@@ -36,6 +36,14 @@ const PRIORITY: Record<string, number> = {
 
 const BUBBLE = 'speech-bubble';
 const EMOJI_KEY = 'emoji';
+// "Cato is saying something" alert bubble (a message glyph over his head) shown while he chatters
+// in the bottom-left box — the box is easy to miss, so this draws the eye. Sits up-and-right of the
+// emoji bubble so both can show at once. `ui-icons` (all_icons) frame 245 = the white-message glyph.
+const MSG_KEY = 'ui-icons';
+const MSG_FRAME = 245;
+const TALK_SCALE = 0.46;
+const TALK_DX = 17;   // px right of Cato's origin (clear of the centred emoji bubble)
+const TALK_DY = -4;   // a touch higher than the emoji bubble's tail
 const FULL_SCALE = 0.52;       // the bubble's native 42×47 is too big over Cato → shrink
 const EMOJI_BODY_FRAC = 0.62;  // emoji Y = -height*this → centred in the rounded BODY (above the tail)
 const EMOJI_SCALE = 30 / 32;   // fit the 32px emoji into the bubble body (within the container)
@@ -66,6 +74,7 @@ export class EmoteController {
   private ambient: Emotion = 'idle'; // which emotion the ambient tick uses (scene-driven)
   private staminaImg?: Phaser.GameObjects.Image; // the stamina gauge over Cato's head
   private staminaHideAt = 0;
+  private talkRoot?: Phaser.GameObjects.Container; // the "he's talking" message bubble over his head
   private moodFrame = SWEET_FRAME;   // the persistent top-right mood emoji (published to registry)
   private moodExpireAt = 0;          // after this, the mood falls back to `sweet`
   private rngSeed = 1;
@@ -120,6 +129,7 @@ export class EmoteController {
     if (this.nextIdle === 0) this.nextIdle = now + IDLE_MIN_MS; // don't fire an idle emote at t=0
     const t = this.target();
     if (this.root && t) this.root.setPosition(Math.round(t.x), Math.round(t.y - HEAD_OFFSET));
+    if (this.talkRoot?.visible && t) this.talkRoot.setPosition(Math.round(t.x + TALK_DX), Math.round(t.y - HEAD_OFFSET + TALK_DY));
     // Stamina gauge: follow Cato's upper-left; hide once its linger lapses.
     if (this.staminaImg) {
       if (t) this.staminaImg.setPosition(Math.round(t.x + STAMINA_DX), Math.round(t.y + STAMINA_DY));
@@ -148,6 +158,29 @@ export class EmoteController {
     if (EMOJI[emotion]) this.ambient = emotion;
   }
 
+  /** Show / hide the "Cato is saying something" message bubble over his head (driven by
+   *  catoSay / clearChatter) — an attention cue for the easy-to-miss bottom-left chatter box. */
+  setTalking(on: boolean, _now: number): void {
+    if (on) {
+      if (!this.talkRoot) {
+        const bubble = this.scene.add.image(0, 0, BUBBLE).setOrigin(0.5, 1);
+        const icon = this.scene.add.image(0, Math.round(-bubble.height * EMOJI_BODY_FRAC), MSG_KEY, MSG_FRAME)
+          .setOrigin(0.5, 0.5).setScale(0.9).setTint(0x4a3524); // dark tint so the white glyph reads on the grey bubble
+        this.talkRoot = this.scene.add.container(0, 0, [bubble, icon]).setDepth(DEPTH).setVisible(false);
+      }
+      const r = this.talkRoot;
+      if (!r.visible) {
+        this.scene.tweens.killTweensOf(r);
+        r.setVisible(true).setScale(0);
+        this.scene.tweens.add({ targets: r, scale: TALK_SCALE, duration: 220, ease: 'Back.easeOut' });
+      }
+    } else if (this.talkRoot?.visible) {
+      const r = this.talkRoot;
+      this.scene.tweens.killTweensOf(r);
+      this.scene.tweens.add({ targets: r, scale: 0, duration: 160, ease: 'Back.easeIn', onComplete: () => r.setVisible(false) });
+    }
+  }
+
   /** Show/refresh the stamina gauge for `frac` (0..1). Call it every frame while Cato
    *  works or recovers; it auto-hides STAMINA_LINGER_MS after the last call ("做完后
    *  等一会儿就消失"). Positioned each frame in update(). */
@@ -164,5 +197,6 @@ export class EmoteController {
   hide(): void {
     this.active = null;
     if (this.root) { this.scene.tweens.killTweensOf(this.root); this.root.setVisible(false); }
+    if (this.talkRoot) { this.scene.tweens.killTweensOf(this.talkRoot); this.talkRoot.setVisible(false); }
   }
 }

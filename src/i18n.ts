@@ -66,6 +66,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   chatter_tired: { en: "Phew… I'm getting tired. I need a little rest.", 'zh-CN': '呼…我有点累了，得歇一会儿。' },
   chatter_found_food: { en: "Oh! There's a snack in my bag — let me sit down and have a bite.", 'zh-CN': '咦，包里还有吃的～我坐下歇会儿，吃点东西。' },
   chatter_ate: { en: 'Munch munch — that hit the spot!', 'zh-CN': '吃点东西，力气回来啦～' },
+  chatter_thanks: { en: 'Ooh, for me? Thank you — yum!', 'zh-CN': '哇，是给我的吗？谢谢你～好好吃！' },
   chatter_full: { en: "I'm stuffed — couldn't eat another bite!", 'zh-CN': '我现在饱饱的，吃不下啦～' },
   chatter_bag_full: { en: "My little bag is full — no more room!", 'zh-CN': '我的小背包装不下更多啦～' },
   chatter_coop_no_room: { en: "There's no room for a bigger coop here!", 'zh-CN': '这里放不下更大的鸡舍啦～' },
