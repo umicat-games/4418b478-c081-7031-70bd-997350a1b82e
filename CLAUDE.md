@@ -611,6 +611,7 @@ and chest-only-crafting descriptions above where they conflict.
   (not the 3rd, which used to double up with the last branch), a plain tree shakes on chop 4 and
   falls on chop 5 (+3 wood). Branch + wood drops use `playChopDrop` (toss → ground-bounce → fly),
   not the instant `playPopOut`.
+- **Full backpack on the fruit-payoff chop (2026-09-16 fix):** the payoff branch set `tree.busy=true` + played `shake3` (the sheet visibly drops the fruit) BEFORE any bag check, so with a full backpack `harvestTree` then declined — nothing banked AND the tree left stuck `busy=true` (reported "Cato chops the fruit tree, fruit falls but isn't collected"). Now the fruit-payoff branch guards `backpackHasSpaceFor('fruit-<type>')` UP FRONT (notifyBagFull + return, no swing), and `harvestTree`'s own guard also resets `busy=false` for the rare bag-fills-mid-swing race. Matches the crop/forage/bush harvest guards. Verified: full bag → fruit stays on the tree, tree not stuck, nothing lost.
 - **Branch chops must NOT visually drop the fruit (2026-09-16 fix):** the fruit sheets shed their
   fruit only during `shake3` (see BootScene's anim registration), but the branch path played
   `shake${min(branchStrikes,3)}` — so the **3rd** branch chop played shake3, the fruit visibly FELL,

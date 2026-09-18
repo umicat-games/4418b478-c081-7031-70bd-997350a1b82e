@@ -4845,6 +4845,10 @@ export class GameScene extends Phaser.Scene {
 
     // Branches done for today → the payoff.
     if (tree.hasFruit) {
+      // Backpack full → DON'T swing: the shake3 sheet visibly drops the fruit, but harvestTree would
+      // then decline (nothing banked) AND leave the tree stuck `busy` — reads as "fruit fell but wasn't
+      // collected". Guard up front (like the crop/forage/bush harvests) + tell the player.
+      if (!this.backpackHasSpaceFor(`fruit-${tree.type}`)) { this.notifyBagFull(); return; }
       // Fruit tree: the very next chop harvests the fruit (no extra combo).
       tree.busy = true;
       tree.timer?.remove(); tree.timer = undefined;
@@ -4876,7 +4880,7 @@ export class GameScene extends Phaser.Scene {
     const tree = this.trees.get(key);
     if (!tree || !this.islandLayer) return;
     const type = tree.type;
-    if (!this.backpackHasSpaceFor(`fruit-${type}`)) { this.notifyBagFull(); return; } // full → leave the fruit on the tree
+    if (!this.backpackHasSpaceFor(`fruit-${type}`)) { this.notifyBagFull(); tree.busy = false; return; } // full → leave the fruit + un-stick the tree (rare: bag filled mid-swing)
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
     // The tree's own shake sheet drops the 3 fruits to FIXED, uneven spots (measured from
     // its last frame: 1 left + 2 right of the trunk). Show the collected fruits at those
