@@ -215,6 +215,11 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   mail_reminder_goods: { en: "Our order arrived! Let's go grab it from the mailbox.", 'zh-CN': '我们的货物送到啦！一起去邮箱那儿取一下吧～' },
   mail_reminder_mail: { en: "We've got new mail! Let's go check the mailbox.", 'zh-CN': '我们有新邮件啦！一起去邮箱看看吧～' },
   mail_reminder_both: { en: "Our new mail AND a delivery came in! Let's check the mailbox.", 'zh-CN': '我们有新邮件，还有新货物送到啦！一起去邮箱看看吧～' },
+  jamin_letter_title: { en: 'A letter from Jamin', 'zh-CN': 'Jamin 的来信' },
+  jamin_letter_body: {
+    en: "Hi {name}!\n\nI'm so happy you've come to Catopia to look after our little island together with {cato}.\n\nFrom time to time I'll write with news from around Catopia and the curious things I find out in the world — so keep an eye on the mailbox!\n\n— Jamin",
+    'zh-CN': '嗨 {name}！\n\n真高兴你来到 Catopia，和 {cato} 一起照看我们这座小岛。\n\n我会不定期写信，分享 Catopia 的新消息和我在外面世界的新发现，记得常看看邮箱哦！\n\n—— Jamin',
+  },
   home_reminder: { en: "Our home got bigger! {desc} Want to come inside and take a look?", 'zh-CN': '我们的家扩建好啦！{desc} 要不要进去看看呀～' },
   // Crafting (work station modal)
   craft_title: { en: 'CRAFTING', 'zh-CN': '合成' },

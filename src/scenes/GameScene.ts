@@ -291,7 +291,7 @@ interface ItemStack {
  *  a sales receipt opens the ReceiptScene from its `lines` + `total`. */
 interface MailEntry {
   id: string;
-  kind: 'sell-receipt' | 'delivery'; // sell-receipt = sales receipt; delivery = an order that couldn't fit the 取货 grid (claim it)
+  kind: 'sell-receipt' | 'delivery' | 'letter'; // sell-receipt = sales receipt; delivery = an order that couldn't fit the 取货 grid (claim it); letter = a prose note (e.g. from Jamin)
   sender: string;
   title: string;
   iconFrame: number;
@@ -299,6 +299,7 @@ interface MailEntry {
   lines: ReceiptLine[];
   total: number;
   items?: Array<{ id: string; count: number }>; // delivery only — the actual package to claim into the pickup grid / backpack
+  body?: string; // letter only — the prose text (already localized + {name}/{cato} substituted)
 }
 
 /** In-progress fishing cast (rod + float + line, and a fish that swims over to bite). */
@@ -819,6 +820,7 @@ interface SaveBlob {
   dayCount?: number; // v6: real local day index (recomputed on load)
   lastMailReminderDay?: number; // day of Cato's last "you've got mail" reminder (once/day, first open)
   homeAnnounce?: string | null; // a settled house-upgrade tier whose "our home expanded!" reminder hasn't played yet
+  jaminWelcomeDue?: number; // day index Jamin's day-2 welcome letter is due (-1 = none/sent)
   lastRealDay?: number; // v21: last-settled local day index (login catch-up — ADR-029)
   debugTimeOffsetMs?: number; // DEBUG time-skip offset — persisted so a skipped-to day survives reload (else deliverDays outrun the reset clock)
   lastSeen?: number;    // v21: last-seen wall-clock ms
@@ -1071,6 +1073,7 @@ export class GameScene extends Phaser.Scene {
   private mailReminderPending = false; // a reminder is scheduled (in its settle-in delay) but not yet showing
   private mailReminderLiveArmed = false; // true once markReady is done → a mid-session day-rollover (skip-day / real midnight) can trigger a reminder too
   private homeAnnounce: string | null = null; // a HOUSE tier just settled (overnight upgrade) whose "our home expanded!" reminder hasn't played yet (persisted); the tier id → the what's-new line
+  private jaminWelcomeDue = -1; // day index when Jamin's day-2 welcome letter should arrive (-1 = none / already sent); set to day+1 when a new game begins (persisted)
   private homeReminderActive = false; // the cinematic house-upgrade reminder is showing → a tap dismisses it
   private homeReminderPending = false; // scheduled (in its settle-in delay) but not yet showing
   private chest?: Phaser.GameObjects.Sprite;
@@ -3136,6 +3139,7 @@ export class GameScene extends Phaser.Scene {
     this.settleCoopUpgrades(); // build any coop whose paid upgrade came due (before they lay)
     this.settleCoops(); // coops lay their daily eggs
     this.settleCowPen(); // cows give their daily milk (one bottle each, by colour)
+    this.settleJaminMail(); // Jamin's day-2 welcome letter (once a new game reaches its second day)
     this.settleRealDayBond(days);
     this.scheduleSave();
     if (this.menuOpen) this.publishMenu();
@@ -7068,6 +7072,19 @@ export class GameScene extends Phaser.Scene {
     this.promoteEvent('home_upgrade', tier ? `Moved into a new home: ${tier.id}` : 'Moved into a new home'); // ② milestone
   }
 
+  /** Jamin's welcome letter — arrives in the mailbox on the SECOND day of a new game. Greets the
+   *  player by name, welcomes them to run the island together with Cato (his renamed name if changed),
+   *  and sets up that Jamin will write occasionally with Catopia news. Once-only (jaminWelcomeDue→-1). */
+  private settleJaminMail(): void {
+    if (this.jaminWelcomeDue < 0 || this.dayCount < this.jaminWelcomeDue) return;
+    this.jaminWelcomeDue = -1;
+    const name = this.callName() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
+    const cato = this.catoName || 'Cato';
+    const body = t('jamin_letter_body').replace(/\{name\}/g, name).replace(/\{cato\}/g, cato);
+    this.addMail({ kind: 'letter', sender: 'Jamin', title: t('jamin_letter_title'), iconFrame: 245, lines: [], total: 0, body });
+    this.mailboxAlertSeen = false; this.refreshMailboxAlert(true); // "new mail" bounce on the door mailbox
+  }
+
   // ── Affinity / bond (ADR-027, Phase 1) ─────────────────────────────────────
   //  Deterministic ledger the game owns. `addBond(signal)` applies the tuning table's per-signal
   //  daily count cap → tier-diminishing → daily net cap; `settleDayBond()` (day rollover) awards
@@ -7575,13 +7592,13 @@ export class GameScene extends Phaser.Scene {
 
   /** The selected mail's receipt for the right detail pane. Auto-selects the newest mail
    *  when nothing valid is selected (so the pane isn't blank on open), marking it read. */
-  private selectedMailDetail(): { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number } | undefined {
+  private selectedMailDetail(): { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number; body?: string } | undefined {
     let mail = this.menuMailSel ? this.mailList.find((m) => m.id === this.menuMailSel) : undefined;
     if (!mail && this.mailList.length) mail = this.mailList[0]; // auto-select newest
     if (!mail) { this.menuMailSel = null; return undefined; }
     this.menuMailSel = mail.id;
     if (!mail.read) { mail.read = true; this.scheduleSave(); }
-    return { kind: mail.kind, sender: mail.sender, title: mail.title, lines: mail.lines, total: mail.total };
+    return { kind: mail.kind, sender: mail.sender, title: mail.title, lines: mail.lines, total: mail.total, body: mail.body };
   }
 
   /** Shop catalog row under (x,y) → its id. */
@@ -12015,7 +12032,7 @@ export class GameScene extends Phaser.Scene {
     this.loadingOverlay = undefined;
     // Framing: a brand-new game opens on the house (Cato at the door); a returning
     // save centres the camera on the restored Cato.
-    if (this.isNewGame) { this.frameNewGameStart(); this.onboardingActive = true; this.scheduleSave(); } // new game → begin onboarding (persisted, so a mid-tutorial exit resumes)
+    if (this.isNewGame) { this.frameNewGameStart(); this.onboardingActive = true; this.jaminWelcomeDue = this.dayIndex() + 1; this.scheduleSave(); } // new game → begin onboarding + arm Jamin's day-2 welcome letter (persisted, so a mid-tutorial exit resumes)
     else if (this.child) this.cameras.main.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
     // New-game intro: snap into the cinematic framing NOW (camera on Cato + letterbox) so the
     // paw opens onto the already-composed shot — but HOLD Cato's dialogue box until the paw has
@@ -12297,6 +12314,7 @@ export class GameScene extends Phaser.Scene {
       dayCount: this.dayCount,
       lastMailReminderDay: this.lastMailReminderDay,
       homeAnnounce: this.homeAnnounce ?? undefined,
+      jaminWelcomeDue: this.jaminWelcomeDue,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
       orders: this.orders.map((o) => ({ ...o })),
@@ -12501,6 +12519,7 @@ export class GameScene extends Phaser.Scene {
       this.dayCount = s.dayCount ?? 0;
       this.lastMailReminderDay = s.lastMailReminderDay ?? -1;
       this.homeAnnounce = s.homeAnnounce ?? null;
+      this.jaminWelcomeDue = s.jaminWelcomeDue ?? -1;
       // v21 (ADR-029): real-time day sync. A returning save carries the last-settled day index →
       // the first syncRealDay() catches up the missed real days. A pre-v21 save (no lastRealDay)
       // starts fresh at today (no spurious catch-up). dayCount is recomputed to the real day index.

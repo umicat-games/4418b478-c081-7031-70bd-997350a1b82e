@@ -110,7 +110,7 @@ export interface MenuModel {
   buyQty?: number;              // how many to buy (right-side stepper)
   shopMsg?: string;             // transient warning ("金币不够" / "箱子满了")
   mailSelected?: string;        // Mail tab: selected mail id → right-side receipt detail + row highlight
-  mailDetail?: { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number }; // the selected mail's receipt
+  mailDetail?: { kind: string; sender: string; title: string; lines: ReceiptLine[]; total: number; body?: string }; // the selected mail's receipt / letter
   catoInfo?: { name: string; stamina: number; staminaMax: number; bondTier: string; bondFrac: number }; // Cato-info tab
   calendar?: { title: string; today: number; daysInMonth: number; firstWeekdayMon: number }; // Calendar tab (ADR-029)
   replaceHint?: string;         // craft-replace mode banner (backpack full → pick a slot to overwrite)
@@ -661,6 +661,26 @@ export class MenuScene extends Phaser.Scene {
     c.add(this.T(rx + rw / 2, ry + rh * 0.08, d.title.toUpperCase(), Math.round(fs * 1.15), '#ffffff'));
     const rule = this.add.graphics(); rule.fillStyle(0xa98d63, 1); rule.fillRect(rx + rw * 0.16, ry + rh * 0.145, rw * 0.68, Math.max(2, rh * 0.006)); c.add(rule);
     c.add(this.T(rx + rw / 2, ry + rh * 0.205, d.sender, Math.round(fs * 0.8), SUB));
+    // LETTER (a prose note, e.g. from Jamin) — no item rows / total, just the wrapped body on a paper
+    // bar. Font auto-SHRINKS to fit the paper height so a long letter never spills past the panel.
+    if (d.kind === 'letter') {
+      const px = rx + rw * 0.06, pw = rw * 0.88, pyTop = ry + rh * 0.26, ph = rh * 0.70;
+      const radius = Math.max(6, rh * 0.02);
+      const paper = this.add.graphics();
+      paper.fillStyle(0xefe4c8, 1); paper.fillRoundedRect(px, pyTop, pw, ph, radius);
+      paper.lineStyle(Math.max(1, rh * 0.004), 0xd8c69e, 1); paper.strokeRoundedRect(px, pyTop, pw, ph, radius);
+      c.add(paper);
+      const innerW = pw * 0.88, innerH = ph * 0.88, bx = px + pw * 0.06, by = pyTop + ph * 0.06;
+      const mk = (size: number): Phaser.GameObjects.Text => this.add.text(bx, by, d.body ?? '', {
+        fontFamily: dialogFont(), fontSize: size + 'px', color: '#4a2e12', align: 'left',
+        lineSpacing: Math.round(size * 0.38), wordWrap: { width: innerW }, resolution: RES,
+      }).setOrigin(0, 0);
+      let bodyFs = Math.round(fs * 0.92);
+      let body = mk(bodyFs);
+      if (body.height > innerH) { bodyFs = Math.max(11, Math.floor(bodyFs * (innerH / body.height))); body.destroy(); body = mk(bodyFs); }
+      c.add(body);
+      return;
+    }
     // Item rows: cream bars (icon + count badge + name + subtotal / ×count). The list has NO scroll —
     // rows shrink to fit, but never below a readable minimum: if there are more than fit, we show the
     // first (maxRows−1) and a "+N more" line so nothing renders as an unreadable sliver.
