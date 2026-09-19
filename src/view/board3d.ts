@@ -60,6 +60,10 @@ export class BoardView {
   private stones: Record<'black' | 'white', THREE.InstancedMesh> | null = null;
   private marker: THREE.Mesh;
   private ghostMesh: THREE.Mesh;
+  /** Rings the coach points with. One mesh per marked point, pooled. */
+  private highlights: THREE.Mesh[] = [];
+  /** Screen width, in pixels, the chat panel is occupying on the right. */
+  private insetRight = 0;
 
   // Camera state as spherical coordinates around the board's centre. Kept as
   // numbers rather than read back off the camera so "reset" is exact and the
@@ -227,6 +231,43 @@ export class BoardView {
     return { x, y };
   }
 
+  /** Mark points the coach is talking about. Empty clears. */
+  setHighlights(points: Array<{ x: number; y: number }>): void {
+    while (this.highlights.length < points.length) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.46, 0.07, 8, 28),
+        new THREE.MeshBasicMaterial({ color: 0x4fd2ff, transparent: true, opacity: 0.95 }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      this.scene.add(ring);
+      this.highlights.push(ring);
+    }
+    this.highlights.forEach((ring, i) => {
+      const p = points[i];
+      ring.visible = !!p;
+      if (!p) return;
+      ring.scale.setScalar(this.spacing);
+      const at = this.at(p.x, p.y);
+      // Above a stone if there is one there, so pointing at a played stone
+      // reads as "this one" rather than being hidden underneath it.
+      ring.position.set(at.x, TOP_Y + this.spacing * 0.42, at.z);
+    });
+  }
+
+  /**
+   * Keep this many pixels on the right clear.
+   *
+   * The chat panel opens over the right-hand side, and a board that stays
+   * centred in the window ends up half behind it. Rather than shrink the board
+   * on a fixed guess, the camera is reframed to centre it in what is left —
+   * which on a wide screen costs nothing at all, because the board was never
+   * that wide to begin with.
+   */
+  reserveRight(px: number): void {
+    this.insetRight = Math.max(0, px);
+    this.resize();
+  }
+
   orbit(dAzimuth: number, dPolar: number): void {
     this.azimuth += dAzimuth;
     // Never below the board (you would be looking at its underside) and never
@@ -259,13 +300,20 @@ export class BoardView {
   resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);
-    // Frame the board's diagonal, so turning the camera never crops a corner.
-    const extent = HALF * 1.12;
     const aspect = w / h;
-    this.camera.left = -extent * Math.max(aspect, 1);
-    this.camera.right = extent * Math.max(aspect, 1);
-    this.camera.top = extent * Math.max(1 / aspect, 1);
-    this.camera.bottom = -extent * Math.max(1 / aspect, 1);
+    // 1.12 = the board plus a tenth of itself in air, so nothing touches an edge.
+    const pad = HALF * 1.12;
+    const usable = Math.max(1, w - this.insetRight);
+    // Wide enough for the board vertically, and wide enough for it to fit in
+    // the part of the window that is not covered — whichever is the bigger ask.
+    const extentX = Math.max(pad * aspect, (pad * w) / usable);
+    const extentY = extentX / aspect;
+    // Pushing the frustum right moves the board left, into the free space.
+    const shift = (this.insetRight / w) * extentX;
+    this.camera.left = -extentX + shift;
+    this.camera.right = extentX + shift;
+    this.camera.top = extentY;
+    this.camera.bottom = -extentY;
     this.place();
   }
 
