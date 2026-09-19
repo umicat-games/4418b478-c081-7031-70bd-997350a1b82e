@@ -29,7 +29,7 @@ import { Speech, segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { showTitle } from './ui/title';
 import { showLessonCard } from './ui/lessoncard';
-import { Autosave, load } from './save';
+import { Autosave, load, type LessonBoard } from './save';
 import { Course, type Phase } from './teach/course';
 import { LESSONS } from './teach/curriculum';
 import { goalMet, setUp } from './teach/curriculum';
@@ -356,13 +356,23 @@ async function start(): Promise<void> {
     const lesson = resuming ? course.resume() ?? course.start(id) : course.start(id);
     if (!lesson) return;
 
+    const carriedOn = resuming && before.lesson === lesson.id && before.phase !== 'done';
     coach.profile.mode = 'learning';
-    if (!(resuming && before.lesson === lesson.id && before.phase !== 'done')) {
+    if (!carriedOn) {
       await coach.newSession();
       spoken = 0;
       redrawChat();
     }
-    setUpPhase({ announce: true });
+
+    // Read the board back only when carrying on with the same lesson — a
+    // restart is a restart. Flushed first so a move made a moment ago is in
+    // the save rather than still in the debounce.
+    let restore: LessonBoard | null = null;
+    if (carriedOn) {
+      await autosave.flush();
+      restore = (await umicat.saves.get<LessonBoard>('lesson')) ?? null;
+    }
+    setUpPhase({ announce: true, restore });
   }
 
   /**
@@ -372,14 +382,30 @@ async function start(): Promise<void> {
    * inherits the last one's ko history or capture count is an exercise whose
    * goal checker quietly reads the wrong number.
    */
-  function setUpPhase(opts: { announce?: boolean } = {}): void {
+  function setUpPhase(opts: { announce?: boolean; restore?: LessonBoard | null } = {}): void {
     const lesson = course.lesson;
     if (!lesson) return;
     const problem = course.problem();
 
-    game = new GoGame(lesson.size);
-    if (problem) setUp(game, problem);
-    capturesAtStart = game.captures.black;
+    // A lesson that has just been passed keeps the board that passed it: the
+    // student is looking at their own finished game, with the count on it.
+    if (course.phase === 'done') { refresh(); persist(); return; }
+
+    // A board the player walked out of comes back as they left it — but only
+    // if it belongs to THIS lesson and THIS phase. The last lesson is a whole
+    // game of Go; rebuilding it from its starting position, which is what
+    // happened before, threw away every move they had played.
+    const keep = opts.restore && opts.restore.lesson === lesson.id && opts.restore.phase === course.phase
+      ? opts.restore
+      : null;
+    if (keep) {
+      game = GoGame.restore(keep.board);
+      capturesAtStart = keep.capturesAtStart;
+    } else {
+      game = new GoGame(lesson.size);
+      if (problem) setUp(game, problem);
+      capturesAtStart = game.captures.black;
+    }
 
     view.setBoardSize(lesson.size);
     view.setHighlights([]);
@@ -459,6 +485,12 @@ async function start(): Promise<void> {
       persist();
       return;
     }
+
+    // A whole game is not a one-move problem: until it ends, nothing has gone
+    // wrong. Counting each move as a failed attempt is what the first version
+    // did — it reset the board under the player after every stone, and threw
+    // them back to the teaching after two.
+    if (problem.goal.kind === 'finish') return;
 
     const attempts = course.missed();
     if (phase === 'quiz') {
@@ -684,11 +716,19 @@ async function start(): Promise<void> {
     coach.profile.level = level.id;
     coach.profile.course = course.progress;
     coach.course = courseView();
+    const inLesson = course.active && !!game;
     autosave.queue({
       profile: coach.profile,
       messages: coach.messages,
-      // An unfinished game is worth coming back to; a finished one is history.
-      game: game && !game.over ? game.snapshot() : null,
+      // The free game's slot is left ALONE while a lesson is on the board:
+      // an exercise is not something the title screen should offer as "carry
+      // on with your game", and a game interrupted by a lesson is still there
+      // afterwards. An unfinished game is worth coming back to; a finished one
+      // is history.
+      game: inLesson ? undefined : (game && !game.over ? game.snapshot() : null),
+      lessonBoard: inLesson && game
+        ? { lesson: course.progress.lesson!, phase: course.phase, board: game.snapshot(), capturesAtStart }
+        : null,
     });
   }
 
@@ -773,8 +813,11 @@ async function start(): Promise<void> {
     const choice = await showTitle({
       canContinue: unfinished,
       returning: saved.returning || coach.profile.gamesPlayed > 0 || coach.messages.length > 0,
-      // Where "continue the course" would land: the first lesson not yet passed.
-      lesson: course.finished ? 0 : LESSONS.indexOf(Course.nextFor(course.progress.passed)) + 1,
+      // Where "continue the course" would land: the lesson actually open, if
+      // there is one, and otherwise the first not yet passed. Reading only the
+      // passed list said "continue lesson 1" to someone sitting in lesson 5.
+      lesson: course.finished ? 0
+        : LESSONS.indexOf(course.lesson ?? Course.nextFor(course.progress.passed)) + 1,
       lessonStarted: course.progress.passed.length > 0 || !!course.progress.lesson,
       loading,
     });
@@ -851,6 +894,7 @@ async function start(): Promise<void> {
       beginExercise: () => { if (course.phase === 'teach') { course.advance(); setUpPhase({ announce: false }); } },
       openLesson: (id?: string) => openLesson(id),
       toTitle: () => toTitle(),
+      flush: () => autosave.flush(),
       phase: () => course.phase,
       say: (text: string) => talk(text),
       redraw: redrawChat,

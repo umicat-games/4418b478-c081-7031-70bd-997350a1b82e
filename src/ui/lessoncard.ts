@@ -20,6 +20,12 @@ export interface LessonCardOptions {
 }
 
 export function showLessonCard(opts: LessonCardOptions): void {
+  // Only ever one. A lesson can be opened while a card is still up — the coach
+  // can call start_lesson at any moment — and two stacked cards leave a player
+  // dismissing the same screen twice, with the second one being about a lesson
+  // they are no longer in.
+  document.getElementById('lessoncard')?.remove();
+
   const el = document.createElement('div');
   el.id = 'lessoncard';
 
