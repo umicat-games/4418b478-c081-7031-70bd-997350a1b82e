@@ -19,12 +19,15 @@ export interface CropDef {
   growDryMs: number; // ms per stage on dry soil
 }
 
+// Grow times are REAL-TIME hours now (cozy daily pacing — plant today, harvest tomorrow), applied
+// offline too (see GameScene crop catch-up). Watered ≈ 2× faster than dry.
+const HOUR_MS = 3_600_000;
 const FALLBACK: Record<string, CropDef> = {
-  corn: { stages: 5, tall: true, label: 'Corn', growWateredMs: 3500, growDryMs: 12000 },
-  carrot: { stages: 4, tall: false, label: 'Carrot', growWateredMs: 2500, growDryMs: 9000 },
-  tomato: { stages: 4, tall: false, label: 'Tomato', growWateredMs: 3000, growDryMs: 10000 },
-  eggplant: { stages: 4, tall: false, label: 'Eggplant', growWateredMs: 4000, growDryMs: 14000 },
-  pumpkin: { stages: 4, tall: false, label: 'Pumpkin', growWateredMs: 6000, growDryMs: 20000 },
+  corn: { stages: 5, tall: true, label: 'Corn', growWateredMs: 3 * HOUR_MS, growDryMs: 6 * HOUR_MS },
+  carrot: { stages: 4, tall: false, label: 'Carrot', growWateredMs: 2.25 * HOUR_MS, growDryMs: 4.5 * HOUR_MS },
+  tomato: { stages: 4, tall: false, label: 'Tomato', growWateredMs: 2.5 * HOUR_MS, growDryMs: 5 * HOUR_MS },
+  eggplant: { stages: 4, tall: false, label: 'Eggplant', growWateredMs: 3.5 * HOUR_MS, growDryMs: 7 * HOUR_MS },
+  pumpkin: { stages: 4, tall: false, label: 'Pumpkin', growWateredMs: 5 * HOUR_MS, growDryMs: 10 * HOUR_MS },
 };
 
 // MUTABLE, populated by applyCropData() at boot. Seeded with the fallback so the game
@@ -37,8 +40,8 @@ interface CropRow {
   label?: string;
   stages?: number;
   tall?: boolean;
-  growWateredSec?: number;
-  growDrySec?: number;
+  growWateredHours?: number; // REAL-TIME hours per stage on WET soil
+  growDryHours?: number;     // ...on dry soil
 }
 
 /** Replace CROPS with the loaded data table (`public/data/crops.json`, shape
@@ -55,8 +58,8 @@ export function applyCropData(json: unknown): void {
       stages: Math.max(2, Math.round(r.stages ?? 4)),
       tall: !!r.tall,
       label: r.label ?? r.name,
-      growWateredMs: Math.round((r.growWateredSec ?? 3.5) * 1000),
-      growDryMs: Math.round((r.growDrySec ?? 12) * 1000),
+      growWateredMs: Math.round((r.growWateredHours ?? 3) * HOUR_MS),
+      growDryMs: Math.round((r.growDryHours ?? 6) * HOUR_MS),
     };
   }
   if (Object.keys(next).length === 0) return; // keep fallback

@@ -74,10 +74,10 @@ const PLAYER_SPEED = 80;              // world-px/s when the player drives Cato
 // nearby point of interest (a crop or a prop that's in view) and lingers there —
 // "rest in front of something, occasionally wander" rather than constant random
 // walking. These tune how long he lingers and how often he decides to move.
-const REST_MIN_MS = 3000;     // min time Cato lingers before considering a move
-const REST_MAX_MS = 7000;     // max linger time
-const WANDER_MOVE_CHANCE = 0.65; // after a rest, chance he strolls to a real POI (else lingers)
-const WANDER_STROLL_CHANCE = 0.3; // when nothing's in reach, chance of an aimless amble
+const REST_MIN_MS = 8000;     // min time Cato lingers before considering a move (longer = wanders less often)
+const REST_MAX_MS = 18000;    // max linger time
+const WANDER_MOVE_CHANCE = 0.4; // after a rest, chance he strolls to a real POI (else lingers) — lower = calmer
+const WANDER_STROLL_CHANCE = 0.2; // when nothing's in reach, chance of an aimless amble
 const WANDER_ARRIVE = 16;     // stop ~a tile short of the POI ("in front of it")
 const WANDER_MIN_TRIP = 24;   // a POI must be at least this far to be worth walking to
 
@@ -151,8 +151,8 @@ const CATO_ESCAPE_MS = 3500; // trying to walk out of the house this long (on fo
 // The MAX is a saved per-Cato value (`staminaMax`), NOT this const, so a future upgrade
 // can RAISE the cap; this is just the starting cap. Rates are per-second.
 const STAMINA_MAX_DEFAULT = 100;
-const STAMINA_DRAIN_PER_SEC = 5;    // ~20s of continuous work drains a full bar
-const STAMINA_REGEN_PER_SEC = 3.5;  // ~29s to fully recover from empty
+const STAMINA_DRAIN_PER_SEC = 1.5;  // ~67s of continuous work drains a full bar (was 20s test-fast)
+const STAMINA_REGEN_PER_SEC = 1.0;  // ~100s to fully recover from empty (was 29s)
 const STAMINA_LOW_FRAC = 0.3;       // below this WHILE WORKING → a sweat emote
 const STAMINA_RECOVER_FRAC = 0.5;   // once exhausted, must regen to this before working again
 const CHATTER_MS = 8000;            // how long Cato's proactive small-talk chip lingers before it auto-hides (longer so it's not missed)
@@ -427,7 +427,8 @@ const WATER_SHADOW_DEPTH = 2;
 // old global constant, so each crop can mature at its own rate.
 // How long a watering stays wet (soil tint + fast growth), independent of stage
 // advances, so the damp look persists and re-watering isn't instantly consumed.
-const WET_DURATION_MS = 9000;
+const WET_DURATION_MS = 6 * 3_600_000; // watered soil stays wet ~6 REAL hours (crops are day-scale now) — persists through a session AND a while offline, so watering before you log off speeds growth
+const CROP_CATCHUP_MIN_MS = 2000; // syncRealDay runs every frame; only a gap bigger than this (reload / debug skip) triggers the offline crop catch-up
 const WATER_MAX = 6; // watering-can capacity (0-6, matching the blue-bar-0..6 gauge frames)
 // The forced new-game tutorial's steps, in order. `allow` = the interaction KINDS the tutorial input
 // gate permits while that step is live (see tutStepAllows). Menus/wheels, once open, route through
@@ -3111,6 +3112,11 @@ export class GameScene extends Phaser.Scene {
    *  during play it advances one day at a time. */
   private syncRealDay(): void {
     const di = this.dayIndex();
+    // Offline crop growth: if real time jumped since we last saw the game (a reload after being closed,
+    // or a debug time-skip), grow the crops by that gap. Small per-frame deltas (this runs every frame)
+    // fall under the threshold and are handled by updateCrops instead — so no double-count.
+    const away = this.lastSeen > 0 ? this.nowMs() - this.lastSeen : 0;
+    if (away > CROP_CATCHUP_MIN_MS) this.catchUpCropsOffline(away);
     this.lastSeen = this.nowMs();
     if (this.lastRealDay < 0) { this.lastRealDay = di; this.dayCount = di; return; } // first init → no catch-up
     if (di <= this.lastRealDay) { this.dayCount = di; return; }
@@ -9456,23 +9462,50 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Advance every growing crop; on WET soil it grows fast, on dry soil it crawls
-   *  (water it to speed it up). Mature crops stop. */
+  /** Advance every growing crop by real-frame time. Crops are DAY-SCALE now (real hours per stage),
+   *  so within one short session a crop barely moves on screen — most growth is the OFFLINE catch-up
+   *  (catchUpCropsOffline) between sessions. WET soil accrues ~2× faster while you're playing. `timer`
+   *  is grow-credit in DRY-ms; the per-stage need is growDryMs. */
   private updateCrops(delta: number): void {
     for (const [key, crop] of this.crops) {
-      const max = CROPS[crop.name].stages - 1;
-      if (crop.stage >= max) continue;
-      crop.timer += delta;
-      const wet = (this.soilWet.get(key) ?? 0) > 0;
       const def = CROPS[crop.name];
-      const need = wet ? def.growWateredMs : def.growDryMs;
-      if (crop.timer >= need) {
-        crop.timer = 0;
-        crop.stage += 1;
-        crop.sprite.setFrame(`grow-${crop.name}-${crop.stage}`);
-        this.scheduleSave(); // a crop advanced a stage → persist
-      }
+      if (crop.stage >= def.stages - 1) continue;
+      const wet = (this.soilWet.get(key) ?? 0) > 0;
+      crop.timer += wet ? delta * (def.growDryMs / def.growWateredMs) : delta;
+      this.advanceCropStages(key, crop);
     }
+  }
+
+  /** Grow every crop by `ms` of real time the game was CLOSED (or a debug skip jumped forward). Offline
+   *  the soil dries out, so the WET bonus applies only while the saved wetness lasts (consumed here,
+   *  since updateSoil didn't run offline), then dry — so watering right before you log off speeds the
+   *  next few hours of growth. Called from syncRealDay for any big time gap. */
+  private catchUpCropsOffline(ms: number): void {
+    if (ms <= 0) return;
+    for (const [key, crop] of this.crops) {
+      const def = CROPS[crop.name];
+      if (crop.stage >= def.stages - 1) continue;
+      const wetRemain = this.soilWet.get(key) ?? 0;
+      const wetPortion = Math.min(ms, wetRemain);
+      crop.timer += wetPortion * (def.growDryMs / def.growWateredMs) + (ms - wetPortion);
+      if (wetPortion > 0) { // consume the wetness used up while away
+        const left = wetRemain - wetPortion;
+        if (left <= 0) { this.soilWet.delete(key); this.setSoilWet(key, false); }
+        else this.soilWet.set(key, left);
+      }
+      this.advanceCropStages(key, crop);
+    }
+  }
+
+  /** Consume `crop.timer` (grow-credit in DRY-ms) into whole stage advances (per-stage need = growDryMs)
+   *  + update the sprite frame. Returns true if it advanced ≥1 stage. Shared by online + offline growth. */
+  private advanceCropStages(key: string, crop: { name: CropName; stage: number; timer: number; sprite: Phaser.GameObjects.Image }): boolean {
+    const def = CROPS[crop.name], max = def.stages - 1;
+    let changed = false;
+    while (crop.stage < max && crop.timer >= def.growDryMs) { crop.timer -= def.growDryMs; crop.stage += 1; changed = true; }
+    if (crop.stage >= max) crop.timer = 0;
+    if (changed) { crop.sprite.setFrame(`grow-${crop.name}-${crop.stage}`); this.scheduleSave(); }
+    return changed;
   }
 
   /** Tint / un-tint the soil sprite at a cell to show the damp watered look. */
