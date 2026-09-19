@@ -51,6 +51,17 @@ async function start(): Promise<void> {
   // anyone has read two buttons there is nothing left to wait for.
   const loading = opponent.ready();
 
+  // The board is on screen from the first frame, turning slowly, with the
+  // title over it — which is also what hides the engine download: by the time
+  // anyone has read two buttons there is nothing left to wait for.
+  let idleSpin = true;
+  const frame = (): void => {
+    if (idleSpin) view.orbit(0.0012, 0);
+    view.render();
+    requestAnimationFrame(frame);
+  };
+  frame();
+
   const saved = await load(umicat);
   const autosave = new Autosave(umicat);
 
@@ -267,11 +278,18 @@ async function start(): Promise<void> {
   }
 
   // ── the way in ──────────────────────────────────────────────────────────
+  // The HUD and the chat belong to the game, not to the title — and a button
+  // showing faintly through a title screen reads as a rendering bug.
+  document.body.classList.add('titling');
   const choice = await showTitle({
     canContinue: !!saved.game,
     returning: saved.returning,
     loading,
   });
+
+  document.body.classList.remove('titling');
+  idleSpin = false;
+  view.resetCamera();
 
   if (choice === 'forget') {
     await Promise.all([umicat.saves.delete('profile'), umicat.saves.delete('chat'), umicat.saves.delete('game')]);
@@ -287,12 +305,6 @@ async function start(): Promise<void> {
   } else {
     newGame(coach.profile.boardSize, 0);
   }
-
-  const frame = (): void => {
-    view.render();
-    requestAnimationFrame(frame);
-  };
-  frame();
 
   // The first thing that happens is the coach asking what the player came for
   // — unless it already knows, in which case asking again would be the rudest
