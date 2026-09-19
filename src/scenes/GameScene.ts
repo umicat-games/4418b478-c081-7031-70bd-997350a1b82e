@@ -4537,6 +4537,7 @@ export class GameScene extends Phaser.Scene {
   private confirmHeld: string | null = null; // which confirm button (ok/cancel) is held down (ConfirmScene shows it pressed; acts on release)
   private confirmJustActed = false;           // a ✓/⊘ button just released → swallow the touch pointerup so it doesn't fall through to actAt
   private pendingConfirm?: () => void;
+  private pendingCancel?: () => void;         // the 2nd choice's action (e.g. 丢弃) in a promptChoice two-button dialog
 
   /** Pop a modal yes/no dialog (ConfirmScene renders it). `onOk` runs on confirm. An optional
    *  `heading` shows a bold top-centred title above the body. */
@@ -4557,10 +4558,23 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('CursorScene');  // keep the pixel cursor topmost
   }
 
+  /** Pop a modal TWO-CHOICE dialog with TEXT buttons (e.g. 替换 / 丢弃). `onOk` = the first (left)
+   *  button, `onCancel` = the second (right) button — BOTH run an action (unlike promptConfirm, whose
+   *  ⊘ just dismisses). Used for the backpack-full replace-or-discard prompt. */
+  private promptChoice(body: string, heading: string, okLabel: string, cancelLabel: string, onOk: () => void, onCancel: () => void): void {
+    this.pendingConfirm = onOk;
+    this.pendingCancel = onCancel;
+    this.confirmOpen = true;
+    this.registry.set('confirm', { visible: true, title: body, heading, okLabel, cancelLabel, rev: ++this.confirmRev });
+    this.scene.bringToTop('ConfirmScene'); // above the open menu / world
+    this.scene.bringToTop('CursorScene');
+  }
+
   private closeConfirm(): void {
     if (!this.confirmOpen) return;
     this.confirmOpen = false;
     this.pendingConfirm = undefined;
+    this.pendingCancel = undefined;
     if (this.confirmHeld) { this.confirmHeld = null; this.registry.set('confirmHeld', null); } // don't leave a button stuck pressed
     this.registry.set('confirm', { visible: false, title: '', rev: ++this.confirmRev });
   }
@@ -4593,7 +4607,7 @@ export class GameScene extends Phaser.Scene {
     this.confirmHeld = null;
     this.registry.set('confirmHeld', null);
     if (this.confirmOpen && this.confirmButtonAt(x, y) === held) {
-      const run = held === 'ok' ? this.pendingConfirm : undefined;
+      const run = held === 'ok' ? this.pendingConfirm : this.pendingCancel; // ⊘ runs pendingCancel only for a promptChoice (else undefined = just dismiss)
       this.confirmJustActed = true; // swallow the follow-up touch pointerup (else it falls through to actAt)
       this.closeConfirm();
       run?.();
@@ -4864,7 +4878,7 @@ export class GameScene extends Phaser.Scene {
       // Backpack full → DON'T swing: the shake3 sheet visibly drops the fruit, but harvestTree would
       // then decline (nothing banked) AND leave the tree stuck `busy` — reads as "fruit fell but wasn't
       // collected". Guard up front (like the crop/forage/bush harvests) + tell the player.
-      if (!this.backpackHasSpaceFor(`fruit-${tree.type}`)) { this.notifyBagFull(); return; }
+      if (!this.backpackHasSpaceFor(`fruit-${tree.type}`) && this.catoActing) { this.notifyBagFull(); return; } // CATO only leaves it; the PLAYER chops through → collect() prompts replace/discard
       // Fruit tree: the very next chop harvests the fruit (no extra combo).
       tree.busy = true;
       tree.timer?.remove(); tree.timer = undefined;
@@ -4896,7 +4910,7 @@ export class GameScene extends Phaser.Scene {
     const tree = this.trees.get(key);
     if (!tree || !this.islandLayer) return;
     const type = tree.type;
-    if (!this.backpackHasSpaceFor(`fruit-${type}`)) { this.notifyBagFull(); tree.busy = false; return; } // full → leave the fruit + un-stick the tree (rare: bag filled mid-swing)
+    if (!this.backpackHasSpaceFor(`fruit-${type}`) && this.catoActing) { this.notifyBagFull(); tree.busy = false; return; } // CATO only leaves it (player falls through → collect() prompts)
     const w = this.islandLayer.tileToWorldXY(cx, cy)!;
     // The tree's own shake sheet drops the 3 fruits to FIXED, uneven spots (measured from
     // its last frame: 1 left + 2 right of the trunk). Show the collected fruits at those
@@ -6363,7 +6377,7 @@ export class GameScene extends Phaser.Scene {
   private harvestBush(cx: number, cy: number): void {
     const bush = this.bushes.get(`${cx},${cy}`);
     if (!bush || bush.stage < 2) return;
-    if (!this.backpackHasSpaceFor(`fruit-${bush.type}`)) { this.notifyBagFull(); return; } // full → don't swing
+    if (!this.backpackHasSpaceFor(`fruit-${bush.type}`) && this.catoActing) { this.notifyBagFull(); return; } // CATO only; player swings → collect() prompts replace/discard
     this.hideTileCursor();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     if (!w) { this.reapBush(cx, cy); return; }
@@ -6375,7 +6389,7 @@ export class GameScene extends Phaser.Scene {
   private reapBush(cx: number, cy: number): void {
     const bush = this.bushes.get(`${cx},${cy}`);
     if (!bush || bush.stage < 2) return;
-    if (!this.backpackHasSpaceFor(`fruit-${bush.type}`)) { this.notifyBagFull(); return; } // backpack full → leave the berries
+    if (!this.backpackHasSpaceFor(`fruit-${bush.type}`) && this.catoActing) { this.notifyBagFull(); return; } // CATO only leaves the berries; player falls through → collect() prompts
     this.swayBush(bush); // rustle as the berries are picked
     for (const b of bush.berries) this.playPopOut(b.x, b.y, 'fruit-items', FRUIT_FRAME[bush.type]);
     this.collect(makeFruit(bush.type, 3));
@@ -6495,7 +6509,7 @@ export class GameScene extends Phaser.Scene {
   private harvestForagable(cx: number, cy: number): void {
     const f = this.foragables.get(`${cx},${cy}`);
     if (!f || f.stage < (FORAGABLES[f.type]?.stages ?? 1)) return;
-    if (!this.backpackHasSpaceFor(makeForage(f.type, 1).id)) { this.notifyBagFull(); return; } // full → don't swing (else the hoe swings but nothing's collected — reads as a bug)
+    if (!this.backpackHasSpaceFor(makeForage(f.type, 1).id) && this.catoActing) { this.notifyBagFull(); return; } // CATO only; player swings → collect() prompts replace/discard
     this.hideTileCursor();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     if (!w) { this.reapForagable(cx, cy); return; }
@@ -6507,7 +6521,7 @@ export class GameScene extends Phaser.Scene {
     const f = this.foragables.get(key);
     const def = f && FORAGABLES[f.type];
     if (!f || !def || f.stage < def.stages) return;
-    if (!this.backpackHasSpaceFor(makeForage(f.type, 1).id)) { this.notifyBagFull(); return; } // full → leave it
+    if (!this.backpackHasSpaceFor(makeForage(f.type, 1).id) && this.catoActing) { this.notifyBagFull(); return; } // CATO only leaves it; player falls through → collect() prompts
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     this.foragables.delete(key);
     if (w) this.playPopOut(w.x + TILE / 2, w.y + TILE / 2, 'forage', `${f.type}-${def.stages}`);
@@ -6613,7 +6627,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const stone = this.bigStones.get(key);
     if (!stone) return;
-    if (!this.backpackHasSpaceFor('stone')) { this.notifyBagFull(); return; } // full → can't mine (stone stays)
+    if (!this.backpackHasSpaceFor('stone') && this.catoActing) { this.notifyBagFull(); return; } // CATO only (stone stays); player mines through → collect() prompts replace/discard
     const sx = stone.sprite.x, topY = stone.sprite.y - stone.sprite.displayHeight * 0.55;
     playSfx(this, SFX_HIT_ROCK); // pick thunk on each real strike (mirrors the tree's SFX_CHOP)
     this.whiteBurst(sx, topY);
@@ -7693,7 +7707,14 @@ export class GameScene extends Phaser.Scene {
    *  the chest, since you'll leave home with only the backpack) and Cato says so. Harvest fns guard
    *  with backpackHasSpaceFor BEFORE acting, so this rarely returns false. Refreshes an open bag. */
   private collect(item: ItemStack): boolean {
-    if (!this.addToBackpack(item)) { this.notifyBagFull(); return false; }
+    if (!this.addToBackpack(item)) {
+      // Bag full. CATO's autonomous harvest (catoActing, set synchronously via runAsCato) just leaves
+      // it + says so — no modal while the player isn't even interacting. The PLAYER instead gets a
+      // replace-or-discard prompt (the harvest ANIMATION already played), which pops a beat later.
+      if (this.catoActing) this.notifyBagFull();
+      else this.promptBagFullReplace(item);
+      return false;
+    }
     if (this.menuOpen && this.menuTab === TAB_BACKPACK) this.publishMenu();
     this.bumpStat('harvests', item.count); // ① lifetime counter
     this.markFirst('first_harvest', 'Harvested the first crop on the island');
@@ -7731,6 +7752,24 @@ export class GameScene extends Phaser.Scene {
     this.bagFullMsgAt = now;
     this.catoSay('chatter_pack_full');
     this.showTextToast(t('bag_full')); // a VISIBLE bottom-centre pill too — Cato's bubble alone is easy to miss while you're looking at the crop/grass
+  }
+
+  private bagFullPending = false; // a replace-or-discard dialog is scheduled/open → don't stack a 2nd
+  /** PLAYER harvested into a full backpack: after a short beat (so the harvest flourish finishes),
+   *  pop a "背包满了" dialog → 替换 (open the bag, tap a slot to overwrite with this item + close) or
+   *  丢弃 (drop the new item). One at a time — a further full harvest during the window just flashes. */
+  private promptBagFullReplace(item: ItemStack): void {
+    if (this.bagFullPending || this.confirmOpen || this.craftReplace) { this.notifyBagFull(); return; }
+    this.bagFullPending = true;
+    this.time.delayedCall(450, () => {
+      this.bagFullPending = false;
+      if (this.confirmOpen || this.craftReplace) return; // another dialog took over meanwhile
+      this.promptChoice(
+        t('bag_full_body'), t('bag_full'), t('action_replace'), t('action_discard'),
+        () => this.openCraftReplace(item), // 替换 → open the backpack in replace mode (tap a slot → overwrite → close)
+        () => {},                          // 丢弃 → discard the new item (nothing to do)
+      );
+    });
   }
 
   /** Show a one-off text pill in the harvest-toast slot (bottom-centre). Used for the bag-full notice
@@ -8166,8 +8205,8 @@ export class GameScene extends Phaser.Scene {
     this.backpackStore[idx] = item; // overwrite → the old item is discarded
     this.craftReplace = null;
     this.showHarvestToast(item);
-    this.publishMenu();
     this.scheduleSave();
+    this.closeMenu(); // picked a slot → we're done, close the backpack
   }
 
   /** Remove `n` of item `id` from the chest (across stacks). */
@@ -8580,9 +8619,13 @@ export class GameScene extends Phaser.Scene {
     // (you carry the backpack; the chest is storage, so take it out first, then use it).
     if (this.menuTab === TAB_BACKPACK && it && isHotbarUsable(it)) opts.push({ action: 'use', label: t(it.place ? 'action_place' : 'action_use') }); // placeables read "摆放/Place" (same use action → placement mode)
     if (this.menuTab === TAB_BACKPACK) { // Backpack: use / feed / 上架 / store→chest / delete
+      // 上架(list for sale) + 放进箱子(store→chest) are HOME-ISLAND ONLY — the chest + the
+      // shipping/mailbox economy live on Cato's home island; on a visited island there's no
+      // chest to store into and no market to list to, so those options are hidden there.
+      const atHome = this.sceneId === HOME_ISLAND;
       if (it && isFood(it.id)) opts.push({ action: 'feed', label: t('action_give_cato') }); // give a food / dish to Cato (isFood ⇒ edibles + dishes only)
-      if (it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_list') }); // list for sale → 待售 bin
-      opts.push({ action: 'store', label: t('action_store') });
+      if (atHome && it && sellPrice(it.id) > 0) opts.push({ action: 'sell', label: t('action_list') }); // list for sale → 待售 bin
+      if (atHome) opts.push({ action: 'store', label: t('action_store') });
       opts.push({ action: 'delete', label: t('action_delete') });
       return opts;
     }
@@ -9226,7 +9269,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const crop = this.crops.get(key);
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return;
-    if (!this.backpackHasSpaceFor(`crop-${crop.name}`)) { this.notifyBagFull(); return; } // full → don't swing
+    if (!this.backpackHasSpaceFor(`crop-${crop.name}`) && this.catoActing) { this.notifyBagFull(); return; } // CATO only; player swings → collect() prompts replace/discard
     this.hideTileCursor();
     const w = this.islandLayer?.tileToWorldXY(cx, cy);
     if (!w) { this.reapCrop(cx, cy); return; }
@@ -9242,7 +9285,7 @@ export class GameScene extends Phaser.Scene {
     const key = `${cx},${cy}`;
     const crop = this.crops.get(key);
     if (!crop || crop.stage < CROPS[crop.name].stages - 1) return false;
-    if (!this.backpackHasSpaceFor(`crop-${crop.name}`)) { this.notifyBagFull(); return false; } // full → leave it ripe
+    if (!this.backpackHasSpaceFor(`crop-${crop.name}`) && this.catoActing) { this.notifyBagFull(); return false; } // CATO only leaves it ripe; player falls through → collect() prompts
     this.crops.delete(key);
     crop.sprite.destroy();
     this.collect(makeCrop(crop.name, 1));

@@ -19,6 +19,7 @@ const ICON_OK = 44;     // ✓ dark-brown check
 const ICON_CANCEL = 46; // ⊘ dark-brown cancel
 
 const BTN = 56;         // button size (px)
+const LBTN_W = 116;     // wider button for a TEXT label (替换/丢弃)
 const OK_TINT = 0xffffff;
 
 export interface ConfirmModel {
@@ -26,6 +27,8 @@ export interface ConfirmModel {
   title: string;   // body text (may contain \n\n paragraph breaks)
   heading?: string; // optional bold top-centred title
   alert?: boolean;  // true = a one-button NOTICE (single centred ✓, no cancel) — e.g. "背包满了"
+  okLabel?: string;     // when set, the OK/cancel buttons show TEXT (wider pills) instead of the ✓/⊘ icons
+  cancelLabel?: string; // e.g. 替换 / 丢弃 for the backpack-full replace-or-discard choice
   rev: number;
 }
 
@@ -131,11 +134,16 @@ export class ConfirmScene extends Phaser.Scene {
     title.setPosition(0, y + title.height / 2);
     box.add(title);
 
-    // Buttons below the body. An ALERT has ONE centred ✓ (a notice to dismiss); a confirm has ✓/⊘.
+    // Buttons below the body. An ALERT has ONE centred ✓ (a notice to dismiss); a confirm has ✓/⊘,
+    // OR two TEXT pills (替换/丢弃) when okLabel/cancelLabel are given.
     const alert = !!model.alert;
-    const okX = alert ? 0 : -58, cancelX = 58, btnY = panelH / 2 - BOT - BTN / 2;
-    box.add(this.button(okX, btnY, ICON_OK, 'ok'));
-    if (!alert) box.add(this.button(cancelX, btnY, ICON_CANCEL, 'cancel'));
+    const labeled = !!model.okLabel; // text-button mode
+    const bw = labeled ? LBTN_W : BTN; // labeled buttons are wider pills to fit the text
+    const btnY = panelH / 2 - BOT - BTN / 2;
+    const spread = bw / 2 + 8;
+    const okX = alert ? 0 : -spread, cancelX = spread;
+    box.add(this.button(okX, btnY, ICON_OK, 'ok', bw, model.okLabel));
+    if (!alert) box.add(this.button(cancelX, btnY, ICON_CANCEL, 'cancel', bw, model.cancelLabel));
 
     // Pop-in.
     box.setScale(0.8);
@@ -145,17 +153,20 @@ export class ConfirmScene extends Phaser.Scene {
     // LOGICAL px (dpr-zoomed camera), so scale the published bounds ×dpr.
     const d = hudDpr(this);
     this.registry.set('confirmBounds', [
-      { action: 'ok', x: (cx + okX - BTN / 2) * d, y: (cy + btnY - BTN / 2) * d, w: BTN * d, h: BTN * d },
-      ...(alert ? [] : [{ action: 'cancel', x: (cx + cancelX - BTN / 2) * d, y: (cy + btnY - BTN / 2) * d, w: BTN * d, h: BTN * d }]),
+      { action: 'ok', x: (cx + okX - bw / 2) * d, y: (cy + btnY - BTN / 2) * d, w: bw * d, h: BTN * d },
+      ...(alert ? [] : [{ action: 'cancel', x: (cx + cancelX - bw / 2) * d, y: (cy + btnY - BTN / 2) * d, w: bw * d, h: BTN * d }]),
     ]);
   }
 
-  private button(x: number, y: number, iconFrame: number, action: 'ok' | 'cancel'): Phaser.GameObjects.Container {
+  private button(x: number, y: number, iconFrame: number, action: 'ok' | 'cancel', width = BTN, label?: string): Phaser.GameObjects.Container {
     const b = this.add.container(x, y);
-    const bg = this.add.nineslice(0, 0, BUTTON, BUTTON_FRAME, BTN, BTN, 6, 6, 7, 7).setTint(OK_TINT);
+    const bg = this.add.nineslice(0, 0, BUTTON, BUTTON_FRAME, width, BTN, 6, 6, 7, 7).setTint(OK_TINT);
     if (action === 'ok') this.okBg = bg; else this.cancelBg = bg;
     b.add(bg);
-    if (this.textures.exists(ICONS)) {
+    if (label) {
+      // Text pill (替换/丢弃) — dark ink centred on the light button, no icon.
+      b.add(this.add.text(0, 0, label, { fontFamily: dialogFont(), fontSize: '23px', color: '#4a2e12', fontStyle: 'bold' }).setOrigin(0.5));
+    } else if (this.textures.exists(ICONS)) {
       const icon = this.add.image(0, 0, ICONS, iconFrame);
       icon.setScale((BTN * 0.5) / Math.max(icon.width, icon.height));
       b.add(icon);
