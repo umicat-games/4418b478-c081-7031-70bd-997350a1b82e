@@ -233,6 +233,24 @@ export class Coach {
     return this.profile.summary;
   }
 
+  /**
+   * Start a fresh conversation, keeping what was learned from the old one.
+   *
+   * A lesson is a session. Without this, opening lesson 2 dropped the coach
+   * into the middle of the thread from lesson 1 — it picked up where that
+   * conversation had stopped instead of starting the new subject, and every
+   * turn kept paying to ship a transcript about capturing stones to a lesson
+   * about eyes.
+   *
+   * Nothing is lost: the transcript is summarised into the running note first,
+   * which is where the long memory has always lived.
+   */
+  async newSession(): Promise<void> {
+    if (this.messages.length) await this.summarise();
+    this.npc.reset();
+    this.messages.length = 0;
+  }
+
   /** Restore a saved conversation so the coach remembers a player who left. */
   load(messages: ChatMessage[], profile: Profile): void {
     this.messages.splice(0, this.messages.length, ...messages);

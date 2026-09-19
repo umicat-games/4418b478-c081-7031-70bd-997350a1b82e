@@ -343,6 +343,29 @@ async function start(): Promise<void> {
   }
 
   /**
+   * Open a lesson: the one asked for, or wherever the student had got to.
+   *
+   * A NEW lesson starts a new conversation with the coach — a lesson is a
+   * session, and the record of the old one lives on in its summary. RESUMING
+   * an unfinished lesson does not: picking up mid-practice with a coach who has
+   * forgotten the last thing it said would be worse than the problem it fixes.
+   */
+  async function openLesson(id?: string): Promise<void> {
+    const before = course.progress;
+    const resuming = !id || id === before.lesson;
+    const lesson = resuming ? course.resume() ?? course.start(id) : course.start(id);
+    if (!lesson) return;
+
+    coach.profile.mode = 'learning';
+    if (!(resuming && before.lesson === lesson.id && before.phase !== 'done')) {
+      await coach.newSession();
+      spoken = 0;
+      redrawChat();
+    }
+    setUpPhase({ announce: true });
+  }
+
+  /**
    * Put the current phase's position on the board.
    *
    * Every phase gets a FRESH game rather than an edited one: an exercise that
@@ -612,6 +635,12 @@ async function start(): Promise<void> {
 
   const retryBtn = button('btn.retry', () => setUpPhase({ announce: false }));
   const nextLessonBtn = button('btn.nextLesson', () => {
+    // The next lesson is a new subject, so a new conversation — `openLesson`
+    // with the id the course has moved on to.
+    const upcoming = course.progress.passed.length < LESSONS.length
+      ? LESSONS.find((l) => !course.progress.passed.includes(l.id))?.id
+      : undefined;
+    if (upcoming) { void openLesson(upcoming); return; }
     if (!course.next()) {
       // Course finished: back to an ordinary game, and the coach gets to say so.
       newGame(coach.profile.boardSize, 0);
@@ -624,11 +653,7 @@ async function start(): Promise<void> {
   // The course was reachable from the title screen and by asking the coach,
   // and from nowhere else: once someone was in a free game, the lessons had
   // vanished from the product.
-  const learnBtn = button('btn.learn', () => {
-    coach.profile.mode = 'learning';
-    course.start(course.progress.lesson ?? undefined);
-    setUpPhase({ announce: true });
-  });
+  const learnBtn = button('btn.learn', () => void openLesson());
   const leaveBtn = button('btn.leaveCourse', () => {
     course.leave();
     newGame(coach.profile.boardSize, 0);
@@ -767,9 +792,7 @@ async function start(): Promise<void> {
     }
 
     if (choice === 'learn') {
-      coach.profile.mode = 'learning';
-      course.start(course.progress.lesson ?? undefined);
-      setUpPhase({ announce: true });
+      await openLesson();
       return;
     }
     if (choice === 'continue') {
@@ -826,6 +849,8 @@ async function start(): Promise<void> {
         setUpPhase({ announce: false });
       },
       beginExercise: () => { if (course.phase === 'teach') { course.advance(); setUpPhase({ announce: false }); } },
+      openLesson: (id?: string) => openLesson(id),
+      toTitle: () => toTitle(),
       phase: () => course.phase,
       say: (text: string) => talk(text),
       redraw: redrawChat,

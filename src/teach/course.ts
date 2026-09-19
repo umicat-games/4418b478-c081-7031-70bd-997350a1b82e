@@ -67,6 +67,19 @@ export class Course {
     return lesson;
   }
 
+  /**
+   * Carry on with the lesson that was open, at the phase it was left at.
+   *
+   * Distinct from `start`, which always begins a lesson at its explanation:
+   * "continue lesson 2" that puts someone back through the teaching they
+   * already sat through is not continuing anything.
+   */
+  resume(): Lesson | null {
+    const lesson = this.lesson;
+    if (!lesson || this.state.phase === 'done') return null;
+    return lesson;
+  }
+
   leave(): void {
     this.state.lesson = null;
     this.state.phase = 'done';
