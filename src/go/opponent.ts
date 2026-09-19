@@ -21,12 +21,21 @@
 import { getKataGoEngineClient } from '../engine/katago/client';
 import type { GoGame } from './rules';
 
-/** Where the network lives. In dev it is served out of `public/`; in a build it
- *  comes off the CDN, so the weights never enter the game's git history and are
- *  downloaded once per player rather than per version. */
-export const MODEL_URL = import.meta.env.DEV
-  ? `${location.origin}/models/katago-small.bin.gz`
-  : 'https://cdn.umicat.ai/shared/katago/g170-b6c96.bin.gz';
+/**
+ * Where the network lives: beside the game, not inside it.
+ *
+ * ABSOLUTE, deliberately. The fetch happens in the Web Worker, and a relative
+ * URL there resolves against the worker's own script — which lives under
+ * `assets/` — so `models/x.gz` would be looked for in `assets/models/x.gz` and
+ * 404 in a way that looks like a broken engine rather than a broken path.
+ *
+ * The file is NOT committed: 3.7MB of weights in a git history that every
+ * workspace rebuild re-clones, for a file that never changes, is a cost paid
+ * for ever. It is uploaded to the game's own CDN prefix instead, and
+ * `npm run dev` reads a local copy out of `public/models/` (gitignored — see
+ * vendor/VENDOR.md for how to fetch it).
+ */
+export const MODEL_URL = new URL('models/katago-small.bin.gz', document.baseURI).href;
 
 export interface Level {
   id: string;
