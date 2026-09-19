@@ -9,9 +9,19 @@
 // rather than showing a key, because a rare English word in a Chinese UI is a
 // small blemish and `hud.yourMove` is a bug report.
 //
-// The locale comes from the platform (`umicat.locale`), which follows the
-// player's account setting, not the browser's — so it matches the rest of
-// Umicat around the game.
+// **The language comes from the platform, and from nowhere else.** The host
+// sends `locale` at handshake, from the player's Umicat language setting, and
+// the game switches to it — the same contract every other Umicat surface
+// follows, which is what makes the language one setting instead of one per
+// place. It arrives once, at init: changing it is a platform action, and the
+// game is reloaded around it.
+//
+// Chat is the exception, and it is not this file's business: the coach replies
+// in whatever language it is written to, because a conversation follows the
+// person talking. That rule lives in its playbook.
+//
+// Adding a language: write a table, add it to TABLES under its locale tags.
+// Nothing else in the game looks at a language id.
 
 type Vars = Record<string, string | number>;
 
@@ -228,20 +238,6 @@ let current = 'en';
 
 /** Which language the UI is speaking right now. */
 export const locale = (): string => current;
-
-/**
- * Guess a language from something the player wrote.
- *
- * The platform's locale is an account setting, and an account set to English
- * says nothing about the person typing Chinese into the chat box — which is
- * exactly what happened the first time someone used the coach. What someone
- * types is the better evidence of what they want to read, so the UI follows it.
- * Only CJK is detected, because that is the only case where guessing wrong is
- * cheap: a Latin-script language is left alone rather than mangled into English.
- */
-export function guessLocale(text: string): string | null {
-  return /[\u3400-\u9fff\uf900-\ufaff]/.test(text) ? 'zh-CN' : null;
-}
 
 /** Call once, as early as the platform hands over a locale. */
 export function setLocale(next: string | undefined): void {

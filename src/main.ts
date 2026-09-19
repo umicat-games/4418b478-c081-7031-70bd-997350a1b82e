@@ -32,7 +32,7 @@ import { Autosave, load } from './save';
 import { Course, type Phase } from './teach/course';
 import { LESSONS } from './teach/curriculum';
 import { goalMet, setUp } from './teach/curriculum';
-import { guessLocale, locale as uiLocale, setLocale, t } from './i18n';
+import { setLocale, t } from './i18n';
 
 /** The player is Black: Black moves first, and the beginner should be the one
  *  who gets to start rather than the one who has to answer. */
@@ -48,6 +48,7 @@ const REMARK_COOLDOWN = 4;
 async function start(): Promise<void> {
   const umicat = await ThreeUmicat.init();
   // Before any UI exists: everything below asks `t()` for its words.
+  // The platform's setting, and nothing else — see i18n.ts.
   setLocale(umicat.locale);
 
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -80,15 +81,6 @@ async function start(): Promise<void> {
   // title over it — which is also what hides the engine download: by the time
   // anyone has read two buttons there is nothing left to wait for.
   let idleSpin = true;
-  /** Re-read every fixed string after the UI language changes. */
-  function relabel(): void {
-    for (const [btn, key] of labels) btn.textContent = t(key);
-    chat.relabel();
-    speech.relabel();
-    menu.sync({}, !!game && !game.over);
-    refresh();
-  }
-
   const frame = (): void => {
     if (idleSpin) view.orbit(0.0012, 0);
     if (speech.showing) placeSpeech();
@@ -98,9 +90,6 @@ async function start(): Promise<void> {
   frame();
 
   const saved = await load(umicat);
-  // A returning player's own language beats the account setting that was only
-  // ever a guess about them.
-  if (saved.profile.lang) setLocale(saved.profile.lang);
   const autosave = new Autosave(umicat);
 
   let game: GoGame | null = null;
@@ -219,13 +208,6 @@ async function start(): Promise<void> {
   redrawChat();
 
   async function talk(text: string): Promise<void> {
-    const guessed = guessLocale(text);
-    if (guessed && guessed !== uiLocale()) {
-      setLocale(guessed);
-      coach.profile.lang = guessed;
-      relabel();
-      persist();
-    }
     redrawChat();
     await coach.ask(text, { game, read });
     redrawChat();
@@ -548,13 +530,11 @@ async function start(): Promise<void> {
   const bar = document.createElement('div');
   bar.className = 'bar';
   hud.appendChild(bar);
-  const labels: Array<[HTMLButtonElement, Parameters<typeof t>[0]]> = [];
   const button = (key: Parameters<typeof t>[0], onClick: () => void): HTMLButtonElement => {
     const b = document.createElement('button');
     b.textContent = t(key);
     b.onclick = onClick;
     bar.appendChild(b);
-    labels.push([b, key]);
     return b;
   };
   const menu = new Menu(

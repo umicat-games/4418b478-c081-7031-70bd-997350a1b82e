@@ -18,7 +18,7 @@
 import type { ThreeUmicat } from '@umicat/three-sdk';
 import type { AiActResult } from '@umicat/platform-sdk/protocol.js';
 import { toGtp } from '../go/coords';
-import { t } from '../i18n';
+import { locale, t } from '../i18n';
 import type { GoGame } from '../go/rules';
 import type { Read } from '../go/opponent';
 import { LEVELS } from '../go/opponent';
@@ -68,8 +68,6 @@ export interface Profile {
    *  `summarise()` and fed back in as observation — this IS the long memory. */
   summary: string;
   gamesPlayed: number;
-  /** The language the UI is in, once the player has shown us which it is. */
-  lang?: string;
   /** Where the student is in the course. The game's record, not the model's. */
   course?: Progress;
 }
@@ -268,6 +266,14 @@ const fromGtpSafe = (s: string, size: number): { x: number; y: number } | null =
 function observe(game: GoGame | null, read: Read | null, profile: Profile, course: CourseView | null): unknown {
   const base = {
     lesson: course ?? 'not in a lesson right now',
+    // The platform's language, for the times the coach speaks FIRST — a
+    // greeting has no student sentence to take its language from, and guessing
+    // it from an English system prompt is how a Chinese player gets greeted in
+    // English by a coach that will then switch the moment they reply.
+    language: {
+      the_game_is_in: locale(),
+      rule: 'Reply in the language the student writes to you in. When you speak first, use the language above.',
+    },
     student: {
       here_for: profile.mode,
       games_played: profile.gamesPlayed,
