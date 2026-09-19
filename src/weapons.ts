@@ -89,7 +89,20 @@ export const WEAPONS: WeaponKind[] = [
     // weapon you have to walk into the fire to use was the one that paid worst
     // for it. Against a wave-one saucer's 10 health this is three hits at Lv1
     // and two at Lv3, before the Range bonus or anything a run buys.
-    damage: [4, 6, 9],
+// WHAT A HERO IS FOR. This is a tower defence: the towers are the defence,
+// and the hero is the part of it that can be somewhere else in time. The
+// numbers said otherwise — a swing lands every 0.417s (the attack clip; there
+// is no other gate) and a bow shot every 0.2s, so at the old table the sword
+// did 9.6 DPS to EVERYTHING within reach and the bow 15 to one target, against
+// a 25g ballista's 2. Five to seven times a tower, for free, from a thing you
+// already own. Reported as "I can clear most waves without placing anything",
+// which is exactly what that arithmetic buys.
+//
+// Cut to roughly 45%. The hero still out-damages one cheap tower — the price
+// of melee is the square you have to stand on, and a staff pays a 1.7s
+// cooldown for its area — but a board is won with twelve towers and not with
+// one person, which is the game this is.
+    damage: [2, 3, 4],
   },
   {
     id: 'bow',
@@ -102,7 +115,7 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 320, wood: 50, stone: 15 },
       { gold: 650, wood: 95, stone: 40 },
     ],
-    damage: [3, 4, 6],
+    damage: [1.5, 2, 2.5],
   },
   {
     id: 'fire',
@@ -131,7 +144,9 @@ export const WEAPONS: WeaponKind[] = [
     // is now 4 + 3.06x3.5 = 14.7. Fresh, with no town, it is 8.7 against 10 —
     // slightly weaker on the first run, which is the run where you have time to
     // watch it.
-    effect: [2.2, 3.8, 5.4],   // damage per second
+    // The burn is fire's real damage, so it is cut on the same curve as
+    // everything else rather than left as a way round the change.
+    effect: [1.4, 2.4, 3.4],   // damage per second
     effectSeconds: 3.5,
     sound: 'fire-magic-wand-sound-effect.mp3',
     tint: { gem: 0xff7a3a, glow: 0xd63a10, mote: 0xff3606, mote2: 0xffc07a },
@@ -150,7 +165,7 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 520, wood: 25, stone: 70 },
       { gold: 980, wood: 45, stone: 125 },
     ],
-    damage: [2, 3, 4],
+    damage: [1, 1.5, 2],
     radius: 3.2,
     cooldown: 1.7,
     effect: [0.55, 0.42, 0.3], // how much of their speed is LEFT — lower is colder
@@ -174,7 +189,7 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 700, wood: 35, stone: 95 },
       { gold: 1250, wood: 60, stone: 170 },
     ],
-    damage: [4, 5, 7],    // Lv1 is exactly what the staff always did
+    damage: [2, 2.5, 3.5],
     radius: 2.6,          // ditto — unchanged from the staff it used to be
     cooldown: 1.7,
     effect: [1, 2, 3],    // how many further enemies the arc reaches

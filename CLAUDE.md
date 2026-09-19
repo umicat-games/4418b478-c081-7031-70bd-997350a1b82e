@@ -565,18 +565,42 @@ hit LOOK hard.
 | bow | across the board | middle | reach |
 | staves | a patch of ground | **lowest** | burn, chill, chain |
 
-That is the design. **The numbers were the other way round**: the sword did
-2/3/5 — less than the bow's 3/4/6 at every level and barely half the storm
-staff's 4/5/7 — so the one weapon you have to walk into the fire to use paid
-worst for it, and the highest per-hit damage in the game belonged to a magic
-weapon that also hits an area and chains. The sword is **4/6/9** now: three hits
-on a wave-one saucer at Lv1, two at Lv3, before the Range bonus or anything a
-run buys.
+That is the design, and it is about the ORDER of the three. Their absolute
+level is a separate question, and it was wrong.
 
-The staves' side of that is still wrong — the storm staff out-damages the bow
-per target while carrying a chain and a blast radius — and it is left alone for
-now because nerfing it takes damage off a weapon players have already paid to
-forge. It wants deciding rather than sliding.
+### The hero is support, and the numbers said otherwise
+
+**There is no cooldown on a swing or a shot** — the gate is `animator.busy`,
+the attack clip. That is 0.417s for the sword and 0.200s for the bow, and a
+swing damages EVERY enemy inside its reach. So the old table bought:
+
+| | per hit | every | DPS | against a 25g ballista's 2 |
+| --- | --- | --- | --- | --- |
+| sword 4 | 4 | 0.417s | **9.6**, to everything in reach | ×4.8, and an area |
+| bow 3 | 3 | 0.200s | **15**, single target | ×7.5 |
+
+Five to seven times a tower, for free, from a thing you already own — before
+the Range building's flat +1 PER HIT, which on a 5-shots-a-second bow is +5
+DPS on its own. Reported as "I can clear most waves without placing anything",
+which is exactly what that arithmetic buys. **This is a tower defence**: the
+towers are the defence and the hero is the part of it that can be somewhere
+else in time.
+
+Cut to roughly 45% — sword **2/3/4**, bow **1.5/2/2.5**, ice **1/1.5/2**, storm
+**2/2.5/3.5**, and fire's burn **1.4/2.4/3.4** a second so that the one weapon
+whose damage is not the hit does not become the way round the change. The order
+in the table above is unchanged; the sword is still the hardest single hit,
+which is what the square you have to stand on is paying for.
+
+**Measured, not assumed.** `verify-3d-balance` on Meadow after the cut: wave
+7/8, 9 lives, 12 towers, 10 upgrades, hero took 240 damage over 24 hits — the
+same board, the same wave and the same upgrade count as the run recorded above
+it (220 over 22), which is inside this file's own stated run-to-run spread. A
+tower-first player loses nothing. What is gone is the shortcut past them.
+
+The staves' relative order is still worth deciding: the storm staff
+out-damages the bow per target while carrying a chain and a blast radius. That
+was true before this cut and is true after it, since everything moved together.
 
 ### The wave is a RING SEGMENT, not atlas sprites
 
