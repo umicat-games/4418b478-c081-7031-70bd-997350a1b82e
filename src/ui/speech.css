@@ -73,3 +73,23 @@
   border-right: 1px solid rgba(127, 214, 194, 0.45);
   border-bottom: 1px solid rgba(127, 214, 194, 0.45);
 }
+
+/* "Play C3" — taking the coach's suggestion without hunting for the point.
+ *
+ * A button rather than making the highlighted point itself tappable: a stone
+ * cannot be taken back, and a board where touching the lit-up spot plays there
+ * turns "let me look at what they mean" into a move. */
+#speech .play {
+  display: block;
+  margin: 9px 0 0;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid #5fb9a4;
+  background: rgba(47, 111, 98, 0.85);
+  color: #fff;
+  font: 600 13px/1 system-ui, sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#speech .play:hover { filter: brightness(1.15); }
+#speech .play[hidden] { display: none; }

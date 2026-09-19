@@ -71,6 +71,11 @@ async function start(): Promise<void> {
       view.setHighlights([]);
       chat.setEchoed(false);
     },
+    // The coach names points it is not suggesting — White's move, a dead
+    // shape, the place they should NOT have played — so the offer appears only
+    // where a stone of theirs could actually go, this turn.
+    canPlay: (at) => !!game && !game.over && !thinking && game.toPlay === HUMAN && game.legal(at.x, at.y),
+    onPlay: (at) => commit(at),
   });
 
   const opponent = new Opponent();
@@ -211,7 +216,8 @@ async function start(): Promise<void> {
       spoken = said.length;
       // Only the newest: if the coach got two lines in while the player was
       // reading, the older one is history, and history is what the panel is for.
-      speech.show(segment(said[said.length - 1].text, game?.size ?? 9));
+      const size = game?.size ?? 9;
+      speech.show(segment(said[said.length - 1].text, size), size);
     }
   };
   redrawChat();
@@ -288,6 +294,8 @@ async function start(): Promise<void> {
     retryBtn.hidden = !(course.active && (phase === 'practice' || phase === 'quiz'));
     nextLessonBtn.hidden = !(course.lesson && phase === 'done');
     leaveBtn.hidden = !course.lesson;
+    // One or the other, never both: they are the two directions of the same door.
+    learnBtn.hidden = !!course.lesson || course.finished;
     // No hints in a test. A hint button that works during the one part of the
     // lesson that is being marked is not a hint button, it is the answer.
     hintBtn.hidden = phase === 'quiz' && course.active;
@@ -610,6 +618,14 @@ async function start(): Promise<void> {
       refresh();
       return;
     }
+    setUpPhase({ announce: true });
+  });
+  // The course was reachable from the title screen and by asking the coach,
+  // and from nowhere else: once someone was in a free game, the lessons had
+  // vanished from the product.
+  const learnBtn = button('btn.learn', () => {
+    coach.profile.mode = 'learning';
+    course.start(course.progress.lesson ?? undefined);
     setUpPhase({ announce: true });
   });
   const leaveBtn = button('btn.leaveCourse', () => {

@@ -24,7 +24,7 @@
 // three `focus` calls could not say WHICH line each belonged to. The marker
 // travels with the sentence it is about.
 import './speech.css';
-import { fromGtp } from '../go/coords';
+import { fromGtp, toGtp } from '../go/coords';
 import { t } from '../i18n';
 
 export interface Segment {
@@ -131,24 +131,43 @@ export interface SpeechOptions {
   onPage(segment: Segment): void;
   /** The last page has been dismissed. */
   onDone(): void;
+  /** May the student put a stone on this point right now? Decides whether the
+   *  bubble offers to play it. */
+  canPlay(at: { x: number; y: number }): boolean;
+  /** They took the offer. */
+  onPlay(at: { x: number; y: number }): void;
 }
 
 export class Speech {
   private el: HTMLDivElement;
   private textEl: HTMLDivElement;
   private moreEl: HTMLSpanElement;
+  private playBtn: HTMLButtonElement;
   private pages: Segment[] = [];
   private index = 0;
+  /** Board size, for turning an anchor back into something to read. */
+  private size = 9;
 
   constructor(private opts: SpeechOptions) {
     this.el = document.createElement('div');
     this.el.id = 'speech';
     this.el.hidden = true;
-    this.el.innerHTML = '<span class="who"></span><div class="text"></div><span class="more"></span>';
+    this.el.innerHTML = '<span class="who"></span><div class="text"></div>'
+      + '<button class="play" hidden></button><span class="more"></span>';
     document.body.appendChild(this.el);
     this.textEl = this.el.querySelector('.text')!;
     this.moreEl = this.el.querySelector('.more')!;
+    this.playBtn = this.el.querySelector('.play')!;
     this.el.addEventListener('click', () => this.next());
+    // Its own handler, and it must not also page the bubble on: one tap is one
+    // thing. The stop is the whole reason this is a button rather than the
+    // highlighted point on the board being tappable — a stone cannot be taken
+    // back, and "I touched the board while reading" must never place one.
+    this.playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const at = this.current?.at;
+      if (at) { this.opts.onPlay(at); this.next(); }
+    });
     this.relabel();
   }
 
@@ -161,7 +180,8 @@ export class Speech {
 
   /** Say something. Replaces whatever was on screen — the newest thing the
    *  coach said is always the thing worth reading. */
-  show(pages: Segment[]): void {
+  show(pages: Segment[], size = this.size): void {
+    this.size = size;
     if (!pages.length) { this.hide(); return; }
     this.pages = pages;
     this.index = 0;
@@ -201,6 +221,14 @@ export class Speech {
     const page = this.pages[this.index];
     this.textEl.textContent = page.text;
     this.moreEl.hidden = this.index >= this.pages.length - 1;
+    // Offered only when the point is actually playable by the student right
+    // now — the coach talks about White's moves and about dead shapes too, and
+    // a button that says "Play E5" where a stone already sits is a button that
+    // teaches the player not to trust buttons.
+    const at = page.at;
+    const offer = !!at && this.opts.canPlay(at);
+    this.playBtn.hidden = !offer;
+    if (offer && at) this.playBtn.textContent = t('speech.playHere', { point: toGtp(at.x, at.y, this.size) });
     this.opts.onPage(page);
   }
 }

@@ -56,6 +56,7 @@ const EN = {
   'btn.nextLesson': 'Next lesson',
   'btn.leaveCourse': 'Just play',
   'btn.learn': 'Teach me',
+  'speech.playHere': 'Play {point}',
 
   'course.banner': 'Lesson {index}/{total} · {name}',
   'course.phase.teach': 'Explaining',
@@ -167,6 +168,7 @@ const ZH: Partial<Record<Key, string>> = {
   'btn.nextLesson': '下一课',
   'btn.leaveCourse': '只想下棋',
   'btn.learn': '教我',
+  'speech.playHere': '下在 {point}',
 
   'course.banner': '第 {index}/{total} 课 · {name}',
   'course.phase.teach': '讲解',
