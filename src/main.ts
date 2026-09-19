@@ -3502,15 +3502,17 @@ export async function startLevel(
     animator.play('attack');
     swing = SWING_SECONDS;
     trailDone = false;
-    // NO WHOOSH. On trial: the swing sound and the hit sound started in the
-    // SAME millisecond — the damage loop below runs synchronously, right here —
-    // and both of them were 0.6-0.8s whooshes 290Hz apart in spectral centre,
-    // so the hit was two copies of the same noise laid over one short impact.
-    // Taking the whoosh off leaves the blow on its own to be judged.
+    // NO WHOOSH, and this is the decision rather than an omission.
     //
-    // The cost, which is real: a swing that MISSES is now silent. What is left
-    // for it is the blade's smear, which is drawn on a miss for exactly this
-    // kind of reason.
+    // A swing used to make three sounds in the SAME millisecond — the damage
+    // loop below runs synchronously, right here — and two of them were
+    // 0.6-0.8s whooshes 290Hz apart in spectral centre, laid over one short
+    // impact. Replacing the hit clip changed nothing anyone could hear,
+    // because the new one was a second copy of the noise already playing.
+    //
+    // The cost is real and was accepted knowingly: a swing that MISSES is
+    // silent. What is left for it is the blade's smear, which is drawn on a
+    // miss for exactly this sort of reason.
     let connected = false;
     const reach = meleeReach(HERO_ATTACK_RANGE, runTier);
     const swingX = Math.sin(hero.rotation.y), swingZ = Math.cos(hero.rotation.y);

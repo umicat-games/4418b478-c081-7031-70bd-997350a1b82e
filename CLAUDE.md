@@ -1474,7 +1474,7 @@ into a strobe.
 Melee feel is a stack of small things, and they are not worth the same. In the
 order they paid off here:
 
-**There is no whoosh on a swing right now.** Three clips used to start in the
+**A swing makes ONE sound: the blow.** Three clips used to start in the
 SAME millisecond — the melee damage loop runs synchronously inside
 `heroAttack`, right after the sound line — and two of them were whooshes 290Hz
 apart in spectral centre (`swing.ogg` at 6886, the hit clip at 6598), laid over
@@ -1486,19 +1486,19 @@ and now starts **none**. Which is also the cost, stated plainly — **a swing
 that misses is silent**. What is left for it is the blade's smear, which is
 drawn on a miss for exactly this sort of reason.
 
-Worth knowing while judging it: `hit-enemy.ogg` is NOT the sword's. It is in
+Worth knowing: `hit-enemy.ogg` is NOT the sword's. It is in
 `damage()`, so every tower shot, every staff burst and every burn tick plays it
 — a constant bed during a wave. That is the reason the sword wants a sound of
 its own at all: without one, your own blow is indistinguishable from a ballista
 landing somewhere behind you.
 
-**The hit's own sound is `swing-sword-sound.mp3`, and it is on trial.** Its
-profile is a WHOOSH rather than an impact — 0.79s long, peaking 86ms in, with
-NOTHING in the first 40ms — measured the way the rest of this file measures
-sound. Two consequences to listen for: it arrives after the 60ms hitstop below,
-which is the beat it is supposed to land on, and at a swing every 0.417s two
-copies overlap. `sword-hit.ogg` is still in `public/audio/` and swapping back is
-one line in `audio.ts`.
+**The hit's own sound is `swing-sword-sound.mp3`**, and by the numbers it is a
+whoosh rather than an impact — 0.79s, peaking 86ms in, nothing in the first 40.
+It was kept anyway, on the ear, once the other whoosh was gone: with nothing
+underneath it, it is what a swing sounds like. `swing.ogg` and the old
+`sword-hit.ogg` are both deleted — a clip that is registered and never played is
+fetched and decoded on every boot for nothing, and this is a game about to be
+released. Both are one `git revert` away if the question reopens.
 
 Worth keeping as a method rather than as a verdict: **an envelope tells you what
 a sound IS.** A real impact is `█▄▂▂▁` — loudest on its first sample. A whoosh

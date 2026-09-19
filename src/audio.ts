@@ -15,23 +15,20 @@ const CLIPS: Record<string, AudioClipSpec> = {
   'hit-enemy': { volume: 0.4, throttle: 30 },
   'enemy-shot': { volume: 0.3, throttle: 40 },
   'enemy-die': { volume: 0.5, throttle: 40 },
-  // NOT PLAYED right now — see the melee block in `main.ts`. Kept registered
-  // while the hit is judged without it; restoring is one line there, and if
-  // the trial ends with the whoosh staying off this entry and the file should
-  // both go rather than being fetched and decoded on every boot for nothing.
-  swing: { volume: 0.45, throttle: 120 },
-  // The sword's connecting blow. Uploaded through the Assets tool, and the
-  // filename says "swing" — it is used as the HIT here, which is why the call
-  // site goes through `SFX.swordHit` rather than naming the file.
+  // The sword's connecting blow, and the ONLY thing a swing makes now.
+  // Uploaded through the Assets tool; the filename says "swing" and it is the
+  // HIT, which is why the call site goes through `SFX.swordHit` rather than
+  // naming the file.
   //
-  // Louder than the .55 the old clip carried: matched by measurement rather
-  // than by ear, over the loud quarter of each (0.356 against 0.408 RMS).
+  // Its profile is a whoosh by the numbers — 0.79s, peaking 86ms in, silent
+  // for the first 40 — and it was inaudible as a change while `swing.ogg` was
+  // still playing underneath it, because the two were 290Hz apart in spectral
+  // centre. With the whoosh gone it is what a swing sounds like, and it was
+  // kept on that basis: judged by ear, which is the right instrument for the
+  // last question even where measurement is the right one for the first.
   //
-  // Its own profile is a WHOOSH, not an impact — 0.79s long, peaking 86ms in,
-  // silent for the first 40 — so it arrives after the 60ms hitstop the hit
-  // sets, and two of them overlap at a swing every 0.417s. Kept while that is
-  // judged by ear; `sword-hit.ogg` is still in `public/audio/` and this is a
-  // one-line revert.
+  // Volume matched by measurement rather than by ear, over the loud quarter of
+  // each clip: 0.356 RMS against the old 0.408 at 0.55.
   'swing-sword-sound.mp3': { volume: 0.62, throttle: 300 },
   'hero-hurt': { volume: 0.7, throttle: 200 },
   coin: { volume: 0.5, throttle: 40 },
