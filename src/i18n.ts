@@ -76,6 +76,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   cato_buy_unknown: { en: "Hmm… I don't think the shop sells that one. Want me to order something else?", 'zh-CN': '唔…商店好像没有卖这个呢，要不要我帮你订别的？' },
   cato_buy_no_coins: { en: "We don't quite have enough coins for that right now…", 'zh-CN': '我们的金币好像还不太够买这个呢…' },
   cato_buy_have_pen: { en: "We've already got a cow pen — no need for another!", 'zh-CN': '我们已经有一个牛栏啦，不用再买一个啦～' },
+  cato_no_tool: { en: "We don't have a {tool} yet, so I can't do that — let's get one first!", 'zh-CN': '我们现在还没有{tool}呢，所以做不了这件事哦～得先弄一个才行！' },
   // Names for the {crop} slot above — crops, tree fruit, and berry bushes.
   crop_generic: { en: 'crops', 'zh-CN': '作物' },
   crop_corn: { en: 'corn', 'zh-CN': '玉米' },

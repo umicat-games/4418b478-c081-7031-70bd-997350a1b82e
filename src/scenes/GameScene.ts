@@ -1589,6 +1589,7 @@ export class GameScene extends Phaser.Scene {
               'You have LIMITED ENERGY (see observation.cato.energyPct). If observation.cato.exhausted is true you are TOO TIRED to do any chore — warmly tell your friend you need to rest and get your energy back first, and do NOT call any task action (till/plant/water/harvest/chop/mine/forage). When your energy is low but not empty you can still work, though you may mention you\'re getting a bit tired.',
               'When observation.weather is "raining" you are staying INSIDE your cosy house because you really don\'t like getting wet. If your friend asks you to come out / go outside / go do something outdoors, warmly REFUSE — tell them you\'d rather stay in where it\'s dry and not get soaked, and maybe suggest waiting for the rain to pass. Do NOT call any outdoor task action (till/plant/water/harvest/chop/mine/forage/fish) while it is raining.',
               'You can shop for your friend with buy_item. observation.shop lists everything the shop sells with its price, and observation.coins is how many coins you two have. When they ask you to buy/order something, order it ONLY if it\'s in observation.shop and you can afford price×count; then tell them it\'s ordered and arrives in the mailbox tomorrow morning. If it\'s not sold or too pricey, say so warmly and don\'t order. Deliveries are ALWAYS next-morning — never claim it arrives instantly. If they don\'t say HOW MANY, just order 1 — never stop to ask a clarifying question, just act.',
+              'Chores need the right TOOL, and you use your friend\'s tools — observation.tools lists the ones you two OWN. Fishing needs a fishing rod; chopping trees / harvesting tree fruit needs an axe; mining stones needs a pickaxe; tilling needs a hoe; watering needs a watering can. If the tool for what they asked is NOT in observation.tools, warmly tell them you can\'t do it yet because you don\'t have that tool (name it), and do NOT call that task action. (The fishing rod isn\'t owned at the start — it has to be crafted first.)',
               'CRITICAL: your reply is ONLY what Cato SAYS OUT LOUD — never your private thinking, planning, analysis, or notes. NEVER write things like "The player is asking…", "Let me check…", "I should clarify…", "My name is…", or numbered lists reasoning about what to do or what you can see. Do not narrate deciding. Just warmly say your 1–3 short sentences (and call the action if there is one). If some detail is unspecified, pick a sensible default and act — don\'t think out loud.',
             ],
             // The vocabulary of things Cato can DO in the world. The AI picks one
@@ -2440,13 +2441,26 @@ export class GameScene extends Phaser.Scene {
 
   // ── Decorative fish (circle the open water) ───────────────────────────
 
-  /** Spawn a few decorative fish at spots that sit in OPEN WATER (off the grass island) and PLAY
-   *  the `fish-swimming` turn animation IN PLACE — the circling motion is baked into the sheet. */
+  // Decorative fish that circle the OPEN water and are what you actually catch. Kept SPARSE: a low cap,
+  // and fishing CONSUMES them (a fish you don't land swims off for good — see finishReel/cancelFishing),
+  // so the water refills only SLOWLY via a low-chance respawn (updateFishSpawns).
+  private static readonly FISH_MAX = 4;                    // how many fish at once (was 9 — too crowded)
+  private static readonly FISH_SPAWN_INTERVAL_MS = 9000;   // roll a respawn this often (below the cap)
+  private static readonly FISH_SPAWN_CHANCE = 0.35;        // ...and actually add one with this chance — keeps them scarce
+  private fishSpawnTimer = GameScene.FISH_SPAWN_INTERVAL_MS;
+
+  /** Initial fill: place up to FISH_MAX fish in open water. */
   private spawnFish(): void {
-    if (!this.textures.exists('fish') || !this.islandLayer) return;
+    for (let i = 0; i < GameScene.FISH_MAX; i++) this.spawnOneFish();
+  }
+
+  /** Place ONE decorative fish at a spot that sits in OPEN WATER (off the grass island) and PLAY the
+   *  `fish-swimming` turn animation IN PLACE. Returns false if at the cap or no water spot was found. */
+  private spawnOneFish(): boolean {
+    if (!this.textures.exists('fish') || !this.islandLayer) return false;
+    if (this.fish.length >= GameScene.FISH_MAX) return false;
     const b = this.cameras.main.getBounds();
-    const COUNT = 9;
-    for (let tries = 0; this.fish.length < COUNT && tries < 500; tries++) {
+    for (let tries = 0; tries < 200; tries++) {
       const x = Phaser.Math.Between(Math.ceil(b.x + 12), Math.floor(b.right - 12));
       const y = Phaser.Math.Between(Math.ceil(b.y + 12), Math.floor(b.bottom - 12));
       // the spot + a little margin all around must be open water (keep off the shore)
@@ -2457,7 +2471,19 @@ export class GameScene extends Phaser.Scene {
       s.play('fish-swimming');
       s.anims.setProgress(Phaser.Math.FloatBetween(0, 1)); // desync so they aren't all in lockstep
       this.fish.push(s);
+      return true;
     }
+    return false;
+  }
+
+  /** Slowly respawn fish up to the cap (fishing consumes them). Called each frame; low interval×chance
+   *  keeps the water sparse. */
+  private updateFishSpawns(delta: number): void {
+    if (this.fish.length >= GameScene.FISH_MAX) return;
+    this.fishSpawnTimer -= delta;
+    if (this.fishSpawnTimer > 0) return;
+    this.fishSpawnTimer = GameScene.FISH_SPAWN_INTERVAL_MS;
+    if (Math.random() < GameScene.FISH_SPAWN_CHANCE) this.spawnOneFish();
   }
 
   /** A world point is water when there's no grass-island tile there. */
@@ -2743,8 +2769,7 @@ export class GameScene extends Phaser.Scene {
       this.collect(itemFromId('fish', 1)); // bank it in the backpack (+ toast + save); notifies if the bag is full
       this.catoReact('love');
       this.playCatchReveal(sx, sy - 6, F.byCato ?? false); // "new item!" burst above the rod tip / Cato's head
-    } else if (F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); } // darts back to the pool
-    else F.fish?.destroy();
+    } else F.fish?.destroy(); // NOT caught → the fish is GONE (a fish you don't land swims off for good; the water respawns slowly)
     this.tearDownFishing(F);
   }
 
@@ -2777,13 +2802,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Immediate teardown (re-cast / no-bite timeout / fish escapes) — no reel animation. `escaped`
-   *  returns an uncaught fish to the decorative pool. */
-  private cancelFishing(escaped: boolean): void {
+  /** Immediate teardown (re-cast / no-bite timeout / fish escapes) — no reel animation. An uncaught
+   *  fish is GONE (it swam off), whether it escaped after hooking or the cast was abandoned — the
+   *  water respawns new fish slowly (updateFishSpawns). `escaped` is kept for callers' clarity. */
+  private cancelFishing(_escaped: boolean): void {
     const F = this.fishing; if (!F) return;
     this.fishing = null;
-    if (escaped && F.fish?.active) { F.fish.setDepth(2).setFlipY(false).setPosition(F.fishOrigX, F.fishOrigY).play('fish-swimming'); this.fish.push(F.fish); }
-    else F.fish?.destroy();
+    F.fish?.destroy();
     this.tearDownFishing(F);
   }
 
@@ -9741,7 +9766,34 @@ export class GameScene extends Phaser.Scene {
     return /[?？]/.test(say) || /[吗呢吧][”"'’～~!！。.\s]*$/.test(say.trim());
   }
 
+  /** Run the NON-physical actions in a batch (a standing pref / feeling / rename / shop order) — these
+   *  are honoured even when Cato is exhausted or missing a tool for the physical chore. */
+  private dispatchNonPhysical(a: { name: string; args: unknown }): void {
+    if (a.name === 'set_behavior') this.setAutonomy(a.args);
+    else if (a.name === 'feel') this.addBondWarmth(Number((a.args as { warmth?: unknown })?.warmth));
+    else if (a.name === 'set_cato_name') this.setCatoName(String((a.args as { name?: unknown })?.name ?? ''));
+    else if (a.name === 'buy_item') this.buyItemForFriend(a.args);
+  }
+
+  // A Cato task that needs a specific TOOL the player must own. Cato uses the FRIEND's tools (they
+  // live together), so if we don't own it he can't do the chore — he says which tool we're missing.
+  // Only the fishing rod is realistically ungated at start (it must be crafted); hoe/can/axe/pickaxe
+  // are owned from the start, but the gate is uniform so any future must-craft tool is covered.
+  private static readonly CATO_ACTION_TOOL: Record<string, ToolId> = {
+    go_fishing: 'fishing-rod', chop_trees: 'axe', harvest_fruit: 'axe',
+    mine_stones: 'pickaxe', till_plot: 'hoe', water_crops: 'watering-can',
+  };
+
   private runCatoActions(actions: Array<{ name: string; args: unknown }>, askedQuestion = false): void {
+    // TOOL GATE: a chore whose tool we don't own → Cato can't do it and names the missing tool. Honour
+    // non-physical actions (set_behavior/feel/name/buy) first, then refuse. (Checked before energy — a
+    // missing tool blocks the chore whether he's rested or not.)
+    const needTool = actions.map((a) => GameScene.CATO_ACTION_TOOL[a.name]).find((tid) => tid && !this.ownedTools.includes(tid));
+    if (needTool) {
+      for (const a of actions) this.dispatchNonPhysical(a);
+      this.setImmediateDialog(t('cato_no_tool').replace('{tool}', this.itemName(needTool)));
+      return;
+    }
     // Out of energy → he can't do chores. Still honour a `set_behavior` pref, but refuse
     // the physical tasks + say he needs to rest first (safety net; the AI is also told via
     // the observation + a rule, so it usually says this itself without even calling one).
@@ -9749,12 +9801,7 @@ export class GameScene extends Phaser.Scene {
     // when exhausted; only the chores are refused.
     const isPhysical = (n: string) => n !== 'set_behavior' && n !== 'feel' && n !== 'set_cato_name' && n !== 'buy_item';
     if (this.exhausted && actions.some((a) => isPhysical(a.name))) {
-      for (const a of actions) {
-        if (a.name === 'set_behavior') this.setAutonomy(a.args);
-        else if (a.name === 'feel') this.addBondWarmth(Number((a.args as { warmth?: unknown })?.warmth));
-        else if (a.name === 'set_cato_name') this.setCatoName(String((a.args as { name?: unknown })?.name ?? ''));
-        else if (a.name === 'buy_item') this.buyItemForFriend(a.args); // ordering isn't hard work — do it even when tired
-      }
+      for (const a of actions) this.dispatchNonPhysical(a); // ordering/prefs aren't hard work — do them even when tired
       this.setImmediateDialog('Cato flops down with a tired little sigh — he needs to rest and get some energy back before he can do that.');
       return;
     }
@@ -11885,6 +11932,7 @@ export class GameScene extends Phaser.Scene {
         ...(this.lastChatter ? { lastRemark: this.lastChatter } : {}),
       },
       coins: this.money, // coins you two have — Cato checks this before ordering with buy_item
+      tools: this.ownedTools.map((tid) => this.itemName(tid)), // the tools we OWN — chores need the right one (e.g. fishing needs a fishing rod); refuse if it's missing
       shop: this.orderCatalog().map((e) => ({ item: this.itemName(e.id), price: e.price })), // what the shop sells + prices (buy_item)
       backpack, // e.g. [{item:'Corn seeds', count:10}, {item:'Hoe', count:1}]
       farm: {
@@ -12944,6 +12992,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFog(delta); // fog / mist: light haze + drifting soft patches (misty rain, later fog weather)
     this.updateClouds(delta); // drifting clouds on rain / fog days
     this.updateAnimalAmbience(delta); // occasional daytime moo / cluck when a coop or cow pen has animals
+    this.updateFishSpawns(delta); // slowly respawn fish up to the cap (fishing consumes them)
     this.updateStamina(delta); // drain while working / regen while resting → gauge + tired emotes
     this.emote?.update(_time); // Cato's reactive emote bubble (follow + expire + idle)
     if (this.catoIndoors && this.catoIndoorsReason === 'sleep') this.registry.set('catoMoodFrame', SLEEPY_MOOD_FRAME); // sleepy Z face in the portrait while he's asleep
