@@ -88,7 +88,21 @@ async function start(): Promise<void> {
   // title over it — which is also what hides the engine download: by the time
   // anyone has read two buttons there is nothing left to wait for.
   let idleSpin = true;
+  /**
+   * The "LESSON 2/5 · ATARI · PRACTICE" line is worth reading when a phase
+   * opens and is noise for the rest of it, so it is shown on a change and
+   * expires. Declared HERE, with the other state the render loop touches:
+   * the loop starts before most of this function exists, and a `let` it reads
+   * before the declaration is a ReferenceError that takes the whole game down
+   * at boot rather than a quiet undefined.
+   */
+  let headerUntil = 0;
+  let headerFor = '';
+
   const frame = (): void => {
+    // The header's own expiry. Nothing else would redraw the HUD while the
+    // player sits and thinks, which is exactly when it is in the way.
+    if (headerUntil && performance.now() > headerUntil) { headerUntil = 0; refresh(); }
     if (idleSpin) view.orbit(0.0012, 0);
     if (speech.showing) placeSpeech();
     view.render();
@@ -273,10 +287,15 @@ async function start(): Promise<void> {
     lessonBar.replaceChildren();
     if (lesson) {
       const { index, total } = course.position;
-      const head = document.createElement('div');
-      head.className = 'head';
-      head.textContent = `${t('course.banner', { index, total, name: t(`lesson.${lesson.id}` as Parameters<typeof t>[0]) })} · ${t(`course.phase.${phase}` as Parameters<typeof t>[0])}`;
-      lessonBar.appendChild(head);
+      // A new lesson or a new phase brings the header back for a few seconds.
+      const stamp = `${lesson.id}/${phase}`;
+      if (stamp !== headerFor) { headerFor = stamp; headerUntil = performance.now() + 5000; }
+      if (performance.now() < headerUntil) {
+        const head = document.createElement('div');
+        head.className = 'head';
+        head.textContent = `${t('course.banner', { index, total, name: t(`lesson.${lesson.id}` as Parameters<typeof t>[0]) })} · ${t(`course.phase.${phase}` as Parameters<typeof t>[0])}`;
+        lessonBar.appendChild(head);
+      }
       const goal = document.createElement('div');
       goal.className = 'goal';
       goal.textContent = phase === 'quiz' ? `${goalText(lesson.id, 'quiz')} ${t('course.quizSilent')}`
@@ -300,7 +319,9 @@ async function start(): Promise<void> {
     resignBtn.hidden = !!exercise;
 
     const green = !!game && !game.over && game.toPlay === HUMAN && !thinking;
-    tip.textContent = green && coach.profile.gamesPlayed === 0 && game.turns.length < 2
+    // Until they have put a stone down ONCE, ever. Tying it to the first game
+    // meant it came back for every lesson, under the goal, for ever.
+    tip.textContent = green && !coach.profile.placed
       ? t(coarse ? 'hud.howToPlaceTouch' : 'hud.howToPlaceMouse')
       : '';
   }
@@ -547,6 +568,7 @@ async function start(): Promise<void> {
   function commit(at: { x: number; y: number }): void {
     if (!game || thinking || game.over || game.toPlay !== HUMAN) return;
     if (!game.play(at.x, at.y)) return;  // illegal: the board simply does not take it
+    coach.profile.placed = true;
     const played = toGtp(at.x, at.y, game.size);
     armed = null;
     view.setGhost(null, HUMAN);

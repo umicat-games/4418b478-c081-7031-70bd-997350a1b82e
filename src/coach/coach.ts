@@ -64,6 +64,9 @@ export interface Profile {
   gamesPlayed: number;
   /** Where the student is in the course. The game's record, not the model's. */
   course?: Progress;
+  /** They have put a stone on a board at least once — so the "how to place a
+   *  stone" line can go away and stay away. */
+  placed?: boolean;
 }
 
 export const DEFAULT_PROFILE: Profile = {
