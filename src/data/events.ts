@@ -14,6 +14,7 @@
 //   { type:'flag', id:'x', is:true }    an event flag set/unset (set by set-flag/unlock actions)
 //   { type:'stat', key:'harvests', gte:N }  a lifetime counter >= N
 //   { type:'event-done', id:'other' }   another event has already fired (chaining)
+//   { type:'days-since-event', id:'other', gte:N }  N+ days AFTER another event fired (next-day follow-ups)
 // Action vocabulary (see GameScene.runEventAction):
 //   { type:'send-mail', sender, titleKey, bodyKey, subst:{name:'@callName',cato:'@catoName'} }
 //   { type:'give-item', item, count }

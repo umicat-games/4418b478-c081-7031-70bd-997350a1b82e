@@ -67,7 +67,6 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   chatter_found_food: { en: "Oh! There's a snack in my bag — let me sit down and have a bite.", 'zh-CN': '咦，包里还有吃的～我坐下歇会儿，吃点东西。' },
   chatter_ate: { en: 'Munch munch — that hit the spot!', 'zh-CN': '吃点东西，力气回来啦～' },
   chatter_thanks: { en: 'Ooh, for me? Thank you — yum!', 'zh-CN': '哇，是给我的吗？谢谢你～好好吃！' },
-  chatter_rod_unlocked: { en: 'We\'ve got enough wood — now we can craft a fishing rod at the workbench!', 'zh-CN': '木头够啦——现在可以在工作台做鱼竿咯！' },
   chatter_full: { en: "I'm stuffed — couldn't eat another bite!", 'zh-CN': '我现在饱饱的，吃不下啦～' },
   chatter_bag_full: { en: "My little bag is full — no more room!", 'zh-CN': '我的小背包装不下更多啦～' },
   chatter_coop_no_room: { en: "There's no room for a bigger coop here!", 'zh-CN': '这里放不下更大的鸡舍啦～' },
@@ -219,8 +218,8 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   jamin_letter_title: { en: 'A letter from Jamin', 'zh-CN': 'Jamin 的来信' },
   jamin_rod_title: { en: 'Jamin • Go fishing!', 'zh-CN': 'Jamin • 去钓鱼吧！' },
   jamin_rod_body: {
-    en: "Hi {name}!\n\nThe waters around our island are full of fish. Want to try fishing? You'll need a fishing rod — gather up about 20 pieces of wood and you'll be able to craft one at the workbench.\n\nHappy fishing!\n\n— Jamin",
-    'zh-CN': '嗨 {name}！\n\n我们岛周围的水里有好多鱼呢。想不想试试钓鱼？你需要一根鱼竿——攒够大约 20 块木头，就能在工作台做出来啦。\n\n祝你钓得开心！\n\n—— Jamin',
+    en: "Hi {name}!\n\nI heard you've been gathering lots of wood — perfect! The waters around our island are full of fish, so let me tell you how to make a fishing rod: I've added the recipe to your workbench. You'll need a stick and a bit of fiber to craft one.\n\nOnce it's ready, go catch something tasty!\n\n— Jamin",
+    'zh-CN': '嗨 {name}！\n\n听说你攒了不少木头呀——太好啦！我们岛周围的水里有好多鱼，我来教你怎么做鱼竿吧：我已经把配方加到你的工作台里啦，做鱼竿需要一根木棍和一点纤维。\n\n做好了就去钓点好吃的回来吧！\n\n—— Jamin',
   },
   jamin_letter_body: {
     en: "Hi {name}!\n\nI'm so happy you've come to Catopia to look after our little island together with {cato}.\n\nFrom time to time I'll write with news from around Catopia and the curious things I find out in the world — so keep an eye on the mailbox!\n\n— Jamin",

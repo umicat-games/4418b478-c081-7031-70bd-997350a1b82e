@@ -824,6 +824,7 @@ interface SaveBlob {
   jaminWelcomeDue?: number; // v(old): day index Jamin's day-2 letter was due — replaced by the event engine (kept for migration)
   startDay?: number;               // local day index this game began (day-since-start event triggers)
   firedEvents?: string[];          // ids of `once` events already fired
+  eventFiredDay?: Record<string, number>; // day index each once-event fired (for days-since-event)
   eventFlags?: Record<string, boolean>; // flags set by set-flag/unlock actions
   lastRealDay?: number; // v21: last-settled local day index (login catch-up — ADR-029)
   debugTimeOffsetMs?: number; // DEBUG time-skip offset — persisted so a skipped-to day survives reload (else deliverDays outrun the reset clock)
@@ -1080,6 +1081,7 @@ export class GameScene extends Phaser.Scene {
   // ── Data-driven event engine (public/data/events.json → EVENTS). Progression rules as DATA. ──
   private startDay = -1;                       // local day index this game began (for `day-since-start`); persisted
   private firedEvents: string[] = [];          // ids of `once` events already fired (persisted)
+  private eventFiredDay: Record<string, number> = {}; // day index each once-event fired (for `days-since-event`, persisted)
   private eventFlags: Record<string, boolean> = {}; // flags set by set-flag/unlock actions, read by `flag` conditions (persisted)
   private eventEvalTimer = 0;                  // throttle for the per-frame event evaluation
   private homeReminderActive = false; // the cinematic house-upgrade reminder is showing → a tap dismisses it
@@ -7095,7 +7097,7 @@ export class GameScene extends Phaser.Scene {
       if (ev.once && this.firedEvents.includes(ev.id)) continue;
       if (!ev.when.every((c) => this.checkEventCondition(c))) continue;
       for (const a of ev.do) this.runEventAction(a);
-      if (ev.once) { this.firedEvents.push(ev.id); fired = true; }
+      if (ev.once) { this.firedEvents.push(ev.id); this.eventFiredDay[ev.id] = this.dayCount; fired = true; }
     }
     if (fired) this.scheduleSave();
   }
@@ -7112,6 +7114,7 @@ export class GameScene extends Phaser.Scene {
       case 'flag': return (!!this.eventFlags[String(c.id ?? '')]) === (c.is !== false);
       case 'stat': return (this.stats[String(c.key ?? '')] ?? 0) >= gte;
       case 'event-done': return this.firedEvents.includes(String(c.id ?? '')); // chaining: another event has fired
+      case 'days-since-event': { const d = this.eventFiredDay[String(c.id ?? '')]; return d !== undefined && (this.dayCount - d) >= gte; } // fires N days AFTER another event (e.g. a next-day follow-up letter)
       default: return false;
     }
   }
@@ -12393,6 +12396,7 @@ export class GameScene extends Phaser.Scene {
       homeAnnounce: this.homeAnnounce ?? undefined,
       startDay: this.startDay,
       firedEvents: this.firedEvents.length ? this.firedEvents : undefined,
+      eventFiredDay: Object.keys(this.eventFiredDay).length ? this.eventFiredDay : undefined,
       eventFlags: Object.keys(this.eventFlags).length ? this.eventFlags : undefined,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
@@ -12604,6 +12608,7 @@ export class GameScene extends Phaser.Scene {
       // re-send. A returning save that already HAS a Jamin letter in the mailbox is also treated as sent.
       this.startDay = typeof s.startDay === 'number' ? s.startDay : this.dayIndex();
       this.firedEvents = Array.isArray(s.firedEvents) ? [...s.firedEvents] : [];
+      this.eventFiredDay = s.eventFiredDay && typeof s.eventFiredDay === 'object' ? { ...s.eventFiredDay } : {};
       this.eventFlags = s.eventFlags && typeof s.eventFlags === 'object' ? { ...s.eventFlags } : {};
       if (s.startDay === undefined && (s.jaminWelcomeDue === -1 || this.mailList.some((m) => m.sender === 'Jamin')) && !this.firedEvents.includes('jamin-welcome')) {
         this.firedEvents.push('jamin-welcome');

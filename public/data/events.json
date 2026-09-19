@@ -15,9 +15,15 @@
       ]
     },
     {
-      "id": "jamin-fishing-tip",
+      "id": "wood-milestone",
       "once": true,
-      "when": [ { "type": "day-since-start", "gte": 2 } ],
+      "when": [ { "type": "item-count", "item": "wood", "gte": 20 } ],
+      "do": []
+    },
+    {
+      "id": "jamin-rod-letter",
+      "once": true,
+      "when": [ { "type": "days-since-event", "id": "wood-milestone", "gte": 1 } ],
       "do": [
         {
           "type": "send-mail",
@@ -25,16 +31,8 @@
           "titleKey": "jamin_rod_title",
           "bodyKey": "jamin_rod_body",
           "subst": { "name": "@callName" }
-        }
-      ]
-    },
-    {
-      "id": "unlock-fishing-recipe",
-      "once": true,
-      "when": [ { "type": "item-count", "item": "wood", "gte": 20 } ],
-      "do": [
-        { "type": "unlock", "id": "fishing-recipe-unlocked" },
-        { "type": "cato-say", "key": "chatter_rod_unlocked" }
+        },
+        { "type": "unlock", "id": "fishing-recipe-unlocked" }
       ]
     }
   ]
