@@ -5,6 +5,7 @@ import { applyCropData } from '../data/crops';
 import { applyForagableData, applyBigStoneData } from '../data/foragables';
 import { applyItemData } from '../data/items';
 import { applyRecipeData } from '../data/recipes';
+import { applyEventData } from '../data/events';
 import { applyCookingData } from '../data/cooking';
 import { applyAffinityData } from '../data/affinity';
 import { applyCoopData } from '../data/coops';
@@ -367,6 +368,7 @@ export class BootScene extends Phaser.Scene {
     this.load.json('data-cooking', 'data/cooking.json');
     this.load.json('data-affinity', 'data/affinity.json');
     this.load.json('data-coops', 'data/coops.json');
+    this.load.json('data-events', 'data/events.json');
     // Scripted-dialogue graphs (authored, non-AI): the new-game intro cutscene.
     this.load.json('dialogue-intro', 'dialogue/intro.json');
 
@@ -712,6 +714,7 @@ export class BootScene extends Phaser.Scene {
     applyAffinityData(this.cache.json.get('data-affinity'));
     applyBigStoneData(this.cache.json.get('data-big-stones'));
     applyCoopData(this.cache.json.get('data-coops'));
+    applyEventData(this.cache.json.get('data-events'));
     buildSoilGrassSheet(this);
     // BGM is started per-scene now (title vs game use different tracks): BootMenuScene
     // plays `bgm-title`, GameScene plays `bgm` — each via crossToBgm.

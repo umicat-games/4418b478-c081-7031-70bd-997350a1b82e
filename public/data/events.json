@@ -1,0 +1,18 @@
+{
+  "events": [
+    {
+      "id": "jamin-welcome",
+      "once": true,
+      "when": [ { "type": "day-since-start", "gte": 1 } ],
+      "do": [
+        {
+          "type": "send-mail",
+          "sender": "Jamin",
+          "titleKey": "jamin_letter_title",
+          "bodyKey": "jamin_letter_body",
+          "subst": { "name": "@callName", "cato": "@catoName" }
+        }
+      ]
+    }
+  ]
+}

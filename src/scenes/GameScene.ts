@@ -21,6 +21,7 @@ import { ORDERABLE_IDS, buyPrice, sellPrice, foodValue, isFood } from '../data/i
 import { RECIPES, type Recipe } from '../data/recipes';
 import { COOKING_RECIPES } from '../data/cooking';
 import { AFFINITY, bondTierName, bondTierIndex } from '../data/affinity';
+import { EVENTS, type EventCondition, type EventAction } from '../data/events';
 import type { CookModel, CookRowView } from './CookScene';
 
 // New games (and bond-less old saves) start at HALF the max bond = 5 of 10 hearts.
@@ -820,7 +821,10 @@ interface SaveBlob {
   dayCount?: number; // v6: real local day index (recomputed on load)
   lastMailReminderDay?: number; // day of Cato's last "you've got mail" reminder (once/day, first open)
   homeAnnounce?: string | null; // a settled house-upgrade tier whose "our home expanded!" reminder hasn't played yet
-  jaminWelcomeDue?: number; // day index Jamin's day-2 welcome letter is due (-1 = none/sent)
+  jaminWelcomeDue?: number; // v(old): day index Jamin's day-2 letter was due — replaced by the event engine (kept for migration)
+  startDay?: number;               // local day index this game began (day-since-start event triggers)
+  firedEvents?: string[];          // ids of `once` events already fired
+  eventFlags?: Record<string, boolean>; // flags set by set-flag/unlock actions
   lastRealDay?: number; // v21: last-settled local day index (login catch-up — ADR-029)
   debugTimeOffsetMs?: number; // DEBUG time-skip offset — persisted so a skipped-to day survives reload (else deliverDays outrun the reset clock)
   lastSeen?: number;    // v21: last-seen wall-clock ms
@@ -1073,7 +1077,11 @@ export class GameScene extends Phaser.Scene {
   private mailReminderPending = false; // a reminder is scheduled (in its settle-in delay) but not yet showing
   private mailReminderLiveArmed = false; // true once markReady is done → a mid-session day-rollover (skip-day / real midnight) can trigger a reminder too
   private homeAnnounce: string | null = null; // a HOUSE tier just settled (overnight upgrade) whose "our home expanded!" reminder hasn't played yet (persisted); the tier id → the what's-new line
-  private jaminWelcomeDue = -1; // day index when Jamin's day-2 welcome letter should arrive (-1 = none / already sent); set to day+1 when a new game begins (persisted)
+  // ── Data-driven event engine (public/data/events.json → EVENTS). Progression rules as DATA. ──
+  private startDay = -1;                       // local day index this game began (for `day-since-start`); persisted
+  private firedEvents: string[] = [];          // ids of `once` events already fired (persisted)
+  private eventFlags: Record<string, boolean> = {}; // flags set by set-flag/unlock actions, read by `flag` conditions (persisted)
+  private eventEvalTimer = 0;                  // throttle for the per-frame event evaluation
   private homeReminderActive = false; // the cinematic house-upgrade reminder is showing → a tap dismisses it
   private homeReminderPending = false; // scheduled (in its settle-in delay) but not yet showing
   private chest?: Phaser.GameObjects.Sprite;
@@ -3139,7 +3147,7 @@ export class GameScene extends Phaser.Scene {
     this.settleCoopUpgrades(); // build any coop whose paid upgrade came due (before they lay)
     this.settleCoops(); // coops lay their daily eggs
     this.settleCowPen(); // cows give their daily milk (one bottle each, by colour)
-    this.settleJaminMail(); // Jamin's day-2 welcome letter (once a new game reaches its second day)
+    this.evaluateEvents(); // data-driven events (Jamin's day-2 letter, day/bond/item-count triggers…)
     this.settleRealDayBond(days);
     this.scheduleSave();
     if (this.menuOpen) this.publishMenu();
@@ -7072,17 +7080,78 @@ export class GameScene extends Phaser.Scene {
     this.promoteEvent('home_upgrade', tier ? `Moved into a new home: ${tier.id}` : 'Moved into a new home'); // ② milestone
   }
 
-  /** Jamin's welcome letter — arrives in the mailbox on the SECOND day of a new game. Greets the
-   *  player by name, welcomes them to run the island together with Cato (his renamed name if changed),
-   *  and sets up that Jamin will write occasionally with Catopia news. Once-only (jaminWelcomeDue→-1). */
-  private settleJaminMail(): void {
-    if (this.jaminWelcomeDue < 0 || this.dayCount < this.jaminWelcomeDue) return;
-    this.jaminWelcomeDue = -1;
-    const name = this.callName() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
-    const cato = this.catoName || 'Cato';
-    const body = t('jamin_letter_body').replace(/\{name\}/g, name).replace(/\{cato\}/g, cato);
-    this.addMail({ kind: 'letter', sender: 'Jamin', title: t('jamin_letter_title'), iconFrame: 245, lines: [], total: 0, body });
-    this.mailboxAlertSeen = false; this.refreshMailboxAlert(true); // "new mail" bounce on the door mailbox
+  // ── Event engine ─────────────────────────────────────────────────────────
+  //  Data-driven progression: EVENTS (public/data/events.json) each pair a set of state CONDITIONS
+  //  with a set of ACTIONS. evaluateEvents() fires any whose conditions all hold (once-events tracked
+  //  in firedEvents). The condition/action VOCABULARY lives here (the game owns it); the table composes.
+  //  e.g. Jamin's day-2 welcome letter is now the `jamin-welcome` row, not hard-code.
+
+  /** Scan every event; fire the ones whose conditions all hold now. Cheap (few events, simple checks);
+   *  called on load, on day rollover, and throttled per-frame so item/bond changes trigger promptly. */
+  private evaluateEvents(): void {
+    if (!this.gameReady) return;
+    let fired = false;
+    for (const ev of EVENTS) {
+      if (ev.once && this.firedEvents.includes(ev.id)) continue;
+      if (!ev.when.every((c) => this.checkEventCondition(c))) continue;
+      for (const a of ev.do) this.runEventAction(a);
+      if (ev.once) { this.firedEvents.push(ev.id); fired = true; }
+    }
+    if (fired) this.scheduleSave();
+  }
+
+  /** Evaluate ONE event condition against live game state. Unknown types → false (never fires — safe). */
+  private checkEventCondition(c: EventCondition): boolean {
+    const gte = typeof c.gte === 'number' ? c.gte : 0;
+    switch (c.type) {
+      case 'day-since-start': return this.startDay >= 0 && (this.dayCount - this.startDay) >= gte;
+      case 'day': return this.dayCount >= gte;
+      case 'item-count': return this.countItemEverywhere(String(c.item ?? '')) >= (typeof c.gte === 'number' ? c.gte : 1);
+      case 'bond': return this.bond >= gte;
+      case 'bond-tier': { const idx = AFFINITY.tiers.findIndex((tt) => tt.name === c.tier); return idx >= 0 && bondTierIndex(this.bond) >= idx; }
+      case 'flag': return (!!this.eventFlags[String(c.id ?? '')]) === (c.is !== false);
+      case 'stat': return (this.stats[String(c.key ?? '')] ?? 0) >= gte;
+      case 'event-done': return this.firedEvents.includes(String(c.id ?? '')); // chaining: another event has fired
+      default: return false;
+    }
+  }
+
+  /** Run ONE event action. Unknown types → no-op (safe). */
+  private runEventAction(a: EventAction): void {
+    switch (a.type) {
+      case 'send-mail': {
+        let body = t(String(a.bodyKey ?? ''));
+        const subst = (a.subst ?? {}) as Record<string, string>;
+        for (const [k, src] of Object.entries(subst)) body = body.replace(new RegExp('\\{' + k + '\\}', 'g'), this.resolveEventToken(src));
+        this.addMail({ kind: 'letter', sender: String(a.sender ?? ''), title: t(String(a.titleKey ?? '')), iconFrame: 245, lines: [], total: 0, body });
+        this.mailboxAlertSeen = false; this.refreshMailboxAlert(true); // "new mail" bounce on the door mailbox
+        break;
+      }
+      case 'give-item': {
+        const it = itemFromId(String(a.item ?? ''), typeof a.count === 'number' ? a.count : 1);
+        if (!this.addToBackpack(it)) { if (this.pickupHasSpaceFor(it.id)) this.addToStore(this.pickupStore, it); } // full → the mailbox 取货 grid
+        break;
+      }
+      case 'set-flag': case 'unlock': this.eventFlags[String(a.id ?? '')] = a.value !== false; break;
+      case 'cato-say': this.catoSay(String(a.key ?? '')); break;
+      default: break;
+    }
+  }
+
+  /** Resolve a substitution SOURCE token in a send-mail body: `@callName` / `@catoName`, else literal. */
+  private resolveEventToken(src: string): string {
+    if (src === '@callName') return this.callName() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
+    if (src === '@catoName') return this.catoName || 'Cato';
+    return src;
+  }
+
+  /** How many of item `id` the player HAS across everything they own (hotbar + backpack + chest). */
+  private countItemEverywhere(id: string): number {
+    let n = 0;
+    for (const s of this.inventory) if (s && s.id === id) n += s.count;
+    for (const s of this.backpackStore) if (s.id === id) n += s.count;
+    for (const s of this.chestStore) if (s.id === id) n += s.count;
+    return n;
   }
 
   // ── Affinity / bond (ADR-027, Phase 1) ─────────────────────────────────────
@@ -12032,7 +12101,7 @@ export class GameScene extends Phaser.Scene {
     this.loadingOverlay = undefined;
     // Framing: a brand-new game opens on the house (Cato at the door); a returning
     // save centres the camera on the restored Cato.
-    if (this.isNewGame) { this.frameNewGameStart(); this.onboardingActive = true; this.jaminWelcomeDue = this.dayIndex() + 1; this.scheduleSave(); } // new game → begin onboarding + arm Jamin's day-2 welcome letter (persisted, so a mid-tutorial exit resumes)
+    if (this.isNewGame) { this.frameNewGameStart(); this.onboardingActive = true; this.startDay = this.dayIndex(); this.scheduleSave(); } // new game → begin onboarding + stamp the start day (for day-since-start event triggers, e.g. Jamin's day-2 letter)
     else if (this.child) this.cameras.main.setScroll(this.child.x - this.scale.width / 2, this.child.y - this.scale.height / 2);
     // New-game intro: snap into the cinematic framing NOW (camera on Cato + letterbox) so the
     // paw opens onto the already-composed shot — but HOLD Cato's dialogue box until the paw has
@@ -12314,7 +12383,9 @@ export class GameScene extends Phaser.Scene {
       dayCount: this.dayCount,
       lastMailReminderDay: this.lastMailReminderDay,
       homeAnnounce: this.homeAnnounce ?? undefined,
-      jaminWelcomeDue: this.jaminWelcomeDue,
+      startDay: this.startDay,
+      firedEvents: this.firedEvents.length ? this.firedEvents : undefined,
+      eventFlags: Object.keys(this.eventFlags).length ? this.eventFlags : undefined,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
       orders: this.orders.map((o) => ({ ...o })),
@@ -12519,7 +12590,16 @@ export class GameScene extends Phaser.Scene {
       this.dayCount = s.dayCount ?? 0;
       this.lastMailReminderDay = s.lastMailReminderDay ?? -1;
       this.homeAnnounce = s.homeAnnounce ?? null;
-      this.jaminWelcomeDue = s.jaminWelcomeDue ?? -1;
+      // Event engine (v: startDay/firedEvents/eventFlags). Migration: an OLD save has no startDay →
+      // treat "now" as the start (day-since-start events fire from here). If the old jaminWelcomeDue
+      // said the letter was already sent (-1), mark the ported `jamin-welcome` event fired so it can't
+      // re-send. A returning save that already HAS a Jamin letter in the mailbox is also treated as sent.
+      this.startDay = typeof s.startDay === 'number' ? s.startDay : this.dayIndex();
+      this.firedEvents = Array.isArray(s.firedEvents) ? [...s.firedEvents] : [];
+      this.eventFlags = s.eventFlags && typeof s.eventFlags === 'object' ? { ...s.eventFlags } : {};
+      if (s.startDay === undefined && (s.jaminWelcomeDue === -1 || this.mailList.some((m) => m.sender === 'Jamin')) && !this.firedEvents.includes('jamin-welcome')) {
+        this.firedEvents.push('jamin-welcome');
+      }
       // v21 (ADR-029): real-time day sync. A returning save carries the last-settled day index →
       // the first syncRealDay() catches up the missed real days. A pre-v21 save (no lastRealDay)
       // starts fresh at today (no spurious catch-up). dayCount is recomputed to the real day index.
@@ -13020,6 +13100,9 @@ export class GameScene extends Phaser.Scene {
     this.loadingOverlay?.update(delta); // drift the loading-screen wallpaper while it's up
     if (this.dialogOpen && this.chatVoice) this.layoutChatVoice(); // keep the mic glued to the bar (open tween + resize)
     this.updateChatCloseBtn(); // pin the chat's X close button to the box's top-right (before the inHouse return — chat works indoors too)
+    // Data-driven events: evaluate on a throttle (item-count / bond / flag triggers fire within ~0.7s of
+    // the state changing). Runs before the inHouse return so events aren't paused inside the house.
+    if (this.gameReady) { this.eventEvalTimer -= delta; if (this.eventEvalTimer <= 0) { this.eventEvalTimer = 700; this.evaluateEvents(); } }
     // Inside the house the island is FROZEN (HouseScene paints black over it + drives its own
     // room). GameScene stays active only so its input drives the kept HUD (chat / backpack / shop /
     // menu); the whole world sim is skipped. HUD scenes have their own update loops.
