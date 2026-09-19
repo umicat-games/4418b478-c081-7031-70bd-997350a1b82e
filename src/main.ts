@@ -2788,6 +2788,7 @@ export async function startLevel(
         // The bottom bar first, because nothing else on this board can be done
         // until something is chosen, and the ring it draws under your feet is
         // the explanation for every step after this one.
+        title: 'Choose a weapon',
         text: `${tapWord()} the weapon in the bar below`,
         enter: () => { onlyKind = 0; },
         slot: () => 0,
@@ -2802,6 +2803,7 @@ export async function startLevel(
         // and a dash joining them makes one long sentence that has to be read
         // twice. Named, too: "they" is a pronoun for something the player has
         // not seen yet.
+        title: 'Choose where to build',
         text: 'Stand on the marked square<br>Enemies come out of the gate beside it',
         at: () => ({ x: spot[0], z: spot[1] }),
         enter: () => { onlyBuildAt = spot; },
@@ -2811,6 +2813,7 @@ export async function startLevel(
         // Names the button AND where it is. An icon on its own is a puzzle:
         // the player has not met it yet and has to find which of the four
         // circles on the right it matches.
+        title: 'Build it',
         text: `Press ${pressName('build')} to put it down`,
         // Long enough to watch it land before being told the next thing.
         after: 1.6,
@@ -2849,6 +2852,7 @@ export async function startLevel(
         // button has changed — it changes because they are standing on their
         // own weapon — and an instruction showing the picture the button used
         // to wear is an instruction pointing at nothing.
+        title: 'Upgrade it',
         text: `Stand on your weapon, then press ${pressName('upgrade')}`,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
@@ -2885,6 +2889,7 @@ export async function startLevel(
         // On a phone the button itself becomes the sell icon while you hold
         // it, and that change IS the gesture. On a desktop there is no button
         // to change, so the ring is the whole of the feedback.
+        title: 'Sell it',
         text: touchLikely()
           ? `Hold ${pressName('upgrade')} until it turns to`
             + ` ${iconHtml('sell', '1.25em')} and the ring fills`
@@ -2909,6 +2914,7 @@ export async function startLevel(
         // nothing here has named it.
         //
         // Two lines, in the order the other steps use: what to do, then why.
+        title: 'Fight for yourself',
         text: `Chase the enemy down and press ${pressName('sword')}`
           + '<br>Nothing is guarding the road now',
         button: () => 'sword',
@@ -2944,6 +2950,7 @@ export async function startLevel(
       {
         // The staff, tapped. Same button, a weapon that does not need to touch
         // them — which is the whole of what a staff is.
+        title: 'Use the staff',
         text: `You have a fire staff now<br>Get close and press ${pressName('fire')}`,
         button: () => 'attack',
         ready: () => nearestAway() < 2.6,
@@ -2960,6 +2967,7 @@ export async function startLevel(
         // And placed. Far enough away that the staff's own lock cannot reach —
         // which is what makes the drag the only way to land it, rather than a
         // flourish over a tap that would have worked anyway.
+        title: 'Aim the staff',
         text: 'Now stay back from this one<br>'
           + `Hold ${pressName('fire')}, ${dragThing()} to aim, then let go`,
         button: () => 'attack',

@@ -135,6 +135,15 @@ export interface ScriptStep {
    *  beat of a script needs narrating: a weapon that starts shooting the moment
    *  an enemy walks into range does not need a panel saying that it will, and a
    *  panel covers the very thing it is describing. */
+  /** What this step is FOR, on its own line above the instruction.
+   *
+   *  The body says what to do with your hands; a player who reads
+   *  "hold the button until it turns to a bin" and does it still does not
+   *  know they have just been taught SELLING. Every step that speaks has one.
+   *
+   *  Two or three words, a verb first — it is a heading, not a second
+   *  sentence. */
+  title?: string;
   text?: string;
   /** True once the player has done it. Asked every frame. */
   done: () => boolean;
@@ -223,6 +232,9 @@ function makeBox(): HTMLElement {
     <div style="max-width:min(460px,86vw); background:rgba(16,22,29,.97); color:#fff;
                 border-radius:16px; padding:20px 22px; text-align:center;
                 box-shadow:0 14px 44px rgba(0,0,0,.42)">
+      <div data-step-title style="font:800 13px/1.4 system-ui, sans-serif;
+                  letter-spacing:.09em; text-transform:uppercase;
+                  color:#ffd76a; margin-bottom:9px"></div>
       <div data-line style="font:700 16px/1.5 system-ui, sans-serif"></div>
       <button data-ok class="${LIFT.primary}" style="margin-top:16px; border:0; border-radius:999px; cursor:pointer;
         padding:9px 30px; font:800 14px system-ui; background:#ffd76a; color:#241b00">OK</button>
@@ -241,6 +253,7 @@ export function createScript(
   const scrim = makeScrim();
   hudEl.append(scrim);
   const line = box.querySelector<HTMLElement>('[data-line]')!;
+  const heading = box.querySelector<HTMLElement>('[data-step-title]')!;
 
   /** A way out.
    *
@@ -288,6 +301,11 @@ export function createScript(
       return;
     }
     phase = 'read';
+    // Collapsed rather than left empty when a step has no heading, or the
+    // panel carries a stripe of padding where a title would have been.
+    const head = steps[n].title;
+    heading.textContent = head ?? '';
+    heading.style.display = head ? 'block' : 'none';
     line.innerHTML = t;
     box.style.display = 'flex';
   };

@@ -2684,14 +2684,35 @@ describing.** The player is not stupid; they can see a weapon shooting. The
 steps still exist — they are what spawn the enemy and what give the coin's
 flight a second and a half with nobody talking over it.
 
-Six panels survive, and every one of them is an instruction:
+Eight panels survive, and every one of them is an instruction.
 
-    Tap the weapon in the bar below
-    Stand on the marked square / Enemies come out of the gate beside it
-    Press the ⟨build⟩ button on the right to put it down
-    Stand on your weapon, then press the ⟨upgrade⟩ button on the right
-    Hold the ⟨upgrade⟩ button on the right until it turns to ⟨sell⟩…
-    Nothing is guarding the road. Chase it down and press the ⟨sword⟩ button…
+### And every one of them says what it is TEACHING
+
+A `title`, above the instruction. The body says what to do with your hands, and
+that is not the same as saying what you have learned: a player who reads *hold
+the button until it turns to a bin* and does it has sold a weapon without ever
+being told that selling is a thing this game has. Reported from a phone as "the
+player does not know what this is for".
+
+Two or three words, a verb first — it is a heading, not a second sentence:
+
+    CHOOSE A WEAPON        Tap the weapon in the bar below
+    CHOOSE WHERE TO BUILD  Stand on the marked square / Enemies come out…
+    BUILD IT               Press the ⟨build⟩ button on the right…
+    UPGRADE IT             Stand on your weapon, then press ⟨upgrade⟩…
+    SELL IT                Hold ⟨upgrade⟩ until it turns to ⟨sell⟩…
+    FIGHT FOR YOURSELF     Chase the enemy down and press ⟨sword⟩…
+    USE THE STAFF          You have a fire staff now / Get close and press…
+    AIM THE STAFF          Now stay back from this one / Hold, drag, let go
+
+The heading COLLAPSES when a step has none, rather than being left empty — the
+same rule the readout plate's rows follow, and for the same reason: an empty
+element is a stripe of padding, not nothing.
+
+Its hook is `data-step-title`, **not** `data-title`. That one is the title
+SCREEN's, and this file already records what borrowing another screen's
+attribute costs: a probe that asks for it starts matching two elements and waits
+on the wrong one until it times out.
 
 ### The LAST step needs a beat too
 
