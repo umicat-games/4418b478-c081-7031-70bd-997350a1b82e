@@ -7,7 +7,21 @@ the part of the defence that holds a lane while you are somewhere else; you are
 the only part that can be somewhere else in time.
 
 Game id `d25d06c2-0ae4-4083-8eff-ded32d3125aa`, fork org `umicat-games`.
-`./deploy-preview.sh` publishes `dist/` straight to S3 + CloudFront. **Always
+`./deploy-preview.sh` publishes `dist/` straight to S3 + CloudFront.
+
+**`dist/assets/` holds two kinds of file and they take different cache
+headers.** Vite's bundles are content-hashed, which is what makes `immutable`
+safe; `public/assets/` is copied into the same directory verbatim, at FIXED
+paths. Those were going out immutable for a year, so a changed model reached
+nobody — a CloudFront invalidation does not touch a browser cache, and
+`immutable` is the one header that stops a browser even revalidating. It was
+patched by hand after every deploy for a while; the script splits the two syncs
+now, and the default for anything that is not a bundle is `no-cache`. A needless
+304 costs nothing; the other way round costs a year.
+
+`aws s3 sync` will not repair a header on a file that has not CHANGED, since it
+only re-uploads when the local copy is strictly newer. Fixing one in place is
+`aws s3 cp <key> <key> --metadata-directive REPLACE --cache-control …`. **Always
 commit AND deploy** — a direct deploy is a temporary override that any
 workspace rebuild wipes out.
 

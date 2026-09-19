@@ -19,9 +19,34 @@ CF_DIST=E31A40598Q73XJ   # cdn.umicat.ai
 
 [ -f "$DIST/index.html" ] || { echo "ERROR: $DIST/index.html missing — run 'npx vite build' first"; exit 1; }
 
-echo "==> sync hashed build output (assets/) — immutable (content-hashed names)"
+# `dist/assets/` holds TWO different kinds of file and they cannot share a
+# cache header. Vite writes its bundles there with a content hash in the name,
+# which is what makes `immutable` safe. But `public/assets/` is copied into the
+# same directory VERBATIM — `character.glb`, `Textures/` — at fixed paths. Those
+# were going out as immutable for a year, so a changed model reached nobody:
+# a CloudFront invalidation does not touch a browser cache, and `immutable` is
+# the one header that tells a browser not even to revalidate. It had to be
+# fixed by hand after every deploy, twenty times, which is a fix that belongs
+# in the script.
+#
+# Split by extension, and the DEFAULT is the safe one: anything here that is
+# not a bundle gets `no-cache`. If vite ever starts emitting hashed images into
+# this directory they will be revalidated needlessly, which costs a 304. The
+# other way round costs a year.
+echo "==> sync the content-hashed bundles — immutable"
 aws s3 sync "$DIST/assets/" "s3://$BUCKET/previews/$GID/assets/" \
+  --exclude "*" --include "*.js" --include "*.css" --include "*.js.map" \
   --cache-control "public,max-age=31536000,immutable"
+
+echo "==> sync everything else under assets/ (models, textures) — no-cache"
+aws s3 sync "$DIST/assets/" "s3://$BUCKET/previews/$GID/assets/" \
+  --exclude "*.js" --exclude "*.css" --exclude "*.js.map" \
+  --cache-control "no-cache"
+# One limit of `sync` worth knowing: it will not re-upload a file whose local
+# copy is not STRICTLY NEWER than the remote, so it cannot repair the header of
+# an object that is already wrong and has not changed since. Fixing a header by
+# itself is `aws s3 cp <key> <key> --metadata-directive REPLACE --cache-control
+# ...`. Everything currently up there has been corrected once by hand.
 
 # Everything else lives at FIXED paths (index.html, scenes/*.json,
 # tilemaps/*.json, uploaded/*, manifest.json). Caching these immutable poisons
