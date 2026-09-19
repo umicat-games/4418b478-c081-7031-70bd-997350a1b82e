@@ -214,6 +214,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   mail_reminder_goods: { en: "Our order arrived! Let's go grab it from the mailbox.", 'zh-CN': '我们的货物送到啦！一起去邮箱那儿取一下吧～' },
   mail_reminder_mail: { en: "We've got new mail! Let's go check the mailbox.", 'zh-CN': '我们有新邮件啦！一起去邮箱看看吧～' },
   mail_reminder_both: { en: "Our new mail AND a delivery came in! Let's check the mailbox.", 'zh-CN': '我们有新邮件，还有新货物送到啦！一起去邮箱看看吧～' },
+  home_reminder: { en: "Our home got bigger! {desc} Want to come inside and take a look?", 'zh-CN': '我们的家扩建好啦！{desc} 要不要进去看看呀～' },
   // Crafting (work station modal)
   craft_title: { en: 'CRAFTING', 'zh-CN': '合成' },
   craft_pick: { en: 'Pick something to craft', 'zh-CN': '选一个要合成的东西' },

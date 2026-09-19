@@ -817,6 +817,7 @@ interface SaveBlob {
   dayTimeMs?: number; // v6: vestigial (ambient now reads the real clock — ADR-029)
   dayCount?: number; // v6: real local day index (recomputed on load)
   lastMailReminderDay?: number; // day of Cato's last "you've got mail" reminder (once/day, first open)
+  homeAnnounce?: string | null; // a settled house-upgrade tier whose "our home expanded!" reminder hasn't played yet
   lastRealDay?: number; // v21: last-settled local day index (login catch-up — ADR-029)
   debugTimeOffsetMs?: number; // DEBUG time-skip offset — persisted so a skipped-to day survives reload (else deliverDays outrun the reset clock)
   lastSeen?: number;    // v21: last-seen wall-clock ms
@@ -1068,6 +1069,9 @@ export class GameScene extends Phaser.Scene {
   private mailReminderActive = false; // the cinematic mail reminder is showing → a tap dismisses it
   private mailReminderPending = false; // a reminder is scheduled (in its settle-in delay) but not yet showing
   private mailReminderLiveArmed = false; // true once markReady is done → a mid-session day-rollover (skip-day / real midnight) can trigger a reminder too
+  private homeAnnounce: string | null = null; // a HOUSE tier just settled (overnight upgrade) whose "our home expanded!" reminder hasn't played yet (persisted); the tier id → the what's-new line
+  private homeReminderActive = false; // the cinematic house-upgrade reminder is showing → a tap dismisses it
+  private homeReminderPending = false; // scheduled (in its settle-in delay) but not yet showing
   private chest?: Phaser.GameObjects.Sprite;
   // The editor-placed desk PAD (iPad). Clicking it plays `pad-open` then opens the Shop
   // tab — it replaces the old bottom-right shop button. Resting on the animation sheet's
@@ -2097,7 +2101,7 @@ export class GameScene extends Phaser.Scene {
       // Dialog open: a canvas click (outside the HTML input, which sits on top
       // and swallows its own clicks) ADVANCES the RPG text (reveal the rest / next
       // page); once everything's shown, the same click dismisses it.
-      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (this.signDialog) { if (!this.advanceDialog()) this.closeDialog(); } else { this.advanceDialog(); } return; } // regular chat: tap only ADVANCES pages; the X button closes it (no accidental tap-close). Sign notes still tap-to-close (no X).
+      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene()) { if (this.mailReminderActive) this.endMailReminder(); else if (this.homeReminderActive) this.endHomeReminder(); } } else if (this.signDialog) { if (!this.advanceDialog()) this.closeDialog(); } else { this.advanceDialog(); } return; } // regular chat: tap only ADVANCES pages; the X button closes it (no accidental tap-close). Sign notes still tap-to-close (no X).
       // Modal confirm dialog: press-and-HOLD a ✓/⊘ button (acts on release); a tap OUTSIDE is
       // swallowed (the dialog only closes via a button).
       // Use the RAW pointer (NOT the snapped vcursor sx/sy) so the press matches the release, which
@@ -2226,7 +2230,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (pointer.getDistance() > 12) return; // a drag → pan, not a tap
       // Dialog open: tap advances the RPG text; a final tap (all shown) closes.
-      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else if (this.signDialog) { if (!this.advanceDialog()) this.closeDialog(); } else { this.advanceDialog(); } return; } // regular chat: tap only ADVANCES pages; the X button closes it (no accidental tap-close). Sign notes still tap-to-close (no X).
+      if (this.dialogOpen) { if (this.cutscene) { if (!this.advanceCutscene()) { if (this.mailReminderActive) this.endMailReminder(); else if (this.homeReminderActive) this.endHomeReminder(); } } else if (this.signDialog) { if (!this.advanceDialog()) this.closeDialog(); } else { this.advanceDialog(); } return; } // regular chat: tap only ADVANCES pages; the X button closes it (no accidental tap-close). Sign notes still tap-to-close (no X).
       if (this.menuOpen) { this.handleMenuClick(pointer.x, pointer.y); return; }
       this.actAt(pointer.x, pointer.y);
     });
@@ -2257,7 +2261,7 @@ export class GameScene extends Phaser.Scene {
       const el = document.activeElement;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
       e.preventDefault?.();
-      if (this.cutscene) { if (!this.advanceCutscene() && this.mailReminderActive) this.endMailReminder(); } else this.advanceDialog();
+      if (this.cutscene) { if (!this.advanceCutscene()) { if (this.mailReminderActive) this.endMailReminder(); else if (this.homeReminderActive) this.endHomeReminder(); } } else this.advanceDialog();
     });
 
     // A mouse move (re)enters desktop-cursor mode; update() drives vcursor from the live pointer
@@ -3108,7 +3112,7 @@ export class GameScene extends Phaser.Scene {
     // may have just delivered goods / mail → Cato gives the same cinematic reminder. Gated to after
     // markReady (mailReminderLiveArmed) so the load-time settle above doesn't double-fire it; the
     // once-per-day `lastMailReminderDay` guard inside scheduleMailReminder still applies.
-    if (this.mailReminderLiveArmed) this.scheduleMailReminder();
+    if (this.mailReminderLiveArmed) { if (this.shouldPlayHomeReminder()) this.scheduleHomeReminder(); else this.scheduleMailReminder(); } // house upgrade wins over mail
   }
 
   /** DEBUG time fast-forward (U key / ⏩ button): jump `now()` forward 1h so real-time features
@@ -7028,6 +7032,7 @@ export class GameScene extends Phaser.Scene {
     if (!p || p.applyDay > this.dayCount) return;
     this.currentHome = p.id;
     this.pendingHome = null;
+    this.homeAnnounce = p.id; // arm Cato's "our home expanded — come see!" reminder for the next open (NOT the mail cinematic)
     const tier = HOME_TIERS.find((h) => h.id === p.id);
     this.promoteEvent('home_upgrade', tier ? `Moved into a new home: ${tier.id}` : 'Moved into a new home'); // ② milestone
   }
@@ -11445,6 +11450,56 @@ export class GameScene extends Phaser.Scene {
     this.exitCinematic();
   }
 
+  // ── House-upgrade reminder — a SEPARATE cinematic from the mail one. When a paid room expansion
+  //    settles overnight, the next open Cato says "our home got bigger — come see!" and names what
+  //    was added, framing the HOUSE (not the mailbox). Priority over the mail reminder that morning.
+  private shouldPlayHomeReminder(): boolean {
+    return !!this.homeAnnounce && !!this.child && this.sceneId === HOME_ISLAND && !!this.houseCenter();
+  }
+
+  /** Wait a calm beat after the reveal, THEN play the house-upgrade cinematic (mirrors the mail one). */
+  private scheduleHomeReminder(): void {
+    if (this.homeReminderActive || this.homeReminderPending || !this.shouldPlayHomeReminder()) return;
+    this.homeReminderPending = true;
+    this.time.delayedCall(MAIL_REMINDER_DELAY_MS, () => {
+      this.homeReminderPending = false;
+      if (!this.shouldPlayHomeReminder() || this.menuOpen || this.dialogOpen || this.inventoryOpen || this.cutscene) return;
+      this.enterHomeReminderCinematic();
+      this.playHomeReminderDialogue();
+    });
+  }
+
+  /** Begin the house-upgrade cinematic: letterbox in + snap to Cato, then glide the camera onto the HOUSE. */
+  private enterHomeReminderCinematic(): void {
+    this.homeReminderActive = true;
+    this.enterCinematic();
+    const hc = this.houseCenter();
+    if (hc) this.cineCamTarget = this.cineFrame(hc, 0.5, 0.42, this.cineZoom()); // glide from Cato to the house
+  }
+
+  /** After the reveal settles, Cato announces the expansion + names what's new, and invites the player in. */
+  private playHomeReminderDialogue(): void {
+    const tier = HOME_TIERS.find((h) => h.id === this.homeAnnounce);
+    const desc = tier ? t(tier.descKey) : ''; // e.g. "更宽敞的家，带真正的厨房——灶台、锅具和餐桌。"
+    const name = this.callName() || (getLang() === 'zh-CN' ? '朋友' : 'friend');
+    const line = `${t('mail_reminder_hi').replace('{name}', name)} ${t('home_reminder').replace('{desc}', desc)}`;
+    this.time.delayedCall(900, () => {
+      if (!this.homeReminderActive) return;
+      if (this.menuOpen || this.dialogOpen || this.inventoryOpen || this.craftOpen) { this.endHomeReminder(); return; }
+      this.homeAnnounce = null; // consumed only once it actually SHOWS (a bail above keeps it for the next open)
+      this.scheduleSave();
+      this.openDialog(line, true);
+    });
+  }
+
+  /** A tap dismisses the house-upgrade reminder: close Cato's message + glide the camera back. */
+  private endHomeReminder(): void {
+    if (!this.homeReminderActive) return;
+    this.homeReminderActive = false;
+    this.closeDialog();
+    this.exitCinematic();
+  }
+
   /** Begin the cinematic intro: remember the gameplay framing (the zoom-OUT target),
    *  slide the letterbox bars in, hide the hotbar, and SNAP the camera onto Cato. We snap
    *  (not pan/zoom-in) because the game is meant to OPEN already on Cato — the movie's end
@@ -11885,7 +11940,8 @@ export class GameScene extends Phaser.Scene {
     // paw opens onto the already-composed shot — but HOLD Cato's dialogue box until the paw has
     // FULLY opened (finishTransition's onRevealed), so the box doesn't rush in mid-transition.
     const playIntro = this.shouldPlayIntro();
-    const playMail = !playIntro && this.shouldPlayMailReminder(); // returning player, first open today, mail/goods waiting
+    const playHome = !playIntro && this.shouldPlayHomeReminder(); // house upgraded overnight → announce it (PRIORITY over the mail cinematic)
+    const playMail = !playIntro && !playHome && this.shouldPlayMailReminder(); // returning player, first open today, mail/goods waiting
     if (playIntro) this.enterCinematic();
     // World + save are ready and the camera is framed → NOW uncover: the paw (which held
     // closed showing "Loading") reveals the ready game directly (no reveal-time overlay).
@@ -11894,8 +11950,9 @@ export class GameScene extends Phaser.Scene {
       // Returning MID-onboarding (exited before finishing the tutorial) → restart the tutorial from the
       // top (no intro re-play; they've seen the welcome). New games reach it via the intro's end instead.
       else if (this.onboardingActive) this.time.delayedCall(800, () => this.maybeStartTutorial());
-      // The mail reminder does NOT compose upfront like the intro — the game reveals into
-      // NORMAL play, then after a calm beat the reminder cinematic takes over (a gentle transition).
+      // The reminders do NOT compose upfront like the intro — the game reveals into NORMAL play,
+      // then after a calm beat the cinematic takes over (a gentle transition). House upgrade wins.
+      else if (playHome) this.scheduleHomeReminder();
       else if (playMail) this.scheduleMailReminder();
       // From now on a mid-session day rollover (⏭ skip-day / real midnight while playing) that
       // delivers goods can trigger the same reminder — see advanceRealDays.
@@ -12158,6 +12215,7 @@ export class GameScene extends Phaser.Scene {
       lastSeen: this.lastSeen,
       dayCount: this.dayCount,
       lastMailReminderDay: this.lastMailReminderDay,
+      homeAnnounce: this.homeAnnounce ?? undefined,
       mailbox: this.mailboxStore.map((it) => ({ id: it.id, count: it.count })),
       chest: this.chestStore.map((it) => ({ id: it.id, count: it.count })),
       orders: this.orders.map((o) => ({ ...o })),
@@ -12361,6 +12419,7 @@ export class GameScene extends Phaser.Scene {
       this.dayTimeMs = s.dayTimeMs ?? 0;
       this.dayCount = s.dayCount ?? 0;
       this.lastMailReminderDay = s.lastMailReminderDay ?? -1;
+      this.homeAnnounce = s.homeAnnounce ?? null;
       // v21 (ADR-029): real-time day sync. A returning save carries the last-settled day index →
       // the first syncRealDay() catches up the missed real days. A pre-v21 save (no lastRealDay)
       // starts fresh at today (no spurious catch-up). dayCount is recomputed to the real day index.
