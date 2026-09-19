@@ -13,7 +13,7 @@ import { runHub } from './hub';
 import { showLoading, hideLoading } from './loading';
 import { showTitle } from './title';
 import { createDebugHud } from './debughud';
-import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, saucerBurst, hitSparks, bladeTrail, preloadAtlas, FRAME } from './vfx';
+import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, saucerBurst, hitSparks, slashFlash, bladeTrail, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
 import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
@@ -3527,11 +3527,19 @@ export async function startLevel(
       // where the edge actually met it. At the enemy's own centre the sparks
       // sat ON the saucer and read as the saucer changing colour.
       if (alive) {
-        hitSparks(vfx, new THREE.Vector3(
+        const contact = new THREE.Vector3(
           (hero.position.x + e.obj.position.x) / 2,
           hero.position.y + SWING_HEIGHT,
           (hero.position.z + e.obj.position.z) / 2,
-        ), swingX, swingZ, meleeImpact(runTier) ?? 0);
+        );
+        hitSparks(vfx, contact, swingX, swingZ, meleeImpact(runTier) ?? 0);
+        // And the LINE the edge went along, which the sparks cannot say: they
+        // are omnidirectional, so they report that something happened here and
+        // not what shape it was. Drawn on the ENEMY's own position rather than
+        // the contact point — it is a mark on what was hit.
+        slashFlash(vfx, new THREE.Vector3(
+          e.obj.position.x, hero.position.y + SWING_HEIGHT, e.obj.position.z,
+        ), tierLook(runTier), meleeImpact(runTier) ?? 0);
       }
     }
     // A swing that connects sounds different from one that whiffs. Without

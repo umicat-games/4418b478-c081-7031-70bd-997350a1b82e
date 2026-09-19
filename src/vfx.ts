@@ -880,6 +880,124 @@ export function saucerBurst(vfx: Vfx, at: THREE.Vector3, tint = 0xff8e7a): void 
  * blade was travelling read as struck, and a sphere of them reads as an
  * explosion, which is a different event and already belongs to the saucers.
  */
+/**
+ * The white streak a cut leaves ON what it hit.
+ *
+ * Pointed at both ends and thick in the middle — a lens, not a bar. That shape
+ * is doing the work: a rectangle reads as a wall and a soft blob reads as an
+ * explosion, and neither of them reads as an EDGE having gone through
+ * something. The points are where the blade entered and left.
+ *
+ * It is the half of an impact that particles cannot do. Sparks say *something
+ * happened here*; they are omnidirectional by nature, so they cannot say
+ * ALONG WHAT LINE it happened, which is the whole of what a cut is.
+ *
+ * Three things it has to get right, and the first two are invisible as bugs:
+ *
+ *  - **It faces the camera**, re-aimed every frame. A streak lying in the
+ *    world is a streak seen at whatever angle the player happens to have swung
+ *    the camera to, and edge-on it is a line one pixel wide. It is also rolled
+ *    about the view axis, because a slash that is horizontal ON SCREEN is what
+ *    reads as horizontal — a world-space direction does not survive the
+ *    projection.
+ *  - **It draws on top.** `depthTest: false`: the point is a mark on the thing
+ *    that was hit, and half of it disappearing into the saucer it is drawn
+ *    across is exactly the failure. It lives for an eighth of a second, which
+ *    is the window in which drawing over the world is a flash rather than a
+ *    bug.
+ *  - **One mesh, one draw.** Hits come in handfuls — a staff burst takes four
+ *    at once — and this is the arithmetic that made the burn's flames a
+ *    per-ENEMY effect on a board budgeted at about twenty draws.
+ */
+export function slashFlash(
+  vfx: Vfx, at: THREE.Vector3,
+  look: { color: number; glow?: number } = { color: 0xffc9c2 },
+  power = 0,
+): void {
+  const SEG = 28;
+  const LEN = 1.05 + power * 0.35;
+  const THICK = 0.115 + power * 0.06;
+  const pos = new Float32Array((SEG + 1) * 2 * 3);
+  const uvs = new Float32Array((SEG + 1) * 2 * 2);
+  const idx = new Uint16Array(SEG * 6);
+  for (let i = 0; i <= SEG; i++) {
+    const t = i / SEG;
+    // Zero at both ends, fattest in the middle. The exponent is what decides
+    // whether this is a needle or a leaf; under about 0.5 it stops having
+    // points at all and starts being a capsule.
+    const h = THICK * Math.pow(Math.sin(Math.PI * t), 0.62);
+    const x = (t - 0.5) * LEN;
+    const o = i * 2;
+    pos[o * 3] = x; pos[o * 3 + 1] = -h; pos[o * 3 + 2] = 0;
+    pos[o * 3 + 3] = x; pos[o * 3 + 4] = h; pos[o * 3 + 5] = 0;
+    uvs[o * 2] = t; uvs[o * 2 + 1] = 0;
+    uvs[o * 2 + 2] = t; uvs[o * 2 + 3] = 1;
+  }
+  for (let i = 0; i < SEG; i++) {
+    idx.set([i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2], i * 6);
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geom.setIndex(new THREE.BufferAttribute(idx, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(look.color) },
+      // The CORE goes white; the fringe keeps the tier's colour. A constant
+      // this high made the whole lens white, and additive over this game's
+      // grass then washes it towards nothing — the same trap the fire burst
+      // and the blade smear each hit in their own way.
+      uHot: { value: 0.12 + (look.glow ?? 0) * 0.5 },
+      uK: { value: 0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uHot; uniform float uK;
+      varying vec2 vUv;
+      void main() {
+        float along = vUv.x;
+        // 1 on the centreline, 0 at the lens edge. Squared, so the core is a
+        // thin bright line inside a softer body rather than a flat slab.
+        float core = 1.0 - abs(vUv.y * 2.0 - 1.0);
+        float body = core * core;
+        // Dimmer towards the points, or they end in a hard stop.
+        float taper = pow(sin(3.14159 * clamp(along, 0.0, 1.0)), 0.45);
+        // Up fast, down slower: an impact is an attack, not a fade in.
+        float life = uK < 0.18 ? uK / 0.18 : 1.0 - (uK - 0.18) / 0.82;
+        vec3 col = mix(uColor, vec3(1.0), clamp(pow(core, 1.6) + uHot * 0.35, 0.0, 1.0));
+        gl_FragColor = vec4(col, body * taper * clamp(life, 0.0, 1.0));
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.copy(at);
+  mesh.renderOrder = 9;
+  // A little off horizontal, and not the same little every time. A mark that
+  // lands at exactly the same angle on every hit reads as a decal being
+  // stamped rather than as a cut being made.
+  const roll = (Math.random() - 0.5) * 0.5;
+  vfx.add({
+    obj: mesh, t: 0, life: 0.14, own: [geom, mat],
+    step: (o, k) => {
+      mat.uniforms.uK.value = k;
+      o.quaternion.copy(vfx.facing());
+      o.rotateZ(roll);
+      // Grows along its own length as it goes, which is what sells it as
+      // something passing THROUGH rather than appearing on.
+      o.scale.set(0.82 + k * 0.5, 1, 1);
+    },
+  });
+}
+
 export function hitSparks(
   vfx: Vfx, at: THREE.Vector3, dirX: number, dirZ: number, power = 1,
 ): void {

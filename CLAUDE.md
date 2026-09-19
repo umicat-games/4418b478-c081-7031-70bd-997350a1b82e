@@ -1459,6 +1459,37 @@ game time would last four times as long on a phone having a bad second — the
 same rule the sell-hold and the tutorial's panels follow. It is longer for the
 heavier run tiers, because the freeze is where weight is expressed.
 
+**A STREAK across what was hit**, pointed at both ends and thick in the middle.
+That shape is the whole point: a rectangle reads as a wall, a soft blob reads as
+an explosion, and neither of them reads as an EDGE having gone through
+something. The points are where the blade entered and left.
+
+It is the half of an impact that particles cannot do. Sparks say *something
+happened here* — they are omnidirectional by nature, so they cannot say along
+what LINE it happened, which is what a cut is. The two are drawn together and
+the report that started this was "the particles alone look ordinary".
+
+Three things it has to get right, two of them invisible as bugs:
+
+- **It faces the camera, re-aimed every frame**, and is rolled about the view
+  axis. A streak lying in the world is seen at whatever angle the player has
+  swung the camera to, and edge-on it is a line one pixel wide. Horizontal ON
+  SCREEN is what reads as horizontal; a world direction does not survive the
+  projection.
+- **It draws on top** (`depthTest: false`, `renderOrder` 9). It is a mark on the
+  thing that was hit, and half of it disappearing into the saucer it is drawn
+  across is exactly the failure. It lives 0.14s, which is the window in which
+  drawing over the world is a flash rather than a bug.
+- **The core goes white, the fringe keeps the tier's colour.** The first version
+  whitened the whole lens and additive blending over this game's grass then
+  washed it out — the third time this trap has been hit here, after the fire
+  burst and the blade smear.
+
+Note for anyone measuring it: **`verify-3d-feedback` cannot see it in the effect
+COUNT.** Headless runs at about eight frames a second, so one frame is 125ms and
+a 0.14s effect is gone by the next sample. It is 8 frames on a real device.
+Count pixels, the way the smear check does.
+
 **Sparks at the contact point, on EVERY hit.** The base sword had nothing there
 — a red flash on the victim and a sound, which is feedback about the victim
 rather than about the blow. They are thrown along the swing rather than in a
