@@ -10,7 +10,7 @@ import * as THREE from 'three';
  * eleven hundred objects of forest now, and it was the one place with no way
  * to see what that cost.
  *
- * `?debug=0` turns it off; so do three quick taps on the HUD.
+ * OFF by default; `?debug=1` shows it, and so do three quick taps on the HUD.
  *
  * TOP CENTRE, and never interactive. It started bottom-right, which is where
  * the jump and attack buttons are — a readout added to diagnose performance
@@ -42,7 +42,15 @@ export function createDebugHud(
     text-align: center; background: rgba(0,0,0,.45); padding: 5px 9px;
     border-radius: 8px; white-space: pre;
     pointer-events: ${onTripleTap ? 'auto' : 'none'}; touch-action: manipulation;`;
-  el.style.display = new URLSearchParams(location.search).get('debug') === '0' ? 'none' : 'block';
+  // OFF unless asked for. It was on by default while this was being built,
+  // which was right then and is a frame counter sitting on a released game's
+  // title corner now. `?debug=1` brings it back.
+  //
+  // It is still the way into the sandbox on a phone, and that route survives:
+  // three taps on the HUD toggle this readout, and three taps ON the readout
+  // are the sandbox. Two gestures instead of one, and no keyboard needed.
+  const flag = new URLSearchParams(location.search).get('debug');
+  el.style.display = flag && flag !== '0' ? 'block' : 'none';
   document.body.appendChild(el);
 
   let taps = 0;

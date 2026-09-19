@@ -49,7 +49,7 @@ import {
   type Material, type Materials,
 } from './progress';
 import type { GameAudio } from '@umicat/three-sdk';
-import { installLiftStyles, setLiftPressSound, LIFT, RIM } from './buttons';
+import { installLiftStyles, setLiftPressSound, LIFT } from './buttons';
 
 /**
  * Woodland Defense — a tower defense you can walk around in.
@@ -625,11 +625,21 @@ export async function startLevel(
   const marker = world.entities.get('build_marker')!;
   const saved = await umicat.saves.get<{ best: number; quality?: number }>(SAVE_KEY);
   let bestWave = saved?.best ?? 0;
-  /** 0 = smooth, 1 = sharp. Persisted, because a setting you have to find
-   *  again every run is a setting nobody uses. */
-  // Sharp by default: measured at a steady 60 on an iPhone 14 Pro, which is
-  // the machine that decides this. Smooth stays one tap away.
-  let quality = saved?.quality ?? 1;
+  /** 0 = smooth, 1 = sharp.
+   *
+   *  No longer a button, and no longer read from the save. Sharp is measured at
+   *  a steady 60 on an iPhone 14 Pro, which is the machine that decides it, and
+   *  a pill reading "Sharp" beside the gear was the last piece of workshop
+   *  furniture left on a screen about to be released.
+   *
+   *  Dropping the control must not drop the ability to MEASURE — every
+   *  performance decision in this game was made by reading the frame counter on
+   *  a device — so `?quality=0` still picks the cheap one, alongside `?dpr` and
+   *  `?shadow`. And it is not read back from the save: a player who once tapped
+   *  Smooth would otherwise be held there for good by a button that no longer
+   *  exists. */
+  const qFlag = new URLSearchParams(location.search).get('quality');
+  const quality = qFlag === '0' ? 0 : 1;
 
   // The path the enemies walk is the same polyline the tiles were laid from,
   // so what you see and what they follow cannot drift apart.
@@ -1056,7 +1066,7 @@ export async function startLevel(
   // the fragments. `?dpr=2` to compare — the point is that this is decidable
   // by looking at the screen and the frame counter at the same time, on the
   // device, rather than by me picking a number on a laptop.
-  // --- Picture quality, as a button rather than a URL flag ---
+  // --- Picture quality ---
   //
   // Two settings genuinely trade picture for speed: how many pixels are
   // rendered, and how sharp shadows are. Which way to go is a matter of taste
@@ -1597,21 +1607,6 @@ export async function startLevel(
     pause: (on) => setPaused(on),
     leave: () => quitRun(),
   });
-  const qualityBtn = document.createElement('button');
-  // The gear's CLASS does not come along with its style attribute.
-  qualityBtn.className = RIM;
-  qualityBtn.style.cssText = settings.button.getAttribute('style')
-    + 'width: auto; padding: 0 11px; margin-left: 6px;';
-  const labelQuality = (): void => { qualityBtn.textContent = QUALITY[quality].name; };
-  qualityBtn.onclick = () => {
-    quality = (quality + 1) % QUALITY.length;
-    applyQuality();
-    labelQuality();
-    void patchSave(umicat, { quality });
-  };
-  labelQuality();
-
-  buttons.append(qualityBtn);
   // The BUTTONS stay outside the plate — they carry their own backgrounds, and
   // a plate behind them would be a panel with two holes in it.
   hudEl.append(readoutPlate(line1, line2, buffEl, line3), buttons);

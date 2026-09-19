@@ -164,9 +164,10 @@ both, and the forest does NEITHER — it is outside the board, nobody looks at i
 shadows, and receiving costs shader work on every pixel of four hundred trees.
 Keeping it out of the shadow pass is most of what makes it free.
 
-The **middle rings are a separate mesh** (`forest_far`) so the picture-quality
-toggle can drop them: half the triangles on a board, and the rings nobody stands
-next to. Smooth takes a level from ~150k triangles to ~97k. The OUTERMOST ring
+The **middle rings are a separate mesh** (`forest_far`) so the cheap picture
+setting can drop them: half the triangles on a board, and the rings nobody
+stands next to. Smooth takes a level from ~150k triangles to ~97k. That setting
+is `?quality=0` now rather than a button — see *What the HUD no longer shows*. The OUTERMOST ring
 always stays — it is what hides the edge of the ground against the sky, and
 dropping it traded a frame for a visible seam.
 
@@ -751,7 +752,8 @@ way would cost hours per tweak, and this is a thing to tune by playing.
 
 `?dev` unlocks everything; `?dev=fire` (or `sword`/`bow`/`ice`/`bolt`, and
 `staff` still works and means `bolt`) also puts that weapon in your hand. **On a
-phone, three taps on the frame counter** does the same and reloads. The whole
+phone, three taps on the HUD and then three on the readout it raises** does
+the same and reloads. The whole
 weapon rack forged and improved to Lv3, all four boards in the list, every
 village building at level three — so the tower mounts and the Armory's cap both
 exist — and a store with enough in it to buy anything.
@@ -1918,10 +1920,27 @@ npx vite build    # dist/
 ./deploy-preview.sh
 ```
 
-The frame counter (`src/debughud.ts`) is on by DEFAULT, in the hub and in every
-level — `?debug=0` turns it off, and so do three quick taps on the HUD. The
-numbers that decide performance questions have to come from the phone, and the
-hub was the one place with no way to see what eleven hundred trees cost.
+### What the HUD no longer shows
+
+**The frame counter is OFF by default** (`src/debughud.ts`); `?debug=1` shows
+it, and so do three quick taps on the HUD. It was on by default for the whole
+build, which was right then and is a diagnostic sitting in the corner of a
+released game now.
+
+**The Sharp/Smooth pill is gone from beside the gear**, and the setting is not
+read back from the save either — a player who once tapped Smooth would be held
+there for good by a button that no longer exists. Sharp is what ships; it is
+measured at a steady 60 on an iPhone 14 Pro, which is the machine that decides
+it.
+
+Neither removal takes away the ability to MEASURE, which is the thing that
+matters: every performance decision here was made by reading the counter on a
+device. `?debug=1`, `?quality=0`, `?dpr` and `?shadow` all still work.
+
+**And the phone's way into the sandbox survives**, in two gestures rather than
+one: three taps on the HUD bring the readout up, three taps ON the readout are
+the sandbox. That matters because inside the iOS app the gesture is the only
+way in — the app builds the game's URL itself and passes nothing through.
 
 Probes live in `umicat-infra/playwright/`, 48 of them named `verify-3d-*`.
 **That list is not reproduced here** — it was, and it went stale twice: it named
@@ -2189,7 +2208,8 @@ that skips the feature you opened it to look at is worse than no sandbox,
 because it looks like it worked.
 
 Three taps on the frame counter **cycles** — off, everything, rich-and-empty,
-off. Two modes and one gesture, because inside the iOS app that gesture is the
+off. (The counter is hidden by default now, so this is preceded by three taps
+on the HUD to raise it.) Two modes and one gesture, because inside the iOS app that gesture is the
 only way in (the app builds the game's URL itself and passes nothing through),
 and a mode you cannot reach from it does not exist on a phone. The banner says
 which one is on: they hand you opposite villages.
