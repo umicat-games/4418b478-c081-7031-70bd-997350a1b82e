@@ -16,7 +16,19 @@ const CLIPS: Record<string, AudioClipSpec> = {
   'enemy-shot': { volume: 0.3, throttle: 40 },
   'enemy-die': { volume: 0.5, throttle: 40 },
   swing: { volume: 0.45, throttle: 120 },
-  'sword-hit': { volume: 0.55, throttle: 40 },
+  // The sword's connecting blow. Uploaded through the Assets tool, and the
+  // filename says "swing" — it is used as the HIT here, which is why the call
+  // site goes through `SFX.swordHit` rather than naming the file.
+  //
+  // Louder than the .55 the old clip carried: matched by measurement rather
+  // than by ear, over the loud quarter of each (0.356 against 0.408 RMS).
+  //
+  // Its own profile is a WHOOSH, not an impact — 0.79s long, peaking 86ms in,
+  // silent for the first 40 — so it arrives after the 60ms hitstop the hit
+  // sets, and two of them overlap at a swing every 0.417s. Kept while that is
+  // judged by ear; `sword-hit.ogg` is still in `public/audio/` and this is a
+  // one-line revert.
+  'swing-sword-sound.mp3': { volume: 0.62, throttle: 300 },
   'hero-hurt': { volume: 0.7, throttle: 200 },
   coin: { volume: 0.5, throttle: 40 },
   build: { volume: 0.6 },
@@ -70,6 +82,7 @@ export const SFX = {
   door: 'enter-door.mp3',
   enemySpawn: 'enemy-spawn.mp3',
   uiPress: 'ui-press',
+  swordHit: 'swing-sword-sound.mp3',
 } as const;
 
 /**

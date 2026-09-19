@@ -3542,7 +3542,7 @@ export async function startLevel(
     if (hitCrates(hero.position.x, hero.position.z, reach, 1)) connected = true;
     if (connected) {
       heroHits += 1;
-      audio.play('sword-hit');
+      audio.play(SFX.swordHit);
       // Longer for the heavier tiers: the freeze is how weight is expressed,
       // and a tier that hits harder should stop the world for longer.
       hitstop = HITSTOP_MS + (meleeImpact(runTier) ?? 0) * HITSTOP_MS * 0.6;

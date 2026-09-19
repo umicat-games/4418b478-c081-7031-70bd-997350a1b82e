@@ -1474,6 +1474,19 @@ into a strobe.
 Melee feel is a stack of small things, and they are not worth the same. In the
 order they paid off here:
 
+**The hit's own sound is `swing-sword-sound.mp3`, and it is on trial.** Its
+profile is a WHOOSH rather than an impact — 0.79s long, peaking 86ms in, with
+NOTHING in the first 40ms — measured the way the rest of this file measures
+sound. Two consequences to listen for: it arrives after the 60ms hitstop below,
+which is the beat it is supposed to land on, and at a swing every 0.417s two
+copies overlap. `sword-hit.ogg` is still in `public/audio/` and swapping back is
+one line in `audio.ts`.
+
+Worth keeping as a method rather than as a verdict: **an envelope tells you what
+a sound IS.** A real impact is `█▄▂▂▁` — loudest on its first sample. A whoosh
+swells and falls, `▁▂▆▆███▇▆▅▄▂▁`. That is a four-line measurement and it
+settles an argument that is otherwise about taste.
+
 **HITSTOP, and it is not close.** For sixty milliseconds after contact the world
 does not advance — the swing, the victim, the bullets in the air, all held. It
 reads as the blade MEETING something rather than passing through it, and it is
