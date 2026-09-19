@@ -254,6 +254,31 @@ export class BoardView {
     this.ghostMesh.position.copy(this.at(at.x, at.y));
   }
 
+  /**
+   * Where an intersection is on screen, in CSS pixels — the inverse of `pick`.
+   *
+   * This is what lets the coach point at things: a speech bubble anchored to
+   * D4 has to follow D4 when the camera turns, and "D4" in a chat log is a
+   * coordinate the player has to translate for themselves, which on a board
+   * with thirty stones on it they will get wrong.
+   */
+  screenOf(x: number, y: number): { x: number; y: number } {
+    const p = this.at(x, y).project(this.camera);
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return {
+      x: rect.left + ((p.x + 1) / 2) * rect.width,
+      y: rect.top + ((1 - p.y) / 2) * rect.height,
+    };
+  }
+
+  /** One line spacing, in screen pixels — how far a bubble has to sit from the
+   *  point it belongs to in order to clear the stone on it. */
+  get screenSpacing(): number {
+    const a = this.screenOf(0, 0);
+    const b = this.screenOf(1, 0);
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
   /** Which intersection is under this screen point, if any is close enough. */
   pick(clientX: number, clientY: number): Picked | null {
     const rect = this.renderer.domElement.getBoundingClientRect();

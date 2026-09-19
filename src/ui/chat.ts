@@ -29,6 +29,8 @@ export class ChatPanel {
   private thinking = false;
   private messages: ChatMessage[] = [];
   private listening: { cancel(): void; stop(): void } | null = null;
+  /** The bubble on the board is saying this already. */
+  private echoed = false;
 
   constructor(private umicat: ThreeUmicat, private opts: ChatOptions) {
     this.el = document.createElement('div');
@@ -86,6 +88,15 @@ export class ChatPanel {
     this.opts.onLayout?.(open);
   }
 
+  /** While the coach's line is up on the board, the pill must not repeat it —
+   *  the same sentence twice on one screen reads as a bug, and the pill's job
+   *  in that moment is only to be the way into the conversation. */
+  setEchoed(echoed: boolean): void {
+    if (echoed === this.echoed) return;
+    this.echoed = echoed;
+    this.render(this.messages, this.thinking);
+  }
+
   /** Redraw from the coach's message list. Cheap enough to call on every change:
    *  a Go conversation is tens of lines, not thousands. */
   render(messages: ChatMessage[], thinking: boolean): void {
@@ -93,7 +104,9 @@ export class ChatPanel {
     this.thinking = thinking;
 
     const last = [...messages].reverse().find((m) => m.from === 'coach');
-    this.pillText.textContent = thinking ? t('chat.thinking') : last?.text ?? t('chat.sayHello');
+    this.pillText.textContent = thinking ? t('chat.thinking')
+      : this.echoed && !this.open ? ''
+        : last?.text ?? t('chat.sayHello');
 
     this.log.replaceChildren(...messages.map((m) => {
       const div = document.createElement('div');

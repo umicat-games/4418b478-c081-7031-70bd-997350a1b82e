@@ -25,6 +25,7 @@ import { LEVELS, Opponent, levelById, levelLabel, type Read } from './go/opponen
 import { describe as describeScore, scoreFrom, type Score } from './go/scoring';
 import { Coach } from './coach/coach';
 import { ChatPanel } from './ui/chat';
+import { Speech, segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { showTitle } from './ui/title';
 import { Autosave, load } from './save';
@@ -54,6 +55,22 @@ async function start(): Promise<void> {
   const view = new BoardView(canvas);
   window.addEventListener('resize', () => view.resize());
 
+  // The coach's own voice, on the board. The chat panel keeps the history and
+  // is where the player types; this is where the coach is actually read.
+  const speech = new Speech({
+    onPage: (page) => {
+      // The point being talked about lights up for exactly as long as the
+      // sentence about it is on screen.
+      view.setHighlights(page.at ? [page.at] : []);
+      chat.setEchoed(true);
+      placeSpeech();
+    },
+    onDone: () => {
+      view.setHighlights([]);
+      chat.setEchoed(false);
+    },
+  });
+
   const opponent = new Opponent();
   // Begin the 4MB download now, behind the title screen, so that by the time
   // anyone has read two buttons there is nothing left to wait for.
@@ -67,12 +84,14 @@ async function start(): Promise<void> {
   function relabel(): void {
     for (const [btn, key] of labels) btn.textContent = t(key);
     chat.relabel();
+    speech.relabel();
     menu.sync({}, !!game && !game.over);
     refresh();
   }
 
   const frame = (): void => {
     if (idleSpin) view.orbit(0.0012, 0);
+    if (speech.showing) placeSpeech();
     view.render();
     requestAnimationFrame(frame);
   };
@@ -101,7 +120,12 @@ async function start(): Promise<void> {
   // ── the two voices ──────────────────────────────────────────────────────
   const chat = new ChatPanel(umicat, {
     onSend: (text) => void talk(text),
-    onLayout: (open) => view.reserveRight(open ? panelWidth() : 0),
+    onLayout: (open) => {
+      view.reserveRight(open ? panelWidth() : 0);
+      // Opening the panel means the player wants to read or type, not to be
+      // tapped through a bubble that says the same thing.
+      if (open) speech.hide();
+    },
   });
   const coach = new Coach(umicat, {
     setMode: (mode) => {
@@ -150,7 +174,42 @@ async function start(): Promise<void> {
   });
   coach.load(saved.messages, saved.profile);
 
-  const redrawChat = (): void => chat.render(coach.messages, coach.thinking);
+  /** Put the bubble where its sentence belongs. Runs every frame while it is
+   *  up, because the camera can move under it. */
+  function placeSpeech(): void {
+    const page = speech.current;
+    if (!page) return;
+    const box = speech.rect();
+    const margin = 10;
+    const free = window.innerWidth - (chat.isOpen ? panelWidth() : 0);
+
+    if (page.at && game) {
+      const p = view.screenOf(page.at.x, page.at.y);
+      const gap = view.screenSpacing * 0.7 + 12;
+      const x = Math.min(Math.max(p.x, box.width / 2 + margin), free - box.width / 2 - margin);
+      const top = p.y - gap;
+      // Above the point, unless there is no room up there — a bubble pinned to
+      // the top of the screen while pointing at a stone near it is pointing at
+      // nothing. Below, and the tail comes off, because it would be lying.
+      if (top - box.height >= margin) speech.place(x, top, Math.abs(x - p.x) < 2);
+      else speech.place(x, p.y + gap + box.height, false);
+      return;
+    }
+    speech.place(free / 2, Math.max(box.height + margin, 140), false);
+  }
+
+  /** How many coach lines have already been spoken aloud. */
+  let spoken = 0;
+  const redrawChat = (): void => {
+    chat.render(coach.messages, coach.thinking);
+    const said = coach.messages.filter((m) => m.from === 'coach');
+    if (said.length > spoken) {
+      spoken = said.length;
+      // Only the newest: if the coach got two lines in while the player was
+      // reading, the older one is history, and history is what the panel is for.
+      speech.show(segment(said[said.length - 1].text, game?.size ?? 9));
+    }
+  };
   redrawChat();
 
   async function talk(text: string): Promise<void> {
@@ -677,7 +736,6 @@ async function start(): Promise<void> {
   // The first thing that happens is the coach asking what the player came for
   // — unless it already knows, in which case asking again would be the rudest
   // possible way to greet someone who was here yesterday.
-  chat.setOpen(true);
   void coach.remark(
     coach.messages.length
       ? '(The student is back. Greet them briefly and pick up where you left off.)'
@@ -710,6 +768,8 @@ async function start(): Promise<void> {
       beginExercise: () => { if (course.phase === 'teach') { course.advance(); setUpPhase({ announce: false }); } },
       phase: () => course.phase,
       say: (text: string) => talk(text),
+      redraw: redrawChat,
+      speech,
       finish,
       get score() { return score; },
       board: () => game?.board.map((row) => row.map((c) => (c === 'black' ? 'b' : c === 'white' ? 'w' : '.')).join('')) ?? [],

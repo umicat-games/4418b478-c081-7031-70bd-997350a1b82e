@@ -1,0 +1,75 @@
+/* The coach's voice, on the board.
+ *
+ * A line in a chat log that says "D4 is the cutting point" asks the player to
+ * translate a coordinate into a place, on a board that may have thirty stones
+ * on it. A teacher sitting across the table does not do that — they point. So
+ * a sentence that names a point is shown AT that point, and the point lights
+ * up while it is being said. */
+
+#speech {
+  position: fixed;
+  z-index: 26; /* over the HUD (20) and the chat pill (25), under the menu (30) */
+  max-width: min(330px, 62vw);
+  padding: 11px 15px 13px;
+  border-radius: 14px;
+  background: rgba(16, 20, 27, 0.93);
+  border: 1px solid rgba(127, 214, 194, 0.45);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  color: #f4f5f7;
+  font: 15px/1.5 system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* Positioned by script, so transitions are on opacity only — animating the
+     offsets would make the bubble lag behind the camera. */
+  transition: opacity 0.16s ease;
+  /* The anchor is the point it is talking about; the bubble hangs above it. */
+  transform: translate(-50%, -100%);
+}
+#speech[hidden] { display: none; }
+#speech.fading { opacity: 0; }
+
+#speech .who {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #7fd6c2;
+  margin-bottom: 3px;
+}
+#speech .text { white-space: pre-wrap; word-break: break-word; }
+
+/* The "there is more" dot. Catopia's continue indicator, same idea: a page of
+   text with no sign that it continues is a page people sit and stare at. */
+#speech .more {
+  display: block;
+  width: 9px;
+  height: 9px;
+  margin: 8px 0 -4px auto;
+  border-radius: 50%;
+  background: #7fd6c2;
+  animation: speech-bob 1.1s ease-in-out infinite;
+}
+#speech .more[hidden] { display: none; }
+
+@keyframes speech-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50% { transform: translateY(3px); opacity: 1; }
+}
+
+/* The little tail, so the bubble reads as belonging to the point under it
+   rather than floating over the board at random. */
+#speech.anchored::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  transform: rotate(45deg);
+  background: rgba(16, 20, 27, 0.93);
+  border-right: 1px solid rgba(127, 214, 194, 0.45);
+  border-bottom: 1px solid rgba(127, 214, 194, 0.45);
+}
