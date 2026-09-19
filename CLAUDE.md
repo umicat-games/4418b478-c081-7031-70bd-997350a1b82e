@@ -3351,22 +3351,25 @@ The desktop pad's action button opts out with `data-mute-press`: it already
 makes the build or upgrade sound, and a click over that is two sounds for one
 press. The hotbar is not a `lift` at all, so it never had one.
 
-**The FIRST press of a session is silent, and it is the title's.** `GameAudio`
-creates its context and starts fetching every clip inside the first gesture —
-so on that gesture there is no decoded buffer yet. Measured in both engines: at
-the moment the title is pressed, **zero** audio files have been requested, the
-handler runs, the context is ready, and there is simply nothing to play.
+**The first press used to be silent, and it was the title's** — the one press
+every player makes. `GameAudio` created its context and started fetching every
+clip inside the first gesture, so on that gesture there was no decoded buffer;
+and `resume()` is asynchronous, so even with buffers ready a `play()` made
+inside the unlocking gesture finds `ready` false. Measured in both engines: at
+the moment the title was pressed, **zero** audio files had been requested.
 
-A retry was tried and removed. It cannot be made safe: the delay has to clear a
-fetch AND a decode, `setTimeout` drifts badly on a page rendering a 3D scene,
-and a retry landing outside the clip's throttle plays the click **twice on
-every ordinary button** — measured, two buffers for one press. A blip half a
-second after a press is not feedback.
+A retry was tried in this repo first and removed. It cannot be made safe: the
+delay has to clear a fetch AND a decode, `setTimeout` drifts badly on a page
+rendering a 3D scene, and a retry landing outside the clip's throttle plays the
+click **twice on every ordinary button** — measured, two buffers for one press.
+A blip half a second after a press is not feedback either.
 
-Fixing it properly needs a generic `preload()` on the SDK's audio, so a game
-can warm its clips before the first gesture. `start()` is private today. That
-is a capability every game with a title screen wants, so it belongs there — but
-it is an SDK change and a publish, and neither is taken on a whim.
+**@umicat/three-sdk 0.12.0** fixes it where it belongs, because warming audio
+before the first gesture is what every game with a title screen needs: a public
+`preload()` — called in `boot` while the loading screen is up — and a `play()`
+that HOLDS the request made during the unlock instead of dropping it. Measured
+on the deployed build, both engines: the title's first press now starts exactly
+one buffer.
 
 **The SDK's own controls are not covered and will not be.** `Input3D`'s
 joystick and round action buttons are styled from a module-private `CONTROL`

@@ -4650,10 +4650,13 @@ async function boot(): Promise<void> {
   const hudEl = document.getElementById('hud')!;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   const shared: Shared = { umicat, renderer, canvas, hudEl, audio: createAudio() };
-  // Wired before the title so nothing has to remember to do it later. The
-  // title's own press is still silent, and that is not this line's fault —
-  // see `pressSound`'s note in `audio.ts`.
   setLiftPressSound(() => shared.audio.play(SFX.uiPress));
+  // Fetch and decode the clips NOW, while the loading screen is still up.
+  // Left to itself the first gesture does both jobs — create the context and
+  // start the downloads — so a sound asked for on that gesture has no buffer
+  // and is dropped. That gesture is the title's own button, which is the one
+  // press every player makes. Not awaited: the point is to have started.
+  void shared.audio.preload();
   // Whatever the player set last time, before anything can be heard. Read here
   // rather than in the level because the audio outlives every scene — set in a
   // level and then not applied in the village is a setting that un-sets itself
