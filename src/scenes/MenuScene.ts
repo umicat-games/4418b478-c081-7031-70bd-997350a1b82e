@@ -57,7 +57,7 @@ const TAB_DEFS: Array<{ key: string; iconKey?: string; frame: number | string; t
   { key: 'catobag', frame: 310, title: '猫包' }, // white-cat-claw (all_icons region @96,304)
   { key: 'shop', frame: 229, title: '物品' },     // shop 物品 sub-tab (white-sprout placeholder icon; user picks a better one later)
   { key: 'settings', frame: 164, title: '设置' },
-  { key: 'calendar', frame: 294, title: '日历' }, // all_icons calendar-page glyph (row18 col6). Placeholder tab.
+  { key: 'calendar', iconKey: 'calendar-icon', frame: 0, title: '日历' }, // 日历 tab: uploaded calendar-icon (16×16)
   { key: 'pickup', frame: 293, title: '取货' },   // mailbox: delivered orders (icon tunable like paw)
   { key: 'forsale', frame: 294, title: '待售' },  // mailbox: shipping bin — `whilte-out` outbox glyph (all_icons x96,y288)
   { key: 'house', frame: 278, title: '房子' },    // shop 房子 sub-tab (white-home = all_icons row17 col6, under white-cart 262)
@@ -759,7 +759,7 @@ export class MenuScene extends Phaser.Scene {
     // The content is TALLER than the frame → it SCROLLS: `this.scroll` is a PIXEL offset here (the
     // rail sets it via setScroll, same as the grids' row offset), applied to every element + its
     // hit-rect, with a mask clipping to the visible band. Compute the extent first so we can clamp.
-    const rowH = H * 0.033, gap = H * 0.009, step = rowH + gap, box = H * 0.022;
+    const rowH = H * 0.05, gap = H * 0.014, step = rowH + gap, box = H * 0.03;
     const nFlags = DEBUG_PANEL ? DEBUG_FLAGS.length : 0;
     const nDebugActs = DEBUG_PANEL ? 3 : 0; // camera-toggle + 1h skip + 1day skip (moved here off the main scene)
     const contentTop = 0.282 * H, contentBottom = 0.905 * H, visibleH = contentBottom - contentTop;
@@ -803,7 +803,7 @@ export class MenuScene extends Phaser.Scene {
     if (DEBUG_PANEL) {
       c.add(this.T(cx, 0.755 * H - off, t('settings_debug'), H * 0.024, INK));
       c.add(this.T(cx, 0.782 * H - off, t('settings_debug_note'), H * 0.015, SUB));
-      const rowW = lw * 0.66, rowLeft = cx - rowW / 2;
+      const rowW = lw * 0.78, rowLeft = cx - rowW / 2;
       // Test-tool BUTTONS (moved off the main scene): camera-mode toggle + time skips.
       const ctrlOn = !!this.registry.get('debugControlOn');
       [
@@ -815,7 +815,7 @@ export class MenuScene extends Phaser.Scene {
         const g = this.add.graphics();
         g.fillStyle(0xcdb892, 1); g.fillRoundedRect(rowLeft, ay, rowW, rowH, 6);
         g.lineStyle(2, 0x9a7b4f, 1); g.strokeRoundedRect(rowLeft, ay, rowW, rowH, 6); c.add(g);
-        c.add(this.T(cx, ay + rowH / 2, a.label, H * 0.019, INK));
+        c.add(this.T(cx, ay + rowH / 2, a.label, H * 0.022, INK));
         acts.push({ x: rowLeft, y: ay, w: rowW, h: rowH, action: a.action });
       });
       DEBUG_FLAGS.forEach((f, i0) => {
@@ -824,7 +824,7 @@ export class MenuScene extends Phaser.Scene {
         const g = this.add.graphics();
         g.fillStyle(0x000000, 0.05); g.fillRoundedRect(rowLeft, ry, rowW, rowH, 6); c.add(g);
         const label = (f.reloadOnly ? '★ ' : '') + t(f.labelKey);
-        c.add(this.T(rowLeft + box * 0.6, ry + rowH / 2, label, H * 0.02, INK, 0));
+        c.add(this.T(rowLeft + box * 0.6, ry + rowH / 2, label, H * 0.022, INK, 0));
         const bx = rowLeft + rowW - box * 1.1, by2 = ry + (rowH - box) / 2;
         const cb = this.add.graphics();
         cb.fillStyle(on ? 0x6bbf59 : 0xd8cbb0, 1); cb.fillRoundedRect(bx, by2, box, box, 4);
