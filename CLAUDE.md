@@ -1488,6 +1488,17 @@ into a strobe.
 Melee feel is a stack of small things, and they are not worth the same. In the
 order they paid off here:
 
+**Clearing a board plays `victory-sound.mp3`** — 3.0s, three note onsets,
+resolving into silence, against the 0.79s single flat block it replaced, which
+could not hold a phrase at all. `endRun` ducks the music for ten seconds, so
+there is room for it.
+
+`win.ogg` had been doing THREE jobs: the clear, a rare crate's buff, and the
+level bar wrapping in the summary. Only the first is the fanfare; the other two
+keep the short blip and now read as themselves at the call site
+(`SFX.buffPickup`, `SFX.levelUp`). A crate that blares a victory phrase is a
+crate claiming to have ended the run.
+
 **A swing makes ONE sound: the blow.** Three clips used to start in the
 SAME millisecond — the melee damage loop runs synchronously inside
 `heroAttack`, right after the sound line — and two of them were whooshes 290Hz
@@ -2031,6 +2042,15 @@ per board and there were seventeen.
 A probe must not hard-code a tuning number. Several asserted `heroHp === 6` and
 `lives === 10`, so raising either broke them without saying anything about the
 game; they read the board's own numbers now.
+
+**A probe hears NOTHING unless it makes a real gesture.** `pw-title.mjs` presses
+the title with `go.click()` — a synthetic event, which is not a trusted user
+gesture, so the audio context never resumes and every `play()` is dropped in
+silence. Measured: a whole tutorial board cleared with `window.__started` empty,
+and the same run with one `page.mouse.click()` in it recorded the clip exactly.
+**That failure looks identical to "the new sound is not wired up"**, and it cost
+three runs to tell apart. Any probe asking what played needs one real pointer
+event first.
 
 **Run a probe with the machine to itself.** The warning below is written under
 the balance bot, but it is not about the bot: anything measured in GAME time

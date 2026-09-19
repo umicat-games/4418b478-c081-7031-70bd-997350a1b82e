@@ -2048,7 +2048,7 @@ export async function startLevel(
         const kind = pool[Math.floor(Math.random() * pool.length)];
         buff = { kind, left: BUFF_SECONDS };
         flashBanner(kind.label, kind.badge, 2600);
-        audio.play('win');
+        audio.play(SFX.buffPickup);
         flashTint(hero, { color: 0xffd45e, ms: 500 });
         renderHud();
         c.obj.visible = false;
@@ -3009,7 +3009,7 @@ export async function startLevel(
     input.setEnabled(false);
     hotbar.style.display = 'none';
     audio.duck(10);
-    audio.play(didWin ? 'win' : 'lose');
+    audio.play(didWin ? SFX.victory : 'lose');
     const reached = Math.min(waveIndex + 1, WAVES.length);
     if (reached > bestWave) bestWave = reached;
     // The shared board. A guest run is not recorded — writing needs a signed-in
@@ -3142,7 +3142,7 @@ export async function startLevel(
         lv += 1; have = 0;
         lvEl.textContent = `Level ${lv}`;
         lvEl.style.color = '#ffd45e';
-        audio.play('win');
+        audio.play(SFX.levelUp);
         bar.style.transition = 'none';
         bar.style.width = '0%';
         await new Promise((r) => setTimeout(r, 40));

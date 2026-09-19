@@ -66,6 +66,19 @@ const CLIPS: Record<string, AudioClipSpec> = {
   denied: { volume: 0.5 },
   leak: { volume: 0.7 },
   wave: { volume: 0.6 },
+  // CLEARING A BOARD. Uploaded through the Assets tool. A phrase rather than a
+  // blip, which is what the old one could not be: 3.0s against 0.79s, three
+  // note onsets against one, and it resolves into silence instead of stopping.
+  // There is room for it because `endRun` ducks the music for ten seconds.
+  //
+  // Volume matched by measurement over the loud part of each, not by ear:
+  // 0.344 RMS against the old clip's 0.261 at 0.8.
+  'victory-sound.mp3': { volume: 0.62 },
+  // NOT the victory sound any more, and the name is historical. One clip, two
+  // small good things: a rare crate's buff and the level bar wrapping in the
+  // summary — `SFX.buffPickup` and `SFX.levelUp`. All THREE used to share it,
+  // and a crate that blares a full victory phrase is a crate claiming to have
+  // ended the run.
   win: { volume: 0.8 },
   lose: { volume: 0.7 },
 };
@@ -84,6 +97,9 @@ export const SFX = {
   enemySpawn: 'enemy-spawn.mp3',
   uiPress: 'ui-press',
   swordHit: 'swing-sword-sound.mp3',
+  victory: 'victory-sound.mp3',
+  buffPickup: 'win',
+  levelUp: 'win',
 } as const;
 
 /**
