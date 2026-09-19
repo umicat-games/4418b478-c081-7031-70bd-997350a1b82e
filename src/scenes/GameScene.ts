@@ -196,7 +196,11 @@ const SPAWN_WILD = false;
 // Weather = a TIME-tinted background (fills the window) + a transparent weather icon
 // on top. Sunny only for now (decorative); the icon cycles per day for variety.
 const WEATHER_ICONS = ['sunny-no-bg', 'partial-sunny-no-bg', 'sunny-with-cloud-no-bg'];
-const WEATHER_SALT = 0x5ea50; // day-seed for the random daily weather (weatherOfDay)
+const WEATHER_SALT = 0x5ea50; // seed for the random weather (weatherOfDay)
+// Weather is re-rolled per SEGMENT of the real day, NOT once for the whole day — a full real day of
+// rain is too long when the clock is real-time. 4 = quarter-day (~6 real hours per weather); bump to
+// 2 for half-days. Segments align to dawn/noon/dusk/midnight via dayFrac (which starts at 6am).
+const WEATHER_SLOTS_PER_DAY = 4;
 const WEATHER_BGS = ['background-morning', 'background-noon', 'background-night']; // by time of day
 // Leash: Cato stays near the CAMERA CENTRE (in view) instead of roaming the whole
 // map. The radius ADAPTS to the visible area (`wanderLeashRadius`) so he keeps in
@@ -11907,16 +11911,23 @@ export class GameScene extends Phaser.Scene {
     return h >= SLEEP_START_HOUR || h < SLEEP_END_HOUR;
   }
 
-  /** The weather for the current calendar day. The debug flags OVERRIDE it (one at a time, heavy
-   *  wins — for testing); with NO flag set it's a deterministic RANDOM weather per real day: mostly
-   *  clear, sometimes light/heavy rain or (heavy) fog. Deterministic per `dayCount` → stable all day,
-   *  fresh each day, no flicker, no save needed (same daily-seed pattern as the grass decoration). */
+  /** Which weather SEGMENT of the real day we're in (0..WEATHER_SLOTS_PER_DAY-1), by time-of-day. */
+  private weatherSlot(): number {
+    return Math.min(WEATHER_SLOTS_PER_DAY - 1, Math.floor(this.dayFrac() * WEATHER_SLOTS_PER_DAY));
+  }
+
+  /** The current weather. The debug flags OVERRIDE it (one at a time, heavy wins — for testing); with
+   *  NO flag set it's a deterministic RANDOM weather per (day, SEGMENT): mostly clear, sometimes
+   *  light/heavy rain or (heavy) fog. A full real day of rain was too long, so it re-rolls every
+   *  WEATHER_SLOTS_PER_DAY-th of the day (~6h). Deterministic per `(dayCount, weatherSlot)` → stable
+   *  within the segment, no flicker, no save needed (same seeded-hash pattern as the grass decoration).
+   *  NB: the name stays `weatherOfDay` because every consumer calls it each frame. */
   private weatherOfDay(): 'clear' | 'light-rain' | 'heavy-rain' | 'fog' | 'heavy-fog' {
     if (isDebug('rain')) return 'heavy-rain';
     if (isDebug('lightRain')) return 'light-rain';
     if (isDebug('heavyFog')) return 'heavy-fog';
     if (isDebug('fog')) return 'fog';
-    const r = this.cellHash(this.dayCount, 7, WEATHER_SALT);
+    const r = this.cellHash(this.dayCount, this.weatherSlot(), WEATHER_SALT);
     if (r < 0.64) return 'clear';        // ~64% clear
     if (r < 0.76) return 'light-rain';   // ~12%
     if (r < 0.84) return 'heavy-rain';   // ~8%
