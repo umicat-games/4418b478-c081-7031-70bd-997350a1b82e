@@ -26,6 +26,12 @@ import { LEVELS } from '../go/opponent';
 /** What the coach is allowed to ask the game to do. Deliberately short: each
  *  one is a thing a player could do from the menus anyway. */
 const ACTIONS = [
+  // The first thing the coach learns about anybody, and until this existed it
+  // had nowhere to put the answer: it asked "here to learn or to play?", was
+  // told, and forgot — so the game never switched teaching on and the coach
+  // went quiet after every move. The question was in the playbook; the place to
+  // write the answer down was not.
+  { name: 'set_mode', description: 'Record what the student is here for: "learning" (teach as you go) or "playing" (mostly quiet). Set it as soon as you know.', args: { mode: 'string' } },
   { name: 'set_board_size', description: 'Change the board to 9, 13 or 19. Only between games.', args: { size: 'integer' } },
   { name: 'set_level', description: `How hard the opponent plays. One of: ${LEVELS.map((l) => l.id).join(', ')}.`, args: { level: 'string' } },
   { name: 'start_game', description: 'Begin a new game. handicap 0-5 stones for the student.', args: { handicap: 'integer' } },
@@ -43,6 +49,8 @@ export interface Profile {
    *  `summarise()` and fed back in as observation — this IS the long memory. */
   summary: string;
   gamesPlayed: number;
+  /** The language the UI is in, once the player has shown us which it is. */
+  lang?: string;
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -53,6 +61,7 @@ export interface ChatMessage { from: 'coach' | 'player'; text: string; at: numbe
 
 /** What the game lets the coach change. Each of these validates, and may say no. */
 export interface CoachHooks {
+  setMode(mode: CoachMode): void;
   setBoardSize(size: number): boolean;
   setLevel(level: string): boolean;
   startGame(handicap: number): boolean;
@@ -121,6 +130,14 @@ export class Coach {
    *  choosing it is a request, not permission. */
   private execute(name: string, args: Record<string, unknown>): void {
     switch (name) {
+      case 'set_mode': {
+        const mode = String(args.mode ?? '');
+        if (mode === 'learning' || mode === 'playing') {
+          this.profile.mode = mode;
+          this.hooks.setMode(mode);
+        }
+        return;
+      }
       case 'set_board_size': {
         const size = Number(args.size);
         if ([9, 13, 19].includes(size) && this.hooks.setBoardSize(size)) this.profile.boardSize = size as 9 | 13 | 19;

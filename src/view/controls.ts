@@ -83,11 +83,16 @@ export function attachBoardControls(
 
   const onMove = (e: PointerEvent): void => {
     if (!enabled || !active.has(e.pointerId)) {
-      // A mouse moves with no button down; only the camera drag cares.
       if (mode === 'camera' && e.pointerType !== 'touch') {
         h.onCamera(-(e.clientX - last.x) * TURN_PER_PX, -(e.clientY - last.y) * TURN_PER_PX);
         last = { x: e.clientX, y: e.clientY };
+        return;
       }
+      // A mouse moving with no button down still deserves an answer: the ghost
+      // follows the cursor, which is what tells a first-time player that the
+      // board takes stones at all, and which intersection this one would go on.
+      // Touch has no hover — that is what the aim-then-confirm step is for.
+      if (mode === 'idle' && e.pointerType !== 'touch') h.onAim(pick(e.clientX, e.clientY));
       return;
     }
     active.set(e.pointerId, { x: e.clientX, y: e.clientY });

@@ -36,6 +36,8 @@ const EN = {
   'hud.whiteResigned': 'White resigned — game over.',
   'hud.engineStumbled': 'The engine stumbled — your move again.',
   'hud.looking': 'Looking…',
+  'hud.howToPlaceMouse': 'Click an intersection to place a stone.',
+  'hud.howToPlaceTouch': 'Touch the board, slide to aim, then tap Place.',
   'hud.engineWouldPlay': 'The engine would play {point}.',
   'hud.engineWouldPass': 'The engine would pass.',
 
@@ -105,6 +107,8 @@ const ZH: Partial<Record<Key, string>> = {
   'hud.whiteResigned': '白棋认输 —— 本局结束。',
   'hud.engineStumbled': '引擎出了点岔子 —— 请再下一手。',
   'hud.looking': '正在看…',
+  'hud.howToPlaceMouse': '点一下交叉点就能落子。',
+  'hud.howToPlaceTouch': '手指按住棋盘挪到位置,再点「落子」。',
   'hud.engineWouldPlay': '引擎会下 {point}。',
   'hud.engineWouldPass': '引擎会停一手。',
 
@@ -154,10 +158,29 @@ const ZH: Partial<Record<Key, string>> = {
 const TABLES: Record<string, Partial<Record<Key, string>>> = { 'zh-CN': ZH, zh: ZH, 'zh-TW': ZH, 'zh-HK': ZH };
 
 let table: Partial<Record<Key, string>> = {};
+let current = 'en';
+
+/** Which language the UI is speaking right now. */
+export const locale = (): string => current;
+
+/**
+ * Guess a language from something the player wrote.
+ *
+ * The platform's locale is an account setting, and an account set to English
+ * says nothing about the person typing Chinese into the chat box — which is
+ * exactly what happened the first time someone used the coach. What someone
+ * types is the better evidence of what they want to read, so the UI follows it.
+ * Only CJK is detected, because that is the only case where guessing wrong is
+ * cheap: a Latin-script language is left alone rather than mangled into English.
+ */
+export function guessLocale(text: string): string | null {
+  return /[\u3400-\u9fff\uf900-\ufaff]/.test(text) ? 'zh-CN' : null;
+}
 
 /** Call once, as early as the platform hands over a locale. */
-export function setLocale(locale: string | undefined): void {
-  table = TABLES[locale ?? ''] ?? TABLES[(locale ?? '').split('-')[0]] ?? {};
+export function setLocale(next: string | undefined): void {
+  current = next || 'en';
+  table = TABLES[current] ?? TABLES[current.split('-')[0]] ?? {};
 }
 
 /** A string, with `{name}` placeholders filled in. */

@@ -28,17 +28,17 @@ import { ChatPanel } from './ui/chat';
 import { Menu } from './ui/menu';
 import { showTitle } from './ui/title';
 import { Autosave, load } from './save';
-import { setLocale, t } from './i18n';
+import { guessLocale, locale as uiLocale, setLocale, t } from './i18n';
 
 /** The player is Black: Black moves first, and the beginner should be the one
  *  who gets to start rather than the one who has to answer. */
 const HUMAN = 'black' as const;
 
 /** How many of Black's points have to evaporate on Black's own move before the
- *  coach says something. Small enough to catch a real blunder, big enough that
- *  it is not commenting on every slightly loose move. */
+ *  coach mentions it UNASKED while they are just playing. Small enough to catch
+ *  a real blunder, big enough not to natter about every slightly loose move. */
 const BLUNDER_POINTS = 5;
-/** Moves of quiet after a remark, so the coach does not become a narrator. */
+/** Moves of quiet after an unprompted remark, so the coach is not a narrator. */
 const REMARK_COOLDOWN = 4;
 
 async function start(): Promise<void> {
@@ -60,6 +60,14 @@ async function start(): Promise<void> {
   // title over it — which is also what hides the engine download: by the time
   // anyone has read two buttons there is nothing left to wait for.
   let idleSpin = true;
+  /** Re-read every fixed string after the UI language changes. */
+  function relabel(): void {
+    for (const [btn, key] of labels) btn.textContent = t(key);
+    chat.relabel();
+    menu.sync({}, !!game && !game.over);
+    refresh();
+  }
+
   const frame = (): void => {
     if (idleSpin) view.orbit(0.0012, 0);
     view.render();
@@ -68,6 +76,9 @@ async function start(): Promise<void> {
   frame();
 
   const saved = await load(umicat);
+  // A returning player's own language beats the account setting that was only
+  // ever a guess about them.
+  if (saved.profile.lang) setLocale(saved.profile.lang);
   const autosave = new Autosave(umicat);
 
   let game: GoGame | null = null;
@@ -86,6 +97,14 @@ async function start(): Promise<void> {
     onLayout: (open) => view.reserveRight(open ? panelWidth() : 0),
   });
   const coach = new Coach(umicat, {
+    setMode: (mode) => {
+      persist();
+      // Teaching needs a baseline read of the position the student is about to
+      // move in, and that only starts being taken once the mode says so — so
+      // the switch has to reach the CURRENT game, not just the next one.
+      if (mode === 'learning') void observePosition();
+      refresh();
+    },
     setBoardSize: (size) => {
       // Mid-game is exactly when a model is most likely to try this, because
       // the student just asked "can we play on a bigger board?".
@@ -103,6 +122,13 @@ async function start(): Promise<void> {
   redrawChat();
 
   async function talk(text: string): Promise<void> {
+    const guessed = guessLocale(text);
+    if (guessed && guessed !== uiLocale()) {
+      setLocale(guessed);
+      coach.profile.lang = guessed;
+      relabel();
+      persist();
+    }
     redrawChat();
     await coach.ask(text, { game, read });
     redrawChat();
@@ -123,6 +149,15 @@ async function start(): Promise<void> {
   // ── the board ───────────────────────────────────────────────────────────
   const status = document.createElement('div');
   hud.appendChild(status);
+  // How to play a stone at all. Shown until the player has played one, ever —
+  // the first session had someone sitting in front of their own turn with no
+  // idea the board was waiting for them.
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  hud.appendChild(tip);
+  /** True on a device that has no mouse, which is also the one that needs the
+   *  two-step placement explained. */
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
 
   function refresh(): void {
     if (game) view.sync(game);
@@ -139,6 +174,10 @@ async function start(): Promise<void> {
         : game.toPlay === HUMAN ? t('hud.yourMove', { level: levelLabel(level.id) }) : t('hud.whiteToPlay');
     }
     confirmBtn.hidden = !armed;
+    const green = !!game && !game.over && game.toPlay === HUMAN && !thinking;
+    tip.textContent = green && coach.profile.gamesPlayed === 0 && game.turns.length < 2
+      ? t(coarse ? 'hud.howToPlaceTouch' : 'hud.howToPlaceMouse')
+      : '';
   }
 
   function newGame(size: BoardSize, handicap: number): void {
@@ -157,6 +196,18 @@ async function start(): Promise<void> {
     persist();
     if (game.toPlay !== HUMAN) void engineTurn();
     else void observePosition();
+
+    // "Right, let's begin" followed by nothing is how the first teaching
+    // session actually went: the coach announced a game and then waited, and
+    // the student had no idea it was their turn or where to put anything.
+    if (coach.profile.mode === 'learning') {
+      void remark(
+        `A new teaching game has just started on a ${size}x${size} board` +
+        `${handicap ? ` with ${handicap} handicap stones for the student` : ''}. ` +
+        'They are Black and it is their move. Tell them the ONE concrete thing to do now — ' +
+        'a point to play and why it is a reasonable first move — not a summary of the rules.',
+      );
+    }
   }
 
   /** Read the position the player is about to move in — the baseline a blunder
@@ -213,20 +264,27 @@ async function start(): Promise<void> {
       // Judge the student's move only against a baseline that exists, and only
       // once the engine has answered — a lead that moved because of White's
       // reply is not the student's mistake.
-      if (!game || leadBeforePlayer === null || !read) return;
+      if (!game || game.over || leadBeforePlayer === null || !read) return;
       const lost = leadBeforePlayer - read.scoreLead;
-      if (lost >= BLUNDER_POINTS && game.turns.length - lastRemarkAt >= REMARK_COOLDOWN) {
-        void remark(
-          `The student played ${played}. The engine's estimate of their lead fell by ` +
-          `${lost.toFixed(1)} points, to ${read.scoreLead.toFixed(1)}. Its own choices were ` +
-          `${read.candidates.slice(0, 3).map((c) => toGtp(c.x, c.y, game!.size)).join(', ')}.`,
-        );
-      }
+      const better = read.candidates.slice(0, 3).map((c) => toGtp(c.x, c.y, game!.size)).join(', ');
+      const note =
+        `The student played ${played}. By the engine's count that changed their lead by ` +
+        `${(-lost).toFixed(1)} points, to ${read.scoreLead.toFixed(1)}. It would have played ${better}.`;
+
+      // A student who said they are here to LEARN gets a word every move. That
+      // is what being taught is; waiting for a five-point blunder before saying
+      // anything is what "the coach never talks" looked like from the outside.
+      // Someone who came to play gets left alone unless something happened.
+      if (coach.profile.mode === 'learning') void remark(note);
+      else if (lost >= BLUNDER_POINTS && game.turns.length - lastRemarkAt >= REMARK_COOLDOWN) void remark(note);
     })();
   }
 
   attachBoardControls(canvas, (x, y) => view.pick(x, y), {
-    onAim: (at) => view.setGhost(at && game?.legal(at.x, at.y) ? at : null, HUMAN),
+    onAim: (at) => {
+      const playable = game && !game.over && !thinking && game.toPlay === HUMAN ? game : null;
+      view.setGhost(at && playable?.legal(at.x, at.y) ? at : null, HUMAN);
+    },
     onArmed: (at) => {
       armed = at && game?.legal(at.x, at.y) ? at : null;
       view.setGhost(armed, HUMAN);
@@ -241,11 +299,13 @@ async function start(): Promise<void> {
   const bar = document.createElement('div');
   bar.className = 'bar';
   hud.appendChild(bar);
-  const button = (label: string, onClick: () => void): HTMLButtonElement => {
+  const labels: Array<[HTMLButtonElement, Parameters<typeof t>[0]]> = [];
+  const button = (key: Parameters<typeof t>[0], onClick: () => void): HTMLButtonElement => {
     const b = document.createElement('button');
-    b.textContent = label;
+    b.textContent = t(key);
     b.onclick = onClick;
     bar.appendChild(b);
+    labels.push([b, key]);
     return b;
   };
   const menu = new Menu(
@@ -255,7 +315,7 @@ async function start(): Promise<void> {
       onStart: ({ size, handicap }) => newGame(size, handicap),
     },
   );
-  button(t('btn.setup'), () => {
+  button('btn.setup', () => {
     menu.sync({ size: game?.size ?? coach.profile.boardSize, level: level.id }, !!game && !game.over);
     menu.toggle();
   });
@@ -268,7 +328,7 @@ async function start(): Promise<void> {
    * not involved — if they want to know WHY, they can ask, and that is the call
    * worth paying for.
    */
-  const hintBtn = button(t('btn.hint'), async () => {
+  const hintBtn = button('btn.hint', async () => {
     if (!game || game.over || thinking || game.toPlay !== HUMAN) return;
     hintBtn.disabled = true;
     const was = status.textContent;
@@ -289,9 +349,9 @@ async function start(): Promise<void> {
     }
   });
 
-  const confirmBtn = button(t('btn.place'), () => { if (armed) commit(armed); });
+  const confirmBtn = button('btn.place', () => { if (armed) commit(armed); });
   confirmBtn.hidden = true;
-  button(t('btn.pass'), () => {
+  button('btn.pass', () => {
     if (!game || thinking || game.over) return;
     game.pass();
     refresh();
@@ -299,7 +359,7 @@ async function start(): Promise<void> {
     if (game.over) void finish();
     else void engineTurn();
   });
-  button(t('btn.resign'), () => {
+  button('btn.resign', () => {
     if (!game || game.over) return;
     if (!window.confirm(t('confirm.resign'))) return;
     game.resign(HUMAN);
@@ -307,7 +367,7 @@ async function start(): Promise<void> {
     persist();
     void finish();
   });
-  button(t('btn.recentre'), () => view.resetCamera());
+  button('btn.recentre', () => view.resetCamera());
 
   // ── saving ──────────────────────────────────────────────────────────────
   function persist(): void {

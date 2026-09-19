@@ -44,10 +44,6 @@ export class ChatPanel {
       </div>`;
     document.body.appendChild(this.el);
 
-    this.el.querySelector('.pill .who')!.textContent = t('chat.coach');
-    this.el.querySelector('.pill .more')!.textContent = t('chat.tap');
-    (this.el.querySelector('input') as HTMLInputElement).placeholder = t('chat.ask');
-
     this.log = this.el.querySelector('.log')!;
     this.pillText = this.el.querySelector('.pill .text')!;
     this.input = this.el.querySelector('input')!;
@@ -62,6 +58,16 @@ export class ChatPanel {
     // the browser's recogniser nor a native host bridge, a mic button is a
     // button that does nothing — worse than no button.
     if (umicat.voice.supported()) this.micBtn.hidden = false;
+    this.relabel();
+  }
+
+  /** Re-read every fixed string. Called when the UI language changes under us —
+   *  which it does the first time a player types in Chinese. */
+  relabel(): void {
+    this.el.querySelector('.pill .who')!.textContent = t('chat.coach');
+    this.el.querySelector('.pill .more')!.textContent = t(this.open ? 'chat.close' : 'chat.tap');
+    this.input.placeholder = t('chat.ask');
+    this.render(this.messages, this.thinking);
   }
 
   toggle(): void { this.setOpen(!this.open); }
