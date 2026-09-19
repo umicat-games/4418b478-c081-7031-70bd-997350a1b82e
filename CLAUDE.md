@@ -3337,6 +3337,37 @@ Four more things that were not obvious:
   read the old shadow and reported the `:disabled` rule dead when it was fine.
   Wait past the transition before measuring.
 
+### The press has a sound, and the first one of a session does not
+
+Kenney's Interface Sounds `click_001`, CC0, as `public/audio/ui-press.ogg` —
+0.10s, and quiet at source, which is why its `volume` is high for what is only
+a click. It plays on `pointerdown` from the same delegated handler that adds
+`pressed`, so the sound and the movement are one event rather than two things
+that have to be kept in step. `buttons.ts` takes it as a HOOK
+(`setLiftPressSound`) rather than importing the audio module, and `boot` wires
+it.
+
+The desktop pad's action button opts out with `data-mute-press`: it already
+makes the build or upgrade sound, and a click over that is two sounds for one
+press. The hotbar is not a `lift` at all, so it never had one.
+
+**The FIRST press of a session is silent, and it is the title's.** `GameAudio`
+creates its context and starts fetching every clip inside the first gesture —
+so on that gesture there is no decoded buffer yet. Measured in both engines: at
+the moment the title is pressed, **zero** audio files have been requested, the
+handler runs, the context is ready, and there is simply nothing to play.
+
+A retry was tried and removed. It cannot be made safe: the delay has to clear a
+fetch AND a decode, `setTimeout` drifts badly on a page rendering a 3D scene,
+and a retry landing outside the clip's throttle plays the click **twice on
+every ordinary button** — measured, two buffers for one press. A blip half a
+second after a press is not feedback.
+
+Fixing it properly needs a generic `preload()` on the SDK's audio, so a game
+can warm its clips before the first gesture. `start()` is private today. That
+is a capability every game with a title screen wants, so it belongs there — but
+it is an SDK change and a publish, and neither is taken on a whim.
+
 **The SDK's own controls are not covered and will not be.** `Input3D`'s
 joystick and round action buttons are styled from a module-private `CONTROL`
 const with no export and no hook, so on a phone they keep their own look. How a

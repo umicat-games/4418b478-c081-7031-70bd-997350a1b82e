@@ -49,7 +49,7 @@ import {
   type Material, type Materials,
 } from './progress';
 import type { GameAudio } from '@umicat/three-sdk';
-import { installLiftStyles, LIFT, RIM } from './buttons';
+import { installLiftStyles, setLiftPressSound, LIFT, RIM } from './buttons';
 
 /**
  * Woodland Defense — a tower defense you can walk around in.
@@ -4650,6 +4650,10 @@ async function boot(): Promise<void> {
   const hudEl = document.getElementById('hud')!;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   const shared: Shared = { umicat, renderer, canvas, hudEl, audio: createAudio() };
+  // Wired before the title so nothing has to remember to do it later. The
+  // title's own press is still silent, and that is not this line's fault —
+  // see `pressSound`'s note in `audio.ts`.
+  setLiftPressSound(() => shared.audio.play(SFX.uiPress));
   // Whatever the player set last time, before anything can be heard. Read here
   // rather than in the level because the audio outlives every scene — set in a
   // level and then not applied in the village is a setting that un-sets itself

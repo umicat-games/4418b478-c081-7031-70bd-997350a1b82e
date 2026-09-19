@@ -20,6 +20,13 @@ const CLIPS: Record<string, AudioClipSpec> = {
   'hero-hurt': { volume: 0.7, throttle: 200 },
   coin: { volume: 0.5, throttle: 40 },
   build: { volume: 0.6 },
+  // The press under every raised button. Kenney's Interface Sounds
+  // `click_001`, CC0 — 0.10s, and QUIET at source (RMS 0.048 against `build`'s
+  // own), which is why the volume here is high for what is only a click.
+  //
+  // Throttled: a modal's OK and whatever it opens can land inside one frame,
+  // and two clicks on one press reads as a rattle.
+  'ui-press': { volume: 0.55, throttle: 60 },
   upgrade: { volume: 0.65 },
   // Uploaded through the Assets tool, and `.mp3` while the rest are `.ogg`.
   // The key IS the filename when it carries an extension, which is how a game
@@ -62,7 +69,31 @@ export const SFX = {
   upgradeTower: 'upgrade-weapon.mp3',
   door: 'enter-door.mp3',
   enemySpawn: 'enemy-spawn.mp3',
+  uiPress: 'ui-press',
 } as const;
 
+/**
+ * The click under a button — and why the FIRST press of a session is silent.
+ *
+ * `GameAudio` creates its context and starts fetching every clip inside the
+ * first gesture (its `start()` is private; the game cannot warm it earlier).
+ * On that gesture there is therefore no decoded buffer yet, and `play()`
+ * returns without a sound. The gesture in question is the title screen's own
+ * button, which is the one press every player makes.
+ *
+ * Measured, both engines: at the moment the title is pressed, ZERO audio files
+ * have been requested. The press runs the handler and the context is ready —
+ * there is simply nothing to play.
+ *
+ * A retry was tried and taken out again. It cannot be made safe: the delay has
+ * to clear a fetch and a decode, `setTimeout` drifts badly on a page rendering
+ * a 3D scene, and a retry that lands outside the clip's throttle window plays
+ * the click TWICE on every ordinary button — measured, two buffers for one
+ * press. A blip 500ms after a press is not feedback anyway.
+ *
+ * Every press after the first one sounds. Making the first one sound needs a
+ * generic `preload()` on the SDK's audio — which is a capability every game
+ * with a title screen wants, not a Balaboo-shaped one.
+ */
 export const createAudio = (): GameAudio =>
   new GameAudio({ clips: CLIPS, base: 'audio/', music: MUSIC.lobby, musicVolume: 0.3 });

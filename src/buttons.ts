@@ -120,6 +120,23 @@ const CSS = `
 `;
 
 let installed = false;
+let playPress: (() => void) | null = null;
+
+/**
+ * Give the raised buttons a sound.
+ *
+ * A hook rather than an import, so this file stays what it is — CSS and two
+ * listeners — and does not drag the audio module into every screen that has a
+ * button on it. `boot` wires it once, before the title, which is deliberate:
+ * the title's press is the session's FIRST TAP and therefore the gesture that
+ * unlocks audio on iOS, so the click has to be armed before it rather than
+ * after.
+ *
+ * Elements marked `data-mute-press` stay silent. The desktop pad's action
+ * button is one: it already makes the build or upgrade sound, and a click on
+ * top of that is two sounds for one press.
+ */
+export function setLiftPressSound(play: () => void): void { playPress = play; }
 
 /**
  * Put the stylesheet in, once.
@@ -148,7 +165,10 @@ export function installLiftStyles(): void {
   const press = (on: boolean) => (e: Event): void => {
     if (on) {
       const el = (e.target as HTMLElement | null)?.closest?.('.lift');
-      if (el && !(el as HTMLButtonElement).disabled) el.classList.add('pressed');
+      if (el && !(el as HTMLButtonElement).disabled) {
+        el.classList.add('pressed');
+        if (!(el as HTMLElement).dataset.mutePress) playPress?.();
+      }
       return;
     }
     for (const el of document.querySelectorAll('.pressed')) el.classList.remove('pressed');

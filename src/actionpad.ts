@@ -67,6 +67,9 @@ export function createActionPad(opts: ActionPadOpts): ActionPad {
 
   const button = document.createElement('button');
   button.className = LIFT.dark;
+  // It already sounds — build, upgrade, sell. A UI click over that is two
+  // sounds for one press.
+  button.dataset.mutePress = '';
   button.dataset.actionButton = '';
   button.style.cssText = `${CELL}
     width: 62px; border: 2px solid rgba(255,255,255,.28); cursor: pointer;
