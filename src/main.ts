@@ -193,8 +193,16 @@ async function start(): Promise<void> {
     speech.place(x, Math.max(middle.y, box.height + margin), false);
   }
 
-  /** How many coach lines have already been spoken aloud. */
-  let spoken = 0;
+  /**
+   * How many coach lines have already been said out loud.
+   *
+   * Starts at whatever came back from the save, NOT at zero: the restored
+   * conversation is history, and history does not get spoken. Zero meant the
+   * last thing the coach said in the last session — "White wins, remember:
+   * scattered stones cannot live" — came up in a bubble over the title screen
+   * of the next one.
+   */
+  let spoken = coach.messages.filter((m) => m.from === 'coach').length;
   const redrawChat = (): void => {
     chat.render(coach.messages, coach.thinking);
     const said = coach.messages.filter((m) => m.from === 'coach');

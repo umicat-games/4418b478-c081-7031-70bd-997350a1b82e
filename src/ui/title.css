@@ -24,8 +24,6 @@
   letter-spacing: 0.01em;
   text-shadow: 0 6px 28px rgba(0, 0, 0, 0.6);
 }
-#title .sub { opacity: 0.7; margin-top: -14px; max-width: 30ch; }
-
 #title .buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 #title button {
   font: 600 16px/1 system-ui, sans-serif;
@@ -39,5 +37,17 @@
 }
 #title button.primary { background: #2f6f62; border-color: #5fb9a4; }
 #title button:hover { filter: brightness(1.12); }
+
+#title button.quiet {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.55;
+  background: none;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#title button.quiet:hover { opacity: 0.9; }
 
 #title .status { font-size: 13px; opacity: 0.6; min-height: 1.4em; }

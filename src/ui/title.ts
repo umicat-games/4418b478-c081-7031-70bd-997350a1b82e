@@ -25,12 +25,10 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
   el.id = 'title';
   el.innerHTML = `
     <h1>GO with me</h1>
-    <p class="sub"></p>
     <div class="buttons"></div>
     <p class="status"></p>`;
   // Set as text, not as markup: a translation is content, and content does not
   // go through innerHTML.
-  el.querySelector('.sub')!.textContent = t('title.tagline');
   el.querySelector('.status')!.textContent = t('title.loading');
   document.body.appendChild(el);
 
@@ -54,6 +52,16 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
       buttons.appendChild(b);
       return b;
     };
+    /** Below the row, and quieter. Erasing someone's history is not one of the
+     *  four things they came here to choose between. */
+    const addQuiet = (label: string, choice: TitleChoice): HTMLButtonElement => {
+      const b = add(label, choice);
+      b.className = 'quiet';
+      // Under the row but ABOVE the engine's status line, which is the last
+      // thing on the screen because it is the least important.
+      el.insertBefore(b, el.querySelector('.status'));
+      return b;
+    };
 
     // The course leads for someone who has not finished it: a beginner opening
     // this game wants to be taught, and "Start" next to "Learn to play" is a
@@ -66,7 +74,7 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
     // Only offered to someone who has a past worth erasing, and never made the
     // easy button to hit by accident.
     if (opts.returning) {
-      const forget = add(t('title.fresh'), 'forget');
+      const forget = addQuiet(t('title.fresh'), 'forget');
       forget.title = t('title.freshHint');
       forget.onclick = () => { if (window.confirm(t('title.freshConfirm'))) choose('forget'); };
     }

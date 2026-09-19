@@ -26,7 +26,6 @@
 type Vars = Record<string, string | number>;
 
 const EN = {
-  'title.tagline': 'Play Go against a real engine, with a coach who will talk you through it.',
   'title.start': 'Start',
   'title.play': 'Play',
   'title.continue': 'Continue',
@@ -130,7 +129,6 @@ const EN = {
 export type Key = keyof typeof EN;
 
 const ZH: Partial<Record<Key, string>> = {
-  'title.tagline': '跟真正的围棋引擎下棋,旁边有个会讲解的老师。',
   'title.start': '开始',
   'title.play': '开始下',
   'title.continue': '继续',
