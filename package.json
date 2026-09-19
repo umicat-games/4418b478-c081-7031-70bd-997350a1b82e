@@ -11,13 +11,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.14.0",
-    "@umicat/three-sdk": "^0.9.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
+    "@umicat/three-sdk": "^0.14.0",
+    "pako": "^2.1.0",
     "three": "^0.186.0"
   },
   "devDependencies": {
     "@types/three": "^0.185.0",
     "typescript": "^5.3.3",
-    "vite": "^5.0.11"
+    "vite": "^5.0.11",
+    "@types/pako": "^2.0.3"
   }
 }

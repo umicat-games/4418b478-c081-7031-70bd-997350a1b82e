@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.local
 .DS_Store
+# The KataGo network: 3.7MB of weights that never change. Served from the CDN
+# in a build (see MODEL_URL in src/go/opponent.ts); this copy is only so
+# `npm run dev` works. See vendor/VENDOR.md for how to fetch it.
+public/models/
