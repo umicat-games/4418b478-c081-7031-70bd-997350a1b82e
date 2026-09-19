@@ -141,8 +141,11 @@ export interface ScriptStep {
    *  "hold the button until it turns to a bin" and does it still does not
    *  know they have just been taught SELLING. Every step that speaks has one.
    *
-   *  Two or three words, a verb first — it is a heading, not a second
-   *  sentence. */
+   *  Two or three words, a verb first, and **name the thing** — no "it".
+   *  A heading reading "Build it" is a heading that assumes the player has
+   *  been following along, which is the one assumption a tutorial may not
+   *  make; and it is read in the moment BEFORE the body, so there is nothing
+   *  behind the pronoun yet. It is a heading, not a second sentence. */
   title?: string;
   text?: string;
   /** True once the player has done it. Asked every frame. */

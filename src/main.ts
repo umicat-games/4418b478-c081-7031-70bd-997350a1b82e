@@ -2813,7 +2813,7 @@ export async function startLevel(
         // Names the button AND where it is. An icon on its own is a puzzle:
         // the player has not met it yet and has to find which of the four
         // circles on the right it matches.
-        title: 'Build it',
+        title: 'Build your weapon',
         text: `Press ${pressName('build')} to put it down`,
         // Long enough to watch it land before being told the next thing.
         after: 1.6,
@@ -2852,7 +2852,7 @@ export async function startLevel(
         // button has changed — it changes because they are standing on their
         // own weapon — and an instruction showing the picture the button used
         // to wear is an instruction pointing at nothing.
-        title: 'Upgrade it',
+        title: 'Upgrade your weapon',
         text: `Stand on your weapon, then press ${pressName('upgrade')}`,
         at: () => ({ x: spot[0], z: spot[1] }),
         button: () => 'action',
@@ -2889,7 +2889,7 @@ export async function startLevel(
         // On a phone the button itself becomes the sell icon while you hold
         // it, and that change IS the gesture. On a desktop there is no button
         // to change, so the ring is the whole of the feedback.
-        title: 'Sell it',
+        title: 'Sell your weapon',
         text: touchLikely()
           ? `Hold ${pressName('upgrade')} until it turns to`
             + ` ${iconHtml('sell', '1.25em')} and the ring fills`
@@ -2914,7 +2914,7 @@ export async function startLevel(
         // nothing here has named it.
         //
         // Two lines, in the order the other steps use: what to do, then why.
-        title: 'Fight for yourself',
+        title: 'Swing your sword',
         text: `Chase the enemy down and press ${pressName('sword')}`
           + '<br>Nothing is guarding the road now',
         button: () => 'sword',
