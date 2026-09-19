@@ -3502,7 +3502,15 @@ export async function startLevel(
     animator.play('attack');
     swing = SWING_SECONDS;
     trailDone = false;
-    audio.play('swing');
+    // NO WHOOSH. On trial: the swing sound and the hit sound started in the
+    // SAME millisecond — the damage loop below runs synchronously, right here —
+    // and both of them were 0.6-0.8s whooshes 290Hz apart in spectral centre,
+    // so the hit was two copies of the same noise laid over one short impact.
+    // Taking the whoosh off leaves the blow on its own to be judged.
+    //
+    // The cost, which is real: a swing that MISSES is now silent. What is left
+    // for it is the blade's smear, which is drawn on a miss for exactly this
+    // kind of reason.
     let connected = false;
     const reach = meleeReach(HERO_ATTACK_RANGE, runTier);
     const swingX = Math.sin(hero.rotation.y), swingZ = Math.cos(hero.rotation.y);
@@ -3537,8 +3545,9 @@ export async function startLevel(
         ), tierLook(runTier), meleeImpact(runTier) ?? 0);
       }
     }
-    // A swing that connects sounds different from one that whiffs. Without
-    // that, melee is a noise you make rather than a thing you do.
+    // A swing that connects sounds different from one that whiffs — and with
+    // the whoosh off, a whiff makes no sound at all, so this IS the difference
+    // rather than half of it.
     if (hitCrates(hero.position.x, hero.position.z, reach, 1)) connected = true;
     if (connected) {
       heroHits += 1;

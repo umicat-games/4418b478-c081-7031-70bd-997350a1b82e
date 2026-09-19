@@ -15,6 +15,10 @@ const CLIPS: Record<string, AudioClipSpec> = {
   'hit-enemy': { volume: 0.4, throttle: 30 },
   'enemy-shot': { volume: 0.3, throttle: 40 },
   'enemy-die': { volume: 0.5, throttle: 40 },
+  // NOT PLAYED right now — see the melee block in `main.ts`. Kept registered
+  // while the hit is judged without it; restoring is one line there, and if
+  // the trial ends with the whoosh staying off this entry and the file should
+  // both go rather than being fetched and decoded on every boot for nothing.
   swing: { volume: 0.45, throttle: 120 },
   // The sword's connecting blow. Uploaded through the Assets tool, and the
   // filename says "swing" — it is used as the HIT here, which is why the call
