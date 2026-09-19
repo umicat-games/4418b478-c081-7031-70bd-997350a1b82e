@@ -12,7 +12,7 @@ import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
 import { createThumbMaker } from './thumbs';
 import { iconHtml, type IconName } from './icons';
-import { pressGlyph, touchLikely, PLACE_KEY, JUMP_KEY } from './keycap';
+import { pressGlyph, touchLikely, PLACE_KEY } from './keycap';
 import { createActionPad } from './actionpad';
 import { createSettings } from './settings';
 import { ICON } from './icons';
@@ -145,7 +145,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       y: hero.position.y + 0.5,
       z: hero.position.z,
     },
-    halfHeight: 0.2, radius: 0.16, speed: 4.2, stepHeight: 0.17, jumpSpeed: 2.8,
+    halfHeight: 0.2, radius: 0.16, speed: 4.2, stepHeight: 0.17,
   });
   // The hub's one button is "use what you are standing at" — forge, take,
   // build, read the sign. A hand, not a sword: nothing here is a fight.
@@ -155,11 +155,11 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     // first and E matched the level before Space did.
     actions: [
       { id: 'use', icon: ICON.build, keys: [PLACE_KEY, 'KeyE', 'KeyB', 'KeyJ'] },
-      // Jump, where Space can no longer be it. Desktop only: the SDK draws a
-      // button per action, and on a phone this would be a second jump button.
-      ...(touchLikely() ? [] : [{ id: 'hop', icon: ICON.jump, keys: [JUMP_KEY, 'ShiftRight'] }]),
     ],
-    jumpIcon: ICON.jump,
+    // NO JUMP. This game is played by walking around a board, and the platform
+    // draws only the buttons a game asks for. Declining it also frees `Space`,
+    // which the SDK reads as jump and which places a tower here.
+    jump: false,
   });
 
   const heroMixer = world.mixerFor.get('hero');
@@ -1286,9 +1286,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
       const turn = input.look();
       if (turn.x || turn.y) world.orbit(turn.x, turn.y);
       const dir = input.direction(world.cameraYaw);
-      // Space is the SDK's jump and it places here now; the hero would hop
-      // every time a building went down.
-      character.update(dt, dir, { jump: touchLikely() ? input.jump : input.consume('hop') });
+      character.update(dt, dir);
       character.syncTo(hero, -0.36);
       character.faceTowards(hero, dir, dt);
       animator.update(character.state);

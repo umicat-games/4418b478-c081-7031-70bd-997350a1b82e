@@ -37,7 +37,6 @@ is TRUE, and `src/keycap.ts` is the one place in the code that decides it.
 | move | thumbstick (SDK) | `WASD` / arrows (SDK) |
 | place · upgrade · sell | the action button, held to sell | **`Space`**, held to sell — or the pad's button, `src/actionpad.ts` |
 | attack · cast | the attack button, held to aim | **left mouse button**, held to aim |
-| jump | the jump button (SDK) | **`Shift`** — Space is taken |
 | choose a tower | tap the hotbar | click the hotbar, or `1`–`4` |
 | settings · leave | the gear, top-left of the HUD | the same gear |
 
@@ -775,7 +774,7 @@ Three taps on the READOUT toggles the sandbox; three taps on the HUD BEHIND it
 still hides the readout. Different targets — the readout is `pointer-events:
 auto` and stops the event, so the HUD's listener never sees a tap that landed on
 it. Making the readout tappable at all is the sixth thing this game has drawn
-over the platform's touch layer, so `verify-3d-jump-touch` was re-run and
+over the platform's touch layer, so `verify-3d-walk-touch` was re-run and
 `verify-3d-dev` checks with `elementFromPoint` that the readout is what is
 actually under its own middle — "is it there" has passed for a button nothing
 could reach before.
@@ -1773,7 +1772,7 @@ standing still in exactly the case the option exists for.
   became a block over the left half of a portrait phone, and made the game
   unplayable because the thumbstick was underneath it. The row is
   `pointer-events: none` with `auto` on the cells, never wraps, and
-  `verify-3d-jump-touch` now checks that the stick is reachable.
+  `verify-3d-walk-touch` now checks that the stick is reachable.
 - **A hotbar cell is a PICTURE OF THE MODEL and a price.** Nothing else — the
   corner prompt already names what you are standing on and what it costs, in
   full, and repeating that in a 40px cell only clips it. The picture is rendered
@@ -1868,7 +1867,7 @@ since. `ls` is the authority; what follows is the ones with a lesson attached.
 | `verify-3d-elements` | what each element LEAVES on what it hits — it arranges its own crowd |
 | `verify-3d-staff-audio` | which FILE played, by the duration of the buffer that reached the speaker |
 | `verify-3d-audio` | that turning it down turns it down — by multiplying the gains to the destination |
-| `verify-3d-jump-touch` | the desktop keys and the phone's buttons, on two pages |
+| `verify-3d-walk-touch` | that no key leaves the ground, and the phone's stick is reachable |
 | `verify-3d-desktop` | that a prompt names a key AND that the key does the thing |
 | `verify-3d-settings` | that the pause stops the wave clock and the enemies, not just the hero |
 | `verify-3d-loading` | that the bar is not already full at the 40% mark |
@@ -3016,7 +3015,7 @@ this cost nothing to fix and had been shipped for weeks.
 | `pressName(glyph)` | *"the ⟨icon⟩ button on the right"* · *"the **Space** key"* · *"the left mouse button"* |
 | `dragThing()` | `slide your finger` / `move the mouse` |
 | `tapWord()` | `Tap` / `Click` |
-| `PLACE_KEY` · `JUMP_KEY` | `Space` and `ShiftLeft`, so the binding and the prompt cannot drift |
+| `PLACE_KEY` | `Space`, so the binding and the prompt cannot drift |
 
 Keyed by **glyph**, not by action id, because that is what the prompts have in
 hand — and because the one button changes glyph as you hold it (build → upgrade
@@ -3136,21 +3135,25 @@ hand, so `pressFor` returns `{kind:'click'}` for every weapon glyph and the
 prompts say *"the left mouse button"* instead of naming `J` — which still works,
 and is simply not what anyone should be told to use.
 
-**Jump had to move, and this is the part to remember.** `Space` is the SDK's
-jump and it is **hardcoded** in `Input3D` — `get jump()` reads `isDown('Space')`.
-Taking Space for placing means the hero hops every time a tower goes down, and a
-hop in the middle of a sell-hold is exactly what makes a control feel broken.
-The game owns the call, though: `input.jump` is only ever *read* by
-`character.update`, so the desktop passes its own instead —
+**THE HERO DOES NOT JUMP.** Both scenes pass `jump: false` to `Input3D`, which
+is a thing the SDK learned to accept in 0.13.0 — before that the jump button was
+built before the loop that draws everything else, so it arrived with the
+thumbstick whether a game had a jump or not, and the only way to decline it took
+the stick away too.
 
-```ts
-character.update(dt, move, { jump: touchLikely() ? input.jump : input.consume('hop') });
-```
+This game is played by WALKING to a square and standing on it. There is nothing
+to jump over, and a jump button in the corner of a phone is a control that does
+nothing sitting where the ones that matter go.
 
-— with `hop` declared as a desktop-only action on `ShiftLeft`/`ShiftRight`.
-**Desktop-only because the SDK draws one button per declared action**, so a
-phone would grow a second jump button beside its own. A phone's Space and jump
-button are untouched.
+Declining it also hands back `Space`, which is the other half of why this is
+one switch and not two: the SDK reads Space as jump, so a game that binds Space
+to its own verb — placing, here — has the hero hop every time the player uses
+it. Getting out of that used to cost a whole paragraph in this file: the hop was
+moved to `ShiftLeft`/`ShiftRight`, declared as a DESKTOP-ONLY action so a phone
+would not grow a second jump button beside the platform's, and
+`character.update` was handed `input.consume('hop')` in place of `input.jump`.
+All of that is deleted. `character.update(dt, move)` takes no input options at
+all now.
 
 ### The place button, because a hand on the mouse should not need the keyboard
 

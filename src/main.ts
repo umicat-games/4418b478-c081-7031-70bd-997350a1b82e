@@ -30,7 +30,7 @@ import { makeResourceIcons } from './resicons';
 import { ICON, WEAPON_ICON } from './icons';
 import {
   touchLikely, keyCap, pressName, dragThing, tapWord, pressFor,
-  PLACE_KEY, JUMP_KEY,
+  PLACE_KEY,
 } from './keycap';
 import {
   WEAPONS, WEAPON_BY_ID, weaponDamage, weaponEffect, levelOf, CHAIN_FALLOFF, CHAIN_HOP,
@@ -663,7 +663,7 @@ export async function startLevel(
   };
   const character = new CharacterController3D(world.world, RAPIER, {
     position: SPAWN, halfHeight: HERO_HALF_HEIGHT, radius: HERO_RADIUS,
-    speed: HERO_SPEED, stepHeight: 0.17, jumpSpeed: 2.8,
+    speed: HERO_SPEED, stepHeight: 0.17,
   });
   const input = new Input3D({
     actions: [
@@ -675,12 +675,11 @@ export async function startLevel(
       // was steering with. E and B stay bound; a key that used to work and
       // silently stopped is a worse surprise than an extra one.
       { id: 'build', icon: ICON.build, keys: [PLACE_KEY, 'KeyB', 'KeyE'] },
-      // Jump, where Space can no longer be it. Declared only on a machine with
-      // no on-screen controls: the SDK draws a button per action, and on a
-      // phone this would be a second jump button beside the SDK's own.
-      ...(touchLikely() ? [] : [{ id: 'hop', icon: ICON.jump, keys: [JUMP_KEY, 'ShiftRight'] }]),
     ],
-    jumpIcon: ICON.jump,
+    // NO JUMP. This game is played by walking around a board, and the platform
+    // draws only the buttons a game asks for. Declining it also frees `Space`,
+    // which the SDK reads as jump and which places a tower here.
+    jump: false,
   });
 
   const heroMixer = world.mixerFor.get('hero');
@@ -3798,9 +3797,7 @@ export async function startLevel(
       if (!stick && Math.hypot(glide.x, glide.z) < 0.55) { glide.x = 0; glide.z = 0; }
       move.x = glide.x; move.z = glide.z;
     }
-    // `input.jump` is Space, hardcoded in the SDK. Space places here, so on a
-    // desktop the hero would hop every time a tower went down.
-    character.update(dt, move, { jump: touchLikely() ? input.jump : input.consume('hop') });
+    character.update(dt, move);
     if (character.position.y < RESPAWN_BELOW_Y) character.teleport(SPAWN);
     character.syncTo(hero, HERO_SYNC_OFFSET);
     character.faceTowards(hero, move, dt);

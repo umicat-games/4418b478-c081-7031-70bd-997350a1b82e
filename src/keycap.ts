@@ -49,16 +49,9 @@ export type Press =
  *  worse surprise than an extra one nobody presses. */
 export const PLACE_KEY = 'Space';
 
-/** Jumping, on a desktop only.
- *
- *  Space is the SDK's jump and it is hardcoded there, so taking Space for
- *  placing means jumping needs somewhere else to live — and a hop in the middle
- *  of a sell-hold is exactly the kind of thing that makes a control feel
- *  broken. Shift is beside the hand that is already on WASD.
- *
- *  Only rebound where there are no on-screen controls. A phone jumps with the
- *  SDK's own button and never sees this. */
-export const JUMP_KEY = 'ShiftLeft';
+/* There is no JUMP_KEY. The hero does not jump — see `jump: false` where the
+   scenes declare their controls — so Space is simply the place key, and the
+   whole Space-versus-jump argument this file used to carry is gone with it. */
 
 export const pressFor = (glyph: IconName | string): Press => {
   if (touchLikely()) return { kind: 'button' };
@@ -68,7 +61,6 @@ export const pressFor = (glyph: IconName | string): Press => {
     sell: { kind: 'key', key: PLACE_KEY },
     sword: { kind: 'click' }, bow: { kind: 'click' },
     fire: { kind: 'click' }, ice: { kind: 'click' }, bolt: { kind: 'click' },
-    jump: { kind: 'key', key: 'Shift' },
   };
   return byIcon[glyph] ?? { kind: 'button' };
 };
