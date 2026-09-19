@@ -28,6 +28,7 @@ import { ChatPanel } from './ui/chat';
 import { Speech, segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { showTitle } from './ui/title';
+import { showLessonCard } from './ui/lessoncard';
 import { Autosave, load } from './save';
 import { Course, type Phase } from './teach/course';
 import { LESSONS } from './teach/curriculum';
@@ -363,12 +364,26 @@ async function start(): Promise<void> {
     if (!opts.announce) return;
     const phase = course.phase;
     if (phase === 'teach') {
-      void remark(
-        `A new lesson is open: "${lesson.id}". ${lesson.brief} ` +
-        `${problem ? 'There is a position on the board to talk about. ' : ''}` +
-        'Explain it in two or three sentences, then call begin_exercise to put the practice up. ' +
-        'Do not ask them to play yet.',
-      );
+      // The game says what the lesson is; the coach then says it in its own
+      // words. That order matters when the coach cannot answer at all — signed
+      // out, out of credits — because the lesson still opens with something.
+      const { index, total } = course.position;
+      // Whatever the coach was saying belonged to the last thing that happened;
+      // a bubble left under the card is the previous lesson talking over this
+      // one's title page.
+      speech.hide();
+      showLessonCard({
+        lessonId: lesson.id,
+        index,
+        total,
+        onBegin: () => void remark(
+          `A new lesson is open: "${lesson.id}". ${lesson.brief} ` +
+          'The student has just read the card introducing it, so do not repeat it back to them. ' +
+          `${problem ? 'There is a position on the board to talk about. ' : ''}` +
+          'Add the part a card cannot do — point at the board, in two or three sentences — then call ' +
+          'begin_exercise to put the practice up. Do not ask them to play before that.',
+        ),
+      });
     } else if (phase === 'practice') {
       void remark(
         `The practice position for "${lesson.id}" is now on the board, and the student is Black. ` +

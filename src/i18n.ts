@@ -67,6 +67,14 @@ const EN = {
   'course.quizSilent': 'Test — no hints on this one.',
   'course.finished': 'You have finished the course.',
 
+  'lesson.liberties.intro': 'A stone lives by the empty points beside it — those are its liberties.\nFill the last one and the stone comes off the board.\nBy the end of this lesson you will be able to count liberties and capture a stone.',
+  'lesson.atari.intro': 'A group with one liberty left is in atari: one move from being taken.\nPutting a stone in atari and escaping from one are the same idea from opposite sides.\nBy the end you will be able to do both.',
+  'lesson.connect.intro': 'Two stones side by side share their liberties and are hard to kill.\nTwo with a gap are two weak things, and one point decides which they are.\nBy the end you will see that point, and be able to play it from either side.',
+  'lesson.twoeyes.intro': 'A group with two separate eyes can never be filled in, so it can never be captured.\nWith a three-point eye space, the middle makes two eyes and either end makes one.\nBy the end you will be able to make a group live.',
+  'lesson.territory.intro': 'Empty points your stones surround are yours.\nWhen neither side has anything useful left, both pass and the board is counted.\nBy the end you will have played a whole game and understood the result.',
+  'lesson.intro.begin': 'Begin',
+  'lesson.intro.head': 'Lesson {index} of {total}',
+
   'lesson.liberties': 'Liberties and capture',
   'lesson.liberties.goal': 'Take the white stone off the board.',
   'lesson.liberties.quiz': 'Capture both white stones.',
@@ -169,6 +177,14 @@ const ZH: Partial<Record<Key, string>> = {
   'course.missed': '这手还不行。',
   'course.quizSilent': '测验 —— 这一题没有提示。',
   'course.finished': '这门课你学完了。',
+
+  'lesson.liberties.intro': '棋子靠旁边的空点活着,那些空点叫「气」。\n把最后一口气堵住,这颗子就被提掉。\n学完这一课,你会数气,也能吃掉一颗子。',
+  'lesson.atari.intro': '只剩一口气的棋叫「被打吃」,下一手就会被提走。\n打吃别人和从打吃里逃出来,是同一件事的两面。\n学完这一课,两样你都会。',
+  'lesson.connect.intro': '挨在一起的两颗子共用气,不好吃;隔开的两颗,是两块弱棋。\n决定它们是一块还是两块的,往往只有一个点。\n学完这一课,你能看出那个点,而且两边都会下。',
+  'lesson.twoeyes.intro': '有两只眼的棋永远填不满,也就永远吃不掉。\n三个点的眼位:下中间做出两只眼,下两头只剩一只。\n学完这一课,你能把一块棋做活。',
+  'lesson.territory.intro': '被你的子围住的空点,就是你的地。\n双方都没棋可下时各停一手,然后数子定胜负。\n学完这一课,你会下完整整一盘,并且看得懂结果。',
+  'lesson.intro.begin': '开始',
+  'lesson.intro.head': '第 {index} 课 / 共 {total} 课',
 
   'lesson.liberties': '气与提子',
   'lesson.liberties.goal': '把那颗白子提掉。',

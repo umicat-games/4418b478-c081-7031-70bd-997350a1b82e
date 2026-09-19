@@ -1,0 +1,69 @@
+/* The card that opens a lesson.
+ *
+ * Modal on purpose, and the only modal in the game: it is the one moment where
+ * there is nothing to do on the board yet, and reading three lines before
+ * starting is the whole point of it. Everything else in this game talks from
+ * the side while the board stays live. */
+
+#lessoncard {
+  position: fixed;
+  inset: 0;
+  z-index: 35; /* over the menu (30), under the title (40) */
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 12, 16, 0.72);
+  backdrop-filter: blur(4px);
+  animation: card-in 0.22s ease;
+}
+
+#lessoncard .card {
+  width: min(460px, 92vw);
+  padding: 26px 28px 22px;
+  border-radius: 18px;
+  background: rgba(20, 24, 32, 0.97);
+  border: 1px solid rgba(127, 214, 194, 0.35);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
+  color: #f4f5f7;
+  font: 15px/1.6 system-ui, -apple-system, sans-serif;
+}
+
+#lessoncard .head {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #7fd6c2;
+}
+#lessoncard h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 4px 0 14px;
+}
+#lessoncard .body p { margin-bottom: 9px; opacity: 0.88; }
+/* The promise — "by the end you will…" — reads as one, not as more prose. */
+#lessoncard .body p:last-child {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  opacity: 1;
+  font-weight: 600;
+}
+
+#lessoncard button {
+  width: 100%;
+  margin-top: 18px;
+  padding: 13px;
+  border-radius: 999px;
+  border: 1px solid #5fb9a4;
+  background: #2f6f62;
+  color: #fff;
+  font: 600 15px/1 system-ui, sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#lessoncard button:hover { filter: brightness(1.12); }
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
