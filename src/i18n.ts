@@ -26,12 +26,8 @@
 type Vars = Record<string, string | number>;
 
 const EN = {
-  'title.start': 'Start',
-  'title.play': 'Play',
-  'title.continue': 'Continue',
-  'title.newGame': 'New game',
-  'title.learn': 'Learn to play',
-  'title.continueLesson': 'Continue lesson {index}',
+  'title.course': 'Lessons',
+  'title.freeplay': 'Free play',
   'title.fresh': 'Start fresh',
   'title.freshHint': 'Forget everything the coach knows about you, and begin again.',
   'title.freshConfirm': 'This clears the coach’s memory of you and any unfinished game. Sure?',
@@ -59,6 +55,12 @@ const EN = {
   'speech.playHere': 'Play {point}',
 
   'course.banner': 'Lesson {index}/{total} · {name}',
+  'course.heading': 'The course',
+  'course.continue': 'Continue',
+  'course.locked': 'Locked',
+  'course.inProgress': 'in progress',
+  'course.replay': 'passed · replay',
+  'course.back': 'Back',
   'course.phase.teach': 'Explaining',
   'course.phase.practice': 'Practice',
   'course.phase.quiz': 'Test',
@@ -139,12 +141,8 @@ const EN = {
 export type Key = keyof typeof EN;
 
 const ZH: Partial<Record<Key, string>> = {
-  'title.start': '开始',
-  'title.play': '开始下',
-  'title.continue': '继续',
-  'title.newGame': '新开一局',
-  'title.learn': '从头学围棋',
-  'title.continueLesson': '继续第 {index} 课',
+  'title.course': '课程',
+  'title.freeplay': '自由下棋',
   'title.fresh': '从头开始',
   'title.freshHint': '让老师忘掉关于你的一切,重新认识。',
   'title.freshConfirm': '这会清掉老师对你的记忆和没下完的棋局。确定吗?',
@@ -172,6 +170,12 @@ const ZH: Partial<Record<Key, string>> = {
   'speech.playHere': '下在 {point}',
 
   'course.banner': '第 {index}/{total} 课 · {name}',
+  'course.heading': '课程',
+  'course.continue': '继续',
+  'course.locked': '未解锁',
+  'course.inProgress': '进行中',
+  'course.replay': '已通过 · 可重学',
+  'course.back': '返回',
   'course.phase.teach': '讲解',
   'course.phase.practice': '练习',
   'course.phase.quiz': '测验',

@@ -7,18 +7,11 @@
 import './title.css';
 import { t } from '../i18n';
 
-export type TitleChoice = 'continue' | 'new' | 'forget' | 'learn';
+export type TitleChoice = 'course' | 'play' | 'forget';
 
 export interface TitleOptions {
-  /** There is an unfinished game to go back to. */
-  canContinue: boolean;
   /** This player has been here before, even if no game is unfinished. */
   returning: boolean;
-  /** Which lesson the course would open at, 1-based; 0 when it is finished. */
-  lesson: number;
-  /** Have they actually started the course? Someone who has only played games
-   *  is being invited to learn, not asked to carry on with something. */
-  lessonStarted: boolean;
   /** Resolves when the engine is ready; until then the buttons say so. */
   loading: Promise<unknown>;
 }
@@ -66,14 +59,13 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
       return b;
     };
 
-    // The course leads for someone who has not finished it: a beginner opening
-    // this game wants to be taught, and "Start" next to "Learn to play" is a
-    // choice between a blank board and someone explaining it.
-    if (opts.lesson > 0) {
-      add(opts.lessonStarted ? t('title.continueLesson', { index: opts.lesson }) : t('title.learn'), 'learn', true);
-    }
-    if (opts.canContinue) add(t('title.continue'), 'continue', opts.lesson === 0);
-    add(t(opts.canContinue ? 'title.newGame' : opts.returning ? 'title.play' : 'title.start'), 'new', opts.lesson === 0 && !opts.canContinue);
+    // Two doors, and nothing else. Everything the old screen offered —
+    // continue this game, continue that lesson, start a new one — is a
+    // decision about WHICH, and belongs behind the door it is about. A title
+    // screen with four buttons asks a beginner to understand the product
+    // before it has shown them anything.
+    add(t('title.course'), 'course', true);
+    add(t('title.freeplay'), 'play');
     // Only offered to someone who has a past worth erasing, and never made the
     // easy button to hit by accident.
     if (opts.returning) {

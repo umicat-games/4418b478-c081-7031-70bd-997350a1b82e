@@ -29,6 +29,7 @@ import { Speech, segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { showTitle } from './ui/title';
 import { showLessonCard } from './ui/lessoncard';
+import { showCourseMenu } from './ui/coursemenu';
 import { Autosave, load, type LessonBoard } from './save';
 import { Course, type Phase } from './teach/course';
 import { LESSONS } from './teach/curriculum';
@@ -123,14 +124,6 @@ async function start(): Promise<void> {
     },
   });
   const coach = new Coach(umicat, {
-    setMode: (mode) => {
-      persist();
-      // Teaching needs a baseline read of the position the student is about to
-      // move in, and that only starts being taken once the mode says so — so
-      // the switch has to reach the CURRENT game, not just the next one.
-      if (mode === 'learning') void observePosition();
-      refresh();
-    },
     setBoardSize: (size) => {
       // Mid-game is exactly when a model is most likely to try this, because
       // the student just asked "can we play on a bigger board?".
@@ -809,65 +802,83 @@ async function start(): Promise<void> {
 
     document.body.classList.add('titling');
     idleSpin = true;
-    const unfinished = (!!game && !game.over && !course.active) || (!game && !!saved.game);
     const choice = await showTitle({
-      canContinue: unfinished,
       returning: saved.returning || coach.profile.gamesPlayed > 0 || coach.messages.length > 0,
-      // Where "continue the course" would land: the lesson actually open, if
-      // there is one, and otherwise the first not yet passed. Reading only the
-      // passed list said "continue lesson 1" to someone sitting in lesson 5.
-      lesson: course.finished ? 0
-        : LESSONS.indexOf(course.lesson ?? Course.nextFor(course.progress.passed)) + 1,
-      lessonStarted: course.progress.passed.length > 0 || !!course.progress.lesson,
       loading,
     });
 
-    document.body.classList.remove('titling');
-    idleSpin = false;
-    view.resetCamera();
-
     if (choice === 'forget') {
-      await Promise.all([umicat.saves.delete('profile'), umicat.saves.delete('chat'), umicat.saves.delete('game')]);
-      coach.load([], { ...coach.profile, summary: '', gamesPlayed: 0, mode: 'unknown' });
+      await Promise.all([
+        umicat.saves.delete('profile'), umicat.saves.delete('chat'),
+        umicat.saves.delete('game'), umicat.saves.delete('lesson'),
+      ]);
+      coach.load([], { ...coach.profile, summary: '', gamesPlayed: 0, mode: 'unknown', course: undefined });
       course.leave();
       spoken = 0;
       redrawChat();
-    }
-
-    if (choice === 'learn') {
-      await openLesson();
+      await toTitle();
       return;
     }
-    if (choice === 'continue') {
-      // The game in progress if there is one; otherwise the one on disk. A
-      // player who walked out to the title and straight back in should find
-      // the board exactly as they left it.
-      if (game && !game.over && !course.active) { refresh(); return; }
-      const snapshot = await umicat.saves.get<ReturnType<GoGame['snapshot']>>('game');
-      if (snapshot) {
-        course.leave();
-        game = GoGame.restore(snapshot);
-        view.setBoardSize(game.size);
-        refresh();
-        void observePosition();
-        return;
-      }
+
+    if (choice === 'course') {
+      showCourseMenu({
+        passed: course.progress.passed,
+        current: course.progress.lesson,
+        onContinue: () => { leaveTitle(); void openLesson(); },
+        // Picking a lesson from the list always restarts it from the
+        // explanation — that is what picking it means, and the one in progress
+        // is reached by Continue.
+        onPick: (id) => { leaveTitle(); void openLesson(id); },
+        onBack: () => void toTitle(),
+      });
+      return;
     }
+
+    // Free play. An unfinished game is picked up rather than thrown away; the
+    // way to start a fresh one is in Settings, where the board size and the
+    // opponent are chosen anyway.
+    leaveTitle();
+    coach.profile.mode = 'playing';
     course.leave();
+    if (game && !game.over) { refresh(); return; }
+    const snapshot = await umicat.saves.get<ReturnType<GoGame['snapshot']>>('game');
+    if (snapshot) {
+      game = GoGame.restore(snapshot);
+      view.setBoardSize(game.size);
+      refresh();
+      void observePosition();
+      return;
+    }
     newGame(coach.profile.boardSize, 0);
+  }
+
+  /** Take the title down and give the board back. The course screen sits on
+   *  top of it, so this runs when something past it has been chosen. */
+  function leaveTitle(): void {
+    document.body.classList.remove('titling');
+    idleSpin = false;
+    view.resetCamera();
   }
 
   await toTitle();
 
-  // The first thing that happens is the coach asking what the player came for
-  // — unless it already knows, in which case asking again would be the rudest
-  // possible way to greet someone who was here yesterday.
-  void coach.remark(
-    coach.messages.length
-      ? '(The student is back. Greet them briefly and pick up where you left off.)'
-      : '(A new student has just sat down at the board. You have not met before.)',
-    { game, read },
-  ).then(redrawChat);
+  // No greeting inside a lesson: opening one already announced itself, and two
+  // openings in a row is one too many.
+  //
+  // And nothing here asks what they came for any more. The title screen asked
+  // it — with two buttons — so a coach that asks again is telling the player
+  // their choice did not count. That question was in the playbook from the
+  // start and it survived long after the UI stopped needing it, which is what
+  // it looks like when a prompt outlives its design.
+  if (!course.active) {
+    void coach.remark(
+      coach.messages.length
+        ? '(The student is back, and has chosen a game rather than a lesson. One line of greeting.)'
+        : '(A new student has sat down and chosen to play rather than be taught. Greet them in one line '
+          + 'and offer to set the opponent easier or harder. Do not ask what they came for — they have chosen.)',
+      { game, read },
+    ).then(redrawChat);
+  }
 
   // The probe surface. Playwright drives the game through this rather than
   // through pixels: a test that has to click a three-millimetre intersection is
