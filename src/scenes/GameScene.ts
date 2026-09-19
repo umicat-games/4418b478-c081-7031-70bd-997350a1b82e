@@ -22,6 +22,16 @@ import { RECIPES, type Recipe } from '../data/recipes';
 import { COOKING_RECIPES } from '../data/cooking';
 import { AFFINITY, bondTierName, bondTierIndex } from '../data/affinity';
 import type { CookModel, CookRowView } from './CookScene';
+
+// New games (and bond-less old saves) start at HALF the max bond = 5 of 10 hearts.
+// Mirrors bondFraction()'s dynamic max (highest tier's min, fallback 200), so it
+// stays correct if the affinity table is retuned. Read at construction/applySave
+// (after AFFINITY is loaded in BootScene), never at module load.
+const bondStartValue = (): number => {
+  const tiers = AFFINITY.tiers;
+  const max = tiers.length ? tiers[tiers.length - 1].min : 200;
+  return Math.round(max / 2);
+};
 import { t, initLang, getLang } from '../i18n';
 import { CROPS, CROP_NAMES, type CropName } from '../data/crops';
 import { EmoteController, type Emotion } from '../emote';
@@ -1016,7 +1026,7 @@ export class GameScene extends Phaser.Scene {
   //    the GAME owns (fed to the AI via observation, gates content); the algorithm is tuned in
   //    the affinity data table. Milestone events (②) are a bounded promoted list; `seenFirsts`
   //    dedups first-time events; `stats` are lifetime counters (① quantitative state). ──
-  private bond = 0;               // relationship score (>=0)
+  private bond = bondStartValue(); // relationship score (>=0); new games start at 5/10 hearts
   private playStreak = 0;         // consecutive days with at least one interaction
   private bondDayGain = 0;        // net bond gained today (for the daily cap; reset at day rollover)
   private bondSignalToday: Record<string, number> = {}; // per-signal count today (for per-signal caps)
@@ -12363,7 +12373,7 @@ export class GameScene extends Phaser.Scene {
       this.currentHome = HOME_TIERS.some((h) => h.id === isl.currentHome) ? (isl.currentHome as string) : 'home_1';
       this.pendingHome = isl.pendingHome ?? null; // v18: bought-but-not-moved-in (per-island)
       // v19: affinity/bond + player-model memory (older saves default → fresh relationship).
-      this.bond = typeof s.bond === 'number' ? Math.max(0, s.bond) : 0;
+      this.bond = typeof s.bond === 'number' ? Math.max(0, s.bond) : bondStartValue();
       this.playStreak = s.playStreak ?? 0;
       this.bondDayGain = s.bondDay?.gain ?? 0;
       this.bondInteractedToday = s.bondDay?.interacted ?? false;
