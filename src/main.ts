@@ -195,7 +195,13 @@ async function start(): Promise<void> {
       else speech.place(x, p.y + gap + box.height, false);
       return;
     }
-    speech.place(free / 2, Math.max(box.height + margin, 140), false);
+    // Nothing to point at: the middle of the board. Not the top of the screen —
+    // a bubble parked over the HUD reads as a notification, and this is the
+    // coach talking about the game in front of both of you.
+    const size = game?.size ?? 9;
+    const middle = view.screenOf((size - 1) / 2, (size - 1) / 2);
+    const x = Math.min(Math.max(middle.x, box.width / 2 + margin), free - box.width / 2 - margin);
+    speech.place(x, Math.max(middle.y, box.height + margin), false);
   }
 
   /** How many coach lines have already been spoken aloud. */

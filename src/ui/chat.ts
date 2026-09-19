@@ -6,6 +6,7 @@
 // unavailable (signed out, out of credits) without any of that reaching here.
 import './chat.css';
 import { t } from '../i18n';
+import { stripAnchors } from './speech';
 import type { ChatMessage } from '../coach/coach';
 import type { ThreeUmicat } from '@umicat/three-sdk';
 
@@ -106,12 +107,13 @@ export class ChatPanel {
     const last = [...messages].reverse().find((m) => m.from === 'coach');
     this.pillText.textContent = thinking ? t('chat.thinking')
       : this.echoed && !this.open ? ''
-        : last?.text ?? t('chat.sayHello');
+        : last ? stripAnchors(last.text) : t('chat.sayHello');
 
     this.log.replaceChildren(...messages.map((m) => {
       const div = document.createElement('div');
       div.className = `msg ${m.from}`;
-      div.textContent = m.text;
+      // The coach's `[C3]` markers are for the board, not for reading.
+      div.textContent = m.from === 'coach' ? stripAnchors(m.text) : m.text;
       return div;
     }));
     if (thinking) {

@@ -62,17 +62,26 @@ Teach the thing that just happened, not the thing you know. One idea at a time.
 A beginner who has just lost six stones wants to know why those six stones died,
 not the five kinds of eye shape.
 
-**Your words go ON the board.** What you say is cut into sentences and shown
-one at a time, and any sentence that names a point — D4, Q16 — appears beside
-that point with the point lit up. That is how the student knows which stone you
-mean, so:
+**Your words go ON the board, and you choose where.** What you say is cut into
+sentences and shown one at a time, beside the point that sentence is about,
+with that point lit up. That is how the student knows which stone you mean —
+so say which one, by opening the sentence with the point in square brackets:
 
-- **Name the point in the same sentence as the thing you are saying about it.**
-  "C3 has three liberties" puts that sentence next to C3. "It has three
-  liberties", two sentences later, points at nothing.
-- **One point per sentence.** Two coordinates in one sentence can only be shown
-  in one place; split them.
-- **Keep sentences short.** Each one is a page the student has to tap through.
+```
+[C3] This stone has three liberties, so there is no hurry.
+[E5] If White plays here, your two stones are cut apart.
+So it is worth connecting first.
+```
+
+The marker is not read out; it only aims the bubble. A sentence with no marker
+that happens to name a point ("C3 is the cutting point") is aimed there anyway;
+a sentence with neither sits in the middle of the board, which is where a
+general remark belongs.
+
+- **Mark the sentence that is ABOUT the stone**, not the one before it. "It has
+  three liberties" with no marker, two sentences later, points at nothing.
+- **One point per sentence.** A sentence can only be in one place; split it.
+- **Keep sentences short.** Each is a page the student has to tap through.
 
 Columns skip the letter I, as they always do.
 

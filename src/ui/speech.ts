@@ -6,10 +6,23 @@
 // time, and each sentence that names a point is shown AT that point with the
 // point lit up — which is what a teacher sitting across the table does.
 //
-// The splitting is ours, not the model's: asking it to tag its own sentences
-// with coordinates in JSON would cost tokens, be forgotten halfway through a
-// conversation, and produce a coordinate for a board it cannot see. Reading
-// "D4" out of a sentence it already wrote is free and cannot drift.
+// Where a sentence points is decided in three steps, in this order:
+//
+//   1. the coach SAYS so, by opening the sentence with `[C3]`;
+//   2. failing that, the sentence names a point in passing ("C3 has three
+//      liberties") and we read it out;
+//   3. failing that, the middle of the board.
+//
+// (1) leads because of what the coach actually writes. A coach answering in
+// Chinese says "这颗子还没活" — no coordinate anywhere in it — and a reader that
+// only parses coordinates would anchor nothing at all, in the language most of
+// its students will use. (2) stays as a fallback because it costs nothing and
+// catches the sentences where the coach names a point without marking it.
+//
+// A marker rather than an action, deliberately: a reply is several sentences
+// and `do` is a flat list of calls with nothing tying a call to a sentence, so
+// three `focus` calls could not say WHICH line each belonged to. The marker
+// travels with the sentence it is about.
 import './speech.css';
 import { fromGtp } from '../go/coords';
 import { t } from '../i18n';
@@ -55,7 +68,10 @@ export function segment(text: string, size: number): Segment[] {
   const pieces = sentences
     .map((text) => text.trim())
     .filter(Boolean)
-    .map((text) => ({ text, at: firstPoint(text, size) }));
+    .map((text) => {
+      const marked = marker(text, size);
+      return marked ?? { text, at: firstPoint(text, size) };
+    });
 
   const pages: Segment[] = [];
   for (const piece of pieces) {
@@ -69,6 +85,27 @@ export function segment(text: string, size: number): Segment[] {
     }
   }
   return pages;
+}
+
+/**
+ * A sentence the coach opened with `[C3]` — what it explicitly pointed at.
+ *
+ * Only at the start, and the marker is stripped: it is a stage direction, not
+ * something to read out. An unparseable marker ("[the corner]") is left in the
+ * text rather than silently eaten, so a coach writing nonsense looks like a
+ * coach writing nonsense instead of like a bug in the bubble.
+ */
+function marker(text: string, size: number): Segment | null {
+  const m = /^[[［]\s*([A-HJ-Ta-hj-t])\s?([1-9]|1[0-9])\s*[\]］]\s*/.exec(text);
+  if (!m) return null;
+  const at = fromGtp(`${m[1]}${m[2]}`, size);
+  if (!at) return null;
+  return { text: text.slice(m[0].length).trim(), at };
+}
+
+/** Strip the stage directions, for anywhere the line is shown as prose. */
+export function stripAnchors(text: string): string {
+  return text.replace(/(^|\n)\s*[[［]\s*[A-HJ-Ta-hj-t]\s?(?:[1-9]|1[0-9])\s*[\]］]\s*/g, '$1');
 }
 
 /**
