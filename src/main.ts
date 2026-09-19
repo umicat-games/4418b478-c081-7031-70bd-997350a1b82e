@@ -28,6 +28,9 @@ import { ChatPanel } from './ui/chat';
 import { Menu } from './ui/menu';
 import { showTitle } from './ui/title';
 import { Autosave, load } from './save';
+import { Course, type Phase } from './teach/course';
+import { LESSONS } from './teach/curriculum';
+import { goalMet, setUp } from './teach/curriculum';
 import { guessLocale, locale as uiLocale, setLocale, t } from './i18n';
 
 /** The player is Black: Black moves first, and the beginner should be the one
@@ -90,6 +93,10 @@ async function start(): Promise<void> {
   let armed: { x: number; y: number } | null = null;
   let lastRemarkAt = -REMARK_COOLDOWN;
   let score: Score | null = null;
+  const course = new Course(saved.profile.course);
+  /** Stones the student had taken when the current exercise was set up — the
+   *  baseline a `capture` goal is measured against. */
+  let capturesAtStart = 0;
 
   // ── the two voices ──────────────────────────────────────────────────────
   const chat = new ChatPanel(umicat, {
@@ -113,8 +120,33 @@ async function start(): Promise<void> {
       return true;
     },
     setLevel: (id) => { level = levelById(id); refresh(); return true; },
-    startGame: (handicap) => { newGame(coach.profile.boardSize, handicap); return true; },
+    startGame: (handicap) => {
+      // A game and a lesson cannot both own the board. Asking for one ends the
+      // other — the student keeps the lessons they have passed.
+      course.leave();
+      newGame(coach.profile.boardSize, handicap);
+      return true;
+    },
     highlight: (points) => view.setHighlights(points),
+    startLesson: (id) => {
+      const lesson = course.start(id || undefined);
+      if (!lesson) return false;
+      coach.profile.mode = 'learning';
+      setUpPhase({ announce: true });
+      return true;
+    },
+    beginExercise: () => {
+      // Only from the explaining phase. A model that calls this twice would
+      // otherwise skip the practice and put the student straight into a test.
+      if (!course.active || course.phase !== 'teach') return false;
+      course.advance();
+      setUpPhase({ announce: true });
+      return true;
+    },
+    leaveCourse: () => {
+      course.leave();
+      newGame(coach.profile.boardSize, 0);
+    },
   });
   coach.load(saved.messages, saved.profile);
 
@@ -147,6 +179,12 @@ async function start(): Promise<void> {
   }
 
   // ── the board ───────────────────────────────────────────────────────────
+  // Where the student is, and what this exercise wants. Both sides of the
+  // lesson can see it: the same sentence goes into the coach's observation.
+  const lessonBar = document.createElement('div');
+  lessonBar.className = 'lesson';
+  hud.appendChild(lessonBar);
+
   const status = document.createElement('div');
   hud.appendChild(status);
   // How to play a stone at all. Shown until the player has played one, ever —
@@ -174,6 +212,36 @@ async function start(): Promise<void> {
         : game.toPlay === HUMAN ? t('hud.yourMove', { level: levelLabel(level.id) }) : t('hud.whiteToPlay');
     }
     confirmBtn.hidden = !armed;
+
+    const lesson = course.lesson;
+    const phase = course.phase;
+    lessonBar.replaceChildren();
+    if (lesson) {
+      const { index, total } = course.position;
+      const head = document.createElement('div');
+      head.className = 'head';
+      head.textContent = `${t('course.banner', { index, total, name: t(`lesson.${lesson.id}` as Parameters<typeof t>[0]) })} · ${t(`course.phase.${phase}` as Parameters<typeof t>[0])}`;
+      lessonBar.appendChild(head);
+      const goal = document.createElement('div');
+      goal.className = 'goal';
+      goal.textContent = phase === 'quiz' ? `${goalText(lesson.id, 'quiz')} ${t('course.quizSilent')}`
+        : phase === 'practice' ? goalText(lesson.id, 'practice')
+          : phase === 'done' ? t('course.passed') : '';
+      lessonBar.appendChild(goal);
+    }
+    retryBtn.hidden = !(course.active && (phase === 'practice' || phase === 'quiz'));
+    nextLessonBtn.hidden = !(course.lesson && phase === 'done');
+    leaveBtn.hidden = !course.lesson;
+    // No hints in a test. A hint button that works during the one part of the
+    // lesson that is being marked is not a hint button, it is the answer.
+    hintBtn.hidden = phase === 'quiz' && course.active;
+    // Passing and resigning are moves in a GAME. In a one-move exercise they
+    // are two buttons that can only confuse — except in the last lesson, which
+    // IS a whole game, and where passing is the thing being taught.
+    const exercise = course.active && phase !== 'teach' && course.problem()?.goal.kind !== 'finish';
+    passBtn.hidden = !!exercise;
+    resignBtn.hidden = !!exercise;
+
     const green = !!game && !game.over && game.toPlay === HUMAN && !thinking;
     tip.textContent = green && coach.profile.gamesPlayed === 0 && game.turns.length < 2
       ? t(coarse ? 'hud.howToPlaceTouch' : 'hud.howToPlaceMouse')
@@ -208,6 +276,107 @@ async function start(): Promise<void> {
         'a point to play and why it is a reasonable first move — not a summary of the rules.',
       );
     }
+  }
+
+  /**
+   * Put the current phase's position on the board.
+   *
+   * Every phase gets a FRESH game rather than an edited one: an exercise that
+   * inherits the last one's ko history or capture count is an exercise whose
+   * goal checker quietly reads the wrong number.
+   */
+  function setUpPhase(opts: { announce?: boolean } = {}): void {
+    const lesson = course.lesson;
+    if (!lesson) return;
+    const problem = course.problem();
+
+    game = new GoGame(lesson.size);
+    if (problem) setUp(game, problem);
+    capturesAtStart = game.captures.black;
+
+    view.setBoardSize(lesson.size);
+    view.setHighlights([]);
+    view.setTerritory(null, [], game);
+    armed = null;
+    view.setGhost(null, HUMAN);
+    read = null;
+    score = null;
+    leadBeforePlayer = null;
+    refresh();
+    persist();
+
+    if (!opts.announce) return;
+    const phase = course.phase;
+    if (phase === 'teach') {
+      void remark(
+        `A new lesson is open: "${lesson.id}". ${lesson.brief} ` +
+        `${problem ? 'There is a position on the board to talk about. ' : ''}` +
+        'Explain it in two or three sentences, then call begin_exercise to put the practice up. ' +
+        'Do not ask them to play yet.',
+      );
+    } else if (phase === 'practice') {
+      void remark(
+        `The practice position for "${lesson.id}" is now on the board, and the student is Black. ` +
+        `What they have to do: ${goalText(lesson.id, 'practice')} Tell them, in one line. Do not give the answer.`,
+      );
+    } else if (phase === 'quiz') {
+      // Deliberately no remark: the test is the one part of a lesson where the
+      // coach has to be quiet, or it is not a test.
+      void 0;
+    }
+  }
+
+  /** What the banner says the student has to do — the same sentence the coach
+   *  is briefed with, so they cannot drift apart. */
+  function goalText(lessonId: string, phase: 'practice' | 'quiz'): string {
+    return t(`lesson.${lessonId}${phase === 'quiz' ? '.quiz' : '.goal'}` as Parameters<typeof t>[0]);
+  }
+
+  /** Did that move finish the exercise? Called once White has answered, where
+   *  White answers at all. */
+  function judgeExercise(played: string): void {
+    const lesson = course.lesson;
+    const problem = course.problem();
+    if (!game || !lesson || !problem) return;
+    const phase = course.phase;
+    const met = goalMet(problem.goal, { game, capturesBefore: capturesAtStart });
+
+    if (met) {
+      const passedQuiz = phase === 'quiz';
+      course.advance();
+      if (passedQuiz && course.phase === 'done') {
+        void remark(
+          `The student passed the test for "${lesson.id}" with ${played}. Say one short thing worth ` +
+          'remembering about the idea, and tell them the next lesson is ready.',
+        );
+        void coach.summarise();
+      } else {
+        void remark(`The student solved the practice for "${lesson.id}" with ${played}. One line of praise, then say the test is next.`);
+      }
+      setUpPhase({ announce: false });
+      refresh();
+      persist();
+      return;
+    }
+
+    const attempts = course.missed();
+    if (phase === 'quiz') {
+      // A test is one attempt at a time, and silence in between. Two failures
+      // and it goes back to practice — the explaining was not what failed, so
+      // the lesson does not restart from the top.
+      if (attempts >= 2) {
+        course.backToPractice();
+        setUpPhase({ announce: true });
+        void remark(`The student failed the test for "${lesson.id}" twice (last try ${played}). Take them back to the practice and explain what they missed.`);
+      } else {
+        setUpPhase({ announce: false });
+      }
+    } else {
+      setUpPhase({ announce: false });
+      void remark(`The student tried ${played} in the "${lesson.id}" practice and it did not achieve it. Nudge them — a hint, not the answer.`);
+    }
+    refresh();
+    persist();
   }
 
   /** Read the position the player is about to move in — the baseline a blunder
@@ -258,6 +427,21 @@ async function start(): Promise<void> {
     view.setHighlights([]);
     refresh();
     persist();
+
+    // Inside a lesson the move is judged against the exercise, not against the
+    // engine's opinion of the whole board — "you lost 3 points" is not an
+    // answer to "did you capture that stone".
+    if (course.active && course.phase !== 'teach') {
+      const problem = course.problem();
+      void (async () => {
+        // White answers only where the exercise says so: a one-move problem
+        // that fires back a reply punishes a beginner for a move they were
+        // never asked to read.
+        if (problem?.reply) await engineTurn();
+        judgeExercise(played);
+      })();
+      return;
+    }
 
     void (async () => {
       await engineTurn();
@@ -312,7 +496,7 @@ async function start(): Promise<void> {
     { size: coach.profile.boardSize, level: level.id, handicap: 0 },
     {
       onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
-      onStart: ({ size, handicap }) => newGame(size, handicap),
+      onStart: ({ size, handicap }) => { course.leave(); newGame(size, handicap); },
     },
   );
   button('btn.setup', () => {
@@ -349,9 +533,25 @@ async function start(): Promise<void> {
     }
   });
 
+  const retryBtn = button('btn.retry', () => setUpPhase({ announce: false }));
+  const nextLessonBtn = button('btn.nextLesson', () => {
+    if (!course.next()) {
+      // Course finished: back to an ordinary game, and the coach gets to say so.
+      newGame(coach.profile.boardSize, 0);
+      void remark('The student has finished the whole course. Say so, briefly, and offer a game.');
+      refresh();
+      return;
+    }
+    setUpPhase({ announce: true });
+  });
+  const leaveBtn = button('btn.leaveCourse', () => {
+    course.leave();
+    newGame(coach.profile.boardSize, 0);
+  });
+
   const confirmBtn = button('btn.place', () => { if (armed) commit(armed); });
   confirmBtn.hidden = true;
-  button('btn.pass', () => {
+  const passBtn = button('btn.pass', () => {
     if (!game || thinking || game.over) return;
     game.pass();
     refresh();
@@ -359,7 +559,7 @@ async function start(): Promise<void> {
     if (game.over) void finish();
     else void engineTurn();
   });
-  button('btn.resign', () => {
+  const resignBtn = button('btn.resign', () => {
     if (!game || game.over) return;
     if (!window.confirm(t('confirm.resign'))) return;
     game.resign(HUMAN);
@@ -372,12 +572,33 @@ async function start(): Promise<void> {
   // ── saving ──────────────────────────────────────────────────────────────
   function persist(): void {
     coach.profile.level = level.id;
+    coach.profile.course = course.progress;
+    coach.course = courseView();
     autosave.queue({
       profile: coach.profile,
       messages: coach.messages,
       // An unfinished game is worth coming back to; a finished one is history.
       game: game && !game.over ? game.snapshot() : null,
     });
+  }
+
+  /** What the coach is told about the course, every turn — so it cannot lose
+   *  its place in a lesson the way a long conversation loses its thread. */
+  function courseView(): NonNullable<typeof coach.course> | null {
+    const lesson = course.lesson;
+    if (!lesson) return null;
+    const { index, total } = course.position;
+    const phase: Phase = course.phase;
+    return {
+      lesson: lesson.id,
+      lesson_is_about: lesson.brief,
+      phase,
+      goal: phase === 'quiz' ? goalText(lesson.id, 'quiz')
+        : phase === 'practice' ? goalText(lesson.id, 'practice')
+          : 'explain the idea, then call begin_exercise',
+      attempts: course.attempts,
+      position: `${index} of ${total}`,
+    };
   }
 
   /**
@@ -424,6 +645,8 @@ async function start(): Promise<void> {
   const choice = await showTitle({
     canContinue: !!saved.game,
     returning: saved.returning,
+    // Where "continue the course" would land: the first lesson not yet passed.
+    lesson: course.finished ? 0 : LESSONS.indexOf(Course.nextFor(course.progress.passed)) + 1,
     loading,
   });
 
@@ -437,12 +660,17 @@ async function start(): Promise<void> {
     redrawChat();
   }
 
-  if (choice === 'continue' && saved.game) {
+  if (choice === 'learn') {
+    coach.profile.mode = 'learning';
+    course.start(course.progress.lesson ?? undefined);
+    setUpPhase({ announce: true });
+  } else if (choice === 'continue' && saved.game) {
     game = GoGame.restore(saved.game);
     view.setBoardSize(game.size);
     refresh();
     void observePosition();
   } else {
+    course.leave();
     newGame(coach.profile.boardSize, 0);
   }
 
@@ -471,8 +699,16 @@ async function start(): Promise<void> {
       levels: () => LEVELS.map((l) => l.id),
       play: (x: number, y: number) => commit({ x, y }),
       pass: () => { game?.pass(); refresh(); void engineTurn(); },
-      newGame: (size: BoardSize, handicap = 0) => newGame(size, handicap),
+      newGame: (size: BoardSize, handicap = 0) => { course.leave(); newGame(size, handicap); },
       menu,
+      course,
+      learn: (id?: string) => {
+        coach.profile.mode = 'learning';
+        course.start(id);
+        setUpPhase({ announce: false });
+      },
+      beginExercise: () => { if (course.phase === 'teach') { course.advance(); setUpPhase({ announce: false }); } },
+      phase: () => course.phase,
       say: (text: string) => talk(text),
       finish,
       get score() { return score; },

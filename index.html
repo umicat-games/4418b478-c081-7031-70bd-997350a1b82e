@@ -28,6 +28,13 @@
       }
       /* The HUD itself stays click-through so the board behind it is still
          playable; anything interactive turns pointer events back on. */
+      #hud .lesson { margin-bottom: 6px; }
+      #hud .lesson:empty { display: none; }
+      #hud .lesson .head {
+        font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+        color: #7fd6c2; font-weight: 700;
+      }
+      #hud .lesson .goal { font-size: 15px; font-weight: 600; }
       #hud .tip {
         font-weight: 500; font-size: 13px; opacity: .72; margin-top: 2px;
       }

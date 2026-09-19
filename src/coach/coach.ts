@@ -22,6 +22,7 @@ import { t } from '../i18n';
 import type { GoGame } from '../go/rules';
 import type { Read } from '../go/opponent';
 import { LEVELS } from '../go/opponent';
+import type { Progress } from '../teach/course';
 
 /** What the coach is allowed to ask the game to do. Deliberately short: each
  *  one is a thing a player could do from the menus anyway. */
@@ -36,9 +37,27 @@ const ACTIONS = [
   { name: 'set_level', description: `How hard the opponent plays. One of: ${LEVELS.map((l) => l.id).join(', ')}.`, args: { level: 'string' } },
   { name: 'start_game', description: 'Begin a new game. handicap 0-5 stones for the student.', args: { handicap: 'integer' } },
   { name: 'highlight', description: 'Mark points on the board while you talk about them, e.g. "D4,E4". Empty string clears.', args: { points: 'string' } },
+  // The course. The coach decides when EXPLAINING is finished, because it is
+  // the only one who can tell whether the student followed it; everything after
+  // that — whether the exercise was solved, which lesson is next — is the
+  // game's, and no action here can touch it.
+  { name: 'start_lesson', description: 'Begin a lesson of the course. Pass its id, or "" for wherever the student had got to.', args: { lesson: 'string' } },
+  { name: 'begin_exercise', description: 'You have finished explaining: put the practice position on the board. Only works while you are explaining.', args: {} },
+  { name: 'leave_course', description: 'Stop the lesson and go back to an ordinary game, because they asked to.', args: {} },
 ] as const;
 
 export type CoachMode = 'learning' | 'playing' | 'unknown';
+
+/** Where the student is in the course — the game's record, handed to the coach
+ *  every turn so it cannot lose its place. */
+export interface CourseView {
+  lesson: string;
+  lesson_is_about: string;
+  phase: 'teach' | 'practice' | 'quiz' | 'done';
+  goal: string;
+  attempts: number;
+  position: string;
+}
 
 export interface Profile {
   /** What the player is here for. The coach asks, and sets it. */
@@ -51,6 +70,8 @@ export interface Profile {
   gamesPlayed: number;
   /** The language the UI is in, once the player has shown us which it is. */
   lang?: string;
+  /** Where the student is in the course. The game's record, not the model's. */
+  course?: Progress;
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -62,6 +83,9 @@ export interface ChatMessage { from: 'coach' | 'player'; text: string; at: numbe
 /** What the game lets the coach change. Each of these validates, and may say no. */
 export interface CoachHooks {
   setMode(mode: CoachMode): void;
+  startLesson(id: string): boolean;
+  beginExercise(): boolean;
+  leaveCourse(): void;
   setBoardSize(size: number): boolean;
   setLevel(level: string): boolean;
   startGame(handicap: number): boolean;
@@ -82,6 +106,9 @@ export class Coach {
   get thinking(): boolean { return this.busy; }
 
   /** The player typed (or said) something. */
+  /** Set by the game before each turn; null when no lesson is open. */
+  course: CourseView | null = null;
+
   async ask(text: string, ctx: { game: GoGame | null; read: Read | null }): Promise<void> {
     this.messages.push({ from: 'player', text, at: Date.now() });
     await this.turn(text, ctx);
@@ -101,7 +128,7 @@ export class Coach {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await this.npc.say(line, { observation: observe(ctx.game, ctx.read, this.profile) });
+      const res = await this.npc.say(line, { observation: observe(ctx.game, ctx.read, this.profile, this.course) });
       this.handle(res, opts);
     } finally {
       this.busy = false;
@@ -153,6 +180,17 @@ export class Coach {
         this.hooks.startGame(handicap);
         return;
       }
+      case 'start_lesson':
+        this.hooks.startLesson(String(args.lesson ?? ''));
+        return;
+      case 'begin_exercise':
+        // Refused unless the lesson is actually in its explaining phase — a
+        // model that calls this twice should not skip the practice.
+        this.hooks.beginExercise();
+        return;
+      case 'leave_course':
+        this.hooks.leaveCourse();
+        return;
       case 'highlight': {
         const size = this.profile.boardSize;
         const points = String(args.points ?? '')
@@ -227,8 +265,9 @@ const fromGtpSafe = (s: string, size: number): { x: number; y: number } | null =
  * read is included because without it the model would guess at who is winning,
  * and it would guess wrong.
  */
-function observe(game: GoGame | null, read: Read | null, profile: Profile): unknown {
+function observe(game: GoGame | null, read: Read | null, profile: Profile, course: CourseView | null): unknown {
   const base = {
+    lesson: course ?? 'not in a lesson right now',
     student: {
       here_for: profile.mode,
       games_played: profile.gamesPlayed,
