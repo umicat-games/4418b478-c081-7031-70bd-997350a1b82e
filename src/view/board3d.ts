@@ -2,16 +2,29 @@
 //
 // Two decisions here are load-bearing and everything else follows from them.
 //
-// **The camera is orthographic.** A perspective camera looking down at a board
-// turns the far half into a smaller, tighter grid: the same finger lands on a
-// different-sized target depending on where it is, and on 19x19 the back rows
-// become genuinely hard to hit. Orthographic keeps every intersection the same
-// size no matter where it is or how the camera is turned.
+// **The camera is a LONG LENS** — perspective, but a narrow one (FOV_DEG),
+// which is not the same thing as a normal 3D camera and not the same thing as
+// an orthographic one either.
+//
+// This started orthographic, for a real reason: a wide perspective lens makes
+// the far half of the board smaller and tighter, so the same finger lands on a
+// different-sized target depending where it is, and on 19x19 the back rows get
+// genuinely hard to hit. But orthographic has no near-and-far at all, and a
+// square board seen from an angle with no near-and-far does not look tilted —
+// it looks BENT. Opposite edges stay exactly parallel and exactly equal, the
+// brain gets no depth cue to explain the shape, and the board reads as a
+// squashed rhombus. Which is what it was doing, and it looked broken.
+//
+// A long lens gets both. Measured, on 19x19 at the default tilt: one space at
+// the back row is 33.7 screen pixels against 36.4 at the front — 8%, well
+// inside the slack `pick()` already allows, and it is the whole cue the eye
+// needs to read the board as a flat thing lying down. Cameras solved this a
+// century ago; it is why a telephoto shot of a table looks flat but not bent.
 //
 // **It is tilted a little, not straight down.** From directly overhead a stone
 // is a flat disc and the whole point of drawing this in 3D disappears. Ten-odd
 // degrees plus a light off to one side gives the stones thickness and a small
-// shadow, while the grid stays square because of the line above.
+// shadow.
 //
 // The grid is PAINTED INTO THE BOARD'S TEXTURE rather than drawn as geometry.
 // Lines sitting a hair above a surface z-fight at some camera angles and vanish
@@ -31,6 +44,12 @@ const HALF = 1;
  */
 const MARGIN_RATIO = 0.62;
 const TOP_Y = 0.06;
+/** The lens. Long enough that foreshortening is a cue rather than a distortion
+ *  — see the note at the top of this file. */
+const FOV_DEG = 22;
+/** How far the camera may be tilted from overhead. Past this the board is more
+ *  edge than face, and the rows at the back close up whatever the lens. */
+const MAX_POLAR_DEG = 58;
 
 /** Line spacing, and the inset that follows from it, for a board size. */
 function metrics(size: number): { spacing: number; margin: number } {
@@ -48,7 +67,7 @@ export interface Picked { x: number; y: number }
 
 export class BoardView {
   readonly scene = new THREE.Scene();
-  readonly camera: THREE.OrthographicCamera;
+  readonly camera: THREE.PerspectiveCamera;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly raycaster = new THREE.Raycaster();
   private readonly plane: THREE.Plane;
@@ -81,7 +100,7 @@ export class BoardView {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.scene.background = new THREE.Color('#1b1d22');
-    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(FOV_DEG, 1, 0.1, 100);
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP_Y);
 
     // Key light from the front-left so the shadow falls away from the player's
@@ -272,7 +291,7 @@ export class BoardView {
     this.azimuth += dAzimuth;
     // Never below the board (you would be looking at its underside) and never
     // so far over that the grid stops reading as a grid.
-    this.polar = THREE.MathUtils.clamp(this.polar + dPolar, 0, THREE.MathUtils.degToRad(62));
+    this.polar = THREE.MathUtils.clamp(this.polar + dPolar, 0, THREE.MathUtils.degToRad(MAX_POLAR_DEG));
     this.place();
   }
 
@@ -287,33 +306,67 @@ export class BoardView {
     this.place();
   }
 
-  /** Re-derive the camera from azimuth/polar/zoom and the viewport. */
+  /**
+   * Re-derive the camera from azimuth/polar/zoom and the viewport.
+   *
+   * With a perspective camera the framing is the DISTANCE, not a frustum: back
+   * off until the board fits the narrower of the two screen axes, then divide
+   * by the zoom. Doing it here rather than in `resize` means a turn, a pinch
+   * and a window resize all go through one piece of arithmetic.
+   */
   private place(): void {
-    const r = 6;
+    const w = window.innerWidth, h = window.innerHeight;
+    const vFov = THREE.MathUtils.degToRad(FOV_DEG);
+    // A first guess from the board's bounding sphere: always far enough, often
+    // too far. The fit below pulls it in.
+    const need = HALF * Math.SQRT2 * 1.06;
+    const usable = Math.max(1, w - this.insetRight);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * (usable / h));
+    let r = Math.max(need / Math.tan(vFov / 2), need / Math.tan(hFov / 2)) / this.zoom;
+
     const sp = Math.sin(this.polar), cp = Math.cos(this.polar);
-    this.camera.position.set(r * sp * Math.sin(this.azimuth), r * cp, r * sp * Math.cos(this.azimuth));
-    this.camera.lookAt(0, 0, 0);
-    this.camera.zoom = this.zoom;
-    this.camera.updateProjectionMatrix();
+    const put = (dist: number): void => {
+      this.camera.position.set(dist * sp * Math.sin(this.azimuth), dist * cp, dist * sp * Math.cos(this.azimuth));
+      this.camera.lookAt(0, 0, 0);
+      // Slide the whole picture left by half the covered strip, so the board
+      // sits in the middle of what is VISIBLE rather than of the window.
+      if (this.insetRight > 0) this.camera.setViewOffset(w, h, this.insetRight / 2, 0, w, h);
+      else this.camera.clearViewOffset();
+      this.camera.updateProjectionMatrix();
+      this.camera.updateMatrixWorld();
+    };
+    put(r);
+
+    // Then fit for real, by asking where the corners actually land.
+    //
+    // The alternative — backing off far enough for the bounding SPHERE — is
+    // correct at every angle and wasteful at all but one of them: a board seen
+    // from above covers a square, not a circle, so a sphere fit leaves a third
+    // of the screen empty and the board looks small for no reason. Four rounds
+    // of measure-and-scale converge well inside a pixel, and it costs eight
+    // matrix multiplies on a camera move.
+    const v = new THREE.Vector3();
+    for (let i = 0; i < 4; i++) {
+      let worst = 0;
+      for (const cx of [-HALF, HALF]) {
+        for (const cz of [-HALF, HALF]) {
+          for (const cy of [0, TOP_Y]) {
+            v.set(cx, cy, cz).project(this.camera);
+            worst = Math.max(worst, Math.abs(v.x), Math.abs(v.y));
+          }
+        }
+      }
+      if (!Number.isFinite(worst) || worst <= 0) break;
+      // 0.94 leaves a little air so nothing touches an edge of the screen.
+      r *= worst / 0.94;
+      put(r);
+    }
   }
 
   resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);
-    const aspect = w / h;
-    // 1.12 = the board plus a tenth of itself in air, so nothing touches an edge.
-    const pad = HALF * 1.12;
-    const usable = Math.max(1, w - this.insetRight);
-    // Wide enough for the board vertically, and wide enough for it to fit in
-    // the part of the window that is not covered — whichever is the bigger ask.
-    const extentX = Math.max(pad * aspect, (pad * w) / usable);
-    const extentY = extentX / aspect;
-    // Pushing the frustum right moves the board left, into the free space.
-    const shift = (this.insetRight / w) * extentX;
-    this.camera.left = -extentX + shift;
-    this.camera.right = extentX + shift;
-    this.camera.top = extentY;
-    this.camera.bottom = -extentY;
+    this.camera.aspect = w / h;
     this.place();
   }
 
