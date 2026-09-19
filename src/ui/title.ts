@@ -16,6 +16,9 @@ export interface TitleOptions {
   returning: boolean;
   /** Which lesson the course would open at, 1-based; 0 when it is finished. */
   lesson: number;
+  /** Have they actually started the course? Someone who has only played games
+   *  is being invited to learn, not asked to carry on with something. */
+  lessonStarted: boolean;
   /** Resolves when the engine is ready; until then the buttons say so. */
   loading: Promise<unknown>;
 }
@@ -67,7 +70,7 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
     // this game wants to be taught, and "Start" next to "Learn to play" is a
     // choice between a blank board and someone explaining it.
     if (opts.lesson > 0) {
-      add(opts.returning ? t('title.continueLesson', { index: opts.lesson }) : t('title.learn'), 'learn', true);
+      add(opts.lessonStarted ? t('title.continueLesson', { index: opts.lesson }) : t('title.learn'), 'learn', true);
     }
     if (opts.canContinue) add(t('title.continue'), 'continue', opts.lesson === 0);
     add(t(opts.canContinue ? 'title.newGame' : opts.returning ? 'title.play' : 'title.start'), 'new', opts.lesson === 0 && !opts.canContinue);

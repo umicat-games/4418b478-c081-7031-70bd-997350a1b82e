@@ -573,6 +573,7 @@ async function start(): Promise<void> {
     {
       onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
       onStart: ({ size, handicap }) => { course.leave(); newGame(size, handicap); },
+      onTitle: () => void toTitle(),
     },
   );
   button('btn.setup', () => {
@@ -726,37 +727,71 @@ async function start(): Promise<void> {
   // The HUD and the chat belong to the game, not to the title — and a button
   // showing faintly through a title screen reads as a rendering bug.
   document.body.classList.add('titling');
-  const choice = await showTitle({
-    canContinue: !!saved.game,
-    returning: saved.returning,
-    // Where "continue the course" would land: the first lesson not yet passed.
-    lesson: course.finished ? 0 : LESSONS.indexOf(Course.nextFor(course.progress.passed)) + 1,
-    loading,
-  });
+  /**
+   * Put the title screen up and act on what is chosen.
+   *
+   * Used at boot and every time someone leaves a game, which is why it reads
+   * the CURRENT state rather than the save it booted from: after an hour of
+   * play, "is there a game to continue?" is a question about the board in
+   * front of them, not about what was on disk when the tab opened.
+   */
+  async function toTitle(): Promise<void> {
+    // Whatever is on screen belongs to the game being left.
+    speech.hide();
+    menu.close();
+    chat.setOpen(false);
+    await autosave.flush();
 
-  document.body.classList.remove('titling');
-  idleSpin = false;
-  view.resetCamera();
+    document.body.classList.add('titling');
+    idleSpin = true;
+    const unfinished = (!!game && !game.over && !course.active) || (!game && !!saved.game);
+    const choice = await showTitle({
+      canContinue: unfinished,
+      returning: saved.returning || coach.profile.gamesPlayed > 0 || coach.messages.length > 0,
+      // Where "continue the course" would land: the first lesson not yet passed.
+      lesson: course.finished ? 0 : LESSONS.indexOf(Course.nextFor(course.progress.passed)) + 1,
+      lessonStarted: course.progress.passed.length > 0 || !!course.progress.lesson,
+      loading,
+    });
 
-  if (choice === 'forget') {
-    await Promise.all([umicat.saves.delete('profile'), umicat.saves.delete('chat'), umicat.saves.delete('game')]);
-    coach.load([], { ...coach.profile, summary: '', gamesPlayed: 0, mode: 'unknown' });
-    redrawChat();
-  }
+    document.body.classList.remove('titling');
+    idleSpin = false;
+    view.resetCamera();
 
-  if (choice === 'learn') {
-    coach.profile.mode = 'learning';
-    course.start(course.progress.lesson ?? undefined);
-    setUpPhase({ announce: true });
-  } else if (choice === 'continue' && saved.game) {
-    game = GoGame.restore(saved.game);
-    view.setBoardSize(game.size);
-    refresh();
-    void observePosition();
-  } else {
+    if (choice === 'forget') {
+      await Promise.all([umicat.saves.delete('profile'), umicat.saves.delete('chat'), umicat.saves.delete('game')]);
+      coach.load([], { ...coach.profile, summary: '', gamesPlayed: 0, mode: 'unknown' });
+      course.leave();
+      spoken = 0;
+      redrawChat();
+    }
+
+    if (choice === 'learn') {
+      coach.profile.mode = 'learning';
+      course.start(course.progress.lesson ?? undefined);
+      setUpPhase({ announce: true });
+      return;
+    }
+    if (choice === 'continue') {
+      // The game in progress if there is one; otherwise the one on disk. A
+      // player who walked out to the title and straight back in should find
+      // the board exactly as they left it.
+      if (game && !game.over && !course.active) { refresh(); return; }
+      const snapshot = await umicat.saves.get<ReturnType<GoGame['snapshot']>>('game');
+      if (snapshot) {
+        course.leave();
+        game = GoGame.restore(snapshot);
+        view.setBoardSize(game.size);
+        refresh();
+        void observePosition();
+        return;
+      }
+    }
     course.leave();
     newGame(coach.profile.boardSize, 0);
   }
+
+  await toTitle();
 
   // The first thing that happens is the coach asking what the player came for
   // — unless it already knows, in which case asking again would be the rudest

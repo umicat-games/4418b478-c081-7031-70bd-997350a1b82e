@@ -22,6 +22,8 @@ export interface MenuOptions {
   onStart(choice: MenuChoice): void;
   /** The level changed while no game was running. */
   onLevel(level: string): void;
+  /** Leave for the title screen. */
+  onTitle(): void;
 }
 
 const SIZES: BoardSize[] = [9, 13, 19];
@@ -102,6 +104,15 @@ export class Menu {
       note.textContent = t('menu.note');
       this.el.appendChild(note);
     }
+
+    // The way out. In the settings rather than the button bar because that is
+    // where a game keeps "quit to menu", and quiet because leaving mid-game is
+    // not what most of the taps in here are for.
+    const home = document.createElement('button');
+    home.className = 'home';
+    home.textContent = t('menu.toTitle');
+    home.onclick = () => { this.close(); this.opts.onTitle(); };
+    this.el.appendChild(home);
   }
 
   private group(label: string, items: Array<{ label: string; on: boolean; pick(): void }>): HTMLDivElement {

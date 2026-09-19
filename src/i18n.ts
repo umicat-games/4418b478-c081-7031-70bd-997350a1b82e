@@ -107,6 +107,7 @@ const EN = {
   'menu.start': 'Start',
   'menu.startNew': 'Start a new game',
   'menu.note': 'Board and head start apply to the next game.',
+  'menu.toTitle': 'Back to title',
 
   'chat.coach': 'Coach',
   'chat.ask': 'Ask the coach…',
@@ -219,6 +220,7 @@ const ZH: Partial<Record<Key, string>> = {
   'menu.start': '开始',
   'menu.startNew': '新开一局',
   'menu.note': '棋盘和让子从下一局开始生效。',
+  'menu.toTitle': '返回标题',
 
   'chat.coach': '老师',
   'chat.ask': '问老师…',
