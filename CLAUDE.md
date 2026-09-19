@@ -1798,6 +1798,20 @@ standing still in exactly the case the option exists for.
   most crowded strip of the screen, at a size where the labels are already
   clipping. The KEYS still work; only the caption is gone, until the hotbar gets
   a design of its own. This is a casual game and it does not ask for fast hands.
+- **The right-hand buttons sit on an ARC, not in a row** (three-sdk 0.14.0).
+  A thumb is hinged at the bottom corner and sweeps around it, so controls at
+  the same height are at different reaches. Worth knowing WHY this came up:
+  the old layout was a wrapping flex row whose wrap was being forced by the
+  third button, so dropping jump silently flattened the two that were left into
+  a line. Measured on a landscape phone: attack at (730, 337), place at (800,
+  267) — low-left to up-right, twenty pixels of air between the circles.
+
+  It broke a check, and the lesson is about checks. `verify-3d-touch-layout`
+  measured overlap by intersecting BOUNDING BOXES, and two circles on a
+  diagonal clip at the corner while the circles themselves are well apart — it
+  reported a 9x9px collision that hit-testing says belongs to neither button.
+  Border-radius clips hit testing; a rectangle is not the shape. The probe asks
+  what is actually AT the shared pixels now.
 - **The hotbar dodges the buttons SIDEWAYS, and only climbs as a last resort.**
   Climbing is the wrong first move because the button cluster WRAPS: clearing
   the bottom row lands you in the row above it. The same seven cells that caused
