@@ -67,6 +67,7 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   chatter_found_food: { en: "Oh! There's a snack in my bag — let me sit down and have a bite.", 'zh-CN': '咦，包里还有吃的～我坐下歇会儿，吃点东西。' },
   chatter_ate: { en: 'Munch munch — that hit the spot!', 'zh-CN': '吃点东西，力气回来啦～' },
   chatter_thanks: { en: 'Ooh, for me? Thank you — yum!', 'zh-CN': '哇，是给我的吗？谢谢你～好好吃！' },
+  chatter_rod_unlocked: { en: 'We\'ve got enough wood — now we can craft a fishing rod at the workbench!', 'zh-CN': '木头够啦——现在可以在工作台做鱼竿咯！' },
   chatter_full: { en: "I'm stuffed — couldn't eat another bite!", 'zh-CN': '我现在饱饱的，吃不下啦～' },
   chatter_bag_full: { en: "My little bag is full — no more room!", 'zh-CN': '我的小背包装不下更多啦～' },
   chatter_coop_no_room: { en: "There's no room for a bigger coop here!", 'zh-CN': '这里放不下更大的鸡舍啦～' },
@@ -216,6 +217,11 @@ const STRINGS: Record<string, Record<Lang, string>> = {
   mail_reminder_mail: { en: "We've got new mail! Let's go check the mailbox.", 'zh-CN': '我们有新邮件啦！一起去邮箱看看吧～' },
   mail_reminder_both: { en: "Our new mail AND a delivery came in! Let's check the mailbox.", 'zh-CN': '我们有新邮件，还有新货物送到啦！一起去邮箱看看吧～' },
   jamin_letter_title: { en: 'A letter from Jamin', 'zh-CN': 'Jamin 的来信' },
+  jamin_rod_title: { en: 'Jamin • Go fishing!', 'zh-CN': 'Jamin • 去钓鱼吧！' },
+  jamin_rod_body: {
+    en: "Hi {name}!\n\nThe waters around our island are full of fish. Want to try fishing? You'll need a fishing rod — gather up about 20 pieces of wood and you'll be able to craft one at the workbench.\n\nHappy fishing!\n\n— Jamin",
+    'zh-CN': '嗨 {name}！\n\n我们岛周围的水里有好多鱼呢。想不想试试钓鱼？你需要一根鱼竿——攒够大约 20 块木头，就能在工作台做出来啦。\n\n祝你钓得开心！\n\n—— Jamin',
+  },
   jamin_letter_body: {
     en: "Hi {name}!\n\nI'm so happy you've come to Catopia to look after our little island together with {cato}.\n\nFrom time to time I'll write with news from around Catopia and the curious things I find out in the world — so keep an eye on the mailbox!\n\n— Jamin",
     'zh-CN': '嗨 {name}！\n\n真高兴你来到 Catopia，和 {cato} 一起照看我们这座小岛。\n\n我会不定期写信，分享 Catopia 的新消息和我在外面世界的新发现，记得常看看邮箱哦！\n\n—— Jamin',

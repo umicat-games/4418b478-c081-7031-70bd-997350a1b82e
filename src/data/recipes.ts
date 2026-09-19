@@ -10,21 +10,23 @@ export interface RecipeMat { id: string; count: number }
 // `price` set → a WORKBENCH TOOL recipe: materials come from the backpack (+ chest), it also
 // costs coins, and crafting plays the making cinematic (output → the 工具 tab if it's a tool,
 // else the backpack). No `price` → a legacy chest recipe (materials + output both in the chest).
-export interface Recipe { id: string; output: string; count: number; materials: RecipeMat[]; price?: number }
+// `requiresFlag` set → a LOCKED recipe: only shown/craftable once that event flag is set (see the
+// data-driven event engine — e.g. gather 20 wood → unlock the fishing rod). Absent = always available.
+export interface Recipe { id: string; output: string; count: number; materials: RecipeMat[]; price?: number; requiresFlag?: string }
 
 // Starter recipes, all using EXISTING items (turn harvested goods back into seeds /
 // saplings / bushes, and stone into building pieces). Tune freely in recipes.json.
 const FALLBACK: Recipe[] = [
   // Workbench TOOL recipes only (materials from the backpack + coins → the making cinematic).
   { id: 'stick', output: 'stick', count: 1, materials: [{ id: 'wood', count: 1 }], price: 30 },
-  { id: 'fishing-rod', output: 'fishing-rod', count: 1, materials: [{ id: 'stick', count: 1 }, { id: 'fiber', count: 1 }], price: 100 },
+  { id: 'fishing-rod', output: 'fishing-rod', count: 1, materials: [{ id: 'stick', count: 1 }, { id: 'fiber', count: 1 }], price: 100, requiresFlag: 'fishing-recipe-unlocked' },
 ];
 
 // MUTABLE, populated by applyRecipeData() at boot; seeded with the fallback so the game
 // works even if the data file never loads. Consumers import the live reference.
 export let RECIPES: Recipe[] = FALLBACK.slice();
 
-interface RecipeRow { id?: string; output?: string; count?: number; materials?: RecipeMat[]; price?: number }
+interface RecipeRow { id?: string; output?: string; count?: number; materials?: RecipeMat[]; price?: number; requiresFlag?: string }
 
 /** Replace RECIPES with the loaded table (`public/data/recipes.json`, shape
  *  `{ recipes: RecipeRow[] }`). Tolerant: keeps the fallback if the payload is unusable. */
@@ -39,7 +41,7 @@ export function applyRecipeData(json: unknown): void {
       .map((m) => ({ id: m.id, count: Math.round(m.count) }));
     if (mats.length === 0) continue;
     const price = typeof r.price === 'number' && r.price >= 0 ? Math.round(r.price) : undefined;
-    next.push({ id: r.id || r.output, output: r.output, count: Math.max(1, Math.round(r.count ?? 1)), materials: mats, price });
+    next.push({ id: r.id || r.output, output: r.output, count: Math.max(1, Math.round(r.count ?? 1)), materials: mats, price, requiresFlag: typeof r.requiresFlag === 'string' ? r.requiresFlag : undefined });
   }
   if (next.length === 0) return; // unusable → keep fallback
   RECIPES = next;

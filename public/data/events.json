@@ -13,6 +13,29 @@
           "subst": { "name": "@callName", "cato": "@catoName" }
         }
       ]
+    },
+    {
+      "id": "jamin-fishing-tip",
+      "once": true,
+      "when": [ { "type": "day-since-start", "gte": 2 } ],
+      "do": [
+        {
+          "type": "send-mail",
+          "sender": "Jamin",
+          "titleKey": "jamin_rod_title",
+          "bodyKey": "jamin_rod_body",
+          "subst": { "name": "@callName" }
+        }
+      ]
+    },
+    {
+      "id": "unlock-fishing-recipe",
+      "once": true,
+      "when": [ { "type": "item-count", "item": "wood", "gte": 20 } ],
+      "do": [
+        { "type": "unlock", "id": "fishing-recipe-unlocked" },
+        { "type": "cato-say", "key": "chatter_rod_unlocked" }
+      ]
     }
   ]
 }

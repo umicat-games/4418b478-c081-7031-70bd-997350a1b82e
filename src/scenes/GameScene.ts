@@ -8211,9 +8211,17 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('craft', { visible: false, rev: ++this.craftRev });
   }
 
-  /** Build the crafting model from RECIPES + current chest counts and publish it. */
+  /** Recipes the workbench shows now: all EXCEPT locked ones whose `requiresFlag` event flag isn't set
+   *  yet (e.g. the fishing rod, unlocked by the gather-20-wood event). `craftSel` indexes THIS list. */
+  private visibleRecipes(): Recipe[] {
+    return RECIPES.filter((r) => !r.requiresFlag || this.eventFlags[r.requiresFlag]);
+  }
+
+  /** Build the crafting model from the visible recipes + current chest counts and publish it. */
   private publishCraft(): void {
-    const recipes = RECIPES.map((r) => ({
+    const vis = this.visibleRecipes();
+    if (this.craftSel >= vis.length) this.craftSel = 0; // a recipe (un)locking shifted the list → clamp
+    const recipes = vis.map((r) => ({
       id: r.id,
       iconKey: itemFromId(r.output, 1).iconKey ?? 'fruit-items',
       iconFrame: itemFromId(r.output, 1).iconFrame ?? 0,
@@ -8221,7 +8229,7 @@ export class GameScene extends Phaser.Scene {
       count: r.count,
       ok: this.canCraftRecipe(r),
     }));
-    const sel = RECIPES[this.craftSel];
+    const sel = vis[this.craftSel];
     const detail = sel
       ? {
           name: sel.count > 1 ? `${this.itemName(sel.output)} ×${sel.count}` : this.itemName(sel.output),
@@ -8257,7 +8265,7 @@ export class GameScene extends Phaser.Scene {
   /** Craft the selected recipe: deduct materials from the chest, add the output to it. */
   private doCraft(): void {
     playSfx(this); // craft-button click
-    const r = RECIPES[this.craftSel];
+    const r = this.visibleRecipes()[this.craftSel];
     if (!r) return;
     if (r.price != null) { this.doCraftTool(r); return; } // workbench: materials-anywhere + coins + cinematic
     if (!r.materials.every((m) => this.chestCountOf(m.id) >= m.count)) { this.flashCraftMsg(t('craft_need')); return; }
