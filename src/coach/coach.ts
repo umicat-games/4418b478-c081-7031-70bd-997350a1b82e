@@ -18,6 +18,7 @@
 import type { ThreeUmicat } from '@umicat/three-sdk';
 import type { AiActResult } from '@umicat/platform-sdk/protocol.js';
 import { toGtp } from '../go/coords';
+import { t } from '../i18n';
 import type { GoGame } from '../go/rules';
 import type { Read } from '../go/opponent';
 import { LEVELS } from '../go/opponent';
@@ -103,11 +104,9 @@ export class Coach {
       // Structured refusals, not exceptions: an anonymous player needs a
       // sign-in prompt, not a stack trace, and a player out of credits needs to
       // know the game still plays fine without the coach.
-      const text = res.reason === 'SIGN_IN_REQUIRED'
-        ? 'Sign in and I can talk you through the game. The board works either way.'
-        : res.reason === 'INSUFFICIENT_CREDITS'
-          ? 'I am out of credits, so I will stop talking — the game plays on without me.'
-          : 'I lost my train of thought. Ask me again?';
+      const text = t(res.reason === 'SIGN_IN_REQUIRED' ? 'chat.signIn'
+        : res.reason === 'INSUFFICIENT_CREDITS' ? 'chat.noCredits'
+          : 'chat.lost');
       this.messages.push({ from: 'coach', text, at: Date.now() });
       return;
     }

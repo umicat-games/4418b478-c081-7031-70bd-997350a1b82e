@@ -5,6 +5,7 @@
 // reports what the player typed or said — so the coach can be swapped, muted or
 // unavailable (signed out, out of credits) without any of that reaching here.
 import './chat.css';
+import { t } from '../i18n';
 import type { ChatMessage } from '../coach/coach';
 import type { ThreeUmicat } from '@umicat/three-sdk';
 
@@ -34,14 +35,18 @@ export class ChatPanel {
     this.el.id = 'chat';
     this.el.className = 'collapsed';
     this.el.innerHTML = `
-      <div class="pill"><span class="who">Coach</span><span class="text"></span><span class="more">tap</span></div>
+      <div class="pill"><span class="who"></span><span class="text"></span><span class="more"></span></div>
       <div class="log"></div>
       <div class="composer">
-        <input type="text" placeholder="Ask the coach…" autocomplete="off" />
+        <input type="text" autocomplete="off" />
         <button class="mic" title="Speak" hidden>${MIC}</button>
         <button class="send" title="Send">${SEND}</button>
       </div>`;
     document.body.appendChild(this.el);
+
+    this.el.querySelector('.pill .who')!.textContent = t('chat.coach');
+    this.el.querySelector('.pill .more')!.textContent = t('chat.tap');
+    (this.el.querySelector('input') as HTMLInputElement).placeholder = t('chat.ask');
 
     this.log = this.el.querySelector('.log')!;
     this.pillText = this.el.querySelector('.pill .text')!;
@@ -66,10 +71,10 @@ export class ChatPanel {
     this.open = open;
     this.el.className = open ? 'open' : 'collapsed';
     if (open) {
-      this.el.querySelector('.pill .more')!.textContent = 'close';
+      this.el.querySelector('.pill .more')!.textContent = t('chat.close');
       this.scrollToEnd();
     } else {
-      this.el.querySelector('.pill .more')!.textContent = 'tap';
+      this.el.querySelector('.pill .more')!.textContent = t('chat.tap');
       this.stopMic();
     }
     this.opts.onLayout?.(open);
@@ -82,7 +87,7 @@ export class ChatPanel {
     this.thinking = thinking;
 
     const last = [...messages].reverse().find((m) => m.from === 'coach');
-    this.pillText.textContent = thinking ? 'thinking…' : last?.text ?? 'Say hello.';
+    this.pillText.textContent = thinking ? t('chat.thinking') : last?.text ?? t('chat.sayHello');
 
     this.log.replaceChildren(...messages.map((m) => {
       const div = document.createElement('div');
@@ -133,9 +138,7 @@ export class ChatPanel {
         if (this.input.value) this.send();
       },
       onError: (kind) => {
-        this.input.placeholder = kind === 'not-allowed'
-          ? 'Microphone blocked — type instead'
-          : 'Did not catch that — try again';
+        this.input.placeholder = t(kind === 'not-allowed' ? 'chat.micBlocked' : 'chat.micRetry');
       },
       onEnd: () => { this.stopMic(); },
     });

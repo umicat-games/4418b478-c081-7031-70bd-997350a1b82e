@@ -81,6 +81,10 @@ export class BoardView {
   private ghostMesh: THREE.Mesh;
   /** Rings the coach points with. One mesh per marked point, pooled. */
   private highlights: THREE.Mesh[] = [];
+  /** Territory marks, shown only once the game is counted. */
+  private territory: Record<'black' | 'white', THREE.InstancedMesh> | null = null;
+  /** Keys of stones the count found dead, so they can be drawn as removed. */
+  private dead = new Set<string>();
   /** Screen width, in pixels, the chat panel is occupying on the right. */
   private insetRight = 0;
 
@@ -177,6 +181,24 @@ export class BoardView {
     // Slate is nearly black and glossy; clamshell is warm white and softer.
     this.stones = { black: mk(0x14161a, 0.28), white: mk(0xf2efe6, 0.44) };
 
+    if (this.territory) {
+      for (const m of Object.values(this.territory)) { this.scene.remove(m); m.dispose(); }
+    }
+    // Flat, unlit squares: territory is information, not an object on the
+    // board, and shading it would make it read as another kind of stone.
+    const tile = new THREE.PlaneGeometry(0.34, 0.34).rotateX(-Math.PI / 2);
+    const tmk = (color: number): THREE.InstancedMesh => {
+      const mesh = new THREE.InstancedMesh(tile, new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.85, depthWrite: false,
+      }), capacity);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.count = 0;
+      mesh.renderOrder = 2;
+      this.scene.add(mesh);
+      return mesh;
+    };
+    this.territory = { black: tmk(0x0b0d10), white: tmk(0xfbf8f0) };
+
     const s = this.spacing;
     this.ghostMesh.scale.setScalar(s);
     this.marker.scale.setScalar(s * 0.48);
@@ -196,9 +218,14 @@ export class BoardView {
     const m = new THREE.Matrix4();
     const counts = { black: 0, white: 0 };
     const scale = new THREE.Vector3(this.spacing, this.spacing, this.spacing);
+    const dead = new THREE.Vector3(this.spacing * 0.5, this.spacing * 0.3, this.spacing * 0.5);
     for (const stone of game.stones()) {
       const mesh = this.stones[stone.player];
-      m.compose(this.at(stone.x, stone.y), new THREE.Quaternion(), scale);
+      // A stone the count found dead is drawn small — it is off the board in
+      // the arithmetic, and leaving it full size is how a player ends up
+      // certain they were robbed.
+      const isDead = this.dead.has(`${stone.x},${stone.y}`);
+      m.compose(this.at(stone.x, stone.y), new THREE.Quaternion(), isDead ? dead : scale);
       mesh.setMatrixAt(counts[stone.player]++, m);
     }
     for (const key of ['black', 'white'] as const) {
@@ -271,6 +298,42 @@ export class BoardView {
       // reads as "this one" rather than being hidden underneath it.
       ring.position.set(at.x, TOP_Y + this.spacing * 0.42, at.z);
     });
+  }
+
+  /**
+   * Show (or clear) the count.
+   *
+   * `owner` is one entry per intersection — 1 black, −1 white, 0 nobody — and
+   * `dead` the stones standing on ground the other side owns. Pass null to put
+   * the board back to how it plays.
+   */
+  setTerritory(owner: number[] | null, dead: Array<{ x: number; y: number }> = [], game?: GoGame): void {
+    this.dead = new Set(dead.map((d) => `${d.x},${d.y}`));
+    if (game) this.sync(game);
+    if (!this.territory) return;
+
+    const counts = { black: 0, white: 0 };
+    if (owner) {
+      const m = new THREE.Matrix4();
+      const scale = new THREE.Vector3(this.spacing, this.spacing, this.spacing);
+      const q = new THREE.Quaternion();
+      for (let y = 0; y < this.size; y++) {
+        for (let x = 0; x < this.size; x++) {
+          const side = owner[y * this.size + x] ?? 0;
+          if (side === 0) continue;
+          const key = side === 1 ? 'black' : 'white';
+          const at = this.at(x, y);
+          // Just clear of the wood, and clear of a dead stone's shrunken dome.
+          m.compose(new THREE.Vector3(at.x, TOP_Y + this.spacing * 0.02, at.z), q, scale);
+          this.territory[key].setMatrixAt(counts[key]++, m);
+        }
+      }
+    }
+    for (const key of ['black', 'white'] as const) {
+      this.territory[key].count = counts[key];
+      this.territory[key].instanceMatrix.needsUpdate = true;
+      this.territory[key].computeBoundingSphere();
+    }
   }
 
   /**

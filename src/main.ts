@@ -21,11 +21,14 @@ import { BoardView } from './view/board3d';
 import { attachBoardControls } from './view/controls';
 import { GoGame, type BoardSize } from './go/rules';
 import { toGtp } from './go/coords';
-import { LEVELS, Opponent, levelById, type Read } from './go/opponent';
+import { LEVELS, Opponent, levelById, levelLabel, type Read } from './go/opponent';
+import { describe as describeScore, scoreFrom, type Score } from './go/scoring';
 import { Coach } from './coach/coach';
 import { ChatPanel } from './ui/chat';
+import { Menu } from './ui/menu';
 import { showTitle } from './ui/title';
 import { Autosave, load } from './save';
+import { setLocale, t } from './i18n';
 
 /** The player is Black: Black moves first, and the beginner should be the one
  *  who gets to start rather than the one who has to answer. */
@@ -40,6 +43,8 @@ const REMARK_COOLDOWN = 4;
 
 async function start(): Promise<void> {
   const umicat = await ThreeUmicat.init();
+  // Before any UI exists: everything below asks `t()` for its words.
+  setLocale(umicat.locale);
 
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const hud = document.getElementById('hud')!;
@@ -73,6 +78,7 @@ async function start(): Promise<void> {
   let thinking = false;
   let armed: { x: number; y: number } | null = null;
   let lastRemarkAt = -REMARK_COOLDOWN;
+  let score: Score | null = null;
 
   // ── the two voices ──────────────────────────────────────────────────────
   const chat = new ChatPanel(umicat, {
@@ -122,13 +128,15 @@ async function start(): Promise<void> {
     if (game) view.sync(game);
     if (!game) { status.textContent = ''; return; }
     if (game.over) {
-      status.textContent = game.resignedBy
-        ? `${game.resignedBy === HUMAN ? 'You resigned' : 'White resigned'} — game over.`
-        : 'Both passed — game over.';
+      status.textContent = score
+        ? describeScore(score, game)
+        : game.resignedBy
+          ? t(game.resignedBy === HUMAN ? 'hud.youResigned' : 'hud.whiteResigned')
+          : t('hud.counting');
     } else {
       status.textContent = thinking
-        ? 'White is thinking…'
-        : game.toPlay === HUMAN ? `Your move · ${level.label}` : 'White to play';
+        ? t('hud.whiteThinking')
+        : game.toPlay === HUMAN ? t('hud.yourMove', { level: levelLabel(level.id) }) : t('hud.whiteToPlay');
     }
     confirmBtn.hidden = !armed;
   }
@@ -141,6 +149,8 @@ async function start(): Promise<void> {
     armed = null;
     view.setGhost(null, HUMAN);
     read = null;
+    score = null;
+    view.setTerritory(null, [], game);
     leadBeforePlayer = null;
     lastRemarkAt = -REMARK_COOLDOWN;
     refresh();
@@ -172,7 +182,7 @@ async function start(): Promise<void> {
       else game.resign('white');
     } catch (err) {
       console.error('[go] engine failed', err);
-      status.textContent = 'The engine stumbled — your move again.';
+      status.textContent = t('hud.engineStumbled');
     } finally {
       thinking = false;
       refresh();
@@ -181,7 +191,7 @@ async function start(): Promise<void> {
 
     const taken = game.captures.white - before;
     if (game.over) {
-      void remark(`The game just ended. Black ${describeEnd(game)}.`);
+      void finish();
     } else if (taken >= 3 && game.turns.length - lastRemarkAt >= REMARK_COOLDOWN) {
       void remark(`White just captured ${taken} of the student's stones.`);
     }
@@ -238,23 +248,66 @@ async function start(): Promise<void> {
     bar.appendChild(b);
     return b;
   };
-  const confirmBtn = button('Place', () => { if (armed) commit(armed); });
+  const menu = new Menu(
+    { size: coach.profile.boardSize, level: level.id, handicap: 0 },
+    {
+      onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
+      onStart: ({ size, handicap }) => newGame(size, handicap),
+    },
+  );
+  button(t('btn.setup'), () => {
+    menu.sync({ size: game?.size ?? coach.profile.boardSize, level: level.id }, !!game && !game.over);
+    menu.toggle();
+  });
+
+  /**
+   * Show what the engine would play.
+   *
+   * Free, in the sense that matters: the engine runs on this machine, so a hint
+   * costs a second of battery and nothing of the player's credits. The coach is
+   * not involved — if they want to know WHY, they can ask, and that is the call
+   * worth paying for.
+   */
+  const hintBtn = button(t('btn.hint'), async () => {
+    if (!game || game.over || thinking || game.toPlay !== HUMAN) return;
+    hintBtn.disabled = true;
+    const was = status.textContent;
+    status.textContent = t('hud.looking');
+    try {
+      const r = await opponent.read(game, 200);
+      const best = r.candidates.find((c) => c.x >= 0 && game!.legal(c.x, c.y));
+      if (best) {
+        view.setHighlights([{ x: best.x, y: best.y }]);
+        status.textContent = t('hud.engineWouldPlay', { point: toGtp(best.x, best.y, game.size) });
+      } else {
+        status.textContent = t('hud.engineWouldPass');
+      }
+    } catch {
+      status.textContent = was;
+    } finally {
+      hintBtn.disabled = false;
+    }
+  });
+
+  const confirmBtn = button(t('btn.place'), () => { if (armed) commit(armed); });
   confirmBtn.hidden = true;
-  button('Pass', () => {
+  button(t('btn.pass'), () => {
     if (!game || thinking || game.over) return;
     game.pass();
     refresh();
-    void engineTurn();
+    // Two passes end it there and then; the engine never gets a turn.
+    if (game.over) void finish();
+    else void engineTurn();
   });
-  button('Resign', () => {
+  button(t('btn.resign'), () => {
     if (!game || game.over) return;
-    if (!window.confirm('Resign this game?')) return;
+    if (!window.confirm(t('confirm.resign'))) return;
     game.resign(HUMAN);
     refresh();
     persist();
-    void remark('The student resigned.');
+    void finish();
   });
-  button('Recentre', () => view.resetCamera());
+  button(t('btn.recentre'), () => view.resetCamera());
 
   // ── saving ──────────────────────────────────────────────────────────────
   function persist(): void {
@@ -267,12 +320,39 @@ async function start(): Promise<void> {
     });
   }
 
-  /** A finished game is the moment the coach's note is worth rewriting: it is
-   *  when the most has just been learned, and it is not in anyone's way. */
-  async function closeOut(): Promise<void> {
+  /**
+   * The end of a game: count it, show it, talk about it, remember it.
+   *
+   * The count comes from a FRESH read of the final position at high visits —
+   * not from the read the last move was chosen with, which is one move stale
+   * and can be wrong about a stone that just died. It is also the one moment in
+   * the game where spending a second of thinking is free: nobody is waiting on
+   * their turn.
+   */
+  async function finish(): Promise<void> {
     if (!game?.over) return;
     coach.profile.gamesPlayed += 1;
     persist();
+
+    if (!game.resignedBy) {
+      try {
+        const final = await opponent.read(game, 300);
+        read = final;
+        score = scoreFrom(game, final);
+        view.setTerritory(score.owner, score.dead, game);
+      } catch (err) {
+        console.warn('[go] could not count the board', err);
+      }
+    }
+    refresh();
+
+    await remark(score
+      ? `The game is over and counted. ${describeScore(score, game)}` +
+        (score.unsettled ? ' (The position was still unsettled, so treat the count as approximate.)' : '') +
+        (score.dead.length ? ` ${score.dead.length} stones were dead on the board.` : '')
+      : `The game just ended. ${describeEnd(game)}.`);
+
+    // Written last, when the game it is about is genuinely finished.
     await coach.summarise();
     persist();
   }
@@ -332,8 +412,10 @@ async function start(): Promise<void> {
       play: (x: number, y: number) => commit({ x, y }),
       pass: () => { game?.pass(); refresh(); void engineTurn(); },
       newGame: (size: BoardSize, handicap = 0) => newGame(size, handicap),
+      menu,
       say: (text: string) => talk(text),
-      closeOut,
+      finish,
+      get score() { return score; },
       board: () => game?.board.map((row) => row.map((c) => (c === 'black' ? 'b' : c === 'white' ? 'w' : '.')).join('')) ?? [],
     },
   });

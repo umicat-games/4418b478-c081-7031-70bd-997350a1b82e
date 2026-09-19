@@ -19,6 +19,7 @@
 // board is not "a weaker player", it is a move no human would ever consider,
 // and a beginner shown one learns something false.
 import { getKataGoEngineClient } from '../engine/katago/client';
+import { t, type Key } from '../i18n';
 import type { GoGame } from './rules';
 
 /**
@@ -39,29 +40,28 @@ export const MODEL_URL = new URL('models/katago-small.bin.gz', document.baseURI)
 
 export interface Level {
   id: string;
-  /** Shown to the player. Not a rank claim — see `about`. */
-  label: string;
-  /** One line on what playing this feels like. */
-  about: string;
   visits: number;
   temperature: number;
-  /** Stones the player takes before the game starts. */
-  handicap?: number;
 }
 
 /**
- * The ladder. Calibrated by play-testing rather than by rank arithmetic, and
- * the labels say what it FEELS like rather than claiming a kyu grade — a number
- * we have not measured would be a lie in a game whose whole point is teaching.
+ * The ladder. Calibrated by play-testing rather than by rank arithmetic.
+ *
+ * What each level is CALLED, and the sentence describing how it plays, live in
+ * `i18n.ts` — partly so they translate, and partly because they are a promise
+ * to the player about feel ("misses what you are threatening") rather than a
+ * kyu grade, which we have not measured and will not claim.
  */
 export const LEVELS: Level[] = [
-  { id: 'gentle', label: 'Gentle', about: 'Plays sound shapes, misses what you are threatening.', visits: 2, temperature: 1.1 },
-  { id: 'steady', label: 'Steady', about: 'Sees one exchange ahead. Will take what you leave hanging.', visits: 12, temperature: 0.7 },
-  { id: 'sharp', label: 'Sharp', about: 'Reads capture races. Punishes loose shape.', visits: 64, temperature: 0.35 },
-  { id: 'strong', label: 'Strong', about: 'Full strength for this board. Expect to lose.', visits: 400, temperature: 0 },
+  { id: 'gentle', visits: 2, temperature: 1.1 },
+  { id: 'steady', visits: 12, temperature: 0.7 },
+  { id: 'sharp', visits: 64, temperature: 0.35 },
+  { id: 'strong', visits: 400, temperature: 0 },
 ];
 
 export const levelById = (id: string): Level => LEVELS.find((l) => l.id === id) ?? LEVELS[1];
+export const levelLabel = (id: string): string => t(`level.${id}` as Key);
+export const levelAbout = (id: string): string => t(`level.${id}.about` as Key);
 
 /** What the opponent decided to do. `pass` and `resign` are real answers, not
  *  failure cases — an engine that is behind by enough should say so. */

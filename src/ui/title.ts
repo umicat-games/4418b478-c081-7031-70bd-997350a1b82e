@@ -5,6 +5,7 @@
 // about the player outlives any one game, the same way a teacher does not
 // forget you between lessons. Forgetting is a separate, deliberate thing.
 import './title.css';
+import { t } from '../i18n';
 
 export type TitleChoice = 'continue' | 'new' | 'forget';
 
@@ -22,9 +23,13 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
   el.id = 'title';
   el.innerHTML = `
     <h1>GO with me</h1>
-    <p class="sub">Play Go against a real engine, with a coach who will talk you through it.</p>
+    <p class="sub"></p>
     <div class="buttons"></div>
-    <p class="status">Waking up the engine…</p>`;
+    <p class="status"></p>`;
+  // Set as text, not as markup: a translation is content, and content does not
+  // go through innerHTML.
+  el.querySelector('.sub')!.textContent = t('title.tagline');
+  el.querySelector('.status')!.textContent = t('title.loading');
   document.body.appendChild(el);
 
   const buttons = el.querySelector('.buttons')!;
@@ -49,23 +54,21 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
     };
 
     if (opts.canContinue) {
-      add('Continue', 'continue', true);
-      add('New game', 'new');
+      add(t('title.continue'), 'continue', true);
+      add(t('title.newGame'), 'new');
     } else {
-      add(opts.returning ? 'Play' : 'Start', 'new', true);
+      add(t(opts.returning ? 'title.play' : 'title.start'), 'new', true);
     }
     // Only offered to someone who has a past worth erasing, and never made the
     // easy button to hit by accident.
     if (opts.returning) {
-      const forget = add('Start fresh', 'forget');
-      forget.title = 'Forget everything the coach knows about you, and begin again.';
-      forget.onclick = () => {
-        if (window.confirm('This clears the coach’s memory of you and any unfinished game. Sure?')) choose('forget');
-      };
+      const forget = add(t('title.fresh'), 'forget');
+      forget.title = t('title.freshHint');
+      forget.onclick = () => { if (window.confirm(t('title.freshConfirm'))) choose('forget'); };
     }
 
     void opts.loading
-      .then(() => { status.textContent = 'Engine ready.'; })
-      .catch(() => { status.textContent = 'The engine could not load — the coach can still talk.'; });
+      .then(() => { status.textContent = t('title.ready'); })
+      .catch(() => { status.textContent = t('title.failed'); });
   });
 }
