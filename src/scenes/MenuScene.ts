@@ -149,6 +149,10 @@ export class MenuScene extends Phaser.Scene {
   private scrollStepPx = 60;         // px per row (set by the active render — for swipe/wheel feel)
   private swipeY: number | null = null; // touch swipe anchor (null = not swiping)
   private swipeAccum = 0;
+  private lastLetterBody = '';           // the letter body currently shown → reset scroll to top on a NEW letter
+  private letterScroll = 0;              // letter body scroll offset in LINES (own state — the shared this.scroll is clamped by the mail LIST)
+  private letterMax = 0;                 // max letter line offset (0 = fits, no scroll)
+  private letterActive = false;          // a scrollable letter is currently shown → wheel/swipe drive letterScroll, not the grid
 
   constructor() { super({ key: 'MenuScene' }); }
 
@@ -162,6 +166,7 @@ export class MenuScene extends Phaser.Scene {
       const now = this.time.now;
       if (now - this.lastWheelMs < WHEEL_MS) return;
       this.lastWheelMs = now;
+      if (this.letterActive) { this.setLetterScroll(this.letterScroll + (dy > 0 ? 1 : -1)); return; } // a scrollable letter → scroll it, not the grid
       this.setScroll(this.scroll + (dy > 0 ? 1 : -1));
     });
     // TOUCH swipe-to-scroll (mouse uses the wheel / rail; touch has neither, and dragging
@@ -171,10 +176,16 @@ export class MenuScene extends Phaser.Scene {
       if (p.wasTouch && this.shown && !this.menuRoot) { this.swipeY = p.y; this.swipeAccum = 0; }
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (!p.wasTouch || !p.isDown || !this.shown || this.menuRoot || this.swipeY == null || this.maxScrollRows === 0) return;
+      if (!p.wasTouch || !p.isDown || !this.shown || this.menuRoot || this.swipeY == null) return;
+      if (this.maxScrollRows === 0 && !this.letterActive) return; // nothing scrollable
       this.swipeAccum += this.swipeY - p.y; // finger up (y decreases) → positive → scroll toward later rows
       this.swipeY = p.y;
       const step = Math.max(24, this.scrollStepPx);
+      if (this.letterActive) { // a scrollable letter → swipe its lines
+        while (this.swipeAccum >= step) { this.swipeAccum -= step; this.setLetterScroll(this.letterScroll + 1); }
+        while (this.swipeAccum <= -step) { this.swipeAccum += step; this.setLetterScroll(this.letterScroll - 1); }
+        return;
+      }
       while (this.swipeAccum >= step) { this.swipeAccum -= step; this.setScroll(this.scroll + 1); }
       while (this.swipeAccum <= -step) { this.swipeAccum += step; this.setScroll(this.scroll - 1); }
     });
@@ -211,6 +222,14 @@ export class MenuScene extends Phaser.Scene {
       }
     }
     this.updateHover();
+  }
+
+  /** Scroll the open LETTER body to line `v` (clamped) + re-render. Separate from the grid/list scroll. */
+  private setLetterScroll(v: number): void {
+    const clamped = Phaser.Math.Clamp(v, 0, this.letterMax);
+    if (clamped === this.letterScroll || !this.m) return;
+    this.letterScroll = clamped;
+    this.build(this.m, false);
   }
 
   /** Scroll the active list to row `v` (clamped) + re-render at the new offset. */
@@ -276,6 +295,7 @@ export class MenuScene extends Phaser.Scene {
     this.root?.destroy();
     this.shown = true;
     this.m = m;
+    this.letterActive = false; // set true by the letter render if a scrollable letter is shown
     this.slotTargets = []; this.hovered = null;
     const tabSwitch = !slide && m.tab !== this.prevTab; // animate content only on a real tab change
     this.prevTab = m.tab;
@@ -662,23 +682,42 @@ export class MenuScene extends Phaser.Scene {
     const rule = this.add.graphics(); rule.fillStyle(0xa98d63, 1); rule.fillRect(rx + rw * 0.16, ry + rh * 0.145, rw * 0.68, Math.max(2, rh * 0.006)); c.add(rule);
     c.add(this.T(rx + rw / 2, ry + rh * 0.205, d.sender, Math.round(fs * 0.8), SUB));
     // LETTER (a prose note, e.g. from Jamin) — no item rows / total, just the wrapped body on a paper
-    // bar. Font auto-SHRINKS to fit the paper height so a long letter never spills past the panel.
+    // bar. The body SCROLLS when it's taller than the paper (font stays a readable fixed size): it's
+    // clipped to the paper and the menu's shared scroll (wheel / touch-swipe / rail-drag) moves it,
+    // since renderMailDetail runs AFTER the list so the letter claims `maxScrollRows` when it overflows.
     if (d.kind === 'letter') {
-      const px = rx + rw * 0.06, pw = rw * 0.88, pyTop = ry + rh * 0.26, ph = rh * 0.70;
+      const px = rx + rw * 0.06, pw = rw * 0.86, pyTop = ry + rh * 0.26, ph = rh * 0.70;
       const radius = Math.max(6, rh * 0.02);
       const paper = this.add.graphics();
       paper.fillStyle(0xefe4c8, 1); paper.fillRoundedRect(px, pyTop, pw, ph, radius);
       paper.lineStyle(Math.max(1, rh * 0.004), 0xd8c69e, 1); paper.strokeRoundedRect(px, pyTop, pw, ph, radius);
       c.add(paper);
-      const innerW = pw * 0.88, innerH = ph * 0.88, bx = px + pw * 0.06, by = pyTop + ph * 0.06;
-      const mk = (size: number): Phaser.GameObjects.Text => this.add.text(bx, by, d.body ?? '', {
-        fontFamily: dialogFont(), fontSize: size + 'px', color: '#4a2e12', align: 'left',
-        lineSpacing: Math.round(size * 0.38), wordWrap: { width: innerW }, resolution: RES,
-      }).setOrigin(0, 0);
-      let bodyFs = Math.round(fs * 0.92);
-      let body = mk(bodyFs);
-      if (body.height > innerH) { bodyFs = Math.max(11, Math.floor(bodyFs * (innerH / body.height))); body.destroy(); body = mk(bodyFs); }
+      const padX = pw * 0.06, padY = ph * 0.06, innerW = pw - padX * 2, innerH = ph - padY * 2, bx = px + padX, byTop = pyTop + padY;
+      const size = Math.round(fs * 0.92);
+      if ((d.body ?? '') !== this.lastLetterBody) { this.lastLetterBody = d.body ?? ''; this.letterScroll = 0; } // a NEW letter → start at the top
+      const style = { fontFamily: dialogFont(), fontSize: size + 'px', color: '#4a2e12', align: 'left' as const, lineSpacing: Math.round(size * 0.38), wordWrap: { width: innerW }, resolution: RES };
+      const body = this.add.text(bx, byTop, d.body ?? '', style).setOrigin(0, 0);
+      // Scroll by rendering only the VISIBLE slice of wrapped lines (no GPU mask — masks render black on
+      // some setups). Its OWN scroll (letterScroll) — the shared this.scroll is claimed by the mail LIST.
+      const lines = body.getWrappedText(d.body ?? '');
+      const totalLines = Math.max(1, lines.length);
+      const lineH = body.height / totalLines;
+      const visibleLines = Math.max(1, Math.floor(innerH / lineH));
+      this.letterMax = Math.max(0, totalLines - visibleLines);
+      if (this.letterScroll > this.letterMax) this.letterScroll = this.letterMax;
+      this.letterActive = this.letterMax > 0;
+      body.setText(lines.slice(this.letterScroll, this.letterScroll + visibleLines).join('\n'));
       c.add(body);
+      if (this.letterMax > 0) { // right-edge scrollbar indicator (wheel / touch-swipe scroll it)
+        const barX = px + pw + Math.max(8, rw * 0.02), wbar = Math.max(11, H * 0.016), r = wbar / 2, left = barX - wbar / 2;
+        const g = this.add.graphics();
+        g.fillStyle(0x3a2a12, 0.20); g.fillRoundedRect(left, pyTop, wbar, ph, r);
+        const thumbH = Math.max(wbar * 2.4, ph * (visibleLines / totalLines));
+        const thumbY = pyTop + (this.letterScroll / this.letterMax) * (ph - thumbH);
+        g.fillStyle(0x9a7b4f, 1); g.fillRoundedRect(left, thumbY, wbar, thumbH, r);
+        g.fillStyle(0xbf9d63, 1); g.fillRoundedRect(left + 2, thumbY + 2, wbar - 4, wbar - 4, r * 0.7);
+        c.add(g);
+      }
       return;
     }
     // Item rows: cream bars (icon + count badge + name + subtotal / ×count). The list has NO scroll —
@@ -1224,6 +1263,7 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('menuRail', null); this.registry.set('menuShopRows', []); this.registry.set('menuStepper', []);
     this.registry.set('menuHouseRows', []); this.registry.set('menuHouseBuy', null);
     this.menuRoot?.destroy(); this.menuRoot = undefined; this.menuRev = -1;
+    this.lastLetterBody = ''; this.letterScroll = 0; this.letterActive = false; // reset the letter scroll for the next open
     this.slotTargets = []; this.menuTargets = []; this.hovered = null;
     if (!this.shown) { this.root?.destroy(); this.root = undefined; this.panel = undefined; this.dim = undefined; return; }
     this.shown = false;
