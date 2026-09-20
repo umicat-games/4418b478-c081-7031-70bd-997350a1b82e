@@ -98,6 +98,7 @@ const EN = {
   'btn.resign': 'Resign',
   'btn.recentre': 'Recentre',
   'btn.setup': 'Setup',
+  'btn.log': 'Conversation',
   'btn.hint': 'Hint',
   'confirm.resign': 'Resign this game?',
 
@@ -225,6 +226,7 @@ const ZH: Partial<Record<Key, string>> = {
   'btn.resign': '认输',
   'btn.recentre': '回正',
   'btn.setup': '设置',
+  'btn.log': '对话记录',
   'btn.hint': '提示',
   'confirm.resign': '这局认输?',
 

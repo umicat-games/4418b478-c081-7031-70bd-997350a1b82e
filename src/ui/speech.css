@@ -12,10 +12,14 @@
   width: min(330px, 62vw);
   padding: 11px 15px 13px;
   border-radius: 14px;
-  background: rgba(16, 20, 27, 0.93);
+  /* See-through, because it stands ON the board and the thing it is talking
+     about is often underneath it. "I've marked it" over an opaque box that
+     covers the mark is the companion contradicting itself. The blur is what
+     keeps the text readable over wood grain at this alpha. */
+  background: rgba(16, 20, 27, 0.66);
   border: 1px solid rgba(127, 214, 194, 0.45);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px) saturate(0.85);
   color: #f4f5f7;
   font: 15px/1.5 system-ui, -apple-system, sans-serif;
   cursor: pointer;
@@ -138,7 +142,8 @@
   height: 12px;
   margin-left: -6px;
   transform: rotate(45deg);
-  background: rgba(16, 20, 27, 0.93);
+  background: rgba(16, 20, 27, 0.66);
+  backdrop-filter: blur(14px) saturate(0.85);
   border-right: 1px solid rgba(127, 214, 194, 0.45);
   border-bottom: 1px solid rgba(127, 214, 194, 0.45);
 }

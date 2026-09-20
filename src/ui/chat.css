@@ -16,14 +16,13 @@
 
 /* ── collapsed ─────────────────────────────────────────────────────────── */
 
-#chat.collapsed {
-  top: max(12px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: min(620px, 74vw);
-}
-#chat.collapsed .log,
-#chat.collapsed .composer { display: none; }
+/* Closed, it is not on screen at all.
+ *
+ * It used to be a line across the top showing the newest thing said — which is
+ * also what the bubble on the board says, in the place it is about. Two copies
+ * of every sentence, and the top one took the top of the board with it. The
+ * way in is a button beside the gear now. */
+#chat.collapsed { display: none; }
 
 #chat .pill {
   display: flex;

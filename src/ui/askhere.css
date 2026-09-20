@@ -13,10 +13,11 @@
   transform: translate(-50%, -100%);
   padding: 10px 12px 12px;
   border-radius: 14px;
-  background: rgba(16, 20, 27, 0.95);
+  /* Same reason as the speech bubble: it stands on the board. */
+  background: rgba(16, 20, 27, 0.66);
   border: 1px solid rgba(127, 214, 194, 0.45);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px) saturate(0.85);
   color: #f4f5f7;
   font: 15px/1.4 system-ui, -apple-system, sans-serif;
 }
@@ -90,7 +91,8 @@
   width: 12px; height: 12px;
   margin-left: -6px;
   transform: rotate(45deg);
-  background: rgba(16, 20, 27, 0.95);
+  background: rgba(16, 20, 27, 0.66);
+  backdrop-filter: blur(14px) saturate(0.85);
   border-right: 1px solid rgba(127, 214, 194, 0.45);
   border-bottom: 1px solid rgba(127, 214, 194, 0.45);
 }

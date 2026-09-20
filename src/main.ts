@@ -176,6 +176,12 @@ async function start(): Promise<void> {
   let thinking = false;
   let score: Score | null = null;
   let lastRemarkAt = -REMARK_COOLDOWN;
+  /** Points the companion has rings on. The speech bubble keeps off them:
+   *  "I've marked it" printed over the mark is the companion contradicting
+   *  itself, and transparency alone only half-answers that. */
+  let shown: Array<{ x: number; y: number }> = [];
+  /** The same list, as the hook writes it. */
+  let marks: Array<{ x: number; y: number }> = [];
 
   // ── the companion ───────────────────────────────────────────────────────
   const chat = new ChatPanel(umicat, {
@@ -212,7 +218,7 @@ async function start(): Promise<void> {
     },
     // Parsed HERE, against the board that is actually on screen. The coach
     // hands the points over as it wrote them.
-    highlight: (points) => view.setHighlights(parsePoints(points)),
+    highlight: (points) => { marks = parsePoints(points); shown = marks; view.setHighlights(marks); },
     // The companion asks for a group's liberties; the GAME counts them. A model
     // asked to count liberties on a board it cannot really see will answer
     // confidently and be wrong, and that number is the whole point here.
@@ -235,6 +241,7 @@ async function start(): Promise<void> {
         }
       }
       view.setHighlights(marks);
+      shown = marks;
       return { liberties, stones: group.length, points: marks.map((m) => toGtp(m.x, m.y, board.size)) };
     },
   });
@@ -337,8 +344,18 @@ async function start(): Promise<void> {
       const gap = view.screenSpacing * 0.7 + 12;
       const x = Math.min(Math.max(p.x, box.width / 2 + margin), free - box.width / 2 - margin);
       const top = p.y - gap;
-      if (top - box.height >= margin) speech.place(x, top, Math.abs(x - p.x) < 2);
-      else speech.place(x, p.y + gap + box.height, false);
+      // Above unless there is no room, and then below — but if the side it
+      // would take is sitting on a ring it has just drawn, take the other one.
+      const above = { top: top - box.height, bottom: top };
+      const below = { top: p.y + gap, bottom: p.y + gap + box.height };
+      const fits = (r: { top: number; bottom: number }): boolean => r.top >= margin;
+      const covers = (r: { top: number; bottom: number }): number => shown.filter((m) => {
+        const s = view.screenOf(m.x, m.y);
+        return s.x > x - box.width / 2 - 8 && s.x < x + box.width / 2 + 8 && s.y > r.top - 8 && s.y < r.bottom + 8;
+      }).length;
+      const useAbove = fits(above) && (covers(above) <= covers(below) || !fits(below));
+      if (useAbove) speech.place(x, top, Math.abs(x - p.x) < 2);
+      else speech.place(x, below.bottom, false);
       return;
     }
     // Nothing to point at: the middle of the board, because this is someone
@@ -380,6 +397,7 @@ async function start(): Promise<void> {
     coach.profile.boardSize = size;
     view.setBoardSize(size);
     view.setHighlights([]);
+    shown = [];
     view.setFocus(null);
     view.setTerritory(null, [], game);
     actions.hide();
@@ -466,6 +484,7 @@ async function start(): Promise<void> {
     askHere.hide();
     view.setGhost(null, HUMAN);
     view.setHighlights([]);
+    shown = [];
     view.setFocus(null);
     refresh();
     persist();
@@ -558,6 +577,19 @@ async function start(): Promise<void> {
       onClose: () => { if (!game) void toTitle(); },
     },
   );
+
+  /** The way into the log, now that the top line is gone. Same icon as the one
+   *  beside a stone, because it opens the same thing: what was said. */
+  const logBtn = document.createElement('button');
+  logBtn.className = 'lift quiet icon';
+  logBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path d="M20.5 11.5a7.5 7.5 0 0 1-7.5 7.5H8.8L4.5 21.8V17A7.5 7.5 0 1 1 20.5 11.5z"/>'
+    + '<path d="M9 10.5h6M9 13.5h4"/>'
+    + '</svg>';
+  logBtn.title = t('btn.log');
+  logBtn.setAttribute('aria-label', t('btn.log'));
+  logBtn.onclick = () => chat.toggle();
+  bar.appendChild(logBtn);
 
   const gear = document.createElement('button');
   gear.className = 'lift quiet icon';
