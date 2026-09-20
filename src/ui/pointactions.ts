@@ -1,5 +1,12 @@
 // The three things you can do to a point: play it, forget it, ask about it.
 //
+// The tick and the cross are mirror images about the point — that is what makes
+// them read as a pair belonging to the stone under them. The first version laid
+// all three out in a row and centred the ROW, which put the stone off to one
+// side of its own buttons, because a row with two on the right and one on the
+// left has its centre in the wrong place. "Ask" sits below instead: it is the
+// odd one out, and it should look like it.
+//
 // They appear beside the point itself. Placing was a button in the bottom-left
 // corner on touch and a bare click on a mouse — two rules, and the touch one
 // made the player look away from the stone they were aiming at to press
@@ -26,7 +33,6 @@ export class PointActions {
   private el: HTMLDivElement;
   private okBtn: HTMLButtonElement;
   private askBtn: HTMLButtonElement;
-  private gap: HTMLSpanElement;
   private point: { x: number; y: number } | null = null;
 
   constructor(private opts: PointActionsOptions) {
@@ -35,14 +41,12 @@ export class PointActions {
     this.el.hidden = true;
     this.el.innerHTML =
       `<button class="ok lift" title="Place">${TICK}</button>`
-      + '<span class="gap"></span>'
       + `<button class="no lift dark" title="Cancel">${CROSS}</button>`
       + `<button class="ask lift dark" title="Ask">${ASK}</button>`;
     document.body.appendChild(this.el);
 
     this.okBtn = this.el.querySelector('.ok')!;
     this.askBtn = this.el.querySelector('.ask')!;
-    this.gap = this.el.querySelector('.gap')!;
 
     this.okBtn.onclick = () => { const at = this.point; this.hide(); if (at) this.opts.onConfirm(at); };
     (this.el.querySelector('.no') as HTMLButtonElement).onclick = () => { this.hide(); this.opts.onCancel(); };
@@ -72,11 +76,14 @@ export class PointActions {
     this.point = null;
   }
 
-  /** Follow the point on screen. Called every frame: the camera moves. */
+  /** Follow the point on screen. Called whenever the board is redrawn, since
+   *  that is when the camera can have moved. */
   place(screen: { x: number; y: number }, spacing: number): void {
-    // The gap is the stone's own width plus a little, so the two buttons sit
-    // either side of it rather than on top of it.
-    this.gap.style.width = `${Math.max(spacing * 1.15, 30)}px`;
+    // Far enough out to clear the stone (half its width) plus half a button,
+    // plus a little air. Derived from the board's line spacing, so it holds at
+    // every zoom level and on every board size.
+    const r = Math.max(spacing * 0.55, 22) + 22;
+    this.el.style.setProperty('--r', `${Math.round(r)}px`);
     this.el.style.left = `${Math.round(screen.x)}px`;
     this.el.style.top = `${Math.round(screen.y)}px`;
   }

@@ -1,26 +1,26 @@
 /* Confirm, cancel and ask — on the stone, not in the corner.
  *
- * Placing used to be a button in the bottom-left on touch and a bare click on
- * a mouse: two different rules, and the touch one asked the player to look
- * away from the stone they were aiming to press something in a corner. The
- * buttons live beside the stone now, so the whole move happens in one place
- * and reads the same on every device. */
+ * Each button is placed against the POINT, not laid out in a row. A row of
+ * three centred on the point puts the gap where the stone is off to one side,
+ * because the row has two buttons on the right and one on the left — which is
+ * exactly how it looked: a tick further from the stone than the cross. The
+ * tick and the cross are now mirror images about the point, and "ask", which
+ * is the odd one out, sits below rather than pretending to be part of a pair. */
 
 #pointactions {
   position: fixed;
-  /* ABOVE the companion's bubble (26), not below it. These three buttons are
-     the move the player is making right now; a sentence about the board, no
-     matter how recent, must not be sitting on top of the tick. */
+  /* ABOVE the companion's bubble (26). These buttons are the move the player
+     is making right now; a sentence about the board, however recent, must not
+     be sitting on top of the tick. */
   z-index: 27;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
   pointer-events: none;
 }
 #pointactions[hidden] { display: none; }
 
 #pointactions button {
+  position: absolute;
   pointer-events: auto;
   width: 40px;
   height: 40px;
@@ -30,9 +30,11 @@
   place-items: center;
 }
 #pointactions button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-#pointactions button.ask { --top: rgba(127,214,194,.5); }
 #pointactions button[hidden] { display: none; }
+#pointactions button.ask { --top: rgba(127, 214, 194, 0.5); }
 
-/* The gap the stone sits in. Width is set from the board's line spacing, so
-   the buttons stay clear of the stone at every zoom level. */
-#pointactions .gap { flex: none; }
+/* `--r` is how far from the point a button sits, set from the board's line
+   spacing so the pair clears the stone at any zoom. */
+#pointactions .ok { transform: translate(calc(-50% - var(--r)), -50%); }
+#pointactions .no { transform: translate(calc(-50% + var(--r)), -50%); }
+#pointactions .ask { transform: translate(-50%, calc(-50% + var(--r))); }
