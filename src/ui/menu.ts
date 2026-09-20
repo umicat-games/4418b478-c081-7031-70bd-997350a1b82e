@@ -150,9 +150,14 @@ export class Menu {
       this.el.appendChild(actions);
     }
 
+    // Sound is a setting, not a question about the game being started. Opened
+    // from the title this panel asks three things — which board, which
+    // opponent, how many stones — and everything else it could ask makes that
+    // list longer without making the decision better.
+    //
     // Two switches, not two sliders. A Go board makes one sound; the useful
     // question is whether it makes it, not how loudly.
-    this.el.appendChild(this.group(t('menu.sound'), [
+    if (!this.standalone) this.el.appendChild(this.group(t('menu.sound'), [
       { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
       { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
     ]));
