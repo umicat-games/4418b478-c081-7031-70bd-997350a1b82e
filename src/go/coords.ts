@@ -17,7 +17,10 @@ export const toGtp = (x: number, y: number, size: number): string =>
  *  point on THIS board — which is the common case when a language model makes
  *  one up, and the reason this returns null instead of throwing. */
 export function fromGtp(text: string, size: number): { x: number; y: number } | null {
-  const m = /^\s*([A-HJ-Ta-hj-t])\s*(\d{1,2})\s*$/.exec(text);
+  // Trimmed of whatever it arrived wrapped in — "(D4)", "D4.", "「D4」". A
+  // model writing a coordinate inside punctuation is writing a coordinate,
+  // and refusing it means a mark that silently never appears.
+  const m = /^[^A-Za-z0-9]*([A-HJ-Ta-hj-t])\s*(\d{1,2})[^A-Za-z0-9]*$/.exec(text);
   if (!m) return null;
   const x = LETTERS.indexOf(m[1].toUpperCase());
   const y = size - Number(m[2]);

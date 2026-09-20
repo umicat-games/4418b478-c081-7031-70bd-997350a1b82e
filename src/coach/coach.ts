@@ -29,7 +29,11 @@ const ACTIONS = [
   { name: 'set_board_size', description: 'Change the board to 9, 13 or 19. Only between games.', args: { size: 'integer' } },
   { name: 'set_level', description: `How hard the opponent plays. One of: ${LEVELS.map((l) => l.id).join(', ')}.`, args: { level: 'string' } },
   { name: 'start_game', description: 'Begin a new game. handicap 0-5 stones for the student.', args: { handicap: 'integer' } },
-  { name: 'highlight', description: 'Mark points on the board while you talk about them, e.g. "D4,E4". Empty string clears.', args: { points: 'string' } },
+  // The description is what the model actually reads when it picks a tool, so
+  // it says what this one does NOT do: it kept being chosen for "how many
+  // liberties does this stone have?", where it marks the stone the player
+  // already knew about and counts nothing.
+  { name: 'highlight', description: 'Draw rings on points you are talking about, e.g. "D4,E4" (coordinates only; empty string clears). It COUNTS NOTHING — for liberties or how much air a group has, use show_liberties instead.', args: { points: 'string' } },
   // The course. The coach decides when EXPLAINING is finished, because it is
   // the only one who can tell whether the student followed it; everything after
   // that — whether the exercise was solved, which lesson is next — is the
@@ -74,8 +78,10 @@ export interface CoachHooks {
   showLiberties(point: string): { liberties: number; stones: number; points: string[] } | null;
   setLevel(level: string): boolean;
   startGame(handicap: number): boolean;
-  /** Mark these points, as written ("D4,E4"); empty clears. */
-  highlight(points: string): void;
+  /** Mark these points, as written ("D4,E4"); empty clears. Returns how many
+   *  were actually put on the board — a coordinate the game cannot read marks
+   *  nothing, and saying "marked it" anyway is worse than saying nothing. */
+  highlight(points: string): number;
 }
 
 export class Coach {
@@ -229,9 +235,17 @@ export class Coach {
         });
         return true;
       }
-      case 'highlight':
-        this.hooks.highlight(String(args.points ?? ''));
-        return false;
+      case 'highlight': {
+        const asked = String(args.points ?? '');
+        const marked = this.hooks.highlight(asked);
+        if (!asked.trim() || marked > 0) return false;
+        // It named something the board does not have. Told to the player,
+        // because they are looking at a board with nothing new on it, and to
+        // the model, because it can try again with a real coordinate.
+        this.npc.note(`[the board] "${asked}" is not a point on this board, so nothing was marked. Use coordinates like D4.`);
+        this.messages.push({ from: 'coach', at: Date.now(), text: t('chat.markFailed', { points: asked }) });
+        return true;
+      }
       default:
         // An unknown tool name is the model inventing a capability. Ignoring it
         // is the whole safety story working, so it is worth a line in the log

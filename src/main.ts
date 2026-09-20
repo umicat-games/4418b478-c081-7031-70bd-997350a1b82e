@@ -218,7 +218,12 @@ async function start(): Promise<void> {
     },
     // Parsed HERE, against the board that is actually on screen. The coach
     // hands the points over as it wrote them.
-    highlight: (points) => { marks = parsePoints(points); shown = marks; view.setHighlights(marks); },
+    highlight: (points) => {
+      marks = parsePoints(points);
+      shown = marks;
+      view.setHighlights(marks);
+      return marks.length;
+    },
     // The companion asks for a group's liberties; the GAME counts them. A model
     // asked to count liberties on a board it cannot really see will answer
     // confidently and be wrong, and that number is the whole point here.
