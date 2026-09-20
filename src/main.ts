@@ -150,6 +150,10 @@ async function start(): Promise<void> {
   const chat = new ChatPanel(umicat, {
     onSend: (text) => void talk(text),
     onLayout: (open) => {
+      // The gear moves to the panel's own bottom corner while the panel is
+      // open: that is where the hand already is, and the board's corner is
+      // behind the panel from the player's point of view.
+      document.body.classList.toggle('chatting', open);
       view.reserveRight(open ? panelWidth() : 0);
       // Opening the panel means the player wants to read or type, not to be
       // tapped through a bubble that says the same thing.
@@ -507,8 +511,16 @@ async function start(): Promise<void> {
   );
 
   const gear = document.createElement('button');
-  gear.className = 'lift quiet';
-  gear.textContent = t('btn.setup');
+  gear.className = 'lift quiet icon';
+  // A gear, not the word. It is the only button outside the panels, it never
+  // changes meaning, and an icon that size reads from further away than four
+  // characters do — in any language, which is the other half of it.
+  gear.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<circle cx="12" cy="12" r="3.2"/>'
+    + '<path d="M19.4 14.4a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>'
+    + '</svg>';
+  gear.title = t('btn.setup');
+  gear.setAttribute('aria-label', t('btn.setup'));
   gear.onclick = () => {
     menu.sync({ size: game?.size ?? coach.profile.boardSize, level: level.id }, !!game && !game.over);
     menu.toggle();

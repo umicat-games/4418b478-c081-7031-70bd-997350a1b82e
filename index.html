@@ -43,6 +43,20 @@
       /* The gear is the only button out here; how it LOOKS is buttons.css,
          which the modules import. */
       #hud button[hidden] { display: none; }
+      #hud button.icon { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+      #hud button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+      /* While the conversation is open it belongs to the conversation's corner,
+         just above the composer, at the right-hand edge. */
+      /* The HUD sits under the chat panel (20 against 25), so a gear moved into
+         the panel's corner is a gear behind it. Lifted for as long as it is
+         there, and only then. */
+      body.chatting #hud { z-index: 26; }
+      body.chatting #hud .bar {
+        left: auto; right: max(16px, env(safe-area-inset-right));
+        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 54px);
+        position: fixed; margin: 0;
+      }
+      body.chatting #hud .status, body.chatting #hud .tip { max-width: 46vw; }
       /* While the title is up, the game's own furniture is not. */
       body.titling #hud, body.titling #chat, body.titling #speech { display: none; }
     </style>
