@@ -28,7 +28,6 @@ type Vars = Record<string, string | number>;
 const EN = {
   'title.continue': 'Continue',
   'title.newGame': 'New game',
-  'title.settings': 'Settings',
   'title.fresh': 'Make it forget me',
   'title.freshHint': 'Erase what the companion knows about you — your games, your habits, everything it has learned.',
   'title.freshConfirm': 'This erases everything the companion knows about you: its notes, your games, the unfinished board. A new game does NOT do this. Sure?',
@@ -103,11 +102,12 @@ const EN = {
   'confirm.resign': 'Resign this game?',
 
   'menu.heading': 'Settings',
+  'menu.newHeading': 'New game',
   'menu.board': 'Board',
   'menu.opponent': 'Opponent',
   'menu.handicap': 'Head start',
   'menu.none': 'None',
-  'menu.start': 'Start',
+  'menu.start': 'Start playing',
   'menu.startNew': 'Start a new game',
   'menu.note': 'Board and head start apply to the next game.',
   'menu.toTitle': 'Back to title',
@@ -147,7 +147,6 @@ export type Key = keyof typeof EN;
 const ZH: Partial<Record<Key, string>> = {
   'title.continue': '继续',
   'title.newGame': '新开一局',
-  'title.settings': '设置',
   'title.fresh': '让它忘掉我',
   'title.freshHint': '清除老师对你的全部记忆 —— 下过的棋、你的习惯、它学到的一切。',
   'title.freshConfirm': '这会清掉老师关于你的一切:它的笔记、你的棋局、没下完的那盘。「新开一局」不会这样。确定吗?',
@@ -222,11 +221,12 @@ const ZH: Partial<Record<Key, string>> = {
   'confirm.resign': '这局认输?',
 
   'menu.heading': '设置',
+  'menu.newHeading': '新对局',
   'menu.board': '棋盘',
   'menu.opponent': '对手',
   'menu.handicap': '让子',
   'menu.none': '不让',
-  'menu.start': '开始',
+  'menu.start': '开始下',
   'menu.startNew': '新开一局',
   'menu.note': '棋盘和让子从下一局开始生效。',
   'menu.toTitle': '返回标题',

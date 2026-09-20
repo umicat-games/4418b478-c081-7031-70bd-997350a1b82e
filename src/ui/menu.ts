@@ -96,7 +96,9 @@ export class Menu {
 
     const head = document.createElement('div');
     head.className = 'title';
-    head.textContent = t('menu.heading');
+    // Opened to start a game, it is about the game being started; opened over
+    // one, it is settings. Same controls either way — only the framing differs.
+    head.textContent = t(this.standalone ? 'menu.newHeading' : 'menu.heading');
     this.el.appendChild(head);
 
     this.el.appendChild(this.group(t('menu.board'), SIZES.map((s) => ({
@@ -125,6 +127,7 @@ export class Menu {
     const go = document.createElement('button');
     go.className = 'go lift';
     go.textContent = t(this.inGame ? 'menu.startNew' : 'menu.start');
+    go.autofocus = true;
     go.onclick = () => { this.el.hidden = true; this.opts.onStart({ ...this.choice }); };
     this.el.appendChild(go);
 

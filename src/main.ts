@@ -449,7 +449,12 @@ async function start(): Promise<void> {
     { size: coach.profile.boardSize, level: level.id, handicap: 0 },
     {
       onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
-      onStart: ({ size, handicap }) => void freshGame(size, handicap),
+      onStart: ({ size, handicap }) => void (async () => {
+        // Started from the title, the board is still behind a title screen.
+        leaveTitle();
+        if (!engineReady) await underCurtain(t('title.loading'), loading);
+        await freshGame(size, handicap);
+      })(),
       onHint: () => void hint(),
       onPass: () => {
         if (!game || thinking || game.over) return;
@@ -585,14 +590,6 @@ async function start(): Promise<void> {
       loading,
     });
 
-    if (choice === 'settings') {
-      // The same panel, centred, with nothing behind it to act on. Its own
-      // buttons decide what happens next; dismissing it comes back here.
-      menu.sync({ size: coach.profile.boardSize, level: level.id }, false, true);
-      menu.show();
-      return;
-    }
-
     if (choice === 'forget') {
       await Promise.all([
         umicat.saves.delete('profile'), umicat.saves.delete('chat'),
@@ -602,6 +599,15 @@ async function start(): Promise<void> {
       spoken = 0;
       redrawChat();
       await toTitle();
+      return;
+    }
+
+    if (choice === 'new') {
+      // Not straight into a game: the board size, the opponent and the
+      // handicap are chosen here, and starting without asking is how the
+      // choice ended up invisible. The panel's own Start does the rest.
+      menu.sync({ size: coach.profile.boardSize, level: level.id }, false, true);
+      menu.show();
       return;
     }
 

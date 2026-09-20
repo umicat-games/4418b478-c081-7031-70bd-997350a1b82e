@@ -8,7 +8,7 @@ import './buttons.css';
 import './title.css';
 import { t } from '../i18n';
 
-export type TitleChoice = 'continue' | 'new' | 'settings' | 'forget';
+export type TitleChoice = 'continue' | 'new' | 'forget';
 
 export interface TitleOptions {
   /** This player has been here before, even if no game is unfinished. */
@@ -64,9 +64,13 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
       return b;
     };
 
+    // Two, and the second one opens the panel where the board size, the
+    // opponent and the handicap are chosen. There is no separate Settings
+    // button because there is no separate settings screen: choosing what to
+    // play and changing how it plays are the same panel, and a title screen
+    // that offers both is offering the same door twice.
     if (opts.canContinue) add(t('title.continue'), 'continue', true);
     add(t('title.newGame'), 'new', !opts.canContinue);
-    add(t('title.settings'), 'settings');
     // Only offered to someone who has a past worth erasing, and never made the
     // easy button to hit by accident.
     if (opts.returning) {
