@@ -137,9 +137,18 @@ export class Coach {
       // Structured refusals, not exceptions: an anonymous player needs a
       // sign-in prompt, not a stack trace, and a player out of credits needs
       // to know the game still plays fine without the coach.
-      const text = t(res.reason === 'SIGN_IN_REQUIRED' ? 'chat.signIn'
-        : res.reason === 'INSUFFICIENT_CREDITS' ? 'chat.noCredits'
-          : 'chat.lost');
+      //
+      // `detail` is the platform's own sentence about a refusal it can
+      // explain — in practice "this game hasn't declared the AI capability".
+      // It is shown VERBATIM and in preference to our own wording, because
+      // the only person who can hit it is a member of this game (the backend
+      // checks membership first), which is to say the person who can go and
+      // fix it. Saying "I lost my train of thought" to them instead is how an
+      // afternoon gets spent looking at auth tokens.
+      const detail = detailOf(res);
+      const text = res.reason === 'SIGN_IN_REQUIRED' ? t('chat.signIn')
+        : res.reason === 'INSUFFICIENT_CREDITS' ? t('chat.noCredits')
+          : detail ?? t('chat.lost');
       this.messages.push({ from: 'coach', text, at: Date.now() });
       return;
     }
@@ -319,6 +328,20 @@ function observe(game: ChessGame | null, read: Read | null, profile: Profile): u
       }
       : null,
   };
+}
+
+/**
+ * The platform's explanation for a refusal, if it sent one.
+ *
+ * Read defensively rather than off the type: `AiActFailure.detail` landed in
+ * `@umicat/platform-sdk` after the version this game is pinned to, and the
+ * host sends the field regardless of what the SDK's types know about it —
+ * the result object is passed through untouched. Delete the cast once the
+ * pinned SDK carries the field.
+ */
+function detailOf(res: unknown): string | undefined {
+  const detail = (res as { detail?: unknown }).detail;
+  return typeof detail === 'string' && detail.trim() ? detail.trim() : undefined;
 }
 
 /** `{x,y}` → `"e4"`, for the reports handed back to the model. */
