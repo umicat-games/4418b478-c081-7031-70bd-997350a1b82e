@@ -126,6 +126,7 @@ const EN = {
   'chat.signIn': 'Sign in and I can talk you through the game. The board works either way.',
   'chat.noCredits': 'I am out of credits, so I will stop talking — the game plays on without me.',
   'chat.lost': 'I lost my train of thought. Ask me again?',
+  'chat.marked': 'Marked it on the board.',
 
   'score.youWin': 'You win by {margin} points. Black {black}, White {white} ({komi} of that is komi).',
   'score.whiteWins': 'White wins by {margin} points. Black {black}, White {white} ({komi} of that is komi).',
@@ -245,6 +246,7 @@ const ZH: Partial<Record<Key, string>> = {
   'chat.signIn': '登录之后我就能给你讲解。棋盘不登录也能下。',
   'chat.noCredits': '我的额度用完了,先不说话了 —— 棋照样能下。',
   'chat.lost': '我走神了,再问我一次?',
+  'chat.marked': '标在棋盘上了。',
 
   'score.youWin': '你赢了 {margin} 目。黑 {black},白 {white}(其中 {komi} 是贴目)。',
   'score.whiteWins': '白棋赢了 {margin} 目。黑 {black},白 {white}(其中 {komi} 是贴目)。',

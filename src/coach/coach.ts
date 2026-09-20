@@ -75,6 +75,18 @@ export interface CoachHooks {
 export class Coach {
   /** Everything said, oldest first. Trimmed for the model, kept for the player. */
   readonly messages: ChatMessage[] = [];
+  /**
+   * A question asked while it was still answering the last one.
+   *
+   * It used to be dropped — `turn()` returned early when busy, so the player's
+   * message went into the log, the panel showed "thinking", and nothing was
+   * ever sent. From the outside that is a companion that stopped replying, and
+   * the only way out was reloading the game.
+   *
+   * One question, not a queue: if they type three times while it thinks, the
+   * last one is what they want an answer to.
+   */
+  private queued: { text: string; ctx: { game: GoGame | null; read: Read | null } } | null = null;
   profile: Profile = { ...DEFAULT_PROFILE };
   private npc: ReturnType<ThreeUmicat['ai']['npc']>;
   private busy = false;
@@ -88,6 +100,7 @@ export class Coach {
   /** The player typed (or said) something. */
   async ask(text: string, ctx: { game: GoGame | null; read: Read | null }): Promise<void> {
     this.messages.push({ from: 'player', text, at: Date.now() });
+    if (this.busy) { this.queued = { text, ctx }; return; }
     await this.turn(text, ctx);
   }
 
@@ -110,6 +123,11 @@ export class Coach {
     } finally {
       this.busy = false;
     }
+    // A question that arrived mid-answer gets its turn now. After `busy` is
+    // cleared, so the recursion is one deep and not a chain of stacked awaits.
+    const next = this.queued;
+    this.queued = null;
+    if (next) await this.turn(next.text, next.ctx);
   }
 
   private handle(res: AiActResult, opts: { silentIfEmpty?: boolean }): void {
@@ -124,10 +142,22 @@ export class Coach {
       return;
     }
 
-    for (const call of res.do ?? []) this.execute(call.name, call.args as Record<string, unknown>);
+    const did = res.do ?? [];
+    for (const call of did) this.execute(call.name, call.args as Record<string, unknown>);
+
     const said = (res.say ?? '').trim();
-    if (said) this.messages.push({ from: 'coach', text: said, at: Date.now() });
-    else if (!opts.silentIfEmpty) this.messages.push({ from: 'coach', text: '…', at: Date.now() });
+    if (said) { this.messages.push({ from: 'coach', text: said, at: Date.now() }); return; }
+    if (opts.silentIfEmpty) return;
+
+    // It acted without saying anything — usually marking a point and expecting
+    // the mark to speak for itself. It does not: the player asked a question
+    // and got an ellipsis, which reads as the companion having stopped. Say
+    // what happened instead. (The playbook also tells it not to do this.)
+    this.messages.push({
+      from: 'coach',
+      text: t(did.length ? 'chat.marked' : 'chat.lost'),
+      at: Date.now(),
+    });
   }
 
   /** Run an intent the model chose. Everything is re-checked here; the model's
