@@ -1,6 +1,6 @@
 # GO with me
 
-A game of Go against a real engine, with an AI companion sitting beside the
+A game of Go against a real engine, with an AI assistant sitting beside the
 board. This file is the memory of what has been built and why; the design
 questions that are still open live in `docs/`.
 
@@ -136,7 +136,7 @@ panels using `backdrop-filter` need the canvas to repaint too, which is what
 `repaintSoon()` in main.ts is for.
 
 **Saves are quota'd**: 100KB per value, 1MB per player, 64 keys. The chat log
-is trimmed to its tail and the rest lives in the companion's summary — which is
+is trimmed to its tail and the rest lives in the assistant's summary — which is
 also what stops each turn getting more expensive, since every turn ships the
 history.
 
@@ -145,7 +145,7 @@ is written first, so nothing is lost.
 
 **The platform decides the language.** `umicat.locale` arrives at handshake;
 the game switches to it and nothing else does. Chat is the exception and
-belongs to the companion: it replies in whatever it is written to.
+belongs to the assistant: it replies in whatever it is written to.
 
 **`ai` and `microphone` must be declared** in the game's Settings on the
 platform, or the backend rejects AI calls and the iframe blocks the mic.
@@ -162,6 +162,6 @@ npm run verify    # the parked lesson data: every exercise still solvable
 ```
 
 Playwright probes live in the session scratchpad rather than here; they drive
-the game through `window.__game`, which exposes the board, the companion, the
+the game through `window.__game`, which exposes the board, the assistant, the
 menu and the actions. Driving it through pixels means testing whether you can
 click a three-millimetre intersection, which is a test of the test.
