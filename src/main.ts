@@ -33,6 +33,7 @@ import { ChatPanel } from './ui/chat';
 import { Speech, segment, type Segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { SquareActions } from './ui/squareactions';
+import { AskHere } from './ui/askhere';
 import { EvalBar } from './ui/evalbar';
 import { askPromotion, type Promotion } from './ui/promotion';
 import { showTitle } from './ui/title';
@@ -74,8 +75,25 @@ async function start(): Promise<void> {
   // before the rest of this function exists, and a `const` it reads too early
   // is a ReferenceError that takes the whole game down at boot.
   let idleSpin = true;
+  /**
+   * Keep drawing for a moment after anything is touched.
+   *
+   * The panels over the board use `backdrop-filter`, which samples the canvas
+   * behind them — and the canvas only redraws when the BOARD changes. Open a
+   * panel while the board is still and the blur keeps the sample it took last
+   * time, which paints a ghost of wherever that panel used to be.
+   *
+   * A quarter of a second covers a tap and the transitions it starts, and
+   * costs about fifteen frames of drawing a board that was going to be drawn
+   * anyway if anything had actually happened.
+   */
+  let repaintUntil = 0;
+  const repaintSoon = (): void => { repaintUntil = performance.now() + 250; };
+  for (const type of ['pointerdown', 'pointerup', 'click', 'keydown'] as const) {
+    document.addEventListener(type, repaintSoon, true);
+  }
 
-  const speech = new Speech({
+  const speech = new Speech(umicat, {
     onPage: (page) => {
       // The square being talked about lights up for exactly as long as the
       // sentence about it is on screen — as a FOCUS, not as a mark. Sharing
@@ -94,6 +112,9 @@ async function start(): Promise<void> {
       const m = offeredMove(page);
       if (m) void commit(m.from, m.to);
     },
+    // Answering from the box the answer arrived in, rather than opening the
+    // log to type. The box then waits in place and the next reply replaces it.
+    onReply: (text) => void talk(text),
   });
 
   /** Confirm / cancel / ask, beside the square rather than in a corner. */
@@ -101,6 +122,12 @@ async function start(): Promise<void> {
     onConfirm: (at) => { if (from) void commit(from, at); },
     onCancel: () => clearSelection(),
     onAsk: (at) => askAbout(at),
+  });
+
+  /** And the question itself, in the same place. */
+  const askHere = new AskHere(umicat, {
+    onAsk: (square, text) => void talk(`${square}: ${text}`),
+    onCancel: () => view.setFocus(null),
   });
 
   const evalBar = new EvalBar();
@@ -128,12 +155,14 @@ async function start(): Promise<void> {
 
   const frame = (): void => {
     if (idleSpin) view.orbit(0.0012, 0);
+    if (performance.now() < repaintUntil) view.invalidate();
     // Only when the picture actually changed. Between two moves a chess board
     // is a still life, and redrawing it sixty times a second takes a core off
     // the engine — which is the thing the player is waiting for.
     if (view.render()) {
       if (speech.showing) placeSpeech();
       if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
+      if (askHere.showing && askHere.at) askHere.place(view.screenOf(askHere.at.x, askHere.at.y), view.screenSpacing);
     }
     requestAnimationFrame(frame);
   };
@@ -157,11 +186,29 @@ async function start(): Promise<void> {
   let lastRemarkAt = -REMARK_COOLDOWN;
   /** The move being built: a piece picked up, and where it is going. */
   let from: Sq | null = null;
+  /** Squares the assistant has rings on. The speech bubble keeps off them:
+   *  "I've marked it" printed over the mark is the assistant contradicting
+   *  itself, and transparency alone only half-answers that. */
+  let shown: Sq[] = [];
+  /**
+   * Whether this game has an assistant at all.
+   *
+   * ON for every new game, and only a player turning it off turns it off —
+   * it is not a remembered preference, because "I did not want to be talked
+   * to during that game" is not the same as "never talk to me". Off means no
+   * calls to the platform's AI, no bubble, and no buttons that would open
+   * one: a game that costs nothing and says nothing.
+   */
+  let companion = true;
 
   // ── the companion ───────────────────────────────────────────────────────
   const chat = new ChatPanel(umicat, {
     onSend: (text) => void talk(text),
     onLayout: (open) => {
+      // The gear moves to the panel's own bottom corner while the panel is
+      // open: that is where the hand already is, and the board's corner is
+      // behind the panel from the player's point of view.
+      document.body.classList.toggle('chatting', open);
       view.reserveRight(open ? panelWidth() : 0);
       // Opening the panel means the player wants to read or type, not to be
       // tapped through a bubble that says the same thing.
@@ -178,7 +225,13 @@ async function start(): Promise<void> {
       void freshGame(side, odds);
       return true;
     },
-    highlight: (squares) => view.setHighlights(squares),
+    // Parsed HERE, against the board that is actually on screen. The
+    // assistant hands the squares over as it wrote them.
+    highlight: (squares) => {
+      shown = parseSquares(squares);
+      view.setHighlights(shown);
+      return shown.length;
+    },
     // The companion asks what is attacking a square; the BOARD answers. A
     // model asked to read that off a text diagram will answer confidently and
     // be wrong, and it is exactly the kind of thing a beginner then believes.
@@ -188,7 +241,8 @@ async function start(): Promise<void> {
       const owner: Side = piece?.side ?? game.human;
       const attackers = game.attackers(at, other(owner));
       const defenders = game.attackers(at, owner);
-      view.setHighlights([at, ...attackers, ...defenders]);
+      shown = [at, ...attackers, ...defenders];
+      view.setHighlights(shown);
       return {
         square: toSan(at.x, at.y),
         piece: piece ? `${piece.side} ${piece.kind}` : null,
@@ -201,7 +255,8 @@ async function start(): Promise<void> {
       if (!game) return null;
       const piece = game.at(at);
       const moves = game.movesFrom(at);
-      view.setHighlights([at, ...moves.map((m) => m.to)]);
+      shown = [at, ...moves.map((m) => m.to)];
+      view.setHighlights(shown);
       return {
         square: toSan(at.x, at.y),
         piece: piece ? `${piece.side} ${piece.kind}` : null,
@@ -225,26 +280,45 @@ async function start(): Promise<void> {
     const said = coach.messages.filter((m) => m.from === 'coach');
     if (said.length > spoken) {
       spoken = said.length;
+      // Something new is on screen over the board; see `repaintSoon`.
+      repaintSoon();
+      // The reply has arrived, so the waiting dots beside the square are done
+      // — the answer is about to appear as speech, beside whatever square the
+      // answer is about, which is often not the one that was asked about.
+      askHere.hide();
       speech.show(segment(said[said.length - 1].text));
     }
   };
 
+  // Anything the assistant does to the conversation — a message, a queued
+  // question, starting or finishing a turn — redraws the panel itself.
+  coach.onChange = () => redrawChat();
+
+  // Draw what came back from the save, ONCE, now. The panel only ever redraws
+  // when somebody speaks, and "Continue" is the one path where nobody does —
+  // so without this the restored conversation sat in memory with an empty
+  // panel in front of it. (`spoken` is already at the restored count, so this
+  // does not read any of it out loud.)
+  redrawChat();
+
   async function talk(text: string): Promise<void> {
-    redrawChat();
+    if (!companion) return;
     await coach.ask(text, { game, read });
-    redrawChat();
     persist();
   }
 
   /** An unprompted line. `note` is what just happened, in plain words; the
    *  companion decides how, and whether, to react. */
   async function remark(note: string): Promise<void> {
-    if (!game) return;
+    if (!game || !companion) return;
     lastRemarkAt = game.plies;
-    redrawChat();
     await coach.remark(note, { game, read });
-    redrawChat();
     persist();
+  }
+
+  /** Squares as the assistant writes them ("e4,d5"), against the live board. */
+  function parseSquares(squares: string): Sq[] {
+    return squares.split(',').map((x) => fromSan(x)).filter((x): x is Sq => !!x);
   }
 
   /**
@@ -256,8 +330,13 @@ async function start(): Promise<void> {
    */
   function askAbout(at: Sq): void {
     if (!game) return;
-    view.setHighlights([at]);
-    chat.prefill(`${toSan(at.x, at.y)}: `);
+    // Whatever the assistant last said belonged to the last thing that
+    // happened. Leaving it up puts two boxes over the board at once, and from
+    // a foot away they read as one box with a ghost behind it.
+    speech.hide();
+    view.setFocus(at);
+    askHere.open(at, toSan(at.x, at.y));
+    askHere.place(view.screenOf(at.x, at.y), view.screenSpacing);
   }
 
   /**
@@ -300,8 +379,17 @@ async function start(): Promise<void> {
       const gap = view.screenSpacing * 0.7 + 12;
       const x = Math.min(Math.max(p.x, box.width / 2 + margin), free - box.width / 2 - margin);
       const top = p.y - gap;
-      if (top - box.height >= margin) speech.place(x, top, Math.abs(x - p.x) < 2);
-      else speech.place(x, p.y + gap + box.height, false);
+      // Above unless there is no room, and then below — but if the side it
+      // would take is sitting on a ring it has just drawn, take the other one.
+      const above = { top: top - box.height, bottom: top };
+      const below = { top: p.y + gap, bottom: p.y + gap + box.height };
+      const fits = (r: { top: number; bottom: number }): boolean => r.top >= margin;
+      const covers = (r: { top: number; bottom: number }): number => shown.filter((m) => {
+        const sc = view.screenOf(m.x, m.y);
+        return sc.x > x - box.width / 2 - 8 && sc.x < x + box.width / 2 + 8 && sc.y > r.top - 8 && sc.y < r.bottom + 8;
+      }).length;
+      if (fits(above) && (covers(above) <= covers(below) || !fits(below))) speech.place(x, top, Math.abs(x - p.x) < 2);
+      else speech.place(x, below.bottom, false);
       return;
     }
     // Nothing to point at: the middle of the board, because this is someone
@@ -361,6 +449,7 @@ async function start(): Promise<void> {
     coach.profile.odds = odds;
     view.setSeat(side);
     view.setHighlights([]);
+    shown = [];
     view.setFocus(null);
     clearSelection();
     read = null;
@@ -381,7 +470,8 @@ async function start(): Promise<void> {
    * next game does not open in the middle of the last one's argument about a
    * bishop that is no longer on the board.
    */
-  async function freshGame(side: Side, odds: Odds): Promise<void> {
+  async function freshGame(side: Side, odds: Odds, withCompanion = true): Promise<void> {
+    setCompanion(withCompanion);
     await coach.newSession();
     spoken = 0;
     redrawChat();
@@ -498,7 +588,10 @@ async function start(): Promise<void> {
     if (played.captured) audio.play(SFX.capture);
     coach.profile.moved = true;
     clearSelection();
+    askHere.hide();
     view.setHighlights([]);
+    shown = [];
+    view.setFocus(null);
     refresh();
     persist();
 
@@ -539,6 +632,7 @@ async function start(): Promise<void> {
    */
   function select(at: Sq | null): void {
     if (!at || !game) { clearSelection(); return; }
+    askHere.hide();
     const yours = !game.over && !thinking && game.toPlay === game.human;
     const piece = game.at(at);
 
@@ -547,7 +641,7 @@ async function start(): Promise<void> {
       if (move) {
         const moving = game.at(from)!;
         view.setGhost(at, moving.kind, moving.side);
-        actions.show(at, true, true);
+        actions.show(at, true, companion);
         actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
         return;
       }
@@ -555,7 +649,7 @@ async function start(): Promise<void> {
       // not a mistake worth a noise.
       if (piece && piece.side === game.human && yours) { pickUp(at); return; }
       clearSelection();
-      if (piece) { actions.show(at, false, true); actions.place(view.screenOf(at.x, at.y), view.screenSpacing); }
+      if (piece) { actions.show(at, false, companion); actions.place(view.screenOf(at.x, at.y), view.screenSpacing); }
       return;
     }
 
@@ -567,7 +661,7 @@ async function start(): Promise<void> {
     }
     view.setSelection(null);
     if (piece) {
-      actions.show(at, false, true);
+      actions.show(at, false, companion);
       actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
     } else {
       actions.hide();
@@ -580,7 +674,7 @@ async function start(): Promise<void> {
     const moves = game.movesFrom(at);
     view.setGhost(null, null, 'white');
     view.setSelection(at, moves.filter((m) => !m.capture).map((m) => m.to), moves.filter((m) => m.capture).map((m) => m.to));
-    actions.show(at, false, true);
+    actions.show(at, false, companion);
     actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
   }
 
@@ -597,14 +691,15 @@ async function start(): Promise<void> {
   hud.appendChild(bar);
 
   const menu = new Menu(
-    { side: coach.profile.side, level: level.id, odds: coach.profile.odds },
+    { side: coach.profile.side, level: level.id, odds: coach.profile.odds, companion: true },
     {
       onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
-      onStart: ({ side, odds }) => void (async () => {
+      onCompanion: (on) => setCompanion(on),
+      onStart: ({ side, odds, companion: withCompanion }) => void (async () => {
         // Started from the title, the board is still behind a title screen.
         leaveTitle();
         if (!engineReady) await underCurtain(t('title.loading'), loading);
-        await freshGame(side, odds);
+        await freshGame(side, odds, withCompanion);
       })(),
       onHint: () => void hint(),
       onTakeback: () => {
@@ -636,11 +731,32 @@ async function start(): Promise<void> {
     },
   );
 
+  /** The way into the log. Same icon as the one beside a piece, because it
+   *  opens the same thing: what was said. */
+  const logBtn = document.createElement('button');
+  logBtn.className = 'lift quiet icon';
+  logBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path d="M20.5 11.5a7.5 7.5 0 0 1-7.5 7.5H8.8L4.5 21.8V17A7.5 7.5 0 1 1 20.5 11.5z"/>'
+    + '<path d="M9 10.5h6M9 13.5h4"/>'
+    + '</svg>';
+  logBtn.title = t('btn.log');
+  logBtn.setAttribute('aria-label', t('btn.log'));
+  logBtn.onclick = () => chat.toggle();
+  bar.appendChild(logBtn);
+
   const gear = document.createElement('button');
-  gear.className = 'lift quiet';
-  gear.textContent = t('btn.setup');
+  gear.className = 'lift quiet icon';
+  // A gear, not the word. It is the only button outside the panels, it never
+  // changes meaning, and an icon that size reads from further away than five
+  // characters do — in any language, which is the other half of it.
+  gear.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<circle cx="12" cy="12" r="3.2"/>'
+    + '<path d="M19.4 14.4a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>'
+    + '</svg>';
+  gear.title = t('btn.setup');
+  gear.setAttribute('aria-label', t('btn.setup'));
   gear.onclick = () => {
-    menu.sync({ side: game?.human ?? coach.profile.side, level: level.id }, !!game && !game.over);
+    menu.sync({ side: game?.human ?? coach.profile.side, level: level.id, companion }, !!game && !game.over);
     menu.toggle();
   };
   bar.appendChild(gear);
@@ -712,6 +828,7 @@ async function start(): Promise<void> {
   async function toTitle(): Promise<void> {
     speech.hide();
     actions.hide();
+    askHere.hide();
     evalBar.hide();
     menu.close();
     chat.setOpen(false);
@@ -741,7 +858,8 @@ async function start(): Promise<void> {
       // Not straight into a game: which side, which opponent and what odds
       // are chosen here, and starting without asking is how the choice ended
       // up invisible. The panel's own Start does the rest.
-      menu.sync({ side: coach.profile.side, level: level.id, odds: coach.profile.odds }, false, true);
+      // A new game always OFFERS the assistant, whatever the last game did.
+      menu.sync({ side: coach.profile.side, level: level.id, odds: coach.profile.odds, companion: true }, false, true);
       menu.show();
       return;
     }
@@ -766,6 +884,19 @@ async function start(): Promise<void> {
     await freshGame(coach.profile.side, coach.profile.odds);
   }
 
+  /** Turn the assistant on or off for this game, and everything that follows
+   *  from it: the buttons that reach it, and whatever it had on screen. */
+  function setCompanion(on: boolean): void {
+    companion = on;
+    logBtn.hidden = !on;
+    if (!on) {
+      speech.hide();
+      askHere.hide();
+      chat.setOpen(false);
+    }
+    refresh();
+  }
+
   /** Take the title down and give the board back. */
   function leaveTitle(): void {
     document.body.classList.remove('titling');
@@ -780,7 +911,9 @@ async function start(): Promise<void> {
   // test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, view, opponent, coach, chat, speech, menu, actions, audio, evalBar,
+      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar,
+      get companion() { return companion; },
+      setCompanion,
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },

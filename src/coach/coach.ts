@@ -35,7 +35,11 @@ import { openingName } from '../chess/openings';
 const ACTIONS = [
   { name: 'set_level', description: `How hard the opponent plays. One of: ${LEVELS.map((l) => l.id).join(', ')}.`, args: { level: 'string' } },
   { name: 'start_game', description: 'Begin a new game. side is "white" or "black"; odds is "none", "knight", "rook" or "queen" (a piece taken off the OPPONENT\'s side).', args: { side: 'string', odds: 'string' } },
-  { name: 'highlight', description: 'Mark squares on the board while you talk about them, e.g. "e4,d5". Empty string clears.', args: { squares: 'string' } },
+  // The description is what the model actually reads when it picks a tool, so
+  // it says what this one does NOT do: it kept being chosen for "what is
+  // attacking my knight?", where it marks the square the player already knew
+  // about and works nothing out.
+  { name: 'highlight', description: 'Mark squares you are talking about, e.g. "e4,d5" (coordinates only; empty string clears). It WORKS NOTHING OUT — for what attacks or defends a square use show_attacks, and for where a piece can go use show_moves.', args: { squares: 'string' } },
   { name: 'show_attacks', description: 'THE BOARD COUNTS FOR YOU. Give a square: it marks and reports every piece attacking and defending it. Use this before saying anything is hanging, defended, or safe.', args: { square: 'string' } },
   { name: 'show_moves', description: 'THE BOARD COUNTS FOR YOU. Give a square: it marks and reports every legal move of the piece standing there. Use this before saying where a piece can or cannot go.', args: { square: 'string' } },
 ] as const;
@@ -87,7 +91,14 @@ export interface MovesReport {
 export interface CoachHooks {
   setLevel(level: string): boolean;
   startGame(side: Side, odds: Odds): boolean;
-  highlight(squares: Sq[]): void;
+  /** Ring these squares, as written ("e4,d5"); empty clears. Returns how many
+   *  were actually put on the board — a coordinate the game cannot read marks
+   *  nothing, and saying "marked it" anyway is worse than saying nothing.
+   *
+   *  Takes the squares AS WRITTEN, and the game parses them, for the same
+   *  reason the two reports below do: there is one board, and it is the one
+   *  on screen. */
+  highlight(squares: string): number;
   showAttacks(at: Sq): AttackReport | null;
   showMoves(at: Sq): MovesReport | null;
 }
@@ -96,8 +107,29 @@ export class Coach {
   /** Everything said, oldest first. Trimmed for the model, kept for the player. */
   readonly messages: ChatMessage[] = [];
   profile: Profile = { ...DEFAULT_PROFILE };
+  /**
+   * A question asked while it was still answering the last one.
+   *
+   * It used to be dropped — `turn()` returned early when busy, so the
+   * player's message went into the log, the panel showed "thinking", and
+   * nothing was ever sent. From the outside that is an assistant that stopped
+   * replying, and the only way out was reloading the game.
+   *
+   * One question, not a queue: if they type three times while it thinks, the
+   * last one is what they want an answer to.
+   */
+  private queued: { text: string; ctx: { game: ChessGame | null; read: Read | null } } | null = null;
   private npc: ReturnType<ThreeUmicat['ai']['npc']>;
   private busy = false;
+  /**
+   * Called whenever the conversation or its state changed.
+   *
+   * The UI used to be redrawn by the CALLER, around the await — which meant
+   * the player's own message was not on screen until the reply came back,
+   * because it is pushed inside the call the caller is waiting on. Anything
+   * that changes what the panel should show now says so, here.
+   */
+  onChange: (() => void) | null = null;
 
   constructor(private umicat: ThreeUmicat, private hooks: CoachHooks) {
     this.npc = umicat.ai.npc({ playbook: 'coach', actions: ACTIONS as unknown as typeof ACTIONS[number][] });
@@ -108,6 +140,8 @@ export class Coach {
   /** The player typed (or said) something. */
   async ask(text: string, ctx: { game: ChessGame | null; read: Read | null }): Promise<void> {
     this.messages.push({ from: 'player', text, at: Date.now() });
+    this.onChange?.();
+    if (this.busy) { this.queued = { text, ctx }; return; }
     await this.turn(text, ctx);
   }
 
@@ -124,15 +158,28 @@ export class Coach {
   ): Promise<void> {
     if (this.busy) return;
     this.busy = true;
+    this.onChange?.();
     try {
       const res = await this.npc.say(line, { observation: observe(ctx.game, ctx.read, this.profile) });
       this.handle(res, opts);
     } finally {
       this.busy = false;
+      this.onChange?.();
     }
+    // A question that arrived mid-answer gets its turn now. After `busy` is
+    // cleared, so the recursion is one deep and not a chain of stacked awaits.
+    const next = this.queued;
+    this.queued = null;
+    if (next) await this.turn(next.text, next.ctx);
   }
 
   private handle(res: AiActResult, opts: { silentIfEmpty?: boolean }): void {
+    // Every path out of here ends in a redraw, including the ones that push
+    // nothing: `busy` has changed, and the dots have to stop.
+    try { this.handleInner(res, opts); } finally { this.onChange?.(); }
+  }
+
+  private handleInner(res: AiActResult, opts: { silentIfEmpty?: boolean }): void {
     if (!res.ok) {
       // Structured refusals, not exceptions: an anonymous player needs a
       // sign-in prompt, not a stack trace, and a player out of credits needs
@@ -153,38 +200,64 @@ export class Coach {
       return;
     }
 
-    for (const call of res.do ?? []) this.execute(call.name, call.args as Record<string, unknown>);
+    const did = res.do ?? [];
+    // Whether any of them said something to the player by itself — a
+    // timestamp comparison was tried and is not a signal: two pushes a
+    // millisecond apart look like two different moments.
+    let spoke = false;
+    for (const call of did) spoke = this.execute(call.name, call.args as Record<string, unknown>) || spoke;
+
     const said = (res.say ?? '').trim();
-    if (said) this.messages.push({ from: 'coach', text: said, at: Date.now() });
-    else if (!opts.silentIfEmpty) this.messages.push({ from: 'coach', text: '…', at: Date.now() });
+    if (said) { this.messages.push({ from: 'coach', text: said, at: Date.now() }); return; }
+    if (opts.silentIfEmpty || spoke) return;
+
+    // It acted without saying anything — usually ringing a square and
+    // expecting the ring to speak for itself. It does not: the player asked a
+    // question and got an ellipsis, which reads as the assistant having
+    // stopped. Say what happened instead. (The playbook also says not to.)
+    this.messages.push({
+      from: 'coach',
+      text: t(did.length ? 'chat.marked' : 'chat.lost'),
+      at: Date.now(),
+    });
   }
 
-  /** Run an intent the model chose. Everything is re-checked here; the model's
-   *  choosing it is a request, not permission. */
-  private execute(name: string, args: Record<string, unknown>): void {
+  /**
+   * Run an intent the model chose. Everything is re-checked here; the model's
+   * choosing it is a request, not permission.
+   *
+   * Returns whether the action put something in front of the player by
+   * itself — a measurement said out loud, or a failure admitted. The caller
+   * needs that to know whether an empty `say` left the player with nothing.
+   */
+  private execute(name: string, args: Record<string, unknown>): boolean {
     switch (name) {
       case 'set_level': {
         const id = String(args.level ?? '');
         if (LEVELS.some((l) => l.id === id) && this.hooks.setLevel(id)) this.profile.level = id;
-        return;
+        return false;
       }
       case 'start_game': {
         const side: Side = String(args.side ?? '').toLowerCase() === 'black' ? 'black' : 'white';
         const raw = String(args.odds ?? 'none').toLowerCase();
         const odds: Odds = raw === 'knight' || raw === 'rook' || raw === 'queen' ? raw : 'none';
         this.hooks.startGame(side, odds);
-        return;
+        return false;
       }
       case 'highlight': {
-        const squares = String(args.squares ?? '')
-          .split(',')
-          .map((s) => fromSan(s))
-          .filter((s): s is Sq => !!s);
-        this.hooks.highlight(squares);
-        return;
+        const asked = String(args.squares ?? '');
+        const marked = this.hooks.highlight(asked);
+        if (!asked.trim() || marked > 0) return false;
+        // It named something the board does not have. Told to the player,
+        // because they are looking at a board with nothing new on it, and to
+        // the model, because it can try again with a real coordinate.
+        this.npc.note(`[the board] "${asked}" is not a square on this board, so nothing was marked. Use coordinates like e4.`);
+        this.messages.push({ from: 'coach', at: Date.now(), text: t('chat.markFailed', { squares: asked }) });
+        return true;
       }
       case 'show_attacks': {
-        const at = fromSan(String(args.square ?? ''));
+        const asked = String(args.square ?? '');
+        const at = fromSan(asked);
         const out = at ? this.hooks.showAttacks(at) : null;
         // Told back to the model as an event, so its NEXT sentence can use the
         // real answer instead of the one it was about to invent.
@@ -193,22 +266,48 @@ export class Coach {
             + `attacked by ${out.attackers.join(', ') || 'nothing'}; `
             + `defended by ${out.defenders.join(', ') || 'nothing'}`
             + (out.undefended ? '. It is attacked and undefended.' : '')
-          : `[the board] "${String(args.square ?? '')}" is not a square.`);
-        return;
+          : `[the board] "${asked}" is not a square.`);
+        // AND said out loud, by the game, now. The model asked the question on
+        // the player's behalf and has already finished its turn — waiting for
+        // it to speak again means the player is shown a handful of rings and
+        // never told what they mean. This is a measurement, so the game states it.
+        const none = t('chat.attacksNothing');
+        this.messages.push({
+          from: 'coach',
+          at: Date.now(),
+          text: out
+            ? t('chat.attacks', {
+              square: out.square,
+              attackers: out.attackers.join(', ') || none,
+              defenders: out.defenders.join(', ') || none,
+            })
+            : t('chat.notASquare', { square: asked }),
+        });
+        return true;
       }
       case 'show_moves': {
-        const at = fromSan(String(args.square ?? ''));
+        const asked = String(args.square ?? '');
+        const at = fromSan(asked);
         const out = at ? this.hooks.showMoves(at) : null;
         this.npc.note(out
           ? `[the board] the ${out.piece ?? 'nothing'} on ${out.square} has ${out.moves.length} legal move(s): ${out.moves.join(', ') || 'none'}`
-          : `[the board] "${String(args.square ?? '')}" is not a square.`);
-        return;
+          : `[the board] "${asked}" is not a square.`);
+        this.messages.push({
+          from: 'coach',
+          at: Date.now(),
+          text: !out ? t('chat.notASquare', { square: asked })
+            : out.moves.length
+              ? t('chat.moves', { piece: out.piece ?? '?', square: out.square, count: out.moves.length, moves: out.moves.join(', ') })
+              : t('chat.movesNone', { square: out.square }),
+        });
+        return true;
       }
       default:
         // An unknown tool name is the model inventing a capability. Ignoring
         // it is the whole safety story working, so it is worth a line in the
         // log and nothing more.
         console.warn('[coach] ignored unknown action', name);
+        return false;
     }
   }
 

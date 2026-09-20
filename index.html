@@ -39,10 +39,27 @@
         font-weight: 500; font-size: 13px; opacity: .72; margin-top: 2px;
       }
       #hud .tip:empty { display: none; }
-      #hud .bar { display: flex; gap: 8px; margin-top: 10px; pointer-events: auto; flex-wrap: wrap; max-width: 46vw; }
-      /* The gear is the only button out here; how it LOOKS is buttons.css,
-         which the modules import. */
+      #hud .bar { display: flex; gap: 10px; margin-top: 10px; pointer-events: auto; flex-wrap: wrap; max-width: 46vw; }
+      /* Two round icons out here — the conversation and the gear; how they
+         LOOK is buttons.css, which the modules import. */
       #hud button[hidden] { display: none; }
+      #hud button.icon { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+      #hud button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+      /* While the conversation is open the buttons belong to the
+         conversation's corner, just above the composer, at the right edge.
+         The HUD sits under the chat panel (20 against 25), so a gear moved
+         into the panel's corner is a gear behind it — lifted for as long as
+         it is there, and only then. */
+      body.chatting #hud { z-index: 26; }
+      /* Inside the log's bottom-right corner, with room around it. Clearing
+         the composer is not the same as clearing the box above it: the
+         composer sits 54px up. */
+      body.chatting #hud .bar {
+        left: auto; right: calc(max(12px, env(safe-area-inset-right)) + 16px);
+        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 74px);
+        position: fixed; margin: 0;
+      }
+      body.chatting #hud .tip { max-width: 46vw; }
       /* While the title is up, the game's own furniture is not. */
       body.titling #hud, body.titling #chat, body.titling #speech { display: none; }
     </style>

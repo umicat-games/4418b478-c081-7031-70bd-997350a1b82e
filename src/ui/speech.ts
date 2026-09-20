@@ -27,7 +27,13 @@
 import './buttons.css';
 import './speech.css';
 import { fromSan, type Sq } from '../chess/coords';
+import { Dictation, waveBars } from './dictation';
 import { t } from '../i18n';
+import type { ThreeUmicat } from '@umicat/three-sdk';
+
+const MIC = '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+const STOP = '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/></svg>';
+const SEND = '<svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg>';
 
 export interface Segment {
   text: string;
@@ -137,6 +143,8 @@ export interface SpeechOptions {
   onPage(segment: Segment): void;
   /** The last page has been dismissed. */
   onDone(): void;
+  /** The player answered, from the box the answer was in. */
+  onReply(text: string): void;
   /**
    * May the student play what this sentence is pointing at, right now?
    *
@@ -157,18 +165,77 @@ export class Speech {
   private playBtn: HTMLButtonElement;
   private pages: Segment[] = [];
   private index = 0;
+  private input: HTMLInputElement;
+  private micBtn: HTMLButtonElement;
+  private bars: HTMLElement[];
+  private dictation: Dictation;
+  private draft = '';
 
-  constructor(private opts: SpeechOptions) {
+  constructor(umicat: ThreeUmicat, private opts: SpeechOptions) {
     this.el = document.createElement('div');
     this.el.id = 'speech';
     this.el.hidden = true;
-    this.el.innerHTML = '<span class="who"></span><div class="text"></div>'
-      + '<button class="play lift" hidden></button><span class="more"></span>';
+    this.el.innerHTML = '<button class="close" title="close">×</button>'
+      + '<span class="who"></span><div class="text"></div>'
+      + '<button class="play lift" hidden></button><span class="more"></span>'
+      // The conversation continues here rather than in the panel: an answer
+      // you cannot answer is a dead end, and the only way on used to be
+      // opening the whole log and typing there.
+      + '<div class="reply">'
+      + `<div class="field">${waveBars()}<input type="text" autocomplete="off" /></div>`
+      + `<button class="mic lift dark" hidden>${MIC}</button>`
+      + `<button class="send lift">${SEND}</button>`
+      + '</div>'
+      + '<div class="dots"><i></i><i></i><i></i></div>';
     document.body.appendChild(this.el);
     this.textEl = this.el.querySelector('.text')!;
     this.moreEl = this.el.querySelector('.more')!;
     this.playBtn = this.el.querySelector('.play')!;
+    this.input = this.el.querySelector('input')!;
+    this.micBtn = this.el.querySelector('.mic')!;
+    this.bars = [...this.el.querySelectorAll('.wave i')] as HTMLElement[];
+
+    this.dictation = new Dictation(umicat, {
+      onFinal: (text) => {
+        const prefix = this.draft ? `${this.draft.replace(/\s+$/, '')} ` : '';
+        this.draft = '';
+        this.input.value = prefix + text;
+        this.input.focus();
+      },
+      onState: (listening) => {
+        this.el.classList.toggle('listening', listening);
+        this.micBtn.innerHTML = listening ? STOP : MIC;
+        this.micBtn.title = t(listening ? 'chat.stopRecording' : 'chat.speak');
+        if (listening) {
+          this.draft = this.input.value;
+          this.input.value = '';
+          this.input.placeholder = '';
+          this.dictation.meter(this.bars);
+        } else {
+          this.input.placeholder = t('speech.reply');
+          if (!this.input.value && this.draft) this.input.value = this.draft;
+          this.draft = '';
+        }
+      },
+    });
+    if (this.dictation.supported) this.micBtn.hidden = false;
+
+    // Tapping the bubble turns the page — except on the controls, where a tap
+    // means the control.
     this.el.addEventListener('click', () => this.next());
+    for (const sel of ['.reply', '.dots']) {
+      this.el.querySelector(sel)!.addEventListener('click', (e) => e.stopPropagation());
+    }
+    (this.el.querySelector('.close') as HTMLButtonElement).addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.hide();
+    });
+    (this.el.querySelector('.send') as HTMLButtonElement).addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.reply();
+    });
+    this.micBtn.addEventListener('click', (e) => { e.stopPropagation(); void this.dictation.toggle(); });
+    this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.reply(); });
     // Its own handler, and it must not also page the bubble on: one tap is one
     // thing. The stop is the whole reason this is a button rather than the
     // highlighted square being tappable — "I touched the board while reading"
@@ -183,6 +250,7 @@ export class Speech {
 
   relabel(): void {
     this.el.querySelector('.who')!.textContent = t('chat.coach');
+    this.input.placeholder = t('speech.reply');
   }
 
   get showing(): boolean { return !this.el.hidden; }
@@ -195,24 +263,44 @@ export class Speech {
     this.pages = pages;
     this.index = 0;
     this.el.hidden = false;
-    this.el.classList.remove('fading');
+    this.el.classList.remove('fading', 'waiting');
+    this.input.value = '';
     this.draw();
   }
 
-  /** Next page, or away if that was the last. */
+  /**
+   * Next page. The last one STAYS.
+   *
+   * Tapping used to dismiss it once there was nothing left to read, which was
+   * right when the box was only words. It now ends in a reply field, and a box
+   * you are about to type into must not vanish because you tapped it to read
+   * on. The cross closes it; so does anything that replaces it.
+   */
   next(): void {
-    if (!this.showing) return;
-    if (this.index >= this.pages.length - 1) { this.hide(); return; }
+    if (!this.showing || this.index >= this.pages.length - 1) return;
     this.index++;
     this.draw();
   }
 
   hide(): void {
     if (this.el.hidden) return;
+    this.dictation.stop();
     this.el.classList.add('fading');
     this.el.hidden = true;
+    this.el.classList.remove('waiting');
     this.pages = [];
     this.opts.onDone();
+  }
+
+  /** The player answered. The box stays put and waits in place — moving the
+   *  conversation somewhere else to show a reply is what the panel does. */
+  private reply(): void {
+    const text = this.input.value.trim();
+    if (!text) return;
+    this.dictation.stop();
+    this.input.value = '';
+    this.el.classList.add('waiting');
+    this.opts.onReply(text);
   }
 
   /** Put the bubble somewhere. `anchored` draws the tail — an unanchored
@@ -229,7 +317,12 @@ export class Speech {
   private draw(): void {
     const page = this.pages[this.index];
     this.textEl.textContent = page.text;
-    this.moreEl.hidden = this.index >= this.pages.length - 1;
+    const last = this.index >= this.pages.length - 1;
+    this.moreEl.hidden = last;
+    // The reply field belongs at the END of what was said. Offering it under
+    // the first of four sentences invites an answer to a thought that is not
+    // finished, and puts a text box over the tap that turns the page.
+    this.el.classList.toggle('replyable', last);
     // Offered only for a move the student can actually make right now — the
     // companion talks about the engine's replies and about squares to avoid
     // too, and a button offering a move that is not legal is a button that

@@ -9,13 +9,17 @@
 #speech {
   position: fixed;
   z-index: 26; /* over the HUD (20) and the chat pill (25), under the menu (30) */
-  max-width: min(330px, 62vw);
+  width: min(330px, 62vw);
   padding: 11px 15px 13px;
   border-radius: 14px;
-  background: rgba(16, 20, 27, 0.93);
+  /* See-through, because it stands ON the board and the thing it is talking
+     about is often underneath it. "I've marked it" over an opaque box that
+     covers the mark is the companion contradicting itself. The blur is what
+     keeps the text readable over wood grain at this alpha. */
+  background: rgba(16, 20, 27, 0.66);
   border: 1px solid rgba(127, 214, 194, 0.45);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px) saturate(0.85);
   color: #f4f5f7;
   font: 15px/1.5 system-ui, -apple-system, sans-serif;
   cursor: pointer;
@@ -39,6 +43,75 @@
   margin-bottom: 3px;
 }
 #speech .text { white-space: pre-wrap; word-break: break-word; }
+
+/* Close, top-right. The bubble is dismissed by reading it to the end too, but
+   a box with a field in it has to be closable on purpose. */
+#speech .close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.45;
+  font: 300 20px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+#speech .close:hover { opacity: 1; }
+
+/* The reply field, under what was said, on the LAST page of it. */
+#speech .reply { display: none; gap: 7px; align-items: center; margin-top: 10px; }
+#speech.replyable:not(.waiting) .reply { display: flex; }
+#speech .reply .field { position: relative; flex: 1; min-width: 0; display: flex; }
+#speech .reply input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 13, 18, 0.9);
+  color: inherit;
+  font: 14px/1.3 system-ui, -apple-system, sans-serif;
+  outline: none;
+}
+#speech .reply input:focus { border-color: rgba(127, 214, 194, 0.8); }
+#speech .reply button { flex: none; width: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+#speech .reply button[hidden] { display: none; }
+#speech .reply svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+#speech .wave { display: none; }
+#speech.listening .wave {
+  position: absolute;
+  inset: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  pointer-events: none;
+}
+#speech.listening .wave i { width: 3px; height: 3px; border-radius: 2px; background: #ff8f86; transition: height 0.06s linear; }
+#speech.listening .reply input { border-color: rgba(255, 143, 134, 0.75); }
+
+/* Sent: what was said is gone, the box waits where it stood, and the answer
+   replaces it in the same place. */
+#speech.waiting .text,
+#speech.waiting .play,
+#speech.waiting .more { display: none; }
+#speech .dots { display: none; gap: 5px; padding: 6px 2px 2px; }
+#speech.waiting .dots { display: flex; }
+#speech .dots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; opacity: 0.35;
+  animation: speech-dots 1.1s ease-in-out infinite;
+}
+#speech .dots i:nth-child(2) { animation-delay: 0.15s; }
+#speech .dots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes speech-dots {
+  0%, 60%, 100% { opacity: 0.28; transform: translateY(0); }
+  30% { opacity: 0.9; transform: translateY(-3px); }
+}
 
 /* The "there is more" dot. Catopia's continue indicator, same idea: a page of
    text with no sign that it continues is a page people sit and stare at. */
@@ -69,7 +142,8 @@
   height: 12px;
   margin-left: -6px;
   transform: rotate(45deg);
-  background: rgba(16, 20, 27, 0.93);
+  background: rgba(16, 20, 27, 0.66);
+  backdrop-filter: blur(14px) saturate(0.85);
   border-right: 1px solid rgba(127, 214, 194, 0.45);
   border-bottom: 1px solid rgba(127, 214, 194, 0.45);
 }

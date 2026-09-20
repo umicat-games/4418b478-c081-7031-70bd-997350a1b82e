@@ -234,9 +234,13 @@ export class BoardView {
     this.dots = target(dot);
     this.rings = target(ring);
 
+    // GOLD, where the assistant's own marks are cyan. They are different
+    // things and they appear together: the marks are what it chose to ring,
+    // the focus is the square the sentence on screen is about. In one colour
+    // a player cannot tell which ring the words belong to.
     this.focusRing = new THREE.Mesh(
       new THREE.RingGeometry(SQUARE * 0.42, SQUARE * 0.5, 32).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0x4fd2ff, transparent: true, opacity: 0.95, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.9, depthWrite: false }),
     );
     this.focusRing.renderOrder = 4;
     this.focusRing.visible = false;

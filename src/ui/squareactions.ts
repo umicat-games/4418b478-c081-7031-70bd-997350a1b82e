@@ -19,7 +19,9 @@ import type { Sq } from '../chess/coords';
 
 const TICK = '<svg viewBox="0 0 24 24"><path d="M5 13l4.5 4.5L19 7"/></svg>';
 const CROSS = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-const ASK = '<svg viewBox="0 0 24 24"><path d="M9.2 9a3 3 0 1 1 4 2.8c-.8.3-1.2 1-1.2 1.8v.4"/><path d="M12 17.6v.01"/></svg>';
+/** A speech bubble, not a question mark: what this opens is a conversation
+ *  about the square, and the same icon is what opens the log in the corner. */
+const ASK = '<svg viewBox="0 0 24 24"><path d="M20.5 11.5a7.5 7.5 0 0 1-7.5 7.5H8.8L4.5 21.8V17A7.5 7.5 0 1 1 20.5 11.5z"/></svg>';
 
 export interface SquareActionsOptions {
   onConfirm(at: Sq): void;

@@ -39,6 +39,8 @@ const EN = {
   'hud.howToMove': 'Tap a piece, then a square, and confirm with the tick.',
   'hud.engineWouldPlay': 'The engine would play {move}.',
 
+  'btn.log': 'Conversation',
+  'btn.place': 'Play',
   'btn.setup': 'Setup',
   'btn.hint': 'Hint',
   'btn.takeback': 'Take back',
@@ -52,6 +54,9 @@ const EN = {
   'menu.white': 'White',
   'menu.black': 'Black',
   'menu.opponent': 'Opponent',
+  'menu.companion': 'AI assistant',
+  'menu.on': 'On',
+  'menu.off': 'Off',
   'menu.odds': 'Odds',
   'menu.none': 'None',
   'menu.oddsKnight': 'No knight',
@@ -77,8 +82,24 @@ const EN = {
   'chat.signIn': 'Sign in and I can talk you through the game. The board works either way.',
   'chat.noCredits': 'I am out of credits, so I will stop talking — the game plays on without me.',
   'chat.lost': 'I lost my train of thought. Ask me again?',
+  'chat.speak': 'Speak',
+  'chat.stopRecording': 'Done',
+  'chat.marked': 'Marked it on the board.',
+  'chat.markFailed': 'I could not find “{squares}” on this board — ask me again and I will point properly.',
+  // What the board counted, said out loud by the GAME. The model asked on the
+  // player's behalf and has already finished its turn; waiting for it to speak
+  // again shows the player some rings and never tells them the answer.
+  'chat.attacks': '{square}: attacked by {attackers}, defended by {defenders}. Marked on the board.',
+  'chat.attacksNothing': 'nothing',
+  'chat.moves': 'The {piece} on {square} has {count} legal move(s): {moves}.',
+  'chat.movesNone': 'The piece on {square} has nowhere to go.',
+  'chat.notASquare': '“{square}” is not a square on this board.',
 
   'speech.playHere': 'Play {move}',
+  'speech.reply': 'Reply…',
+
+  'askhere.about': 'About {square}',
+  'askhere.placeholder': 'Ask about this square…',
 
   'promo.heading': 'Promote to',
   'promo.queen': 'Queen',
@@ -132,6 +153,8 @@ const ZH: Partial<Record<Key, string>> = {
   'hud.howToMove': '点一个子，再点要去的格子，然后按对勾确认。',
   'hud.engineWouldPlay': '引擎会走 {move}。',
 
+  'btn.log': '对话记录',
+  'btn.place': '走这步',
   'btn.setup': '设置',
   'btn.hint': '提示',
   'btn.takeback': '悔棋',
@@ -145,6 +168,9 @@ const ZH: Partial<Record<Key, string>> = {
   'menu.white': '白',
   'menu.black': '黑',
   'menu.opponent': '对手',
+  'menu.companion': 'AI 助手',
+  'menu.on': '打开',
+  'menu.off': '关闭',
   'menu.odds': '让子',
   'menu.none': '不让',
   'menu.oddsKnight': '让一马',
@@ -172,6 +198,10 @@ const ZH: Partial<Record<Key, string>> = {
   'chat.lost': '我走神了，再问我一遍？',
 
   'speech.playHere': '走 {move}',
+  'speech.reply': '回复…',
+
+  'askhere.about': '关于 {square}',
+  'askhere.placeholder': '问问这个格子…',
 
   'promo.heading': '升变成',
   'promo.queen': '后',

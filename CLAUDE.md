@@ -26,10 +26,13 @@ backend, no per-move cost, works signed out. Everything factual comes from
 here: who is better, by how much, whether there is a mate, what the move
 would have been.
 
-**The COMPANION** (`src/coach/coach.ts`) talks. It is the platform's runtime
+**The ASSISTANT** (`src/coach/coach.ts`) talks. It is the platform's runtime
 AI (ADR-017), handed the engine's numbers to talk *about*. It can point at the
 board — mark squares, show what attacks what, offer a move — and it can change
-the level and start a game. It never decides a move and it never moves a piece.
+the level and start a game. It never decides a move and it never moves a
+piece. A game can be played without it at all (the switch in the new-game
+panel), and then nothing here calls the platform AI and none of the buttons
+that would are on screen.
 
 This split is the whole trust model, and **chess makes it more dangerous than
 Go does, not less**. A language model has read an enormous amount of chess
@@ -53,7 +56,14 @@ the playbook says so at length.
 | `src/view/pieces.ts` | **the pieces, as lathe profiles** — no models anywhere |
 | `src/view/board3d.ts` | the board drawn, the camera, hit-testing |
 | `src/view/controls.ts` | pointer handling: choose a square vs move the camera |
-| `src/ui/*` | chat, bubble, settings, title, square actions, eval bar, promotion |
+| `src/ui/speech.ts` | what it says, on the board, with the reply field |
+| `src/ui/askhere.ts` | asking about a square, at the square |
+| `src/ui/squareactions.ts` | confirm / cancel / ask, beside the piece |
+| `src/ui/dictation.ts` | voice + level meter, shared by every field |
+| `src/ui/chat.ts` | the log, opened from the corner |
+| `src/ui/menu.ts` | the one panel: new game AND settings |
+| `src/ui/evalbar.ts`, `promotion.ts`, `title.ts`, `curtain.ts` | the rest |
+| `src/ui/buttons.css` | **how a button looks** — `lift` and `chip` |
 | `src/audio.ts` | which clips, how loud |
 | `src/save.ts` | what survives leaving, and the quotas that shape it |
 | `public/stockfish/` | **vendored Stockfish** — frozen, see `vendor/VENDOR.md` |
@@ -124,6 +134,24 @@ is written first, so nothing is lost.
 Chat is the exception and belongs to the companion. Move notation is never
 translated.
 
+**Marks and focus are different things.** `setHighlights` is the assistant's
+own marking (cyan squares); `setFocus` is the square the current sentence is
+about (a gold ring), and the bubble sets it on every page. They shared one
+list once, and a sentence with no coordinate in it cleared the marks the
+assistant had just drawn — so `highlight` worked and was invisible.
+
+**Never report a mark that did not happen.** `highlight` returns how many
+squares it actually marked; zero says so, to the player and to the model.
+"I've marked it" over an unchanged board sends the player looking for
+something that is not there. The same rule makes `show_attacks` and
+`show_moves` state their answer OUT LOUD, as the game, rather than leaving
+the player with some marked squares and no number.
+
+**The board draws only when it changes** — and the panels standing on it use
+`backdrop-filter`, which samples a canvas that is not redrawing. That is what
+`repaintSoon()` in main.ts is for. If a panel leaves a ghost of itself behind,
+this is why.
+
 **`ai` and `microphone` must be declared** in the game's Settings on the
 platform, or the backend rejects AI calls and the iframe blocks the mic.
 
@@ -141,12 +169,24 @@ whole game down at boot with a blank screen. It happened twice in the Go game.
   hiding it reads as the game not knowing it rather than as tact.
 - **Two taps, never a drag.** On a phone the finger covers the square it is
   over, and a mis-drop in chess costs a piece.
+- **The conversation happens ON the board.** The assistant's reply is a bubble
+  beside the square it is about, with a reply field on its last page; asking
+  about a piece opens a composer at that piece. The panel on the right is for
+  reading back through what was said, and it opens from the corner. Anything
+  that makes the player open the panel to continue a conversation is a
+  regression. (Ported from GO with me, which learned it the hard way.)
 - **Odds instead of a Go handicap.** Taking the engine's queen off is an old
   and honest way to make a game fair, and it maps onto the same slot in the
   settings panel.
 - **Promotion is asked, not assumed.** Auto-queening is right almost every
   time, and the exception — queen is stalemate, rook is mate — is the one a
   beginner needs to meet.
+- **The assistant is per GAME, not a remembered preference.** Every new game
+  offers it; only the player turning it off turns it off. "I did not want to
+  be talked to during that game" is not "never talk to me".
+- **Speech goes into the field, never straight out.** Recognition mishears,
+  and these sentences are full of coordinates. The field is either words or
+  the level meter, never both.
 
 ## Building and checking
 

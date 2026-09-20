@@ -1,17 +1,21 @@
 // The chat panel: one line at the top when it is closed, a column down the
 // right when it is open. See chat.css for why it lives where it does.
 //
-// It knows nothing about Go and nothing about the AI. It shows messages and
+// It knows nothing about chess and nothing about the AI. It shows messages and
 // reports what the player typed or said — so the coach can be swapped, muted or
 // unavailable (signed out, out of credits) without any of that reaching here.
 import './buttons.css';
 import './chat.css';
 import { t } from '../i18n';
+import { Dictation, waveBars } from './dictation';
 import { stripAnchors } from './speech';
 import type { ChatMessage } from '../coach/coach';
 import type { ThreeUmicat } from '@umicat/three-sdk';
 
 const MIC = '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+/** A stop square, because a mic that is already listening is not an invitation
+ *  to start — it is the thing you press to finish. */
+const STOP = '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/></svg>';
 const SEND = '<svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg>';
 
 export interface ChatOptions {
@@ -30,7 +34,11 @@ export class ChatPanel {
   private open = false;
   private thinking = false;
   private messages: ChatMessage[] = [];
-  private listening: { cancel(): void; stop(): void } | null = null;
+  private bars: HTMLElement[] = [];
+  private dictation!: Dictation;
+  /** Whatever was half-typed when the mic was opened, to be put back if the
+   *  player says nothing and it closes again. */
+  private draft = '';
   /** The bubble on the board is saying this already. */
   private echoed = false;
 
@@ -42,8 +50,8 @@ export class ChatPanel {
       <div class="pill"><span class="who"></span><span class="text"></span><span class="more"></span></div>
       <div class="log"></div>
       <div class="composer">
-        <input type="text" autocomplete="off" />
-        <button class="mic lift dark" title="Speak" hidden>${MIC}</button>
+        <div class="field">${waveBars()}<input type="text" autocomplete="off" /></div>
+        <button class="mic lift dark" hidden>${MIC}</button>
         <button class="send lift" title="Send">${SEND}</button>
       </div>`;
     document.body.appendChild(this.el);
@@ -52,16 +60,44 @@ export class ChatPanel {
     this.pillText = this.el.querySelector('.pill .text')!;
     this.input = this.el.querySelector('input')!;
     this.micBtn = this.el.querySelector('.mic')!;
+    this.bars = [...this.el.querySelectorAll('.wave i')] as HTMLElement[];
 
     this.el.querySelector('.pill')!.addEventListener('click', () => this.toggle());
     this.el.querySelector('.send')!.addEventListener('click', () => this.send());
     this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.send(); });
     this.micBtn.addEventListener('click', () => void this.toggleMic());
 
+    this.dictation = new Dictation(umicat, {
+      onFinal: (text) => {
+        // Into the field, never straight out: recognition mishears, and these
+        // sentences are full of coordinates.
+        const prefix = this.draft ? `${this.draft.replace(/\s+$/, '')} ` : '';
+        this.draft = '';
+        this.input.value = prefix + text;
+        this.input.focus();
+      },
+      onState: (listening) => {
+        this.el.classList.toggle('listening', listening);
+        this.micBtn.classList.toggle('listening', listening);
+        this.micBtn.innerHTML = listening ? STOP : MIC;
+        this.micBtn.title = t(listening ? 'chat.stopRecording' : 'chat.speak');
+        if (listening) {
+          this.draft = this.input.value;
+          this.input.value = '';
+          this.input.placeholder = '';
+          this.dictation.meter(this.bars);
+        } else {
+          this.input.placeholder = t('chat.ask');
+          if (!this.input.value && this.draft) this.input.value = this.draft;
+          this.draft = '';
+        }
+      },
+      onError: (kind) => { this.input.placeholder = t(kind === 'not-allowed' ? 'chat.micBlocked' : 'chat.micRetry'); },
+    });
     // Only offer the mic where speech actually works. On a surface with neither
     // the browser's recogniser nor a native host bridge, a mic button is a
     // button that does nothing — worse than no button.
-    if (umicat.voice.supported()) this.micBtn.hidden = false;
+    if (this.dictation.supported) this.micBtn.hidden = false;
     this.relabel();
   }
 
@@ -71,6 +107,7 @@ export class ChatPanel {
     this.el.querySelector('.pill .who')!.textContent = t('chat.coach');
     this.el.querySelector('.pill .more')!.textContent = t(this.open ? 'chat.close' : 'chat.tap');
     this.input.placeholder = t('chat.ask');
+    this.micBtn.title = t(this.dictation.listening ? 'chat.stopRecording' : 'chat.speak');
     this.render(this.messages, this.thinking);
   }
 
@@ -85,7 +122,7 @@ export class ChatPanel {
       this.scrollToEnd();
     } else {
       this.el.querySelector('.pill .more')!.textContent = t('chat.tap');
-      this.stopMic();
+      this.dictation.stop();
     }
     this.opts.onLayout?.(open);
   }
@@ -100,7 +137,7 @@ export class ChatPanel {
   }
 
   /** Redraw from the coach's message list. Cheap enough to call on every change:
-   *  a Go conversation is tens of lines, not thousands. */
+   *  a conversation about one game is tens of lines, not thousands. */
   render(messages: ChatMessage[], thinking: boolean): void {
     this.messages = messages;
     this.thinking = thinking;
@@ -113,25 +150,20 @@ export class ChatPanel {
     this.log.replaceChildren(...messages.map((m) => {
       const div = document.createElement('div');
       div.className = `msg ${m.from}`;
-      // The coach's `[C3]` markers are for the board, not for reading.
+      // The coach's `[e4]` markers are for the board, not for reading.
       div.textContent = m.from === 'coach' ? stripAnchors(m.text) : m.text;
       return div;
     }));
     if (thinking) {
+      // Where the reply will appear, waiting. Three dots that MOVE: a static
+      // ellipsis is indistinguishable from a message that says "…", which is
+      // what this was and what it looked like.
       const div = document.createElement('div');
       div.className = 'msg coach thinking';
-      div.textContent = '…';
+      div.innerHTML = '<i></i><i></i><i></i>';
       this.log.appendChild(div);
     }
     if (this.open) this.scrollToEnd();
-  }
-
-  /** Put words in the player's mouth — used for the opening line, so a new
-   *  player does not have to think of something to say to get started. */
-  prefill(text: string): void {
-    this.input.value = text;
-    this.setOpen(true);
-    this.input.focus();
   }
 
   private send(): void {
@@ -148,30 +180,8 @@ export class ChatPanel {
   }
 
   private async toggleMic(): Promise<void> {
-    if (this.listening) { this.listening.stop(); return; }
     this.setOpen(true);
-    this.micBtn.classList.add('listening');
-    const session = await this.umicat.voice.start(this.umicat.locale === 'zh-CN' ? 'zh-CN' : 'en-US', {
-      onPartial: (text) => { this.input.value = text; },
-      onFinal: (text) => {
-        this.input.value = text.trim();
-        // Speaking is a whole utterance; making someone then reach for a send
-        // button is asking them to finish the sentence twice.
-        if (this.input.value) this.send();
-      },
-      onError: (kind) => {
-        this.input.placeholder = t(kind === 'not-allowed' ? 'chat.micBlocked' : 'chat.micRetry');
-      },
-      onEnd: () => { this.stopMic(); },
-    });
-    if (!session) { this.stopMic(); return; }
-    this.listening = session;
-  }
-
-  private stopMic(): void {
-    this.listening?.cancel();
-    this.listening = null;
-    this.micBtn.classList.remove('listening');
+    await this.dictation.toggle();
   }
 
   /** Whether the panel currently covers part of the screen, so the board can

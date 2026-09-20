@@ -17,6 +17,8 @@ export interface MenuChoice {
   side: Side;
   level: string;
   odds: Odds;
+  /** Whether the AI assistant is part of this game at all. */
+  companion: boolean;
 }
 
 export interface MenuOptions {
@@ -24,6 +26,8 @@ export interface MenuOptions {
   onStart(choice: MenuChoice): void;
   /** The level changed. Takes effect immediately, mid-game included. */
   onLevel(level: string): void;
+  /** Switched mid-game; a new game takes it from `onStart`'s choice. */
+  onCompanion(on: boolean): void;
   onHint(): void;
   onTakeback(): void;
   onResign(): void;
@@ -123,6 +127,14 @@ export class Menu {
     levels.appendChild(about);
     this.el.appendChild(levels);
 
+    // A game-level switch, not a preference: it decides whether this game
+    // talks to a language model at all. Off means no calls, no buttons, no
+    // bubble — see `companion` in main.ts.
+    this.el.appendChild(this.group(t('menu.companion'), [
+      { label: t('menu.on'), on: this.choice.companion, pick: () => { this.choice.companion = true; this.opts.onCompanion(true); this.draw(); } },
+      { label: t('menu.off'), on: !this.choice.companion, pick: () => { this.choice.companion = false; this.opts.onCompanion(false); this.draw(); } },
+    ]));
+
     const odds = this.group(t('menu.odds'), ODDS.map((o) => ({
       label: t(o.key),
       on: this.choice.odds === o.id,
@@ -160,9 +172,14 @@ export class Menu {
       this.el.appendChild(actions);
     }
 
+    // Sound is a setting, not a question about the game being started. Opened
+    // from the title this panel asks three things — which side, which
+    // opponent, what odds — and everything else it could ask makes that list
+    // longer without making the decision better.
+    //
     // Switches, not sliders. A chess board makes one sound; the useful
     // question is whether it makes it.
-    this.el.appendChild(this.group(t('menu.sound'), [
+    if (!this.standalone) this.el.appendChild(this.group(t('menu.sound'), [
       { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
       { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
       { label: t('menu.eval'), on: this.opts.evalBar(), pick: () => { this.opts.onEval(!this.opts.evalBar()); this.draw(); } },
