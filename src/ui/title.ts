@@ -7,11 +7,13 @@
 import './title.css';
 import { t } from '../i18n';
 
-export type TitleChoice = 'course' | 'play' | 'forget';
+export type TitleChoice = 'continue' | 'new' | 'settings' | 'forget';
 
 export interface TitleOptions {
   /** This player has been here before, even if no game is unfinished. */
   returning: boolean;
+  /** There is a game worth going back to. */
+  canContinue: boolean;
   /** Resolves when the engine is ready; until then the buttons say so. */
   loading: Promise<unknown>;
 }
@@ -59,13 +61,9 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
       return b;
     };
 
-    // Two doors, and nothing else. Everything the old screen offered —
-    // continue this game, continue that lesson, start a new one — is a
-    // decision about WHICH, and belongs behind the door it is about. A title
-    // screen with four buttons asks a beginner to understand the product
-    // before it has shown them anything.
-    add(t('title.course'), 'course', true);
-    add(t('title.freeplay'), 'play');
+    if (opts.canContinue) add(t('title.continue'), 'continue', true);
+    add(t('title.newGame'), 'new', !opts.canContinue);
+    add(t('title.settings'), 'settings');
     // Only offered to someone who has a past worth erasing, and never made the
     // easy button to hit by accident.
     if (opts.returning) {

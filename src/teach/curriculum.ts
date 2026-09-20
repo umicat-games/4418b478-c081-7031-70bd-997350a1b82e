@@ -1,3 +1,12 @@
+// PARKED, 2026-09-20. Nothing in the running game imports this any more.
+//
+// The tutorial was taken out because the flow around it needed redesigning, not
+// because the material was wrong: the lessons, the goals and the checkers are
+// still verified by `npm run verify`, and they are the starting point for
+// whatever replaces it. The parts that were deleted are the UI and the wiring —
+// the course screen, the lesson card, the phase machine's hooks into the game
+// loop — all of which are in the history if they are wanted back.
+//
 // The course: five lessons, each one a level.
 //
 // A lesson runs teach → practice → quiz → summary, and the point of the shape

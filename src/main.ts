@@ -1,4 +1,4 @@
-// GO with me — a game of Go against KataGo, with a coach who can talk about it.
+// GO with me — a game of Go against KataGo, with an AI companion beside it.
 //
 // Two brains, deliberately separate:
 //
@@ -7,15 +7,19 @@
 //   factual — who is ahead, by how many points, what the better move was — comes
 //   from here, because it is measured rather than asserted.
 //
-//   the COACH (`src/coach/coach.ts`) talks. It is the platform's runtime AI, and
-//   it is handed the engine's numbers to talk ABOUT. It never decides a move and
-//   it never touches the board.
+//   the COMPANION (`src/coach/coach.ts`) talks. It is the platform's runtime
+//   AI, handed the engine's numbers to talk ABOUT, and it can point at the
+//   board — mark a stone, show a group's liberties, suggest a move. It never
+//   decides a move and it never puts a stone down.
 //
-// Keeping them apart is why the teaching can be trusted: a coach that could
-// play an illegal move would be a coach whose explanations mean nothing.
+// Keeping them apart is why what it says can be trusted: a companion that could
+// play an illegal move would be a companion whose explanations mean nothing.
 //
-// This file is the loop that joins them, and nothing else. When something is
-// wrong, the first question is which of the two it belongs to.
+// A course of lessons lived here until 2026-09-20 and was taken out for
+// redesign; `src/teach/` is what survives of it, parked and unwired.
+//
+// This file is the loop that joins the pieces, and nothing else. When something
+// is wrong, the first question is which piece it belongs to.
 import { ThreeUmicat } from '@umicat/three-sdk';
 import { BoardView } from './view/board3d';
 import { attachBoardControls } from './view/controls';
@@ -23,17 +27,14 @@ import { GoGame, type BoardSize } from './go/rules';
 import { toGtp } from './go/coords';
 import { LEVELS, Opponent, levelById, levelLabel, type Read } from './go/opponent';
 import { describe as describeScore, scoreFrom, type Score } from './go/scoring';
+import { getLiberties } from './engine/utils/gameLogic';
 import { Coach } from './coach/coach';
 import { ChatPanel } from './ui/chat';
 import { Speech, segment } from './ui/speech';
 import { Menu } from './ui/menu';
+import { PointActions } from './ui/pointactions';
 import { showTitle } from './ui/title';
-import { showLessonCard } from './ui/lessoncard';
-import { showCourseMenu } from './ui/coursemenu';
-import { Autosave, load, type LessonBoard } from './save';
-import { Course, type Phase } from './teach/course';
-import { LESSONS } from './teach/curriculum';
-import { goalMet, setUp } from './teach/curriculum';
+import { Autosave, load } from './save';
 import { setLocale, t } from './i18n';
 
 /** The player is Black: Black moves first, and the beginner should be the one
@@ -41,16 +42,16 @@ import { setLocale, t } from './i18n';
 const HUMAN = 'black' as const;
 
 /** How many of Black's points have to evaporate on Black's own move before the
- *  coach mentions it UNASKED while they are just playing. Small enough to catch
- *  a real blunder, big enough not to natter about every slightly loose move. */
+ *  companion mentions it unasked. Small enough to catch a real blunder, big
+ *  enough not to natter about every slightly loose move. */
 const BLUNDER_POINTS = 5;
-/** Moves of quiet after an unprompted remark, so the coach is not a narrator. */
+/** Moves of quiet after an unprompted remark, so it is not a narrator. */
 const REMARK_COOLDOWN = 4;
 
 async function start(): Promise<void> {
   const umicat = await ThreeUmicat.init();
-  // Before any UI exists: everything below asks `t()` for its words.
-  // The platform's setting, and nothing else — see i18n.ts.
+  // Before any UI exists: everything below asks `t()` for its words. The
+  // platform's language setting, and nothing else — see i18n.ts.
   setLocale(umicat.locale);
 
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -58,8 +59,12 @@ async function start(): Promise<void> {
   const view = new BoardView(canvas);
   window.addEventListener('resize', () => view.resize());
 
-  // The coach's own voice, on the board. The chat panel keeps the history and
-  // is where the player types; this is where the coach is actually read.
+  // ── things the render loop touches ──────────────────────────────────────
+  // Declared before it starts. The loop runs from the first frame, long before
+  // the rest of this function exists, and a `const` it reads too early is a
+  // ReferenceError that takes the whole game down at boot.
+  let idleSpin = true;
+
   const speech = new Speech({
     onPage: (page) => {
       // The point being talked about lights up for exactly as long as the
@@ -72,11 +77,18 @@ async function start(): Promise<void> {
       view.setHighlights([]);
       chat.setEchoed(false);
     },
-    // The coach names points it is not suggesting — White's move, a dead
-    // shape, the place they should NOT have played — so the offer appears only
-    // where a stone of theirs could actually go, this turn.
+    // The companion names points it is NOT suggesting — White's reply, a dead
+    // shape, the place they should not have played — so the offer to play one
+    // appears only where a stone could actually go, this turn.
     canPlay: (at) => !!game && !game.over && !thinking && game.toPlay === HUMAN && game.legal(at.x, at.y),
     onPlay: (at) => commit(at),
+  });
+
+  /** Confirm / cancel / ask, beside the stone rather than in a corner. */
+  const actions = new PointActions({
+    onConfirm: (at) => commit(at),
+    onCancel: () => view.setGhost(null, HUMAN),
+    onAsk: (at) => askAbout(at),
   });
 
   const opponent = new Opponent();
@@ -84,32 +96,16 @@ async function start(): Promise<void> {
   // anyone has read two buttons there is nothing left to wait for.
   const loading = opponent.ready();
 
-  // The board is on screen from the first frame, turning slowly, with the
-  // title over it — which is also what hides the engine download: by the time
-  // anyone has read two buttons there is nothing left to wait for.
-  let idleSpin = true;
-  /**
-   * The "LESSON 2/5 · ATARI · PRACTICE" line is worth reading when a phase
-   * opens and is noise for the rest of it, so it is shown on a change and
-   * expires. Declared HERE, with the other state the render loop touches:
-   * the loop starts before most of this function exists, and a `let` it reads
-   * before the declaration is a ReferenceError that takes the whole game down
-   * at boot rather than a quiet undefined.
-   */
-  let headerUntil = 0;
-  let headerFor = '';
-
   const frame = (): void => {
-    // The header's own expiry. Nothing else would redraw the HUD while the
-    // player sits and thinks, which is exactly when it is in the way.
-    if (headerUntil && performance.now() > headerUntil) { headerUntil = 0; refresh(); }
     if (idleSpin) view.orbit(0.0012, 0);
     if (speech.showing) placeSpeech();
+    if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
     view.render();
     requestAnimationFrame(frame);
   };
   frame();
 
+  // ── state ───────────────────────────────────────────────────────────────
   const saved = await load(umicat);
   const autosave = new Autosave(umicat);
 
@@ -119,15 +115,10 @@ async function start(): Promise<void> {
   let read: Read | null = null;
   let leadBeforePlayer: number | null = null;
   let thinking = false;
-  let armed: { x: number; y: number } | null = null;
-  let lastRemarkAt = -REMARK_COOLDOWN;
   let score: Score | null = null;
-  const course = new Course(saved.profile.course);
-  /** Stones the student had taken when the current exercise was set up — the
-   *  baseline a `capture` goal is measured against. */
-  let capturesAtStart = 0;
+  let lastRemarkAt = -REMARK_COOLDOWN;
 
-  // ── the two voices ──────────────────────────────────────────────────────
+  // ── the companion ───────────────────────────────────────────────────────
   const chat = new ChatPanel(umicat, {
     onSend: (text) => void talk(text),
     onLayout: (open) => {
@@ -137,44 +128,88 @@ async function start(): Promise<void> {
       if (open) speech.hide();
     },
   });
+
   const coach = new Coach(umicat, {
     setBoardSize: (size) => {
-      // Mid-game is exactly when a model is most likely to try this, because
-      // the student just asked "can we play on a bigger board?".
       if (game && !game.over && game.turns.length > 0) return false;
       newGame(size as BoardSize, 0);
       return true;
     },
-    setLevel: (id) => { level = levelById(id); refresh(); return true; },
-    startGame: (handicap) => {
-      // A game and a lesson cannot both own the board. Asking for one ends the
-      // other — the student keeps the lessons they have passed.
-      course.leave();
-      newGame(coach.profile.boardSize, handicap);
-      return true;
-    },
+    setLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); return true; },
+    startGame: (handicap) => { void freshGame(coach.profile.boardSize, handicap); return true; },
     highlight: (points) => view.setHighlights(points),
-    startLesson: (id) => {
-      const lesson = course.start(id || undefined);
-      if (!lesson) return false;
-      coach.profile.mode = 'learning';
-      setUpPhase({ announce: true });
-      return true;
-    },
-    beginExercise: () => {
-      // Only from the explaining phase. A model that calls this twice would
-      // otherwise skip the practice and put the student straight into a test.
-      if (!course.active || course.phase !== 'teach') return false;
-      course.advance();
-      setUpPhase({ announce: true });
-      return true;
-    },
-    leaveCourse: () => {
-      course.leave();
-      newGame(coach.profile.boardSize, 0);
+    // The companion asks for a group's liberties; the GAME counts them. A model
+    // asked to count liberties on a board it cannot really see will answer
+    // confidently and be wrong, and that number is the whole point here.
+    showLiberties: (at) => {
+      const board = game;
+      if (!board || board.board[at.y]?.[at.x] == null) return null;
+      const { liberties, group } = getLiberties(board.board, at.x, at.y);
+      const seen = new Set<string>();
+      const marks: Array<{ x: number; y: number }> = [];
+      for (const s of group) {
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Array<[number, number]>) {
+          const p = { x: s.x + dx, y: s.y + dy };
+          if (p.x < 0 || p.y < 0 || p.x >= board.size || p.y >= board.size) continue;
+          if (board.board[p.y][p.x] !== null) continue;
+          const key = `${p.x},${p.y}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          marks.push(p);
+        }
+      }
+      view.setHighlights(marks);
+      return { liberties, stones: group.length, points: marks.map((m) => toGtp(m.x, m.y, board.size)) };
     },
   });
   coach.load(saved.messages, saved.profile);
+
+  /** How many companion lines have already been said out loud. Starts at the
+   *  restored count: the conversation that came back is history, and history
+   *  does not get spoken over the title screen. */
+  let spoken = coach.messages.filter((m) => m.from === 'coach').length;
+
+  const redrawChat = (): void => {
+    chat.render(coach.messages, coach.thinking);
+    const said = coach.messages.filter((m) => m.from === 'coach');
+    if (said.length > spoken) {
+      spoken = said.length;
+      const size = game?.size ?? 9;
+      speech.show(segment(said[said.length - 1].text, size), size);
+    }
+  };
+
+  async function talk(text: string): Promise<void> {
+    redrawChat();
+    await coach.ask(text, { game, read });
+    redrawChat();
+    persist();
+  }
+
+  /** An unprompted line. `note` is what just happened, in plain words; the
+   *  companion decides how, and whether, to react. */
+  async function remark(note: string): Promise<void> {
+    if (!game) return;
+    lastRemarkAt = game.turns.length;
+    redrawChat();
+    await coach.remark(note, { game, read });
+    redrawChat();
+    persist();
+  }
+
+  /**
+   * The player pointing back.
+   *
+   * The companion can point at the board; this is the other direction, and it
+   * matters more than it looks. Asking about a stone by tapping it beats
+   * working out that it is called Q16 and typing that — which is a thing
+   * beginners cannot do and nobody enjoys.
+   */
+  function askAbout(at: { x: number; y: number }): void {
+    if (!game) return;
+    view.setHighlights([at]);
+    chat.prefill(`${toGtp(at.x, at.y, game.size)}: `);
+  }
 
   /** Put the bubble where its sentence belongs. Runs every frame while it is
    *  up, because the camera can move under it. */
@@ -190,85 +225,29 @@ async function start(): Promise<void> {
       const gap = view.screenSpacing * 0.7 + 12;
       const x = Math.min(Math.max(p.x, box.width / 2 + margin), free - box.width / 2 - margin);
       const top = p.y - gap;
-      // Above the point, unless there is no room up there — a bubble pinned to
-      // the top of the screen while pointing at a stone near it is pointing at
-      // nothing. Below, and the tail comes off, because it would be lying.
       if (top - box.height >= margin) speech.place(x, top, Math.abs(x - p.x) < 2);
       else speech.place(x, p.y + gap + box.height, false);
       return;
     }
-    // Nothing to point at: the middle of the board. Not the top of the screen —
-    // a bubble parked over the HUD reads as a notification, and this is the
-    // coach talking about the game in front of both of you.
+    // Nothing to point at: the middle of the board, because this is someone
+    // talking about the game in front of you, not a notification.
     const size = game?.size ?? 9;
     const middle = view.screenOf((size - 1) / 2, (size - 1) / 2);
     const x = Math.min(Math.max(middle.x, box.width / 2 + margin), free - box.width / 2 - margin);
     speech.place(x, Math.max(middle.y, box.height + margin), false);
   }
 
-  /**
-   * How many coach lines have already been said out loud.
-   *
-   * Starts at whatever came back from the save, NOT at zero: the restored
-   * conversation is history, and history does not get spoken. Zero meant the
-   * last thing the coach said in the last session — "White wins, remember:
-   * scattered stones cannot live" — came up in a bubble over the title screen
-   * of the next one.
-   */
-  let spoken = coach.messages.filter((m) => m.from === 'coach').length;
-  const redrawChat = (): void => {
-    chat.render(coach.messages, coach.thinking);
-    const said = coach.messages.filter((m) => m.from === 'coach');
-    if (said.length > spoken) {
-      spoken = said.length;
-      // Only the newest: if the coach got two lines in while the player was
-      // reading, the older one is history, and history is what the panel is for.
-      const size = game?.size ?? 9;
-      speech.show(segment(said[said.length - 1].text, size), size);
-    }
-  };
-  redrawChat();
-
-  async function talk(text: string): Promise<void> {
-    redrawChat();
-    await coach.ask(text, { game, read });
-    redrawChat();
-    persist();
-  }
-
-  /** The coach's unprompted line. Never for its own sake: `note` is an event
-   *  that just happened, and the model may still decide to stay quiet. */
-  async function remark(note: string): Promise<void> {
-    if (!game) return;
-    lastRemarkAt = game.turns.length;
-    redrawChat();
-    await coach.remark(note, { game, read });
-    redrawChat();
-    persist();
-  }
-
   // ── the board ───────────────────────────────────────────────────────────
-  // Where the student is, and what this exercise wants. Both sides of the
-  // lesson can see it: the same sentence goes into the coach's observation.
-  const lessonBar = document.createElement('div');
-  lessonBar.className = 'lesson';
-  hud.appendChild(lessonBar);
-
   const status = document.createElement('div');
   hud.appendChild(status);
-  // How to play a stone at all. Shown until the player has played one, ever —
-  // the first session had someone sitting in front of their own turn with no
-  // idea the board was waiting for them.
+  /** How to place a stone, until they have placed one — ever. */
   const tip = document.createElement('div');
   tip.className = 'tip';
   hud.appendChild(tip);
-  /** True on a device that has no mouse, which is also the one that needs the
-   *  two-step placement explained. */
-  const coarse = window.matchMedia('(pointer: coarse)').matches;
 
   function refresh(): void {
     if (game) view.sync(game);
-    if (!game) { status.textContent = ''; return; }
+    if (!game) { status.textContent = ''; tip.textContent = ''; return; }
     if (game.over) {
       status.textContent = score
         ? describeScore(score, game)
@@ -280,50 +259,8 @@ async function start(): Promise<void> {
         ? t('hud.whiteThinking')
         : game.toPlay === HUMAN ? t('hud.yourMove', { level: levelLabel(level.id) }) : t('hud.whiteToPlay');
     }
-    confirmBtn.hidden = !armed;
-
-    const lesson = course.lesson;
-    const phase = course.phase;
-    lessonBar.replaceChildren();
-    if (lesson) {
-      const { index, total } = course.position;
-      // A new lesson or a new phase brings the header back for a few seconds.
-      const stamp = `${lesson.id}/${phase}`;
-      if (stamp !== headerFor) { headerFor = stamp; headerUntil = performance.now() + 5000; }
-      if (performance.now() < headerUntil) {
-        const head = document.createElement('div');
-        head.className = 'head';
-        head.textContent = `${t('course.banner', { index, total, name: t(`lesson.${lesson.id}` as Parameters<typeof t>[0]) })} · ${t(`course.phase.${phase}` as Parameters<typeof t>[0])}`;
-        lessonBar.appendChild(head);
-      }
-      const goal = document.createElement('div');
-      goal.className = 'goal';
-      goal.textContent = phase === 'quiz' ? `${goalText(lesson.id, 'quiz')} ${t('course.quizSilent')}`
-        : phase === 'practice' ? goalText(lesson.id, 'practice')
-          : phase === 'done' ? t('course.passed') : '';
-      lessonBar.appendChild(goal);
-    }
-    retryBtn.hidden = !(course.active && (phase === 'practice' || phase === 'quiz'));
-    nextLessonBtn.hidden = !(course.lesson && phase === 'done');
-    leaveBtn.hidden = !course.lesson;
-    // One or the other, never both: they are the two directions of the same door.
-    learnBtn.hidden = !!course.lesson || course.finished;
-    // No hints in a test. A hint button that works during the one part of the
-    // lesson that is being marked is not a hint button, it is the answer.
-    hintBtn.hidden = phase === 'quiz' && course.active;
-    // Passing and resigning are moves in a GAME. In a one-move exercise they
-    // are two buttons that can only confuse — except in the last lesson, which
-    // IS a whole game, and where passing is the thing being taught.
-    const exercise = course.active && phase !== 'teach' && course.problem()?.goal.kind !== 'finish';
-    passBtn.hidden = !!exercise;
-    resignBtn.hidden = !!exercise;
-
-    const green = !!game && !game.over && game.toPlay === HUMAN && !thinking;
-    // Until they have put a stone down ONCE, ever. Tying it to the first game
-    // meant it came back for every lesson, under the goal, for ever.
-    tip.textContent = green && !coach.profile.placed
-      ? t(coarse ? 'hud.howToPlaceTouch' : 'hud.howToPlaceMouse')
-      : '';
+    const green = !game.over && game.toPlay === HUMAN && !thinking;
+    tip.textContent = green && !coach.profile.placed ? t('hud.howToPlace') : '';
   }
 
   function newGame(size: BoardSize, handicap: number): void {
@@ -331,205 +268,42 @@ async function start(): Promise<void> {
     coach.profile.boardSize = size;
     view.setBoardSize(size);
     view.setHighlights([]);
-    armed = null;
+    view.setTerritory(null, [], game);
+    actions.hide();
     view.setGhost(null, HUMAN);
     read = null;
     score = null;
-    view.setTerritory(null, [], game);
     leadBeforePlayer = null;
     lastRemarkAt = -REMARK_COOLDOWN;
     refresh();
     persist();
     if (game.toPlay !== HUMAN) void engineTurn();
-    else void observePosition();
-
-    // "Right, let's begin" followed by nothing is how the first teaching
-    // session actually went: the coach announced a game and then waited, and
-    // the student had no idea it was their turn or where to put anything.
-    if (coach.profile.mode === 'learning') {
-      void remark(
-        `A new teaching game has just started on a ${size}x${size} board` +
-        `${handicap ? ` with ${handicap} handicap stones for the student` : ''}. ` +
-        'They are Black and it is their move. Tell them the ONE concrete thing to do now — ' +
-        'a point to play and why it is a reasonable first move — not a summary of the rules.',
-      );
-    }
   }
 
   /**
-   * Open a lesson: the one asked for, or wherever the student had got to.
+   * A new game is a new conversation.
    *
-   * A NEW lesson starts a new conversation with the coach — a lesson is a
-   * session, and the record of the old one lives on in its summary. RESUMING
-   * an unfinished lesson does not: picking up mid-practice with a coach who has
-   * forgotten the last thing it said would be worse than the problem it fixes.
+   * The old one is summarised into the companion's running note first — that is
+   * where the long memory lives — and then the thread is cleared, so the next
+   * game does not open in the middle of the last one's argument about a corner
+   * that no longer exists. Continuing a game keeps the thread, for the same
+   * reason in reverse.
    */
-  async function openLesson(id?: string): Promise<void> {
-    const before = course.progress;
-    const resuming = !id || id === before.lesson;
-    const lesson = resuming ? course.resume() ?? course.start(id) : course.start(id);
-    if (!lesson) return;
-
-    const carriedOn = resuming && before.lesson === lesson.id && before.phase !== 'done';
-    coach.profile.mode = 'learning';
-    if (!carriedOn) {
-      await coach.newSession();
-      spoken = 0;
-      redrawChat();
-    }
-
-    // Read the board back only when carrying on with the same lesson — a
-    // restart is a restart. Flushed first so a move made a moment ago is in
-    // the save rather than still in the debounce.
-    let restore: LessonBoard | null = null;
-    if (carriedOn) {
-      await autosave.flush();
-      restore = (await umicat.saves.get<LessonBoard>('lesson')) ?? null;
-    }
-    setUpPhase({ announce: true, restore });
-  }
-
-  /**
-   * Put the current phase's position on the board.
-   *
-   * Every phase gets a FRESH game rather than an edited one: an exercise that
-   * inherits the last one's ko history or capture count is an exercise whose
-   * goal checker quietly reads the wrong number.
-   */
-  function setUpPhase(opts: { announce?: boolean; restore?: LessonBoard | null } = {}): void {
-    const lesson = course.lesson;
-    if (!lesson) return;
-    const problem = course.problem();
-
-    // A lesson that has just been passed keeps the board that passed it: the
-    // student is looking at their own finished game, with the count on it.
-    if (course.phase === 'done') { refresh(); persist(); return; }
-
-    // A board the player walked out of comes back as they left it — but only
-    // if it belongs to THIS lesson and THIS phase. The last lesson is a whole
-    // game of Go; rebuilding it from its starting position, which is what
-    // happened before, threw away every move they had played.
-    const keep = opts.restore && opts.restore.lesson === lesson.id && opts.restore.phase === course.phase
-      ? opts.restore
-      : null;
-    if (keep) {
-      game = GoGame.restore(keep.board);
-      capturesAtStart = keep.capturesAtStart;
-    } else {
-      game = new GoGame(lesson.size);
-      if (problem) setUp(game, problem);
-      capturesAtStart = game.captures.black;
-    }
-
-    view.setBoardSize(lesson.size);
-    view.setHighlights([]);
-    view.setTerritory(null, [], game);
-    armed = null;
-    view.setGhost(null, HUMAN);
-    read = null;
-    score = null;
-    leadBeforePlayer = null;
-    refresh();
-    persist();
-
-    if (!opts.announce) return;
-    const phase = course.phase;
-    if (phase === 'teach') {
-      // The game says what the lesson is; the coach then says it in its own
-      // words. That order matters when the coach cannot answer at all — signed
-      // out, out of credits — because the lesson still opens with something.
-      const { index, total } = course.position;
-      // Whatever the coach was saying belonged to the last thing that happened;
-      // a bubble left under the card is the previous lesson talking over this
-      // one's title page.
-      speech.hide();
-      showLessonCard({
-        lessonId: lesson.id,
-        index,
-        total,
-        onBegin: () => void remark(
-          `A new lesson is open: "${lesson.id}". ${lesson.brief} ` +
-          'The student has just read the card introducing it, so do not repeat it back to them. ' +
-          `${problem ? 'There is a position on the board to talk about. ' : ''}` +
-          'Add the part a card cannot do — point at the board, in two or three sentences — then call ' +
-          'begin_exercise to put the practice up. Do not ask them to play before that.',
-        ),
-      });
-    } else if (phase === 'practice') {
-      void remark(
-        `The practice position for "${lesson.id}" is now on the board, and the student is Black. ` +
-        `What they have to do: ${goalText(lesson.id, 'practice')} Tell them, in one line. Do not give the answer.`,
-      );
-    } else if (phase === 'quiz') {
-      // Deliberately no remark: the test is the one part of a lesson where the
-      // coach has to be quiet, or it is not a test.
-      void 0;
-    }
-  }
-
-  /** What the banner says the student has to do — the same sentence the coach
-   *  is briefed with, so they cannot drift apart. */
-  function goalText(lessonId: string, phase: 'practice' | 'quiz'): string {
-    return t(`lesson.${lessonId}${phase === 'quiz' ? '.quiz' : '.goal'}` as Parameters<typeof t>[0]);
-  }
-
-  /** Did that move finish the exercise? Called once White has answered, where
-   *  White answers at all. */
-  function judgeExercise(played: string): void {
-    const lesson = course.lesson;
-    const problem = course.problem();
-    if (!game || !lesson || !problem) return;
-    const phase = course.phase;
-    const met = goalMet(problem.goal, { game, capturesBefore: capturesAtStart });
-
-    if (met) {
-      const passedQuiz = phase === 'quiz';
-      course.advance();
-      if (passedQuiz && course.phase === 'done') {
-        void remark(
-          `The student passed the test for "${lesson.id}" with ${played}. Say one short thing worth ` +
-          'remembering about the idea, and tell them the next lesson is ready.',
-        );
-        void coach.summarise();
-      } else {
-        void remark(`The student solved the practice for "${lesson.id}" with ${played}. One line of praise, then say the test is next.`);
-      }
-      setUpPhase({ announce: false });
-      refresh();
-      persist();
-      return;
-    }
-
-    // A whole game is not a one-move problem: until it ends, nothing has gone
-    // wrong. Counting each move as a failed attempt is what the first version
-    // did — it reset the board under the player after every stone, and threw
-    // them back to the teaching after two.
-    if (problem.goal.kind === 'finish') return;
-
-    const attempts = course.missed();
-    if (phase === 'quiz') {
-      // A test is one attempt at a time, and silence in between. Two failures
-      // and it goes back to practice — the explaining was not what failed, so
-      // the lesson does not restart from the top.
-      if (attempts >= 2) {
-        course.backToPractice();
-        setUpPhase({ announce: true });
-        void remark(`The student failed the test for "${lesson.id}" twice (last try ${played}). Take them back to the practice and explain what they missed.`);
-      } else {
-        setUpPhase({ announce: false });
-      }
-    } else {
-      setUpPhase({ announce: false });
-      void remark(`The student tried ${played} in the "${lesson.id}" practice and it did not achieve it. Nudge them — a hint, not the answer.`);
-    }
-    refresh();
-    persist();
+  async function freshGame(size: BoardSize, handicap: number): Promise<void> {
+    await coach.newSession();
+    spoken = 0;
+    redrawChat();
+    newGame(size, handicap);
+    void remark(
+      'A new game has just started. One line: greet them if you have not yet, and name the first thing '
+      + 'worth thinking about on an empty board. Do not recap the last game.',
+    );
   }
 
   /** Read the position the player is about to move in — the baseline a blunder
-   *  is measured against. Only worth its CPU when someone is being taught. */
+   *  is measured against. */
   async function observePosition(): Promise<void> {
-    if (!game || game.over || coach.profile.mode !== 'learning') return;
+    if (!game || game.over) return;
     try {
       read = await opponent.read(game, 24);
       leadBeforePlayer = read.scoreLead;
@@ -557,10 +331,9 @@ async function start(): Promise<void> {
     }
 
     const taken = game.captures.white - before;
-    if (game.over) {
-      void finish();
-    } else if (taken >= 3 && game.turns.length - lastRemarkAt >= REMARK_COOLDOWN) {
-      void remark(`White just captured ${taken} of the student's stones.`);
+    if (game.over) void finish();
+    else if (taken >= 3 && game.turns.length - lastRemarkAt >= REMARK_COOLDOWN) {
+      void remark(`White just captured ${taken} of the player's stones.`);
     }
     void observePosition();
   }
@@ -570,98 +343,104 @@ async function start(): Promise<void> {
     if (!game.play(at.x, at.y)) return;  // illegal: the board simply does not take it
     coach.profile.placed = true;
     const played = toGtp(at.x, at.y, game.size);
-    armed = null;
+    actions.hide();
     view.setGhost(null, HUMAN);
     view.setHighlights([]);
     refresh();
     persist();
 
-    // Inside a lesson the move is judged against the exercise, not against the
-    // engine's opinion of the whole board — "you lost 3 points" is not an
-    // answer to "did you capture that stone".
-    if (course.active && course.phase !== 'teach') {
-      const problem = course.problem();
-      void (async () => {
-        // White answers only where the exercise says so: a one-move problem
-        // that fires back a reply punishes a beginner for a move they were
-        // never asked to read.
-        if (problem?.reply) await engineTurn();
-        judgeExercise(played);
-      })();
-      return;
-    }
-
     void (async () => {
       await engineTurn();
-      // Judge the student's move only against a baseline that exists, and only
-      // once the engine has answered — a lead that moved because of White's
-      // reply is not the student's mistake.
+      // Judge the move only against a baseline that exists, and only once the
+      // engine has answered — a lead that moved because of White's reply is not
+      // the player's mistake.
       if (!game || game.over || leadBeforePlayer === null || !read) return;
       const lost = leadBeforePlayer - read.scoreLead;
+      if (lost < BLUNDER_POINTS || game.turns.length - lastRemarkAt < REMARK_COOLDOWN) return;
       const better = read.candidates.slice(0, 3).map((c) => toGtp(c.x, c.y, game!.size)).join(', ');
-      const note =
-        `The student played ${played}. By the engine's count that changed their lead by ` +
-        `${(-lost).toFixed(1)} points, to ${read.scoreLead.toFixed(1)}. It would have played ${better}.`;
-
-      // A student who said they are here to LEARN gets a word every move. That
-      // is what being taught is; waiting for a five-point blunder before saying
-      // anything is what "the coach never talks" looked like from the outside.
-      // Someone who came to play gets left alone unless something happened.
-      if (coach.profile.mode === 'learning') void remark(note);
-      else if (lost >= BLUNDER_POINTS && game.turns.length - lastRemarkAt >= REMARK_COOLDOWN) void remark(note);
+      void remark(
+        `The player played ${played}. By the engine's count that changed their lead by `
+        + `${(-lost).toFixed(1)} points, to ${read.scoreLead.toFixed(1)}. It would have played ${better}.`,
+      );
     })();
+  }
+
+  /** A point was chosen. Nothing is played yet — that is what the tick is for. */
+  function select(at: { x: number; y: number } | null): void {
+    if (!at || !game) { actions.hide(); view.setGhost(null, HUMAN); return; }
+    const canPlace = !game.over && !thinking && game.toPlay === HUMAN && game.legal(at.x, at.y);
+    view.setGhost(canPlace ? at : null, HUMAN);
+    // Asking about an empty point in the middle of nowhere is not worth a
+    // button; asking about a stone, or about a point you could play, is.
+    const canAsk = canPlace || game.board[at.y][at.x] !== null;
+    actions.show(at, canPlace, canAsk);
+    actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
   }
 
   attachBoardControls(canvas, (x, y) => view.pick(x, y), {
     onAim: (at) => {
+      // While the cluster is up, the ghost belongs to the point it is offering;
+      // a hovering mouse must not drag it somewhere else.
+      if (actions.showing) return;
       const playable = game && !game.over && !thinking && game.toPlay === HUMAN ? game : null;
       view.setGhost(at && playable?.legal(at.x, at.y) ? at : null, HUMAN);
     },
-    onArmed: (at) => {
-      armed = at && game?.legal(at.x, at.y) ? at : null;
-      view.setGhost(armed, HUMAN);
-      refresh();
-    },
-    onCommit: commit,
+    onPicked: select,
     onCamera: (a, p) => view.orbit(a, p),
     onZoom: (f) => view.zoomBy(f),
   });
 
-  // ── the buttons ─────────────────────────────────────────────────────────
+  // ── the one button, and everything behind it ────────────────────────────
   const bar = document.createElement('div');
   bar.className = 'bar';
   hud.appendChild(bar);
-  const button = (key: Parameters<typeof t>[0], onClick: () => void): HTMLButtonElement => {
-    const b = document.createElement('button');
-    b.textContent = t(key);
-    b.onclick = onClick;
-    bar.appendChild(b);
-    return b;
-  };
+
   const menu = new Menu(
     { size: coach.profile.boardSize, level: level.id, handicap: 0 },
     {
       onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
-      onStart: ({ size, handicap }) => { course.leave(); newGame(size, handicap); },
+      onStart: ({ size, handicap }) => void freshGame(size, handicap),
+      onHint: () => void hint(),
+      onPass: () => {
+        if (!game || thinking || game.over) return;
+        game.pass();
+        refresh();
+        if (game.over) void finish();
+        else void engineTurn();
+      },
+      onResign: () => {
+        if (!game || game.over) return;
+        if (!window.confirm(t('confirm.resign'))) return;
+        game.resign(HUMAN);
+        refresh();
+        persist();
+        void finish();
+      },
+      onRecentre: () => view.resetCamera(),
       onTitle: () => void toTitle(),
+      // Dismissed from the title screen, where there is no board behind it.
+      onClose: () => { if (!game) void toTitle(); },
     },
   );
-  button('btn.setup', () => {
+
+  const gear = document.createElement('button');
+  gear.textContent = t('btn.setup');
+  gear.onclick = () => {
     menu.sync({ size: game?.size ?? coach.profile.boardSize, level: level.id }, !!game && !game.over);
     menu.toggle();
-  });
+  };
+  bar.appendChild(gear);
 
   /**
    * Show what the engine would play.
    *
    * Free, in the sense that matters: the engine runs on this machine, so a hint
-   * costs a second of battery and nothing of the player's credits. The coach is
-   * not involved — if they want to know WHY, they can ask, and that is the call
-   * worth paying for.
+   * costs a second of battery and nothing of the player's credits. The companion
+   * is not involved — if they want to know WHY, they can ask, and that is the
+   * call worth paying for.
    */
-  const hintBtn = button('btn.hint', async () => {
+  async function hint(): Promise<void> {
     if (!game || game.over || thinking || game.toPlay !== HUMAN) return;
-    hintBtn.disabled = true;
     const was = status.textContent;
     status.textContent = t('hud.looking');
     try {
@@ -675,105 +454,27 @@ async function start(): Promise<void> {
       }
     } catch {
       status.textContent = was;
-    } finally {
-      hintBtn.disabled = false;
     }
-  });
-
-  const retryBtn = button('btn.retry', () => setUpPhase({ announce: false }));
-  const nextLessonBtn = button('btn.nextLesson', () => {
-    // The next lesson is a new subject, so a new conversation — `openLesson`
-    // with the id the course has moved on to.
-    const upcoming = course.progress.passed.length < LESSONS.length
-      ? LESSONS.find((l) => !course.progress.passed.includes(l.id))?.id
-      : undefined;
-    if (upcoming) { void openLesson(upcoming); return; }
-    if (!course.next()) {
-      // Course finished: back to an ordinary game, and the coach gets to say so.
-      newGame(coach.profile.boardSize, 0);
-      void remark('The student has finished the whole course. Say so, briefly, and offer a game.');
-      refresh();
-      return;
-    }
-    setUpPhase({ announce: true });
-  });
-  // The course was reachable from the title screen and by asking the coach,
-  // and from nowhere else: once someone was in a free game, the lessons had
-  // vanished from the product.
-  const learnBtn = button('btn.learn', () => void openLesson());
-  const leaveBtn = button('btn.leaveCourse', () => {
-    course.leave();
-    newGame(coach.profile.boardSize, 0);
-  });
-
-  const confirmBtn = button('btn.place', () => { if (armed) commit(armed); });
-  confirmBtn.hidden = true;
-  const passBtn = button('btn.pass', () => {
-    if (!game || thinking || game.over) return;
-    game.pass();
-    refresh();
-    // Two passes end it there and then; the engine never gets a turn.
-    if (game.over) void finish();
-    else void engineTurn();
-  });
-  const resignBtn = button('btn.resign', () => {
-    if (!game || game.over) return;
-    if (!window.confirm(t('confirm.resign'))) return;
-    game.resign(HUMAN);
-    refresh();
-    persist();
-    void finish();
-  });
-  button('btn.recentre', () => view.resetCamera());
+  }
 
   // ── saving ──────────────────────────────────────────────────────────────
   function persist(): void {
     coach.profile.level = level.id;
-    coach.profile.course = course.progress;
-    coach.course = courseView();
-    const inLesson = course.active && !!game;
     autosave.queue({
       profile: coach.profile,
       messages: coach.messages,
-      // The free game's slot is left ALONE while a lesson is on the board:
-      // an exercise is not something the title screen should offer as "carry
-      // on with your game", and a game interrupted by a lesson is still there
-      // afterwards. An unfinished game is worth coming back to; a finished one
-      // is history.
-      game: inLesson ? undefined : (game && !game.over ? game.snapshot() : null),
-      lessonBoard: inLesson && game
-        ? { lesson: course.progress.lesson!, phase: course.phase, board: game.snapshot(), capturesAtStart }
-        : null,
+      // An unfinished game is worth coming back to; a finished one is history.
+      game: game && !game.over ? game.snapshot() : null,
     });
-  }
-
-  /** What the coach is told about the course, every turn — so it cannot lose
-   *  its place in a lesson the way a long conversation loses its thread. */
-  function courseView(): NonNullable<typeof coach.course> | null {
-    const lesson = course.lesson;
-    if (!lesson) return null;
-    const { index, total } = course.position;
-    const phase: Phase = course.phase;
-    return {
-      lesson: lesson.id,
-      lesson_is_about: lesson.brief,
-      phase,
-      goal: phase === 'quiz' ? goalText(lesson.id, 'quiz')
-        : phase === 'practice' ? goalText(lesson.id, 'practice')
-          : 'explain the idea, then call begin_exercise',
-      attempts: course.attempts,
-      position: `${index} of ${total}`,
-    };
   }
 
   /**
    * The end of a game: count it, show it, talk about it, remember it.
    *
-   * The count comes from a FRESH read of the final position at high visits —
-   * not from the read the last move was chosen with, which is one move stale
-   * and can be wrong about a stone that just died. It is also the one moment in
-   * the game where spending a second of thinking is free: nobody is waiting on
-   * their turn.
+   * The count comes from a fresh read of the final position at high visits —
+   * not from the read the last move was chosen with, which is a move stale and
+   * can be wrong about a stone that just died. It is also the one moment where
+   * a second of thinking is free: nobody is waiting on their turn.
    */
   async function finish(): Promise<void> {
     if (!game?.over) return;
@@ -793,89 +494,80 @@ async function start(): Promise<void> {
     refresh();
 
     await remark(score
-      ? `The game is over and counted. ${describeScore(score, game)}` +
-        (score.unsettled ? ' (The position was still unsettled, so treat the count as approximate.)' : '') +
-        (score.dead.length ? ` ${score.dead.length} stones were dead on the board.` : '')
-      : `The game just ended. ${describeEnd(game)}.`);
+      ? `The game is over and counted. ${describeScore(score, game)}`
+        + (score.unsettled ? ' (The position was still unsettled, so treat the count as approximate.)' : '')
+        + (score.dead.length ? ` ${score.dead.length} stones were dead on the board.` : '')
+      : 'The game just ended.');
 
     // Written last, when the game it is about is genuinely finished.
     await coach.summarise();
     persist();
   }
 
-  // ── the way in ──────────────────────────────────────────────────────────
-  // The HUD and the chat belong to the game, not to the title — and a button
-  // showing faintly through a title screen reads as a rendering bug.
-  document.body.classList.add('titling');
+  // ── the way in, and back out ────────────────────────────────────────────
   /**
-   * Put the title screen up and act on what is chosen.
+   * The title screen: continue, a new game, or settings.
    *
-   * Used at boot and every time someone leaves a game, which is why it reads
-   * the CURRENT state rather than the save it booted from: after an hour of
-   * play, "is there a game to continue?" is a question about the board in
-   * front of them, not about what was on disk when the tab opened.
+   * Runs at boot and every time the player leaves a game, so it reads the
+   * CURRENT state rather than the save it booted from: after an hour of play,
+   * "is there a game to continue?" is a question about the board in front of
+   * them, not about what was on disk when the tab opened.
    */
   async function toTitle(): Promise<void> {
-    // Whatever is on screen belongs to the game being left.
     speech.hide();
+    actions.hide();
     menu.close();
     chat.setOpen(false);
     await autosave.flush();
 
     document.body.classList.add('titling');
     idleSpin = true;
+    const stored = await umicat.saves.get<ReturnType<GoGame['snapshot']>>('game');
     const choice = await showTitle({
+      canContinue: (!!game && !game.over) || !!stored,
       returning: saved.returning || coach.profile.gamesPlayed > 0 || coach.messages.length > 0,
       loading,
     });
+
+    if (choice === 'settings') {
+      // The same panel, centred, with nothing behind it to act on. Its own
+      // buttons decide what happens next; dismissing it comes back here.
+      menu.sync({ size: coach.profile.boardSize, level: level.id }, false, true);
+      menu.show();
+      return;
+    }
 
     if (choice === 'forget') {
       await Promise.all([
         umicat.saves.delete('profile'), umicat.saves.delete('chat'),
         umicat.saves.delete('game'), umicat.saves.delete('lesson'),
       ]);
-      coach.load([], { ...coach.profile, summary: '', gamesPlayed: 0, mode: 'unknown', course: undefined });
-      course.leave();
+      coach.load([], { ...coach.profile, summary: '', gamesPlayed: 0, mode: 'unknown', placed: false });
       spoken = 0;
       redrawChat();
       await toTitle();
       return;
     }
 
-    if (choice === 'course') {
-      showCourseMenu({
-        passed: course.progress.passed,
-        current: course.progress.lesson,
-        onContinue: () => { leaveTitle(); void openLesson(); },
-        // Picking a lesson from the list always restarts it from the
-        // explanation — that is what picking it means, and the one in progress
-        // is reached by Continue.
-        onPick: (id) => { leaveTitle(); void openLesson(id); },
-        onBack: () => void toTitle(),
-      });
-      return;
-    }
-
-    // Free play. An unfinished game is picked up rather than thrown away; the
-    // way to start a fresh one is in Settings, where the board size and the
-    // opponent are chosen anyway.
     leaveTitle();
-    coach.profile.mode = 'playing';
-    course.leave();
-    if (game && !game.over) { refresh(); return; }
-    const snapshot = await umicat.saves.get<ReturnType<GoGame['snapshot']>>('game');
-    if (snapshot) {
-      game = GoGame.restore(snapshot);
-      view.setBoardSize(game.size);
-      refresh();
-      void observePosition();
-      return;
+
+    if (choice === 'continue') {
+      // The game in progress if there is one, and the conversation that goes
+      // with it — a player who walked out to the title and straight back in
+      // should find both exactly as they left them.
+      if (game && !game.over) { refresh(); void observePosition(); return; }
+      if (stored) {
+        game = GoGame.restore(stored);
+        view.setBoardSize(game.size);
+        refresh();
+        void observePosition();
+        return;
+      }
     }
-    newGame(coach.profile.boardSize, 0);
+    await freshGame(coach.profile.boardSize, 0);
   }
 
-  /** Take the title down and give the board back. The course screen sits on
-   *  top of it, so this runs when something past it has been chosen. */
+  /** Take the title down and give the board back. */
   function leaveTitle(): void {
     document.body.classList.remove('titling');
     idleSpin = false;
@@ -884,56 +576,29 @@ async function start(): Promise<void> {
 
   await toTitle();
 
-  // No greeting inside a lesson: opening one already announced itself, and two
-  // openings in a row is one too many.
-  //
-  // And nothing here asks what they came for any more. The title screen asked
-  // it — with two buttons — so a coach that asks again is telling the player
-  // their choice did not count. That question was in the playbook from the
-  // start and it survived long after the UI stopped needing it, which is what
-  // it looks like when a prompt outlives its design.
-  if (!course.active) {
-    void coach.remark(
-      coach.messages.length
-        ? '(The student is back, and has chosen a game rather than a lesson. One line of greeting.)'
-        : '(A new student has sat down and chosen to play rather than be taught. Greet them in one line '
-          + 'and offer to set the opponent easier or harder. Do not ask what they came for — they have chosen.)',
-      { game, read },
-    ).then(redrawChat);
-  }
-
   // The probe surface. Playwright drives the game through this rather than
   // through pixels: a test that has to click a three-millimetre intersection is
   // a test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, view, opponent, coach, chat,
+      umicat, view, opponent, coach, chat, speech, menu, actions,
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },
+      get score() { return score; },
       level: () => level.id,
       setLevel: (id: string) => { level = levelById(id); refresh(); },
       levels: () => LEVELS.map((l) => l.id),
+      select,
       play: (x: number, y: number) => commit({ x, y }),
-      pass: () => { game?.pass(); refresh(); void engineTurn(); },
-      newGame: (size: BoardSize, handicap = 0) => { course.leave(); newGame(size, handicap); },
-      menu,
-      course,
-      learn: (id?: string) => {
-        coach.profile.mode = 'learning';
-        course.start(id);
-        setUpPhase({ announce: false });
-      },
-      beginExercise: () => { if (course.phase === 'teach') { course.advance(); setUpPhase({ announce: false }); } },
-      openLesson: (id?: string) => openLesson(id),
-      toTitle: () => toTitle(),
-      flush: () => autosave.flush(),
-      phase: () => course.phase,
+      pass: () => { game?.pass(); refresh(); if (game?.over) void finish(); else void engineTurn(); },
+      newGame: (size: BoardSize, handicap = 0) => void freshGame(size, handicap),
       say: (text: string) => talk(text),
       redraw: redrawChat,
-      speech,
+      hint,
       finish,
-      get score() { return score; },
+      toTitle: () => toTitle(),
+      flush: () => autosave.flush(),
       board: () => game?.board.map((row) => row.map((c) => (c === 'black' ? 'b' : c === 'white' ? 'w' : '.')).join('')) ?? [],
     },
   });
@@ -941,11 +606,6 @@ async function start(): Promise<void> {
 
 /** How the chat panel is sized in CSS, in pixels, so the board can dodge it. */
 const panelWidth = (): number => Math.min(380, window.innerWidth * 0.42) + 24;
-
-function describeEnd(game: GoGame): string {
-  if (game.resignedBy) return game.resignedBy === HUMAN ? 'resigned' : 'won by resignation';
-  return 'and White both passed, so it goes to the count';
-}
 
 void start().catch((err) => {
   const hud = document.getElementById('hud');

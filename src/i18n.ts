@@ -26,8 +26,9 @@
 type Vars = Record<string, string | number>;
 
 const EN = {
-  'title.course': 'Lessons',
-  'title.freeplay': 'Free play',
+  'title.continue': 'Continue',
+  'title.newGame': 'New game',
+  'title.settings': 'Settings',
   'title.fresh': 'Start fresh',
   'title.freshHint': 'Forget everything the coach knows about you, and begin again.',
   'title.freshConfirm': 'This clears the coach’s memory of you and any unfinished game. Sure?',
@@ -43,8 +44,7 @@ const EN = {
   'hud.whiteResigned': 'White resigned — game over.',
   'hud.engineStumbled': 'The engine stumbled — your move again.',
   'hud.looking': 'Looking…',
-  'hud.howToPlaceMouse': 'Click an intersection to place a stone.',
-  'hud.howToPlaceTouch': 'Touch the board, slide to aim, then tap Place.',
+  'hud.howToPlace': 'Choose a point, then confirm with the tick beside it.',
   'hud.engineWouldPlay': 'The engine would play {point}.',
   'hud.engineWouldPass': 'The engine would pass.',
 
@@ -102,6 +102,7 @@ const EN = {
   'btn.hint': 'Hint',
   'confirm.resign': 'Resign this game?',
 
+  'menu.heading': 'Settings',
   'menu.board': 'Board',
   'menu.opponent': 'Opponent',
   'menu.handicap': 'Head start',
@@ -141,8 +142,9 @@ const EN = {
 export type Key = keyof typeof EN;
 
 const ZH: Partial<Record<Key, string>> = {
-  'title.course': '课程',
-  'title.freeplay': '自由下棋',
+  'title.continue': '继续',
+  'title.newGame': '新开一局',
+  'title.settings': '设置',
   'title.fresh': '从头开始',
   'title.freshHint': '让老师忘掉关于你的一切,重新认识。',
   'title.freshConfirm': '这会清掉老师对你的记忆和没下完的棋局。确定吗?',
@@ -158,8 +160,7 @@ const ZH: Partial<Record<Key, string>> = {
   'hud.whiteResigned': '白棋认输 —— 本局结束。',
   'hud.engineStumbled': '引擎出了点岔子 —— 请再下一手。',
   'hud.looking': '正在看…',
-  'hud.howToPlaceMouse': '点一下交叉点就能落子。',
-  'hud.howToPlaceTouch': '手指按住棋盘挪到位置,再点「落子」。',
+  'hud.howToPlace': '选一个点,再点旁边的对勾确认。',
   'hud.engineWouldPlay': '引擎会下 {point}。',
   'hud.engineWouldPass': '引擎会停一手。',
 
@@ -217,6 +218,7 @@ const ZH: Partial<Record<Key, string>> = {
   'btn.hint': '提示',
   'confirm.resign': '这局认输?',
 
+  'menu.heading': '设置',
   'menu.board': '棋盘',
   'menu.opponent': '对手',
   'menu.handicap': '让子',

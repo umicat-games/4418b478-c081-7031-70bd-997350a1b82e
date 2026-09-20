@@ -1,14 +1,16 @@
-// The setup panel. Board size, opponent strength, handicap, and the button
-// that starts the game they describe.
+// Settings, and everything that used to be a button in the corner.
 //
-// Nothing here changes a game in progress. Picking a size or a level stages a
-// choice; "New game" is what applies it — because the alternative is a player
-// tapping 19x19 out of curiosity mid-game and losing the position they were in.
-// The one exception is the level, which takes effect immediately when there is
-// no game running, so the first game starts with what the panel shows.
+// The bottom-left had grown to six buttons over the board. Five of them are
+// things a player does once a game or once a session — change the board, take
+// a hint, pass, resign, straighten the camera, leave — and one of them, the
+// gear, is the way to all of it. So that is all that is left outside.
+//
+// Board size and handicap stage a choice and apply to the NEXT game; the level
+// applies at once, because it is the next move that gets harder, not the
+// position. The panel says so rather than leaving it to be discovered.
 import './menu.css';
 import { LEVELS, levelAbout, levelLabel } from '../go/opponent';
-import { t } from '../i18n';
+import { t, type Key } from '../i18n';
 import type { BoardSize } from '../go/rules';
 
 export interface MenuChoice {
@@ -18,12 +20,17 @@ export interface MenuChoice {
 }
 
 export interface MenuOptions {
-  /** Start a game with these settings. */
+  /** Start a new game with these settings. */
   onStart(choice: MenuChoice): void;
-  /** The level changed while no game was running. */
+  /** The level changed. Takes effect immediately, mid-game included. */
   onLevel(level: string): void;
-  /** Leave for the title screen. */
+  onHint(): void;
+  onPass(): void;
+  onResign(): void;
+  onRecentre(): void;
   onTitle(): void;
+  /** The panel was dismissed without choosing anything. */
+  onClose?(): void;
 }
 
 const SIZES: BoardSize[] = [9, 13, 19];
@@ -33,6 +40,9 @@ export class Menu {
   readonly el: HTMLDivElement;
   private choice: MenuChoice;
   private inGame = false;
+  /** Centred over the whole screen (from the title) rather than parked in the
+   *  corner (over a game). */
+  private standalone = false;
 
   constructor(initial: MenuChoice, private opts: MenuOptions) {
     this.choice = { ...initial };
@@ -44,21 +54,43 @@ export class Menu {
   }
 
   get open(): boolean { return !this.el.hidden; }
-  toggle(): void { this.el.hidden = !this.el.hidden; }
-  close(): void { this.el.hidden = true; }
 
-  /** Keep the panel honest about the game's actual state — the coach can change
-   *  the level and the size too, and a panel showing something else is worse
-   *  than no panel. */
-  sync(choice: Partial<MenuChoice>, inGame: boolean): void {
+  toggle(): void { this.el.hidden ? this.show() : this.close(); }
+
+  show(): void {
+    this.el.hidden = false;
+    this.draw();
+  }
+
+  close(): void {
+    if (this.el.hidden) return;
+    this.el.hidden = true;
+    this.opts.onClose?.();
+  }
+
+  /** Dismissed by tapping outside it — the same as close, and the only way out
+   *  of the panel when it is opened from the title. */
+  private dismiss(): void { this.close(); }
+
+  /** Keep the panel honest about the game's actual state — the level can be
+   *  changed from here and from the coach, and a panel showing something else
+   *  is worse than no panel. */
+  sync(choice: Partial<MenuChoice>, inGame: boolean, standalone = false): void {
     Object.assign(this.choice, choice);
     this.inGame = inGame;
+    this.standalone = standalone;
     this.draw();
   }
 
   private draw(): void {
     const level = LEVELS.find((l) => l.id === this.choice.level) ?? LEVELS[1];
+    this.el.className = this.standalone ? 'standalone' : '';
     this.el.replaceChildren();
+
+    const head = document.createElement('div');
+    head.className = 'title';
+    head.textContent = t('menu.heading');
+    this.el.appendChild(head);
 
     this.el.appendChild(this.group(t('menu.board'), SIZES.map((s) => ({
       label: `${s}×${s}`,
@@ -69,13 +101,7 @@ export class Menu {
     const levels = this.group(t('menu.opponent'), LEVELS.map((l) => ({
       label: levelLabel(l.id),
       on: l.id === level.id,
-      pick: () => {
-        this.choice.level = l.id;
-        // A level is the one setting that is safe to change mid-game: it is the
-        // next move that gets harder, not the position.
-        this.opts.onLevel(l.id);
-        this.draw();
-      },
+      pick: () => { this.choice.level = l.id; this.opts.onLevel(l.id); this.draw(); },
     })));
     const about = document.createElement('div');
     about.className = 'about';
@@ -91,27 +117,32 @@ export class Menu {
 
     const go = document.createElement('button');
     go.className = 'go';
-    go.textContent = this.inGame ? t('menu.startNew') : t('menu.start');
-    go.onclick = () => {
-      this.close();
-      this.opts.onStart({ ...this.choice });
-    };
+    go.textContent = t(this.inGame ? 'menu.startNew' : 'menu.start');
+    go.onclick = () => { this.el.hidden = true; this.opts.onStart({ ...this.choice }); };
     this.el.appendChild(go);
 
+    // What used to live in the corner. Only while there is a game: a hint or a
+    // pass with no board is a button that cannot mean anything.
     if (this.inGame) {
-      const note = document.createElement('div');
-      note.className = 'note';
-      note.textContent = t('menu.note');
-      this.el.appendChild(note);
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const act = (key: Key, run: () => void): void => {
+        const b = document.createElement('button');
+        b.textContent = t(key);
+        b.onclick = () => { this.el.hidden = true; run(); };
+        actions.appendChild(b);
+      };
+      act('btn.hint', this.opts.onHint);
+      act('btn.pass', this.opts.onPass);
+      act('btn.resign', this.opts.onResign);
+      act('btn.recentre', this.opts.onRecentre);
+      this.el.appendChild(actions);
     }
 
-    // The way out. In the settings rather than the button bar because that is
-    // where a game keeps "quit to menu", and quiet because leaving mid-game is
-    // not what most of the taps in here are for.
     const home = document.createElement('button');
     home.className = 'home';
     home.textContent = t('menu.toTitle');
-    home.onclick = () => { this.close(); this.opts.onTitle(); };
+    home.onclick = () => { this.el.hidden = true; this.opts.onTitle(); };
     this.el.appendChild(home);
   }
 

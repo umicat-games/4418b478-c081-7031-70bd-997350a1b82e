@@ -1,3 +1,5 @@
+// PARKED, 2026-09-20 — see curriculum.ts. Not wired into the game.
+//
 // A lesson, as a level: teach → practice → quiz → done.
 //
 // The shape exists so that both sides know where they are. Before it, the coach

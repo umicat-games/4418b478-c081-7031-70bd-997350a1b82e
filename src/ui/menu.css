@@ -8,6 +8,8 @@
 
 #menu {
   position: fixed;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
   z-index: 30; /* over the HUD (20), under the title (40) */
   left: max(16px, env(safe-area-inset-left));
   /* Clear of the whole HUD block, not just the buttons: the status line sits
@@ -26,6 +28,32 @@
   gap: 14px;
 }
 #menu[hidden] { display: none; }
+
+/* Opened from the title screen, where there is no corner to belong to. */
+#menu.standalone {
+  left: 50%;
+  bottom: auto;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, 88vw);
+}
+
+#menu .title { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
+
+/* Hint, pass, resign, recentre — the old corner, folded inside. */
+#menu .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+#menu .actions button {
+  flex: 1 1 auto;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: 600 13px/1 system-ui, sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#menu .actions button:hover { background: rgba(255, 255, 255, 0.12); }
 
 #menu .group > .label {
   font-size: 11px;

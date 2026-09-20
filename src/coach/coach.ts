@@ -22,7 +22,6 @@ import { locale, t } from '../i18n';
 import type { GoGame } from '../go/rules';
 import type { Read } from '../go/opponent';
 import { LEVELS } from '../go/opponent';
-import type { Progress } from '../teach/course';
 
 /** What the coach is allowed to ask the game to do. Deliberately short: each
  *  one is a thing a player could do from the menus anyway. */
@@ -35,23 +34,9 @@ const ACTIONS = [
   // the only one who can tell whether the student followed it; everything after
   // that — whether the exercise was solved, which lesson is next — is the
   // game's, and no action here can touch it.
-  { name: 'start_lesson', description: 'Begin a lesson of the course. Pass its id, or "" for wherever the student had got to.', args: { lesson: 'string' } },
-  { name: 'begin_exercise', description: 'You have finished explaining: put the practice position on the board. Only works while you are explaining.', args: {} },
-  { name: 'leave_course', description: 'Stop the lesson and go back to an ordinary game, because they asked to.', args: {} },
 ] as const;
 
 export type CoachMode = 'learning' | 'playing' | 'unknown';
-
-/** Where the student is in the course — the game's record, handed to the coach
- *  every turn so it cannot lose its place. */
-export interface CourseView {
-  lesson: string;
-  lesson_is_about: string;
-  phase: 'teach' | 'practice' | 'quiz' | 'done';
-  goal: string;
-  attempts: number;
-  position: string;
-}
 
 export interface Profile {
   /** What the player is here for. The coach asks, and sets it. */
@@ -62,8 +47,6 @@ export interface Profile {
    *  `summarise()` and fed back in as observation — this IS the long memory. */
   summary: string;
   gamesPlayed: number;
-  /** Where the student is in the course. The game's record, not the model's. */
-  course?: Progress;
   /** They have put a stone on a board at least once — so the "how to place a
    *  stone" line can go away and stay away. */
   placed?: boolean;
@@ -77,10 +60,10 @@ export interface ChatMessage { from: 'coach' | 'player'; text: string; at: numbe
 
 /** What the game lets the coach change. Each of these validates, and may say no. */
 export interface CoachHooks {
-  startLesson(id: string): boolean;
-  beginExercise(): boolean;
-  leaveCourse(): void;
   setBoardSize(size: number): boolean;
+  /** Mark a group's liberties and report them back. Null if there is no stone
+   *  at that point — which is a thing the model will ask for. */
+  showLiberties(at: { x: number; y: number }): { liberties: number; stones: number; points: string[] } | null;
   setLevel(level: string): boolean;
   startGame(handicap: number): boolean;
   highlight(points: Array<{ x: number; y: number }>): void;
@@ -100,9 +83,6 @@ export class Coach {
   get thinking(): boolean { return this.busy; }
 
   /** The player typed (or said) something. */
-  /** Set by the game before each turn; null when no lesson is open. */
-  course: CourseView | null = null;
-
   async ask(text: string, ctx: { game: GoGame | null; read: Read | null }): Promise<void> {
     this.messages.push({ from: 'player', text, at: Date.now() });
     await this.turn(text, ctx);
@@ -122,7 +102,7 @@ export class Coach {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await this.npc.say(line, { observation: observe(ctx.game, ctx.read, this.profile, this.course) });
+      const res = await this.npc.say(line, { observation: observe(ctx.game, ctx.read, this.profile) });
       this.handle(res, opts);
     } finally {
       this.busy = false;
@@ -166,17 +146,16 @@ export class Coach {
         this.hooks.startGame(handicap);
         return;
       }
-      case 'start_lesson':
-        this.hooks.startLesson(String(args.lesson ?? ''));
+      case 'show_liberties': {
+        const at = fromGtpSafe(String(args.point ?? ''), this.profile.boardSize);
+        const out = at ? this.hooks.showLiberties(at) : null;
+        // Told back to the model as an event, so its NEXT sentence can use the
+        // real number instead of the one it was about to invent.
+        this.npc.note(out
+          ? `[the board] the group at ${args.point} has ${out.stones} stone(s) and ${out.liberties} liberties: ${out.points.join(', ')}`
+          : `[the board] there is no stone at ${args.point}, so it has no liberties`);
         return;
-      case 'begin_exercise':
-        // Refused unless the lesson is actually in its explaining phase — a
-        // model that calls this twice should not skip the practice.
-        this.hooks.beginExercise();
-        return;
-      case 'leave_course':
-        this.hooks.leaveCourse();
-        return;
+      }
       case 'highlight': {
         const size = this.profile.boardSize;
         const points = String(args.points ?? '')
@@ -269,9 +248,8 @@ const fromGtpSafe = (s: string, size: number): { x: number; y: number } | null =
  * read is included because without it the model would guess at who is winning,
  * and it would guess wrong.
  */
-function observe(game: GoGame | null, read: Read | null, profile: Profile, course: CourseView | null): unknown {
+function observe(game: GoGame | null, read: Read | null, profile: Profile): unknown {
   const base = {
-    lesson: course ?? 'not in a lesson right now',
     // The platform's language, for the times the coach speaks FIRST — a
     // greeting has no student sentence to take its language from, and guessing
     // it from an English system prompt is how a Chinese player gets greeted in
