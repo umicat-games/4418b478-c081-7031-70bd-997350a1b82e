@@ -369,7 +369,7 @@ async function start(): Promise<void> {
     lastRemarkAt = -REMARK_COOLDOWN;
     refresh();
     persist();
-    if (game.toPlay !== game.human) void engineTurn();
+    if (game.toPlay !== game.human) void engineTurnAlone();
     else void observePosition();
   }
 
@@ -407,14 +407,23 @@ async function start(): Promise<void> {
   /**
    * The engine's move.
    *
-   * Returns the read it decided from — which is the position AFTER the
-   * player's move and BEFORE this one, and therefore the right thing to
-   * judge the player's move against. Returned rather than read off `read`
-   * afterwards, because `observePosition` overwrites that a moment later and
-   * whether the caller wins that race is not something to leave to chance.
+   * Returns two things, and gives away neither of them by itself.
+   *
+   * `read` is the position AFTER the player's move and BEFORE this one, which
+   * is the right thing to judge the player's move against. Returned rather
+   * than read off `read` afterwards, because `observePosition` overwrites
+   * that a moment later and whether the caller wins that race is not
+   * something to leave to chance.
+   *
+   * `event` is what just happened, if it is worth a word. It is handed BACK
+   * rather than said here because the caller may have something better to
+   * say: after a blunder, "you dropped two pawns and should have played
+   * exd5" beats "they took your knight", and whichever is said first spends
+   * the cooldown and silences the other. One event, one sentence, and the
+   * one who knows which sentence is better picks.
    */
-  async function engineTurn(): Promise<Read | null> {
-    if (!game || game.over || game.toPlay === game.human) return null;
+  async function engineTurn(): Promise<{ read: Read | null; event: string | null }> {
+    if (!game || game.over || game.toPlay === game.human) return { read: null, event: null };
     thinking = true;
     clearSelection();
     refresh();
@@ -451,20 +460,28 @@ async function start(): Promise<void> {
     if (!moved && !game.over) {
       console.error('[chess] engine produced no legal move');
       status.textContent = t('hud.engineStumbled');
-      return decided;
+      return { read: decided, event: null };
     }
 
-    if (game.over) { void finish(); return decided; }
+    if (game.over) { void finish(); return { read: decided, event: null }; }
     // The engine taking a real piece is worth a word, once in a while. A pawn
     // is not: most captures in a game are pawns, and a companion that mentions
     // every one of them is a companion nobody leaves open.
-    if (took && took !== 'pawn' && game.plies - lastRemarkAt >= REMARK_COOLDOWN) {
-      void remark(`They just took the student's ${took} with ${game.lastMove?.san}.`);
-    } else if (game.inCheck && game.plies - lastRemarkAt >= REMARK_COOLDOWN) {
-      void remark(`${game.lastMove?.san} puts the student in check.`);
-    }
+    const event = took && took !== 'pawn'
+      ? `They just took the student's ${took} with ${game.lastMove?.san}.`
+      : game.inCheck
+        ? `${game.lastMove?.san} puts the student in check.`
+        : null;
     void observePosition();
-    return decided;
+    return { read: decided, event };
+  }
+
+  /** The engine's move when nobody else is going to decide what to say about
+   *  it — the opening move of a game it plays first, and a restored game it
+   *  was on move in. */
+  async function engineTurnAlone(): Promise<void> {
+    const { event } = await engineTurn();
+    if (event && game && game.plies - lastRemarkAt >= REMARK_COOLDOWN) void remark(event);
   }
 
   async function commit(f: Sq, to: Sq): Promise<void> {
@@ -490,7 +507,8 @@ async function start(): Promise<void> {
     void (async () => {
       const before = cpBeforePlayer;
       const instead = bestBeforePlayer.filter((san) => san !== played.san);
-      const after = await engineTurn();
+      const { read: after, event } = await engineTurn();
+      const speakable = (): boolean => !!game && !game.over && game.plies - lastRemarkAt >= REMARK_COOLDOWN;
       // Judged only against a baseline that exists, and against the position
       // the player's move ACTUALLY produced — not the one after the engine
       // has replied, because an evaluation that moved because of the reply is
@@ -499,7 +517,10 @@ async function start(): Promise<void> {
       if (!game || game.over || before === null || !after) return;
       const now = after.mate === null ? after.cp : (after.mate > 0 ? 3000 : -3000);
       const lost = before - now;
-      if (lost < BLUNDER_CP || game.plies - lastRemarkAt < REMARK_COOLDOWN) return;
+      // The blunder has first claim on the one sentence going spare. Only if
+      // the move was fine does what the engine did get mentioned.
+      if (lost < BLUNDER_CP) { if (event && speakable()) void remark(event); return; }
+      if (!speakable()) return;
       void remark(
         `The student played ${played.san}. By the engine's count that changed their evaluation by `
         + `${(-lost / 100).toFixed(1)} pawns, to ${(now / 100).toFixed(1)}. `
@@ -738,7 +759,7 @@ async function start(): Promise<void> {
         view.setSeat(game.human);
         refresh();
         if (game.toPlay === game.human) void observePosition();
-        else void engineTurn();
+        else void engineTurnAlone();
         return;
       }
     }
