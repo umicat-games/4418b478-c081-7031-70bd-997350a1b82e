@@ -33,6 +33,7 @@ import { ChatPanel } from './ui/chat';
 import { Speech, segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { PointActions } from './ui/pointactions';
+import { AskHere } from './ui/askhere';
 import { showTitle } from './ui/title';
 import { underCurtain } from './ui/curtain';
 import { Autosave, load } from './save';
@@ -66,6 +67,25 @@ async function start(): Promise<void> {
   // the rest of this function exists, and a `const` it reads too early is a
   // ReferenceError that takes the whole game down at boot.
   let idleSpin = true;
+  /**
+   * Keep drawing for a moment after anything is touched.
+   *
+   * The panels over the board use `backdrop-filter`, which samples the canvas
+   * behind them — and the canvas only redraws when the BOARD changes. Open a
+   * panel while the board is still and the blur keeps the sample it took last
+   * time, which paints a ghost of wherever that panel used to be. Measured:
+   * the composer beside a stone left an outline of its own taller self behind
+   * after sending.
+   *
+   * A quarter of a second covers a tap and the transitions it starts, and
+   * costs about fifteen frames of drawing a board that was going to be drawn
+   * anyway if anything had actually happened.
+   */
+  let repaintUntil = 0;
+  const repaintSoon = (): void => { repaintUntil = performance.now() + 250; };
+  for (const type of ['pointerdown', 'pointerup', 'click', 'keydown'] as const) {
+    document.addEventListener(type, repaintSoon, true);
+  }
 
   const speech = new Speech({
     onPage: (page) => {
@@ -96,6 +116,12 @@ async function start(): Promise<void> {
     onAsk: (at) => askAbout(at),
   });
 
+  /** And the question itself, in the same place. */
+  const askHere = new AskHere(umicat, {
+    onAsk: (point, text) => void talk(`${point}: ${text}`),
+    onCancel: () => view.setFocus(null),
+  });
+
   const audio = createAudio();
   // Fetch and decode ahead of the first gesture. Without it the very first
   // press of a session is silent — there is no decoded buffer yet — and the
@@ -122,12 +148,14 @@ async function start(): Promise<void> {
 
   const frame = (): void => {
     if (idleSpin) view.orbit(0.0012, 0);
+    if (performance.now() < repaintUntil) view.invalidate();
     // Only when the picture actually changed. Between two moves a Go board is
     // a still life, and redrawing it sixty times a second takes a core off the
     // engine — which is the thing the player is waiting for.
     if (view.render()) {
       if (speech.showing) placeSpeech();
       if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
+      if (askHere.showing && askHere.at) askHere.place(view.screenOf(askHere.at.x, askHere.at.y), view.screenSpacing);
     }
     requestAnimationFrame(frame);
   };
@@ -223,6 +251,12 @@ async function start(): Promise<void> {
     const said = coach.messages.filter((m) => m.from === 'coach');
     if (said.length > spoken) {
       spoken = said.length;
+      // Something new is on screen over the board; see `repaintSoon`.
+      repaintSoon();
+      // The reply has arrived, so the waiting dots beside the stone are done —
+      // the answer is about to appear as speech, beside whatever point the
+      // answer is about, which is often not the point that was asked about.
+      askHere.hide();
       const size = game?.size ?? 9;
       speech.show(segment(said[said.length - 1].text, size), size);
     }
@@ -269,11 +303,21 @@ async function start(): Promise<void> {
    * matters more than it looks. Asking about a stone by tapping it beats
    * working out that it is called Q16 and typing that — which is a thing
    * beginners cannot do and nobody enjoys.
+   *
+   * It happens AT the stone rather than in the panel. Opening the whole
+   * conversation to ask one question moved the board sideways, took four
+   * movements, and left the player closing it again afterwards; the panel is
+   * for reading back through what was said.
    */
   function askAbout(at: { x: number; y: number }): void {
     if (!game) return;
+    // Whatever the companion last said belonged to the last thing that
+    // happened. Leaving it up puts two boxes over the board at once, and from
+    // a foot away they read as one box with a ghost behind it.
+    speech.hide();
     view.setFocus(at);
-    chat.prefill(`${toGtp(at.x, at.y, game.size)}: `);
+    askHere.open(at, toGtp(at.x, at.y, game.size));
+    askHere.place(view.screenOf(at.x, at.y), view.screenSpacing);
   }
 
   /** Put the bubble where its sentence belongs. Runs every frame while it is
@@ -416,6 +460,7 @@ async function start(): Promise<void> {
     coach.profile.placed = true;
     const played = toGtp(at.x, at.y, game.size);
     actions.hide();
+    askHere.hide();
     view.setGhost(null, HUMAN);
     view.setHighlights([]);
     view.setFocus(null);
@@ -441,6 +486,7 @@ async function start(): Promise<void> {
   /** A point was chosen. Nothing is played yet — that is what the tick is for. */
   function select(at: { x: number; y: number } | null): void {
     if (!at || !game) { actions.hide(); view.setGhost(null, HUMAN); return; }
+    askHere.hide();
     const canPlace = !game.over && !thinking && game.toPlay === HUMAN && game.legal(at.x, at.y);
     // An empty point that the rules will not take — a ko, or filling your own
     // last liberty. Silence there reads as the game not having noticed the tap.
@@ -613,6 +659,7 @@ async function start(): Promise<void> {
   async function toTitle(): Promise<void> {
     speech.hide();
     actions.hide();
+    askHere.hide();
     menu.close();
     chat.setOpen(false);
     await autosave.flush();
@@ -685,7 +732,7 @@ async function start(): Promise<void> {
   // a test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, view, opponent, coach, chat, speech, menu, actions, audio,
+      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio,
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },
