@@ -118,9 +118,12 @@ export class ChatPanel {
       return div;
     }));
     if (thinking) {
+      // Where the reply will appear, waiting. Three dots that MOVE: a static
+      // ellipsis is indistinguishable from a message that says "…", which is
+      // what this was and what it looked like.
       const div = document.createElement('div');
       div.className = 'msg coach thinking';
-      div.textContent = '…';
+      div.innerHTML = '<i></i><i></i><i></i>';
       this.log.appendChild(div);
     }
     if (this.open) this.scrollToEnd();

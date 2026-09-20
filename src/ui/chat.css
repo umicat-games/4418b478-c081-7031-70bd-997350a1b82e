@@ -109,7 +109,23 @@
 }
 #chat .msg.coach { align-self: flex-start; background: rgba(255, 255, 255, 0.1); }
 #chat .msg.player { align-self: flex-end; background: #2f6f62; }
-#chat .msg.thinking { opacity: 0.6; font-style: italic; }
+/* The reply, before it exists. */
+#chat .msg.thinking { display: flex; gap: 5px; align-items: center; padding: 13px 14px; }
+#chat .msg.thinking i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: chat-dots 1.1s ease-in-out infinite;
+}
+#chat .msg.thinking i:nth-child(2) { animation-delay: 0.15s; }
+#chat .msg.thinking i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chat-dots {
+  0%, 60%, 100% { opacity: 0.28; transform: translateY(0); }
+  30% { opacity: 0.9; transform: translateY(-3px); }
+}
 
 #chat .composer {
   display: flex;

@@ -228,6 +228,10 @@ async function start(): Promise<void> {
     }
   };
 
+  // Anything the coach does to the conversation — a message, a queued
+  // question, starting or finishing a turn — redraws the panel itself.
+  coach.onChange = () => redrawChat();
+
   // Draw what came back from the save, ONCE, now. The panel only ever redraws
   // when somebody speaks, and "Continue" is the one path where nobody does —
   // so without this the restored conversation sat in memory with an empty
@@ -236,9 +240,7 @@ async function start(): Promise<void> {
   redrawChat();
 
   async function talk(text: string): Promise<void> {
-    redrawChat();
     await coach.ask(text, { game, read });
-    redrawChat();
     persist();
   }
 
@@ -247,9 +249,7 @@ async function start(): Promise<void> {
   async function remark(note: string): Promise<void> {
     if (!game) return;
     lastRemarkAt = game.turns.length;
-    redrawChat();
     await coach.remark(note, { game, read });
-    redrawChat();
     persist();
   }
 

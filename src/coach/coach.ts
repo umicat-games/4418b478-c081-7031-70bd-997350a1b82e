@@ -96,6 +96,15 @@ export class Coach {
   profile: Profile = { ...DEFAULT_PROFILE };
   private npc: ReturnType<ThreeUmicat['ai']['npc']>;
   private busy = false;
+  /**
+   * Called whenever the conversation or its state changed.
+   *
+   * The UI used to be redrawn by the CALLER, around the await — which meant
+   * the player's own message was not on screen until the reply came back,
+   * because it is pushed inside the call the caller is waiting on. Anything
+   * that changes what the panel should show now says so, here.
+   */
+  onChange: (() => void) | null = null;
 
   constructor(private umicat: ThreeUmicat, private hooks: CoachHooks) {
     this.npc = umicat.ai.npc({ playbook: 'coach', actions: ACTIONS as unknown as typeof ACTIONS[number][] });
@@ -106,6 +115,7 @@ export class Coach {
   /** The player typed (or said) something. */
   async ask(text: string, ctx: { game: GoGame | null; read: Read | null }): Promise<void> {
     this.messages.push({ from: 'player', text, at: Date.now() });
+    this.onChange?.();
     if (this.busy) { this.queued = { text, ctx }; return; }
     await this.turn(text, ctx);
   }
@@ -123,11 +133,13 @@ export class Coach {
   ): Promise<void> {
     if (this.busy) return;
     this.busy = true;
+    this.onChange?.();
     try {
       const res = await this.npc.say(line, { observation: observe(ctx.game, ctx.read, this.profile) });
       this.handle(res, opts);
     } finally {
       this.busy = false;
+      this.onChange?.();
     }
     // A question that arrived mid-answer gets its turn now. After `busy` is
     // cleared, so the recursion is one deep and not a chain of stacked awaits.
@@ -137,6 +149,12 @@ export class Coach {
   }
 
   private handle(res: AiActResult, opts: { silentIfEmpty?: boolean }): void {
+    // Every path out of here ends in a redraw, including the ones that push
+    // nothing: `busy` has changed, and the dots have to stop.
+    try { this.handleInner(res, opts); } finally { this.onChange?.(); }
+  }
+
+  private handleInner(res: AiActResult, opts: { silentIfEmpty?: boolean }): void {
     if (!res.ok) {
       // Structured refusals, not exceptions: an anonymous player needs a
       // sign-in prompt, not a stack trace, and a player out of credits needs to
