@@ -1,0 +1,45 @@
+/* The title screen. It sits over the live board — the game is already running
+ * behind it, slowly turning, which is also what hides the engine's 4MB
+ * download: by the time anyone has read the buttons, the network is loaded. */
+
+#title {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-content: center;
+  gap: 22px;
+  justify-items: center;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(12, 14, 18, 0.55), rgba(12, 14, 18, 0.92));
+  color: #f4f5f7;
+  font: 15px/1.5 system-ui, -apple-system, sans-serif;
+  transition: opacity 0.35s ease;
+}
+#title.leaving { opacity: 0; pointer-events: none; }
+
+#title h1 {
+  font-size: clamp(34px, 7vw, 64px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-shadow: 0 6px 28px rgba(0, 0, 0, 0.6);
+}
+#title .buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+#title button.quiet-link {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.55;
+  background: none;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#title button.quiet-link:hover { opacity: 0.9; }
+
+#title .status { font-size: 13px; opacity: 0.6; min-height: 1.4em; }

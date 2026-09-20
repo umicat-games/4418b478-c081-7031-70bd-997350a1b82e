@@ -1,184 +1,802 @@
-import * as THREE from 'three';
-import RAPIER from '@dimforge/rapier3d-compat';
-import {
-  ThreeUmicat, loadScene3D, CharacterController3D, CharacterAnimator, Input3D,
-  type Scene3D, type Manifest3D, type LoadedScene3D,
-} from '@umicat/three-sdk';
-import { GAME_WIDTH, GAME_HEIGHT } from './config';
+// Chess with me — a game of chess against Stockfish, with an AI companion
+// sitting beside the board.
+//
+// Two brains, deliberately separate:
+//
+//   the ENGINE (`src/chess/opponent.ts`) decides moves and reads the
+//   position. It is Stockfish, running in this browser. Everything factual —
+//   who is better, by how much, what the move was, whether that dropped a
+//   piece — comes from here, because it is measured rather than asserted.
+//
+//   the COMPANION (`src/coach/coach.ts`) talks. It is the platform's runtime
+//   AI, handed the engine's numbers to talk ABOUT, and it can point at the
+//   board — mark squares, show what attacks what, offer a move. It never
+//   decides a move and it never moves a piece.
+//
+// Keeping them apart is why what it says can be trusted. A companion that
+// could play an illegal move would be a companion whose explanations mean
+// nothing — and chess makes that trap worse than Go does, because a language
+// model has read enough chess prose to describe, fluently and in the right
+// vocabulary, a position it has misread.
+//
+// This file is the loop that joins the pieces, and nothing else. When
+// something is wrong, the first question is which piece it belongs to.
+import { ThreeUmicat } from '@umicat/three-sdk';
+import { BoardView } from './view/board3d';
+import { attachBoardControls } from './view/controls';
+import { ChessGame, other, type Odds, type Side } from './chess/rules';
+import { fromSan, toSan, type Sq } from './chess/coords';
+import { LEVELS, Opponent, levelById, levelLabel, type Read } from './chess/opponent';
+import { openingName } from './chess/openings';
+import { Coach } from './coach/coach';
+import { ChatPanel } from './ui/chat';
+import { Speech, segment, type Segment } from './ui/speech';
+import { Menu } from './ui/menu';
+import { SquareActions } from './ui/squareactions';
+import { EvalBar } from './ui/evalbar';
+import { askPromotion, type Promotion } from './ui/promotion';
+import { showTitle } from './ui/title';
+import { underCurtain } from './ui/curtain';
+import { Autosave, load } from './save';
+import { SFX, createAudio, playPiece } from './audio';
+import { setLocale, t, type Key } from './i18n';
 
 /**
- * A 3D Umicat game.
+ * How much has to evaporate on the player's own move before the companion
+ * mentions it unasked, in centipawns.
  *
- * Everything host-facing — who the player is, their cloud save, shared game
- * data, multiplayer, runtime AI, voice — comes from `umicat.*` and is identical
- * to what a 2D game gets, because it is literally the same package underneath.
- * What differs is only how the world is drawn.
- *
- * Start here: `SAVE_KEY`, the scene JSON in `public/scenes3d/`, and `update()`.
+ * 150 is "you dropped more than a pawn and a half" — big enough that it is a
+ * mistake rather than an inaccuracy, small enough to catch a hung knight. A
+ * coach that speaks up every time you lose 30 centipawns is a coach nobody
+ * finishes a game with.
  */
-
-const SAVE_KEY = 'progress';
-
-// Where the character starts, and where it is put back if it ever leaves the
-// world. Falling out is not hypothetical: before the arena was enclosed, a few
-// seconds of walking dropped the player through the edge and kept going, and
-// because the position was being saved they were restored mid-plunge on the
-// next load. A world without a floor under its floor strands people.
-const SPAWN = { x: 0, y: 0.4, z: 1.7 };
-const RESPAWN_BELOW_Y = -5;
+const BLUNDER_CP = 150;
+/** Moves of quiet after an unprompted remark, so it is not a narrator. */
+const REMARK_COOLDOWN = 3;
+/** How long the engine reads when nobody is waiting on it — the baseline the
+ *  next blunder is measured against, and what the eval bar shows. */
+const WATCH = { movetime: 240, multipv: 3 };
+/** A hint is worth a proper look: nobody is on move while it runs. */
+const HINT = { movetime: 1200, multipv: 1 };
 
 async function start(): Promise<void> {
-  // 1) The platform. Do this first: reading the save before the first frame is
-  //    what makes a reload resume instead of restart.
   const umicat = await ThreeUmicat.init();
+  // Before any UI exists: everything below asks `t()` for its words.
+  setLocale(umicat.locale);
 
-  // 2) Physics. Rapier is WASM and must be initialised before use.
-  await RAPIER.init();
-
-  // 3) The world, from design data on disk. Nothing here runs game logic —
-  //    same separation the 2D editor relies on (ADR-021).
-  const [manifest, scene3d] = await Promise.all([
-    fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
-    fetch('scenes3d/main.json').then((r) => r.json() as Promise<Scene3D>),
-  ]);
-  const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
-
-  const hero = world.entities.get('hero')!;
-  const saved = (await umicat.saves.get<{ x: number; y: number; z: number }>(SAVE_KEY)) ?? null;
-
-  // Sized for THIS character and this world's unit. The capsule's total height
-  // is 2*halfHeight + 2*radius = 0.72, which is the character's own height —
-  // a collider that does not match the model is how a character ends up
-  // floating, sunk, or catching on things that are not there.
-  const character = new CharacterController3D(world.world, RAPIER, {
-    position: saved ?? SPAWN,
-    halfHeight: 0.2,
-    radius: 0.16,
-    speed: 1.9,        // ~2.6 character-heights per second
-    stepHeight: 0.17,  // a quarter of the character's height
-    // ~0.94 units at full height, a bit over one character height. The SDK owns
-    // how a jump FEELS — coyote time, buffering, variable height — because
-    // every 3D game shares this character (ADR-034); this is just how high.
-    //
-    // Full height is not the number you build platforms against: releasing
-    // early cuts the jump on purpose, so a TAPPED jump rises about a fifth as
-    // far. Ask the controller (`character.minJumpRise`) instead of doing the
-    // algebra — see CLAUDE.md.
-    jumpSpeed: 2.8,
-  });
-  // Action buttons are DECLARED, not built. Mounting your own is how one game
-  // put its attack button exactly on top of the jump button on a phone — same
-  // corner, platform layer on top, so the attack button could not be tapped at
-  // all and nothing errored. The SDK places every button, so they cannot
-  // collide, and the same declaration gives you the key binding.
-  const input = new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] });
-
-  // Animation. The SDK owns both halves — locomotion follows the controller's
-  // state, and an action is a one-shot that interrupts and returns. Neither is
-  // game logic: once every game shares one character, they are the character's
-  // behaviour (ADR-034).
-  const heroMixer = world.mixerFor.get('hero');
-  const clipMap: Record<string, string> =
-    (manifest.models?.find((m) => m.id === 'hero') as { animations?: Record<string, string> } | undefined)?.animations ?? {};
-  const animator = heroMixer
-    ? new CharacterAnimator(heroMixer, world.clips.get('hero') ?? [], clipMap)
-    : null;
-
-  // 4) Render. The canvas is in index.html; the game owns the loop.
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const hud = document.getElementById('hud')!;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
+  const view = new BoardView(canvas);
+  window.addEventListener('resize', () => view.resize());
 
-  const resize = (): void => {
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
-    world.camera.aspect = window.innerWidth / window.innerHeight;
-    world.camera.updateProjectionMatrix();
-  };
-  resize();
-  window.addEventListener('resize', resize);
+  // ── things the render loop touches ──────────────────────────────────────
+  // Declared before it starts. The loop runs from the first frame, long
+  // before the rest of this function exists, and a `const` it reads too early
+  // is a ReferenceError that takes the whole game down at boot.
+  let idleSpin = true;
 
-  // Write into a CHILD, never `hud.textContent` — that wipes every child the
-  // HUD has, which is how the on-screen touch controls used to disappear.
-  const greeting = document.createElement('div');
-  greeting.textContent = umicat.user ? `Hello, ${umicat.user.name}` : 'Playing as a guest';
-  hud.appendChild(greeting);
-
-  // Saving every frame would hammer the host; coalesce instead.
-  let pending: ReturnType<typeof setTimeout> | undefined;
-  const save = (): void => {
-    clearTimeout(pending);
-    pending = setTimeout(() => {
-      const p = character.position;
-      void umicat.saves.set(SAVE_KEY, { x: p.x, y: p.y, z: p.z });
-    }, 500);
-  };
-
-  // three.js deprecated Clock, and setAnimationLoop already hands us the
-  // timestamp, so there is nothing to replace it with.
-  let last = performance.now();
-  renderer.setAnimationLoop((now: number) => {
-    // Clamped: a backgrounded tab returns with a multi-second delta and
-    // everything tunnels through the floor in one step.
-    const dt = Math.min((now - last) / 1000, 0.05);
-    last = now;
-    // Turn the camera from the right half of the screen, then walk relative to
-    // where it now points. The order matters: reading `look` first means this
-    // frame's movement already accounts for this frame's turn, rather than
-    // lagging one frame behind every time you swing the camera round.
-    //
-    // Passing `cameraYaw` is not optional once the camera can turn. Without
-    // it, "up" on the stick always walks north — so the player looks at
-    // something, pushes towards it, and goes somewhere else. That is worse
-    // than a camera that does not turn at all.
-    const turn = input.look();
-    if (turn.x || turn.y) world.orbit(turn.x, turn.y);
-    const dir = input.direction(world.cameraYaw);
-
-    character.update(dt, dir, { jump: input.jump });
-
-    // The floor under the floor. Rapier's character controller resolves against
-    // contacts rather than integrating through them, so putting the body back
-    // is enough — the next frame lands and clears the fall speed.
-    if (character.position.y < RESPAWN_BELOW_Y) {
-      character.teleport(SPAWN);
-    }
-
-    character.syncTo(hero, -0.36);          // capsule centre → the model's feet (halfHeight + radius)
-    character.faceTowards(hero, dir, dt);
-
-    // One press is one swing. Two guards, doing different jobs: the edge check
-    // means holding the key does not chain swings (drop it and you get
-    // hold-to-attack, which is a game's decision), and the animator's `busy`
-    // means a second press mid-swing is ignored rather than restarting it.
-    // One press is one swing. `consume` latches at the event and clears on
-    // read, so holding does not chain — and, unlike comparing this frame's
-    // state to last frame's, it cannot miss a tap that began and ended between
-    // two frames. `busy` is the separate question of whether a swing is
-    // already playing.
-    if (input.consume('attack') && animator && !animator.busy) animator.play('attack');
-    animator?.update(character.state);
-    // Save only while STANDING on something. A position saved mid-air restores
-    // you mid-air, which turns one fall into a permanently broken save.
-    if (Math.hypot(dir.x, dir.z) > 0 && character.grounded) save();
-
-    world.update(dt);                        // animation + physics + follow camera
-    renderer.render(world.scene, world.camera);
+  const speech = new Speech({
+    onPage: (page) => {
+      // The square being talked about lights up for exactly as long as the
+      // sentence about it is on screen — as a FOCUS, not as a mark. Sharing
+      // the marks would mean a sentence with no square in it clearing the
+      // ring the companion had just drawn with `highlight`.
+      view.setFocus(page.at ?? null);
+      chat.setEchoed(true);
+      placeSpeech();
+    },
+    onDone: () => {
+      view.setFocus(null);
+      chat.setEchoed(false);
+    },
+    moveOf: (page) => offeredMove(page)?.san ?? null,
+    onPlay: (page) => {
+      const m = offeredMove(page);
+      if (m) void commit(m.from, m.to);
+    },
   });
 
-  // Handy while developing; harmless in a published build.
-  Object.assign(window as unknown as Record<string, unknown>,
-    { __game: { umicat, world, character, input, animator, locomotion: () => animator?.action || character.state } as unknown });
+  /** Confirm / cancel / ask, beside the square rather than in a corner. */
+  const actions = new SquareActions({
+    onConfirm: (at) => { if (from) void commit(from, at); },
+    onCancel: () => clearSelection(),
+    onAsk: (at) => askAbout(at),
+  });
+
+  const evalBar = new EvalBar();
+
+  const audio = createAudio();
+  // Fetch and decode ahead of the first gesture. Without it the very first
+  // press of a session is silent — there is no decoded buffer yet — and the
+  // press in question is the title screen's own button.
+  void audio.preload();
+  const lastKnock = { i: -1 };
+
+  // One listener for every button in the game. A click sound wired per button
+  // is a click sound that is missing from the next button somebody adds.
+  document.addEventListener('click', (e) => {
+    const el = e.target as HTMLElement | null;
+    if (el?.closest('button')) audio.play(SFX.uiPress);
+  }, true);
+
+  const opponent = new Opponent();
+  // Start compiling the wasm now, behind the title screen, so that by the
+  // time anyone has read two buttons there is nothing left to wait for.
+  const loading = opponent.ready();
+  let engineReady = false;
+  void loading.then(() => { engineReady = true; }).catch(() => { engineReady = true; });
+
+  const frame = (): void => {
+    if (idleSpin) view.orbit(0.0012, 0);
+    // Only when the picture actually changed. Between two moves a chess board
+    // is a still life, and redrawing it sixty times a second takes a core off
+    // the engine — which is the thing the player is waiting for.
+    if (view.render()) {
+      if (speech.showing) placeSpeech();
+      if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
+    }
+    requestAnimationFrame(frame);
+  };
+  frame();
+
+  // ── state ───────────────────────────────────────────────────────────────
+  const saved = await load(umicat);
+  const autosave = new Autosave(umicat);
+
+  let game: ChessGame | null = null;
+  let level = levelById(saved.profile.level);
+  /** The engine's read of the position the player is looking at. */
+  let read: Read | null = null;
+  /** The same number, from before the player moved — the baseline a blunder
+   *  is measured against — and what the engine would have played instead.
+   *  Both belong to the position the player was LOOKING at, which is the only
+   *  position in which "you should have played X" means anything. */
+  let cpBeforePlayer: number | null = null;
+  let bestBeforePlayer: string[] = [];
+  let thinking = false;
+  let lastRemarkAt = -REMARK_COOLDOWN;
+  /** The move being built: a piece picked up, and where it is going. */
+  let from: Sq | null = null;
+
+  // ── the companion ───────────────────────────────────────────────────────
+  const chat = new ChatPanel(umicat, {
+    onSend: (text) => void talk(text),
+    onLayout: (open) => {
+      view.reserveRight(open ? panelWidth() : 0);
+      // Opening the panel means the player wants to read or type, not to be
+      // tapped through a bubble that says the same thing.
+      if (open) speech.hide();
+    },
+  });
+
+  const coach = new Coach(umicat, {
+    setLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); return true; },
+    startGame: (side, odds) => {
+      // A game nobody has moved in IS a new game. Starting another one throws
+      // away the conversation that has just begun about this one.
+      if (game && !game.over && game.plies === 0 && game.human === side && game.odds === odds) return true;
+      void freshGame(side, odds);
+      return true;
+    },
+    highlight: (squares) => view.setHighlights(squares),
+    // The companion asks what is attacking a square; the BOARD answers. A
+    // model asked to read that off a text diagram will answer confidently and
+    // be wrong, and it is exactly the kind of thing a beginner then believes.
+    showAttacks: (at) => {
+      if (!game) return null;
+      const piece = game.at(at);
+      const owner: Side = piece?.side ?? game.human;
+      const attackers = game.attackers(at, other(owner));
+      const defenders = game.attackers(at, owner);
+      view.setHighlights([at, ...attackers, ...defenders]);
+      return {
+        square: toSan(at.x, at.y),
+        piece: piece ? `${piece.side} ${piece.kind}` : null,
+        attackers: attackers.map((s) => toSan(s.x, s.y)),
+        defenders: defenders.map((s) => toSan(s.x, s.y)),
+        undefended: attackers.length > 0 && defenders.length === 0,
+      };
+    },
+    showMoves: (at) => {
+      if (!game) return null;
+      const piece = game.at(at);
+      const moves = game.movesFrom(at);
+      view.setHighlights([at, ...moves.map((m) => m.to)]);
+      return {
+        square: toSan(at.x, at.y),
+        piece: piece ? `${piece.side} ${piece.kind}` : null,
+        moves: moves.map((m) => m.san),
+      };
+    },
+  });
+  coach.load(saved.messages, saved.profile);
+  // What they turned off last time stays off. Applied before the first
+  // gesture so the music does not get one bar in before being silenced.
+  if (coach.profile.music === false) audio.setMusicVolume(0);
+  if (coach.profile.sound === false) audio.setSfxVolume(0);
+
+  /** How many companion lines have already been said out loud. Starts at the
+   *  restored count: the conversation that came back is history, and history
+   *  does not get spoken over the title screen. */
+  let spoken = coach.messages.filter((m) => m.from === 'coach').length;
+
+  const redrawChat = (): void => {
+    chat.render(coach.messages, coach.thinking);
+    const said = coach.messages.filter((m) => m.from === 'coach');
+    if (said.length > spoken) {
+      spoken = said.length;
+      speech.show(segment(said[said.length - 1].text));
+    }
+  };
+
+  async function talk(text: string): Promise<void> {
+    redrawChat();
+    await coach.ask(text, { game, read });
+    redrawChat();
+    persist();
+  }
+
+  /** An unprompted line. `note` is what just happened, in plain words; the
+   *  companion decides how, and whether, to react. */
+  async function remark(note: string): Promise<void> {
+    if (!game) return;
+    lastRemarkAt = game.plies;
+    redrawChat();
+    await coach.remark(note, { game, read });
+    redrawChat();
+    persist();
+  }
+
+  /**
+   * The player pointing back.
+   *
+   * The companion can point at the board; this is the other direction.
+   * Asking about a piece by tapping it beats working out that it is on c6 and
+   * typing that — which is a thing beginners cannot do and nobody enjoys.
+   */
+  function askAbout(at: Sq): void {
+    if (!game) return;
+    view.setHighlights([at]);
+    chat.prefill(`${toSan(at.x, at.y)}: `);
+  }
+
+  /**
+   * Which move, if any, the bubble is offering to play.
+   *
+   * A square is not a move — two knights can reach f3 — so the sentence is
+   * read first: every move the companion writes is in SAN, and SAN says which
+   * piece. Only if there is no move in the text does the anchor square get
+   * used, and then only when exactly one legal move ends there.
+   */
+  function offeredMove(page: Segment): { from: Sq; to: Sq; san: string } | null {
+    if (!game || game.over || thinking || game.toPlay !== game.human) return null;
+    const legal: Array<{ from: Sq; to: Sq; san: string }> = [];
+    for (const f of game.movable(game.human)) {
+      for (const m of game.movesFrom(f)) legal.push({ from: f, to: m.to, san: m.san });
+    }
+    // SAN as written, with the check and capture marks optional — the
+    // companion writes `Nf3` where the board says `Nf3+` often enough.
+    const bare = (s: string): string => s.replace(/[+#!?]+$/, '');
+    for (const m of legal) {
+      const re = new RegExp(`(^|[^A-Za-z0-9])${escapeRe(bare(m.san))}([+#!?]*)(?![A-Za-z0-9])`);
+      if (re.test(page.text)) return m;
+    }
+    if (!page.at) return null;
+    const ending = legal.filter((m) => m.to.x === page.at!.x && m.to.y === page.at!.y);
+    return ending.length === 1 ? ending[0] : null;
+  }
+
+  /** Put the bubble where its sentence belongs. Runs every frame while it is
+   *  up, because the camera can move under it. */
+  function placeSpeech(): void {
+    const page = speech.current;
+    if (!page) return;
+    const box = speech.rect();
+    const margin = 10;
+    const free = window.innerWidth - (chat.isOpen ? panelWidth() : 0);
+
+    if (page.at && game) {
+      const p = view.screenOf(page.at.x, page.at.y);
+      const gap = view.screenSpacing * 0.7 + 12;
+      const x = Math.min(Math.max(p.x, box.width / 2 + margin), free - box.width / 2 - margin);
+      const top = p.y - gap;
+      if (top - box.height >= margin) speech.place(x, top, Math.abs(x - p.x) < 2);
+      else speech.place(x, p.y + gap + box.height, false);
+      return;
+    }
+    // Nothing to point at: the middle of the board, because this is someone
+    // talking about the game in front of you, not a notification.
+    const middle = view.screenOf(3.5, 3.5);
+    const x = Math.min(Math.max(middle.x, box.width / 2 + margin), free - box.width / 2 - margin);
+    speech.place(x, Math.max(middle.y, box.height + margin), false);
+  }
+
+  // ── the board ───────────────────────────────────────────────────────────
+  const status = document.createElement('div');
+  hud.appendChild(status);
+  /** How to move a piece, until they have moved one — ever. */
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  hud.appendChild(tip);
+
+  function refresh(): void {
+    if (game) view.sync(game);
+    evalBar.show(game && !game.over ? read : null);
+    if (!game) { status.textContent = ''; tip.textContent = ''; return; }
+    if (game.over) {
+      status.textContent = resultText(game);
+    } else if (thinking) {
+      status.textContent = t('hud.thinking');
+    } else if (game.toPlay === game.human) {
+      status.textContent = t(game.inCheck ? 'hud.yourMoveCheck' : 'hud.yourMove', { level: levelLabel(level.id) });
+    } else {
+      status.textContent = t('hud.theirMove');
+    }
+    const yours = !game.over && game.toPlay === game.human && !thinking;
+    tip.textContent = yours && !coach.profile.moved ? t('hud.howToMove') : '';
+  }
+
+  function resultText(g: ChessGame): string {
+    const key: Key = g.outcome === 'resigned'
+      ? (g.resignedBy === g.human ? 'result.youResigned' : 'result.theyResigned')
+      : g.outcome === 'checkmate'
+        ? (g.winner === g.human ? 'result.youMate' : 'result.theyMate')
+        : g.outcome === 'stalemate' ? 'result.stalemate'
+          : g.outcome === 'repetition' ? 'result.repetition'
+            : g.outcome === 'fifty-move' ? 'result.fifty'
+              : 'result.insufficient';
+    return t(key);
+  }
+
+  function clearSelection(): void {
+    from = null;
+    actions.hide();
+    view.setSelection(null);
+    view.setGhost(null, null, 'white');
+  }
+
+  function newGame(side: Side, odds: Odds): void {
+    game = new ChessGame(side, odds);
+    coach.profile.side = side;
+    coach.profile.odds = odds;
+    view.setSeat(side);
+    view.setHighlights([]);
+    view.setFocus(null);
+    clearSelection();
+    read = null;
+    cpBeforePlayer = null;
+    bestBeforePlayer = [];
+    lastRemarkAt = -REMARK_COOLDOWN;
+    refresh();
+    persist();
+    if (game.toPlay !== game.human) void engineTurn();
+    else void observePosition();
+  }
+
+  /**
+   * A new game is a new conversation.
+   *
+   * The old one is summarised into the companion's running note first — that
+   * is where the long memory lives — and then the thread is cleared, so the
+   * next game does not open in the middle of the last one's argument about a
+   * bishop that is no longer on the board.
+   */
+  async function freshGame(side: Side, odds: Odds): Promise<void> {
+    await coach.newSession();
+    spoken = 0;
+    redrawChat();
+    newGame(side, odds);
+    void remark(
+      `A new game has just started; the student is ${side}. One line: greet them if you have not `
+      + 'yet, and say the one thing to think about on the first move. Do not recap the last game.',
+    );
+  }
+
+  /** Read the position the player is about to move in. Also what the eval bar
+   *  is showing, so it is never older than the board. */
+  async function observePosition(): Promise<void> {
+    if (!game || game.over) return;
+    try {
+      read = await opponent.read(game, WATCH);
+      cpBeforePlayer = read.mate === null ? read.cp : (read.mate > 0 ? 3000 : -3000);
+      bestBeforePlayer = read.candidates.slice(0, 3).map((c) => c.san);
+      refresh();
+    } catch { /* a missing read costs commentary, not the game */ }
+  }
+
+  /**
+   * The engine's move.
+   *
+   * Returns the read it decided from — which is the position AFTER the
+   * player's move and BEFORE this one, and therefore the right thing to
+   * judge the player's move against. Returned rather than read off `read`
+   * afterwards, because `observePosition` overwrites that a moment later and
+   * whether the caller wins that race is not something to leave to chance.
+   */
+  async function engineTurn(): Promise<Read | null> {
+    if (!game || game.over || game.toPlay === game.human) return null;
+    thinking = true;
+    clearSelection();
+    refresh();
+    let took: string | null = null;
+    let decided: Read | null = null;
+    let moved = false;
+    try {
+      const out = await opponent.decide(game, level);
+      read = out.read;
+      decided = out.read;
+      if (out.uci) {
+        const m = fromSan(out.uci.slice(0, 2));
+        const to = fromSan(out.uci.slice(2, 4));
+        const promo = out.uci[4] as Promotion | undefined;
+        const played = m && to ? game.play(m, to, promo ?? 'q') : null;
+        if (played) {
+          moved = true;
+          playPiece(audio, lastKnock);
+          if (played.captured) { audio.play(SFX.capture); took = played.captured; }
+        }
+      }
+    } catch (err) {
+      console.error('[chess] engine failed', err);
+      status.textContent = t('hud.engineStumbled');
+    } finally {
+      thinking = false;
+      refresh();
+      persist();
+    }
+
+    // An engine that answered with nothing, or with a move the board refused,
+    // leaves it silently NOT the player's turn — the game looks frozen and
+    // nothing in the log says why. Say so, and give the move back.
+    if (!moved && !game.over) {
+      console.error('[chess] engine produced no legal move');
+      status.textContent = t('hud.engineStumbled');
+      return decided;
+    }
+
+    if (game.over) { void finish(); return decided; }
+    // The engine taking a real piece is worth a word, once in a while. A pawn
+    // is not: most captures in a game are pawns, and a companion that mentions
+    // every one of them is a companion nobody leaves open.
+    if (took && took !== 'pawn' && game.plies - lastRemarkAt >= REMARK_COOLDOWN) {
+      void remark(`They just took the student's ${took} with ${game.lastMove?.san}.`);
+    } else if (game.inCheck && game.plies - lastRemarkAt >= REMARK_COOLDOWN) {
+      void remark(`${game.lastMove?.san} puts the student in check.`);
+    }
+    void observePosition();
+    return decided;
+  }
+
+  async function commit(f: Sq, to: Sq): Promise<void> {
+    if (!game || thinking || game.over || game.toPlay !== game.human) return;
+    const moves = game.movesFrom(f).filter((m) => m.to.x === to.x && m.to.y === to.y);
+    if (!moves.length) return;   // illegal: the board simply does not take it
+    // Asked at the last moment, so the question only ever appears for a move
+    // that is actually being played.
+    const promotion: Promotion = moves[0].promotion ? await askPromotion() : 'q';
+
+    const played = game.play(f, to, promotion);
+    if (!played) return;
+    playPiece(audio, lastKnock);
+    if (played.captured) audio.play(SFX.capture);
+    coach.profile.moved = true;
+    clearSelection();
+    view.setHighlights([]);
+    refresh();
+    persist();
+
+    if (game.over) { void finish(); return; }
+
+    void (async () => {
+      const before = cpBeforePlayer;
+      const instead = bestBeforePlayer.filter((san) => san !== played.san);
+      const after = await engineTurn();
+      // Judged only against a baseline that exists, and against the position
+      // the player's move ACTUALLY produced — not the one after the engine
+      // has replied, because an evaluation that moved because of the reply is
+      // not the player's mistake. Both numbers are from the student's point
+      // of view; `opponent.read` does that flip once, so nothing here has to.
+      if (!game || game.over || before === null || !after) return;
+      const now = after.mate === null ? after.cp : (after.mate > 0 ? 3000 : -3000);
+      const lost = before - now;
+      if (lost < BLUNDER_CP || game.plies - lastRemarkAt < REMARK_COOLDOWN) return;
+      void remark(
+        `The student played ${played.san}. By the engine's count that changed their evaluation by `
+        + `${(-lost / 100).toFixed(1)} pawns, to ${(now / 100).toFixed(1)}. `
+        + (instead.length ? `It would have played ${instead.join(' or ')}.` : ''),
+      );
+    })();
+  }
+
+  /**
+   * A square was chosen. Nothing is played yet — that is what the tick is for.
+   *
+   * Two taps, always: pick the piece up, then say where it goes. It could be
+   * one drag, and a drag is worse here — on a phone the finger covers the
+   * square it is over, and a mis-drop in chess is a lost piece rather than a
+   * point.
+   */
+  function select(at: Sq | null): void {
+    if (!at || !game) { clearSelection(); return; }
+    const yours = !game.over && !thinking && game.toPlay === game.human;
+    const piece = game.at(at);
+
+    if (from) {
+      const move = game.movesFrom(from).find((m) => m.to.x === at.x && m.to.y === at.y);
+      if (move) {
+        const moving = game.at(from)!;
+        view.setGhost(at, moving.kind, moving.side);
+        actions.show(at, true, true);
+        actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+        return;
+      }
+      // Tapping another of your own pieces is picking that one up instead,
+      // not a mistake worth a noise.
+      if (piece && piece.side === game.human && yours) { pickUp(at); return; }
+      clearSelection();
+      if (piece) { actions.show(at, false, true); actions.place(view.screenOf(at.x, at.y), view.screenSpacing); }
+      return;
+    }
+
+    if (yours && piece && piece.side === game.human) {
+      if (game.movesFrom(at).length) { pickUp(at); return; }
+      // A piece with nowhere to go — pinned, or blocked. Silence there reads
+      // as the game not having noticed the tap.
+      audio.play(SFX.denied);
+    }
+    view.setSelection(null);
+    if (piece) {
+      actions.show(at, false, true);
+      actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+    } else {
+      actions.hide();
+    }
+  }
+
+  function pickUp(at: Sq): void {
+    if (!game) return;
+    from = at;
+    const moves = game.movesFrom(at);
+    view.setGhost(null, null, 'white');
+    view.setSelection(at, moves.filter((m) => !m.capture).map((m) => m.to), moves.filter((m) => m.capture).map((m) => m.to));
+    actions.show(at, false, true);
+    actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+  }
+
+  attachBoardControls(canvas, (x, y) => view.pick(x, y), {
+    onAim: () => { /* no hover ghost: a chess piece only moves where it is sent */ },
+    onPicked: select,
+    onCamera: (a, p) => view.orbit(a, p),
+    onZoom: (f) => view.zoomBy(f),
+  });
+
+  // ── the one button, and everything behind it ────────────────────────────
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  hud.appendChild(bar);
+
+  const menu = new Menu(
+    { side: coach.profile.side, level: level.id, odds: coach.profile.odds },
+    {
+      onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
+      onStart: ({ side, odds }) => void (async () => {
+        // Started from the title, the board is still behind a title screen.
+        leaveTitle();
+        if (!engineReady) await underCurtain(t('title.loading'), loading);
+        await freshGame(side, odds);
+      })(),
+      onHint: () => void hint(),
+      onTakeback: () => {
+        if (!game || thinking || game.over) return;
+        if (!game.undoPair()) return;
+        clearSelection();
+        refresh();
+        persist();
+        void observePosition();
+      },
+      onResign: () => {
+        if (!game || game.over) return;
+        if (!window.confirm(t('confirm.resign'))) return;
+        game.resign(game.human);
+        refresh();
+        persist();
+        void finish();
+      },
+      onRecentre: () => view.resetCamera(),
+      onMusic: (on) => { audio.setMusicVolume(on ? 0.22 : 0); coach.profile.music = on; persist(); },
+      onSound: (on) => { audio.setSfxVolume(on ? 1 : 0); coach.profile.sound = on; persist(); },
+      onEval: (on) => { evalBar.setEnabled(on); refresh(); },
+      music: () => coach.profile.music !== false,
+      sound: () => coach.profile.sound !== false,
+      evalBar: () => evalBar.enabled,
+      onTitle: () => void toTitle(),
+      // Dismissed from the title screen, where there is no board behind it.
+      onClose: () => { if (!game) void toTitle(); },
+    },
+  );
+
+  const gear = document.createElement('button');
+  gear.className = 'lift quiet';
+  gear.textContent = t('btn.setup');
+  gear.onclick = () => {
+    menu.sync({ side: game?.human ?? coach.profile.side, level: level.id }, !!game && !game.over);
+    menu.toggle();
+  };
+  bar.appendChild(gear);
+
+  /**
+   * Show what the engine would play.
+   *
+   * Free, in the sense that matters: the engine runs on this machine, so a
+   * hint costs a second of battery and nothing of the player's credits. The
+   * companion is not involved — if they want to know WHY, they can ask, and
+   * that is the call worth paying for.
+   */
+  async function hint(): Promise<void> {
+    if (!game || game.over || thinking || game.toPlay !== game.human) return;
+    const was = status.textContent;
+    status.textContent = t('hud.looking');
+    try {
+      const r = await opponent.read(game, HINT);
+      const best = r.candidates[0];
+      const squares = best ? [best.uci.slice(0, 2), best.uci.slice(2, 4)].map((s) => fromSan(s)) : [];
+      view.setHighlights(squares.filter((s): s is Sq => !!s));
+      status.textContent = best ? t('hud.engineWouldPlay', { move: best.san }) : was ?? '';
+    } catch {
+      status.textContent = was ?? '';
+    }
+  }
+
+  // ── saving ──────────────────────────────────────────────────────────────
+  function persist(): void {
+    coach.profile.level = level.id;
+    autosave.queue({
+      profile: coach.profile,
+      messages: coach.messages,
+      // An unfinished game is worth coming back to; a finished one is history.
+      game: game && !game.over ? game.snapshot() : null,
+    });
+  }
+
+  /** The end of a game: show it, talk about it, remember it. */
+  async function finish(): Promise<void> {
+    if (!game?.over) return;
+    coach.profile.gamesPlayed += 1;
+    evalBar.hide();
+    refresh();
+    audio.play(SFX.gameOver);
+    persist();
+
+    const g = game;
+    await remark(
+      `The game is over. ${resultText(g)} It lasted ${g.moveNumber} moves`
+      + `${openingName(g.moves) ? `, from a ${openingName(g.moves)}` : ''}. `
+      + 'One line worth remembering, not a list.',
+    );
+
+    // Written last, when the game it is about is genuinely finished.
+    await coach.summarise();
+    persist();
+  }
+
+  // ── the way in, and back out ────────────────────────────────────────────
+  /**
+   * The title screen: continue, a new game, or settings.
+   *
+   * Runs at boot and every time the player leaves a game, so it reads the
+   * CURRENT state rather than the save it booted from: after an hour of play,
+   * "is there a game to continue?" is a question about the board in front of
+   * them, not about what was on disk when the tab opened.
+   */
+  async function toTitle(): Promise<void> {
+    speech.hide();
+    actions.hide();
+    evalBar.hide();
+    menu.close();
+    chat.setOpen(false);
+    await autosave.flush();
+
+    document.body.classList.add('titling');
+    idleSpin = true;
+    const stored = await umicat.saves.get<ReturnType<ChessGame['snapshot']>>('game');
+    const choice = await showTitle({
+      canContinue: (!!game && !game.over) || !!stored,
+      returning: saved.returning || coach.profile.gamesPlayed > 0 || coach.messages.length > 0,
+      loading,
+    });
+
+    if (choice === 'forget') {
+      await Promise.all([
+        umicat.saves.delete('profile'), umicat.saves.delete('chat'), umicat.saves.delete('game'),
+      ]);
+      coach.load([], { ...coach.profile, summary: '', gamesPlayed: 0, mode: 'unknown', moved: false });
+      spoken = 0;
+      redrawChat();
+      await toTitle();
+      return;
+    }
+
+    if (choice === 'new') {
+      // Not straight into a game: which side, which opponent and what odds
+      // are chosen here, and starting without asking is how the choice ended
+      // up invisible. The panel's own Start does the rest.
+      menu.sync({ side: coach.profile.side, level: level.id, odds: coach.profile.odds }, false, true);
+      menu.show();
+      return;
+    }
+
+    leaveTitle();
+    // Almost always already true — the wasm compiles while the title is being
+    // read. The exception is a player who presses through it in under a
+    // second, and they are the reason this exists.
+    if (!engineReady) await underCurtain(t('title.loading'), loading);
+
+    if (choice === 'continue') {
+      if (game && !game.over) { view.setSeat(game.human); refresh(); void observePosition(); return; }
+      if (stored) {
+        game = ChessGame.restore(stored);
+        view.setSeat(game.human);
+        refresh();
+        if (game.toPlay === game.human) void observePosition();
+        else void engineTurn();
+        return;
+      }
+    }
+    await freshGame(coach.profile.side, coach.profile.odds);
+  }
+
+  /** Take the title down and give the board back. */
+  function leaveTitle(): void {
+    document.body.classList.remove('titling');
+    idleSpin = false;
+    view.resetCamera();
+  }
+
+  await toTitle();
+
+  // The probe surface. Playwright drives the game through this rather than
+  // through pixels: a test that has to click a square on a tilted board is a
+  // test of the test.
+  Object.assign(window as unknown as Record<string, unknown>, {
+    __game: {
+      umicat, view, opponent, coach, chat, speech, menu, actions, audio, evalBar,
+      get game() { return game; },
+      get thinking() { return thinking; },
+      get read() { return read; },
+      get from() { return from; },
+      level: () => level.id,
+      setLevel: (id: string) => { level = levelById(id); refresh(); },
+      levels: () => LEVELS.map((l) => l.id),
+      select,
+      /** Play a move by name: `move('e2', 'e4')` or `move('e7e8q')`. */
+      move: (a: string, b?: string, promo: Promotion = 'q') => {
+        const f = fromSan(b ? a : a.slice(0, 2));
+        const to = fromSan(b ?? a.slice(2, 4));
+        if (!f || !to) return false;
+        void commit(f, to);
+        return true;
+      },
+      newGame: (side: Side = 'white', odds: Odds = 'none') => void freshGame(side, odds),
+      say: (text: string) => talk(text),
+      redraw: redrawChat,
+      hint,
+      finish,
+      observe: observePosition,
+      toTitle: () => toTitle(),
+      flush: () => autosave.flush(),
+      fen: () => game?.fen ?? null,
+      board: () => game?.diagram() ?? [],
+    },
+  });
 }
 
+/** How the chat panel is sized in CSS, in pixels, so the board can dodge it. */
+const panelWidth = (): number => Math.min(380, window.innerWidth * 0.42) + 24;
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 void start().catch((err) => {
-  // A 3D game that fails to boot should say so rather than show a black canvas.
   const hud = document.getElementById('hud');
   if (hud) hud.textContent = `Failed to start: ${String(err)}`;
-  console.error('[umicat] game failed to start', err);
+  console.error('[chess] failed to start', err);
 });
-
-// Referenced so the design canvas is not silently unused; a game that letterboxes
-// itself will want these.
-void GAME_WIDTH; void GAME_HEIGHT;

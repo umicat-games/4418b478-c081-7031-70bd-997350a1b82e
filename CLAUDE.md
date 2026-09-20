@@ -1,202 +1,162 @@
-# Umicat 3D game
+# Chess with me
 
-A three.js game on the Umicat platform. This file is what the agent reads first.
+A game of chess against a real engine, with an AI companion sitting beside the
+board. This file is the memory of what has been built and why.
+
+> **Update this file in the same commit as the change.** The Go game's copy
+> described the 3D character template it was forked from long after none of
+> that was true, which is exactly how a long session gets misled.
+
+Game id `2a991d0a-30ae-47a8-b04c-a726e5eb2fbe`, fork org `umicat-games` (the
+repo holds one branch per game). `./deploy-preview.sh` publishes `dist/`
+straight to S3 + CloudFront. **Always commit AND deploy** — a direct deploy is
+a temporary override that any workspace rebuild wipes out.
+
+This game is a deliberate sibling of **GO with me**
+(`f60d9eec-40ae-42fd-be1d-2c1f2cf428db`, `work/umicat/go`). The chat panel, the
+speech bubble, the title screen, the settings panel, the save shape, the
+camera rig and the coach's architecture are that game's, ported. When
+something here looks odd, the Go repo probably explains why it is like that.
+
+## The two brains, and why they are separate
+
+**The ENGINE** (`src/chess/opponent.ts`) decides moves and reads positions. It
+is Stockfish 10, vendored and running in a Web Worker in this browser — no
+backend, no per-move cost, works signed out. Everything factual comes from
+here: who is better, by how much, whether there is a mate, what the move
+would have been.
+
+**The COMPANION** (`src/coach/coach.ts`) talks. It is the platform's runtime
+AI (ADR-017), handed the engine's numbers to talk *about*. It can point at the
+board — mark squares, show what attacks what, offer a move — and it can change
+the level and start a game. It never decides a move and it never moves a piece.
+
+This split is the whole trust model, and **chess makes it more dangerous than
+Go does, not less**. A language model has read an enormous amount of chess
+writing. It will describe a position it has misread in exactly the right
+vocabulary — "the knight is pinned", "that square is weak" — and sound like a
+coach while doing it. Go at least made the model *sound* lost. Here it does
+not, so every factual claim has to come from the engine or from the board, and
+the playbook says so at length.
 
 ## Where things are
 
-| | |
-|---|---|
-| `src/main.ts` | the whole game loop — start here |
-| `src/config.ts` | the design canvas + `ORIENTATION` (set at game creation; do not change it) |
-| `public/scenes3d/main.json` | **the scene** — entities, lights, colliders, camera |
-| `public/scenes3d/manifest.json` | models, their import scale, and their **animation map** |
-| `public/assets/` | `.glb` models, textures, audio |
-
-## The two halves, and why the split matters
-
-**Platform** — `umicat.saves`, `umicat.gameData`, `umicat.rooms`, `umicat.ai`,
-`umicat.voice`, `umicat.dialogue`, `umicat.user`. Identical to what a 2D Umicat
-game gets, because it is the same package underneath
-(`@umicat/platform-sdk`). None of it knows anything is being drawn.
-
-**Engine** — `loadScene3D`, `CharacterController3D`, `Input3D`, three.js and
-Rapier. This is the part that differs from a 2D game.
-
-When something goes wrong, knowing which half you are in usually names the bug.
-
-## The scene format
-
-`scenes3d/main.json` is **design data**: what the game looks like before anyone
-plays it. No save is loaded when it is read. Rules that are decisions, not
-accidents:
-
-- **Rotation is a quaternion** `[x, y, z, w]`, never Euler angles.
-- **Ids are authored and stable.** Saves and code refer to entities by id.
-- **Transforms are local to `parent`.** World transforms are derived.
-- **Colliders are explicit.** Never use a render mesh as a dynamic collider —
-  that is the classic way to make a game that is correct and unplayably slow.
-- **Animation clips are mapped by meaning** in the manifest
-  (`{ "walk": "Walk" }`), never guessed from the clip's name.
-
-`loadScene3D` refuses duplicate ids, dangling parents, entities that would draw
-nothing, and trimesh colliders on dynamic bodies — at load, because every one of
-them otherwise shows up as a blank screen an hour later.
-
-## Building
-
-```bash
-npm run dev      # local dev server
-npm run build    # what the platform runs
-```
+| file | what |
+| --- | --- |
+| `src/main.ts` | the loop that joins everything. Start here. |
+| `src/chess/rules.ts` | the board — a thin shell over `chess.js`, and why |
+| `src/chess/opponent.ts` | the engine wrapper, **and the one place strength is decided** |
+| `src/chess/coords.ts` | `e4` ⇄ `{x,y}`, and which way `y` runs |
+| `src/chess/openings.ts` | opening names, as a table and not as a guess |
+| `src/coach/coach.ts` | the companion: actions, observation, memory |
+| `public/playbooks/coach.md` | **its persona and rules, as editable prose** |
+| `src/view/pieces.ts` | **the pieces, as lathe profiles** — no models anywhere |
+| `src/view/board3d.ts` | the board drawn, the camera, hit-testing |
+| `src/view/controls.ts` | pointer handling: choose a square vs move the camera |
+| `src/ui/*` | chat, bubble, settings, title, square actions, eval bar, promotion |
+| `src/audio.ts` | which clips, how loud |
+| `src/save.ts` | what survives leaving, and the quotas that shape it |
+| `public/stockfish/` | **vendored Stockfish** — frozen, see `vendor/VENDOR.md` |
 
 ## Things that will bite
 
-**A `SkinnedMesh`'s bounding sphere comes from the bind pose** and does not
-follow its bones, so three.js culls a character against a stale volume and it
-vanishes the moment it moves. `loadScene3D` already sets `frustumCulled = false`
-on skinned meshes; if you add a character by hand, do the same.
+**The engine is Stockfish 10 on purpose, and it is 360KB.** Stockfish 10 is
+the last release with a classical evaluation, so there is no weights file at
+all — every newer build needs a 38MB NNUE net. It is also single-threaded
+(`Threads` is `min 1 max 1`), which matches the fact that threaded wasm needs
+`SharedArrayBuffer`, which needs cross-origin isolation, which a game iframe
+served from the CDN does not have. Measured here: depth 14 in 500ms, 1.38M
+nodes/s. Do not "upgrade" it without reading `vendor/VENDOR.md`.
 
-**An action is a one-shot, not a state.** The character ships 32 clips —
-`attack`, `kick`, `pick-up`, `interact`, `holding-*` (including shooting),
-`die`, `emote-yes/no` — and `CharacterAnimator.play('attack')` runs one once and
-hands control back. Gate on `animator.busy` so one press is one swing, and use
-an edge check if you do not want holding the key to chain them. Locomotion keeps
-following `character.state` underneath.
+**Stockfish is GPL-3.** It is vendored unmodified, in its own directory, with
+its licence beside it, and spoken to over UCI across a Worker boundary. Do not
+edit those files and do not merge them into the bundle.
 
-**Use the prop kit before you draw scenery out of boxes.** `public/kit/` ships
-86 real models with a catalogue at `public/kit/index.json`. A coloured box named
-`crystal` is still a box, and a scene of them reads as a prototype.
+**Strength is movetime plus slack over the engine's OWN candidates.** Never
+inject random moves: a random chess move is not "a weaker player", it is
+hanging a queen on move four, and a beginner shown one learns something false.
+Stockfish's built-in `Skill Level` is deliberately unused — it is opaque, and
+owning the choice is what lets each level be described in a sentence a player
+can check.
 
-**The world's unit is Kenney's, not the metre.** A character is 0.72 units tall,
-so ~4,700 CC0 props drop in at `importScale: 1`. Anything length-shaped you add —
-sizes, positions, collider extents, camera offsets, speeds, **and gravity** —
-lives in that unit. See ASSETS.md. The character takes its gravity from the
-world's, so there is one gravity in the scene and not two; the scene's own
-`gravity` in `main.json` is where it is set.
+**Every score is flipped to the STUDENT's point of view exactly once**, inside
+`opponent.read`. UCI scores are from the side to move, so a second flip
+anywhere downstream is a coach telling you that you are winning while you are
+being mated. Nothing outside that function should touch the sign.
 
-**Rotate geometry, not objects, when orienting a primitive.** An object's
-rotation is overwritten by the entity's authored transform. Getting this wrong
-once left every "ground" standing upright as a wall, which renders convincingly
-until the camera crosses to the other side.
+**A blunder is judged against the position the move PRODUCED**, not the one
+after the engine has replied — an evaluation that moved because of the reply
+is not the player's mistake. `engineTurn()` returns the read it decided from
+for exactly this reason; do not go back to reading it off `read`, which
+`observePosition` overwrites a moment later.
 
-**Jump and the on-screen controls belong to the SDK, not to your game.**
-`update(dt, dir, { jump })` takes the button's current state; coyote time,
-input buffering and the release-cut live in `CharacterController3D` because
-every 3D game shares this character (ADR-034). `Input3D` adds a thumbstick and
-jump button on touch devices and merges them into the same `direction()` and
-`jump`, so nothing here branches on input source.
+**The pieces are code, not models.** Five of the six are surfaces of
+revolution and the profile is the design; the knight is an extruded spline
+silhouette. Two things are faked because three has no CSG: the bishop's slit
+is a darker wedge lying in the surface, and the rook's crenellations are
+blocks on the rim rather than notches out of it.
 
-**A jump is a range, not a number — author platforms against the SHORT one.**
-Releasing the button early cuts the jump deliberately, so this character clears
-`character.maxJumpRise` held and only `character.minJumpRise` tapped — roughly a
-fifth as far. Read those off the controller rather than deriving them; a course
-laid out against the held height has a first step that tapping players cannot
-clear, and that reads as "the platform up there is unreachable", not as a bug.
-Leave headroom on top: both numbers are ballistics, and a real jump is stepped
-at frame rate.
+**`y = 0` is rank 8.** So `board[y][x]` printed top to bottom is a chess
+diagram as a book prints one, and the far side of the board is the far side in
+world space. The board texture is painted in the same order — and the file and
+rank labels are the only thing that would ever reveal a mirror, which is why
+they are worth having.
 
-**The thumbstick is invisible until a thumb lands on the left half of the
-screen, and then it is exactly there.** That is the default; `stick: 'fixed'`
-brings back an always-drawn pad at the bottom left. Nothing in a game changes
-either way — `direction()` reads the same.
+**The board's labels are repainted when the seat changes.** Playing Black
+turns the camera to the other end AND turns the text over with it. Doing one
+without the other gives you a board with the "1" upside down.
 
-**The right half of the screen turns the camera, and the stick follows it.**
-On desktop the same `look()` is fed by holding the RIGHT mouse button and
-dragging — the left button stays the game's, for selecting and aiming.
-`input.look()` returns a delta and clears on read; hand it to `world.orbit()`,
-then pass `world.cameraYaw` to `input.direction()`. Those two go together: a
-camera that turns while movement stays on world axes is worse than a camera
-that cannot turn, because the player looks at something, pushes towards it, and
-walks somewhere else. Read the look BEFORE moving, or every turn lags a frame.
+**Counting is the board's job.** `show_attacks` and `show_moves` exist because
+a model asked to read attackers off a text diagram answers confidently and
+wrongly. The same rule applies to anything that must be *correct* rather than
+*fluent* — which is also why opening names are a lookup table.
 
-**What the platform has already taken, and what is left for you.** The controls
-are shared between the SDK and your game, and the SDK went first — so before
-wiring an input, check it is still free:
+**Saves are quota'd**: 100KB per value, 1MB per player, 64 keys. The chat log
+is trimmed to its tail and the rest lives in the companion's summary — which
+is also what stops each turn getting more expensive, since every turn ships
+the history. A game is saved as its starting FEN plus the moves, never as the
+final FEN: a FEN alone loses the repetition history.
 
-| | Taken by the platform | Yours |
-|---|---|---|
-| Touch | left half (thumbstick), right half (camera), the button cluster bottom-right | extra buttons, via `actions` |
-| Mouse | **right button + drag** (camera), and the context menu | **left button** |
-| Keys | `WASD` / arrows, `Space` | everything else |
-| Layers | a full-screen control layer at **`z-index: 10`**, kept clear of the top `max(64px, 12%)` | anything above or below it; `#hud` is already at 20 |
+**A new game is a new conversation; Continue keeps the old one.** The summary
+is written first, so nothing is lost.
 
-**Any dialog you put up must call `input.setEnabled(false)`.** The controls are
-a full-screen layer above your DOM, so a button in a modal renders perfectly
-and cannot be pressed — the taps go to the move zone behind it. Disabling also
-stops the character walking behind the dialog, and clears what was held so a
-thumb mid-push does not resume when it closes. Re-enable when the dialog goes.
-Give the dialog a `z-index` above 10 as well, so it is visible over the layer
-while it is still fading out.
+**The platform decides the language.** `umicat.locale` arrives at handshake.
+Chat is the exception and belongs to the companion. Move notation is never
+translated.
 
-The one that bites: **do not wire an action to "the mouse went down."** The
-right button is the camera now, so a game that attacks on any pointerdown
-swings every time the player turns round to look at something — and it looks
-like a combat bug, not an input one. Check `e.button === 0`. Check
-`e.pointerType !== 'touch'` too, or a phone fires both your handler and the
-on-screen button and you get two swings per tap.
+**`ai` and `microphone` must be declared** in the game's Settings on the
+platform, or the backend rejects AI calls and the iframe blocks the mic.
 
-Text selection and the iOS long-press callout are already suppressed page-wide,
-with form fields exempted — you do not need to repeat it, and you should not
-blanket `user-select: none` yourself, because that is what breaks typing in a
-name field.
+**`let` that the render loop reads must be declared before the loop starts.**
+The loop runs from the first frame, long before the rest of `start()` exists,
+and a `const`/`let` it touches too early is a `ReferenceError` that takes the
+whole game down at boot with a blank screen. It happened twice in the Go game.
 
-**Declare action buttons; never mount your own.**
-`new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] })`, then
-`input.consume('attack')` for one-press-one-action or `input.held('attack')` for
-hold-to-act. A game that builds its own button cannot know where the platform's
-jump button is, and the first one to try landed exactly on top of it: same
-corner, platform layer above, so on a phone the attack button could not be
-pressed at all — and it mounted perfectly, with no error. `consume` also catches
-a tap that starts and ends between two frames, which a state comparison against
-last frame cannot see.
+## Decisions worth not relitigating
 
-**Never write `hud.textContent`.** It wipes every child the HUD has. Append a
-child element instead. The platform's touch controls mount to `<body>` for
-exactly this reason, but anything YOU put in the HUD is still yours to lose.
+- **The eval bar is on by default**, and can be turned off in Settings. The Go
+  game shows the player nothing about who is ahead, on the grounds that a
+  running score turns every move into a verdict. Chess is different in one
+  way: the number is already on every board the player has seen online, so
+  hiding it reads as the game not knowing it rather than as tact.
+- **Two taps, never a drag.** On a phone the finger covers the square it is
+  over, and a mis-drop in chess costs a piece.
+- **Odds instead of a Go handicap.** Taking the engine's queen off is an old
+  and honest way to make a game fair, and it maps onto the same slot in the
+  settings panel.
+- **Promotion is asked, not assumed.** Auto-queening is right almost every
+  time, and the exception — queen is stalemate, rook is mate — is the one a
+  beginner needs to meet.
 
-**A camera limit that is an angle is usually meant to be a distance.** The
-follow camera's pitch floor is expressed as "stay this far above what you are
-looking at", not as a number of radians — at an orbit radius of 5.4 a −0.25rad
-floor puts the camera almost a unit underground, because how low an angle takes
-you depends on how far out you are.
+## Building and checking
 
-**Animate from `character.state`, not from input.** `idle`/`walk`/`jump`/`fall`
-describe what the character is doing; a clip chosen from the key that is held
-leaves it walking in mid-air.
-
-**Gravity is an acceleration, not a displacement.** Feeding a character
-controller a constant downward offset each frame passes a wall test and fails a
-step test. `CharacterController3D` already handles this.
-
-**A character that moves is not a character that is animating.**
-`CharacterAnimator` now owns this — it follows `character.state` and cross-fades
-— but the failure is worth knowing, because it is what a test misses rather than
-what it catches: before the animator existed, the character slid around playing
-its idle clip, and a test asking "are bones moving?" said yes, because idle moves
-bones too. If you ever drive the mixer yourself, the question to ask is *which*
-clip is playing, never *whether* something is.
-
-**Feedback beats numbers.** `flashTint(object, { color, ms })` plus
-`updateTints(objects)` once a frame is the hit flash. It is in the SDK for one
-reason worth knowing even if you never call it: `gltf.scene.clone(true)` SHARES
-MATERIALS, so tinting one of five cloned enemies turns all five red — a
-graphics bug wearing a gameplay bug's clothes. `flashTint` clones per object.
-
-**Sound goes through `GameAudio`, never through `<audio>`.**
-```ts
-const audio = new GameAudio({
-  clips: { coin: { volume: 0.5, throttle: 40 }, hit: { volume: 0.4 } },
-  music: 'bgm',                       // public/audio/bgm.ogg
-});
-audio.play('coin');
+```bash
+npm run dev     # local dev server; the engine works offline, the coach does not
+npm run build   # what the platform runs
 ```
-`HTMLAudioElement` is the trap: iOS gives each one a real audio pipeline, caps
-how many may exist, and charges for every `play()`. A game pooling forty of them
-ran at **11fps on an iPhone and a locked 60 with sound muted** — and a desktop
-A/B showed no difference at all, which is why this belongs to the platform
-rather than to whoever is unlucky. The gesture unlock, the asynchronous
-`resume()`, and iOS suspending the context when the app goes away are all
-handled; `audio.play()` before the first tap is simply a no-op.
 
-**UI is DOM.** There is no reason to draw a score with triangles on the web;
-`index.html` has a `#hud` div for exactly this.
+Playwright probes live in the session scratchpad rather than here; they drive
+the game through `window.__game`, which exposes the board, the engine, the
+companion, the menu and `move('e2','e4')`. Driving it through pixels means
+testing whether you can click a square on a tilted board, which is a test of
+the test.
