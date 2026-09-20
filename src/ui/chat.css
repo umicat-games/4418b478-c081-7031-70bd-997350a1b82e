@@ -127,6 +127,25 @@
   30% { opacity: 0.9; transform: translateY(-3px); }
 }
 
+/* The level meter. Present only while the microphone is open — a meter that is
+   always there, flat, is a meter nobody believes. */
+#chat .wave { display: none; }
+#chat.listening .wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 14px;
+}
+#chat.listening .wave i {
+  width: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: #ff8f86;
+  transition: height 0.06s linear;
+}
+
 #chat .composer {
   display: flex;
   gap: 8px;
