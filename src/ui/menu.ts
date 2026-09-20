@@ -18,6 +18,8 @@ export interface MenuChoice {
   size: BoardSize;
   level: string;
   handicap: number;
+  /** Whether the AI assistant is part of this game at all. */
+  companion: boolean;
 }
 
 export interface MenuOptions {
@@ -30,6 +32,8 @@ export interface MenuOptions {
   onResign(): void;
   onRecentre(): void;
   onTitle(): void;
+  /** Switched mid-game; a new game takes it from `onStart`'s choice. */
+  onCompanion(on: boolean): void;
   onMusic(on: boolean): void;
   onSound(on: boolean): void;
   /** Read back, so the panel shows what is actually true rather than what it
@@ -117,6 +121,14 @@ export class Menu {
     about.textContent = levelAbout(level.id);
     levels.appendChild(about);
     this.el.appendChild(levels);
+
+    // A game-level switch, not a preference: it decides whether this game
+    // talks to a language model at all. Off means no calls, no buttons, no
+    // bubble — see `companion` in main.ts.
+    this.el.appendChild(this.group(t('menu.companion'), [
+      { label: t('menu.on'), on: this.choice.companion, pick: () => { this.choice.companion = true; this.opts.onCompanion(true); this.draw(); } },
+      { label: t('menu.off'), on: !this.choice.companion, pick: () => { this.choice.companion = false; this.opts.onCompanion(false); this.draw(); } },
+    ]));
 
     this.el.appendChild(this.group(t('menu.handicap'), HANDICAPS.map((h) => ({
       label: h === 0 ? t('menu.none') : `${h}`,

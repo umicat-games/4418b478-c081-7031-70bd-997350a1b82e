@@ -180,6 +180,16 @@ async function start(): Promise<void> {
    *  "I've marked it" printed over the mark is the companion contradicting
    *  itself, and transparency alone only half-answers that. */
   let shown: Array<{ x: number; y: number }> = [];
+  /**
+   * Whether this game has an assistant at all.
+   *
+   * ON for every new game, and only a player turning it off turns it off —
+   * it is not a remembered preference, because "I did not want to be talked
+   * to during that game" is not the same as "never talk to me". Off means no
+   * calls to the platform's AI, no bubble, and no buttons that would open one:
+   * a game that costs nothing and says nothing.
+   */
+  let companion = true;
   /** The same list, as the hook writes it. */
   let marks: Array<{ x: number; y: number }> = [];
 
@@ -289,6 +299,7 @@ async function start(): Promise<void> {
   redrawChat();
 
   async function talk(text: string): Promise<void> {
+    if (!companion) return;
     await coach.ask(text, { game, read });
     persist();
   }
@@ -296,7 +307,7 @@ async function start(): Promise<void> {
   /** An unprompted line. `note` is what just happened, in plain words; the
    *  companion decides how, and whether, to react. */
   async function remark(note: string): Promise<void> {
-    if (!game) return;
+    if (!game || !companion) return;
     lastRemarkAt = game.turns.length;
     await coach.remark(note, { game, read });
     persist();
@@ -425,7 +436,8 @@ async function start(): Promise<void> {
    * that no longer exists. Continuing a game keeps the thread, for the same
    * reason in reverse.
    */
-  async function freshGame(size: BoardSize, handicap: number): Promise<void> {
+  async function freshGame(size: BoardSize, handicap: number, withCompanion = true): Promise<void> {
+    setCompanion(withCompanion);
     await coach.newSession();
     spoken = 0;
     redrawChat();
@@ -523,7 +535,7 @@ async function start(): Promise<void> {
     view.setGhost(canPlace ? at : null, HUMAN);
     // Asking about an empty point in the middle of nowhere is not worth a
     // button; asking about a stone, or about a point you could play, is.
-    const canAsk = canPlace || game.board[at.y][at.x] !== null;
+    const canAsk = companion && (canPlace || game.board[at.y][at.x] !== null);
     actions.show(at, canPlace, canAsk);
     actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
   }
@@ -547,14 +559,15 @@ async function start(): Promise<void> {
   hud.appendChild(bar);
 
   const menu = new Menu(
-    { size: coach.profile.boardSize, level: level.id, handicap: 0 },
+    { size: coach.profile.boardSize, level: level.id, handicap: 0, companion: true },
     {
       onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
-      onStart: ({ size, handicap }) => void (async () => {
+      onCompanion: (on) => setCompanion(on),
+      onStart: ({ size, handicap, companion: withCompanion }) => void (async () => {
         // Started from the title, the board is still behind a title screen.
         leaveTitle();
         if (!engineReady) await underCurtain(t('title.loading'), loading);
-        await freshGame(size, handicap);
+        await freshGame(size, handicap, withCompanion);
       })(),
       onHint: () => void hint(),
       onPass: () => {
@@ -608,7 +621,7 @@ async function start(): Promise<void> {
   gear.title = t('btn.setup');
   gear.setAttribute('aria-label', t('btn.setup'));
   gear.onclick = () => {
-    menu.sync({ size: game?.size ?? coach.profile.boardSize, level: level.id }, !!game && !game.over);
+    menu.sync({ size: game?.size ?? coach.profile.boardSize, level: level.id, companion }, !!game && !game.over);
     menu.toggle();
   };
   bar.appendChild(gear);
@@ -729,7 +742,8 @@ async function start(): Promise<void> {
       // Not straight into a game: the board size, the opponent and the
       // handicap are chosen here, and starting without asking is how the
       // choice ended up invisible. The panel's own Start does the rest.
-      menu.sync({ size: coach.profile.boardSize, level: level.id }, false, true);
+      // A new game always OFFERS the assistant, whatever the last game did.
+      menu.sync({ size: coach.profile.boardSize, level: level.id, companion: true }, false, true);
       menu.show();
       return;
     }
@@ -756,6 +770,19 @@ async function start(): Promise<void> {
       }
     }
     await freshGame(coach.profile.boardSize, 0);
+  }
+
+  /** Turn the assistant on or off for this game, and everything that follows
+   *  from it: the buttons that reach it, and whatever it had on screen. */
+  function setCompanion(on: boolean): void {
+    companion = on;
+    logBtn.hidden = !on;
+    if (!on) {
+      speech.hide();
+      askHere.hide();
+      chat.setOpen(false);
+    }
+    refresh();
   }
 
   /** Take the title down and give the board back. */
