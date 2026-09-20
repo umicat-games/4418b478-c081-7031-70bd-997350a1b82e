@@ -127,6 +127,8 @@ const EN = {
   'chat.noCredits': 'I am out of credits, so I will stop talking — the game plays on without me.',
   'chat.lost': 'I lost my train of thought. Ask me again?',
   'chat.marked': 'Marked it on the board.',
+  'chat.liberties': '{point}: {stones} stone(s), {liberties} liberties — {points}. They are ringed on the board.',
+  'chat.libertiesNone': 'There is no stone at {point}, so it has no liberties.',
 
   'score.youWin': 'You win by {margin} points. Black {black}, White {white} ({komi} of that is komi).',
   'score.whiteWins': 'White wins by {margin} points. Black {black}, White {white} ({komi} of that is komi).',
@@ -247,6 +249,8 @@ const ZH: Partial<Record<Key, string>> = {
   'chat.noCredits': '我的额度用完了,先不说话了 —— 棋照样能下。',
   'chat.lost': '我走神了,再问我一次?',
   'chat.marked': '标在棋盘上了。',
+  'chat.liberties': '{point}:{stones} 子,{liberties} 口气 —— {points}。已经在棋盘上圈出来了。',
+  'chat.libertiesNone': '{point} 上没有棋子,所以谈不上气。',
 
   'score.youWin': '你赢了 {margin} 目。黑 {black},白 {white}(其中 {komi} 是贴目)。',
   'score.whiteWins': '白棋赢了 {margin} 目。黑 {black},白 {white}(其中 {komi} 是贴目)。',

@@ -149,11 +149,15 @@ export class Coach {
     }
 
     const did = res.do ?? [];
-    for (const call of did) this.execute(call.name, call.args as Record<string, unknown>);
+    // Whether any of them said something to the player by itself — a timestamp
+    // comparison was tried and is not a signal: two pushes a millisecond apart
+    // look like two different moments.
+    let spoke = false;
+    for (const call of did) spoke = this.execute(call.name, call.args as Record<string, unknown>) || spoke;
 
     const said = (res.say ?? '').trim();
     if (said) { this.messages.push({ from: 'coach', text: said, at: Date.now() }); return; }
-    if (opts.silentIfEmpty) return;
+    if (opts.silentIfEmpty || spoke) return;
 
     // It acted without saying anything — usually marking a point and expecting
     // the mark to speak for itself. It does not: the player asked a question
@@ -167,41 +171,55 @@ export class Coach {
   }
 
   /** Run an intent the model chose. Everything is re-checked here; the model's
-   *  choosing it is a request, not permission. */
-  private execute(name: string, args: Record<string, unknown>): void {
+   *  choosing it is a request, not permission. Returns whether the action
+   *  itself said something to the player. */
+  private execute(name: string, args: Record<string, unknown>): boolean {
     switch (name) {
       case 'set_board_size': {
         const size = Number(args.size);
         if ([9, 13, 19].includes(size) && this.hooks.setBoardSize(size)) this.profile.boardSize = size as 9 | 13 | 19;
-        return;
+        return false;
       }
       case 'set_level': {
         const id = String(args.level ?? '');
         if (LEVELS.some((l) => l.id === id) && this.hooks.setLevel(id)) this.profile.level = id;
-        return;
+        return false;
       }
       case 'start_game': {
         const handicap = Math.max(0, Math.min(5, Number(args.handicap) || 0));
         this.hooks.startGame(handicap);
-        return;
+        return false;
       }
       case 'show_liberties': {
-        const out = this.hooks.showLiberties(String(args.point ?? ''));
-        // Told back to the model as an event, so its NEXT sentence can use the
-        // real number instead of the one it was about to invent.
+        const point = String(args.point ?? '');
+        const out = this.hooks.showLiberties(point);
+        // Told back to the model, so its NEXT sentence can use the real number
+        // rather than one it invented.
         this.npc.note(out
-          ? `[the board] the group at ${args.point} has ${out.stones} stone(s) and ${out.liberties} liberties: ${out.points.join(', ')}`
-          : `[the board] there is no stone at ${args.point}, so it has no liberties`);
-        return;
+          ? `[the board] the group at ${point} has ${out.stones} stone(s) and ${out.liberties} liberties: ${out.points.join(', ')}`
+          : `[the board] there is no stone at ${point}, so it has no liberties`);
+        // AND said out loud, by the game, now. The model asked the question on
+        // the player's behalf and has already finished its turn — waiting for
+        // it to speak again means the player is shown four rings and never
+        // told the number. This is a measurement, so the game states it.
+        this.messages.push({
+          from: 'coach',
+          at: Date.now(),
+          text: out
+            ? t('chat.liberties', { point, stones: out.stones, liberties: out.liberties, points: out.points.join('、') })
+            : t('chat.libertiesNone', { point }),
+        });
+        return true;
       }
       case 'highlight':
         this.hooks.highlight(String(args.points ?? ''));
-        return;
+        return false;
       default:
         // An unknown tool name is the model inventing a capability. Ignoring it
         // is the whole safety story working, so it is worth a line in the log
         // and nothing more.
         console.warn('[coach] ignored unknown action', name);
+        return false;
     }
   }
 
