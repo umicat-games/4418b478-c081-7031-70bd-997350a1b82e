@@ -189,10 +189,21 @@ export class ChatPanel {
       // Deliberately ignored — see above. The meter is the live feedback.
       onPartial: () => { /* the waveform is what moves while they speak */ },
       onFinal: (text) => {
-        this.input.value = text.trim();
-        // Speaking is a whole utterance; making someone then reach for a send
-        // button is asking them to finish the sentence twice.
-        if (this.input.value) this.send();
+        // Into the field, NOT straight out. Recognition mishears, and the
+        // sentences this game gets are full of coordinates — "D4" and "the
+        // top" are exactly what it mangles — so sending unseen means the
+        // companion answers a question nobody asked. They can read it, fix it,
+        // and press send.
+        //
+        // Anything they had typed before reaching for the mic is kept in front
+        // of it: tapping a stone fills the field with "D4: " and then speaking
+        // the question is the natural way to use both.
+        const spoken = text.trim();
+        if (!spoken) return;
+        const prefix = this.draft ? `${this.draft.replace(/\s+$/, '')} ` : '';
+        this.draft = '';
+        this.input.value = prefix + spoken;
+        this.input.focus();
       },
       onError: (kind) => {
         this.input.placeholder = t(kind === 'not-allowed' ? 'chat.micBlocked' : 'chat.micRetry');
