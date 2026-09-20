@@ -93,6 +93,21 @@ None of those are fixed by editing the lesson text.
 5. **How does a lesson end on a phone?** Everything above was designed at 1280
    wide with a mouse.
 
+## What the game has become since
+
+The redesign starts from a different game than the one the course was built
+into, and the parts it should use are already there:
+
+- **The conversation happens on the board.** The assistant answers beside the
+  point it is talking about, with a reply field under it; the player asks about
+  a stone by tapping it. A lesson does not need a panel any more.
+- **The assistant can point and count.** `highlight` rings points and
+  `show_liberties` counts them, with the game — not the model — supplying the
+  number. Most of what the first three lessons explained by hand is now one
+  action away.
+- **A game can have no assistant at all.** Whatever the course becomes, it has
+  to say what happens when the player has turned it off.
+
 ## Where the pieces are
 
 | file | what |

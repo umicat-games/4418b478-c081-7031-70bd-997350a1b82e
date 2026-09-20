@@ -21,10 +21,12 @@ a Web Worker in this browser — no backend, no per-move cost, works signed out.
 Everything factual comes from here: who is ahead, by how many points, what the
 better move was, which points a group's liberties are on.
 
-**The COMPANION** (`src/coach/coach.ts`) talks. It is the platform's runtime AI
+**The ASSISTANT** (`src/coach/coach.ts`) talks. It is the platform's runtime AI
 (ADR-017), handed the engine's numbers to talk *about*. It can point at the
 board — mark points, show liberties, offer a move — and it can change settings.
-It never decides a move and it never puts a stone down.
+It never decides a move and it never puts a stone down. A game can be played
+without it at all (the switch in the new-game panel), and then nothing here
+calls the platform AI and none of the buttons that would are on screen.
 
 This split is the whole trust model. **A language model cannot play Go**: it
 loses track of the board, miscounts liberties, and proposes illegal moves with
@@ -41,11 +43,17 @@ factual, that is the line being crossed.
 | `src/go/opponent.ts` | the engine wrapper, **and the one place strength is decided** |
 | `src/go/scoring.ts` | counting the board from the network's ownership head |
 | `src/go/coords.ts` | `D4` ⇄ `{x,y}` — three conventions disagree, see the file |
-| `src/coach/coach.ts` | the companion: actions, observation, memory |
+| `src/coach/coach.ts` | the assistant: actions, observation, memory |
 | `public/playbooks/coach.md` | **its persona and rules, as editable prose** |
 | `src/view/board3d.ts` | the board drawn, the camera, hit-testing |
 | `src/view/controls.ts` | pointer handling: choose a point vs move the camera |
-| `src/ui/*` | chat, speech bubble, settings, title, point actions, curtain |
+| `src/ui/speech.ts` | what it says, on the board, with the reply field |
+| `src/ui/askhere.ts` | asking about a point, at the point |
+| `src/ui/pointactions.ts` | confirm / cancel / ask, beside the stone |
+| `src/ui/dictation.ts` | voice + level meter, shared by every field |
+| `src/ui/chat.ts` | the log, opened from the corner |
+| `src/ui/menu.ts` | the one panel: new game AND settings |
+| `src/ui/buttons.css` | **how a button looks** — `lift` and `chip` |
 | `src/audio.ts` | which clips, how loud |
 | `src/save.ts` | what survives leaving, and the quotas that shape it |
 | `src/engine/` | **vendored KataGo** — frozen, see `vendor/VENDOR.md` |
@@ -86,7 +94,30 @@ The loop runs from the first frame, long before the rest of `start()` exists,
 and a `const`/`let` it touches too early is a `ReferenceError` that takes the
 whole game down at boot with a blank screen. This has happened twice.
 
-**The companion's `[C3]` markers aim the speech bubble.** A sentence it opens
+**Nothing is played by pointing at it.** Choosing a point shows a ghost and
+three buttons beside it — confirm, cancel, ask. Both devices work this way:
+one-tap placement on a 19x19 is a game that loses itself to a fat finger, and
+two rules (tap-to-place on a mouse, aim-and-confirm on touch) is one rule too
+many to describe.
+
+**The conversation happens ON the board.** The assistant's reply is a bubble
+beside the point it is about, with a reply field on its last page; asking about
+a stone opens a composer at that stone. The panel on the right is for reading
+back through what was said, and it opens from the corner. Anything that makes
+the player open the panel to continue a conversation is a regression.
+
+**Marks and focus are different things.** `setHighlights` is the assistant's
+own marking (cyan); `setFocus` is the point the current sentence is about
+(gold), and the bubble sets it on every page. They shared one list once, and a
+sentence with no coordinate in it cleared the rings the assistant had just
+drawn — so `highlight` worked and was invisible.
+
+**Never report a mark that did not happen.** `highlight` returns how many
+points it actually marked; zero says so, to the player and to the model. "I've
+marked it" over an unchanged board sends the player looking for something that
+is not there.
+
+**The assistant's `[C3]` markers aim the speech bubble.** A sentence it opens
 with `[C3]` is shown beside C3 with the point lit; without a marker, a
 coordinate in the text is used; with neither, the middle of the board. Strip
 them anywhere the line is shown as prose (`stripAnchors`).
@@ -95,6 +126,14 @@ them anywhere the line is shown as prose (`stripAnchors`).
 model asked to count them off a text board answers confidently and wrongly.
 The same rule applies to anything else that must be *correct* rather than
 *fluent*.
+
+**The board draws only when it changes.** A Go board between moves is a still
+life, and redrawing it sixty times a second costs the core the ENGINE wants.
+Every mutator sets `dirty`; `render()` returns whether it drew, and the DOM
+overlays pinned to board points follow that signal. If something on the board
+stops updating, look for a mutator that forgot to invalidate — and note that
+panels using `backdrop-filter` need the canvas to repaint too, which is what
+`repaintSoon()` in main.ts is for.
 
 **Saves are quota'd**: 100KB per value, 1MB per player, 64 keys. The chat log
 is trimmed to its tail and the rest lives in the companion's summary — which is
@@ -112,6 +151,9 @@ belongs to the companion: it replies in whatever it is written to.
 platform, or the backend rejects AI calls and the iframe blocks the mic.
 
 ## Building and checking
+
+Sound is Kenney CC0 except the music; `public/audio/CREDITS.md` says which
+clip is which and why poker chips are the closest thing to slate on wood.
 
 ```bash
 npm run dev       # local dev server (needs public/models/, see above)
