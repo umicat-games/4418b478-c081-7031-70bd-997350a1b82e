@@ -64,7 +64,25 @@
   flex-direction: column;
   gap: 8px;
 }
-#chat.open .pill { border-radius: 14px 14px 0 0; }
+/* Open, the bar is a header, not a preview: the newest line is right there in
+   the log two centimetres below it, and showing it twice is the same sentence
+   on screen twice. Collapse on the left, who you are talking to in the middle,
+   nothing else.
+
+   A three-column grid so the name is centred on the PANEL rather than on
+   whatever is left over beside the button. */
+#chat.open .pill {
+  border-radius: 14px 14px 0 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+#chat.open .pill .text { display: none; }
+/* Both pinned to row 1. With only a column given, auto-placement puts the
+   collapse link on a SECOND row — it comes after the name in the markup, and
+   by then the cursor has already passed column one. */
+#chat.open .pill .more { grid-area: 1 / 1; justify-self: start; }
+#chat.open .pill .who { grid-area: 1 / 2; }
 
 #chat .log {
   flex: 1;
