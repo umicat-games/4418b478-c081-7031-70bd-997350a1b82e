@@ -43,6 +43,9 @@ export class ChatPanel {
    *  the recent past, not of this instant, or it reads as a flicker. */
   private levels: number[] = [];
   private waveFrame = 0;
+  /** Whatever was half-typed when the mic was opened, to be put back if the
+   *  player says nothing and it closes again. */
+  private draft = '';
   /** The bubble on the board is saying this already. */
   private echoed = false;
 
@@ -175,8 +178,16 @@ export class ChatPanel {
     this.micBtn.innerHTML = STOP;
     this.micBtn.title = t('chat.stopRecording');
     this.el.classList.add('listening');
+    // The field belongs to the meter while the mic is open. A partial
+    // transcript rewriting itself under a waveform is two things moving in the
+    // same small box, and neither can be read; the words arrive when they are
+    // final, which is the only version worth reading anyway.
+    this.draft = this.input.value;
+    this.input.value = '';
+    this.input.placeholder = '';
     const session = await this.umicat.voice.start(this.umicat.locale === 'zh-CN' ? 'zh-CN' : 'en-US', {
-      onPartial: (text) => { this.input.value = text; },
+      // Deliberately ignored — see above. The meter is the live feedback.
+      onPartial: () => { /* the waveform is what moves while they speak */ },
       onFinal: (text) => {
         this.input.value = text.trim();
         // Speaking is a whole utterance; making someone then reach for a send
@@ -235,6 +246,10 @@ export class ChatPanel {
     this.micBtn.innerHTML = MIC;
     this.micBtn.title = t('chat.speak');
     this.el.classList.remove('listening');
+    this.input.placeholder = t('chat.ask');
+    // Nothing was said: give them back what they had been typing.
+    if (!this.input.value && this.draft) this.input.value = this.draft;
+    this.draft = '';
   }
 
   /** Whether the panel currently covers part of the screen, so the board can

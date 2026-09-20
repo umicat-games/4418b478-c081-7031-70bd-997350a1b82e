@@ -132,20 +132,19 @@
    Present only while the microphone is open: a meter that is always there,
    flat, is a meter nobody believes.
 
-   It grows from the bottom of the field and the text sits above it, so a
-   partial transcript and the proof that the mic is live can be read at once. */
+   The field is EITHER words or the meter, never both: a partial transcript
+   rewriting itself under a moving waveform is two things in one small box and
+   neither can be read. The words arrive when they are final, which is the only
+   version worth reading. */
 #chat .field { position: relative; flex: 1; min-width: 0; display: flex; }
 #chat .field input { width: 100%; }
 
 #chat .wave { display: none; }
 #chat.listening .wave {
   position: absolute;
-  left: 15px;
-  right: 15px;
-  bottom: 5px;
-  height: 16px;
+  inset: 0 15px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   gap: 3px;
   pointer-events: none;
@@ -153,6 +152,8 @@
 #chat.listening .wave i {
   width: 4px;
   height: 3px;
+  /* Centred and growing both ways, now that nothing shares the field. */
+  align-self: center;
   border-radius: 2px;
   background: #ff8f86;
   transition: height 0.06s linear;
