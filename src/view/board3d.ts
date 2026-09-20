@@ -88,8 +88,17 @@ export class BoardView {
   private stones: Record<'black' | 'white', THREE.InstancedMesh> | null = null;
   private marker: THREE.Mesh;
   private ghostMesh: THREE.Mesh;
-  /** Rings the coach points with. One mesh per marked point, pooled. */
+  /** Rings the companion points with. One mesh per marked point, pooled. */
   private highlights: THREE.Mesh[] = [];
+  /**
+   * The point the sentence on screen is about.
+   *
+   * Kept apart from the marks above, and that separation is the whole reason
+   * this exists: the bubble sets its anchor on every page, and when it shared
+   * the marks, a sentence with no coordinate in it cleared the ring the
+   * companion had just drawn — so `highlight` appeared to do nothing at all.
+   */
+  private focusRing: THREE.Mesh | null = null;
   /** Territory marks, shown only once the game is counted. */
   private territory: Record<'black' | 'white', THREE.InstancedMesh> | null = null;
   /** Keys of stones the count found dead, so they can be drawn as removed. */
@@ -321,7 +330,27 @@ export class BoardView {
     return { x, y };
   }
 
-  /** Mark points the coach is talking about. Empty clears. */
+  /** The point the current sentence is about. Null clears it, and clears only
+   *  it — the companion's own marks are untouched. */
+  setFocus(at: { x: number; y: number } | null): void {
+    this.dirty = true;
+    if (!this.focusRing) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.52, 0.055, 8, 28),
+        new THREE.MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.9 }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      this.scene.add(ring);
+      this.focusRing = ring;
+    }
+    this.focusRing.visible = !!at;
+    if (!at) return;
+    this.focusRing.scale.setScalar(this.spacing);
+    const p = this.at(at.x, at.y);
+    this.focusRing.position.set(p.x, TOP_Y + this.spacing * 0.44, p.z);
+  }
+
+  /** Mark points the companion is talking about. Empty clears. */
   setHighlights(points: Array<{ x: number; y: number }>): void {
     this.dirty = true;
     while (this.highlights.length < points.length) {

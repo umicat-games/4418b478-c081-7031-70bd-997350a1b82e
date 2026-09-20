@@ -65,11 +65,17 @@ export interface ChatMessage { from: 'coach' | 'player'; text: string; at: numbe
 export interface CoachHooks {
   setBoardSize(size: number): boolean;
   /** Mark a group's liberties and report them back. Null if there is no stone
-   *  at that point — which is a thing the model will ask for. */
-  showLiberties(at: { x: number; y: number }): { liberties: number; stones: number; points: string[] } | null;
+   *  at that point — which is a thing the model will ask for.
+   *
+   *  Takes the point AS WRITTEN. Parsing it here would need a board size, and
+   *  the only one available is the profile's, which is a remembered preference
+   *  rather than the board on screen — a continued 13x13 game left it reading
+   *  coordinates against a 9x9 and quietly finding nothing. */
+  showLiberties(point: string): { liberties: number; stones: number; points: string[] } | null;
   setLevel(level: string): boolean;
   startGame(handicap: number): boolean;
-  highlight(points: Array<{ x: number; y: number }>): void;
+  /** Mark these points, as written ("D4,E4"); empty clears. */
+  highlight(points: string): void;
 }
 
 export class Coach {
@@ -180,8 +186,7 @@ export class Coach {
         return;
       }
       case 'show_liberties': {
-        const at = fromGtpSafe(String(args.point ?? ''), this.profile.boardSize);
-        const out = at ? this.hooks.showLiberties(at) : null;
+        const out = this.hooks.showLiberties(String(args.point ?? ''));
         // Told back to the model as an event, so its NEXT sentence can use the
         // real number instead of the one it was about to invent.
         this.npc.note(out
@@ -189,15 +194,9 @@ export class Coach {
           : `[the board] there is no stone at ${args.point}, so it has no liberties`);
         return;
       }
-      case 'highlight': {
-        const size = this.profile.boardSize;
-        const points = String(args.points ?? '')
-          .split(',')
-          .map((s) => fromGtpSafe(s, size))
-          .filter((p): p is { x: number; y: number } => !!p);
-        this.hooks.highlight(points);
+      case 'highlight':
+        this.hooks.highlight(String(args.points ?? ''));
         return;
-      }
       default:
         // An unknown tool name is the model inventing a capability. Ignoring it
         // is the whole safety story working, so it is worth a line in the log
@@ -264,13 +263,7 @@ export class Coach {
   }
 }
 
-const fromGtpSafe = (s: string, size: number): { x: number; y: number } | null => {
-  const m = /^\s*([A-HJ-Ta-hj-t])\s*(\d{1,2})\s*$/.exec(s);
-  if (!m) return null;
-  const x = 'ABCDEFGHJKLMNOPQRST'.indexOf(m[1].toUpperCase());
-  const y = size - Number(m[2]);
-  return x >= 0 && x < size && y >= 0 && y < size ? { x, y } : null;
-};
+
 
 /**
  * What the coach can see this turn.

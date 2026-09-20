@@ -24,7 +24,7 @@ import { ThreeUmicat } from '@umicat/three-sdk';
 import { BoardView } from './view/board3d';
 import { attachBoardControls } from './view/controls';
 import { GoGame, type BoardSize } from './go/rules';
-import { toGtp } from './go/coords';
+import { fromGtp, toGtp } from './go/coords';
 import { LEVELS, Opponent, levelById, levelLabel, type Read } from './go/opponent';
 import { describe as describeScore, scoreFrom, type Score } from './go/scoring';
 import { getLiberties } from './engine/utils/gameLogic';
@@ -70,13 +70,16 @@ async function start(): Promise<void> {
   const speech = new Speech({
     onPage: (page) => {
       // The point being talked about lights up for exactly as long as the
-      // sentence about it is on screen.
-      view.setHighlights(page.at ? [page.at] : []);
+      // sentence about it is on screen — as a FOCUS, not as a mark. Sharing
+      // the marks meant a sentence with no coordinate in it cleared the ring
+      // the companion had just drawn with `highlight`, so marking a point
+      // appeared to do nothing at all.
+      view.setFocus(page.at ?? null);
       chat.setEchoed(true);
       placeSpeech();
     },
     onDone: () => {
-      view.setHighlights([]);
+      view.setFocus(null);
       chat.setEchoed(false);
     },
     // The companion names points it is NOT suggesting — White's reply, a dead
@@ -172,13 +175,16 @@ async function start(): Promise<void> {
       void freshGame(coach.profile.boardSize, handicap);
       return true;
     },
-    highlight: (points) => view.setHighlights(points),
+    // Parsed HERE, against the board that is actually on screen. The coach
+    // hands the points over as it wrote them.
+    highlight: (points) => view.setHighlights(parsePoints(points)),
     // The companion asks for a group's liberties; the GAME counts them. A model
     // asked to count liberties on a board it cannot really see will answer
     // confidently and be wrong, and that number is the whole point here.
-    showLiberties: (at) => {
+    showLiberties: (point) => {
       const board = game;
-      if (!board || board.board[at.y]?.[at.x] == null) return null;
+      const at = board ? fromGtp(point, board.size) : null;
+      if (!board || !at || board.board[at.y]?.[at.x] == null) return null;
       const { liberties, group } = getLiberties(board.board, at.x, at.y);
       const seen = new Set<string>();
       const marks: Array<{ x: number; y: number }> = [];
@@ -236,6 +242,15 @@ async function start(): Promise<void> {
     persist();
   }
 
+  /** Points as the companion writes them ("D4,E4"), against the live board. */
+  function parsePoints(points: string): Array<{ x: number; y: number }> {
+    if (!game) return [];
+    return points
+      .split(',')
+      .map((p) => fromGtp(p, game!.size))
+      .filter((p): p is { x: number; y: number } => !!p);
+  }
+
   /**
    * The player pointing back.
    *
@@ -246,7 +261,7 @@ async function start(): Promise<void> {
    */
   function askAbout(at: { x: number; y: number }): void {
     if (!game) return;
-    view.setHighlights([at]);
+    view.setFocus(at);
     chat.prefill(`${toGtp(at.x, at.y, game.size)}: `);
   }
 
@@ -307,6 +322,7 @@ async function start(): Promise<void> {
     coach.profile.boardSize = size;
     view.setBoardSize(size);
     view.setHighlights([]);
+    view.setFocus(null);
     view.setTerritory(null, [], game);
     actions.hide();
     view.setGhost(null, HUMAN);
@@ -391,6 +407,7 @@ async function start(): Promise<void> {
     actions.hide();
     view.setGhost(null, HUMAN);
     view.setHighlights([]);
+    view.setFocus(null);
     refresh();
     persist();
 
@@ -624,6 +641,8 @@ async function start(): Promise<void> {
       if (game && !game.over) { refresh(); void observePosition(); return; }
       if (stored) {
         game = GoGame.restore(stored);
+        // What is on the board wins over what was last chosen in the panel.
+        coach.profile.boardSize = game.size;
         view.setBoardSize(game.size);
         refresh();
         void observePosition();
