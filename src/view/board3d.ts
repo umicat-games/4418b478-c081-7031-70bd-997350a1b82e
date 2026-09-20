@@ -75,6 +75,15 @@ export class BoardView {
   private size = 9;
   private spacing = 0;
   private margin = 0;
+  /**
+   * Whether the picture on screen is out of date.
+   *
+   * A Go board does not move between moves. Drawing it sixty times a second
+   * anyway costs a whole core — and on this game that is a core taken away
+   * from the ENGINE, which is the thing the player is actually waiting for. So
+   * the loop draws when something has changed and otherwise does nothing.
+   */
+  private dirty = true;
   private board: THREE.Mesh | null = null;
   private stones: Record<'black' | 'white', THREE.InstancedMesh> | null = null;
   private marker: THREE.Mesh;
@@ -144,7 +153,15 @@ export class BoardView {
   /** Build (or rebuild) the board for a size. Cheap enough to call on a size
    *  change; there is nothing to reuse between a 9x9 and a 19x19 grid. */
   setBoardSize(size: number): void {
+    // Already this size: do nothing at all. Rebuilding is not free and it is
+    // not invisible — the grain is drawn with random strokes, so a rebuild
+    // gives the board a DIFFERENT piece of wood, and it takes the ghost stone
+    // and anything pinned to a point with it. "Set it to what it already is"
+    // arrives from the companion, which will happily agree to play on the
+    // board that is already in front of it.
+    if (size === this.size && this.board) return;
     this.size = size;
+    this.dirty = true;
     ({ spacing: this.spacing, margin: this.margin } = metrics(size));
 
     if (this.board) {
@@ -213,6 +230,7 @@ export class BoardView {
   /** Put the board on screen in the state the game is in. */
   sync(game: GoGame): void {
     if (!this.stones) return;
+    this.dirty = true;
     if (game.size !== this.size) this.setBoardSize(game.size);
 
     const m = new THREE.Matrix4();
@@ -247,6 +265,7 @@ export class BoardView {
 
   /** Show (or hide) the uncommitted stone. */
   setGhost(at: Picked | null, player: 'black' | 'white'): void {
+    this.dirty = true;
     this.ghostMesh.visible = !!at;
     if (!at) return;
     const mat = this.ghostMesh.material as THREE.MeshStandardMaterial;
@@ -304,6 +323,7 @@ export class BoardView {
 
   /** Mark points the coach is talking about. Empty clears. */
   setHighlights(points: Array<{ x: number; y: number }>): void {
+    this.dirty = true;
     while (this.highlights.length < points.length) {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(0.46, 0.07, 8, 28),
@@ -333,6 +353,7 @@ export class BoardView {
    * the board back to how it plays.
    */
   setTerritory(owner: number[] | null, dead: Array<{ x: number; y: number }> = [], game?: GoGame): void {
+    this.dirty = true;
     this.dead = new Set(dead.map((d) => `${d.x},${d.y}`));
     if (game) this.sync(game);
     if (!this.territory) return;
@@ -403,6 +424,7 @@ export class BoardView {
    * and a window resize all go through one piece of arithmetic.
    */
   private place(): void {
+    this.dirty = true;
     const w = window.innerWidth, h = window.innerHeight;
     const vFov = THREE.MathUtils.degToRad(FOV_DEG);
     // A first guess from the board's bounding sphere: always far enough, often
@@ -458,9 +480,17 @@ export class BoardView {
     this.place();
   }
 
-  render(): void {
+  /** Draw, if there is anything new to draw. Returns whether it did, so the
+   *  DOM overlays pinned to board points know when to follow. */
+  render(): boolean {
+    if (!this.dirty) return false;
+    this.dirty = false;
     this.renderer.render(this.scene, this.camera);
+    return true;
   }
+
+  /** Something changed; draw on the next frame. */
+  invalidate(): void { this.dirty = true; }
 }
 
 /** One squashed sphere, shared by every stone on the board. */

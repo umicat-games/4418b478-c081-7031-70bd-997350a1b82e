@@ -119,9 +119,13 @@ async function start(): Promise<void> {
 
   const frame = (): void => {
     if (idleSpin) view.orbit(0.0012, 0);
-    if (speech.showing) placeSpeech();
-    if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
-    view.render();
+    // Only when the picture actually changed. Between two moves a Go board is
+    // a still life, and redrawing it sixty times a second takes a core off the
+    // engine — which is the thing the player is waiting for.
+    if (view.render()) {
+      if (speech.showing) placeSpeech();
+      if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
+    }
     requestAnimationFrame(frame);
   };
   frame();
@@ -152,12 +156,22 @@ async function start(): Promise<void> {
 
   const coach = new Coach(umicat, {
     setBoardSize: (size) => {
+      // Agreeing with the board it is already looking at must do nothing. It
+      // used to start a new game, which rebuilt the board under a player who
+      // was mid-tap: new grain, ghost gone, the confirm buttons gone with it.
+      if (game && game.size === size) return true;
       if (game && !game.over && game.turns.length > 0) return false;
       newGame(size as BoardSize, 0);
       return true;
     },
     setLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); return true; },
-    startGame: (handicap) => { void freshGame(coach.profile.boardSize, handicap); return true; },
+    startGame: (handicap) => {
+      // A game nobody has moved in IS a new game. Starting another one throws
+      // away the conversation that has just begun about this one.
+      if (game && !game.over && game.turns.length === 0 && handicap === game.handicap) return true;
+      void freshGame(coach.profile.boardSize, handicap);
+      return true;
+    },
     highlight: (points) => view.setHighlights(points),
     // The companion asks for a group's liberties; the GAME counts them. A model
     // asked to count liberties on a board it cannot really see will answer
