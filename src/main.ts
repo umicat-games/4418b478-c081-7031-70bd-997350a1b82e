@@ -87,7 +87,7 @@ async function start(): Promise<void> {
     document.addEventListener(type, repaintSoon, true);
   }
 
-  const speech = new Speech({
+  const speech = new Speech(umicat, {
     onPage: (page) => {
       // The point being talked about lights up for exactly as long as the
       // sentence about it is on screen — as a FOCUS, not as a mark. Sharing
@@ -107,6 +107,9 @@ async function start(): Promise<void> {
     // appears only where a stone could actually go, this turn.
     canPlay: (at) => !!game && !game.over && !thinking && game.toPlay === HUMAN && game.legal(at.x, at.y),
     onPlay: (at) => commit(at),
+    // Answering from the box the answer arrived in, rather than opening the
+    // log to type. The box then waits in place and the next reply replaces it.
+    onReply: (text) => void talk(text),
   });
 
   /** Confirm / cancel / ask, beside the stone rather than in a corner. */
