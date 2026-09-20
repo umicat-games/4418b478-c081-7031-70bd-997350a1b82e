@@ -53,9 +53,8 @@ export class ChatPanel {
     this.el.innerHTML = `
       <div class="pill"><span class="who"></span><span class="text"></span><span class="more"></span></div>
       <div class="log"></div>
-      <div class="wave"></div>
       <div class="composer">
-        <input type="text" autocomplete="off" />
+        <div class="field"><div class="wave"></div><input type="text" autocomplete="off" /></div>
         <button class="mic lift dark" hidden>${MIC}</button>
         <button class="send lift" title="Send">${SEND}</button>
       </div>`;

@@ -127,16 +127,28 @@
   30% { opacity: 0.9; transform: translateY(-3px); }
 }
 
-/* The level meter. Present only while the microphone is open — a meter that is
-   always there, flat, is a meter nobody believes. */
+/* The level meter, INSIDE the field it is filling in — the place the player is
+   already looking, because that is where their words are about to appear.
+   Present only while the microphone is open: a meter that is always there,
+   flat, is a meter nobody believes.
+
+   It grows from the bottom of the field and the text sits above it, so a
+   partial transcript and the proof that the mic is live can be read at once. */
+#chat .field { position: relative; flex: 1; min-width: 0; display: flex; }
+#chat .field input { width: 100%; }
+
 #chat .wave { display: none; }
 #chat.listening .wave {
+  position: absolute;
+  left: 15px;
+  right: 15px;
+  bottom: 5px;
+  height: 16px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   gap: 3px;
-  height: 24px;
-  padding: 0 14px;
+  pointer-events: none;
 }
 #chat.listening .wave i {
   width: 4px;
@@ -145,6 +157,8 @@
   background: #ff8f86;
   transition: height 0.06s linear;
 }
+/* The field says it is listening, so the placeholder does not have to. */
+#chat.listening .field input { border-color: rgba(255, 143, 134, 0.75); }
 
 #chat .composer {
   display: flex;
