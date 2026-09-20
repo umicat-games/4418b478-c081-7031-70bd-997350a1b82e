@@ -215,11 +215,15 @@ export class BoardView {
     this.tints.check = [mk(0xff4b3e, 0.48)];
 
     // Dots and rings for where a picked-up piece can go.
-    const dot = new THREE.CircleGeometry(SQUARE * 0.16, 20).rotateX(-Math.PI / 2);
-    const ring = new THREE.RingGeometry(SQUARE * 0.40, SQUARE * 0.48, 28).rotateX(-Math.PI / 2);
+    const dot = new THREE.CircleGeometry(SQUARE * 0.19, 20).rotateX(-Math.PI / 2);
+    const ring = new THREE.RingGeometry(SQUARE * 0.38, SQUARE * 0.48, 28).rotateX(-Math.PI / 2);
+    // The same green as the square the piece is standing on, so the whole
+    // thing reads as one sentence: this piece, these squares. A neutral dark
+    // dot was tried and it disappears on the dark squares, which is half the
+    // board — the exact half a beginner most needs the help on.
     const target = (geo: THREE.BufferGeometry): THREE.InstancedMesh => {
       const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({
-        color: 0x2f3b33, transparent: true, opacity: 0.42, depthWrite: false,
+        color: 0x7fe08a, transparent: true, opacity: 0.62, depthWrite: false,
       }), 32);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.renderOrder = 2;
