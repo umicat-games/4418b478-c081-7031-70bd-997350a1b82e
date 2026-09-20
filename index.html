@@ -51,9 +51,12 @@
          the panel's corner is a gear behind it. Lifted for as long as it is
          there, and only then. */
       body.chatting #hud { z-index: 26; }
+      /* Inside the log's bottom-right corner, with room around it. The first
+         version put it ON the panel's bottom edge — the composer sits 54px up,
+         so clearing the composer is not the same as clearing the box above it. */
       body.chatting #hud .bar {
-        left: auto; right: max(16px, env(safe-area-inset-right));
-        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 54px);
+        left: auto; right: calc(max(12px, env(safe-area-inset-right)) + 16px);
+        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 74px);
         position: fixed; margin: 0;
       }
       body.chatting #hud .status, body.chatting #hud .tip { max-width: 46vw; }
