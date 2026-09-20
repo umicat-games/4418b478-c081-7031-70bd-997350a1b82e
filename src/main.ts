@@ -224,6 +224,13 @@ async function start(): Promise<void> {
     }
   };
 
+  // Draw what came back from the save, ONCE, now. The panel only ever redraws
+  // when somebody speaks, and "Continue" is the one path where nobody does —
+  // so without this the restored conversation sat in memory with an empty
+  // panel in front of it. (`spoken` is already at the restored count, so this
+  // does not read any of it out loud.)
+  redrawChat();
+
   async function talk(text: string): Promise<void> {
     redrawChat();
     await coach.ask(text, { game, read });
