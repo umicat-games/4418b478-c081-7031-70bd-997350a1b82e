@@ -22,23 +22,15 @@
 
 #pointactions button {
   pointer-events: auto;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: rgba(16, 20, 28, 0.86);
-  color: #fff;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 #pointactions button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-#pointactions button.ok { background: #2f6f62; border-color: #7fd6c2; }
-#pointactions button.ask { background: rgba(16, 20, 28, 0.86); border-color: rgba(127, 214, 194, 0.7); }
-#pointactions button:hover { filter: brightness(1.2); }
+#pointactions button.ask { --top: rgba(127,214,194,.5); }
 #pointactions button[hidden] { display: none; }
 
 /* The gap the stone sits in. Width is set from the board's line spacing, so

@@ -9,6 +9,7 @@
 // player can point back. Tapping a stone and asking about THAT is how a person
 // sitting at a board asks a question, and it beats typing a coordinate they
 // have to work out first.
+import './buttons.css';
 import './pointactions.css';
 
 const TICK = '<svg viewBox="0 0 24 24"><path d="M5 13l4.5 4.5L19 7"/></svg>';
@@ -33,10 +34,10 @@ export class PointActions {
     this.el.id = 'pointactions';
     this.el.hidden = true;
     this.el.innerHTML =
-      `<button class="ok" title="Place">${TICK}</button>`
+      `<button class="ok lift" title="Place">${TICK}</button>`
       + '<span class="gap"></span>'
-      + `<button class="no" title="Cancel">${CROSS}</button>`
-      + `<button class="ask" title="Ask">${ASK}</button>`;
+      + `<button class="no lift dark" title="Cancel">${CROSS}</button>`
+      + `<button class="ask lift dark" title="Ask">${ASK}</button>`;
     document.body.appendChild(this.el);
 
     this.okBtn = this.el.querySelector('.ok')!;

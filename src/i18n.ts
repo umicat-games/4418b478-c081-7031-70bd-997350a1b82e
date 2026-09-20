@@ -111,6 +111,9 @@ const EN = {
   'menu.startNew': 'Start a new game',
   'menu.note': 'Board and head start apply to the next game.',
   'menu.toTitle': 'Back to title',
+  'menu.sound': 'Sound',
+  'menu.music': 'Music',
+  'menu.effects': 'Effects',
 
   'chat.coach': 'Coach',
   'chat.ask': 'Ask the coach…',
@@ -227,6 +230,9 @@ const ZH: Partial<Record<Key, string>> = {
   'menu.startNew': '新开一局',
   'menu.note': '棋盘和让子从下一局开始生效。',
   'menu.toTitle': '返回标题',
+  'menu.sound': '声音',
+  'menu.music': '音乐',
+  'menu.effects': '音效',
 
   'chat.coach': '老师',
   'chat.ask': '问老师…',

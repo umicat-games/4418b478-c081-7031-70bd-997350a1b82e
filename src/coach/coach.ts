@@ -47,6 +47,9 @@ export interface Profile {
    *  `summarise()` and fed back in as observation — this IS the long memory. */
   summary: string;
   gamesPlayed: number;
+  /** Sound settings, off only when the player has turned them off. */
+  music?: boolean;
+  sound?: boolean;
   /** They have put a stone on a board at least once — so the "how to place a
    *  stone" line can go away and stay away. */
   placed?: boolean;

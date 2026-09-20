@@ -23,6 +23,7 @@
 // and `do` is a flat list of calls with nothing tying a call to a sentence, so
 // three `focus` calls could not say WHICH line each belonged to. The marker
 // travels with the sentence it is about.
+import './buttons.css';
 import './speech.css';
 import { fromGtp, toGtp } from '../go/coords';
 import { t } from '../i18n';
@@ -153,7 +154,7 @@ export class Speech {
     this.el.id = 'speech';
     this.el.hidden = true;
     this.el.innerHTML = '<span class="who"></span><div class="text"></div>'
-      + '<button class="play" hidden></button><span class="more"></span>';
+      + '<button class="play lift" hidden></button><span class="more"></span>';
     document.body.appendChild(this.el);
     this.textEl = this.el.querySelector('.text')!;
     this.moreEl = this.el.querySelector('.more')!;

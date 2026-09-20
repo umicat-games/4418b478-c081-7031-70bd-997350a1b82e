@@ -40,13 +40,8 @@
       }
       #hud .tip:empty { display: none; }
       #hud .bar { display: flex; gap: 8px; margin-top: 10px; pointer-events: auto; flex-wrap: wrap; max-width: 46vw; }
-      #hud button {
-        font: 600 14px/1 system-ui, sans-serif; color: #fff;
-        background: rgba(16,20,28,.62); border: 1px solid rgba(255,255,255,.5);
-        border-radius: 999px; padding: 9px 14px; cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-      }
-      #hud button:hover { background: rgba(16,20,28,.8); }
+      /* The gear is the only button out here; how it LOOKS is buttons.css,
+         which the modules import. */
       #hud button[hidden] { display: none; }
       /* While the title is up, the game's own furniture is not. */
       body.titling #hud, body.titling #chat, body.titling #speech { display: none; }

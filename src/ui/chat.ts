@@ -4,6 +4,7 @@
 // It knows nothing about Go and nothing about the AI. It shows messages and
 // reports what the player typed or said — so the coach can be swapped, muted or
 // unavailable (signed out, out of credits) without any of that reaching here.
+import './buttons.css';
 import './chat.css';
 import { t } from '../i18n';
 import { stripAnchors } from './speech';
@@ -42,8 +43,8 @@ export class ChatPanel {
       <div class="log"></div>
       <div class="composer">
         <input type="text" autocomplete="off" />
-        <button class="mic" title="Speak" hidden>${MIC}</button>
-        <button class="send" title="Send">${SEND}</button>
+        <button class="mic lift dark" title="Speak" hidden>${MIC}</button>
+        <button class="send lift" title="Send">${SEND}</button>
       </div>`;
     document.body.appendChild(this.el);
 

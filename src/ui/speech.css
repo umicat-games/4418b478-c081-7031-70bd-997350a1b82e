@@ -83,13 +83,6 @@
   display: block;
   margin: 9px 0 0;
   padding: 7px 13px;
-  border-radius: 999px;
-  border: 1px solid #5fb9a4;
-  background: rgba(47, 111, 98, 0.85);
-  color: #fff;
-  font: 600 13px/1 system-ui, sans-serif;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  font-size: 13px;
 }
-#speech .play:hover { filter: brightness(1.15); }
 #speech .play[hidden] { display: none; }

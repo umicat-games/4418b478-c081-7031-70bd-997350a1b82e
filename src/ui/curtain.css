@@ -1,0 +1,36 @@
+/* The handover between one thing and the next.
+ *
+ * It exists for one measured case: the engine's 4MB network is still arriving
+ * when someone presses Continue on a fast tap. Without a curtain the board
+ * appears, the player plays, and their stone sits there while a download they
+ * were never told about finishes — which looks like the game ignoring them.
+ * With one, the wait is a wait, and it says what it is waiting for. */
+
+#curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 45; /* over everything, including the title */
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  justify-items: center;
+  background: rgba(10, 12, 16, 0.92);
+  color: #f4f5f7;
+  font: 14px/1.5 system-ui, -apple-system, sans-serif;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  pointer-events: all;
+}
+#curtain.on { opacity: 1; }
+
+#curtain .spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.16);
+  border-top-color: #7fd6c2;
+  animation: curtain-spin 0.9s linear infinite;
+}
+#curtain .label { opacity: 0.75; }
+
+@keyframes curtain-spin { to { transform: rotate(360deg); } }

@@ -8,6 +8,7 @@
 // Board size and handicap stage a choice and apply to the NEXT game; the level
 // applies at once, because it is the next move that gets harder, not the
 // position. The panel says so rather than leaving it to be discovered.
+import './buttons.css';
 import './menu.css';
 import { LEVELS, levelAbout, levelLabel } from '../go/opponent';
 import { t, type Key } from '../i18n';
@@ -29,6 +30,12 @@ export interface MenuOptions {
   onResign(): void;
   onRecentre(): void;
   onTitle(): void;
+  onMusic(on: boolean): void;
+  onSound(on: boolean): void;
+  /** Read back, so the panel shows what is actually true rather than what it
+   *  set last time it was open. */
+  music(): boolean;
+  sound(): boolean;
   /** The panel was dismissed without choosing anything. */
   onClose?(): void;
 }
@@ -116,7 +123,7 @@ export class Menu {
     }))));
 
     const go = document.createElement('button');
-    go.className = 'go';
+    go.className = 'go lift';
     go.textContent = t(this.inGame ? 'menu.startNew' : 'menu.start');
     go.onclick = () => { this.el.hidden = true; this.opts.onStart({ ...this.choice }); };
     this.el.appendChild(go);
@@ -128,6 +135,7 @@ export class Menu {
       actions.className = 'actions';
       const act = (key: Key, run: () => void): void => {
         const b = document.createElement('button');
+        b.className = key === 'btn.resign' ? 'lift danger' : 'lift quiet';
         b.textContent = t(key);
         b.onclick = () => { this.el.hidden = true; run(); };
         actions.appendChild(b);
@@ -139,8 +147,15 @@ export class Menu {
       this.el.appendChild(actions);
     }
 
+    // Two switches, not two sliders. A Go board makes one sound; the useful
+    // question is whether it makes it, not how loudly.
+    this.el.appendChild(this.group(t('menu.sound'), [
+      { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
+      { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
+    ]));
+
     const home = document.createElement('button');
-    home.className = 'home';
+    home.className = 'home lift quiet';
     home.textContent = t('menu.toTitle');
     home.onclick = () => { this.el.hidden = true; this.opts.onTitle(); };
     this.el.appendChild(home);
@@ -158,6 +173,7 @@ export class Menu {
     choices.className = 'choices';
     for (const item of items) {
       const b = document.createElement('button');
+      b.className = 'chip';
       b.textContent = item.label;
       b.setAttribute('aria-pressed', String(item.on));
       b.onclick = item.pick;

@@ -34,7 +34,9 @@ import { Speech, segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { PointActions } from './ui/pointactions';
 import { showTitle } from './ui/title';
+import { underCurtain } from './ui/curtain';
 import { Autosave, load } from './save';
+import { SFX, createAudio, playStone } from './audio';
 import { setLocale, t } from './i18n';
 
 /** The player is Black: Black moves first, and the beginner should be the one
@@ -91,10 +93,29 @@ async function start(): Promise<void> {
     onAsk: (at) => askAbout(at),
   });
 
+  const audio = createAudio();
+  // Fetch and decode ahead of the first gesture. Without it the very first
+  // press of a session is silent — there is no decoded buffer yet — and the
+  // press in question is the title screen's own button, which every player
+  // makes.
+  void audio.preload();
+  /** Which stone clip was used last, so the same one is never heard twice. */
+  const lastStone = { i: -1 };
+
+  // One listener for every button in the game. A click sound wired per button
+  // is a click sound that is missing from the next button somebody adds.
+  document.addEventListener('click', (e) => {
+    const el = e.target as HTMLElement | null;
+    if (el?.closest('button')) audio.play(SFX.uiPress);
+  }, true);
+
   const opponent = new Opponent();
   // Begin the 4MB download now, behind the title screen, so that by the time
   // anyone has read two buttons there is nothing left to wait for.
   const loading = opponent.ready();
+  /** Whether that is true yet, for the one case where someone is faster. */
+  let engineReady = false;
+  void loading.then(() => { engineReady = true; }).catch(() => { engineReady = true; });
 
   const frame = (): void => {
     if (idleSpin) view.orbit(0.0012, 0);
@@ -163,6 +184,10 @@ async function start(): Promise<void> {
     },
   });
   coach.load(saved.messages, saved.profile);
+  // What they turned off last time stays off. Applied before the first gesture
+  // so the music does not get one bar in before being silenced.
+  if (coach.profile.music === false) audio.setMusicVolume(0);
+  if (coach.profile.sound === false) audio.setSfxVolume(0);
 
   /** How many companion lines have already been said out loud. Starts at the
    *  restored count: the conversation that came back is history, and history
@@ -318,9 +343,12 @@ async function start(): Promise<void> {
     try {
       const out = await opponent.decide(game, level);
       read = out.read;
-      if (out.decision.kind === 'play') game.play(out.decision.x, out.decision.y);
-      else if (out.decision.kind === 'pass') game.pass();
+      if (out.decision.kind === 'play') {
+        game.play(out.decision.x, out.decision.y);
+        playStone(audio, lastStone);
+      } else if (out.decision.kind === 'pass') game.pass();
       else game.resign('white');
+      if (game.captures.white > before) audio.play(SFX.capture);
     } catch (err) {
       console.error('[go] engine failed', err);
       status.textContent = t('hud.engineStumbled');
@@ -340,7 +368,10 @@ async function start(): Promise<void> {
 
   function commit(at: { x: number; y: number }): void {
     if (!game || thinking || game.over || game.toPlay !== HUMAN) return;
+    const taken = game.captures.black;
     if (!game.play(at.x, at.y)) return;  // illegal: the board simply does not take it
+    playStone(audio, lastStone);
+    if (game.captures.black > taken) audio.play(SFX.capture);
     coach.profile.placed = true;
     const played = toGtp(at.x, at.y, game.size);
     actions.hide();
@@ -369,6 +400,11 @@ async function start(): Promise<void> {
   function select(at: { x: number; y: number } | null): void {
     if (!at || !game) { actions.hide(); view.setGhost(null, HUMAN); return; }
     const canPlace = !game.over && !thinking && game.toPlay === HUMAN && game.legal(at.x, at.y);
+    // An empty point that the rules will not take — a ko, or filling your own
+    // last liberty. Silence there reads as the game not having noticed the tap.
+    if (!canPlace && game.board[at.y][at.x] === null && !game.over && game.toPlay === HUMAN) {
+      audio.play(SFX.denied);
+    }
     view.setGhost(canPlace ? at : null, HUMAN);
     // Asking about an empty point in the middle of nowhere is not worth a
     // button; asking about a stone, or about a point you could play, is.
@@ -417,6 +453,10 @@ async function start(): Promise<void> {
         void finish();
       },
       onRecentre: () => view.resetCamera(),
+      onMusic: (on) => { audio.setMusicVolume(on ? 0.22 : 0); coach.profile.music = on; persist(); },
+      onSound: (on) => { audio.setSfxVolume(on ? 1 : 0); coach.profile.sound = on; persist(); },
+      music: () => coach.profile.music !== false,
+      sound: () => coach.profile.sound !== false,
       onTitle: () => void toTitle(),
       // Dismissed from the title screen, where there is no board behind it.
       onClose: () => { if (!game) void toTitle(); },
@@ -424,6 +464,7 @@ async function start(): Promise<void> {
   );
 
   const gear = document.createElement('button');
+  gear.className = 'lift quiet';
   gear.textContent = t('btn.setup');
   gear.onclick = () => {
     menu.sync({ size: game?.size ?? coach.profile.boardSize, level: level.id }, !!game && !game.over);
@@ -492,6 +533,7 @@ async function start(): Promise<void> {
       }
     }
     refresh();
+    audio.play(SFX.gameOver);
 
     await remark(score
       ? `The game is over and counted. ${describeScore(score, game)}`
@@ -550,6 +592,10 @@ async function start(): Promise<void> {
     }
 
     leaveTitle();
+    // Almost always already true — the network arrives while the title is
+    // being read. The exception is a player who presses through it in under a
+    // second, and they are the reason this exists.
+    if (!engineReady) await underCurtain(t('title.loading'), loading);
 
     if (choice === 'continue') {
       // The game in progress if there is one, and the conversation that goes
@@ -581,7 +627,7 @@ async function start(): Promise<void> {
   // a test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, view, opponent, coach, chat, speech, menu, actions,
+      umicat, view, opponent, coach, chat, speech, menu, actions, audio,
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },

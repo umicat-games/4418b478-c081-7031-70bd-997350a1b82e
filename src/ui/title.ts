@@ -4,6 +4,7 @@
 // about it: a new GAME is a new board, not a new student. What the coach knows
 // about the player outlives any one game, the same way a teacher does not
 // forget you between lessons. Forgetting is a separate, deliberate thing.
+import './buttons.css';
 import './title.css';
 import { t } from '../i18n';
 
@@ -45,7 +46,9 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
     const add = (label: string, choice: TitleChoice, primary = false): HTMLButtonElement => {
       const b = document.createElement('button');
       b.textContent = label;
-      if (primary) b.className = 'primary';
+      // One raised green button per screen — the thing to press. The rest are
+      // the quiet variant, which is a choice rather than a suggestion.
+      b.className = primary ? 'lift' : 'lift quiet';
       b.onclick = () => choose(choice);
       buttons.appendChild(b);
       return b;
@@ -54,7 +57,7 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
      *  four things they came here to choose between. */
     const addQuiet = (label: string, choice: TitleChoice): HTMLButtonElement => {
       const b = add(label, choice);
-      b.className = 'quiet';
+      b.className = 'quiet-link';
       // Under the row but ABOVE the engine's status line, which is the last
       // thing on the screen because it is the least important.
       el.insertBefore(b, el.querySelector('.status'));
