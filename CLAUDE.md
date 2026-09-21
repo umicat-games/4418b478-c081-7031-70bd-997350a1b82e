@@ -102,7 +102,8 @@ the target at the origin and the real shot is placed afterwards.
 
 | | touch | mouse |
 | --- | --- | --- |
-| aim the piece | one finger, drag | left button, drag or hover |
+| put the piece down | one finger, tap — it lands ABOVE the fingertip | left button, drag or hover |
+| move it again | drag from ANYWHERE; the finger is a trackpad | left button, drag |
 | turn the piece | Turn button / `R` | **right CLICK**, Turn button, `R` |
 | move the camera | — | right button, DRAG |
 | pan | two fingers, drag | middle button, or shift + right |
@@ -113,9 +114,27 @@ four times the zoom most of the board is off screen and there is no other way
 to reach it. The right mouse button carries both turn and orbit, told apart by
 whether it moved more than a few pixels before coming up.
 
-**A settled piece still follows a DRAG.** Moving it by tapping again means
-tapping exactly where the confirm buttons are standing. Hovering stops when
-the piece settles (see below); dragging never does.
+**On a finger, the piece is put down once and then NUDGED.** The first touch
+after picking a piece aims where it lands, held `TOUCH_LIFT` (44px, about a
+fingertip) above the finger — a finger covers roughly a centimetre of board,
+and that centimetre is the part you are trying to look at. Every touch after
+that is RELATIVE: touching elsewhere does not fling the piece there, and a
+drag moves it by however far the finger moved, from wherever on the screen the
+hand is out of the way. Tapping to re-place it would mean tapping exactly
+where the confirm buttons are now standing, which is where you want to tap.
+
+The relative drag moves a VIRTUAL POINTER that starts at the piece's own
+screen position and is then picked against the board like any other point
+(`virtual` in main.ts). Perspective, the tilt and the zoom all come out right
+for free, and nothing accumulates rounding the way a cells-per-pixel
+conversion would. A nudge that would take the piece off the board is refused —
+which is why `pick` grew a `clamp` argument: the lifted aim point lands off
+the grid near the far edge, and without the clamp the ghost vanished for the
+last two rows, which are somebody's home corner.
+
+A mouse keeps aiming absolutely, with no lift: a cursor is one pixel and
+covers nothing. Hovering stops when the piece settles (see below); a
+held-button drag never does.
 
 **The ghost freezes when you choose a square.** Without that, a mouse moving
 towards the tick keeps re-aiming, and the piece lands where the BUTTON was

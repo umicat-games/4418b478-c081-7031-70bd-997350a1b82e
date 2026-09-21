@@ -123,6 +123,17 @@ async function start(): Promise<void> {
    *  as it travels towards the tick, and the piece lands where the BUTTON
    *  was rather than where the player was pointing. */
   let frozen = false;
+  /**
+   * Where the finger's "cursor" is while it nudges a settled piece.
+   *
+   * A relative drag has no point on the board of its own — the finger may be
+   * anywhere, and usually is deliberately somewhere else so it is not in the
+   * way. So the drag moves a virtual pointer that STARTS at the piece and
+   * then gets picked against the board like any other point: perspective, the
+   * tilt and the zoom all come out right for free, and nothing accumulates
+   * rounding the way a cells-per-pixel conversion would.
+   */
+  let virtual: { x: number; y: number } | null = null;
   let botTimer: ReturnType<typeof setTimeout> | null = null;
   /** The result card is up (or on its way). Both `afterMove` and a message
    *  from the room can notice the same ending, and two result cards over one
@@ -205,7 +216,21 @@ async function start(): Promise<void> {
     else if (e.key === 'Escape') { clearAim(); refresh(); }
   });
 
-  attachBoardControls(canvas, (x, y) => view.pick(x, y), {
+  attachBoardControls(canvas, (x, y, clamp) => view.pick(x, y, clamp), {
+    aimed: () => !!aim && frozen && !!selected && !!game && !game.over && game.turn === table.seat,
+    onNudgeStart: () => {
+      virtual = aim ? view.screenOf(aim[0], aim[1]) : null;
+    },
+    onNudge: (dx, dy) => {
+      if (!game || game.over || game.turn !== table.seat || !selected || !aim) return;
+      if (!virtual) virtual = view.screenOf(aim[0], aim[1]);
+      virtual.x += dx;
+      virtual.y += dy;
+      const at = view.pick(virtual.x, virtual.y, true);
+      if (!at) return;
+      aim = at;
+      refresh();
+    },
     onAim: (at, source) => {
       if (!game || game.over || game.turn !== table.seat || !selected) return;
       // A DRAG always aims, even once the piece is settled: moving it again
@@ -254,6 +279,7 @@ async function start(): Promise<void> {
   function clearAim(): void {
     aim = null;
     frozen = false;
+    virtual = null;
     actions.hide();
   }
 
@@ -437,9 +463,14 @@ async function start(): Promise<void> {
 
     if (game.over) hud.say(t('over.heading'));
     else if (myTurn) {
-      hud.say(t('hud.yourTurn'), selected
-        ? t(TOUCH ? 'hud.confirmHintTouch' : 'hud.confirmHint')
-        : t('hud.pickPiece'));
+      // Three states, three sentences — and on a finger the middle one is
+      // worth saying, because "drag from anywhere" is not a thing a player
+      // would guess at a board game.
+      hud.say(t('hud.yourTurn'), !selected
+        ? t('hud.pickPiece')
+        : TOUCH
+          ? t(aim ? 'hud.confirmHintTouch' : 'hud.tapToPlace')
+          : t('hud.confirmHint'));
     } else if (table.isBot(game.turn)) {
       hud.say(t('hud.botTurn', { name: nameOf(game.turn) }));
     } else {

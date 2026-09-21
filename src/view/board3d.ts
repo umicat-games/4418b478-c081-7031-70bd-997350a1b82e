@@ -221,8 +221,16 @@ export class BoardView {
     return new THREE.Vector3(o + x * CELL, SLAB, o + y * CELL);
   }
 
-  /** Which cell is under this screen point, if any. */
-  pick(clientX: number, clientY: number): Cell | null {
+  /**
+   * Which cell is under this screen point, if any.
+   *
+   * `clamp` pulls a point just off the grid back onto its nearest edge cell.
+   * That is for the finger: a touch aims at a point held ABOVE the fingertip
+   * (see `TOUCH_LIFT`), and near the far edge that lifted point lands off the
+   * board — without the clamp the ghost would simply vanish for the last two
+   * rows, which are somebody's home corner.
+   */
+  pick(clientX: number, clientY: number, clamp = false): Cell | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -234,8 +242,16 @@ export class BoardView {
     const o = -(HALF - BORDER * CELL);
     const x = Math.floor((hit.x - o) / CELL);
     const y = Math.floor((hit.z - o) / CELL);
-    if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) return null;
-    return [x, y];
+    if (x >= 0 && y >= 0 && x < SIZE && y < SIZE) return [x, y];
+    if (!clamp) return null;
+    // Far enough out and it was not a near miss — the player is pointing at
+    // the table, not at the board.
+    const SLACK = 4;
+    if (x < -SLACK || y < -SLACK || x >= SIZE + SLACK || y >= SIZE + SLACK) return null;
+    return [
+      THREE.MathUtils.clamp(x, 0, SIZE - 1),
+      THREE.MathUtils.clamp(y, 0, SIZE - 1),
+    ];
   }
 
   /** Where a cell is on screen, in CSS pixels — the inverse of `pick`, and

@@ -2,7 +2,8 @@
 // looks. The two are on the same surface, so the split between them is decided
 // once, here, rather than guessed at every call site.
 //
-//   touch    one finger drags the piece about; two fingers pan and pinch
+//   touch    one finger puts the piece down, then NUDGES it; two fingers pan
+//            and pinch
 //   mouse    left drags the piece, right CLICKS turn it and right DRAGS orbit,
 //            middle (or shift + right) pans, the wheel zooms
 //
@@ -12,12 +13,19 @@
 // board a cell is a few millimetres wide on a phone — one-tap placement is a
 // game that loses itself to a fat finger.
 //
-// **But a piece already aimed must still follow a DRAG.** Tapping to move it
-// again means tapping somewhere the confirm buttons are standing, which is
-// exactly where you want to tap. So a drag is always aiming, whether the
-// piece is settled or not; it is hovering that stops once it is (see `frozen`
-// in main.ts — a mouse travelling towards the tick must not take the piece
-// with it).
+// **On a finger, the piece is put down ONCE and then nudged.** The first touch
+// after picking a piece aims where it lands — held a little above the
+// fingertip, because a finger covers about a centimetre of board and that
+// centimetre is the part you are trying to look at. From then on the finger
+// is a TRACKPAD: touching somewhere else does not fling the piece there, and
+// a drag moves the piece by however far the finger moved, from wherever on
+// the screen it is comfortable to put it. That is the whole point — the hand
+// can sit off to one side while the piece moves in clear view.
+//
+// A mouse keeps aiming absolutely, with no lift: a cursor is one pixel and
+// covers nothing. Hovering stops once the piece is settled (see `frozen` in
+// main.ts — a mouse travelling towards the tick must not take the piece with
+// it), but a held-button drag always aims.
 //
 // Two fingers PAN rather than orbit, because panning is what zooming needs:
 // at four times the zoom most of the board is off screen and there is no
@@ -30,8 +38,16 @@ import type { Cell } from '../blokus/pieces';
 export type AimSource = 'hover' | 'drag';
 
 export interface BoardControlsHandlers {
+  /** Whether a piece is already down on the board waiting to be confirmed.
+   *  It decides whether a finger aims (absolutely) or nudges (relatively). */
+  aimed(): boolean;
   /** Aiming: the ghost should follow. `null` means off-board. */
   onAim(at: Cell | null, source: AimSource): void;
+  /** A relative drag is starting — the piece stays where it is until the
+   *  finger moves. */
+  onNudgeStart(): void;
+  /** Move the piece by this much on SCREEN, not to this point. */
+  onNudge(dxPx: number, dyPx: number): void;
   /** A cell was chosen — pressed and released on it. Nothing is played by
    *  pointing at it; what happens next is the game's business. */
   onPicked(at: Cell | null): void;
@@ -46,14 +62,22 @@ export interface BoardControlsHandlers {
 const TURN_PER_PX = 0.006;
 /** How far the right button may travel and still count as a click. */
 const CLICK_SLOP = 6;
+/**
+ * How far above the fingertip the piece is aimed, in CSS pixels.
+ *
+ * About the radius of a fingertip. A fixed number of pixels rather than a
+ * number of cells because what is doing the covering is a finger, which is
+ * the same size however far in the board is zoomed.
+ */
+const TOUCH_LIFT = 44;
 
 export function attachBoardControls(
   canvas: HTMLCanvasElement,
-  pick: (clientX: number, clientY: number) => Cell | null,
+  pick: (clientX: number, clientY: number, clamp: boolean) => Cell | null,
   h: BoardControlsHandlers,
 ): () => void {
   const active = new Map<number, { x: number; y: number }>();
-  let mode: 'idle' | 'aim' | 'orbit' | 'pan' = 'idle';
+  let mode: 'idle' | 'aim' | 'nudge' | 'orbit' | 'pan' = 'idle';
   let last = { x: 0, y: 0 };
   let pinch = 0;
   /** How far the right button has moved since it went down. */
@@ -85,8 +109,16 @@ export function attachBoardControls(
         pinch = spread();
         return;
       }
+      last = { x: e.clientX, y: e.clientY };
+      if (h.aimed()) {
+        // The piece is already down: this finger moves it, and does not
+        // teleport it to wherever it happens to have landed.
+        mode = 'nudge';
+        h.onNudgeStart();
+        return;
+      }
       mode = 'aim';
-      h.onAim(pick(e.clientX, e.clientY), 'drag');
+      h.onAim(pick(e.clientX, e.clientY - TOUCH_LIFT, true), 'drag');
       return;
     }
 
@@ -100,7 +132,7 @@ export function attachBoardControls(
     }
     if (e.button === 0) {
       mode = 'aim';
-      h.onAim(pick(e.clientX, e.clientY), 'drag');
+      h.onAim(pick(e.clientX, e.clientY, false), 'drag');
     }
   };
 
@@ -112,7 +144,7 @@ export function attachBoardControls(
       // ghost follows the cursor, which is what tells a first-time player
       // that the board takes pieces at all, and where this one would land.
       // Touch has no hover — that is what the aim-then-confirm step is for.
-      if (mode === 'idle' && e.pointerType !== 'touch') h.onAim(pick(e.clientX, e.clientY), 'hover');
+      if (mode === 'idle' && e.pointerType !== 'touch') h.onAim(pick(e.clientX, e.clientY, false), 'hover');
       return;
     }
     active.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -135,7 +167,16 @@ export function attachBoardControls(
       return;
     }
 
-    if (mode === 'aim') h.onAim(pick(e.clientX, e.clientY), 'drag');
+    if (mode === 'nudge') {
+      h.onNudge(e.clientX - last.x, e.clientY - last.y);
+      last = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    if (mode === 'aim') {
+      const lift = e.pointerType === 'touch' ? TOUCH_LIFT : 0;
+      h.onAim(pick(e.clientX, e.clientY - lift, lift > 0), 'drag');
+    }
   };
 
   const onUp = (e: PointerEvent): void => {
@@ -148,7 +189,10 @@ export function attachBoardControls(
     if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
 
     if (!enabled) { mode = active.size ? mode : 'idle'; return; }
-    if (wasAiming) h.onPicked(pick(e.clientX, e.clientY));
+    if (wasAiming) {
+      const lift = e.pointerType === 'touch' ? TOUCH_LIFT : 0;
+      h.onPicked(pick(e.clientX, e.clientY - lift, lift > 0));
+    }
     if (wasTurn) h.onTurnPiece();
     if (active.size === 0) mode = 'idle';
     else if (active.size === 1 && (mode === 'pan' || mode === 'orbit')) { last = mid(); pinch = 0; }
