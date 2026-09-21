@@ -6,7 +6,7 @@ import {
   type Scene3D, type Manifest3D,
 } from '@umicat/three-sdk';
 import type { Shared, Progress } from './main';
-import { patchSave, readSave } from './main';
+import { patchSave, readSave, MANA_PER_ATTACK } from './main';
 import { DEV, DEV_BANNER, toggleDev } from './dev';
 import { skyWithClouds } from './sky';
 import { readoutPlate } from './hud';
@@ -467,12 +467,19 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     const offers = RACK.length;
     let offered = 0;
     for (const r of RACK) {
-      const made = levelOf(weapons, r.id) > 0;
-      const shown = made || offered < offers;
-      if (!made && shown) offered += 1;
+      const shown = offered < offers;
+      offered += 1;
       visibleRack.set(r.id, shown);
       const d = displays.get(r.id);
-      if (d) d.visible = made;
+      // The WEAPON stands there, always — not only once it has been made.
+      //
+      // Balaboo showed a bare plinth for anything unforged, and that was
+      // right: an empty pedestal is the thing you are saving for, and the
+      // weapon appearing is what you bought. Nothing is bought here. The rack
+      // is the menu a run is chosen from, and five identical empty stumps is
+      // not a menu — you cannot tell which is which without walking to each
+      // one and reading a card.
+      if (d) d.visible = shown;
       // The plinth is a scene entity and deliberately NOT merged — see the
       // note in `merge.ts`. A folded entity has no visibility left to turn off.
       const plinth = world.entities.get(`pedestal_${r.id}`);
@@ -911,12 +918,20 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  One button, in the order you would want it: make it, pick it up, make it
    *  better. That ordering is what lets the armory have no menu — "press again
    *  to improve it" is a rule you learn once. */
-  const rackAction = (id: Weapon): 'forge' | 'take' | 'improve' | null => {
-    const lvl = levelOf(weapons, id);
-    if (lvl === 0) return 'forge';
-    if (weapon !== id) return 'take';
-    return lvl < Math.min(WEAPON_MAX_LEVEL, weaponCap()) ? 'improve' : null;
-  };
+/** What pressing at a plinth does. One answer: you take it.
+ *
+ *  Forging and improving are gone from the rack, and not only because they
+ *  are free now and a press that costs nothing is a press for nothing.
+ *  **Free improving would have handed every run a level-3 weapon** — the rack
+ *  would be three presses, the damage would be double what the difficulty
+ *  curve was set against, and the mana-priced upgrades inside a run would be
+ *  buying a smaller share of a bigger number.
+ *
+ *  So the permanent weapon level is fixed at one for everybody, and ALL the
+ *  progression lives inside a run, in `runtiers.ts`, paid in the resource the
+ *  player is actually playing with. Which weapon to take is the choice the
+ *  rack exists for; how good it gets is the choice the run is about. */
+  const rackAction = (id: Weapon): 'take' | null => (weapon === id ? null : 'take');
 
   const cardAnchor = new THREE.Vector3();
   /** Put the card over a world point, clamped so it never hangs off the screen. */
@@ -1495,55 +1510,31 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
        *  price, a made weapon is a number you are about to take into a fight. */
       const rackCard = (id: Weapon): void => {
         const k = WEAPON_BY_ID.get(id)!;
-        const lvl = levelOf(weapons, id);
-        const cap = Math.min(WEAPON_MAX_LEVEL, weaponCap());
-        const cost = nextCost(id, lvl);
-        const canStep = lvl < cap && cost;
-        const at = (n: number): string =>
-          `${weaponDamage(id, n)} damage${effectText(id, n) ? ` · ${effectText(id, n)}` : ''}`;
-        // WHAT IT DOES, in one line — the blurb until it is made, its numbers
-        // once it is. Not both, and never glued to why you cannot buy it: those
-        // are two different thoughts and the `·` between them read as one.
-        const body = lvl > 0 ? at(lvl) : k.blurb;
-        // WHAT STANDS BETWEEN YOU AND THE NEXT LEVEL: a price, or the building
-        // that has to exist first. The one dead end worth explaining is that
-        // the weapon exists, the money may even be there, and the reason
-        // nothing happens is a building.
-        let gate: string | undefined;
-        if (canStep) {
-          gate = canAfford(store, cost!)
-            ? `Lv${lvl + 1} · ${at(lvl + 1)}<br>${priceOf(cost!)}`
-            : `needs ${shortfall(store, cost!)}`;
-        } else if (lvl === 0) {
-          gate = weaponCap() === 0 ? 'The Armory has not been built' : `Needs Armory Lv${lvl + 1}`;
-        } else if (lvl >= WEAPON_MAX_LEVEL) {
-          gate = 'Fully forged';
-        } else {
-          gate = `Improving needs Armory Lv${lvl + 1}`;
-        }
+        // Everything is taken at level one — see `rackAction`. There is no
+        // price, no building in the way and no next step, so the card has one
+        // job left: say what this weapon DOES, so the choice can be made
+        // standing in front of it.
+        const body = k.blurb;
+        const effect = effectText(id, 1);
+        const gate = `${weaponDamage(id, 1)} damage`
+          + (effect ? ` · ${effect}` : '')
+          + `<br>costs ${MANA_PER_ATTACK[k.cast]} magic a hit`;
 
-        const act = rackAction(id);
         let action: string | undefined;
         // "equipped" is a statement, not a button — the pad must not light up
         // for it. Set alongside `action` so the two cannot drift apart.
         let pressable = false;
-        if (act === 'take') { action = `${pressGlyph('build')} take`; pressable = true; }
-        else if (act === 'forge' || act === 'improve') {
-          if (canStep) {
-            action = canAfford(store, cost!)
-              ? (act === 'forge'
-                ? `${pressGlyph('build')} forge`
-                : `${pressGlyph('build')} improve to Lv${lvl + 1}`)
-              : undefined;
-            pressable = action !== undefined;
-          }
-        } else if (id === weapon) action = 'equipped';
-        // Same shape as a building: name, rule, level, what it does, what the
-        // step costs.
+        if (rackAction(id) === 'take') {
+          action = `${pressGlyph('build')} take`;
+          pressable = true;
+        } else action = 'equipped';
         showCard({
           title: k.name,
           glyph: k.icon,
-          level: lvl ? `Lv${lvl}` : 'Not forged yet',
+          // No level line. Every weapon is taken at the same level and none of
+          // them is ever "not forged yet" — a row that says the same thing on
+          // all five cards is a row that is not read.
+          level: id === weapon ? 'In your hands' : 'Ready',
           body,
           cost: gate,
           action,
@@ -1708,27 +1699,17 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           }
         } else if (atPickup) {
           const id = atPickup.id;
-          const act = rackAction(id);
-          const lvl = levelOf(weapons, id);
-          if (act === 'take') {
+          if (rackAction(id) === 'take') {
             weapon = id;
+            // Level one, written down. `weaponDamage` reads the saved level and
+            // an unrecorded weapon is level ZERO — which indexes off the front
+            // of the damage table rather than failing, so the weapon would have
+            // gone into a run quietly doing the wrong number.
+            weapons[id] = Math.max(1, levelOf(weapons, id));
+            showRack();
             showWeapon();
             audio.play('build');
-            void patchSave(shared.umicat, { weapon });
-          } else if (act === 'forge' || act === 'improve') {
-            const cost = lvl < Math.min(WEAPON_MAX_LEVEL, weaponCap()) ? nextCost(id, lvl) : null;
-            if (!cost || !canAfford(store, cost)) { audio.play('denied'); }
-            else {
-              store.gold -= cost.gold; store.wood -= cost.wood; store.stone -= cost.stone;
-              weapons[id] = lvl + 1;
-              showRack();
-              renderPurse();
-              audio.play(SFX.upgradeTower);
-              // Forging it also puts it in your hand. Making a weapon and then
-              // being asked to pick it up is a second press for nothing.
-              if (lvl === 0) { weapon = id; showWeapon(); }
-              void patchSave(shared.umicat, { store, weapons, weapon });
-            }
+            void patchSave(shared.umicat, { weapon, weapons });
           } else {
             audio.play('denied');
           }
@@ -1844,6 +1825,16 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                 *  claim and is checked separately; this is for the checks that are
                 *  about what the board DRAWS. */
                openScores: () => showScores(),
+               /** What is actually STANDING on the plinths, and whether it can be seen.
+                *  Reported as "there are no weapons on the pedestals" — which every
+                *  other check passed straight through, because the rack, the plinths
+                *  and the cards were all fine and the only thing missing was the
+                *  models. `visible` is the whole question. */
+               rackModels: () => RACK.map((r) => {
+                 const d = displays.get(r.id);
+                 return { id: r.id, exists: !!d, visible: !!d?.visible,
+                          plinth: !!world.entities.get(`pedestal_${r.id}`)?.visible };
+               }),
                /** Draw the board from rows handed in, through the REAL clean-and-render
                 *  path. `gameData` is a postMessage RPC to the platform host, so a game
                 *  opened straight off the CDN has no host to ask and reads nothing —

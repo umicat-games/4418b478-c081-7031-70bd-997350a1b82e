@@ -290,9 +290,39 @@ stall, and the door — which is what the hall was asked to be.
 board needing a new gesture would be a second interface to learn for the one
 screen nobody has to read.
 
-**The rack gives you everything, free.** Two gates had to come off and both
-would have failed SILENTLY — the rack renders either way, it just never offers
-anything:
+**The rack is a MENU: five weapons standing on five plinths, take one.**
+
+Reported as "there are no weapons on the pedestals", and every check in this
+file passed straight through it — the rack rendered, the plinths were up, the
+cards were right, and the pedestals were bare. Balaboo hid the model until a
+weapon was forged, which was correct there: an empty pedestal is the thing you
+are saving for, and the weapon appearing is what you bought. **Nothing is
+bought here**, so that rule turned the one screen where a choice is made into
+five identical stumps you had to walk up to one at a time to identify.
+
+`verify-3d-polarity-rack` asks `rackModels()` — exists, visible, plinth — per
+weapon, because "the rack works" is exactly the claim that was true while this
+was broken.
+
+**Pressing at a plinth TAKES it. There is no forging and no improving.** Not
+only because both are free now and a press that costs nothing is a press for
+nothing: free improving would have handed every run a level-3 weapon, which is
+double the damage the difficulty curve was set against, and would have left the
+mana-priced upgrades inside a run buying a smaller share of a bigger number.
+
+So the permanent weapon level is fixed at ONE for everybody and all the
+progression lives inside a run, paid in the resource the player is actually
+playing with. Which weapon to take is the choice the rack exists for; how good
+it gets is the choice the run is about. The card says what the weapon does and
+what a hit costs in magic — the two things you decide on.
+
+Taking a weapon writes `weapons[id] = 1`. `weaponDamage` reads the saved level
+and an unrecorded weapon is level ZERO, which indexes off the front of the
+damage table rather than failing — so it would have gone into a run quietly
+doing the wrong number.
+
+Two gates had to come off before any of that, and both would have failed
+SILENTLY — the rack renders either way, it just never offers anything:
 
 - forging needed the Armory, and the Armory was bought at the shop. `nextCost`
   returns free now; the price table is kept, because the moment anything pays
@@ -361,6 +391,7 @@ In `umicat-infra/playwright/`. The ones written for this fork:
 | `verify-3d-polarity-coach` | lessons fire on conditions, and say words rather than markup |
 | `verify-3d-polarity-run` | does the curve ramp, does a boss arrive, is its fan both colours |
 | `verify-3d-polarity-board-xss` | what the board does with a name that is trying to be an element |
+| `verify-3d-polarity-rack` | are the weapons ON the plinths — the check the bare-pedestal bug slipped past |
 
 Four lessons from writing them, all of which cost a run:
 

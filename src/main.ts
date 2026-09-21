@@ -338,7 +338,7 @@ const MANA_PER_BOSS_KILL = 45;
  *
  *  Absolute values are a first guess: one absorbed orb is 6, so a sword swing
  *  is two thirds of an orb and a staff cast is two and a half of them. */
-const MANA_PER_ATTACK: Record<'melee' | 'arrow' | 'burst', number> = {
+export const MANA_PER_ATTACK: Record<'melee' | 'arrow' | 'burst', number> = {
   melee: 4,
   arrow: 7,
   burst: 15,
