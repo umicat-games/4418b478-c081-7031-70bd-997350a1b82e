@@ -40,6 +40,7 @@ something here looks odd, one of those two repos probably explains why.
 | `src/ui/actions.ts` | the tick and the cross, beside the piece |
 | `src/ui/hud.ts` | whose turn, the scoreboard, the two round buttons |
 | `src/ui/chat.ts`, `menu.ts`, `over.ts` | table talk, settings, the result |
+| `src/ui/confirm.ts` | **the only way to ask a yes/no question here** |
 | `src/ui/buttons.css` | **how a button looks** — `lift` and `chip` |
 | `src/save.ts` | settings, best score, and the unfinished solo game |
 | `src/i18n.ts` | every fixed string, English and Chinese |
@@ -77,10 +78,54 @@ a diagonal a square board is a diamond, and a diamond needs its 28-cell
 diagonal to fit in a window with 20 cells' worth of height — forty per cent of
 the board thrown away. It is also how people sit at a real one.
 
+**Never `window.confirm` / `alert` / `prompt`.** The game runs in an iframe
+sandboxed `allow-scripts allow-same-origin allow-popups allow-forms` — note
+what is missing. Without `allow-modals` the browser IGNORES `confirm()`: no
+dialog, no exception, and a return value of `false`. So "Leave the game" and
+"Pass" were buttons that did nothing at all, silently, for days. `ui/confirm.ts`
+is the replacement and it is made of the same DOM as everything else.
+
+**The canvas needs `touch-action: none`, and nothing else will set it.** A 3D
+game that mounts `Input3D` gets this from the SDK; this one does not mount it,
+so `index.html` says it. Without it the browser claims two fingers for its own
+page zoom and a drag for a scroll, `pointermove` stops arriving, and
+pinch-to-zoom and drag-to-aim both do nothing on a phone while working
+perfectly on a desktop.
+
+**Zoom and pan are one feature.** Zooming with the look-at point nailed to the
+middle of the board is zooming into the one place you are not playing. The
+camera's distance is `fitDistance / zoom`, where `fitDistance` is re-measured on
+every frame with the pan and zoom taken out — that is why the fit loop runs with
+the target at the origin and the real shot is placed afterwards.
+
+**The gestures, and why each is where it is:**
+
+| | touch | mouse |
+| --- | --- | --- |
+| aim the piece | one finger, drag | left button, drag or hover |
+| turn the piece | Turn button / `R` | **right CLICK**, Turn button, `R` |
+| move the camera | — | right button, DRAG |
+| pan | two fingers, drag | middle button, or shift + right |
+| zoom | pinch, or the + / − buttons | wheel, or the + / − buttons |
+
+Two fingers PAN rather than orbit because panning is what zooming needs: at
+four times the zoom most of the board is off screen and there is no other way
+to reach it. The right mouse button carries both turn and orbit, told apart by
+whether it moved more than a few pixels before coming up.
+
+**A settled piece still follows a DRAG.** Moving it by tapping again means
+tapping exactly where the confirm buttons are standing. Hovering stops when
+the piece settles (see below); dragging never does.
+
 **The ghost freezes when you choose a square.** Without that, a mouse moving
 towards the tick keeps re-aiming, and the piece lands where the BUTTON was
 rather than where the player pointed. Aim → freeze → confirm, on both mouse
 and touch, which is GO with me's rule and for the same reason.
+
+**An icon is read by its silhouette.** The settings gear was a small circle
+with eight spokes around it, which is a SUN — that is what every brightness
+control looks like, and that is what players called it. A cog needs a toothed
+outline and a hole.
 
 **A piece is aimed by its CENTRE** (`originFor`). Hanging it off its top-left
 corner means aiming with a square that, for an L or a V, is not part of the

@@ -61,12 +61,11 @@ export class Tray {
     };
     this.rotateBtn = tool(t('act.rotate'), () => this.opts.onRotate());
     this.flipBtn = tool(t('act.flip'), () => this.opts.onFlip());
-    // Passing is the only thing here that changes the game, which is why it
-    // is the only one that asks first: a pass cannot be taken back and, in a
-    // four-handed game, "whose turn was it?" is not obvious afterwards.
-    this.passBtn = tool(t('act.pass'), () => {
-      if (window.confirm(t('confirm.pass'))) this.opts.onPass();
-    }, 'lift dark');
+    // Passing is the only thing here that changes the game, and it asks
+    // first — but the ASKING belongs to the game (main.ts), not to the tray:
+    // it has to be the in-game dialog, because `window.confirm` is ignored
+    // outright in the sandboxed iframe this runs in.
+    this.passBtn = tool(t('act.pass'), () => this.opts.onPass(), 'lift dark');
   }
 
   /** Re-draw the hand. Cheap: twenty-one small grids of divs. */

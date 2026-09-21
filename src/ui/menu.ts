@@ -10,6 +10,7 @@
 import './buttons.css';
 import './menu.css';
 import { t } from '../i18n';
+import { ask } from './confirm';
 import { DIFFICULTIES, type Difficulty } from '../blokus/bot';
 import type { Settings } from '../save';
 
@@ -107,9 +108,14 @@ export class Menu {
       leave.onclick = () => {
         // An online game cannot be come back to, and a solo one is saved on
         // the way out — so the question is worth asking once either way.
-        if (!window.confirm(t('confirm.leave'))) return;
+        //
+        // NOT `window.confirm`: the game runs in an iframe sandboxed without
+        // `allow-modals`, where the browser ignores it and returns false. This
+        // button did nothing at all, silently, for exactly that reason.
         this.el.hidden = true;
-        this.opts.onLeave();
+        void ask(t('confirm.leave'), t('confirm.leaveYes'), t('confirm.no')).then((yes) => {
+          if (yes) this.opts.onLeave();
+        });
       };
       this.el.appendChild(leave);
     }

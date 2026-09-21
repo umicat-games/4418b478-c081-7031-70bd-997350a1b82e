@@ -36,9 +36,14 @@ import { Actions } from './ui/actions';
 import { ChatPanel } from './ui/chat';
 import { Menu } from './ui/menu';
 import { showResult } from './ui/over';
+import { ask } from './ui/confirm';
 import { Autosave, load, loadGame, type Settings } from './save';
 import { SFX, createAudio, playTile } from './audio';
 import { colourName, setLocale, t } from './i18n';
+
+/** Whether this is a finger or a mouse. Read once: it decides which of two
+ *  sentences the HUD offers, and a device does not change its mind mid-game. */
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /** How long a bot appears to think. Not a search budget — the search takes a
  *  few milliseconds — but the beat that makes three bots in a row readable as
@@ -132,6 +137,7 @@ async function start(): Promise<void> {
   const hud = new Hud(hudEl, {
     onMenu: () => menu.toggle(),
     onChat: () => chat.toggle(),
+    onZoom: (factor) => view.zoomBy(factor),
   });
 
   const tray = new Tray({
@@ -145,10 +151,16 @@ async function start(): Promise<void> {
     onFlip: () => turn(flipped),
     onPass: () => {
       if (!game || game.turn !== table.seat || game.over) return;
-      game.pass();
-      clearAim();
-      hud.say(t('hud.youPassed'));
-      afterMove();
+      void ask(t('confirm.pass'), t('confirm.passYes'), t('confirm.no')).then((yes) => {
+        // Asked and answered a moment later: by the time it comes back the
+        // turn may have moved on, so the guard is repeated rather than
+        // trusted from before the question.
+        if (!yes || !game || game.turn !== table.seat || game.over) return;
+        game.pass();
+        clearAim();
+        hud.say(t('hud.youPassed'));
+        afterMove();
+      });
     },
   });
 
@@ -194,11 +206,18 @@ async function start(): Promise<void> {
   });
 
   attachBoardControls(canvas, (x, y) => view.pick(x, y), {
-    onAim: (at) => {
-      if (frozen || !game || game.over || game.turn !== table.seat || !selected) return;
+    onAim: (at, source) => {
+      if (!game || game.over || game.turn !== table.seat || !selected) return;
+      // A DRAG always aims, even once the piece is settled: moving it again
+      // by tapping means tapping where the confirm buttons are standing.
+      // Hovering stops at that point, because a mouse on its way to the tick
+      // would otherwise carry the piece along with it.
+      if (frozen && source !== 'drag') return;
       aim = at;
       refresh();
     },
+    onPan: (dx, dy) => view.panBy(dx, dy),
+    onTurnPiece: () => { if (selected) turn(rotated); },
     onPicked: (at) => {
       if (!game || game.over || game.turn !== table.seat || !selected) return;
       if (!at) { clearAim(); refresh(); return; }
@@ -418,7 +437,9 @@ async function start(): Promise<void> {
 
     if (game.over) hud.say(t('over.heading'));
     else if (myTurn) {
-      hud.say(t('hud.yourTurn'), selected ? t('hud.confirmHint') : t('hud.pickPiece'));
+      hud.say(t('hud.yourTurn'), selected
+        ? t(TOUCH ? 'hud.confirmHintTouch' : 'hud.confirmHint')
+        : t('hud.pickPiece'));
     } else if (table.isBot(game.turn)) {
       hud.say(t('hud.botTurn', { name: nameOf(game.turn) }));
     } else {
@@ -595,6 +616,8 @@ async function start(): Promise<void> {
     get table(): Table { return table; },
     get selected(): string | null { return selected; },
     get ori(): number { return ori; },
+    get aim(): Cell | null { return aim; },
+    get frozen(): boolean { return frozen; },
     view,
     screen,
     solo: (difficulty: Difficulty = settings.difficulty): void => {

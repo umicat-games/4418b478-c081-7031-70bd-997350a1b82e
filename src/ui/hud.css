@@ -45,7 +45,31 @@
   box-shadow: 0 0 0 2px rgba(8, 9, 14, 0.9);
 }
 
-#hud.gone, .standings.gone { display: none; }
+#hud.gone, .standings.gone, .zoomer.gone { display: none; }
+
+/* ── zoom ────────────────────────────────────────────────────────────────── */
+
+.zoomer {
+  position: fixed;
+  z-index: 21; /* over the board, under the tray (22) and the chat (25) */
+  right: max(12px, env(safe-area-inset-right));
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  gap: 8px;
+}
+.zoomer button.icon {
+  width: 42px; height: 42px; padding: 0;
+  border-radius: 50%;
+  display: grid; place-items: center;
+}
+.zoomer button.icon svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: currentColor;
+  stroke-width: 2.2; stroke-linecap: round;
+}
+/* The conversation takes that edge over. */
+body.screening .zoomer, body.chatting .zoomer { display: none; }
 
 /* ── the scoreboard ──────────────────────────────────────────────────────── */
 

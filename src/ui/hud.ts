@@ -12,12 +12,26 @@ import { COLOURS } from '../blokus/pieces';
 import { PLAYERS } from '../blokus/game';
 import { t } from '../i18n';
 
-const GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6L17 17M7 7 5.4 5.4"/></svg>';
+/**
+ * A cog, with teeth.
+ *
+ * The first one here was a small circle with eight spokes radiating off it,
+ * which is a SUN — every brightness control ever drawn looks exactly like
+ * that, and that is what it was read as. A gear has to have a toothed outline
+ * and a hole in the middle, or it is a different icon.
+ */
+const GEAR = '<svg viewBox="0 0 24 24"><path d="M10.3 2.8a1 1 0 0 1 1-.8h1.4a1 1 0 0 1 1 .8l.3 1.7a7.6 7.6 0 0 1 1.7 1l1.6-.6a1 1 0 0 1 1.2.4l.7 1.2a1 1 0 0 1-.2 1.3l-1.3 1.1a7.6 7.6 0 0 1 0 2l1.3 1.1a1 1 0 0 1 .2 1.3l-.7 1.2a1 1 0 0 1-1.2.4l-1.6-.6a7.6 7.6 0 0 1-1.7 1l-.3 1.7a1 1 0 0 1-1 .8h-1.4a1 1 0 0 1-1-.8l-.3-1.7a7.6 7.6 0 0 1-1.7-1l-1.6.6a1 1 0 0 1-1.2-.4l-.7-1.2a1 1 0 0 1 .2-1.3l1.3-1.1a7.6 7.6 0 0 1 0-2L4.1 8.8a1 1 0 0 1-.2-1.3l.7-1.2a1 1 0 0 1 1.2-.4l1.6.6a7.6 7.6 0 0 1 1.7-1z"/><circle cx="12" cy="12" r="2.9"/></svg>';
+const PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+const MINUS = '<svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg>';
 const TALK = '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.3A8 8 0 1 1 21 12Z"/></svg>';
 
 export interface HudOptions {
   onMenu(): void;
   onChat(): void;
+  /** In and out. A pinch does the same thing, but a pinch is a gesture
+   *  nobody is told about — and on a twenty-square board seen on a phone,
+   *  zooming is not an advanced feature, it is how you read the board. */
+  onZoom(factor: number): void;
 }
 
 export interface Standing {
@@ -36,6 +50,7 @@ export class Hud {
   private tip: HTMLDivElement;
   private board: HTMLDivElement;
   private chatBtn: HTMLButtonElement;
+  private zoomer!: HTMLDivElement;
   private unread = 0;
 
   constructor(host: HTMLElement, opts: HudOptions) {
@@ -72,6 +87,23 @@ export class Hud {
     this.board = document.createElement('div');
     this.board.className = 'standings';
     document.body.appendChild(this.board);
+
+    // Down the right-hand edge, where a right thumb already is, and clear of
+    // both the scoreboard above and the tray below.
+    this.zoomer = document.createElement('div');
+    this.zoomer.className = 'zoomer';
+    const zoomBtn = (glyph: string, factor: number, title: string): HTMLButtonElement => {
+      const b = document.createElement('button');
+      b.className = 'lift dark icon';
+      b.innerHTML = glyph;
+      b.title = title;
+      b.onclick = () => opts.onZoom(factor);
+      this.zoomer.appendChild(b);
+      return b;
+    };
+    zoomBtn(PLUS, 1.35, t('act.zoomIn'));
+    zoomBtn(MINUS, 1 / 1.35, t('act.zoomOut'));
+    document.body.appendChild(this.zoomer);
   }
 
   /** Online games have somebody to talk to; solo games do not, and a chat
@@ -135,5 +167,6 @@ export class Hud {
   hide(on: boolean): void {
     this.el.classList.toggle('gone', on);
     this.board.classList.toggle('gone', on);
+    this.zoomer.classList.toggle('gone', on);
   }
 }

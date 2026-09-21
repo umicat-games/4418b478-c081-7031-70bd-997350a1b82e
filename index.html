@@ -7,7 +7,12 @@
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { height: 100%; overflow: hidden; background: #0d0f16; }
-      canvas { display: block; width: 100%; height: 100%; }
+      /* The canvas owns every gesture that lands on it. Without this the
+         browser takes two fingers for its own page zoom and a drag for a
+         scroll, and `pointermove` simply stops arriving — which is what made
+         pinch-to-zoom and drag-to-aim do nothing at all on a phone. There is
+         no platform input layer in this game to have set it for us. */
+      canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       /* The UI of a 3D game on the web is DOM. There is no reason to draw a
          score with triangles, and every reason not to: a real <input> is the
          only thing with an IME and a soft keyboard. */

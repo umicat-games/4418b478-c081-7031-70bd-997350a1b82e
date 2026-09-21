@@ -43,6 +43,10 @@ const TILE_H = CELL * 0.55;
 /** The lens, and how far from overhead it may be pushed. */
 const FOV_DEG = 26;
 const MIN_POLAR_DEG = 6;
+/** How far in and out the player may take the board. Four times is a cell
+ *  about a centimetre across on a phone, which is what a thumb wants. */
+const MIN_ZOOM = 0.85;
+const MAX_ZOOM = 4;
 const MAX_POLAR_DEG = 58;
 const DEFAULT_POLAR_DEG = 34;
 
@@ -91,6 +95,17 @@ export class BoardView {
   private azimuth = 0;
   private polar = THREE.MathUtils.degToRad(DEFAULT_POLAR_DEG);
   private zoom = 1;
+  /**
+   * What the camera is looking AT, on the board's surface.
+   *
+   * Zooming without this is zooming into the middle of the board and nowhere
+   * else, which on a phone is the one place you are not playing. Pan and zoom
+   * are one feature: either both exist or neither is worth having.
+   */
+  private target = new THREE.Vector2(0, 0);
+  /** How far back the whole board fits from here. Divided by the zoom to get
+   *  the distance actually used, and re-measured whenever the shot changes. */
+  private fitDistance = 4;
   /** Which corner of the board is nearest the camera — the player's own. */
   private seat = 0;
 
@@ -379,8 +394,39 @@ export class BoardView {
   }
 
   zoomBy(factor: number): void {
-    this.zoom = THREE.MathUtils.clamp(this.zoom * factor, 0.85, 3.2);
+    this.zoom = THREE.MathUtils.clamp(this.zoom * factor, MIN_ZOOM, MAX_ZOOM);
     this.frame();
+  }
+
+  get zoomLevel(): number { return this.zoom; }
+
+  /**
+   * Slide the view across the board, in screen pixels.
+   *
+   * The conversion is the world size of a pixel AT THE BOARD, so a finger
+   * keeps the square it grabbed: at four times the zoom the same drag moves a
+   * quarter as far across the grid, which is what "the board is under my
+   * finger" means. Clamped to the board's own edges — panning off into the
+   * dark is a way to lose the game you are playing.
+   */
+  panBy(dxPx: number, dyPx: number): void {
+    const k = this.worldPerPixel();
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0).setY(0).normalize();
+    // The camera's up vector, flattened onto the board: "away from the
+    // viewer" on screen. Using the view direction instead would be zero-length
+    // when looking straight down.
+    const away = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1).setY(0);
+    if (away.lengthSq() < 1e-8) away.set(0, 0, -1); else away.normalize();
+    this.target.x = THREE.MathUtils.clamp(this.target.x - (right.x * dxPx - away.x * dyPx) * k, -HALF, HALF);
+    this.target.y = THREE.MathUtils.clamp(this.target.y - (right.z * dxPx - away.z * dyPx) * k, -HALF, HALF);
+    this.frame();
+  }
+
+  /** How much board one screen pixel covers, at the distance being looked at. */
+  private worldPerPixel(): number {
+    const h = Math.max(1, window.innerHeight);
+    const dist = this.fitDistance / this.zoom;
+    return (2 * dist * Math.tan(THREE.MathUtils.degToRad(FOV_DEG) / 2)) / h;
   }
 
   /** Back to the view the game opens on, for whichever corner it is. */
@@ -388,6 +434,7 @@ export class BoardView {
     this.azimuth = 0;
     this.polar = THREE.MathUtils.degToRad(DEFAULT_POLAR_DEG);
     this.zoom = 1;
+    this.target.set(0, 0);
     this.frame();
   }
 
@@ -418,15 +465,17 @@ export class BoardView {
     this.dirty = true;
     const w = window.innerWidth, h = window.innerHeight;
     const vFov = THREE.MathUtils.degToRad(FOV_DEG);
-    // A first guess, close enough that the measured fit below converges in a
-    // couple of passes. The fit is what actually decides the distance.
-    let r = (HALF * Math.SQRT2 * 1.1) / Math.tan(vFov / 2) / this.zoom;
 
     const az = this.baseAzimuth + this.azimuth;
     const sp = Math.sin(this.polar), cp = Math.cos(this.polar);
-    const put = (dist: number): void => {
-      this.camera.position.set(dist * sp * Math.sin(az), dist * cp, dist * sp * Math.cos(az));
-      this.camera.lookAt(0, 0, 0);
+    /** Put the camera `dist` away, looking at a point on the board. */
+    const place = (dist: number, tx: number, tz: number): void => {
+      this.camera.position.set(
+        tx + dist * sp * Math.sin(az),
+        dist * cp,
+        tz + dist * sp * Math.cos(az),
+      );
+      this.camera.lookAt(tx, 0, tz);
       // Slide the whole picture away from the strips the tray and the chat
       // cover, so the board sits in the middle of what is VISIBLE rather than
       // of the window. A POSITIVE offset moves the picture left and up, which
@@ -439,21 +488,24 @@ export class BoardView {
       this.camera.updateProjectionMatrix();
       this.camera.updateMatrixWorld();
     };
-    put(r);
 
     /**
-     * Fit the board to the part of the window nothing is standing on.
+     * How far back the WHOLE board fits, centred — measured, not derived.
      *
-     * Measured in SCREEN PIXELS against that rectangle, rather than in
-     * normalised coordinates against the whole window: with a view offset the
-     * two are not the same thing, and the version that mixed them backed the
-     * camera off by nearly half for a tray a seventh of the screen tall.
+     * In SCREEN PIXELS against the part of the window nothing is standing on,
+     * rather than in normalised coordinates against the whole window: with a
+     * view offset those are different things, and the version that mixed them
+     * backed the camera off by nearly half for a tray a seventh of the screen
+     * tall. The corners are measured rather than a bounding sphere — a board
+     * seen from above covers a square, not a circle — and the tile height is
+     * in the measurement, so a piece on the near edge is not sliced off.
      *
-     * The corners are measured rather than a bounding sphere: a board seen
-     * from above covers a square, not a circle, and a sphere fit leaves a
-     * third of the screen empty. The tile height is in the measurement too,
-     * so a piece on the near edge is not sliced off by the bottom.
+     * This is the ZOOM-1 shot. Everything the player does to the camera after
+     * that is a fraction of it, which is why it is measured with the pan and
+     * the zoom taken out and then divided back in.
      */
+    let r = (HALF * Math.SQRT2 * 1.1) / Math.tan(vFov / 2);
+    place(r, 0, 0);
     const v = new THREE.Vector3();
     const top = SLAB + TILE_H;
     const cx = (w - this.insetRight) / 2;
@@ -475,9 +527,12 @@ export class BoardView {
       }
       if (!Number.isFinite(worst) || worst <= 0) break;
       r *= worst;
-      put(r);
+      place(r, 0, 0);
       if (Math.abs(worst - 1) < 0.005) break;
     }
+    this.fitDistance = r;
+
+    place(r / this.zoom, this.target.x, this.target.y);
   }
 
   resize(): void {
