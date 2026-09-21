@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GID=d25d06c2-0ae4-4083-8eff-ded32d3125aa
+GID=367450cf-f39d-4748-b57b-0bb0a9dcdb37
 DIST="$REPO/dist"
 BUCKET=unboxy-dev
 CF_DIST=E31A40598Q73XJ   # cdn.umicat.ai

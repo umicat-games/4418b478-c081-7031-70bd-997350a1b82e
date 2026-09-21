@@ -15,7 +15,13 @@ import { showTitle } from './title';
 import { createDebugHud } from './debughud';
 import { Vfx, ring as ringVfx, motes, corpse, dissolve, lightning, arcBetween, flames, frost, saucerBurst, hitSparks, slashFlash, bladeTrail, preloadAtlas, FRAME } from './vfx';
 import { DEV, DEV_BANNER, devProgress, toggleDev } from './dev';
-import { LEVELS, TUTORIAL, type LevelDef, type Wave } from './levels';
+import { createSpendPanel, type Offer } from './spend';
+import { createCoach } from './coach';
+import { submit, readBoard, boardElement } from './board';
+import {
+  ARENA, LEVELS, PRELOAD, BOSS_EVERY, bossAt, enemyAt, spawnGapAt,
+  type LevelDef, type Wave,
+} from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
 import { createWayfinder } from './wayfinder';
 import { createAim } from './aim';
@@ -66,6 +72,13 @@ const SAVE_KEY = 'td-progress';
 
 /** What is kept between runs. */
 export interface Progress {
+  /** Which lessons the player has already been shown, by id.
+   *
+   *  On the SAVE rather than on the run: a lesson is a thing a person has
+   *  learned, and learning it again on the second run is the game not having
+   *  noticed. Ids rather than a count, so lessons can be added and reordered
+   *  without re-teaching the ones already seen. */
+  taught?: string[];
   best?: number;
   quality?: number;
   weapon?: Weapon;
@@ -226,13 +239,114 @@ const ENEMY_FLY_HEIGHT = 0.38;
  *  a delay — and with a 1.7-unit range and nothing visible crossing the gap it
  *  read as "walking near it costs a heart". A bullet you can see leave, cross
  *  the ground and miss is a different game, from exactly the same numbers. */
-const ENEMY_SHOOT_RANGE = 3.4;
+/** How close one has to be to start shooting.
+ *
+ *  Large enough to cover the board, which is the point: an enemy crossing the
+ *  far side still contributes, so the player is never standing somewhere with
+ *  nothing to collect. At 3.4 — the tower defense's value, where shooting was
+ *  something that happened when you strayed too near a lane — the only way to
+ *  earn anything was to chase, and chasing is not what the colour rule is
+ *  about. */
+const ENEMY_SHOOT_RANGE = 15;
 const ENEMY_SHOOT_COOLDOWN = 2.4;
 /** The tell, before the shot leaves. */
 const ENEMY_WINDUP_SECONDS = 0.45;
 const BULLET_SPEED = 4.2;         // slower than the hero: it can be outrun
 const BULLET_HIT_RADIUS = 0.38;
 const BULLET_LIFE = 2.6;          // seconds before a miss gives up
+// ─────────────────────────────────────────────────────────────────────────────
+// Polarity
+//
+// The whole game is one rule: a bullet your own colour FEEDS you, a bullet of
+// the other colour HURTS you, and you choose which is which at any moment.
+// Everything else — mana, the weapons, the boss — hangs off that.
+//
+// Two poles, named `dark` and `light` rather than black and white because the
+// names have to survive the art: the pieces that carry them are lit, and a
+// "white" bullet in shadow is grey. What matters is which of the two it is,
+// and that the player can tell at a glance.
+
+export type Pole = 'dark' | 'light';
+export const POLES: Pole[] = ['dark', 'light'];
+export const other = (p: Pole): Pole => (p === 'dark' ? 'light' : 'dark');
+
+/** What each pole LOOKS like.
+ *
+ *  Not `0x000000` and `0xffffff`. A pure black bullet against the board's
+ *  shadow is invisible, and pure white is what every existing effect in this
+ *  game already flashes — a hit spark, a cast, the screen flash. Both poles
+ *  are pushed off the extremes and given a tint, so they read as a PAIR of
+ *  deliberate colours rather than as "the lights went out".
+ *
+ *  `rim` is what the piece is outlined in, and it is the opposite end of the
+ *  scale from the body: a dark bullet carries a bright edge and a light one a
+ *  dark edge, so neither disappears against the ground it happens to cross. */
+export const POLE_LOOK: Record<Pole, { body: number; rim: number; glow: number }> = {
+  dark:  { body: 0x241f33, rim: 0x9d7bff, glow: 0x7a4dff },
+  light: { body: 0xf2f0ea, rim: 0x4a4636, glow: 0xffe9a8 },
+};
+
+/** How close a bullet of your own colour has to get before it is pulled in.
+ *
+ *  Comfortably wider than `BULLET_HIT_RADIUS`, and that gap is the design: a
+ *  same-pole bullet is absorbed strictly before it could ever reach the body,
+ *  so matching a colour is SAFE and not merely profitable. A player who has to
+ *  wonder whether the absorb will win the race is a player who dodges instead
+ *  of collecting, which is the game not being played. */
+const ABSORB_RADIUS = 1.35;
+
+/** The boss's fan: how many pellets, and how far apart.
+ *
+ *  Seven at 13 degrees is a 78-degree spread — wide enough that standing
+ *  still inside it is never right, narrow enough to be walked out of sideways
+ *  rather than requiring a sprint. */
+const BOSS_FAN = 7;
+const BOSS_FAN_SPREAD = 0.227;
+const UP = new THREE.Vector3(0, 1, 0);
+
+// --- mana ------------------------------------------------------------------
+/** The one resource. Absorbing fills it, everything the hero does spends it.
+ *
+ *  There is no regeneration and no floor. Standing still earns nothing — the
+ *  only way to have mana is to have stood in front of something shooting at
+ *  you wearing the right colour, which is the risk the game is made of. */
+const MANA_MAX = 100;
+/** What you start with.
+ *
+ *  Deliberately BELOW both prices — a heal is 30 and the first upgrade 34 —
+ *  so the opening cannot buy anything. The panel is a thing you earn your way
+ *  into, and a game that offers it on frame one has explained its economy
+ *  before the player has met the thing that feeds it.
+ *
+ *  Not zero, though: attacking costs mana too, and a hero who cannot swing
+ *  until something has shot at them is a hero whose first input does nothing.
+ *  Twenty is five sword swings. */
+const MANA_START = 20;
+const MANA_PER_ABSORB = 6;
+const MANA_PER_KILL = 14;
+const MANA_PER_BOSS_KILL = 45;
+
+/** What a heal costs and what it gives. Flat, like every other heal in this
+ *  game's history — see the Barracks note in CLAUDE.md for why a percentage
+ *  heal quietly devalues itself. */
+/** What a swing costs, by what the weapon REACHES.
+ *
+ *  A sword answers one thing beside you; an arrow answers something across the
+ *  board; a staff answers a patch of it. That order is the design and it is
+ *  the same order the weapons' damage runs in, inverted — the cheap one has to
+ *  be worth using late, or a run becomes "hold the staff and never swing".
+ *
+ *  Absolute values are a first guess: one absorbed orb is 6, so a sword swing
+ *  is two thirds of an orb and a staff cast is two and a half of them. */
+const MANA_PER_ATTACK: Record<'melee' | 'arrow' | 'burst', number> = {
+  melee: 4,
+  arrow: 7,
+  burst: 15,
+};
+
+const HEAL_MANA_COST = 30;
+const HEAL_AMOUNT = 35;
+
 /** Bullets appear a little clear of the hull so they are not drawn inside it.
  *
  *  There is NO minimum shooting distance. I added one — a UFO on top of you
@@ -245,19 +359,27 @@ const BULLET_MUZZLE = 0.15;
  *  of six, so the answer to it has to be "move", and moving needs warning. */
 /** How many things may be shooting at the hero at once.
  *
- *  Two, not three. With the tower count capped, every measured run ended the
- *  same way: the base never lost a life and the hero was shot to death while
- *  walking between build spots. That is the game inverted — walking to a spot
- *  is the mechanic, so being shot for walking is being shot for playing.
+ *  **Seven, and the reason it is not two is the whole difference between this
+ *  game and the one it was forked from.** There the cap existed because a
+ *  bullet was purely danger: a crowd firing at once was a wall nobody dodges,
+ *  and capping the shooters kept each enemy exactly as dangerous as it was
+ *  while stopping the crowd from being dangerous by arithmetic.
  *
- *  Without a cap, danger scales with the size of the wave: twenty saucers each
- *  firing every 2.4s within 3.4 units is a wall of bullets nobody dodges, and
- *  the measured result was a board that never lost a life while the hero was
- *  shot to death on wave eight. A cap keeps each enemy exactly as dangerous as
- *  it was and stops the crowd from being dangerous by arithmetic.
+ *  Here half of what is in the air is FOOD. A cap on shooters is therefore a
+ *  cap on income — and mana is what heals you, so starving the player of
+ *  bullets is starving them of health. The same number that made the old game
+ *  fair makes this one unplayable by drought.
+ *
+ *  It is not removed entirely, because the thing a cap protects against is
+ *  real and did not go away: past about seven simultaneous streams the board
+ *  is denser than the swap button can be READ, and a fight you cannot read is
+ *  not a harder fight. The invincibility window (`HERO_INVINCIBLE_SECONDS`) is
+ *  what actually bounds the damage — it puts a ceiling on how fast health can
+ *  leave regardless of how much is flying — which is why the shooter cap is
+ *  free to be about legibility instead.
  *
  *  The boss is exempt — it is the one thing that is supposed to be personal. */
-const MAX_SHOOTERS = 2;
+const MAX_SHOOTERS = 7;
 const BOSS_WINDUP_SECONDS = 0.9;
 const BOSS_SHOOT_COOLDOWN = 3.2;
 /** How long the body lies there before it sinks away. */
@@ -274,7 +396,10 @@ const CORPSE_SECONDS = 2.4;
 const CRATE_EVERY = 11;         // seconds between drops
 const CRATE_MAX = 3;            // how many can be waiting at once
 const CRATE_LIFE = 26;          // seconds before an unopened one is gone
-const CRATE_GOLD = [12, 30];    // the range a gold crate pays
+/** What a crate pays, in MANA. It was 12-30 GOLD against a run that paid
+ *  about 550 of it; as mana — a bar of 100, six a bullet — the same numbers
+ *  are two to five orbs, which is what a walk across the board is worth. */
+const CRATE_GOLD = [12, 26];
 /** A heart only if one is missing — a crate that pays nothing is worse than a
  *  crate that pays gold, so a full-health player gets the gold instead. */
 const CRATE_HEART_CHANCE = 0.42;
@@ -420,14 +545,19 @@ interface Enemy {
   barFill: THREE.Mesh | null;
   speed: number;
   bounty: number;
-  /** How far along the path, in cells. Fractional between waypoints. */
-  t: number;
+  /** Which colour it is, and therefore what colour it SHOOTS. An enemy's pole
+   *  is the whole of the information the player acts on: it says, from across
+   *  the board and before a shot is fired, whether what is about to come out
+   *  of it will feed them or hurt them. */
+  pole: Pole;
+  /** Where it is going, per second. Constant for its whole life — it enters
+   *  from outside one side of the board and leaves outside another, and does
+   *  not steer. A thing that follows you is a contact hit with extra steps;
+   *  the threat here is the LINE it draws across the field, which you can read
+   *  in advance precisely because it does not change. */
+  vel: THREE.Vector3;
   /** Seconds left of the rock from being hit. Flyers only. */
   wobble: number;
-  /** Which fork it took, chosen at spawn. Both gates are always live, so the
-   *  question the board asks is no longer "where is the path" but "which half
-   *  of it can I afford to leave thin". */
-  route: number;
   alive: boolean;
   shootCooldown: number;
   windup: number;
@@ -535,8 +665,11 @@ interface Bullet {
   obj: THREE.Object3D;
   vel: THREE.Vector3;
   life: number;
-  /** Hearts on contact. The boss's boulder is worth two. */
+  /** Bar points on contact — and only if the hero is the OTHER colour. */
   damage: number;
+  /** Which colour it is. The single most important field in this game: it
+   *  decides whether touching this thing pays the player or costs them. */
+  pole: Pole;
 }
 
 /** Does the segment a→b pass within `r` of `c`? Closest-point-on-segment.
@@ -584,22 +717,19 @@ export async function startLevel(
   /** The tutorial board is entered as index -1. It is not in `LEVELS` because
    *  it is not a board you choose — it is the first two minutes of the game,
    *  once — and a list entry would leave it sitting there for good. */
-  const scripted = levelIndex < 0;
-  const level: LevelDef = scripted
-    ? TUTORIAL
-    : LEVELS[Math.max(0, Math.min(levelIndex, LEVELS.length - 1))];
-  const WAVES = level.waves;
-  const SPAWN_GAP = level.spawnGap;
-  const WAVE_GAP = level.waveGap;
+  // There is one board, so there is nothing to choose and nothing to look up.
+  // `levelIndex` survives as an argument because the hub and the save still
+  // speak in board numbers; it no longer selects anything.
+  void levelIndex;
+  const scripted = false;
+  const level: LevelDef = ARENA;
   const { umicat, renderer, canvas, hudEl, audio } = shared;
 
-  const [manifest, scene3d, pathData] = await Promise.all([
+  // No path file. There is no road on this board — nothing follows one — so
+  // the scene is the whole of what the level loads.
+  const [manifest, scene3d] = await Promise.all([
     fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
-    fetch(`scenes3d/${level.id}.json`).then((r) => r.json() as Promise<Scene3D>),
-    fetch(`scenes3d/${level.id}-path.json`).then((r) => r.json() as Promise<{
-      routes: [number, number][][]; cells: [number, number][]; spots: [number, number][];
-      scenery: [number, number][]; gates: string[]; blocked?: [number, number][];
-    }>),
+    fetch('scenes3d/arena.json').then((r) => r.json() as Promise<Scene3D>),
   ]);
   const [world] = await Promise.all([
     loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER }),
@@ -641,27 +771,16 @@ export async function startLevel(
   const qFlag = new URLSearchParams(location.search).get('quality');
   const quality = qFlag === '0' ? 0 : 1;
 
-  // The path the enemies walk is the same polyline the tiles were laid from,
-  // so what you see and what they follow cannot drift apart.
-  // One list of waypoints per gate, each a complete walk from the spawn tile.
-  // They share their first thirty cells; nothing here needs to know that.
-  const ROUTES = pathData.routes;
-  const BUILDABLE = new Set(pathData.spots.map(([x, z]) => `${x},${z}`));
-  const ON_PATH = new Set(pathData.cells.map(([x, z]) => `${x},${z}`));
-  /** The back field: cells that are neither road nor a place to build. Nothing
-   *  else ever wants them, which is exactly why the crates go there. */
-  const SCENERY = new Set((pathData.scenery ?? []).map(([x, z]) => `${x},${z}`));
-  /** Water. Nothing is built there and nothing lands there. */
-  const BLOCKED = new Set((pathData.blocked ?? []).map(([x, z]) => `${x},${z}`));
+  /** The air wall, which is what the hero is held inside. Enemies FLY and were
+   *  never touching it — they cross the board from outside one side to outside
+   *  the other, and `OUTSIDE` is where they are made and where they are gone. */
+  const FIELD = 6.6;
+  const OUTSIDE = 8.6;
+  /** Anywhere on the board a thing may be dropped. There is no road and no
+   *  build spot to avoid any more, so this is simply the field. */
   const BACKFIELD: [number, number][] = [];
   for (let x = -5.5; x <= 5.5; x += 1) {
-    for (let z = -5.5; z <= 5.5; z += 1) {
-      const k = `${x},${z}`;
-      // Not on the road, not on a build spot, and not inside a tree.
-      if (!ON_PATH.has(k) && !BUILDABLE.has(k) && !SCENERY.has(k) && !BLOCKED.has(k)) {
-        BACKFIELD.push([x, z]);
-      }
-    }
+    for (let z = -5.5; z <= 5.5; z += 1) BACKFIELD.push([x, z]);
   }
 
   /** Where the hero comes in, and where a knocked-out one is carried back to —
@@ -680,15 +799,20 @@ export async function startLevel(
       // Shapes, not emoji — see `src/icons.ts`. The attack one is swapped in
       // `setWeapon` for whatever is in your hand.
       { id: 'attack', icon: WEAPON_ICON.sword, keys: ['KeyJ'] },
-      // SPACE places. The left hand is on WASD while the hero walks, and the
-      // thumb is the only finger free — `E` asked that hand to leave the keys it
-      // was steering with. E and B stay bound; a key that used to work and
-      // silently stopped is a worse surprise than an extra one.
-      { id: 'build', icon: ICON.build, keys: [PLACE_KEY, 'KeyB', 'KeyE'] },
+      // The colour. SPACE, and it is the most-pressed control in the game —
+      // which is why it gets the key the thumb is already resting on, and why
+      // it is declared FIRST among the two that are not the attack: the SDK
+      // lays its buttons on an arc from the bottom corner outward, so the
+      // earlier a button is declared the closer to the hinge of the thumb it
+      // sits. The swap is pressed several times a second in a busy board; the
+      // upgrade is pressed once a minute.
+      { id: 'swap', icon: ICON.swap, keys: [PLACE_KEY, 'KeyQ'] },
+      // Opens the panel. Not a thing done in a hurry, and it pauses.
+      { id: 'upgrade', icon: ICON.upgrade, keys: ['KeyE', 'KeyB'] },
     ],
     // NO JUMP. This game is played by walking around a board, and the platform
     // draws only the buttons a game asks for. Declining it also frees `Space`,
-    // which the SDK reads as jump and which places a tower here.
+    // which the SDK reads as jump and which swaps the pole here.
     jump: false,
   });
 
@@ -968,7 +1092,7 @@ export async function startLevel(
     (manifest.models ?? []).find((m) => m.id === 'boss-orc')?.animations ?? {};
   for (const id of [...TOWERS.map((t) => t.model), ...TOWERS.map((t) => t.ammo),
                     ...TOWERS.flatMap((t) => t.stack ?? []), 'td-tower-round-crystals',
-                    ...WAVES.map((w) => w.model), ...WAVES.map((w) => w.ammo ?? 'td-bullet'),
+                    ...PRELOAD.map((w) => w.model), ...PRELOAD.map((w) => w.ammo ?? 'td-bullet'),
                     // Everything `dropPickup`, `dropCrate` and the tower
                     // levels can ask for. A model that is not here is not a
                     // missing texture — it is `undefined.type` thrown out of
@@ -1193,11 +1317,16 @@ export async function startLevel(
   let pickedUp = 0;
   /** Whether the hero has swung at anything and connected. */
   let heroHits = 0;
-  const maxTowers = level.maxTowers + bonus.towerCap;
-  /** What the hotbar offers on this run. A tower mount you have not unlocked
-   *  is not a greyed-out cell — it is not there, because a row of things you
-   *  cannot buy is a row you learn to look past. */
-  const KINDS = TOWERS.filter((k) => (k.needsSmithy ?? 0) <= bonus.smithy);
+  const maxTowers = 0;
+  /** Nothing is placed any more, so the hotbar offers no towers. It keeps its
+   *  ONE remaining cell — the weapon, with the staff's recharge drawn on it —
+   *  which is a readout rather than a row of things to buy.
+   *
+   *  Empty rather than deleted: `TOWERS` and everything that reads it are one
+   *  commit away from being removed outright, and taking them out in the same
+   *  pass as the new game would mean two large changes landing together with
+   *  nothing to tell their failures apart. */
+  const KINDS: TowerKind[] = [];
   // FIXED. The Clinic buys armour now, not a bigger pool — see `TownBonus`.
   // A percentage bar cannot show a pool growing anyway: it always starts full,
   // and 175/175 looks exactly like 100/100 until something hits you.
@@ -1218,20 +1347,75 @@ export async function startLevel(
   const withBuff = (base: number): number =>
     base * attackMultiplier(playerLevel) * (buff?.kind.id === 'strike' ? 2 : 1);
   const heroDamage = baseHeroDamage;
-  let gold = level.startGold + bonus.gold;
-  let lives = level.lives;
+  let gold = bonus.gold;
+  let lives = 1;
   let heroHp = heroMaxHp;
   let waveIndex = 0;
   // Countdown to the next wave. The FIRST one is longer than the rest: a board
   // with a short road gives the towers less time with everything that walks it,
   // and the answer to that is more time to build before it starts, not a
   // gentler wave one. Measured — Frostfall's opening cost eight of ten lives.
-  let waveTimer = level.firstWaveDelay;
+  let waveTimer = 0;
   /** Whether the wave at `waveIndex` has actually been sent out yet. */
   let waveLaunched = false;
   let wavesPaused = false;
-  let spawnTimer = 0;
+  /** How long before the first crossing. Long enough to have looked at the
+   *  board and found which colour you are, and not a second longer: what
+   *  teaches this game is a bullet coming at you, and nothing before the first
+   *  one teaches anything.
+   *
+   *  It is the SPAWN timer that carries this, not a separate opening delay.
+   *  There was one — and the clock-driven loop that replaced the wave loop
+   *  never read it, so the opening grace silently became zero and the first
+   *  enemy arrived on frame one. */
+  let spawnTimer = 3.5;
   let toSpawn = 0;
+  /** Seconds the run has been going. The whole difficulty curve is a function
+   *  of this and nothing else, so "what is minute three like" is a question
+   *  with an answer you can read off `levels.ts` without playing to it. */
+  let runClock = 0;
+  let bossCount = 0;
+
+  // --- the three numbers this game is actually about ----------------------
+
+  /** Which colour the hero is RIGHT NOW. Everything follows from it: which
+   *  bullets feed you and which ones hurt.
+   *
+   *  It starts `dark` rather than being chosen, and the opening board is a
+   *  coin flip per enemy, so the first thing that happens to a new player is
+   *  half the bullets going the wrong way. That is the lesson, delivered by
+   *  the game rather than by a panel. */
+  let pole: Pole = 'dark';
+  /** The one resource. Absorbing fills it; attacking, healing and upgrading
+   *  spend it. It does not regenerate — see the note on `MANA_MAX`. */
+  let mana = MANA_START;
+  /** What the run is worth. Every point of mana TAKEN scores, and so does
+   *  every kill — which means the score is a record of how much you were
+   *  willing to stand in front of, not of how long you hid. A survival timer
+   *  would reward the opposite. */
+  let score = 0;
+
+  /** `m:ss`. The run has no waves to count, so its length is the only thing
+   *  left that says how far you got. */
+  const formatTime = (t: number): string =>
+    `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+  /** Take mana, and score it. One function because the two must not drift:
+   *  a source that pays mana and forgets to score is a source that quietly
+   *  does not count. */
+  const gainMana = (n: number): void => {
+    mana = Math.min(MANA_MAX, mana + n);
+    score += n;
+    renderHud();
+  };
+  /** Spend it, if there is enough. Returns whether the thing may happen —
+   *  every caller is an action that must not half-occur. */
+  const spendMana = (n: number): boolean => {
+    if (mana < n) return false;
+    mana -= n;
+    renderHud();
+    return true;
+  };
   let running = true;
   /** Milliseconds of HITSTOP left — the freeze on a connecting blow.
    *
@@ -1528,10 +1712,6 @@ export async function startLevel(
   // leaves it that colour for the rest of the run — the gates went red on the
   // first leak and stayed red, which reads as damage you cannot repair.
   const tinted: THREE.Object3D[] = [hero];
-  for (const id of pathData.gates) {
-    const g = world.entities.get(id);
-    if (g) tinted.push(g);
-  }
 
   // --- HUD ---
   //
@@ -1563,6 +1743,44 @@ export async function startLevel(
   armourEl.style.cssText = 'display:none; align-items:center; gap:3px; font: 700 13px/1 system-ui;'
     + ' color:#9fd0ff;';
   line1.append(hpTrack, armourEl);
+
+  // --- the mana bar, and the colour you are ------------------------------
+  //
+  // Second row, under the health. They are the two bars the run is decided by
+  // and they are read in this order: health says whether you are in trouble,
+  // mana says what you can do about it.
+  //
+  // The SWATCH sits at the end of the mana bar rather than anywhere else on
+  // the screen, because "what colour am I" and "what can I spend" are the two
+  // halves of the same question — mana only arrives in the colour you are
+  // wearing.
+  const manaLine = document.createElement('div');
+  manaLine.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:5px;';
+  const manaTrack = document.createElement('div');
+  manaTrack.dataset.mana = '';
+  manaTrack.style.cssText = `position: relative; width: 168px; height: 10px; border-radius: 5px;
+    background: rgba(0,0,0,.42); box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
+    overflow: hidden; transition: box-shadow .12s;`;
+  const manaFill = document.createElement('div');
+  manaFill.style.cssText = 'height:100%; width:0%; border-radius:5px;'
+    + ' background: linear-gradient(90deg,#7a4dff,#c9a6ff); transition: width .14s;';
+  manaTrack.appendChild(manaFill);
+  /** The colour you are, as a disc. Not a word: `DARK` and `LIGHT` are two
+   *  five-letter words that have to be READ, and this is a thing the player
+   *  checks several times a second. A disc is checked without reading. */
+  const poleDot = document.createElement('span');
+  poleDot.dataset.pole = '';
+  poleDot.style.cssText = `width:17px; height:17px; border-radius:9px; display:inline-block;
+    flex: none; transition: background .12s, box-shadow .12s;`;
+  manaLine.append(manaTrack, poleDot);
+
+  /** Say NO, visibly. The button refusing in silence is the thing this game's
+   *  own history says never to do — the staff's cooldown spent a build being
+   *  mistaken for a broken button. */
+  const flashMana = (): void => {
+    manaTrack.style.boxShadow = 'inset 0 0 0 2px #ef4b4b';
+    window.setTimeout(() => { manaTrack.style.boxShadow = 'inset 0 0 0 2px rgba(255,255,255,.25)'; }, 190);
+  };
   const line2 = document.createElement('div');
   const line3 = document.createElement('div');
   line3.dataset.prompt = '1';
@@ -1604,12 +1822,12 @@ export async function startLevel(
     sfx: { get: () => audio.sfxLevel, set: (v) => audio.setSfxVolume(v) },
     save: () => void patchSave(umicat,
       { musicVolume: audio.musicLevel, sfxVolume: audio.sfxLevel }),
-    pause: (on) => setPaused(on),
+    pause: (on: boolean) => setPaused(on),
     leave: () => quitRun(),
   });
   // The BUTTONS stay outside the plate — they carry their own backgrounds, and
   // a plate behind them would be a panel with two holes in it.
-  hudEl.append(readoutPlate(line1, line2, buffEl, line3), buttons);
+  hudEl.append(readoutPlate(line1, manaLine, line2, buffEl, line3), buttons);
 
   const banner = document.createElement('div');
   banner.style.cssText = `
@@ -1666,10 +1884,15 @@ export async function startLevel(
     for (const e of enemies) {
       if (!e.alive || !e.bar || !e.barFill) continue;
       const frac = Math.max(0, e.hp / e.maxHp);
-      // Full bars everywhere are noise and the interesting information is which
-      // things are nearly dead — except for the boss, whose bar IS the fight's
-      // progress bar and has to be there from the first hit to the last.
-      if (frac >= 1 && !e.boss) { e.bar.visible = false; continue; }
+      // ALWAYS up, full or not.
+      //
+      // The tower defense hid full bars on the grounds that a board of them is
+      // noise and the interesting information is what is nearly dead. That was
+      // right there and is wrong here, for a reason that has nothing to do
+      // with clutter: in this game you pay MANA to attack, so "how much is
+      // left of this one" is a question asked BEFORE committing to it, not
+      // afterwards. A bar that appears only once you have already spent on it
+      // answers too late to change anything.
       e.bar.visible = true;
       e.barFill.scale.x = frac;
       (e.barFill.material as THREE.MeshBasicMaterial).color.setHex(
@@ -1689,6 +1912,34 @@ export async function startLevel(
    *  the damage does, so one cast teaches the radius better than any number
    *  in the HUD could. */
   const _burstAt = new THREE.Vector3();
+  /** An orb going in.
+   *
+   *  It has to be unmistakable, and specifically it has to be distinguishable
+   *  from being HIT — those are the two things that happen when a bullet
+   *  reaches you, they happen in the same place, and reading the wrong one is
+   *  reading the whole game wrong. A hit is red, loud, and shakes the camera;
+   *  this is a small inward pull in the pole's own colour with no shake at
+   *  all. The difference is deliberately larger than it needs to be.
+   *
+   *  Motes are thrown in the ABSORBED orb's colour rather than a neutral
+   *  spark, so the feedback names which colour was taken — the player who
+   *  swapped a moment too early sees it. */
+  const _absorbAt = new THREE.Vector3();
+  const absorb = (at: THREE.Vector3): void => {
+    const look = POLE_LOOK[pole];
+    motes(vfx, at, {
+      count: 7, color: look.glow, color2: look.rim,
+      radius: 0.3, rise: 0.5, spin: 2.2, life: 0.32, size: 0.1,
+      frame: FRAME.sparkle,
+    });
+    // A ring ON THE HERO, not on the orb: the point being made is that the
+    // thing arrived HERE, and a mark left where it died says the opposite.
+    _absorbAt.set(hero.position.x, 0.05, hero.position.z);
+    ringVfx(vfx, _absorbAt, {
+      color: look.glow, from: ABSORB_RADIUS * 0.75, to: 0.15, life: 0.24, opacity: 0.5,
+    });
+  };
+
   const castBurst = (at: THREE.Vector3): void => {
     const t = kind.tint;
     // One effect per element, each its own ONE draw call — the same budget the
@@ -1928,6 +2179,98 @@ export async function startLevel(
    *  Materials are SHARED between clones cut from one model, so each shot gets
    *  its own or repainting one repaints every bullet in the air — including the
    *  arrows the towers fire. */
+  // --- the orb, and why it is not lit ------------------------------------
+  //
+  // A bullet is a SPHERE, and its colour is the only thing in this game the
+  // player has to read correctly every single time. A sphere is the right
+  // shape for that because it has no orientation: the kit's bullet is a capsule
+  // that shows a different silhouette depending on which way it is flying, and
+  // "which way is it pointing" is a second thing to decode at the moment there
+  // is no time to decode anything.
+  //
+  // **`MeshBasicMaterial`, so no light touches it.** This is the part that
+  // matters. Lit, a white orb crossing the hero's shadow goes grey and a dark
+  // one under the sun picks up a specular highlight — the two poles converge
+  // exactly where the board is busiest. Unlit, dark is the same dark in the
+  // shadow of a tree as it is in the open, and the decision the whole game
+  // rests on never depends on where on the field it is being made.
+  //
+  // And each orb wears a SHELL of the opposite value, drawn back-faces-only so
+  // it reads as an outline. Against bright grass a white orb would have almost
+  // nothing to separate it from the ground; against the board's shadows a dark
+  // one would have nothing either. With the shell, whichever half is losing
+  // contrast, the other half is winning it — there is no background on this
+  // board that can swallow both at once.
+  const ORB = new THREE.SphereGeometry(0.16, 14, 10);
+  const ORB_SHELL = new THREE.SphereGeometry(0.205, 14, 10);
+  const orbMat: Record<Pole, THREE.Material> = {
+    dark: new THREE.MeshBasicMaterial({ color: POLE_LOOK.dark.body }),
+    light: new THREE.MeshBasicMaterial({ color: POLE_LOOK.light.body }),
+  };
+  const shellMat: Record<Pole, THREE.Material> = {
+    dark: new THREE.MeshBasicMaterial({ color: POLE_LOOK.dark.rim, side: THREE.BackSide }),
+    light: new THREE.MeshBasicMaterial({ color: POLE_LOOK.light.rim, side: THREE.BackSide }),
+  };
+  /** One bullet. The materials are SHARED — nothing ever repaints an orb after
+   *  it is made, which is what lets every bullet of a pole be two draws for the
+   *  whole board rather than two per shot. (Contrast the kit's bullets, which
+   *  had to be cloned per shot precisely because they were recoloured.) */
+  const makeOrb = (pole: Pole, scale = 1): THREE.Object3D => {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(ORB, orbMat[pole]);
+    const shell = new THREE.Mesh(ORB_SHELL, shellMat[pole]);
+    // The shell must not win the depth test against its own core.
+    shell.renderOrder = -1;
+    g.add(shell, core);
+    g.scale.setScalar(scale);
+    return g;
+  };
+
+  /** Put one orb in the air.
+   *
+   *  Spawned OUT IN FRONT rather than at the hull's centre: from the centre it
+   *  could already be past the player, and at close range it crossed the gap
+   *  faster than a frame — invisible damage for standing nearby, which is what
+   *  the wind-up exists to replace. */
+  const fireOrb = (
+    from: THREE.Vector3, dir: THREE.Vector3, p: Pole,
+    dmg: number, scale: number, speed: number,
+  ): void => {
+    const obj = makeOrb(p, scale);
+    obj.position.copy(from).addScaledVector(dir, BULLET_MUZZLE);
+    world.scene.add(obj);
+    bullets.push({
+      obj, vel: dir.clone().multiplyScalar(speed),
+      life: BULLET_LIFE, damage: dmg, pole: p,
+    });
+  };
+
+  /** Mark an ENEMY with the pole it shoots.
+   *
+   *  The bullets say it loudest, but a player who can only read the pole once
+   *  a shot is in the air is always reacting. Reading it off the thing that is
+   *  about to fire is what lets them choose a colour BEFORE the shot — which is
+   *  the difference between dodging and collecting.
+   *
+   *  Emissive rather than base colour, and the emissive is the pole's GLOW
+   *  rather than its body: a saucer repainted flat white is a saucer that has
+   *  lost its own shading and reads as untextured. */
+  const paintPole = (obj: THREE.Object3D, pole: Pole): void => {
+    const look = POLE_LOOK[pole];
+    obj.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const paint = (m: THREE.Material): THREE.Material => {
+        const c = (m as THREE.MeshStandardMaterial).clone() as THREE.MeshStandardMaterial;
+        c.color.lerp(new THREE.Color(look.body), 0.72);
+        c.emissive?.setHex(look.glow);
+        c.emissiveIntensity = pole === 'light' ? 0.34 : 0.5;
+        return c;
+      };
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(paint) : paint(mesh.material);
+    });
+  };
+
   const paintShot = (obj: THREE.Object3D, colour: number): void => {
     obj.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -2114,11 +2457,12 @@ export async function startLevel(
         } else {
           earned[q.kind] += q.amount;
           pickedUp += 1;
-          // Only GOLD is spendable during a run. Wood and stone have nothing to
-          // buy here, which is what makes them come home in full while the gold
-          // is a choice between a tower now and a building later.
+          // A gold crate pays MANA now. Gold has no source and no use in this
+          // game — the town is gone and nothing sells anything — so a crate
+          // that paid it was a crate that paid nothing, which is worse than a
+          // crate that is not there. The one resource is the one resource.
           if (q.kind === 'gold') {
-            gold += q.amount;
+            gainMana(q.amount);
             goldEl.style.transform = 'scale(1.22)';
             setTimeout(() => { goldEl.style.transform = 'scale(1)'; }, 120);
           }
@@ -2497,15 +2841,23 @@ export async function startLevel(
         document.createTextNode(String(Math.round(armour / ARMOUR_PER_LEVEL))));
       armourEl.style.display = 'inline-flex';
     }
-    const w = Math.min(waveIndex + 1, WAVES.length);
     // Shapes, and the base's own MAXIMUM alongside it. `10` on its own does not
     // say whether it is climbing or falling, and this is the number the run
     // ends on — it was quieter than the gold beside it.
     // 1.25em, not 1em. A silhouette needs more room than a letter of the same
     // nominal size — at 1em the tower's rook read as a small white square.
-    setIconText(livesEl, 'house', ` ${lives}/${level.lives}\u2003`, HUD_ICON);
-    setIconText(goldEl, 'coin', ` ${gold}`, HUD_ICON);
-    waveEl.textContent = `\u2003Wave ${w}/${WAVES.length}`;
+    manaFill.style.width = `${(Math.max(0, mana) / MANA_MAX * 100).toFixed(1)}%`;
+    {
+      const look = POLE_LOOK[pole];
+      // The swatch is the pole's BODY colour with its rim around it — the same
+      // two colours the orbs wear, so the disc in the corner and the thing
+      // flying at you are recognisably the same statement.
+      poleDot.style.background = `#${look.body.toString(16).padStart(6, '0')}`;
+      poleDot.style.boxShadow = `0 0 0 2.5px #${look.rim.toString(16).padStart(6, '0')}`;
+    }
+    // The SCORE, where the gold used to be. Same corner, same shape, and the
+    // number the run is actually about.
+    setIconText(goldEl, 'award', ` ${score}`, HUD_ICON);
     setIconText(towerEl, 'tower', ` ${towers.length}/${maxTowers}`, HUD_ICON);
     towerEl.style.marginLeft = '1em';
     buffEl.textContent = '';
@@ -2631,7 +2983,33 @@ export async function startLevel(
    *  says one enemy, then another, then another, each after a step is done —
    *  that is not a wave table, and expressing it as one would mean a table that
    *  is really a state machine written sideways. */
+  /** Where one crosses from, and where it is headed.
+   *
+   *  It comes in from OUTSIDE one side and leaves OUTSIDE another, so it is
+   *  already moving by the time it can be seen and does not pop into being in
+   *  front of the player. The exit is a random point on the far side rather
+   *  than straight across, which is what makes each crossing a different line
+   *  instead of four lanes the player learns to stand off.
+   *
+   *  The exit spread is deliberately narrower than the board (±4.6 against
+   *  ±6.6): a line between two points near the SAME corner clips the edge of
+   *  the field and is over before it is a threat. Pulling both ends in aims
+   *  every crossing through the part of the board that is actually played. */
+  const crossing = (): { from: THREE.Vector3; dir: THREE.Vector3 } => {
+    const side = Math.floor(Math.random() * 4);
+    const along = () => (Math.random() * 2 - 1) * 4.6;
+    const from = new THREE.Vector3();
+    const to = new THREE.Vector3();
+    // 0 north, 1 south, 2 west, 3 east — and the exit is on the opposite one.
+    if (side === 0) { from.set(along(), 0, -OUTSIDE); to.set(along(), 0, OUTSIDE); }
+    else if (side === 1) { from.set(along(), 0, OUTSIDE); to.set(along(), 0, -OUTSIDE); }
+    else if (side === 2) { from.set(-OUTSIDE, 0, along()); to.set(OUTSIDE, 0, along()); }
+    else { from.set(OUTSIDE, 0, along()); to.set(-OUTSIDE, 0, along()); }
+    return { from, dir: to.sub(from).normalize() };
+  };
+
   const spawnOne = (w: Wave): void => {
+    const path = crossing();
     const obj = spawnFrom(w.model);
     obj.scale.setScalar(w.scale);
     // Measured before anything is hung off it — a bar inside the box it
@@ -2652,14 +3030,13 @@ export async function startLevel(
     const e: Enemy = {
       obj, hp: w.hp, maxHp: w.hp, speed: w.speed, bounty: w.bounty,
       armed: w.armed, bar, barFill, wobble: 0,
-      // Alternate, rather than choose at random. Both lanes stay live all
-      // wave, which is the point of the fork; randomness would sometimes
-      // send fifteen of sixteen down one side and read as a bug.
-      t: 0, route: nextRoute, alive: true, shootCooldown: 1, windup: 0,
+      pole: w.pole ?? (Math.random() < 0.5 ? 'dark' : 'light'),
+      vel: path.dir.clone().multiplyScalar(w.speed),
+      alive: true, shootCooldown: 1, windup: 0,
       ground: w.ground ?? false, facesTravel: w.facesTravel ?? false,
       ammo: w.ammo ?? 'td-bullet', damage: w.damage ?? BULLET_DAMAGE, boss: w.boss ?? false,
     };
-    nextRoute = (nextRoute + 1) % ROUTES.length;
+    paintPole(obj, e.pole);
     if (w.model === 'boss-orc' && bossClips.length) {
       // A rig needs a mixer or it renders in its bind pose and slides —
       // silently, looking exactly like a model that has no animation.
@@ -2672,328 +3049,11 @@ export async function startLevel(
       audio.play('wave');
       if (bar) bar.visible = true;   // always up: it is the run's clock
     }
-    posAt(e.route, 0, e.ground ? 0 : ENEMY_FLY_HEIGHT, obj.position);
+    obj.position.copy(path.from);
+    obj.position.y = e.ground ? 0 : ENEMY_FLY_HEIGHT;
     enemies.push(e);
     tinted.push(obj);
   };
-
-  // --- the scripted tutorial -------------------------------------------------
-  //
-  // Built after the hotbar and the towers exist, because half of it points at
-  // them. The board is entered as index -1 and nothing else runs this.
-  let script: Script | null = null;
-  /** The ground trail, for the steps that name a square to stand on. Built
-   *  whether or not this is the tutorial board, because building it lazily
-   *  inside a step means building it mid-frame in the render loop. */
-  // Cyan, like the rings. The trail, the ring on the ground and the ring on the
-  // button are ONE instruction — a white trail beside two cyan marks reads as
-  // three separate things that happen to be on screen at the same time.
-  const scriptTrail = createWayfinder(world.scene, { color: 0x4fd2ff });
-  /** The square a step is pointing at. Pulses, so it is not mistaken for the
-   *  build marker that follows the hero around. */
-  const scriptRing = new THREE.Mesh(
-    new THREE.RingGeometry(0.34, 0.5, 40).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({
-      // Cyan, like everything else the tutorial points with.
-      color: 0x4fd2ff, transparent: true, opacity: 0.8,
-      depthWrite: false, side: THREE.DoubleSide,
-    }),
-  );
-  scriptRing.visible = false;
-  scriptRing.renderOrder = 6;
-  world.scene.add(scriptRing);
-  /** The square the script wants the tower on: the second build spot along the
-   *  road from where the enemies come out.
-   *
-   *  Chosen from the board's own spot list rather than written down, so a
-   *  change to the lane cannot leave the arrow pointing at grass. Not the FIRST
-   *  spot — that one is level with the gate, and a tower there has the enemy in
-   *  range for a moment before it is walking away. */
-  const scriptCell = (): [number, number] => {
-    // A THIRD of the way along, not the first square past the gate.
-    //
-    // Beside the gate, the enemy spawns already inside the tower's range: it
-    // was shot on its first frame and died a second and a half later having
-    // moved half a tile, so the step that says "it shoots on its own, two hits"
-    // was over before it could be read. From here it comes out, walks into
-    // range and is shot in front of you — which is the lesson.
-    const route = ROUTES[0];
-    const aim = route[Math.floor(route.length / 3)];
-    const byAim = [...pathData.spots].sort((a, b) =>
-      (Math.hypot(a[0] - aim[0], a[1] - aim[1]))
-      - (Math.hypot(b[0] - aim[0], b[1] - aim[1])));
-    return byAim[0];
-  };
-
-  if (scripted) {
-    const spot = scriptCell();
-    const spawnScripted = (): void => {
-      // From the board's OWN wave entry, so the model is one this level
-      // preloaded. Only the health is the script's, and it is derived.
-      spawnOne({ ...level.waves[0], count: 1, hp: scriptEnemyHp() });
-    };
-    const alive = (): number => enemies.filter((e) => e.alive).length;
-    const nearestAway = (): number => {
-      const live = enemies.filter((e) => e.alive);
-      if (!live.length) return Infinity;
-      return Math.min(...live.map((e) =>
-        Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z)));
-    };
-    /** The staff the tutorial hands over for its last two steps.
-     *
-     *  Handed over, not earned: it is gone the moment the board ends, because
-     *  what the player owns lives in the save and this board writes none of it.
-     *  Fire is the first one they will actually forge. */
-    const TAUGHT_STAFF: Weapon = 'fire';
-    /** An enemy that one cast kills.
-     *
-     *  Derived, like the tower's: the fire staff does ONE damage — its point is
-     *  the burn, not the hit — so the enemy the towers were sized against would
-     *  take four casts, and "press it and watch" would be a lie four times over.
-     */
-    /** Seconds since the board last emptied, so a replacement is sent with a
-     *  beat rather than the instant the last one falls. */
-    let emptyFor = 0;
-    /** Keep something on the board for a step that is waiting for a kill of a
-     *  particular kind. Without it, killing it the ORDINARY way finishes
-     *  nothing and nothing else arrives. */
-    const keepOne = (send: () => void) => (): void => {
-      if (alive() > 0) { emptyFor = 0; return; }
-      emptyFor += 1;
-      // About a second and a half at sixty frames, and longer on a slow one —
-      // which is the right way round, since a slow frame means a slow fight.
-      if (emptyFor > 90) { emptyFor = 0; send(); }
-    };
-    const spawnForStaff = (): void => {
-      spawnOne({
-        ...level.waves[0], count: 1,
-        hp: weaponDamage(TAUGHT_STAFF, weaponLevel),
-      });
-    };
-    let placedAt = -1;
-    let upgradedAt = -1;
-    let soldAt = -1;
-    let staffKills = -1;
-    let placedKills = -1;
-    let placedCasts = -1;
-
-    script = createScript([
-      {
-        // The bottom bar first, because nothing else on this board can be done
-        // until something is chosen, and the ring it draws under your feet is
-        // the explanation for every step after this one.
-        title: 'Choose a weapon',
-        text: `${tapWord()} the weapon in the bar below`,
-        enter: () => { onlyKind = 0; },
-        slot: () => 0,
-        // Nothing to walk to: the bar is under your thumb wherever you are.
-        ready: () => true,
-        done: () => selected !== null,
-      },
-      {
-        // The arrow does the pointing; the words say why that square.
-        // Two lines, and the second one is not an aside. "Stand here" is the
-        // instruction; "enemies come out of the gate beside it" is the REASON,
-        // and a dash joining them makes one long sentence that has to be read
-        // twice. Named, too: "they" is a pronoun for something the player has
-        // not seen yet.
-        title: 'Choose where to build',
-        text: 'Stand on the marked square<br>Enemies come out of the gate beside it',
-        at: () => ({ x: spot[0], z: spot[1] }),
-        enter: () => { onlyBuildAt = spot; },
-        done: () => !!buildCell && buildCell[0] === spot[0] && buildCell[1] === spot[1],
-      },
-      {
-        // Names the button AND where it is. An icon on its own is a puzzle:
-        // the player has not met it yet and has to find which of the four
-        // circles on the right it matches.
-        title: 'Build your weapon',
-        text: `Press ${pressName('build')} to put it down`,
-        // Long enough to watch it land before being told the next thing.
-        after: 1.6,
-        at: () => ({ x: spot[0], z: spot[1] }),
-        button: () => 'action',
-        ready: () => !!buildCell && buildCell[0] === spot[0] && buildCell[1] === spot[1],
-        enter: () => { allow.build = true; allow.upgrade = false; allow.sell = false; },
-        done: () => towers.length > 0,
-      },
-      {
-        // One enemy. It takes two hits, and the health it takes them with is
-        // derived from the tower's damage — see `scriptEnemyHp`.
-        // NO panel. An enemy walks out of the gate and the weapon starts
-        // shooting it — a box saying "it shoots on its own" both states the
-        // obvious and covers the thing it is describing. The step still exists
-        // to spawn the enemy and wait for the kill; it just says nothing.
-        //
-        // The pacing is still derived (see `scriptEnemyHp`): two hits, then one
-        // after the upgrade. Felt, not read.
-        enter: () => { placedAt = kills; spawnScripted(); },
-        done: () => kills > placedAt,
-        after: 1.8,
-      },
-      {
-        // Also no panel, for the same reason as the fight above it: the coin
-        // visibly flies to you, and by the time a box could say so it has
-        // already arrived. The step stays as a BEAT — it is what gives the
-        // flight a second and a half of nobody talking over it.
-        done: () => pickedUp > 0,
-        after: 1.4,
-      },
-      {
-        // The same button, doing something else because of where you are
-        // standing. That is the lesson, so the step names the place first.
-        // The UPGRADE icon, not the build one. By the time they press it the
-        // button has changed — it changes because they are standing on their
-        // own weapon — and an instruction showing the picture the button used
-        // to wear is an instruction pointing at nothing.
-        title: 'Upgrade your weapon',
-        text: `Stand on your weapon, then press ${pressName('upgrade')}`,
-        at: () => ({ x: spot[0], z: spot[1] }),
-        button: () => 'action',
-        ready: () => !!standingOn,
-        enter: () => {
-          // Upgrade only. A step that says "press to upgrade" answered by a
-          // HOLD sells the weapon the next three steps are about.
-          allow.build = false; allow.upgrade = true; allow.sell = false;
-          upgradedAt = kills;
-          // Make sure it can be paid for. The board hands out 25g, the weapon
-          // costs 25 and the upgrade 20, and what the first enemy leaves is a
-          // roll — so a run of bad luck turns an instruction into a wall. A
-          // scripted step that cannot be completed is the one failure this
-          // whole board exists to avoid.
-          const t = towers[0];
-          if (t && gold < upgradeCost(t)) { gold = upgradeCost(t); renderHud(); }
-        },
-        done: () => towers.some((t) => t.level > 1),
-        // Watch it grow before being told what that bought.
-        after: 1.6,
-      },
-      {
-        // Same again: the upgrade's whole point is visible in how fast the
-        // next one falls.
-        enter: () => { upgradedAt = kills; spawnScripted(); },
-        done: () => kills > upgradedAt,
-        after: 1.8,
-      },
-      {
-        // Hold, not tap. The button becomes the sell icon while you hold it,
-        // which is the only warning the gesture gets.
-        // Both pictures, because the change IS the gesture: you hold the one
-        // and let go when it has become the other.
-        // On a phone the button itself becomes the sell icon while you hold
-        // it, and that change IS the gesture. On a desktop there is no button
-        // to change, so the ring is the whole of the feedback.
-        title: 'Sell your weapon',
-        text: touchLikely()
-          ? `Hold ${pressName('upgrade')} until it turns to`
-            + ` ${iconHtml('sell', '1.25em')} and the ring fills`
-          : `Hold ${pressName('upgrade')} down until the ring fills`,
-        at: () => ({ x: spot[0], z: spot[1] }),
-        button: () => 'action',
-        ready: () => !!standingOn,
-        enter: () => {
-          // Sell only. Otherwise the square is free the instant it is sold and
-          // a new weapon can be dropped on it, which is not the next lesson.
-          allow.build = false; allow.upgrade = false; allow.sell = true;
-          soldAt = towers.length;
-        },
-        done: () => towers.length === 0,
-        after: 1.4,
-      },
-      {
-        // The board is empty now, on purpose: you sold the thing that was
-        // doing the work, so the last lesson is that you can do it yourself.
-        // "The enemy", not "it". Same reason the step before this one stopped
-        // saying "they": a pronoun stands in for something already named, and
-        // nothing here has named it.
-        //
-        // Two lines, in the order the other steps use: what to do, then why.
-        title: 'Swing your sword',
-        text: `Chase the enemy down and press ${pressName('sword')}`
-          + '<br>Nothing is guarding the road now',
-        button: () => 'sword',
-        enter: () => {
-          // Nothing may be built, and no weapon may be chosen.
-          //
-          // Not just because it short-circuits the lesson — you sold the
-          // weapon, so the point is that there is nothing to do it for you —
-          // but because it STICKS. This step is done when `heroHits > 0` and
-          // the board is empty, so an enemy killed by a tower empties the board
-          // with no hero hit, and nothing spawns another: the tutorial sits
-          // there forever with an instruction it has made impossible.
-          //
-          // -1 is no slot: the bar has four, numbered from zero.
-          onlyBuildAt = null;
-          onlyKind = -1;
-          allow.build = false; allow.upgrade = false; allow.sell = false;
-          // And un-choose what is still chosen from four steps ago. Locking the
-          // bar leaves the old selection standing, which keeps drawing its
-          // range ring around a player who cannot build — a circle saying "this
-          // is what it would cover" for a weapon there is no way to place.
-          selected = null;
-          refreshHotbar();
-          spawnScripted();
-          // If it walks the whole way, send another and say it again. On this
-          // board a leak costs nothing, which is what makes that safe.
-          onScriptLeak = () => { if (alive() === 0) spawnScripted(); };
-        },
-        done: () => heroHits > 0 && alive() === 0,
-        tick: keepOne(spawnScripted),
-        after: 1.6,
-      },
-      {
-        // The staff, tapped. Same button, a weapon that does not need to touch
-        // them — which is the whole of what a staff is.
-        title: 'Use the staff',
-        text: `You have a fire staff now<br>Get close and press ${pressName('fire')}`,
-        button: () => 'attack',
-        ready: () => nearestAway() < 2.6,
-        enter: () => {
-          setWeapon(TAUGHT_STAFF);
-          staffKills = kills;
-          spawnForStaff();
-        },
-        done: () => kills > staffKills,
-        tick: keepOne(spawnForStaff),
-        after: 1.8,
-      },
-      {
-        // And placed. Far enough away that the staff's own lock cannot reach —
-        // which is what makes the drag the only way to land it, rather than a
-        // flourish over a tap that would have worked anyway.
-        title: 'Aim the staff',
-        text: 'Now stay back from this one<br>'
-          + `Hold ${pressName('fire')}, ${dragThing()} to aim, then let go`,
-        button: () => 'attack',
-        enter: () => {
-          placedKills = kills;
-          placedCasts = aimedCasts;
-          spawnForStaff();
-        },
-        // A TAP kills it too — the enemy is sized to one cast — and that
-        // satisfies half of this and none of the lesson. So another one comes.
-        done: () => kills > placedKills && aimedCasts > placedCasts,
-        tick: keepOne(spawnForStaff),
-        // The LAST step needs a beat too, and it is the one that had none —
-        // `after ?? 0` on the final step meant the summary panel landed on the
-        // same frame as the kill, over the body that was still falling. Every
-        // other step in the script waits for its own result to be seen; the one
-        // that ends the board should not be the exception.
-        after: 2.2,
-      },
-    ], hudEl, () => {
-      // Skipping ends the board the same way finishing it does — a win, with
-      // the materials the village needs. A skip that drops you into an empty
-      // purse is a skip into the dead end the grant exists to prevent.
-      onScriptLeak = null;
-      onlyBuildAt = null;
-      onlyKind = null;
-      allow.build = true; allow.upgrade = true; allow.sell = true;
-      if (running) endRun(true);
-    });
-    void soldAt;
-  }
-
 
   const endRun = (didWin: boolean): void => {
     // Once. A run can plausibly end twice in the same breath — the last life
@@ -3010,7 +3070,7 @@ export async function startLevel(
     hotbar.style.display = 'none';
     audio.duck(10);
     audio.play(didWin ? SFX.victory : 'lose');
-    const reached = Math.min(waveIndex + 1, WAVES.length);
+    const reached = score;
     if (reached > bestWave) bestWave = reached;
     // The shared board. A guest run is not recorded — writing needs a signed-in
     // player — and that is handled inside rather than being a caller's problem.
@@ -3036,10 +3096,10 @@ export async function startLevel(
     debug.dispose();
     hudEl.textContent = '';
     vfx.clear();
-    script?.dispose();
-    scriptTrail.dispose();
     aim.dispose();
     dial.dispose();
+    spendPanel.dispose();
+    coach.dispose();
     // These live on document.body, so they would outlive the level that made
     // them and sit over the hub wired to a disposed input.
     pad?.dispose();
@@ -3091,6 +3151,11 @@ export async function startLevel(
       bests: { ...(prev.bests ?? {}), [level.id]: Math.max(prev.bests?.[level.id] ?? 0, reached) },
     });
 
+    // The shared board. Started BEFORE the panel is built so the round trip
+    // overlaps with the player reading their own numbers, and awaited only
+    // where its answer is actually drawn.
+    const posting = submit(umicat, score, Math.floor(runClock));
+
     const panel = document.createElement('div');
     panel.style.cssText = `position: fixed; inset: 0; z-index: 80; display: flex;
       align-items: center; justify-content: center; background: rgba(8,12,16,.72);
@@ -3103,7 +3168,7 @@ export async function startLevel(
       <div style="min-width:290px;max-width:86vw;background:rgba(18,22,28,.96);
                   border-radius:18px;padding:22px 24px">
         <div style="font:800 19px/1.5 system-ui">${didWin ? 'Cleared' : 'Defeated'}</div>
-        <div style="opacity:.75;margin-bottom:14px">${level.name} · wave ${reached}/${WAVES.length}</div>
+        <div style="opacity:.75;margin-bottom:14px">${level.name} · ${formatTime(runClock)} · ${reached} points</div>
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span id="sum-lv" style="font:800 17px/1.4 system-ui">Level ${fromLevel}</span>
           <span id="sum-xp" style="opacity:.7">+${gained} XP</span>
@@ -3112,12 +3177,36 @@ export async function startLevel(
                     overflow:hidden;margin:6px 0 16px">
           <div id="sum-bar" style="height:100%;width:0%;background:#7cc4ff;border-radius:6px"></div>
         </div>
-        ${row('coin', 'Gold', gold)}${row('wood', 'Wood', earned.wood)}${row('stone', 'Stone', earned.stone)}
+        ${row('award', 'Score', score)}${row('sword', 'Defeated', kills)}
+        <div id="sum-rank" style="margin-top:14px;opacity:.75;font-size:13px;min-height:1.6em"></div>
         <button id="sum-go" style="margin-top:18px;width:100%;padding:11px 0;border:0;
           border-radius:999px;font:800 15px system-ui;background:#fff;color:#222;
           cursor:pointer">Back to the village</button>
       </div>`;
     document.body.appendChild(panel);
+
+    // Where the run landed on the shared board — filled in when the round trip
+    // comes back, rather than holding the panel up for it.
+    //
+    // `textContent`, and no player name is shown here at all: this line is
+    // about the player reading it. The board itself, which DOES show other
+    // people's names, is built in `board.ts` and never goes near innerHTML.
+    void (async () => {
+      const el = panel.querySelector<HTMLElement>('#sum-rank');
+      if (!el) return;
+      const r = await posting;
+      if (r.ok) {
+        el.textContent = r.best
+          ? `Your best yet — #${r.rank} on the board`
+          : 'Your best still stands on the board';
+      } else if (r.why === 'anonymous') {
+        // A rule, not a failure. Said plainly, because a score that silently
+        // does not count is worse than one that says why.
+        el.textContent = 'Sign in to put your score on the board';
+      } else {
+        el.textContent = 'Could not reach the score board';
+      }
+    })();
 
     // Fill the bar, one level at a time. A single jump to the final number
     // hides the thing worth watching, which is the moment it wraps.
@@ -3156,18 +3245,6 @@ export async function startLevel(
     };
   };
 
-  // --- the path, as a position lookup -------------------------------------
-  const posAt = (route: number, t: number, y: number, out: THREE.Vector3): THREE.Vector3 => {
-    const path = ROUTES[route];
-    const i = Math.floor(t);
-    if (i >= path.length - 1) {
-      const last = path[path.length - 1];
-      return out.set(last[0], y, last[1]);
-    }
-    const a = path[i], b = path[i + 1], f = t - i;
-    return out.set(a[0] + (b[0] - a[0]) * f, y, a[1] + (b[1] - a[1]) * f);
-  };
-
   // --- building ------------------------------------------------------------
   const cellOf = (x: number, z: number): [number, number] =>
     [Math.floor(x) + 0.5, Math.floor(z) + 0.5];
@@ -3193,36 +3270,128 @@ export async function startLevel(
    *  rendering at eight frames a second that is a perfectly ordinary tap. */
   let pressPending = false;
   let pressAt = 0;
-  const readBuildButton = (): void => {
-    if (input.consume('build')) { pressPending = true; pressAt = performance.now(); }
-    if (!pressPending) return;
-    const down = input.held('build');
-    const heldMs = performance.now() - pressAt;
+  // --- the swap -----------------------------------------------------------
 
-    if (allow.sell && standingOn && down && heldMs >= SELL_HOLD_MS) {
-      sellTower(standingOn);
-      pressPending = false;
-      return;
+  /** Flip the pole.
+   *
+   *  Free, instant, and with no cooldown at all. Every instinct says to put a
+   *  cost on the most powerful button in the game, and every version of that
+   *  is wrong here: a cooldown means a bullet you can SEE is your colour but
+   *  may not take, which reads as the game refusing an input rather than as a
+   *  rule. The cost of swapping is already paid — it is that the OTHER half of
+   *  what is in the air just became lethal. */
+  const swapPole = (): void => {
+    everSwapped = true;
+    pole = other(pole);
+    const look = POLE_LOOK[pole];
+    audio.play(SFX.uiPress);
+    // On the HERO, because the hero is what changed. A player mid-crossing is
+    // looking at the board, not at the corner of the screen, so the readout is
+    // a confirmation rather than the message.
+    flashTint(hero, { color: look.glow, ms: 260 });
+    _absorbAt.set(hero.position.x, 0.05, hero.position.z);
+    ringVfx(vfx, _absorbAt, {
+      color: look.glow, from: 0.3, to: ABSORB_RADIUS * 1.1, life: 0.3, opacity: 0.75,
+    });
+    paintHero();
+    renderHud();
+  };
+
+  /** The hero wears the pole.
+   *
+   *  This is not decoration. The player has to be able to answer "what colour
+   *  am I" from the middle of the screen, where they are already looking —
+   *  reading it off a bar in the corner costs a glance, and the glance costs
+   *  the crossing. The HUD says it too, for the moment after a swap when the
+   *  hero is behind something. */
+  const heroTint: THREE.Object3D[] = [];
+  const paintHero = (): void => {
+    if (!heroTint.length) {
+      hero.traverse((o) => { if ((o as THREE.Mesh).isMesh) heroTint.push(o); });
     }
-    if (!down) {
-      pressPending = false;
-      // Released. On a TOWER there are THREE outcomes, not two.
-      //
-      //   under the dead zone  -> upgrade. A tap, and it showed nothing.
-      //   past it, before full -> NOTHING. The ring was on screen; letting go
-      //                           is a cancel, and a cancel must cancel.
-      //   full                 -> sold, handled above.
-      //
-      // It used to treat any early release as "just a slow tap" and upgrade —
-      // so holding halfway, thinking better of it and letting go bought an
-      // upgrade nobody asked for. That puts the two gestures back on top of
-      // each other, which is the whole thing the dead zone was added to stop.
-      //
-      // Off a tower there is no hold to cancel: the button only builds, and a
-      // slow press there IS just a slow tap.
-      if (standingOn && heldMs >= SELL_ARM_MS) return;
-      tryBuild();
+    const look = POLE_LOOK[pole];
+    for (const o of heroTint) {
+      const mesh = o as THREE.Mesh;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const st = m as THREE.MeshStandardMaterial;
+        // Emissive only. Repainting the hero's BASE colour would take the
+        // face this game spent a session rebuilding and make it a silhouette.
+        if (st.emissive) { st.emissive.setHex(look.glow); st.emissiveIntensity = 0.42; }
+      }
     }
+  };
+
+  // --- spending it on something other than a swing -------------------------
+
+  const spendPanel = createSpendPanel({
+    pause: (on: boolean) => setPaused(on),
+    mana: () => mana,
+    manaMax: () => MANA_MAX,
+    press: () => audio.play(SFX.uiPress),
+    offers: () => {
+      const next = nextTierCost(kind.cast, runTier);
+      const label = tierLabel(kind.cast, runTier);
+      return [
+        {
+          id: 'heal',
+          glyph: 'heart',
+          title: 'Heal',
+          body: `Back ${HEAL_AMOUNT} health`,
+          cost: HEAL_MANA_COST,
+          // Offered but refused at full health, rather than hidden. A row that
+          // comes and goes is a panel whose shape changes under the thumb
+          // that is reaching for it.
+          blocked: heroHp >= heroMaxHp ? 'full' : null,
+        },
+        {
+          id: 'upgrade',
+          glyph: 'upgrade',
+          title: 'Improve your weapon',
+          body: label ?? 'Nothing left to improve',
+          cost: next ?? 0,
+          blocked: next === null ? 'max' : null,
+        },
+      ];
+    },
+    take: (id: Offer['id']) => {
+      if (id === 'heal') {
+        if (!spendMana(HEAL_MANA_COST)) return;
+        heroHp = Math.min(heroMaxHp, heroHp + HEAL_AMOUNT);
+        audio.play(SFX.buffPickup);
+        flashTint(hero, { color: 0x5fd36a, ms: 320 });
+      } else {
+        const next = nextTierCost(kind.cast, runTier);
+        if (next === null || !spendMana(next)) return;
+        runTier += 1;
+        audio.play(SFX.levelUp);
+        // The blade carries its own tier — it thickens and reddens at each
+        // step — so this is not cosmetic bookkeeping: skip it and the weapon
+        // gets better while looking exactly as it did.
+        paintBlade();
+        const got = tierLabel(kind.cast, runTier);
+        if (got) flashBanner(got, 'upgrade');
+      }
+      renderHud();
+    },
+  });
+
+  const openUpgrade = (): void => {
+    if (!running || spendPanel.open) return;
+    spendPanel.show();
+  };
+
+  /** The two buttons that are not the attack.
+   *
+   *  Both are plain taps. There is no hold-to-do-something-else anywhere in
+   *  this game: the tower defense had one because a single button had to carry
+   *  three verbs, and the reason it could get away with it was that placing a
+   *  tower is a thing done at leisure. Here the swap is pressed in the middle
+   *  of a bullet crossing the screen, and a control whose meaning depends on
+   *  how long you held it is a control that goes wrong exactly then. */
+  const readButtons = (): void => {
+    if (input.consume('swap')) swapPole();
+    if (input.consume('upgrade')) openUpgrade();
   };
 
   /** How far through a sell-hold we are, 0 to 1, or 0 when nothing is being
@@ -3379,8 +3548,32 @@ export async function startLevel(
     placedCast = at;
     if (!running || animator.busy) return;
 
+    // Attacking is paid for. This is the whole economy in one line: the only
+    // way to have mana is to have stood in front of something shooting at you
+    // wearing the right colour, so every swing is charged against the risk
+    // that earned it.
+    //
+    // The three weapons are priced by how much of the board they answer — a
+    // sword reaches one thing beside you, an arrow reaches across the field,
+    // and a staff catches a patch of it. That ORDER is the design; the
+    // absolute numbers are a first guess and are one table away.
+    //
+    // Refused rather than silently ignored. A silent cooldown is
+    // indistinguishable from a broken button — this game already learned that
+    // once, from the staff — and "you are out of mana" is a thing the player
+    // can act on the moment they are told it.
+    const price = MANA_PER_ATTACK[kind.cast];
+    if (mana < price) {
+      audio.play('denied');
+      flashMana();
+      return;
+    }
+
     if (kind.cast === 'burst') {
       if (staffCooldown > 0) return;
+      // Charged HERE, past the cooldown check: charging above would take the
+      // mana for a cast that then does not happen.
+      spendMana(price);
       staffCooldown = (kind.cooldown ?? 1.7) * burstCooldownScale(runTier);
       animator.play('interact');
       // Each staff's own sound, and the generic one only if a weapon has not
@@ -3466,6 +3659,7 @@ export async function startLevel(
     }
 
     if (kind.cast === 'arrow') {
+      spendMana(price);
       animator.play('holdBothShoot');
       audio.play('enemy-shot');
       // Towards the lock if there is one, otherwise straight ahead. Auto-aim
@@ -3499,6 +3693,7 @@ export async function startLevel(
       return;
     }
 
+    spendMana(price);
     animator.play('attack');
     swing = SWING_SECONDS;
     trailDone = false;
@@ -3595,6 +3790,10 @@ export async function startLevel(
       playEnemyClip(e, 'die', false);
       corpse(vfx, e.obj, { hold: CORPSE_SECONDS, sink: 1.2, mixer: e.mixer ?? null });
       kills += 1;
+      // A boss is worth most of a bar. It has to be: killing one costs a long
+      // stretch of attacking, which is a long stretch of SPENDING, and a fight
+      // you come out of poorer than you went in is a fight to walk away from.
+      gainMana(MANA_PER_BOSS_KILL);
       const share = Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1) / 6);
       for (let i = 0; i < 6; i++) dropPickup(e.obj.position, share, 'gold');
       return;
@@ -3605,8 +3804,16 @@ export async function startLevel(
     e.obj.visible = false;
     e.obj.rotation.z = 0;
     kills += 1;
-    dropPickup(e.obj.position,
-      Math.round(e.bounty * BOUNTY_SCALE * (buff?.kind.id === 'lucky' ? 1.6 : 1)));
+    // Paid on the spot, and NOTHING is dropped.
+    //
+    // Everything in this game's ancestry made you walk to your money — that
+    // was the tower defense's whole point, since you were somewhere else and
+    // the money was here. Here you are already at the kill, because the only
+    // weapon is your own, so a coin to collect is a coin lying where you are
+    // standing. And the coins paid GOLD, which now has nothing to buy: they
+    // were still flying to the hero, still chiming, and moving a counter that
+    // is no longer on the screen.
+    gainMana(MANA_PER_KILL);
   };
 
   const hurtHero = (amount = BULLET_DAMAGE): void => {
@@ -3745,6 +3952,111 @@ export async function startLevel(
     go({ won: false, wave: 0, level: levelIndex, banked: 0 });
   };
 
+  // --- the lessons ---------------------------------------------------------
+  //
+  // Every one of them is a CONDITION. They are written in the order a player
+  // is most likely to meet them, which is a readability convenience and
+  // nothing more — the game decides what happens first.
+  //
+  // Each says what the player should DO, and the ones that can wait until
+  // there is something to do it with, do.
+  const taught = new Set<string>(saveNow.taught ?? []);
+  let sawOwnColour = false;
+  let sawWrongColour = false;
+  let everSwapped = false;
+  const coach = createCoach({
+    host: document.body,
+    already: saveNow.taught ?? [],
+    onFire: (id) => {
+      // Written as they fire rather than at the end of the run: a player who
+      // closes the tab mid-lesson has still had it, and being taught the same
+      // thing again next time is worse than missing the tail of a run's list.
+      taught.add(id);
+      void patchSave(umicat, { taught: [...taught] });
+    },
+    lessons: [
+      {
+        id: 'move',
+        when: () => runClock > 1.2,
+        title: 'Walk',
+        text: `${dragThing()} to move. Everything here is decided by where you are standing.`,
+        hold: 4.0,
+      },
+      {
+        // The first thing that crosses, named before it starts shooting.
+        id: 'colours',
+        when: () => enemies.some((e) => e.alive),
+        title: 'Two colours',
+        text: 'Enemies are dark or light, and they shoot their own colour.',
+        hold: 4.4,
+      },
+      {
+        // The core rule, taught at the first moment it is ABOUT to matter —
+        // an orb of the player's own colour, in the air, coming towards them.
+        id: 'absorb',
+        when: () => sawOwnColour,
+        title: 'Take your own colour',
+        text: 'Orbs the same colour as you are pulled in and become magic. Stand in them.',
+        hold: 5.0,
+      },
+      {
+        // And its other half, taught the first time the player is actually hit.
+        id: 'swap',
+        when: () => sawWrongColour,
+        title: `Change colour with ${pressName('swap')}`,
+        text: 'The other colour hurts. Match it and it feeds you instead.',
+        hold: 5.4,
+      },
+      {
+        // Only once they have done it. "You can swap" and "swapping worked"
+        // are different lessons and the second one only lands after the first
+        // has been acted on.
+        id: 'attack-costs',
+        when: () => everSwapped && mana >= MANA_PER_ATTACK[kind.cast] * 2,
+        title: 'Attacking spends magic',
+        text: `${pressName(weapon)} to attack. Every swing costs magic, so collect before you fight.`,
+        hold: 5.2,
+      },
+      {
+        // The panel, offered at the exact moment it can be used — which is
+        // what the whole trigger model is for. Before this it would have been
+        // a button that opens a panel where everything is greyed out.
+        id: 'spend',
+        // Not "you have 30 mana" — "there is something you could buy with it
+        // RIGHT NOW". Those came apart at the start of a run: the opening
+        // purse used to equal the price of a heal, so the panel was explained
+        // on frame one, at full health, where the only thing it offered was
+        // greyed out. `score > 0` is the other half: it means this mana was
+        // EARNED, so the lesson arrives attached to the thing that earned it.
+        when: () => score > 0 && (
+          mana >= (nextTierCost(kind.cast, runTier) ?? Infinity)
+          || (heroHp < heroMaxHp && mana >= HEAL_MANA_COST)),
+        title: `Spend magic with ${pressName('upgrade')}`,
+        text: 'Heal, or make your weapon better. It pauses while you choose.',
+        hold: 5.6,
+      },
+      {
+        id: 'hurt',
+        when: () => heroHp <= heroMaxHp * 0.45,
+        title: 'Heal before it is too late',
+        text: `Magic buys health back — ${pressName('upgrade')}, then Heal.`,
+        hold: 5.0,
+      },
+      {
+        id: 'boss',
+        when: () => enemies.some((e) => e.alive && e.boss),
+        title: 'The boss fires both',
+        text: 'Its fan is dark AND light at once. No colour is safe — move out of it.',
+        hold: 5.4,
+      },
+    ],
+  });
+
+  // The hero wears its starting colour before the first frame, not on the
+  // first swap — otherwise the opening minute is played by someone who cannot
+  // see what they are.
+  paintHero();
+
   const frame = (now: number): void => {
     // `dt` is CLAMPED so a stall cannot tunnel the physics, which means a slow
     // scene runs the world in slow motion. `realDt` is not — anything measured
@@ -3834,7 +4146,7 @@ export async function startLevel(
       // The button where there is one, the chip where there is not.
       dial.show(aimsByDrag() ? (attackButton() ?? weaponCell) : null,
                 aimsByDrag() ? staffCooldown / (kind.cooldown ?? 1.7) : 0);
-      readBuildButton();
+      readButtons();
       // The effect ring follows the hero and breathes, so it reads as live
       // rather than as a mark left on the grass. It fades over the last two
       // seconds instead of blinking out — an effect that ends without saying so
@@ -3851,71 +4163,6 @@ export async function startLevel(
       if (invincible > 0) invincible -= dt;
       if (staffCooldown > 0) staffCooldown -= dt;
 
-      if (script) {
-        script.update();
-        // The same trail the village uses to point a new player at the gate.
-        scriptTrail.update(hero.position.x, hero.position.z, script.target(), now);
-        // Ring the hotbar slot the step is talking about. A bar of five cells
-        // and an instruction saying "the weapon below" is a sentence with five
-        // possible referents.
-        // The same breathing cyan the buttons use. NOT gold: the selected cell
-        // already wears a gold border, so a gold ring around the cell the
-        // tutorial is pointing at read as a second selection.
-        const want = script.slot();
-        cells.forEach((c, i) => {
-          c.classList.toggle('umicat-point', i === want);
-          if (i !== want) c.style.boxShadow = '';
-        });
-        let spot: HTMLElement | null = want === null ? null : cells[want] ?? null;
-        // And the button on the right, for the steps that name one.
-        //
-        // `'action'` rather than an icon name. The buttons are found by the
-        // picture they are wearing, and that picture now CHANGES with where you
-        // are standing — so the sell step, which asked for `build`, rang
-        // nothing at all: by then the button was wearing `upgrade`.
-        const wantBtn = script.button();
-        const litBtn = ringActionButton(wantBtn === 'action' ? currentActionIcon() : wantBtn);
-        if (litBtn) spot = litBtn;
-        // On a desktop the SDK drew no buttons to ring, so the tutorial pointed
-        // at nothing and the scrim stayed down. The pad's button is a real
-        // button and can carry both.
-        else if (pad && wantBtn) {
-          const mine = wantBtn === 'attack' || wantBtn === 'sword' || wantBtn === 'bow'
-            || wantBtn === 'fire' || wantBtn === 'ice' || wantBtn === 'bolt'
-            ? pad.weapon : pad.button;
-          if (mine) {
-            mine.classList.add('umicat-point');
-            spot = mine;
-          }
-        }
-        if (pad && !wantBtn) {
-          pad.button.classList.remove('umicat-point');
-          pad.weapon?.classList.remove('umicat-point');
-        }
-        // Everything but the thing to press goes grey.
-        //
-        // Only for a step that names a CONTROL. The step that says "stand on
-        // the marked square" points at the world, and the trail and the ring
-        // that do the pointing are in it — a scrim over the board would cover
-        // the only two things the player is meant to be looking at.
-        script.focus(spot);
-        // The square the step is pointing at, marked in the world. The trail
-        // shows the WAY there and goes out once you arrive, which left the last
-        // two metres — and the arrival — unmarked.
-        const aim = script.target();
-        scriptRing.visible = !!aim;
-        if (aim) {
-          scriptRing.position.set(aim.x, 0.045, aim.z);
-          // Breathing, on the same 1.25s as the buttons, so the ring on the
-          // ground and the ring on the button read as one instruction.
-          const breath = Math.sin((now / 1250) * Math.PI * 2);
-          scriptRing.scale.setScalar(1 + breath * 0.12);
-          (scriptRing.material as THREE.MeshBasicMaterial).opacity = 0.72 + breath * 0.22;
-        }
-        // The board ends when the script does, not when a wave table runs out —
-        // there is no wave table on this board.
-        if (script.done() && running) endRun(true);
-      }
 
       // The tower being sold is what shows the hold — not the button, which is
       // on the platform's control layer and under the player's own thumb. It
@@ -3974,92 +4221,49 @@ export async function startLevel(
         }
       }
 
-      // Where the player could build right now. Recomputed every frame because
-      // it is a function of where they are standing — a cached answer is one
-      // that is wrong the moment they walk.
-      const cell = cellOf(hero.position.x, hero.position.z);
-      const key = `${cell[0]},${cell[1]}`;
-      const here = occupied.get(key) ?? null;
-      // The script names ONE square while it is teaching placement. An arrow
-      // pointing at a square while the button works on every other square is an
-      // arrow that lies.
-      const allowedHere = !onlyBuildAt || (cell[0] === onlyBuildAt[0] && cell[1] === onlyBuildAt[1]);
-      const canBuild = !here && BUILDABLE.has(key) && allowedHere;
-      const before = `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`;
-      standingOn = here;
-      buildCell = canBuild ? cell : null;
-      // The ring marks anywhere the button will DO something, built or not —
-      // otherwise standing on your own tower looks like standing on grass.
-      marker.visible = canBuild || !!here;
-      if (marker.visible) marker.position.set(cell[0], 0.03, cell[1]);
-      // What the thing under your feet can reach. GREEN for a tower that is
-      // already there — a real object's real reach, shown whenever you are on
-      // it. GOLD for the one you are about to put down, and only once you have
-      // GREEN for a tower that is already there — a real object's real reach,
-      // shown whenever you are standing on it. GOLD for the one you are about
-      // to put down, and only while something is CHOSEN: gold is this game's
-      // colour for "the thing selected in the hotbar", which white was not, and
-      // white is what people read as a spell.
-      if (here) showRange(here.cell, levelRange(here), 0x8effa0);
-      else if (canBuild && selected !== null) {
-        showRange(cell, KINDS[selected].range, 0xffd76a);
-      } else showRange(null, 0, 0);
+      // Nothing is built any more, so the only thing under the hero's feet
+      // worth knowing about is a crate.
       const nearCrate = crates.some((c) =>
         c.hp > 0 && Math.hypot(c.obj.position.x - hero.position.x, c.obj.position.z - hero.position.z) < 1.0);
-      const changed = before !== `${standingOn ? standingOn.cell.join(',') : ''}|${buildCell ? key : ''}`
-        || nearCrate !== atCrate;
-      atCrate = nearCrate;
-      if (changed) renderHud();
+      if (nearCrate !== atCrate) { atCrate = nearCrate; renderHud(); }
 
       // --- waves ---
       // A tutorial you can lose while reading it is not a tutorial. The first
       // wave waits until there is something on the board to meet it; after
       // that the lessons run alongside the fight, which is where they mean
       // anything.
-      if (wavesPaused) { /* held */ }
-      else if (toSpawn > 0) {
+      // The run has no waves. It has a CLOCK, and everything is read off it:
+      // how often one crosses, how tough it is, and when a boss is due.
+      //
+      // The old loop waited for the board to be empty before sending the next
+      // wave, which is what made a wave a wave. Nothing waits here — a board
+      // that empties is a board where the player has run out of bullets to
+      // absorb, and mana is the only thing keeping them alive. Going quiet is
+      // the one thing this game must never do.
+      runClock += dt;
+      // `wavesPaused` holds the board still without stopping the world, which
+      // is what a probe needs in order to test one orb against one hero. It
+      // survived the rewrite as a variable nobody read — set by its handle,
+      // doing nothing, so `pauseWaves(true)` reported success and the board
+      // kept firing into the middle of the experiment.
+      if (!wavesPaused) {
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
-          spawnTimer = SPAWN_GAP;
-          toSpawn -= 1;
-          spawnOne(WAVES[waveIndex]);
+          spawnTimer = spawnGapAt(runClock);
+          spawnOne(enemyAt(runClock));
         }
-      } else if (enemies.every((e) => !e.alive)) {
-        waveTimer -= dt;
-        if (waveTimer <= 0) {
-          // Advance FIRST, then launch. Without the increment this re-launched
-          // wave one forever: every mechanic worked, the HUD read "Wave 1/4"
-          // the whole time, and the game could not be won or lost to anything
-          // but the first five critters.
-          if (waveLaunched) {
-            waveIndex += 1;
-            waveLaunched = false;
-            // Surviving a wave gives a heart back. Six hearts and no way to
-            // heal was survivable over eight waves and a slow death over
-            // twelve: with no recovery a long run is lost to accumulated
-            // carelessness rather than to any particular wave, and the lull
-            // between waves is the natural place to hand it back.
-            if (heroHp < heroMaxHp && waveIndex < WAVES.length) {
-              heroHp = Math.min(heroMaxHp, heroHp + HEAL_WAVE);
-              flashBanner(`Wave cleared · +${HEAL_WAVE} health`);
-            }
-          }
-          if (waveIndex >= WAVES.length) { endRun(true); }
-          else {
-            toSpawn = WAVES[waveIndex].count;
-            spawnTimer = 0;
-            waveTimer = WAVE_GAP;
-            waveLaunched = true;
-            // ONCE A WAVE, not once an enemy. Per-arrival was a real cue — the
-            // gates are at the far end and you spend the wave somewhere else —
-            // but fourteen of them is the board talking over the player, and
-            // the wave already has a moment of its own to land on.
-            //
-            // It REPLACES the jingle here rather than layering with it: two
-            // announcements on the same frame is one announcement nobody hears.
-            audio.play(SFX.enemySpawn);
-            renderHud();
-          }
+        // The boss is DERIVED from the run clock, not counted down beside it.
+        //
+        // It was its own timer, which is the obvious way to write "one every
+        // 68 seconds" and quietly made the schedule un-skippable: winding the
+        // clock forward to look at minute four moved the crossings and left
+        // the boss timer where it was, so minute four could not be looked at
+        // with a boss in it. Anything that is a function of the run's clock
+        // should be written as one — then there is a single thing to move.
+        const due = Math.floor(runClock / BOSS_EVERY);
+        if (due > bossCount) {
+          bossCount = due;
+          spawnOne(bossAt(bossCount));
         }
       }
 
@@ -4093,31 +4297,21 @@ export async function startLevel(
           if (e.chill.left <= 0) e.chill = undefined;
           else speed *= e.chill.mult;
         }
-        e.t += (speed * dt);
         e.mixer?.update(dt);
-        if (e.t >= ROUTES[e.route].length - 1) {
-          // It reached the gate. That is what the towers were for.
+        const prevX = e.obj.position.x, prevZ = e.obj.position.z;
+        // Straight across. `vel` already carries the speed it was made with,
+        // so a chill scales the WHOLE step rather than being applied to a
+        // separate speed the direction knows nothing about.
+        e.obj.position.addScaledVector(e.vel, dt * (speed / e.speed));
+        // Out the far side. Nothing is lost when one leaves: there is no gate
+        // and no base to reach. What it cost you is whatever it fired on the
+        // way through — and what you MISSED is the mana you did not take off
+        // it, which is a cost the player feels without being told about it.
+        if (Math.abs(e.obj.position.x) > OUTSIDE || Math.abs(e.obj.position.z) > OUTSIDE) {
           e.alive = false;
           e.obj.visible = false;
-          // The tutorial board cannot be lost. Its script has the player let an
-          // enemy walk the whole road on purpose — that is the step that
-          // teaches them to swing at it — and a board that punishes you for
-          // following its own instructions is not a tutorial.
-          if (scripted) { onScriptLeak?.(); continue; }
-          lives -= 1;
-          audio.play('leak');
-          flashScreen();
-          // WHICH gate, not just "a life gone". With one lane the screen flash
-          // told you everything; with two it tells you half of it, and the half
-          // it leaves out is the one you would act on.
-          const gate = world.entities.get(pathData.gates[e.route]);
-          if (gate) flashTint(gate, { color: 0xff2a1a, ms: 420 });
-          renderHud();
-          if (lives <= 0) { endRun(false); break; }
           continue;
         }
-        const prevX = e.obj.position.x, prevZ = e.obj.position.z;
-        posAt(e.route, e.t, e.ground ? 0 : ENEMY_FLY_HEIGHT, e.obj.position);
         if (e.facesTravel) {
           // Face where it is going. A walk cycle playing sideways is the kind of
           // wrong that reads as the model being broken rather than the code.
@@ -4143,7 +4337,9 @@ export async function startLevel(
           e.windup -= dt;
           if (e.windup <= 0) {
             // Fire at where the hero IS, and then forget about them. A bullet
-            // that steers is a slower contact hit wearing a costume.
+            // that steers is a slower contact hit wearing a costume — and here
+            // it would be worse than that: a homing bullet cannot be dodged,
+            // and dodging is the ONLY answer to the colour you are not.
             const v = new THREE.Vector3(
               hero.position.x - e.obj.position.x,
               (hero.position.y + 0.3) - e.obj.position.y,
@@ -4151,19 +4347,27 @@ export async function startLevel(
             );
             if (v.lengthSq() < 1e-6) v.set(0, 0, 1);
             v.normalize();
-            const bullet = spawnFrom(e.ammo);
-            // Out in front, not from inside the hull. Spawned at the centre it
-            // could already be past the player, and at close range it crossed
-            // the gap faster than a frame — invisible damage for being nearby,
-            // which is the thing this was supposed to replace.
-            bullet.position.copy(e.obj.position).addScaledVector(v, BULLET_MUZZLE);
-            bullet.lookAt(bullet.position.clone().add(v));
-            paintShot(bullet, e.boss ? 0xff3a1e : 0xff2d6b);
-            if (e.boss) bullet.scale.setScalar(1.6);
-            bullets.push({
-              obj: bullet, vel: v.multiplyScalar(e.boss ? BULLET_SPEED * 0.85 : BULLET_SPEED),
-              life: BULLET_LIFE, damage: e.damage,
-            });
+            if (e.boss) {
+              // A FAN, and in both colours at once.
+              //
+              // This is the only thing on the board that cannot be answered by
+              // picking a side: whichever colour the hero is wearing, half of
+              // what is coming will feed them and half will not, so a boss is
+              // read with the feet rather than with the swap button. The
+              // colours alternate across the fan rather than being rolled per
+              // pellet — a random mix sometimes comes out all one colour,
+              // which is a boss that accidentally behaves like a saucer.
+              const n = BOSS_FAN;
+              const flip = Math.random() < 0.5;
+              for (let k = 0; k < n; k++) {
+                const a = (k - (n - 1) / 2) * BOSS_FAN_SPREAD;
+                const dirK = v.clone().applyAxisAngle(UP, a);
+                const p: Pole = ((k % 2 === 0) === flip) ? 'dark' : 'light';
+                fireOrb(e.obj.position, dirK, p, e.damage, 1.45, BULLET_SPEED * 0.78);
+              }
+            } else {
+              fireOrb(e.obj.position, v, e.pole, e.damage, 1, BULLET_SPEED);
+            }
             audio.play(e.boss ? 'cannon-shot' : 'enemy-shot');
             if (e.mixer) playEnemyClip(e, 'walk');
           }
@@ -4178,35 +4382,6 @@ export async function startLevel(
           // and visible from across the board, because two hearts is most of
           // what the hero has.
           if (e.mixer) playEnemyClip(e, 'attack');
-        }
-      }
-
-      // --- towers shoot ---
-      for (const t of towers) {
-        t.reload -= dt;
-        // Nearest FIRST, not nearest overall: in a tower defense the one
-        // closest to the end is the one about to cost you a life.
-        let target: Enemy | null = null;
-        for (const e of enemies) {
-          if (!e.alive) continue;
-          const d = Math.hypot(e.obj.position.x - t.cell[0], e.obj.position.z - t.cell[1]);
-          if (d > levelRange(t)) continue;
-          if (!target || e.t > target.t) target = e;
-        }
-        if (target) {
-          // Face it even while reloading — a turret tracking its target is how
-          // a player reads "this one is covering that corner".
-          t.mount.rotation.y = Math.atan2(
-            target.obj.position.x - t.cell[0], target.obj.position.z - t.cell[1]);
-        }
-        if (target && t.reload <= 0) {
-          t.reload = levelReload(t) * (buff?.kind.id === 'overdrive' ? 0.55 : 1);
-          const shot = spawnFrom(t.kind.ammo);
-          // From the weapon, which is now somewhere up a tower — a level-three
-          // catapult firing out of the grass at its feet looks like a bug.
-          shot.position.copy(t.mount.getWorldPosition(_muzzle));
-          shots.push({ obj: shot, target, damage: levelDamage(t), speed: t.kind.shotSpeed });
-          audio.play(t.kind.id === 'cannon' ? 'cannon-shot' : 'tower-shot');
         }
       }
 
@@ -4249,13 +4424,40 @@ export async function startLevel(
         bu.life -= dt;
         prevPos.copy(bu.obj.position);
         bu.obj.position.addScaledVector(bu.vel, dt);
+        heroHit.set(hero.position.x, hero.position.y + 0.3, hero.position.z);
+
+        // THE RULE. Your own colour is pulled in; the other colour is a hit.
+        //
+        // Absorption is checked FIRST and at a wider radius, so a same-pole
+        // orb can never reach the body — matching a colour is safe, not
+        // merely profitable. A player who has to wonder whether the absorb
+        // will win the race dodges instead of collecting, which is this game
+        // not being played.
+        if (bu.pole === pole) {
+          const d = Math.hypot(bu.obj.position.x - hero.position.x,
+                               bu.obj.position.z - hero.position.z);
+          // Armed a little wider than the absorb itself, so the lesson lands
+          // as the orb closes rather than after it is already gone.
+          if (d <= ABSORB_RADIUS * 2.2) sawOwnColour = true;
+          if (d <= ABSORB_RADIUS) {
+            absorb(bu.obj.position);
+            gainMana(MANA_PER_ABSORB);
+            world.scene.remove(bu.obj);
+            bullets.splice(i, 1);
+            continue;
+          }
+        }
+
         // Swept, not sampled. A bullet fired from touching distance covers the
         // whole gap inside one frame, and a point test at each end would find
         // it on neither side of the player it just went through.
-        const hit = segmentHitsSphere(prevPos, bu.obj.position,
-          heroHit.set(hero.position.x, hero.position.y + 0.3, hero.position.z), BULLET_HIT_RADIUS);
-        if (hit || bu.life <= 0 || Math.abs(bu.obj.position.x) > 7 || Math.abs(bu.obj.position.z) > 7) {
-          if (hit) hurtHero(bu.damage);
+        const hit = bu.pole !== pole
+          && segmentHitsSphere(prevPos, bu.obj.position, heroHit, BULLET_HIT_RADIUS);
+        // Gone at the FIELD edge, not at the board's. They are fired from
+        // outside it.
+        if (hit || bu.life <= 0
+            || Math.abs(bu.obj.position.x) > OUTSIDE || Math.abs(bu.obj.position.z) > OUTSIDE) {
+          if (hit) { sawWrongColour = true; hurtHero(bu.damage); }
           world.scene.remove(bu.obj);
           bullets.splice(i, 1);
         }
@@ -4281,28 +4483,16 @@ export async function startLevel(
         }
       }
 
-      // --- tower shots fly ---
-      for (let i = shots.length - 1; i >= 0; i--) {
-        const s = shots[i];
-        if (!s.target.alive) { world.scene.remove(s.obj); shots.splice(i, 1); continue; }
-        dir.copy(s.target.obj.position).sub(s.obj.position);
-        const dist = dir.length();
-        if (dist < 0.25) {
-          damage(s.target, s.damage);
-          world.scene.remove(s.obj);
-          shots.splice(i, 1);
-          continue;
-        }
-        dir.normalize();
-        s.obj.position.addScaledVector(dir, Math.min(dist, s.speed * dt));
-        s.obj.lookAt(s.target.obj.position);
-      }
     }
 
     // The blade's own arc, on top of whatever the arm is doing. Eased so it
     // leaves fast and settles slow, which is what makes a swing read as a cut
     // rather than as a rotation.
     debug.tick(now, dt, `shadow ${shadowOf()}`);
+    // REAL seconds, not `dt`. `dt` is clamped at 0.05 so a struggling phone
+    // runs the world in slow motion, and how long a sentence has been readable
+    // is measured against a person rather than against the world.
+    coach.update(realDt);
 
 
 
@@ -4550,21 +4740,43 @@ export async function startLevel(
       hurtHero: (n?: number) => { invincible = 0; hurtHero(n); },
       hurt: (n: number) => { invincible = 0; heroHp = Math.max(1, heroHp - n); renderHud(); },
       debugEndRun: (won = false) => endRun(won),
-      /** The waypoints of one branch, and whether a cell is free to build on.
-       *  For the balance probe, which has to find its own places to stand —
-       *  hard-coded coordinates would turn "is the game too easy" into "is this
-       *  one layout too easy". */
-      pathOf: (r: number) => ROUTES[r],
-      scenery: () => [...SCENERY].map((k) => k.split(',').map(Number)),
-      blocked: () => [...BLOCKED].map((k) => k.split(',').map(Number)),
-      /** Where a tower may go, from the board's own data. Probes carrying a
-       *  coordinate break the day a road moves one row, and then report that
-       *  the game is broken rather than that they are. */
-      spots: () => pathData.spots,
       merged: () => folded,
-      canBuildAt: (x: number, z: number) => {
-        const k = `${x},${z}`;
-        return BUILDABLE.has(k) && !occupied.has(k);
+      /** Everything on the board, with the one field that decides the game.
+       *
+       *  A probe that can only count enemies cannot check a single rule here:
+       *  "there are six of them" says nothing about whether the colour rule
+       *  works, and the colour rule IS the game. Same for the orbs — an
+       *  absorb and a hit happen at the same place a tenth of a second apart,
+       *  and telling them apart needs to know what colour arrived. */
+      foes: () => enemies.filter((e) => e.alive).map((e) => ({
+        pole: e.pole, hp: +e.hp.toFixed(2), boss: e.boss,
+        x: +e.obj.position.x.toFixed(3), z: +e.obj.position.z.toFixed(3),
+      })),
+      orbs: () => bullets.map((b) => ({
+        pole: b.pole, damage: b.damage,
+        x: +b.obj.position.x.toFixed(3), z: +b.obj.position.z.toFixed(3),
+        d: +Math.hypot(b.obj.position.x - hero.position.x,
+                       b.obj.position.z - hero.position.z).toFixed(3),
+      })),
+      /** Drive the two controls a probe cannot press, because the SDK's
+       *  buttons only exist on a touch screen. */
+      swap: () => swapPole(),
+      /** Take everything off the board, so an experiment has one orb in it. */
+      clearBoard: () => {
+        for (const e of enemies) if (e.alive) { e.alive = false; e.obj.visible = false; }
+        for (const b of bullets) world.scene.remove(b.obj);
+        bullets.length = 0;
+      },
+      setPole: (p: Pole) => { if (p !== pole) swapPole(); },
+      giveMana: (n: number) => { mana = Math.max(0, Math.min(MANA_MAX, n)); renderHud(); },
+      /** Put one orb of a named colour on a collision course, from `d` away.
+       *  The only way to test the rule deterministically: waiting for the board
+       *  to fire the colour you want is waiting on a coin flip. */
+      throwOrb: (p: Pole, d = 3, dmg = 10) => {
+        const dir = new THREE.Vector3(1, 0, 0);
+        const from = new THREE.Vector3(
+          hero.position.x - dir.x * d, hero.position.y + 0.3, hero.position.z);
+        fireOrb(from, dir, p, dmg, 1, BULLET_SPEED);
       },
       /** Pick a tower kind, the same way the number keys do. */
       select: (i: number | null) => {
@@ -4595,29 +4807,47 @@ export async function startLevel(
        *  to hold still — a draw-call count taken while enemies are spawning is
        *  a count of the enemies. */
       pauseWaves: (on: boolean) => { wavesPaused = on; },
+      /** Wind the run's clock forward. The curve is a function of it, so this
+       *  is the only thing a probe needs in order to look at minute four
+       *  without playing four minutes of game. */
       skipToWave: (n: number) => {
         for (const e of enemies) { if (e.alive) { e.alive = false; e.obj.visible = false; } }
-        waveIndex = Math.max(0, Math.min(n, WAVES.length - 1));
-        toSpawn = WAVES[waveIndex].count;
+        runClock = Math.max(0, n);
         spawnTimer = 0;
-        waveTimer = WAVE_GAP;
+        // Everything the clock decides moves with it. `bossCount` is caught up
+        // rather than reset, so winding forward does not dump one boss per
+        // interval skipped onto the board at once.
+        bossCount = Math.floor(runClock / BOSS_EVERY);
         waveLaunched = true;
         renderHud();
       },
     state: () => ({ level: level.id, levelIndex, slip: level.slip, kills,
-      gold, lives, heroHp, heroMax: heroMaxHp, waveIndex, waveCount: WAVES.length, running, won,
-      buildCell, selected, maxTowers, maxLevel: MAX_LEVEL, armour,
+      gold, lives, heroHp, heroMax: heroMaxHp, running, won,
+      // What the new game is: which colour you are, what you have banked, and
+      // what the run is worth. A probe that cannot read `pole` cannot check a
+      // single rule in this game.
+      pole, mana, manaMax: MANA_MAX, score, clock: +runClock.toFixed(2),
+      // The curve itself, so "does it ramp" is a question about the game
+      // rather than about how many enemies a slow headless frame managed to
+      // spawn in six seconds of wall clock.
+      gap: +spawnGapAt(runClock).toFixed(3),
+      nextBossAt: (bossCount + 1) * BOSS_EVERY,
+      // A hit that lands during the invincibility window costs nothing, so a
+      // probe reading only `heroHp` cannot tell "the rule is broken" from "the
+      // hero was already hurt a moment ago". That ambiguity cost a run.
+      invincible: +invincible.toFixed(2),
+      maxLevel: MAX_LEVEL, armour,
       tookDamage, tookHits,
       // On `state()` rather than only on its own handle, so the balance bot can
       // read it in the poll it already makes. An extra round-trip per decision
       // starves that bot, and a starved bot reports a hard board.
       runTier: { tier: runTier, next: nextTierCost(kind.cast, runTier) },
-      routes: ROUTES.length,
-      /** Where each branch ends. The tiles get merged into one mesh for the
-       *  sake of the phone's frame rate, so this is the only thing left that
-       *  can answer "where does the road go". */
-      routeEnds: ROUTES.map((r) => r[r.length - 1]),
-      lanes: ROUTES.map((_, r) => enemies.filter((e) => e.alive && e.route === r).length),
+      /** What is on the board, by pole. The one thing a probe has to be able
+       *  to see: this game is unplayable if an enemy's colour is not readable,
+       *  and "there are six enemies" cannot tell a board of six dark ones from
+       *  a board that is half and half. */
+      onBoard: POLES.map((p) => enemies.filter((e) => e.alive && e.pole === p).length),
+      orbs: bullets.length,
       boss: (() => {
         const b = enemies.find((e) => e.boss);
         return b ? { alive: b.alive, hp: b.hp, maxHp: b.maxHp, clip: b.clip ?? null,
@@ -4637,14 +4867,6 @@ export async function startLevel(
       sellProgress: () => sellProgress(),
       /** What the board is currently teaching, and how far through. `null` on
        *  a board that does not teach, and once the last step is done. */
-      /** The scripted tutorial: which step, what it says, and where it is
-       *  pointing. A probe driving a scripted sequence has to know which
-       *  instruction is on screen, not merely that one is. */
-      script: () => (script
-        ? { step: script.index(), phase: script.phase(), text: script.text(),
-            at: script.target(), slot: script.slot(), button: script.button(),
-            done: script.done() }
-        : null),
       locomotion: () => animator.action || character.state,
     } as unknown,
   });
@@ -4704,8 +4926,7 @@ async function boot(): Promise<void> {
     // to take a name from.
     // Keyed by BOARD: they are different sizes, and a shared key would have the
     // bar measuring Meadow against Crossroads.
-    showLoading(`Entering ${(choice.level < 0 ? TUTORIAL : LEVELS[choice.level]).name}`,
-      `level-${choice.level}`);
+    showLoading(`Entering ${LEVELS[0].name}`, 'level-arena');
     // The summary writes the save — level, experience, the store, what was
     // cleared and how far. Doing it here as well double-counted the run.
     await startLevel(shared, choice.weapon, choice.level, choice.bonus, choice.weapons);

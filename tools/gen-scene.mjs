@@ -658,6 +658,161 @@ function buildLevel(def) {
   return { scene, path };
 }
 
+/** The arena.
+ *
+ *  Not a board in the tower-defense sense: there is no road, because nothing
+ *  follows one. Enemies come in over the tree line on a straight line and
+ *  leave over the other side, so every cell is a place the fight can happen
+ *  and none of them is a lane.
+ *
+ *  **Nothing inside the air wall has a collider.** The whole game is walking
+ *  out of the way of a bullet, and a tree at the edge of the field is a snag
+ *  at exactly the moment a snag costs the most. `buildLevel` scatters scenery
+ *  on the outer ring because a tower-defense hero walks between build spots at
+ *  their own pace; this one is running. Everything with a trunk on it lives
+ *  OUTSIDE the wall, where it is scenery and cannot be bumped into.
+ */
+function buildArena(def) {
+  const t = THEMES[def.theme];
+  const entities = [];
+  const add = (e) => entities.push(e);
+  const rand = rng(def.scenerySeed);
+
+  // The floor of the playable field — invisible, here for its collider. Same
+  // as every board: the tiles ARE the ground, with one box underneath them.
+  add({
+    id: 'ground', name: 'ground',
+    primitive: { kind: 'box', size: { x: 13, y: 0.4, z: 13 }, color: t.skirt },
+    visible: false,
+    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
+    castShadow: false,
+    collider: {
+      shape: { kind: 'box', halfExtents: { x: 6.5, y: 0.3, z: 6.5 } },
+      body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
+    },
+  });
+
+  // The field. Plain tiles, every cell, rotated at random so the texture does
+  // not tile visibly. No scenery: see the note above.
+  for (let gx = -HALF; gx <= HALF; gx += 1) {
+    for (let gz = -HALF; gz <= HALF; gz += 1) {
+      add({
+        id: `ground_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'ground_tile',
+        modelAssetId: t.tile,
+        transform: {
+          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
+          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
+        },
+        castShadow: false,
+      });
+    }
+  }
+
+  // The forest, and the ground it stands on — the same treatment every board
+  // gets, minus the openings. There is no door in this one: a run ends when the
+  // health bar does, so a gap in the tree line would be a way out that is not
+  // there.
+  const FOREST_OUT = 7;
+  const OUTER = HALF + FOREST_OUT;
+  add({
+    id: 'ground_skirt', name: 'ground_skirt',
+    primitive: { kind: 'box', size: { x: 2 * OUTER + 1, y: 0.4, z: 2 * OUTER + 1 }, color: t.skirt },
+    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
+    castShadow: false,
+  });
+  for (let gx = -OUTER; gx <= OUTER; gx += 1) {
+    for (let gz = -OUTER; gz <= OUTER; gz += 1) {
+      if (Math.abs(gx) <= HALF && Math.abs(gz) <= HALF) continue;
+      add({
+        id: `outer_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'forest_ground',
+        modelAssetId: t.tile,
+        transform: {
+          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
+          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
+        },
+        castShadow: false,
+      });
+      const depth = Math.max(Math.abs(gx), Math.abs(gz)) - HALF;
+      const chance = Math.min(0.96, 0.72 + depth * 0.05);
+      const r = rand();
+      const n = r < chance ? (r < chance * 0.45 ? 2 : 1) : 0;
+      for (let k = 0; k < n; k++) {
+        add({
+          id: `forest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'),
+          // `forest_far` is what the picture-quality toggle drops. The
+          // outermost ring keeps its own name and always stays: it is what
+          // hides the edge of the ground against the sky.
+          name: depth >= 4 && depth < FOREST_OUT ? 'forest_far' : 'forest',
+          modelAssetId: rand() < 0.22 ? t.props[1] : t.props[0],
+          transform: {
+            position: {
+              x: gx + (rand() - 0.5) * 0.75,
+              y: GROUND_Y,
+              z: gz + (rand() - 0.5) * 0.75,
+            },
+            rotation: yaw(rand() * Math.PI * 2),
+          },
+          castShadow: false,
+        });
+      }
+    }
+  }
+
+  // The air wall, unbroken on all four sides. The hero is held inside ±6.6;
+  // the enemies fly, and were never touching it.
+  for (const side of ['n', 's', 'w', 'e']) {
+    const along = side === 'n' || side === 's' ? 'x' : 'z';
+    const fixed = side === 'n' || side === 'w' ? -6.6 : 6.6;
+    const len = 13.4;
+    add({
+      id: `wall_${side}`, name: `wall_${side}`,
+      primitive: {
+        kind: 'box',
+        size: along === 'x' ? { x: len, y: 1.6, z: 0.4 } : { x: 0.4, y: 1.6, z: len },
+        color: t.wall,
+      },
+      visible: false,
+      transform: {
+        position: along === 'x' ? { x: 0, y: 0.6, z: fixed } : { x: fixed, y: 0.6, z: 0 },
+      },
+      collider: {
+        shape: {
+          kind: 'box',
+          halfExtents: along === 'x'
+            ? { x: len / 2, y: 0.8, z: 0.2 } : { x: 0.2, y: 0.8, z: len / 2 },
+        },
+        body: 'fixed',
+      },
+    });
+  }
+
+  // Dead centre, because every side is a side they can come from. A hero who
+  // starts against one wall starts with a quarter of the board behind them.
+  add({
+    id: 'hero', name: 'hero', modelAssetId: 'hero',
+    transform: { position: { x: 0, y: GROUND_Y, z: 0 } },
+    // Declaring a starting clip is what creates the MIXER, and without one
+    // there is no CharacterAnimator and the hero never moves a limb.
+    animation: { play: 'idle', loop: true },
+  });
+
+  return {
+    schemaVersion: 1,
+    id: def.id,
+    name: def.name,
+    environment: { background: t.sky },
+    gravity: { x: 0, y: -4.1692, z: 0 },
+    lights: [
+      { id: 'sky', kind: 'hemisphere', color: '#ffffff', groundColor: t.ground,
+        intensity: t.skyIntensity },
+      { id: 'sun', kind: 'directional', color: t.sun, intensity: t.sunIntensity,
+        position: { x: 4, y: 8, z: 5 }, castShadow: true },
+    ],
+    camera: { kind: 'follow', target: 'hero', fov: 55, offset: { x: 0, y: 5.2, z: 6.4 } },
+    entities,
+  };
+}
+
 /** The board the tutorial happens on.
  *
  *  Its own board, not Meadow with hand-holding on top. The tutorial is scripted
@@ -681,6 +836,21 @@ const TUTORIAL_SCENE = {
   gates: [{ id: 'gate_w', wall: 'w', at: -0.5 }],
   scenerySeed: 23,
 };
+
+/** The one board this game has. */
+const ARENA = {
+  id: 'arena',
+  name: 'The Clearing',
+  theme: 'grass',
+  scenerySeed: 47,
+};
+
+{
+  const scene = buildArena(ARENA);
+  writeFileSync(new URL(`../public/scenes3d/${ARENA.id}.json`, import.meta.url),
+    JSON.stringify(scene, null, 2) + '\n');
+  console.log(`${ARENA.id.padEnd(12)} ${String(scene.entities.length).padStart(4)} entities · arena`);
+}
 
 for (const def of [...LEVELS, TUTORIAL_SCENE]) {
   const { scene, path } = buildLevel(def);

@@ -56,8 +56,15 @@ export const PLACE_KEY = 'Space';
 export const pressFor = (glyph: IconName | string): Press => {
   if (touchLikely()) return { kind: 'button' };
   const byIcon: Record<string, Press> = {
+    // SPACE swaps the pole. It is the most-pressed control in the game and the
+    // left hand is on WASD throughout, so it gets the key the thumb is already
+    // resting on — the same argument that moved placing onto Space in the
+    // tower defense, applied to the control that replaced it.
+    swap: { kind: 'key', key: PLACE_KEY },
+    // And the panel is `E`, because it is the one thing here that is NOT done
+    // in a hurry: it pauses, so the hand can leave the movement keys for it.
+    upgrade: { kind: 'key', key: 'E' },
     build: { kind: 'key', key: PLACE_KEY },
-    upgrade: { kind: 'key', key: PLACE_KEY },
     sell: { kind: 'key', key: PLACE_KEY },
     sword: { kind: 'click' }, bow: { kind: 'click' },
     fire: { kind: 'click' }, ice: { kind: 'click' }, bolt: { kind: 'click' },

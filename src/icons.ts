@@ -34,7 +34,7 @@ export type IconName =
   | 'build' | 'jump' | 'shield' | 'upgrade' | 'sell'
   | 'house' | 'tower' | 'gate' | 'crate'
   | 'coin' | 'wood' | 'stone' | 'heart' | 'award'
-  | 'audioOn' | 'audioOff' | 'settings';
+  | 'audioOn' | 'audioOff' | 'settings' | 'swap';
 
 /** Two of these are PNG: the Game Icons pack ships its vectors as one sheet
  *  rather than a file per icon, and a mask reads the ALPHA channel — so a
@@ -115,6 +115,7 @@ export const ICON = {
   // button does three things; a button that looks the same for all three is a
   // button you have to remember rather than read.
   upgrade: URL_OF('upgrade'),
+  swap: URL_OF('swap'),
   sell: URL_OF('sell'),
 } as const;
 

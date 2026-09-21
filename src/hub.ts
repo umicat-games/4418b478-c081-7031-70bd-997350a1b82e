@@ -17,6 +17,7 @@ import { createActionPad } from './actionpad';
 import { createSettings } from './settings';
 import { ICON } from './icons';
 import { LEVELS } from './levels';
+import { readBoard, boardElement, clean, rank, type Row } from './board';
 import { mergeStatic } from './merge';
 import { createWayfinder } from './wayfinder';
 import { createSeeThrough } from './seethrough';
@@ -192,7 +193,26 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   const weapons: WeaponLevels = migrated.weapons;
   let weapon: Weapon = migrated.weapon;
   /** How far the Armory can make a weapon. Its level IS the cap. */
-  const weaponCap = (): number => town.armory ?? 0;
+/** How far a weapon may be improved at the rack — and, since the cap is what
+ *  makes a plinth appear at all, how many of them stand there.
+ *
+ *  **Every weapon, at full level, from the first visit.** In the tower defense
+ *  this was the Armory's job: the building was bought at the shop, its level
+ *  was the ceiling, and improving it opened the next tier of the whole rack at
+ *  once. That was a good shape and it does not survive the shop becoming the
+ *  score board — with nothing selling the Armory, `town.armory` is 0 for ever
+ *  and a player would be holding the starting sword permanently, in a game
+ *  whose opening decision is which weapon to take.
+ *
+ *  Which weapon you take is the choice this game asks before a run. A choice
+ *  between one thing is not one, so the gate comes off rather than being
+ *  rehomed: there is no meta-progression here at all now, and the run itself
+ *  is where a weapon gets better (`runtiers.ts`, paid in mana).
+ *
+ *  The Armory machinery is left standing and simply always satisfied — see the
+ *  note on `KINDS` in `main.ts` for why the tower-defense parts are being
+ *  retired in their own pass rather than in this one. */
+  const weaponCap = (): number => WEAPON_MAX_LEVEL;
 
   // --- where the buildings stand -------------------------------------------
   //
@@ -431,7 +451,20 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     //
     // Building the Armory makes one appear, which is the moment worth having —
     // the rack grows while you are standing in front of it.
-    const offers = weaponCap();
+    // ALL of them, from the first visit.
+    //
+    // This used to be `weaponCap()`, which conflated two things that were the
+    // same number only by accident of the Armory deciding both: how far a
+    // weapon may be IMPROVED, and how many plinths stand there. With the cap
+    // opened to `WEAPON_MAX_LEVEL` the second reading came out as three — so
+    // five weapons showed four plinths, and the last one appeared only once
+    // another had been forged. A rack that reveals its last option as a
+    // reward for using the others is a rack that hides the opening choice.
+    //
+    // The "what you have plus one step" rule was right when the rack was a
+    // catalogue you saved up for. Nothing here is saved up for; the rack is
+    // the menu a run is chosen from, and a menu shows its items.
+    const offers = RACK.length;
     let offered = 0;
     for (const r of RACK) {
       const made = levelOf(weapons, r.id) > 0;
@@ -1129,6 +1162,46 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     return items;
   };
 
+  /** The score board, opened at the stall.
+   *
+   *  Built with DOM rather than the panel's HTML path, and that is a security
+   *  decision rather than a style one. The card renderer in this file takes
+   *  markup — it has to, because prices carry icons — and its own comment says
+   *  that is safe only because nothing in this hub shows player text. Every
+   *  row here is a name somebody else typed. So the rows are built in
+   *  `board.ts` with `textContent` and appended as an ELEMENT; nothing on this
+   *  path concatenates a name into a string.
+   *
+   *  It reads even when signed out. Writing needs an account — the summary
+   *  panel at the end of a run is where that is said, because that is the
+   *  moment it costs somebody something. */
+  const showScores = async (): Promise<void> => {
+    panelOpen = true;
+    input.setEnabled(false);
+    panel.style.display = 'flex';
+    panel.style.width = '';
+    panel.style.maxWidth = '82vw';
+    // The panel's own body element, not a query: it is right here, and a
+    // selector that finds nothing would silently write into the panel itself
+    // and destroy the close button that lives beside it.
+    const body = panelBody;
+    body.textContent = '';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'font:800 18px/1.5 system-ui; margin-bottom:6px;';
+    head.textContent = 'Score board';
+    const note = document.createElement('div');
+    note.style.cssText = 'opacity:.6; font-size:13px; margin-bottom:10px;';
+    note.textContent = 'Loading…';
+    body.append(head, note);
+
+    const rows = await readBoard(shared.umicat);
+    note.textContent = rows.length
+      ? 'Best run per player'
+      : '';
+    body.append(boardElement(rows, shared.umicat.user?.id ?? null));
+  };
+
   const showShop = (): void => {
     panelOpen = true;
     input.setEnabled(false);
@@ -1230,7 +1303,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     const rows = LEVELS.map((lv, i) => ({ lv, i })).filter(({ i }) => levelOpen(i)).map(({ lv, i }) => {
       const best = progress.bests?.[lv.id] ?? 0;
       const note = best
-        ? `<span style="opacity:.6">best wave ${best}/${lv.waves.length}</span>`
+        ? `<span style="opacity:.6">best score ${best}</span>`
         : '<span style="opacity:.6">not played</span>';
       return `<button data-level="${i}" style="
           display:flex; gap:12px; align-items:baseline; justify-content:space-between;
@@ -1506,11 +1579,16 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         rackCard(atPickup.id);
         placeCard(atPickup.x, 1.1, atPickup.z);
       } else if (atShop) {
-        const left = shopStock().length;
+        // The stall is the SCORE BOARD.
+        //
+        // It is the same stall, in the same place, opened the same way. That
+        // is the point: "walk to a thing and press the action button" is this
+        // game's one verb, and a board that needed a new gesture would be a
+        // second interface to learn for the one screen nobody has to read.
         showCard({
-          title: 'Shop', glyph: 'coin',
-          body: left ? `${left} thing${left > 1 ? 's' : ''} to buy` : 'Nothing left to buy',
-          action: left ? `${pressGlyph('build')} open` : undefined,
+          title: 'Score board', glyph: 'award',
+          body: 'How everyone has done',
+          action: `${pressGlyph('build')} open`,
           pressable: true,
         });
         placeCard(shopAt.x, 1.5, shopAt.z);
@@ -1600,8 +1678,8 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         // to the shop to buy the land that would make room, would be told
         // "Too close to the shop" and left holding it for good.
         if (atShop) {
-          if (shopStock().length) { audio.play('build'); showShop(); }
-          else audio.play('denied');
+          audio.play('build');
+          void showScores();
         } else if (carrying) {
           // Putting it down. `blocked` was computed this frame from the same
           // cell the ring is drawn on, so what you see is what is checked.
@@ -1758,6 +1836,27 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
                 *  hardcodes it finds an empty patch of grass and reports that
                 *  the shop does not open. */
                shopAt: () => ({ ...SHOP_AT }),
+               /** Put the hero somewhere, for a probe that would otherwise walk across
+                *  the village on keypresses — twenty seconds of simulated walking is
+                *  twenty seconds of things that can go wrong before the check runs. */
+               teleport: (x: number, z: number) => character.teleport({ x, y: 0.5, z }),
+               /** Open the score board directly. The WALK to the stall is a separate
+                *  claim and is checked separately; this is for the checks that are
+                *  about what the board DRAWS. */
+               openScores: () => showScores(),
+               /** Draw the board from rows handed in, through the REAL clean-and-render
+                *  path. `gameData` is a postMessage RPC to the platform host, so a game
+                *  opened straight off the CDN has no host to ask and reads nothing —
+                *  which makes "a hostile name is harmless" pass against an empty
+                *  board. This is how that check gets real rows to chew on. */
+               drawScores: (rows: Row[]) => {
+                 panelOpen = true;
+                 input.setEnabled(false);
+                 panel.style.display = 'flex';
+                 panelBody.textContent = '';
+                 panelBody.append(boardElement(rank(rows.map(clean)),
+                   shared.umicat.user?.id ?? null));
+               },
                /** Why the cell under the hero will not take what is being
                 *  carried, or null. The same call the ring and the card use.
                 *

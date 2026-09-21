@@ -68,6 +68,24 @@ export interface WeaponKind {
   tint?: { gem: number; glow: number; mote: number; mote2: number };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// These numbers were CUT once, and they are put back for the opposite reason.
+//
+// In the tower defense this is forked from, the hero was support: the towers
+// were the defence and a hero who out-damaged them by five to seven times made
+// them optional — measured, and reported as "I can clear most waves without
+// placing anything". So sword/bow/staves were cut to roughly 45%.
+//
+// There are no towers here. The hero is the ONLY thing that deals damage, so
+// the exact argument that justified the cut now argues for undoing it: a
+// weapon balanced to be auxiliary, with nothing for it to be auxiliary TO,
+// is a weapon that cannot finish anything.
+//
+// Set against the curve in `levels.ts` rather than by feel: a sword at 7 kills
+// an opening 9hp crossing in two swings and a four-minute 37hp one in six.
+// The order between the five is untouched — the sword is still the hardest
+// single hit, which is what being next to the thing pays for.
+
 export const WEAPONS: WeaponKind[] = [
   {
     id: 'sword',
@@ -102,7 +120,7 @@ export const WEAPONS: WeaponKind[] = [
 // of melee is the square you have to stand on, and a staff pays a 1.7s
 // cooldown for its area — but a board is won with twelve towers and not with
 // one person, which is the game this is.
-    damage: [2, 3, 4],
+    damage: [7, 10.5, 14],
   },
   {
     id: 'bow',
@@ -115,7 +133,7 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 320, wood: 50, stone: 15 },
       { gold: 650, wood: 95, stone: 40 },
     ],
-    damage: [1.5, 2, 2.5],
+    damage: [5, 7, 9],
   },
   {
     id: 'fire',
@@ -136,7 +154,7 @@ export const WEAPONS: WeaponKind[] = [
     // fire is FOR was killing them before it could be seen, and the element
     // whose whole identity is "damage that happens while you are somewhere
     // else" played as the one that killed on contact.
-    damage: [1, 1, 2],
+    damage: [3, 3.5, 5],
     radius: 2.2,
     cooldown: 1.7,
     // What came off the direct hit went in here, so the staff is worth about
@@ -165,7 +183,7 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 520, wood: 25, stone: 70 },
       { gold: 980, wood: 45, stone: 125 },
     ],
-    damage: [1, 1.5, 2],
+    damage: [3.5, 5, 7],
     radius: 3.2,
     cooldown: 1.7,
     effect: [0.55, 0.42, 0.3], // how much of their speed is LEFT — lower is colder
@@ -189,7 +207,7 @@ export const WEAPONS: WeaponKind[] = [
       { gold: 700, wood: 35, stone: 95 },
       { gold: 1250, wood: 60, stone: 170 },
     ],
-    damage: [2, 2.5, 3.5],
+    damage: [6, 8, 11],
     radius: 2.6,          // ditto — unchanged from the staff it used to be
     cooldown: 1.7,
     effect: [1, 2, 3],    // how many further enemies the arc reaches
@@ -248,12 +266,30 @@ export function effectText(id: Weapon, level: number): string {
 /** What the next step costs, or `null` at the top. Forging and upgrading are
  *  the same act from the player's side — walk to the rack and pay — so they are
  *  one function rather than two the caller has to choose between. */
+/** Nothing at the rack costs anything.
+ *
+ *  The prices below are real and are kept — they were set against what a
+ *  tower-defense run paid out, so the rack was a second sink beside the town.
+ *  **There is no longer anything that pays.** The shop is the score board, no
+ *  building can be bought, and gold, wood and stone have no source and no
+ *  other use: leaving the prices live would mean five weapons priced in a
+ *  currency that cannot be obtained, which is a rack with one weapon on it and
+ *  four pictures of weapons.
+ *
+ *  Which weapon to take is the only decision this game asks before a run, so
+ *  it is handed over rather than sold. What a weapon costs is now paid DURING
+ *  a run, in mana, in `runtiers.ts` — one economy, and it is the one the
+ *  player is actually playing.
+ *
+ *  Returning free rather than deleting the table: the moment anything pays
+ *  materials again, this is one line. */
+const FREE: Materials = { gold: 0, wood: 0, stone: 0 };
+
 export function nextCost(id: Weapon, level: number): Materials | null {
   const k = WEAPON_BY_ID.get(id);
   if (!k) return null;
-  if (level === 0) return k.forge ?? { gold: 0, wood: 0, stone: 0 };
   if (level >= WEAPON_MAX_LEVEL) return null;
-  return k.upgrades[level - 1];
+  return FREE;
 }
 
 /** A save from before the Armory: weapons arrived by finished-level count, so

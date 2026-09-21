@@ -112,6 +112,22 @@ const DRAWN = {
   // quadrilaterals, and a hand-written path of them is forty numbers nobody
   // can check. The hole in the middle is a second subpath wound the other way,
   // which `fill-rule="evenodd"` turns into a hole.
+  // Swap the pole. A disc with one half filled — the universal "invert"
+  // picture, and the only glyph in the set whose MEANING is that there are
+  // exactly two states and you are in one of them.
+  //
+  // Drawn as a ring plus a filled half, rather than as a half-disc alone: a
+  // bare half-disc reads as a crescent moon, and the ring is what makes the
+  // two halves belong to one object. The mask is one colour, so "the filled
+  // half" is the only contrast available — which is exactly the abstraction
+  // the button needs, since the actual colours are on the button's face.
+  swap: [
+    // the ring
+    'M 0 -32 A 32 32 0 1 1 0 32 A 32 32 0 1 1 0 -32 Z',
+    'M 0 -25 A 25 25 0 1 0 0 25 A 25 25 0 1 0 0 -25 Z',
+    // the filled half, inside it
+    'M 0 -22 A 22 22 0 0 1 0 22 Z',
+  ].join(' '),
   settings: gear(8, 34, 25, 12),
 };
 

@@ -1,34 +1,383 @@
-# Balaboo
+# Polarity — a fork of Balaboo
 
-A tower defense you walk around in. You are not a cursor over a map — you are
-a character on the board, and that is the whole design: **a tower can only be
-built where you are standing.** Everything else follows from it. The towers are
-the part of the defence that holds a lane while you are somewhere else; you are
-the only part that can be somewhere else in time.
+**A bullet is either food or a wound, and you choose which.** Enemies cross the
+board in straight lines firing their own colour; you carry a colour too, and
+you change it whenever you like. An orb that matches you is pulled in and
+becomes MAGIC. An orb that does not takes health. Everything else — the
+weapons, the boss, the score — hangs off that one rule.
 
-Game id `d25d06c2-0ae4-4083-8eff-ded32d3125aa`, fork org `umicat-games`.
-`./deploy-preview.sh` publishes `dist/` straight to S3 + CloudFront.
+Magic is the only resource. Absorbing fills it, and it pays for everything:
+every swing, every heal, every weapon upgrade. There is no regeneration, so
+the only way to have any is to have stood in front of something shooting at
+you wearing the right colour. **That is the game**: the safe place and the
+profitable place are the same place, and which one it is depends on a button.
 
-**`dist/assets/` holds two kinds of file and they take different cache
-headers.** Vite's bundles are content-hashed, which is what makes `immutable`
-safe; `public/assets/` is copied into the same directory verbatim, at FIXED
-paths. Those were going out immutable for a year, so a changed model reached
-nobody — a CloudFront invalidation does not touch a browser cache, and
-`immutable` is the one header that stops a browser even revalidating. It was
-patched by hand after every deploy for a while; the script splits the two syncs
-now, and the default for anything that is not a bundle is `no-cache`. A needless
-304 costs nothing; the other way round costs a year.
+Game id `367450cf-f39d-4748-b57b-0bb0a9dcdb37`, forked from Balaboo
+(`d25d06c2-…`), org `umicat-games`. `./deploy-preview.sh` publishes `dist/`
+straight to S3 + CloudFront.
 
-`aws s3 sync` will not repair a header on a file that has not CHANGED, since it
-only re-uploads when the local copy is strictly newer. Fixing one in place is
-`aws s3 cp <key> <key> --metadata-directive REPLACE --cache-control …`. **Always
-commit AND deploy** — a direct deploy is a temporary override that any
-workspace rebuild wipes out.
+> ## READ THIS BEFORE BELIEVING THE REST OF THIS FILE
+>
+> This document is Balaboo's, edited. Balaboo is a TOWER DEFENSE and most of
+> what follows still describes it: towers, waves, boards, gold, a village you
+> buy buildings in. **Those are gone.** They are gone from the game and mostly
+> still present in the code, deliberately — see *What was kept and switched
+> off* — so a section describing them may be true of the source and false of
+> the game.
+>
+> Sections that have been brought up to date are marked **(polarity)**.
+> Everything else is Balaboo's history: worth reading for WHY a thing was
+> done, not for what is true now.
+>
+> The file this was forked from opens with a warning that it spent months
+> describing "Woodland Brawl" after the game had become a tower defense, and
+> calls that "exactly how a long session gets misled". This is the same
+> hazard, one fork later. **Update it in the same commit as the change.**
 
-> This file is the memory of what has been done and why. It used to describe
-> "Woodland Brawl", the arena brawler this started as, long after the game had
-> become a tower defense — which is exactly how a long session gets misled.
-> **Update it in the same commit as the change.**
+## The rule, exactly (polarity)
+
+`Pole` is `dark` or `light`. Enemies have one, orbs inherit it from whatever
+fired them, and the hero has one that the swap button flips.
+
+- An orb whose pole MATCHES the hero is absorbed inside `ABSORB_RADIUS` (1.35)
+  and pays `MANA_PER_ABSORB`. It also scores.
+- An orb whose pole does NOT match is an ordinary bullet and hits for its
+  damage.
+
+The absorb radius is deliberately wider than `BULLET_HIT_RADIUS` (0.38) and is
+tested FIRST, so a matching orb can never reach the body. **Matching a colour
+is safe, not merely profitable** — a player who has to wonder whether the
+absorb will win the race dodges instead of collecting, which is the game not
+being played.
+
+### The orbs are spheres, and nothing lights them
+
+Reported, and right: the colour of a bullet is the only thing in this game the
+player must read correctly every single time, so it has to be readable at a
+glance.
+
+- **A sphere, because it has no orientation.** The kit's bullet is a capsule
+  that presents a different silhouette depending on which way it flies, which
+  is a second thing to decode at the moment there is no time to decode
+  anything.
+- **`MeshBasicMaterial`, so no light touches them.** This is the part that
+  matters. Lit, a white orb crossing a shadow goes grey and a dark one under
+  the sun picks up a specular highlight — the two poles converge exactly where
+  the board is busiest. Unlit, dark is the same dark everywhere, and the
+  decision the whole game rests on never depends on where it is being made.
+- **Each wears a shell of the opposite value**, drawn back-faces-only so it
+  reads as an outline. Against bright grass a light orb would have little to
+  separate it from the ground; against shadow a dark one would have nothing
+  either. With the shell, whichever half is losing contrast the other half is
+  winning it.
+- Neither pole is at an extreme. `#241f33` and `#f2f0ea`, not black and white:
+  pure black disappears into shadow, and pure white is what every existing
+  effect in this game already flashes.
+
+The materials are SHARED per pole, because nothing ever repaints an orb after
+it is made — every bullet on the board is two draws in total. That is the
+opposite of the kit bullets, which had to be cloned per shot precisely because
+they were recoloured.
+
+### The hero wears it too
+
+`paintHero` writes the pole's glow into the hero's emissive, and the HUD has a
+disc at the end of the magic bar. Both, because they answer the same question
+at different costs: the hero is where the player is already looking, and the
+disc is there for the moment after a swap when the hero is behind something.
+
+Emissive rather than base colour — repainting the hero would flatten the face
+this game spent a session rebuilding.
+
+## The board (polarity)
+
+ONE board, `arena`, generated by `buildArena` in `tools/gen-scene.mjs`. A
+clearing: tiles to ±5.5, an air wall at ±6.6, and the forest rings outside it
+that every Balaboo board has.
+
+**Nothing inside the air wall has a collider.** No trees, no rocks, no props on
+the field. Balaboo scattered scenery on the outer ring because its hero walks
+between build spots at their own pace; this one is running from a bullet, and
+a tree at the edge of the field is a snag at exactly the moment a snag costs
+the most.
+
+Enemies enter from `OUTSIDE` (±8.6) and leave past it. They FLY, so the wall
+was never theirs. Nothing is lost when one crosses unharmed — there is no gate
+and no base to reach. What it cost you is whatever it fired on the way past,
+and what you MISSED is the magic you did not take off it.
+
+## A run (polarity)
+
+It does not end in a win. It ends when the health bar does, and the score is
+what it was worth.
+
+**There is no wave table. There is a CLOCK**, and everything is a function of
+it — `spawnGapAt`, `hpAt`, `speedAt` and the boss schedule all live in
+`levels.ts` and all take the run's elapsed seconds. That is deliberate: a curve
+can be reasoned about at any point ("what is minute three like") and tuned by
+moving one constant, where a forty-row table can only be tuned by editing forty
+rows and hoping the shape between them is what you meant.
+
+Three things ramp, at different rates on purpose:
+
+| | shape | why |
+| --- | --- | --- |
+| spawn gap | exponential, 2.7s → 0.62s | pressure is how many are on the board at once; this is the one that makes minute four hard |
+| hit points | linear, +0.115/s | the least interesting axis — a tougher enemy is the same problem held longer |
+| speed | linear, capped at 1.55 | past that a crossing is over before it can be read |
+
+The gap bottoms out at 0.62s because below that the board is denser than the
+swap button can be READ, and a fight you cannot read is not a harder fight.
+
+**Nothing waits for the board to empty.** Balaboo's loop held the next wave
+until the last one was cleared, which is what made a wave a wave. A board that
+empties here is a board with no bullets to absorb, and magic is the only thing
+keeping the player alive — going quiet is the one thing this game must never
+do.
+
+### `MAX_SHOOTERS` went from 2 to 7, and that is the whole difference
+
+Balaboo capped it at two because a bullet was purely danger. Here half of what
+is in the air is FOOD, so a cap on shooters is a cap on income — and magic is
+what heals you, so starving the player of bullets is starving them of health.
+The same number that made the old game fair makes this one unplayable by
+drought.
+
+It is not removed, because the thing the cap protected against is real: past
+about seven simultaneous streams the board stops being legible. What actually
+bounds the DAMAGE is `HERO_INVINCIBLE_SECONDS` (1.1), which puts a ceiling on
+how fast health can leave however much is flying — which is what frees the
+shooter cap to be about legibility instead.
+
+`ENEMY_SHOOT_RANGE` went 3.4 → 15 for the same reason. At 3.4 the only way to
+earn anything was to chase.
+
+### The boss fires a fan, in both colours
+
+Every `BOSS_EVERY` (68s), derived from the run clock rather than counted down
+beside it. **Anything that is a function of the clock should be written as
+one** — it was its own timer at first, which quietly made the schedule
+un-skippable: winding the clock forward to look at minute four moved the
+crossings and left the boss where it was, so minute four could not be looked at
+with a boss in it.
+
+`BOSS_FAN` is 7 pellets over 78 degrees, and the colours ALTERNATE across the
+fan rather than being rolled per pellet — a random mix sometimes comes out all
+one colour, which is a boss accidentally behaving like a saucer. A fan in both
+colours is the one arrangement the swap button cannot answer, so a boss is read
+with the feet.
+
+## Magic, and what it buys (polarity)
+
+`MANA_MAX` 100, `MANA_START` 20 — deliberately below both a heal (30) and the
+first upgrade (34), so the opening cannot buy anything. Not zero, because
+attacking costs magic too and a hero who cannot swing until something has shot
+at them is a hero whose first input does nothing. Twenty is five sword swings.
+
+| in | out |
+| --- | --- |
+| absorb an orb | +6 |
+| kill | +14 |
+| kill a boss | +45 |
+| a crate | +12…26 |
+
+| spend | cost |
+| --- | --- |
+| swing a sword | 4 |
+| loose an arrow | 7 |
+| cast a staff | 15 |
+| heal 35 | 30 |
+| improve the weapon | 34 / 56 / 82 |
+
+Attacks are priced by how much of the board they ANSWER — a sword reaches one
+thing beside you, an arrow reaches across the field, a staff catches a patch of
+it. That order is the design; the numbers are a first guess.
+
+**A refusal is visible.** Attacking without the price flashes the magic bar red
+and plays `denied`. A silent cooldown is indistinguishable from a broken
+button — this game's ancestor learned that from the staff, and the lesson
+outlived the staff.
+
+### The weapon damage was cut once and is put back
+
+Balaboo cut sword/bow/staves to ~45% because the hero was out-damaging the
+towers by five to seven times and making them optional. **There are no towers
+here**, so the exact argument that justified the cut now argues for undoing it:
+a weapon balanced to be auxiliary, with nothing to be auxiliary to, cannot
+finish anything. Sword `[7, 10.5, 14]`, and the order between the five is
+untouched.
+
+Upgrades are priced in MANA now (34/56/82, was 70/220/480 in gold). The shape
+to preserve is that the chain costs more than one bar-full: upgrading competes
+with ATTACKING and with HEALING for the same pool, and that competition is the
+decision.
+
+### Every enemy shows its health, always
+
+Balaboo hid a full bar on the grounds that a board of them is noise. That was
+right there and is wrong here for a reason that has nothing to do with clutter:
+you PAY to attack, so "how much is left of this one" is asked before
+committing, not after. A bar that appears once you have already spent on it
+answers too late to change anything.
+
+## The controls (polarity)
+
+| | touch | desktop |
+|---|---|---|
+| move | thumbstick (SDK) | `WASD` / arrows |
+| **swap colour** | the ◐ button | **`Space`** (also `Q`) |
+| attack | the weapon button, held to aim a staff | left mouse button |
+| **spend magic** | the ⌃ button | **`E`** (also `B`) |
+| settings · leave | the gear | the same gear |
+
+Three buttons, declared in this order because the SDK lays them on an arc out
+from the thumb's hinge: **the swap is first** because it is pressed several
+times a second in a busy board, and the panel is last because it is pressed
+once a minute.
+
+**Both are plain taps.** There is no hold-to-do-something-else anywhere here.
+Balaboo had one because a single button carried three verbs, and it got away
+with it because placing a tower is done at leisure. The swap is pressed in the
+middle of a bullet crossing the screen, and a control whose meaning depends on
+how long you held it goes wrong exactly then.
+
+`src/keycap.ts` is still the one place that decides what a control is CALLED on
+this machine.
+
+## The tutorial is a set of triggers, not a script (polarity)
+
+`src/coach.ts`. Balaboo taught itself with a scripted board: nine steps in a
+fixed order, each staging the world it needed. That worked because its board
+could be made to hold still.
+
+Nothing here holds still, and the moment a lesson MEANS anything is the moment
+its subject happens to exist — the first orb of your own colour, the first time
+you have enough magic to spend. So a lesson is a CONDITION:
+
+- it fires the first time `when()` is true, and never again;
+- the order is whatever order the game produces;
+- a lesson whose moment never comes simply never fires. **There is no queue to
+  get stuck in and no step to fail to complete**, which is the entire class of
+  bug the scripted board spent three sections defending against.
+
+It does not pause and does not dim — a panel here would be read while something
+crosses the screen, and the thing being explained is usually happening behind
+it. A strip at the top, a few seconds, gone.
+
+Two things it got wrong first, both worth keeping:
+
+- **"You have 30 magic" is not "there is something to buy with it".** The
+  opening purse used to equal the price of a heal, so the spend lesson fired on
+  frame one, at full health, where the only thing it offered was greyed out. It
+  now wants `score > 0` — meaning the magic was EARNED — and an offer that is
+  actually takeable.
+- **`pressName()` returns MARKUP**, because it puts the button's own icon into
+  the sentence. The strip renders with `innerHTML` deliberately; a
+  `textContent` sink prints four hundred characters of `<span style=…>`, which
+  this game has shipped once already.
+
+Which lessons have fired lives on the SAVE (`taught`), written as each one
+fires rather than at the end of a run.
+
+## The village is a hall, and the stall is the score board (polarity)
+
+The village is Balaboo's, with its economy off: nothing sells anything, so no
+building can be bought and none appears. What is left is the weapon rack, the
+stall, and the door — which is what the hall was asked to be.
+
+**The stall is the score board.** Same stall, same place, opened the same way:
+"walk to a thing and press the action button" is this game's one verb, and a
+board needing a new gesture would be a second interface to learn for the one
+screen nobody has to read.
+
+**The rack gives you everything, free.** Two gates had to come off and both
+would have failed SILENTLY — the rack renders either way, it just never offers
+anything:
+
+- forging needed the Armory, and the Armory was bought at the shop. `nextCost`
+  returns free now; the price table is kept, because the moment anything pays
+  materials again it is one line.
+- how many plinths stand there was `weaponCap()`, which conflated "how far a
+  weapon may be improved" with "how many are on show". With the cap opened that
+  came out as three, so five weapons showed four plinths and the last appeared
+  only once another was forged. It is `RACK.length`.
+
+Which weapon to take is the only decision this game asks before a run, and a
+choice between one thing is not one.
+
+### The score board shows other people's names, and that changes the rules
+
+`src/board.ts`, on `umicat.gameData` — a key-value store scoped to the GAME.
+Reads are public; writes need an authenticated user, which is a RULE and is
+said plainly in the summary ("Sign in to put your score on the board") rather
+than failing silently.
+
+**Every row was written by another player's client.** The hub's own card
+renderer takes markup — it has to, prices carry icons — and the comment beside
+it says that is safe only because nothing in the hub shows player text. A score
+board breaks that assumption by definition, so it never goes near that path:
+rows are built as ELEMENTS with `textContent`, names are stripped of control
+characters and clamped to 18 characters on the way IN rather than at the point
+of render.
+
+Verified against a name that is an `<img onerror>` payload: rendered escaped,
+no element parsed, nothing executed, clamped.
+
+Three things the backend does NOT do, which are therefore ours:
+
+- **It does not police what is inside a value.** One row per player, best only,
+  or a person who plays all evening owns the board by volume.
+- **It does not bound the list.** 100KB per value, and a list that only grows
+  reaches it and then every write fails for everyone, permanently. `KEEP` is 24.
+- **`set()` takes an `ifVersion` and `get()` throws the version away**, so
+  there is no version to pass on the first write of a session. What is done
+  instead is write, read back, retry if our row is not there. That closes the
+  window rather than preventing it — a real fix wants `get` to surface the
+  version, which is a change to the SDK.
+
+## What was kept and switched off (polarity)
+
+Not deleted, on purpose: removing the tower defense and adding this game in one
+pass would mean two large changes landing together with nothing to tell their
+failures apart.
+
+| thing | state |
+| --- | --- |
+| `TOWERS`, `Tower`, building, selling, the range rings | present; `KINDS` is empty so nothing is offered |
+| the hotbar | present, one cell — the weapon readout and the staff's recharge |
+| the town, the shop's stock, land | present; nothing sells, so nothing appears |
+| gold, wood, stone | still banked, nothing spends them |
+| `src/scripted.ts` and the nine-step board | **deleted** — it taught building towers |
+
+The next pass takes the tower code out. Nothing above is load-bearing.
+
+## Probes (polarity)
+
+In `umicat-infra/playwright/`. The ones written for this fork:
+
+| probe | what it is really asking |
+| --- | --- |
+| `verify-3d-polarity-rule` | one orb, one hero, one field different — does your colour pay and the other colour hurt |
+| `verify-3d-polarity-coach` | lessons fire on conditions, and say words rather than markup |
+| `verify-3d-polarity-run` | does the curve ramp, does a boss arrive, is its fan both colours |
+| `verify-3d-polarity-board-xss` | what the board does with a name that is trying to be an element |
+
+Four lessons from writing them, all of which cost a run:
+
+- **`pauseWaves` did nothing.** It survived the rewrite as a variable that was
+  set and never read, so the handle reported success while the board kept
+  firing into the middle of an experiment. A probe handle that lies is worse
+  than a missing one.
+- **A hit taken during the invincibility window costs nothing**, which looks
+  exactly like the colour rule being broken. The first run of `verify-rule`
+  reported a false failure on it; `invincible` is on `state()` now.
+- **`gameData` is a postMessage RPC to the platform host.** A game opened
+  straight off the CDN has no host, so the in-game read returns nothing — and
+  "a hostile name is harmless" passes against an empty board. `drawScores`
+  exists so that check can be handed real rows.
+- **Counting what spawned measures the renderer, not the game.** Headless runs
+  game time at about a quarter of wall clock, so "is the board busier at 200s"
+  came back as 1 versus 2. `state().gap` is the curve's own answer.
 
 ## The shape of a session
 

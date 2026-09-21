@@ -50,21 +50,31 @@ export interface RunTier {
   cost: number;
 }
 
+// Priced in MANA, which has a ceiling of 100 — these were gold, against a
+// board that paid out about 550 over a whole run, and carrying those numbers
+// over would have made the first upgrade cost seven full mana bars.
+//
+// The shape to preserve is that the chain costs more than one bar-full: 34
+// is about six absorbed orbs and buyable inside the first minute, and the
+// three together are 172, which is most of a good run's income. Upgrading is
+// meant to compete with ATTACKING and with HEALING for the same pool — that
+// competition is the decision, and a chain you can complete out of pocket
+// change is a chain with no decision in it.
 export const RUN_TIERS: Record<Cast, RunTier[]> = {
   melee: [
-    { label: 'Sharper — a longer, harder swing', cost: 70 },
-    { label: 'Heavy — the blow lands with a shock', cost: 220 },
-    { label: 'Crushing — it hits harder again', cost: 480 },
+    { label: 'Sharper — a longer, harder swing', cost: 34 },
+    { label: 'Heavy — the blow lands with a shock', cost: 56 },
+    { label: 'Crushing — it hits harder again', cost: 82 },
   ],
   arrow: [
-    { label: 'Further — the arrow carries further', cost: 70 },
-    { label: 'Two arrows, spread', cost: 220 },
-    { label: 'Three arrows', cost: 480 },
+    { label: 'Further — the arrow carries further', cost: 34 },
+    { label: 'Two arrows, spread', cost: 56 },
+    { label: 'Three arrows', cost: 82 },
   ],
   burst: [
-    { label: 'A wider blast', cost: 70 },
-    { label: 'A shorter wait between casts', cost: 220 },
-    { label: 'A heavier blast, wider still', cost: 480 },
+    { label: 'A wider blast', cost: 34 },
+    { label: 'A shorter wait between casts', cost: 56 },
+    { label: 'A heavier blast, wider still', cost: 82 },
   ],
 };
 
