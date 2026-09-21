@@ -1,4 +1,4 @@
-// The three things you can do to a point: play it, forget it, ask about it.
+// The three things you can do to a square: play it, forget it, ask about it.
 //
 // The tick and the cross are mirror images about the point — that is what makes
 // them read as a pair belonging to the stone under them. The first version laid
@@ -12,10 +12,19 @@
 // made the player look away from the stone they were aiming at to press
 // something in a corner. One rule now, in one place, on every device.
 //
-// "Ask" is the other half of the coach being able to point at the board: the
-// player can point back. Tapping a stone and asking about THAT is how a person
-// sitting at a board asks a question, and it beats typing a coordinate they
-// have to work out first.
+// "Ask" is the other half of the assistant being able to point at the board:
+// the player can point back. Tapping a piece and asking about THAT is how a
+// person sitting at a board asks a question, and it beats typing a coordinate
+// they have to work out first.
+//
+// **They move out of the way of the board.** A button standing on a square is
+// a square the player cannot tap, and on a xiangqi board the squares around
+// the piece in hand are exactly where it is allowed to GO — so a cluster in a
+// fixed place is a cluster that sooner or later makes a legal move
+// unplayable. `place()` is told which points must stay reachable and turns
+// the whole cluster around the square until it stops covering them. It keeps
+// the default arrangement (tick left, cross right) whenever that is free, so
+// the positions are still learnable.
 import './buttons.css';
 import './pointactions.css';
 
@@ -31,9 +40,25 @@ export interface PointActionsOptions {
   onAsk(at: { x: number; y: number }): void;
 }
 
+/** Which of the three are on offer. A tick over a square nothing can move to
+ *  is a button that does nothing, which is how a player learns to stop
+ *  trusting the buttons. */
+export interface Offered {
+  confirm?: boolean;
+  cancel?: boolean;
+  ask?: boolean;
+}
+
+/** How far apart, in degrees, the three buttons sit around the square: tick
+ *  and cross opposite each other, ask between them and below. */
+const SLOT = { confirm: 180, cancel: 0, ask: 90 } as const;
+/** Half a button, plus enough that a fingertip on one is not on the other. */
+const BUTTON_R = 21;
+
 export class PointActions {
   private el: HTMLDivElement;
   private okBtn: HTMLButtonElement;
+  private noBtn: HTMLButtonElement;
   private askBtn: HTMLButtonElement;
   private point: { x: number; y: number } | null = null;
 
@@ -48,29 +73,24 @@ export class PointActions {
     document.body.appendChild(this.el);
 
     this.okBtn = this.el.querySelector('.ok')!;
+    this.noBtn = this.el.querySelector('.no')!;
     this.askBtn = this.el.querySelector('.ask')!;
 
     this.okBtn.onclick = () => { const at = this.point; this.hide(); if (at) this.opts.onConfirm(at); };
-    (this.el.querySelector('.no') as HTMLButtonElement).onclick = () => { this.hide(); this.opts.onCancel(); };
+    this.noBtn.onclick = () => { this.hide(); this.opts.onCancel(); };
     this.askBtn.onclick = () => { const at = this.point; this.hide(); if (at) this.opts.onAsk(at); };
   }
 
   get at(): { x: number; y: number } | null { return this.point; }
   get showing(): boolean { return !this.el.hidden; }
 
-  /**
-   * Offer the actions for a point.
-   *
-   * `canPlace` is false for a point that already has a stone, or that the rules
-   * refuse — and then only asking is offered. A tick over an occupied point
-   * would be a button that does nothing, which is how a player learns to stop
-   * trusting the buttons.
-   */
-  show(at: { x: number; y: number }, canPlace: boolean, canAsk: boolean): void {
+  /** Offer some of the actions for a square. */
+  show(at: { x: number; y: number }, offer: Offered): void {
     this.point = at;
-    this.okBtn.hidden = !canPlace;
-    this.askBtn.hidden = !canAsk;
-    this.el.hidden = !canPlace && !canAsk;
+    this.okBtn.hidden = !offer.confirm;
+    this.noBtn.hidden = !offer.cancel;
+    this.askBtn.hidden = !offer.ask;
+    this.el.hidden = !offer.confirm && !offer.cancel && !offer.ask;
   }
 
   hide(): void {
@@ -78,15 +98,71 @@ export class PointActions {
     this.point = null;
   }
 
-  /** Follow the point on screen. Called whenever the board is redrawn, since
-   *  that is when the camera can have moved. */
-  place(screen: { x: number; y: number }, spacing: number): void {
-    // Far enough out to clear the stone (half its width) plus half a button,
+  /**
+   * Follow the square on screen, keeping off the points that must stay
+   * tappable. Called whenever the board is redrawn, since that is when the
+   * camera can have moved.
+   *
+   * `keepClear` is in screen pixels — the squares the piece in hand may move
+   * to, and the piece itself. The cluster is turned in eighths of a circle
+   * until it covers as few of them as possible; the default arrangement wins
+   * ties, so the tick stays on the left unless staying there would cost the
+   * player a move.
+   */
+  place(screen: { x: number; y: number }, spacing: number, keepClear: Array<{ x: number; y: number }> = []): void {
+    // Far enough out to clear the piece (half its width) plus half a button,
     // plus a little air. Derived from the board's line spacing, so it holds at
-    // every zoom level and on every board size.
+    // every zoom level.
     const r = Math.max(spacing * 0.55, 22) + 22;
-    this.el.style.setProperty('--r', `${Math.round(r)}px`);
     this.el.style.left = `${Math.round(screen.x)}px`;
     this.el.style.top = `${Math.round(screen.y)}px`;
+
+    const live: Array<[HTMLButtonElement, number]> = [
+      [this.okBtn, SLOT.confirm], [this.noBtn, SLOT.cancel], [this.askBtn, SLOT.ask],
+    ].filter(([b]) => !(b as HTMLButtonElement).hidden) as Array<[HTMLButtonElement, number]>;
+
+    // How bad a rotation is, in three grades that are genuinely different:
+    //
+    //   a button ON a point the player needs is the bug this exists to fix —
+    //   the move becomes unplayable, so it costs more than everything else
+    //   put together;
+    //   a button merely CROWDING one is a smaller thing: the dot is still
+    //   hittable, it is just tight, and near the far edge of the board the
+    //   squares are close enough together that some crowding is unavoidable;
+    //   a button off the edge of the SCREEN is unusable, which is its own bug.
+    //
+    // Twenty-four angles rather than eight, because a chariot's destinations
+    // lie along the two axes and the gap to thread is often a diagonal that
+    // the eighths happen to miss.
+    const covered = BUTTON_R + 8;
+    const clearance = BUTTON_R + Math.max(8, spacing * 0.22);
+    const cost = (turn: number): number => {
+      let total = turn === 0 ? 0 : 1;
+      for (const [, slot] of live) {
+        const a = ((slot + turn) * Math.PI) / 180;
+        const bx = screen.x + Math.cos(a) * r;
+        const by = screen.y + Math.sin(a) * r;
+        for (const p of keepClear) {
+          const gap = Math.hypot(p.x - bx, p.y - by);
+          if (gap < covered) total += 40;
+          else if (gap < clearance) total += 4;
+        }
+        if (bx < BUTTON_R || bx > window.innerWidth - BUTTON_R
+          || by < BUTTON_R || by > window.innerHeight - BUTTON_R) total += 8;
+      }
+      return total;
+    };
+
+    let best = 0, bestCost = Infinity;
+    for (let turn = 0; turn < 360; turn += 15) {
+      const c = cost(turn);
+      if (c < bestCost) { bestCost = c; best = turn; }
+    }
+
+    for (const [button, slot] of live) {
+      const a = ((slot + best) * Math.PI) / 180;
+      button.style.transform =
+        `translate(calc(-50% + ${Math.round(Math.cos(a) * r)}px), calc(-50% + ${Math.round(Math.sin(a) * r)}px))`;
+    }
   }
 }

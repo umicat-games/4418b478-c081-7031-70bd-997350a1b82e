@@ -136,6 +136,22 @@ decided from for exactly this reason; do not go back to reading `read`, which
 `observePosition` overwrites a moment later. (The Go game measured the wrong
 position; Chess with me found it.)
 
+**A button standing on a square is a square the player cannot tap** — and on
+this board the squares around the piece in hand are exactly where it is
+allowed to GO, so a fixed cluster eventually makes a legal move unplayable.
+`PointActions.place()` is handed the points that must stay reachable (the
+destinations, and the piece itself) and turns the whole cluster around the
+square in fifteen-degree steps until it is off them; the default arrangement
+wins ties, so the tick stays on the left unless staying there would cost the
+player a move. Measured over every Red piece at both stages of a move, in the
+opening and ten plies in: nothing within 37px of a dot, against 29px at which
+a button would actually be on top of one.
+
+That is also why **picking a piece up offers no cancel button**: tapping the
+same piece again puts it down, and one fewer button is one fewer square
+standing under one. With the assistant off, picking a piece up puts nothing on
+the screen at all.
+
 **Three taps for a move, not two and never a drag.** Pick the piece up, choose
 the square, confirm on the tick. On a phone a piece is about four millimetres
 wide and a xiangqi move cannot be taken back; the ghost in between is also what

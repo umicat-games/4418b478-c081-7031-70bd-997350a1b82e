@@ -120,7 +120,12 @@ async function start(): Promise<void> {
   /** Confirm / cancel / ask, beside the piece rather than in a corner. */
   const actions = new PointActions({
     onConfirm: (at) => { if (selected) commit(selected, at); },
-    onCancel: () => { view.setGhost(null); if (selected) pickUp(selected); },
+    onCancel: () => {
+      view.setGhost(null);
+      // Back to the piece in hand rather than all the way to nothing: they
+      // changed their mind about the square, not about the piece.
+      if (selected) { const at = selected; pickUp(at); actions.show(at, { ask: companion }); placeActions(); }
+    },
     onAsk: (at) => askAbout(at),
   });
 
@@ -158,7 +163,7 @@ async function start(): Promise<void> {
     // engine — which is the thing the player is waiting for.
     if (view.render()) {
       if (speech.showing) placeSpeech();
-      if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
+      placeActions();
       if (askHere.showing && askHere.at) askHere.place(view.screenOf(askHere.at.x, askHere.at.y), view.screenSpacing);
     }
     requestAnimationFrame(frame);
@@ -543,6 +548,23 @@ async function start(): Promise<void> {
     })();
   }
 
+  /**
+   * Put the confirm/cancel/ask cluster beside its square, off the squares the
+   * player still has to be able to tap.
+   *
+   * Those are the legal destinations of the piece in hand and the piece
+   * itself: a button standing on one of them is a move the player cannot
+   * make, and on this board the squares around a piece ARE where it goes.
+   */
+  function placeActions(): void {
+    const at = actions.at;
+    if (!actions.showing || !at) return;
+    const keep = [...destinations, ...(selected ? [selected] : [])]
+      .filter((p) => p.x !== at.x || p.y !== at.y)
+      .map((p) => view.screenOf(p.x, p.y));
+    actions.place(view.screenOf(at.x, at.y), view.screenSpacing, keep);
+  }
+
   /** Pick a piece up: it is selected, and everywhere it may go is dotted. */
   function pickUp(at: Point): void {
     if (!game) return;
@@ -576,10 +598,15 @@ async function start(): Promise<void> {
       // about to stand there hides the one thing worth looking at.
       view.setDestinations(destinations.filter((d) => d.x !== at.x || d.y !== at.y));
       view.setGhost(at, sideOf(from), typeOf(from));
-      actions.show(at, true, companion);
-      actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+      actions.show(at, { confirm: true, cancel: true, ask: companion });
+      placeActions();
       return;
     }
+
+    // The piece already in hand: tapping it again puts it down. That is what
+    // a cancel button would be for, which is why there is no cancel button at
+    // this stage — one fewer button is one fewer square standing under one.
+    if (selected && selected.x === at.x && selected.y === at.y) { clearBoardMarks(); return; }
 
     // One of your own, and it is your turn: pick it up.
     if (mine && yourTurn) {
@@ -589,8 +616,8 @@ async function start(): Promise<void> {
       if (!moves.length) audio.play(SFX.denied);
       pickUp(at);
       // Asking about it is still worth a button.
-      actions.show(at, false, companion);
-      actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+      actions.show(at, { ask: companion });
+      placeActions();
       return;
     }
 
@@ -599,8 +626,8 @@ async function start(): Promise<void> {
     clearBoardMarks();
     if (companion && (code || !yourTurn)) {
       view.setFocus(at);
-      actions.show(at, false, true);
-      actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+      actions.show(at, { ask: true });
+      placeActions();
     }
   }
 

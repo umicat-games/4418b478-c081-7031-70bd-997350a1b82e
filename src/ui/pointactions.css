@@ -1,4 +1,4 @@
-/* Confirm, cancel and ask — on the stone, not in the corner.
+/* Confirm, cancel and ask — on the piece, not in the corner.
  *
  * Each button is placed against the POINT, not laid out in a row. A row of
  * three centred on the point puts the gap where the stone is off to one side,
@@ -33,8 +33,12 @@
 #pointactions button[hidden] { display: none; }
 #pointactions button.ask { --top: rgba(127, 214, 194, 0.5); }
 
-/* `--r` is how far from the point a button sits, set from the board's line
-   spacing so the pair clears the stone at any zoom. */
-#pointactions .ok { transform: translate(calc(-50% - var(--r)), -50%); }
-#pointactions .no { transform: translate(calc(-50% + var(--r)), -50%); }
-#pointactions .ask { transform: translate(-50%, calc(-50% + var(--r))); }
+/* Where each button sits is decided in `place()`, not here: it depends on
+   which squares have to stay tappable, which is a thing only the game knows.
+   These are the starting positions, before the first placement. */
+#pointactions .ok { transform: translate(-50%, -50%); }
+#pointactions .no { transform: translate(-50%, -50%); }
+#pointactions .ask { transform: translate(-50%, -50%); }
+/* The move being made is worth animating; it is small, and it is the only
+   thing on screen that moves when the camera does not. */
+#pointactions button { transition: transform .12s ease-out; }
