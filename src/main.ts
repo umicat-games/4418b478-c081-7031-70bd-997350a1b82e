@@ -86,7 +86,6 @@ async function start(): Promise<void> {
 
   // 4) Render. The canvas is in index.html; the game owns the loop.
   const canvas = document.getElementById('game') as HTMLCanvasElement;
-  const hud = document.getElementById('hud')!;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -98,12 +97,6 @@ async function start(): Promise<void> {
   };
   resize();
   window.addEventListener('resize', resize);
-
-  // Write into a CHILD, never `hud.textContent` — that wipes every child the
-  // HUD has, which is how the on-screen touch controls used to disappear.
-  const greeting = document.createElement('div');
-  greeting.textContent = umicat.user ? `Hello, ${umicat.user.name}` : 'Playing as a guest';
-  hud.appendChild(greeting);
 
   // Saving every frame would hammer the host; coalesce instead.
   let pending: ReturnType<typeof setTimeout> | undefined;
