@@ -20,6 +20,10 @@
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 #tray.gone { opacity: 0; transform: translateY(12px); pointer-events: none; }
+/* Out from under the conversation. The camera already keeps the board clear
+   of both; the tray is the one thing that would otherwise have its far end
+   behind the panel, where it can be neither seen nor scrolled to. */
+body.chatting #tray { right: calc(var(--chat-w) + 24px); }
 /* Somebody else's turn: the hand is still readable — planning your next move
    while three bots play is most of what happens in a four-handed game — but
    it is plainly not yours to act on. */

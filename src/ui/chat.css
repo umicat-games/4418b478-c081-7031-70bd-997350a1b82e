@@ -5,13 +5,19 @@
  * squares once the camera has reframed. A top-anchored panel would cover the
  * far corner of the board, which in Blokus is somebody's home. */
 
+/* How wide the panel is, as a variable, because the TRAY has to know: an
+   open conversation shortens the strip of pieces rather than covering its
+   right-hand end, and a piece you cannot scroll to is a piece you cannot
+   play. */
+:root { --chat-w: min(340px, 42vw); }
+
 #chat {
   position: fixed;
   z-index: 25; /* above the HUD (20) and the tray (22) */
   top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
   bottom: max(12px, env(safe-area-inset-bottom));
-  width: min(340px, 42vw);
+  width: var(--chat-w);
   display: flex;
   flex-direction: column;
   border-radius: 16px;
@@ -109,5 +115,6 @@
 body.chatting .standings { display: none; }
 
 @media (max-height: 460px), (max-width: 520px) {
-  #chat { width: min(300px, 62vw); font-size: 13px; }
+  :root { --chat-w: min(300px, 62vw); }
+  #chat { font-size: 13px; }
 }

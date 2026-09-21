@@ -22,6 +22,7 @@
 
 /* While a card is up, the game's own furniture is not. */
 body.screening #hud,
+body.screening .standings,
 body.screening #tray,
 body.screening #chat,
 body.screening #actions,
