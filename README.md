@@ -1,29 +1,16 @@
-# umicat-template — `template-3d`
+# Xiangqi with me
 
-The starter a **3D** game is forked from. `main` on this same repo is the 2D
-(Phaser) starter; `gitManager.templateBranchFor(runtime)` picks between them,
-and both are branches of the ONE per-user fork so clone/push/restore stay
-runtime-independent. See umicat-design/plans/3d-project-creation.md.
+Chinese chess against an engine, with an AI assistant beside the board.
 
-The starter a new **3D** Umicat game is forked from — the 3D sibling of
-`umicat-template`.
+- The rules live in `src/xiangqi/rules.ts` and are verified by `npm run verify`
+  (perft against the published counts, plus the rules perft cannot reach).
+- The opponent is a small alpha-beta search of our own — see `CLAUDE.md` for
+  why it is not Pikafish.
+- The assistant talks, points and counts; it never moves a piece.
 
-```
-@umicat/platform-sdk     identity · saves · gameData · rooms · ai · voice · dialogue
-        ▲
-@umicat/three-sdk        scene3d format · loader · physics · character · input
-        ▲
-   this template         one scene, one character, one crate that falls
+```bash
+npm install
+npm run dev
 ```
 
-`package.json` carries `"umicat": { "runtime": "three" }`. That marker is how
-everything downstream — project creation, workspace restore, SDK updates, the
-build and the publish path — can tell which runtime a game is, without guessing
-from its dependencies.
-
-## Status
-
-**Not yet wired into project creation.** `agent-session-service` forks
-`umicat-template` unconditionally today; routing on the runtime marker is the
-next piece (see `umicat-design/plans/3d-platform-integration-experiment.md`).
-Until then this is forked by hand.
+`CLAUDE.md` is the working memory of this repo: read it first.

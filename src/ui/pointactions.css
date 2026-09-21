@@ -1,0 +1,40 @@
+/* Confirm, cancel and ask — on the stone, not in the corner.
+ *
+ * Each button is placed against the POINT, not laid out in a row. A row of
+ * three centred on the point puts the gap where the stone is off to one side,
+ * because the row has two buttons on the right and one on the left — which is
+ * exactly how it looked: a tick further from the stone than the cross. The
+ * tick and the cross are now mirror images about the point, and "ask", which
+ * is the odd one out, sits below rather than pretending to be part of a pair. */
+
+#pointactions {
+  position: fixed;
+  /* ABOVE the companion's bubble (26). These buttons are the move the player
+     is making right now; a sentence about the board, however recent, must not
+     be sitting on top of the tick. */
+  z-index: 27;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+#pointactions[hidden] { display: none; }
+
+#pointactions button {
+  position: absolute;
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+#pointactions button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+#pointactions button[hidden] { display: none; }
+#pointactions button.ask { --top: rgba(127, 214, 194, 0.5); }
+
+/* `--r` is how far from the point a button sits, set from the board's line
+   spacing so the pair clears the stone at any zoom. */
+#pointactions .ok { transform: translate(calc(-50% - var(--r)), -50%); }
+#pointactions .no { transform: translate(calc(-50% + var(--r)), -50%); }
+#pointactions .ask { transform: translate(-50%, calc(-50% + var(--r))); }

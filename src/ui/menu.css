@@ -1,0 +1,67 @@
+/* The setup panel: board size, opponent, handicap.
+ *
+ * Everything in here can also be asked for in words — "let's play on a bigger
+ * board", "you're too strong for me" — and the coach will do it. The panel
+ * exists because not everyone wants to talk to get a 13x13, and because a
+ * setting you can only reach by conversation is a setting most players never
+ * find. */
+
+#menu {
+  position: fixed;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  z-index: 30; /* over the HUD (20), under the title (40) */
+  left: max(16px, env(safe-area-inset-left));
+  /* Clear of the whole HUD block, not just the buttons: the status line sits
+     above them, and a panel that covers "your move" covers the one thing on
+     screen that says whose turn it is. */
+  bottom: max(112px, calc(env(safe-area-inset-bottom) + 112px));
+  width: min(320px, 78vw);
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(18, 21, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(12px);
+  color: #f4f5f7;
+  font: 14px/1.45 system-ui, -apple-system, sans-serif;
+  display: grid;
+  gap: 14px;
+}
+#menu[hidden] { display: none; }
+
+/* Opened from the title screen, where there is no corner to belong to. */
+#menu.standalone {
+  left: 50%;
+  bottom: auto;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, 88vw);
+}
+
+#menu .title { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
+
+/* Hint, pass, resign, recentre — the old corner, folded inside. */
+#menu .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+#menu .group > .label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 7px;
+}
+
+#menu .choices { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* What the selected opponent actually plays like. The levels are named by feel
+   rather than by rank, so the sentence is the part that means anything. */
+#menu .about { font-size: 12px; opacity: 0.66; min-height: 2.6em; }
+
+#menu .note { font-size: 12px; opacity: 0.6; }
+
+
+/* Layout only — how a button LOOKS is buttons.css. */
+#menu .choices button { flex: 1 1 auto; }
+#menu .actions button { flex: 1 1 auto; font-size: 13px; padding: 9px 10px; }
+#menu .go { width: 100%; }
+#menu .home { width: 100%; font-weight: 500; }

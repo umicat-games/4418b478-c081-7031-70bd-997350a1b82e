@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Umicat Game</title>
+    <title>Xiangqi with me</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { height: 100%; overflow: hidden; background: #000; }
@@ -18,10 +18,43 @@
            zones out of the top of the screen, but that is a default sized for
            a short HUD, not a guarantee. */
         z-index: 20;
-        position: fixed; left: 16px; top: 14px; pointer-events: none;
+        /* Bottom-left, not top-left: the chat pill owns the top of the screen
+           when the panel is closed, and a button that overlaps the board is a
+           button a thumb presses while trying to play a stone. */
+        position: fixed; left: max(16px, env(safe-area-inset-left));
+        bottom: max(14px, env(safe-area-inset-bottom)); pointer-events: none;
         font: 600 16px/1.5 system-ui, sans-serif; color: #fff;
         text-shadow: 0 2px 6px rgba(0,0,0,.55); max-width: 80vw;
       }
+      /* The HUD itself stays click-through so the board behind it is still
+         playable; anything interactive turns pointer events back on. */
+      #hud .tip {
+        font-weight: 500; font-size: 13px; opacity: .72; margin-top: 2px;
+      }
+      #hud .tip:empty { display: none; }
+      #hud .bar { display: flex; gap: 10px; margin-top: 10px; pointer-events: auto; flex-wrap: wrap; max-width: 46vw; }
+      /* The gear is the only button out here; how it LOOKS is buttons.css,
+         which the modules import. */
+      #hud button[hidden] { display: none; }
+      #hud button.icon { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+      #hud button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+      /* While the conversation is open it belongs to the conversation's corner,
+         just above the composer, at the right-hand edge. */
+      /* The HUD sits under the chat panel (20 against 25), so a gear moved into
+         the panel's corner is a gear behind it. Lifted for as long as it is
+         there, and only then. */
+      body.chatting #hud { z-index: 26; }
+      /* Inside the log's bottom-right corner, with room around it. The first
+         version put it ON the panel's bottom edge — the composer sits 54px up,
+         so clearing the composer is not the same as clearing the box above it. */
+      body.chatting #hud .bar {
+        left: auto; right: calc(max(12px, env(safe-area-inset-right)) + 16px);
+        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 74px);
+        position: fixed; margin: 0;
+      }
+      body.chatting #hud .status, body.chatting #hud .tip { max-width: 46vw; }
+      /* While the title is up, the game's own furniture is not. */
+      body.titling #hud, body.titling #chat, body.titling #speech { display: none; }
     </style>
   </head>
   <body>

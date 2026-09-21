@@ -8,11 +8,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "node tools/perft.mjs 4 && node tools/rules-test.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.14.0",
-    "@umicat/three-sdk": "^0.9.0",
+    "@umicat/three-sdk": "^0.15.0",
     "three": "^0.186.0"
   },
   "devDependencies": {
