@@ -1,0 +1,46 @@
+/* The settings panel: sound, helpers, how hard the bots play.
+ *
+ * It opens from the gear in the HUD and parks itself in the same corner, so
+ * the panel and the button that opened it are plainly the same thing. */
+
+#menu {
+  position: fixed;
+  z-index: 30; /* over the HUD (20) and the tray (22), under the cards (40) */
+  left: max(12px, env(safe-area-inset-left));
+  /* Clear of the whole HUD block, not just the buttons: the turn line sits
+     above them, and a panel that covers "your turn" covers the one thing on
+     screen that says whose it is. */
+  top: max(110px, calc(env(safe-area-inset-top) + 110px));
+  width: min(300px, 80vw);
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(18, 20, 30, 0.93);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  color: #f3f4fa;
+  font: 14px/1.45 system-ui, -apple-system, sans-serif;
+  display: grid;
+  gap: 14px;
+}
+#menu[hidden] { display: none; }
+
+#menu .title { font-size: 17px; font-weight: 700; }
+
+#menu .group > .label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 7px;
+}
+#menu .choices { display: flex; gap: 6px; flex-wrap: wrap; }
+#menu .choices button { flex: 1 1 auto; }
+
+#menu .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+#menu .actions button { flex: 1 1 auto; font-size: 13px; padding: 9px 10px; }
+
+#menu .leave { width: 100%; }
+#menu .note { font-size: 12px; opacity: 0.6; }

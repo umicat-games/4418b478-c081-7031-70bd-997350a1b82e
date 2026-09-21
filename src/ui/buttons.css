@@ -1,0 +1,111 @@
+/* What a button in this game looks like when it is pressable.
+ *
+ * The same design language as Chess with me's and GO with me's — a face with
+ * the top edge catching the light and a deeper slab of the SAME hue underneath
+ * for it to sit on — in this game's colours. Two things make a coloured
+ * rectangle read as a surface, and those are the two.
+ *
+ * A stylesheet rather than inline style for one reason that cannot be worked
+ * around: **`:active` cannot be written inline.** The press is not decoration.
+ * A raised button that does not go down when pushed reads as a picture of a
+ * button.
+ *
+ * The palette is VIOLET on near-black, and it is violet for a reason: blue,
+ * red, green and yellow are the four players, and a green button on a board
+ * where green is somebody would read as that player's. The one hue left that
+ * is nobody's is the one the interface gets to speak in.
+ */
+
+.lift {
+  /* How far it sinks. The slab shrinks by the SAME number when pressed —
+     anything else and the face slides rather than seats. */
+  --d: 3px;
+  --face: #5e50d6;
+  --slab: #3a2f96;
+  --top: rgba(255, 255, 255, 0.34);
+  --ink: #f5f4ff;
+
+  position: relative;
+  border: none;
+  border-radius: 999px;
+  background: var(--face);
+  color: var(--ink);
+  font: 600 14px/1 system-ui, -apple-system, sans-serif;
+  padding: 11px 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow:
+    0 var(--d) 0 var(--slab),
+    inset 0 1px 0 var(--top),
+    0 calc(var(--d) + 4px) 12px rgba(0, 0, 0, 0.38);
+  transform: translateY(0);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.12s ease;
+}
+.lift:hover { filter: brightness(1.1); }
+.lift:active {
+  transform: translateY(var(--d));
+  box-shadow: 0 0 0 var(--slab), inset 0 1px 0 var(--top), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.lift:disabled { opacity: 0.45; cursor: default; filter: none; }
+.lift:disabled:active { transform: none; }
+
+/** The other choice on a screen. Translucent over the board. */
+.lift.quiet {
+  --face: rgba(30, 32, 44, 0.84);
+  --slab: rgba(8, 9, 14, 0.85);
+  --top: rgba(255, 255, 255, 0.2);
+  --ink: #e9eaf3;
+  backdrop-filter: blur(10px);
+}
+
+/** Placing a piece: the one press that changes the board. Green, because it
+ *  is the universal yes — and because it stands beside the piece rather than
+ *  on it, so it is never mistaken for a player's colour on the grid. */
+.lift.go {
+  --face: #2f8f5b;
+  --slab: #1d6640;
+  --top: rgba(255, 255, 255, 0.3);
+}
+
+/** Leaving a game. Solid, never translucent: a translucent red on a dark
+ *  panel comes out darker than its own slab. */
+.lift.danger {
+  --face: #9e3b34;
+  --slab: #6d2520;
+  --top: rgba(255, 255, 255, 0.28);
+}
+
+/** Chrome over the board: the gear, the cancel cross. Small and dark. */
+.lift.dark {
+  --face: rgba(16, 18, 26, 0.86);
+  --slab: rgba(0, 0, 0, 0.7);
+  --top: rgba(255, 255, 255, 0.22);
+  --ink: #fff;
+  backdrop-filter: blur(8px);
+}
+
+/**
+ * Flat, with a hairline rim. NOT a lift, and that is the point.
+ *
+ * Relief says "press me", which is wrong for a thing that is SELECTED rather
+ * than pressed — the bot level, the sound switches. They are a set of chips
+ * showing what is available, and the chosen one says so with a filled face.
+ */
+.chip {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: 600 13px/1 system-ui, sans-serif;
+  padding: 9px 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.chip:hover { background: rgba(255, 255, 255, 0.12); }
+.chip[aria-pressed='true'] {
+  background: #5e50d6;
+  border-color: #a99bff;
+  color: #fff;
+}
+.chip:disabled { opacity: 0.4; cursor: default; }

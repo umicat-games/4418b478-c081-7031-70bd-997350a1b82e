@@ -1,0 +1,38 @@
+/* Confirm, cancel, turn — on the piece, not in the corner.
+ *
+ * Each button is placed against the piece's CENTRE rather than laid out in a
+ * row: a row of three centred on a point sits lopsided, because two of them
+ * end up on one side. The tick and the cross are mirror images about the
+ * piece; turning it is the odd one out and sits below. */
+
+#actions {
+  position: fixed;
+  z-index: 27; /* over the tray (22) and the HUD (20) — this is the move */
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+#actions[hidden] { display: none; }
+
+#actions button {
+  position: absolute;
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+#actions button svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: currentColor;
+  stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+}
+#actions button[hidden] { display: none; }
+
+/* `--r` is how far from the piece's centre a button sits, set from the board's
+   cell size so the pair clears a five-square piece at any zoom. */
+#actions .ok { transform: translate(calc(-50% - var(--r)), -50%); }
+#actions .no { transform: translate(calc(-50% + var(--r)), -50%); }
+#actions .turn { transform: translate(-50%, calc(-50% + var(--r))); }

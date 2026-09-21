@@ -1,202 +1,156 @@
-# Umicat 3D game
+# Blokus
 
-A three.js game on the Umicat platform. This file is what the agent reads first.
+Four colours, one twenty-by-twenty board, in three dimensions — against bots or
+against people in a room. This file is the memory of what has been built and
+why.
+
+> **Update this file in the same commit as the change.** The Go game's copy
+> described the 3D character template it was forked from long after none of it
+> was true, which is exactly how a long session gets misled.
+
+Game id `629fd8aa-4e90-4b1a-97e5-d04358b000cf`, fork org `umicat-games` (the
+repo holds one branch per game). `./deploy-preview.sh` publishes `dist/`
+straight to S3 + CloudFront. **Always commit AND deploy** — a direct deploy is
+a temporary override that any workspace rebuild wipes out.
+
+This is a 3D remake of the 2D Blokus
+(`c4fb5fa2-0d10-46ed-860a-d1bc76111532`, Phaser, in the `unboxy-games` fork of
+the same repo). Every feature that game had is here: the rules, the four-handed
+game with bots filling the empty seats, three bot levels, create / join by code
+/ browse / quick match, in-game chat, and the saved settings. The interface is
+**Chess with me** and **GO with me**'s, ported — the camera rig, the card, the
+aim-then-confirm step, the settings panel and the chat panel are theirs. When
+something here looks odd, one of those two repos probably explains why.
 
 ## Where things are
 
-| | |
-|---|---|
-| `src/main.ts` | the whole game loop — start here |
-| `src/config.ts` | the design canvas + `ORIENTATION` (set at game creation; do not change it) |
-| `public/scenes3d/main.json` | **the scene** — entities, lights, colliders, camera |
-| `public/scenes3d/manifest.json` | models, their import scale, and their **animation map** |
-| `public/assets/` | `.glb` models, textures, audio |
-
-## The two halves, and why the split matters
-
-**Platform** — `umicat.saves`, `umicat.gameData`, `umicat.rooms`, `umicat.ai`,
-`umicat.voice`, `umicat.dialogue`, `umicat.user`. Identical to what a 2D Umicat
-game gets, because it is the same package underneath
-(`@umicat/platform-sdk`). None of it knows anything is being drawn.
-
-**Engine** — `loadScene3D`, `CharacterController3D`, `Input3D`, three.js and
-Rapier. This is the part that differs from a 2D game.
-
-When something goes wrong, knowing which half you are in usually names the bug.
-
-## The scene format
-
-`scenes3d/main.json` is **design data**: what the game looks like before anyone
-plays it. No save is loaded when it is read. Rules that are decisions, not
-accidents:
-
-- **Rotation is a quaternion** `[x, y, z, w]`, never Euler angles.
-- **Ids are authored and stable.** Saves and code refer to entities by id.
-- **Transforms are local to `parent`.** World transforms are derived.
-- **Colliders are explicit.** Never use a render mesh as a dynamic collider —
-  that is the classic way to make a game that is correct and unplayably slow.
-- **Animation clips are mapped by meaning** in the manifest
-  (`{ "walk": "Walk" }`), never guessed from the clip's name.
-
-`loadScene3D` refuses duplicate ids, dangling parents, entities that would draw
-nothing, and trimesh colliders on dynamic bodies — at load, because every one of
-them otherwise shows up as a blank screen an hour later.
-
-## Building
-
-```bash
-npm run dev      # local dev server
-npm run build    # what the platform runs
-```
+| file | what |
+| --- | --- |
+| `src/main.ts` | the loop that joins everything. Start here. |
+| `src/blokus/pieces.ts` | the 21 shapes, their orientations, **and `canPlace`** |
+| `src/blokus/game.ts` | the state machine: hands, turns, skipping, the result |
+| `src/blokus/bot.ts` | the one-ply search, and what the three levels mean |
+| `src/net/table.ts` | the four seats, and the ONE key the state travels under |
+| `src/view/board3d.ts` | the board drawn, the camera, hit-testing |
+| `src/view/controls.ts` | pointer handling: aim a piece vs move the camera |
+| `src/ui/screen.ts` | the card every non-game screen is made of |
+| `src/ui/front.ts` | title, how-to-play, bot level |
+| `src/ui/lobby.ts` | rooms: create, join, browse, quick match, the waiting room |
+| `src/ui/tray.ts` | the hand along the bottom, and the piece glyphs |
+| `src/ui/actions.ts` | the tick and the cross, beside the piece |
+| `src/ui/hud.ts` | whose turn, the scoreboard, the two round buttons |
+| `src/ui/chat.ts`, `menu.ts`, `over.ts` | table talk, settings, the result |
+| `src/ui/buttons.css` | **how a button looks** — `lift` and `chip` |
+| `src/save.ts` | settings, best score, and the unfinished solo game |
+| `src/i18n.ts` | every fixed string, English and Chinese |
 
 ## Things that will bite
 
-**A `SkinnedMesh`'s bounding sphere comes from the bind pose** and does not
-follow its bones, so three.js culls a character against a stale volume and it
-vanishes the moment it moves. `loadScene3D` already sets `frustumCulled = false`
-on skinned meshes; if you add a character by hand, do the same.
+**`canPlace` is the only thing allowed to decide a move is legal**, and
+`BlokusGame.legal` is the only thing allowed to decide it is your turn. The
+view asks, the bot asks, and a move arriving from another machine is checked
+the same way — a client that plays out of turn, by racing or on purpose, is
+refused rather than obeyed.
 
-**An action is a one-shot, not a state.** The character ships 32 clips —
-`attack`, `kick`, `pick-up`, `interact`, `holding-*` (including shooting),
-`die`, `emote-yes/no` — and `CharacterAnimator.play('attack')` runs one once and
-hands control back. Gate on `animator.busy` so one press is one swing, and use
-an edge check if you do not want holding the key to chain them. Locomotion keeps
-following `character.state` underneath.
+**The whole game state crosses the network as ONE value under one key**
+(`state` in `room.data`). The 2D game sent the board, the turn, the scores and
+each hand as separate keys, and that is where its bugs lived: a client could
+read a board from after a move and a hand from before it. One key is ~3KB of
+JSON, which over a websocket is nothing, and it is never half-applied.
+**Only the player on turn writes it**; for a bot's seat, the host does.
 
-**Use the prop kit before you draw scenery out of boxes.** `public/kit/` ships
-86 real models with a catalogue at `public/kit/index.json`. A coloured box named
-`crystal` is still a box, and a scene of them reads as a prototype.
+**An empty seat is a bot — so a solo table has to NAME its own seat.** It did
+not at first, and the bots cheerfully played the human's turn while the player
+watched. `Table.solo()` puts `'me'` in seat 0 for exactly this.
 
-**The world's unit is Kenney's, not the metre.** A character is 0.72 units tall,
-so ~4,700 CC0 props drop in at `importScale: 1`. Anything length-shaped you add —
-sizes, positions, collider extents, camera offsets, speeds, **and gravity** —
-lives in that unit. See ASSETS.md. The character takes its gravity from the
-world's, so there is one gravity in the scene and not two; the scene's own
-`gravity` in `main.json` is where it is set.
+**A bot's timer that finds the turn has moved must ask again, not return.**
+Returning leaves `botTimer` null with nothing scheduled and the board simply
+stops — which is what happened, and it looks like the bots crashed.
 
-**Rotate geometry, not objects, when orienting a primitive.** An object's
-rotation is overwritten by the entity's authored transform. Getting this wrong
-once left every "ground" standing upright as a wall, which renders convincingly
-until the camera crosses to the other side.
+**The camera fit is measured in SCREEN PIXELS against the visible rectangle**,
+not in normalised coordinates against the whole window. With a view offset
+those are different things, and the version that mixed them backed the camera
+off by nearly half for a tray a seventh of the screen tall.
 
-**Jump and the on-screen controls belong to the SDK, not to your game.**
-`update(dt, dir, { jump })` takes the button's current state; coyote time,
-input buffering and the release-cut live in `CharacterController3D` because
-every 3D game shares this character (ADR-034). `Input3D` adds a thumbstick and
-jump button on touch devices and merges them into the same `direction()` and
-`jump`, so nothing here branches on input source.
+**The camera sits at the SIDE next to your corner, not on the diagonal.** Down
+a diagonal a square board is a diamond, and a diamond needs its 28-cell
+diagonal to fit in a window with 20 cells' worth of height — forty per cent of
+the board thrown away. It is also how people sit at a real one.
 
-**A jump is a range, not a number — author platforms against the SHORT one.**
-Releasing the button early cuts the jump deliberately, so this character clears
-`character.maxJumpRise` held and only `character.minJumpRise` tapped — roughly a
-fifth as far. Read those off the controller rather than deriving them; a course
-laid out against the held height has a first step that tapping players cannot
-clear, and that reads as "the platform up there is unreachable", not as a bug.
-Leave headroom on top: both numbers are ballistics, and a real jump is stepped
-at frame rate.
+**The ghost freezes when you choose a square.** Without that, a mouse moving
+towards the tick keeps re-aiming, and the piece lands where the BUTTON was
+rather than where the player pointed. Aim → freeze → confirm, on both mouse
+and touch, which is GO with me's rule and for the same reason.
 
-**The thumbstick is invisible until a thumb lands on the left half of the
-screen, and then it is exactly there.** That is the default; `stick: 'fixed'`
-brings back an always-drawn pad at the bottom left. Nothing in a game changes
-either way — `direction()` reads the same.
+**A piece is aimed by its CENTRE** (`originFor`). Hanging it off its top-left
+corner means aiming with a square that, for an L or a V, is not part of the
+piece — and it drifts under the finger when the piece is turned.
 
-**The right half of the screen turns the camera, and the stick follows it.**
-On desktop the same `look()` is fed by holding the RIGHT mouse button and
-dragging — the left button stays the game's, for selecting and aiming.
-`input.look()` returns a delta and clears on read; hand it to `world.orbit()`,
-then pass `world.cameraYaw` to `input.direction()`. Those two go together: a
-camera that turns while movement stays on world axes is worse than a camera
-that cannot turn, because the player looks at something, pushes towards it, and
-walks somewhere else. Read the look BEFORE moving, or every turn lags a frame.
+**The tray tells the camera how tall it is, and the chat how wide it is.**
+`view.reserve(right, bottom)` is what stops the board being drawn underneath
+them. It is measured from the DOM, not assumed: the strip changes with the
+safe-area inset and with the screen's height.
 
-**What the platform has already taken, and what is left for you.** The controls
-are shared between the SDK and your game, and the SDK went first — so before
-wiring an input, check it is still free:
+**Orientation indices are part of the shared vocabulary.** The bot picks one
+and the board draws it, so `ORIENTATIONS` must be built identically on every
+client — it is derived from `BASE`, never authored, and the duplicates a
+symmetric piece produces are dropped (a rotate button that cycles four
+identical pictures looks broken).
 
-| | Taken by the platform | Yours |
-|---|---|---|
-| Touch | left half (thumbstick), right half (camera), the button cluster bottom-right | extra buttons, via `actions` |
-| Mouse | **right button + drag** (camera), and the context menu | **left button** |
-| Keys | `WASD` / arrows, `Space` | everything else |
-| Layers | a full-screen control layer at **`z-index: 10`**, kept clear of the top `max(64px, 12%)` | anything above or below it; `#hud` is already at 20 |
+**Every piece square is its own tile with a gap around it.** A pentomino drawn
+as one smooth slab is a shape you cannot count, and counting it against the
+piece in your hand is the whole game.
 
-**Any dialog you put up must call `input.setEnabled(false)`.** The controls are
-a full-screen layer above your DOM, so a button in a modal renders perfectly
-and cannot be pressed — the taps go to the move zone behind it. Disabling also
-stops the character walking behind the dialog, and clears what was held so a
-thumb mid-push does not resume when it closes. Re-enable when the dialog goes.
-Give the dialog a `z-index` above 10 as well, so it is visible over the layer
-while it is still fading out.
+**The board draws only when it changes** — and the panels over it use
+`backdrop-filter`, which samples a canvas that is not redrawing. That is what
+`repaintSoon()` in main.ts is for. If a panel leaves a ghost of itself behind,
+this is why.
 
-The one that bites: **do not wire an action to "the mouse went down."** The
-right button is the camera now, so a game that attacks on any pointerdown
-swings every time the player turns round to look at something — and it looks
-like a combat bug, not an input one. Check `e.button === 0`. Check
-`e.pointerType !== 'touch'` too, or a phone fires both your handler and the
-on-screen button and you get two swings per tap.
+**`let` that the render loop reads must be declared before the loop starts.**
+The loop runs from the first frame, long before the rest of `start()` exists,
+and a binding it touches too early is a `ReferenceError` that takes the whole
+game down at boot with a blank screen. It happened twice in the Go game.
 
-Text selection and the iOS long-press callout are already suppressed page-wide,
-with form fields exempted — you do not need to repeat it, and you should not
-blanket `user-select: none` yourself, because that is what breaks typing in a
-name field.
+**Nothing here declares the `ai` capability** and nothing calls the platform's
+runtime AI: the opponents are the local search in `bot.ts`. Multiplayer needs
+no capability either, but it does need the host to have handed over a realtime
+URL — signed out, or outside the platform, `umicat.rooms.available` is false
+and the lobby says so instead of failing one button at a time.
 
-**Declare action buttons; never mount your own.**
-`new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] })`, then
-`input.consume('attack')` for one-press-one-action or `input.held('attack')` for
-hold-to-act. A game that builds its own button cannot know where the platform's
-jump button is, and the first one to try landed exactly on top of it: same
-corner, platform layer above, so on a phone the attack button could not be
-pressed at all — and it mounted perfectly, with no error. `consume` also catches
-a tap that starts and ends between two frames, which a state comparison against
-last frame cannot see.
+## Decisions worth not relitigating
 
-**Never write `hud.textContent`.** It wipes every child the HUD has. Append a
-child element instead. The platform's touch controls mount to `<body>` for
-exactly this reason, but anything YOU put in the HUD is still yours to lose.
+- **Scoring is squares placed**, as the 2D game counted. The official Blokus
+  score is its mirror (minus one per square left, plus a bonus for going out);
+  `squaresLeft` is already on screen, so it can be added without moving
+  anything.
+- **A skipped turn is silent.** Being told "you have no moves" once a round for
+  the rest of a long game is the game nagging you about something you cannot do
+  anything about. The scoreboard shows what everyone has left instead.
+- **Passing asks first; placing does not** (the tick is already the asking).
+- **Empty seats are bots, and the host runs them.** One machine, chosen by a
+  rule every client works out the same way (first seat), because two clients
+  each playing a bot's move would play two different ones.
+- **A seat whose player has left becomes a bot.** The 2D game left the turn
+  with them and the table stopped.
+- **The bot level is a setting, not a property of the game**, and it can be
+  changed mid-game: it is the position on the board that is already there, not
+  the opponent.
+- **Only solo games are saved.** An online game belongs to the room and to the
+  people in it; restoring one from this side would put a board on screen that
+  nobody else is sitting at.
+- **Violet is the interface's colour** because blue, red, green and yellow are
+  the players. A green button on this board would read as somebody's.
 
-**A camera limit that is an angle is usually meant to be a distance.** The
-follow camera's pitch floor is expressed as "stay this far above what you are
-looking at", not as a number of radians — at an orbit radius of 5.4 a −0.25rad
-floor puts the camera almost a unit underground, because how low an angle takes
-you depends on how far out you are.
+## Building and checking
 
-**Animate from `character.state`, not from input.** `idle`/`walk`/`jump`/`fall`
-describe what the character is doing; a clip chosen from the key that is held
-leaves it walking in mid-air.
-
-**Gravity is an acceleration, not a displacement.** Feeding a character
-controller a constant downward offset each frame passes a wall test and fails a
-step test. `CharacterController3D` already handles this.
-
-**A character that moves is not a character that is animating.**
-`CharacterAnimator` now owns this — it follows `character.state` and cross-fades
-— but the failure is worth knowing, because it is what a test misses rather than
-what it catches: before the animator existed, the character slid around playing
-its idle clip, and a test asking "are bones moving?" said yes, because idle moves
-bones too. If you ever drive the mixer yourself, the question to ask is *which*
-clip is playing, never *whether* something is.
-
-**Feedback beats numbers.** `flashTint(object, { color, ms })` plus
-`updateTints(objects)` once a frame is the hit flash. It is in the SDK for one
-reason worth knowing even if you never call it: `gltf.scene.clone(true)` SHARES
-MATERIALS, so tinting one of five cloned enemies turns all five red — a
-graphics bug wearing a gameplay bug's clothes. `flashTint` clones per object.
-
-**Sound goes through `GameAudio`, never through `<audio>`.**
-```ts
-const audio = new GameAudio({
-  clips: { coin: { volume: 0.5, throttle: 40 }, hit: { volume: 0.4 } },
-  music: 'bgm',                       // public/audio/bgm.ogg
-});
-audio.play('coin');
+```bash
+npm run dev        # local dev server (no platform: rooms are unavailable)
+npm run build      # what the platform runs
+npm run typecheck
 ```
-`HTMLAudioElement` is the trap: iOS gives each one a real audio pipeline, caps
-how many may exist, and charges for every `play()`. A game pooling forty of them
-ran at **11fps on an iPhone and a locked 60 with sound muted** — and a desktop
-A/B showed no difference at all, which is why this belongs to the platform
-rather than to whoever is unlucky. The gesture unlock, the asynchronous
-`resume()`, and iOS suspending the context when the app goes away are all
-handled; `audio.play()` before the first tap is simply a no-op.
 
-**UI is DOM.** There is no reason to draw a score with triangles on the web;
-`index.html` has a `#hud` div for exactly this.
+Probes drive the game through `window.__blokus`, which exposes the game, the
+table, the view and the same functions the buttons call — `play(move)` goes
+through the real aiming maths, so it tests that too. Driving it through pixels
+would mean testing whether a click lands on a cell of a tilted board, which is
+a test of the test. The probe scripts live in the session scratchpad.

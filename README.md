@@ -1,29 +1,15 @@
-# umicat-template — `template-3d`
+# Blokus
 
-The starter a **3D** game is forked from. `main` on this same repo is the 2D
-(Phaser) starter; `gitManager.templateBranchFor(runtime)` picks between them,
-and both are branches of the ONE per-user fork so clone/push/restore stay
-runtime-independent. See umicat-design/plans/3d-project-creation.md.
+Four colours, twenty-one pieces each, one twenty-by-twenty board. Your first
+piece covers your corner; after that every piece of yours must touch another of
+your own at a **corner** and never along an edge. When nothing fits, your turn
+is skipped. Most squares placed wins.
 
-The starter a new **3D** Umicat game is forked from — the 3D sibling of
-`umicat-template`.
+Play the bots, or make a room and play with up to three other people.
 
-```
-@umicat/platform-sdk     identity · saves · gameData · rooms · ai · voice · dialogue
-        ▲
-@umicat/three-sdk        scene3d format · loader · physics · character · input
-        ▲
-   this template         one scene, one character, one crate that falls
-```
+- `npm run dev` — local dev server
+- `npm run build` — what the platform runs
+- `./deploy-preview.sh` — publish `dist/` to this game's in-editor preview
 
-`package.json` carries `"umicat": { "runtime": "three" }`. That marker is how
-everything downstream — project creation, workspace restore, SDK updates, the
-build and the publish path — can tell which runtime a game is, without guessing
-from its dependencies.
-
-## Status
-
-**Not yet wired into project creation.** `agent-session-service` forks
-`umicat-template` unconditionally today; routing on the runtime marker is the
-next piece (see `umicat-design/plans/3d-platform-integration-experiment.md`).
-Until then this is forked by hand.
+`CLAUDE.md` is the working memory of the build: where things are, what will
+bite, and which decisions are settled.
