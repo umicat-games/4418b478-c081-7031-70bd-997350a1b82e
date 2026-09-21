@@ -1311,6 +1311,9 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  three padlocks is a progress bar with a known end, and adding a fifth
    *  board later would visibly move the finish line.
    */
+  // Unused: the door goes straight in. Kept for the pass that removes the
+  // tower defense wholesale — see CLAUDE.md.
+  void (() => chooseLevel);
   const chooseLevel = (onPick: (i: number) => void): void => {
     panelOpen = true;
     input.setEnabled(false);
@@ -1723,13 +1726,17 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
         && Math.abs(hero.position.x - DOOR_AT.x) < DOOR_HALF_WIDTH;
       if (!done && !panelOpen && inDoorway) {
         audio.play(SFX.door);
-        // A brand new player does not get a list. There is exactly one place
-        // to go and it is the tutorial, so asking them to choose is asking a
-        // question with one answer — and the first thing they would meet would
-        // be a menu of boards, three of them locked.
+        // **Walking through the door starts the game.** There is no list.
         //
-        // `-1` is the tutorial board: it is not in `LEVELS`, so it has no index
-        // to be picked by.
+        // The tower defense had four boards and asked which one; the rule it
+        // followed was already the right one — a brand new player with nothing
+        // unlocked was sent straight through, because asking a question with a
+        // single answer is not a choice, it is a menu. There is one board now,
+        // so that case is every case.
+        //
+        // `chooseLevel` and the panel it opens are still here, unused, for the
+        // same reason the rest of the tower defense is: they come out in their
+        // own pass.
         const leave = (pick: number): void => {
           done = true;
           // Tear the hub down before handing the renderer over: its scene, its
@@ -1753,8 +1760,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
           delete (window as unknown as Record<string, unknown>).__hub;
           resolve({ weapon, level: pick, bonus: bonusesFrom(town), weapons });
         };
-        if (runs === 0) leave(-1);
-        else chooseLevel(leave);
+        leave(0);
         // Step back out of the doorway, so closing the list does not
         // immediately reopen it.
         character.teleport({ x: hero.position.x, y: 0.5, z: DOOR_AT.z + 0.9 });

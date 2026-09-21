@@ -33,8 +33,8 @@ export interface Wave {
   ground?: boolean;
   /** Turns to face the way it is going, instead of spinning like a saucer. */
   facesTravel?: boolean;
-  /** What it throws. Unused by the orbs, which are built rather than loaded;
-   *  kept because the loader still preloads by model id. */
+  /** What it throws. Only read by the preload now — what actually leaves an
+   *  enemy is `ORB_MODEL`, recoloured by pole. */
   ammo?: string;
   /** Damage per hit, in bar points. Defaults to the ordinary bullet. */
   damage?: number;
@@ -104,6 +104,49 @@ export const hpAt = (t: number): number => 9 + t * 0.115;
  *  anything about it, and the enemy's own bullets start arriving behind it. */
 export const speedAt = (t: number): number => Math.min(1.55, 0.72 + t * 0.0022);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The tide
+//
+// **A coin flip per enemy is a game with no swap button in it.**
+//
+// That is what this was, and it is worth stating plainly because it looked
+// completely reasonable: each crossing picked its colour at random, so the
+// board was always about half red and half blue. Which means standing in ONE
+// colour forever collects half of everything and is hit by nothing — the
+// player never has to touch the control the whole game is built around. A
+// choice that is never forced is not a choice.
+//
+// So the mix SWINGS. For a stretch most of what crosses is red, then it turns
+// and most of it is blue. Staying one colour now means watching the board fill
+// with the thing that hurts you, and the swap becomes the thing you are
+// actually playing.
+//
+// A slow sine rather than a hard alternation: a board that flips cleanly from
+// all-red to all-blue is a metronome, and the answer to a metronome is to keep
+// time rather than to look. The overlap in the middle of each swing is where
+// both colours are on the board at once and the decision is real.
+
+/** Seconds for a full red → blue → red cycle.
+ *
+ *  Long enough to commit to a colour and be rewarded for it, short enough that
+ *  a run is not four separate games. At 26s each half is about thirteen, which
+ *  is a dozen or so crossings at the opening rate and many more later. */
+export const TIDE_PERIOD = 26;
+
+/** How far it swings. 0 would be the coin flip this replaced; 1 would be a
+ *  board that is briefly 100% one colour.
+ *
+ *  0.72, not 1. The peak of a full swing is a stretch with literally nothing
+ *  of your own colour on the board — no mana coming in, nothing to do but
+ *  walk — and a game that periodically stops paying you is a game with a dead
+ *  patch in it. At 0.72 the thin colour is still about one crossing in seven
+ *  at the extreme, which is enough to keep the bar moving. */
+const TIDE_DEPTH = 0.72;
+
+/** The chance the next crossing is RED, at `t` seconds in. */
+export const redShareAt = (t: number): number =>
+  0.5 + (TIDE_DEPTH / 2) * Math.sin((t / TIDE_PERIOD) * Math.PI * 2);
+
 /** An ordinary crossing at `t` seconds in. */
 export const enemyAt = (t: number): Wave => ({
   count: 1,
@@ -113,6 +156,8 @@ export const enemyAt = (t: number): Wave => ({
   // as the same threat — which they are — and the variety is only so that a
   // screen full of them is not a screen full of one sprite.
   model: Math.random() < 0.5 ? 'td-ufo-a' : 'td-ufo-b',
+  // Which colour, read off the tide rather than flipped.
+  pole: Math.random() < redShareAt(t) ? 'red' : 'blue',
   bounty: 12,
   armed: true,
   scale: 0.62,
@@ -154,3 +199,9 @@ export const PRELOAD: Wave[] = [
   { count: 1, hp: 9, speed: 1, model: 'td-ufo-b', bounty: 0, armed: true, scale: 0.62 },
   bossAt(1),
 ];
+
+/** The orb. Named here rather than in `main.ts` so it goes through the same
+ *  preload as everything else a run spawns — a model first asked for by the
+ *  level's own setup is a model the loader was never told about, and
+ *  `cloneOf` on an id that was not loaded hands back `undefined`. */
+export const ORB_MODEL = 'td-ammo-ball';

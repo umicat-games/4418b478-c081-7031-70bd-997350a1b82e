@@ -19,7 +19,7 @@ import { createSpendPanel, type Offer } from './spend';
 import { createCoach } from './coach';
 import { submit, readBoard, boardElement } from './board';
 import {
-  ARENA, LEVELS, PRELOAD, BOSS_EVERY, bossAt, enemyAt, spawnGapAt,
+  ARENA, LEVELS, PRELOAD, ORB_MODEL, BOSS_EVERY, bossAt, enemyAt, spawnGapAt, redShareAt,
   type LevelDef, type Wave,
 } from './levels';
 import { createScript, ringActionButton, type Script } from './scripted';
@@ -783,16 +783,25 @@ export async function startLevel(
   const qFlag = new URLSearchParams(location.search).get('quality');
   const quality = qFlag === '0' ? 0 : 1;
 
-  /** The air wall, which is what the hero is held inside. Enemies FLY and were
-   *  never touching it — they cross the board from outside one side to outside
-   *  the other, and `OUTSIDE` is where they are made and where they are gone. */
-  const FIELD = 6.6;
-  const OUTSIDE = 8.6;
+  /** The air wall, which is what the hero is held inside, and where enemies are
+   *  made and are gone. Enemies FLY and were never touching the wall.
+   *
+   *  **Read from the scene, not written down here.** The generator knows how
+   *  big it built the board; a second copy in this file is a constant that has
+   *  to be kept in step by hand, and this project already has one of those
+   *  (`LAND`, in `hub.ts` and `gen-scene.mjs`) with a note in CLAUDE.md saying
+   *  what it costs. Resizing the arena is one number in `gen-scene.mjs`. */
+  const arena = (scene3d as unknown as { arena?: { field: number; outside: number } }).arena;
+  const FIELD = arena?.field ?? 6.6;
+  const OUTSIDE = arena?.outside ?? 8.6;
   /** Anywhere on the board a thing may be dropped. There is no road and no
    *  build spot to avoid any more, so this is simply the field. */
   const BACKFIELD: [number, number][] = [];
-  for (let x = -5.5; x <= 5.5; x += 1) {
-    for (let z = -5.5; z <= 5.5; z += 1) BACKFIELD.push([x, z]);
+  {
+    // The cell centres inside the wall. Derived, so a smaller board does not
+    // quietly keep dropping crates outside itself.
+    const h = Math.floor(FIELD - 1.1);
+    for (let x = -h; x <= h; x += 1) for (let z = -h; z <= h; z += 1) BACKFIELD.push([x, z]);
   }
 
   /** Where the hero comes in, and where a knocked-out one is carried back to —
@@ -1105,6 +1114,11 @@ export async function startLevel(
   for (const id of [...TOWERS.map((t) => t.model), ...TOWERS.map((t) => t.ammo),
                     ...TOWERS.flatMap((t) => t.stack ?? []), 'td-tower-round-crystals',
                     ...PRELOAD.map((w) => w.model), ...PRELOAD.map((w) => w.ammo ?? 'td-bullet'),
+                    // The orb, named explicitly. It is currently also reached
+                    // through `TOWERS`' ammo list — and the towers are one
+                    // commit from being deleted, which would take every bullet
+                    // in the game with them, silently.
+                    ORB_MODEL,
                     // Everything `dropPickup`, `dropCrate` and the tower
                     // levels can ask for. A model that is not here is not a
                     // missing texture — it is `undefined.type` thrown out of
@@ -2220,33 +2234,61 @@ export async function startLevel(
   // "whichever half is losing contrast the other is winning it", but a plain
   // dark outline, which is what keeps a lit ball from dissolving into bright
   // grass at the moment it matters.
-  const ORB = new THREE.SphereGeometry(0.16, 18, 14);
-  const ORB_SHELL = new THREE.SphereGeometry(0.2, 14, 10);
-  const litOrb = (p: Pole): THREE.Material => new THREE.MeshStandardMaterial({
-    color: POLE_LOOK[p].body,
-    emissive: POLE_LOOK[p].glow,
-    emissiveIntensity: 0.45,
-    roughness: 0.3,
-    metalness: 0.0,
-  });
-  const orbMat: Record<Pole, THREE.Material> = { red: litOrb('red'), blue: litOrb('blue') };
-  const shellMat: Record<Pole, THREE.Material> = {
-    red: new THREE.MeshBasicMaterial({ color: POLE_LOOK.red.rim, side: THREE.BackSide }),
-    blue: new THREE.MeshBasicMaterial({ color: POLE_LOOK.blue.rim, side: THREE.BackSide }),
-  };
-  /** One bullet. The materials are SHARED — nothing ever repaints an orb after
-   *  it is made, which is what lets every bullet of a pole be two draws for the
-   *  whole board rather than two per shot. (Contrast the kit's bullets, which
-   *  had to be cloned per shot precisely because they were recoloured.) */
+  // The kit's own cannonball (`weapon-ammo-ball`, a 0.28 sphere of 160
+  // triangles), recoloured per pole — not a `SphereGeometry` built here.
+  //
+  // The generated sphere was smooth, and everything else on this board is
+  // faceted: low-poly trees, low-poly tiles, a low-poly hero. A perfectly
+  // smooth ball among them reads as something the game imported by accident,
+  // which is most of what "the orbs still do not look right" was about. The
+  // kit piece shades the same way as the ground it flies over because it is
+  // made the same way.
+  //
+  // TWO prototypes, one per pole, each carrying its own cloned material —
+  // every model in this kit points at the same shared `colormap`, so painting
+  // one shot red would paint every projectile on the board red. (That exact
+  // bug is in this project's history twice.) Each shot is a cheap clone of the
+  // prototype it needs and touches no material at all.
+  const orbProto: Record<Pole, THREE.Object3D> = { red: null!, blue: null! };
+  for (const p of POLES) {
+    const proto = cloneOf(ORB_MODEL);
+    const look = POLE_LOOK[p];
+    proto.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as
+        THREE.MeshStandardMaterial;
+      const m = src.clone();
+      // The map comes off: the cannonball's texel is a grey, and multiplying
+      // a hue into it gives two muddy balls rather than a red one and a blue
+      // one. The FACETS are the geometry, not the texture, so nothing about
+      // the look this was chosen for is lost.
+      m.map = null;
+      m.color.setHex(look.body);
+      m.emissive.setHex(look.glow);
+      m.emissiveIntensity = 0.3;
+      m.roughness = 0.55;
+      m.metalness = 0;
+      m.needsUpdate = true;
+      mesh.material = m;
+    });
+    orbProto[p] = proto;
+  }
+
+  /** One bullet: a clone of the pole's prototype. Nothing is repainted per
+   *  shot — the colour lives on the prototype's material. */
+  /** The kit's own size, 0.28, and nothing added to it.
+   *
+   *  It was scaled up on the reasoning that this is the one object in the game
+   *  that must be read correctly every time, so it should be a bigger target.
+   *  Played, that is wrong in both directions: the generated sphere it
+   *  replaced (0.32 with a 0.41 shell) was reported as too big, and a bullet
+   *  that takes up more of the board is a board with less space to dodge in.
+   *  Legibility here comes from HUE, which costs no area at all. */
   const makeOrb = (pole: Pole, scale = 1): THREE.Object3D => {
-    const g = new THREE.Group();
-    const core = new THREE.Mesh(ORB, orbMat[pole]);
-    const shell = new THREE.Mesh(ORB_SHELL, shellMat[pole]);
-    // The shell must not win the depth test against its own core.
-    shell.renderOrder = -1;
-    g.add(shell, core);
-    g.scale.setScalar(scale);
-    return g;
+    const o = orbProto[pole].clone(true);
+    o.scale.setScalar(scale);
+    return o;
   };
 
   /** Put one orb in the air.
@@ -3032,7 +3074,9 @@ export async function startLevel(
    *  every crossing through the part of the board that is actually played. */
   const crossing = (): { from: THREE.Vector3; dir: THREE.Vector3 } => {
     const side = Math.floor(Math.random() * 4);
-    const along = () => (Math.random() * 2 - 1) * 4.6;
+    // Pulled in from the edge, proportionally: a line between two points near
+    // the SAME corner clips the field and is over before it is a threat.
+    const along = () => (Math.random() * 2 - 1) * FIELD * 0.72;
     const from = new THREE.Vector3();
     const to = new THREE.Vector3();
     // 0 north, 1 south, 2 west, 3 east — and the exit is on the opposite one.
@@ -4853,6 +4897,10 @@ export async function startLevel(
       /** Drive the two controls a probe cannot press, because the SDK's
        *  buttons only exist on a touch screen. */
       swap: () => swapPole(),
+      /** One crossing, right now, through the game's own spawn path. Lets a
+       *  probe sample what the tide actually produces rather than re-running
+       *  the same arithmetic beside it and calling that a test. */
+      spawnNow: () => spawnOne(enemyAt(runClock)),
       /** The hero's own meshes, by name, with what material each carries.
        *
        *  Painting the body meant finding it, and "it is called body-mesh in
@@ -4942,6 +4990,9 @@ export async function startLevel(
       // rather than about how many enemies a slow headless frame managed to
       // spawn in six seconds of wall clock.
       gap: +spawnGapAt(runClock).toFixed(3),
+      /** Which way the tide is running. The one thing that makes the swap
+       *  button necessary, and a number a probe can watch swing. */
+      redShare: +redShareAt(runClock).toFixed(3),
       nextBossAt: (bossCount + 1) * BOSS_EVERY,
       // A hit that lands during the invincibility window costs nothing, so a
       // probe reading only `heroHp` cannot tell "the rule is broken" from "the

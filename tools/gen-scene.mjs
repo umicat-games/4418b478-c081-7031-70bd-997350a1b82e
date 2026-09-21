@@ -677,25 +677,36 @@ function buildArena(def) {
   const entities = [];
   const add = (e) => entities.push(e);
   const rand = rng(def.scenerySeed);
+  // The arena is SMALLER than a tower-defense board, and has its own half-size
+  // rather than borrowing the module's `HALF`.
+  //
+  // A tower defense board is big because the road has to be long: road length
+  // is how much time a gun gets with what walks past it. Nothing walks a road
+  // here. What the size decides instead is how long it takes to get out of the
+  // way of something, and at 5.5 the far corner was four seconds away — long
+  // enough that half the board was somewhere nothing was ever happening.
+  const H = def.half;
+  const WALL = H + 1.1;      // same relation the generated boards use
+  const GROUND = 2 * H + 2;
 
   // The floor of the playable field — invisible, here for its collider. Same
   // as every board: the tiles ARE the ground, with one box underneath them.
   add({
     id: 'ground', name: 'ground',
-    primitive: { kind: 'box', size: { x: 13, y: 0.4, z: 13 }, color: t.skirt },
+    primitive: { kind: 'box', size: { x: GROUND, y: 0.4, z: GROUND }, color: t.skirt },
     visible: false,
     transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
     castShadow: false,
     collider: {
-      shape: { kind: 'box', halfExtents: { x: 6.5, y: 0.3, z: 6.5 } },
+      shape: { kind: 'box', halfExtents: { x: GROUND / 2, y: 0.3, z: GROUND / 2 } },
       body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
     },
   });
 
   // The field. Plain tiles, every cell, rotated at random so the texture does
   // not tile visibly. No scenery: see the note above.
-  for (let gx = -HALF; gx <= HALF; gx += 1) {
-    for (let gz = -HALF; gz <= HALF; gz += 1) {
+  for (let gx = -H; gx <= H; gx += 1) {
+    for (let gz = -H; gz <= H; gz += 1) {
       add({
         id: `ground_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'ground_tile',
         modelAssetId: t.tile,
@@ -713,7 +724,7 @@ function buildArena(def) {
   // health bar does, so a gap in the tree line would be a way out that is not
   // there.
   const FOREST_OUT = 7;
-  const OUTER = HALF + FOREST_OUT;
+  const OUTER = H + FOREST_OUT;
   add({
     id: 'ground_skirt', name: 'ground_skirt',
     primitive: { kind: 'box', size: { x: 2 * OUTER + 1, y: 0.4, z: 2 * OUTER + 1 }, color: t.skirt },
@@ -722,7 +733,7 @@ function buildArena(def) {
   });
   for (let gx = -OUTER; gx <= OUTER; gx += 1) {
     for (let gz = -OUTER; gz <= OUTER; gz += 1) {
-      if (Math.abs(gx) <= HALF && Math.abs(gz) <= HALF) continue;
+      if (Math.abs(gx) <= H && Math.abs(gz) <= H) continue;
       add({
         id: `outer_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'forest_ground',
         modelAssetId: t.tile,
@@ -732,7 +743,7 @@ function buildArena(def) {
         },
         castShadow: false,
       });
-      const depth = Math.max(Math.abs(gx), Math.abs(gz)) - HALF;
+      const depth = Math.max(Math.abs(gx), Math.abs(gz)) - H;
       const chance = Math.min(0.96, 0.72 + depth * 0.05);
       const r = rand();
       const n = r < chance ? (r < chance * 0.45 ? 2 : 1) : 0;
@@ -762,8 +773,8 @@ function buildArena(def) {
   // the enemies fly, and were never touching it.
   for (const side of ['n', 's', 'w', 'e']) {
     const along = side === 'n' || side === 's' ? 'x' : 'z';
-    const fixed = side === 'n' || side === 'w' ? -6.6 : 6.6;
-    const len = 13.4;
+    const fixed = side === 'n' || side === 'w' ? -WALL : WALL;
+    const len = 2 * WALL + 0.2;
     add({
       id: `wall_${side}`, name: `wall_${side}`,
       primitive: {
@@ -800,6 +811,14 @@ function buildArena(def) {
     schemaVersion: 1,
     id: def.id,
     name: def.name,
+    /** How big the board is, written down ONCE and read by the game.
+     *
+     *  The alternative is the same constant in two files that must be kept in
+     *  step by hand, which this project already has one of (`LAND`) and has
+     *  the scars to prove it. `field` is where the air wall stands — what the
+     *  hero is held inside — and `outside` is where enemies are made and
+     *  where they are gone, comfortably past anything the camera shows. */
+    arena: { field: WALL, outside: WALL + 2.0 },
     environment: { background: t.sky },
     gravity: { x: 0, y: -4.1692, z: 0 },
     lights: [
@@ -843,6 +862,10 @@ const ARENA = {
   name: 'The Clearing',
   theme: 'grass',
   scenerySeed: 47,
+  // Outermost cell centre. 5.5 is what the tower-defense boards use and it was
+  // simply inherited; at that size the far corner of this board is four
+  // seconds away and most of it is somewhere nothing happens.
+  half: 4,
 };
 
 {
