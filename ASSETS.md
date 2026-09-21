@@ -1,0 +1,232 @@
+# Assets
+
+## 3D models — glTF 2.0 only
+
+Upload `.glb` (self-contained) or `.gltf`. Anything else is converted before it
+gets here. A `.glb` carries geometry, materials, skeleton, animation clips AND
+textures in one file, which is why it is preferred: nothing external to resolve.
+
+Models land in `public/assets/` and are declared in
+`public/scenes3d/manifest.json`, which is also where their **animation map**
+lives:
+
+```json
+{ "id": "hero", "path": "assets/character.glb", "importScale": 0.35,
+  "animations": { "idle": "HumanArmature|Man_Idle", "walk": "HumanArmature|Man_Walk" } }
+```
+
+**Map clips by meaning, never by guessing the name.** Nothing guarantees a
+model's walk cycle is called `Walk` — this one calls its idle `Survey`. The
+loader fails loudly on a missing clip and lists the names the model does have.
+
+`importScale` corrects for the fact that almost no model is authored at 1 unit
+= 1 metre. Fox is authored large; 0.035 puts it at roughly a metre tall.
+
+## Editing a model
+
+Blender, headless, scripted — `blender -b --python edit.py -- in.glb out.glb`.
+The one flag that matters is on the way out:
+
+```python
+bpy.ops.export_scene.gltf(filepath=out, export_format='GLB',
+                          export_animations=True, export_animation_mode='ACTIONS',
+                          export_nla_strips=False,
+                          export_force_sampling=False)   # <- NOT the default
+```
+
+`export_force_sampling` defaults to **True** and resamples every keyframe onto
+integer frames. On the hero that shortened six of 32 clips by about 6% and bent
+`attack-kick-right` by 0.67 in its bone matrices. With it off, all 32 clips come
+back identical to 0.00001 — and the file is smaller.
+
+Two things about the models themselves, learned on the hero:
+
+- **The meshes are not welded.** Splitting by loose parts gives 109 fragments
+  rather than the ten things you can see. Weld first (`remove_doubles` at 1e-4
+  on a COPY) and walk connected components; do not weld the real mesh, since
+  these are flat-shaded with custom split normals.
+- **The palette is a gradient chart: the column is the hue and the row is the
+  shade.** So recolouring a part is moving its UV sideways, not editing pixels —
+  and the top half of the sheet is unused black, which is where new swatches go.
+
+## Images, audio, fonts
+
+Same as any Umicat game — upload through the Assets tool and reference from
+`public/`. A 3D game still uses 2D images for UI and textures.
+
+### What was uploaded, and what the repo carries
+
+`public/uploaded/` holds the art that came in through the Assets tool, pulled
+down with a small script against `GET /projects/<id>/assets` (see the pull
+scripts in `umicat-infra/playwright/`). Two things live there:
+
+| file | what | drawn by |
+| --- | --- | --- |
+| `balaboo-title.png` | the game's name, on the title screen and the loading screen | the project owner |
+| `background-cover.jpg` | the cover art, behind the loading screen | the project owner |
+
+**The repo carries a DISPLAY COPY, not the upload.** The wordmark arrived at
+2164×727 and 996KB and is trimmed to its opaque bounds and resized to 880 wide
+(222KB); the cover arrived as a 1.77MB PNG with no transparency in it and is a
+1600-wide JPEG (228KB). The wordmark is drawn at most 380 CSS pixels wide, so 880 is
+better than 2x for it; the cover is a full-bleed background, so on a window
+wider than 1600 it does upscale — it is scrimmed cartoon art behind text, which
+is the case that survives that. The loading screen is the first thing a new
+player's browser paints, which is the worst possible place to carry two
+megabytes. **The full-size originals stay in the Assets tool**; re-pull from
+there rather than upscaling what is here.
+
+A JPEG for the cover because it has no alpha, a PNG for the wordmark because it
+is nothing but alpha.
+
+## The world's unit is Kenney's, not the metre
+
+A character here is **0.72 units tall**, not 1.8. That is deliberate: Kenney
+authors its whole CC0 library — characters, furniture, trees, terrain blocks —
+in one consistent unit, so every one of its ~4,700 props drops in at
+`importScale: 1` and is automatically the right size standing next to the
+character. Rescaling the character to "metres" instead would mean multiplying
+every prop, forever.
+
+Everything length-shaped follows from that and was scaled by the same factor
+when the unit changed: entity sizes and positions, collider extents, the camera
+offset, light positions, the controller's capsule/step/speed — **and gravity**,
+which is length per time squared, so leaving it at 9.81 in this unit makes
+everything fall as though it were tiny.
+
+## Textures are SHARED, not embedded — except the hero's
+
+A prop references `Textures/colormap.png` relatively, and a whole kit shares one
+512×512 palette. This is a deliberate exception to the "a `.glb` should be
+self-contained" rule above: embedding would put a copy of the same 8KB palette
+inside every prop, and sharing means one request and one GPU texture per kit.
+Without the file a model still loads and animates — it just renders **grey**,
+with a single console line, which is exactly the kind of failure that ships.
+
+**One palette per kit, not one for the library.** `public/kit/*/Textures/` holds
+five and no two are the same file.
+
+**`character.glb` is the exception — its palette is embedded.** The hero's
+palette was never shared with anything (it was the only model under
+`public/assets/`), so embedding costs no extra GPU texture, and it buys the
+thing that matters: the face is repainted using **custom swatches added to the
+palette's unused upper half** — blush, mouth and tongue reds, and a darker eye
+black. Geometry and the colours it points at now travel as one file. Dropping a
+stock Kenney `colormap.png` back in would turn the eyes, blush and mouth
+**black**, because that region is black in the original — which is exactly why
+they are no longer separable. `public/assets/Textures/colormap.png` is left in
+place as the untouched Kenney original; nothing references it any more.
+
+## The prop kit
+
+`public/kit/` holds 86 ready models — Kenney's Platformer set, **CC0** — with a
+catalogue at `public/kit/index.json` (id, path, category). Declare one in
+`scenes3d/manifest.json` with `importScale: 1` and point an entity at it.
+
+**One kit, on purpose.** Kenney publishes ~4,700 CC0 props across forty-odd
+kits and they do NOT share a palette — each carries its own
+`Textures/colormap.png`, and mixing kits means mixing looks. A starter ships
+one complete vocabulary rather than a bigger, less coherent pile. Adding
+another kit means a new folder under `public/kit/` with its own `Textures/`,
+because the models reference that path relatively.
+
+**A prop with no `collider` is decoration** — that is often correct, and it is
+always a choice rather than an omission. Fit the collider to what should block:
+a tree's belongs around its trunk, not its canopy.
+
+## Licensing
+
+`public/assets/character.glb` (modified: see the face note above), its
+`Textures/colormap.png`, everything in `public/kit/`, and the effect sheet `public/vfx/particles.png` are from
+**Kenney** (Mini Characters 1, the Platformer Kit, the Tower Defense Kit, Mini
+Dungeon, Fantasy Town, Modular Buildings and the **Particle Pack**) and are
+**CC0** — public domain. Commercial use, modification and redistribution, with
+no attribution required. <https://kenney.nl>
+
+`particles.png` is a 4×4 sheet packed from sixteen of the Particle Pack's
+transparent PNGs; see the `FRAME` table in `src/vfx.ts` for which cell is what.
+
+`public/uploaded/` is **not** Kenney and not CC0 — it is the project owner's own
+art, uploaded to this project. It is theirs; it is not a library to copy into
+another game.
+
+That matters more here than it looks. A Umicat game ships its `.glb` to the
+player's browser from a public CDN, where anyone can take it — so a licence that
+merely permits "use in a game" is not enough, and a character the platform
+supplies to every project is redistribution-as-a-toolkit, which many asset
+licences forbid by name. CC0 removes the question instead of answering it.
+
+**This replaced the sample `Fox.glb`, which was NOT wholly CC0**: its mesh was
+CC0, but the rigging and animation — the parts a game actually leans on — were
+CC-BY 4.0, so every game made from this template inherited an attribution
+obligation. Apply that test to anything added here.
+
+## The animation contract
+
+All **12** characters in that pack share ONE rig and the SAME 32 clips — one
+signature across all twelve, measured rather than assumed, and a clip from a
+sibling character binds **7 of 7** tracks and poses this one identically
+(`umicat-3d-spike/rigtest/`). So another of the twelve can be swapped in by
+changing one path, with no retargeting — which is the one thing that does NOT
+work here (a cross-rig retarget was measured returning zero matched bones and
+zero tracks, silently).
+
+32 clips ship, including `jump` and `fall` **separately**, `crouch`, `sit`,
+`drive`, `pick-up`, `interact-*`, `holding-*` and a full wheelchair set. The
+manifest maps the ones a game reaches for by semantic name; **`run` is called
+`sprint` inside the file** — which is why clips are mapped by meaning and never
+guessed.
+
+## Sound
+
+`public/audio/*.ogg`, all Kenney, all CC0 — `Music Loops` for the theme and the
+game-over track, `Sci-Fi Sounds` for lasers and explosions, `Impact Sounds` for
+hits, `RPG Audio` for the sword and the coins, `Interface Sounds` for build and
+refuse, `Digital Audio` for the upgrade chime, `Music Jingles` for the wave and
+win stingers.
+
+The `.mp3` files are **uploaded through the platform's Assets tool** rather than
+committed from a kit, and they keep the name they were uploaded under so a clip
+in the game can be traced back to the row in the Asset Manager. `place-weapon`,
+`upgrade-weapon`, `enter-door`, the two music tracks, and one per staff:
+`fire-` / `ice-` / `lightning-magic-wand-sound-effect.mp3`. Pull them with
+`umicat-infra/playwright` against `GET /projects/{id}/assets` — the files are at
+`cdn.umicat.ai/uploads/{gameId}/`.
+
+A weapon says which clip is its own, in `sound` on its row in `weapons.ts`. Not
+a switch inside the level: a fourth staff should arrive WITH its sound, rather
+than arrive silent and wait for somebody to remember the other file.
+
+**Match uploaded clips by measurement, not by ear.** Over the loud quarter of
+each file, the fire and lightning casts are about one and a half times the RMS
+of the ice one — a difference between library recordings, not a decision anyone
+made about fire, and left alone it means changing staff changes how loud the
+game is. Their `volume` in `CLIPS` divides it back out.
+
+**Check what a clip sounds like before wiring it, not after.** The lightning
+cast is four seconds long and does not reach its loudest point until 1.2s in,
+while the spell it belongs to is over in 0.46s — so the bang lands long after
+the flash. `afconvert` to WAV and print an RMS envelope; it takes a minute and
+it is the difference between a sound effect and a sound that arrives late.
+
+`src/audio.ts` plays them, through **Web Audio** — decoded once into buffers,
+played by throwaway source nodes.
+
+**Do not use `HTMLAudioElement` for game sound.** The first version pooled about
+forty `<audio>` objects, which is fine on a desktop and is why this game ran at
+single-digit frames on an iPhone: iOS gives each element a real audio pipeline,
+caps how many can exist, and charges for every `play()`. Muting took the same
+scene from 11fps to a locked 60. Web Audio has none of that shape and overlap
+is free.
+
+**Nothing may play before the player touches the screen.** The context starts
+suspended, browsers block audio until a gesture, and iOS is strictest — a
+SYNTHETIC click does not count, which is how a measurement run can end up
+testing the muted case and reporting that sound is free.
+
+**Load in parallel, music first.** Decoding one clip at a time queued the theme
+behind sixteen effects and left the first few swings silent.
+
+**Repeated sounds need a floor on retriggering.** Four ballistas reloading
+together turn one thwip into a buzz; a few tens of milliseconds of cooldown
+fixes it and nobody notices a dropped shot.
