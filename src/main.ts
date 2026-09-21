@@ -266,24 +266,36 @@ const BULLET_LIFE = 2.6;          // seconds before a miss gives up
 // "white" bullet in shadow is grey. What matters is which of the two it is,
 // and that the player can tell at a glance.
 
-export type Pole = 'dark' | 'light';
-export const POLES: Pole[] = ['dark', 'light'];
-export const other = (p: Pole): Pole => (p === 'dark' ? 'light' : 'dark');
+export type Pole = 'red' | 'blue';
+export const POLES: Pole[] = ['red', 'blue'];
+export const other = (p: Pole): Pole => (p === 'red' ? 'blue' : 'red');
 
 /** What each pole LOOKS like.
  *
- *  Not `0x000000` and `0xffffff`. A pure black bullet against the board's
- *  shadow is invisible, and pure white is what every existing effect in this
- *  game already flashes — a hit spark, a cast, the screen flash. Both poles
- *  are pushed off the extremes and given a tint, so they read as a PAIR of
- *  deliberate colours rather than as "the lights went out".
+ *  **Red and blue, which is a HUE difference — and that is why these pieces
+ *  can be lit.** The first version was dark and light, and value contrast is
+ *  exactly what a light source destroys: a white orb crossing a shadow goes
+ *  grey and a dark one under the sun picks up a specular highlight, so the two
+ *  poles converged precisely where the board was busiest. The only way to hold
+ *  that apart was to take the lighting off them, and an unlit sphere on a lit
+ *  board reads as a sticker rather than as an object in the world.
  *
- *  `rim` is what the piece is outlined in, and it is the opposite end of the
- *  scale from the body: a dark bullet carries a bright edge and a light one a
- *  dark edge, so neither disappears against the ground it happens to cross. */
+ *  Hue survives lighting. A red ball in shadow is a darker red; it is not a
+ *  blue ball. So the material goes back to being a real one — shaded, with a
+ *  highlight, sitting in the same light as everything else — and the two poles
+ *  stay legible because what separates them was never brightness.
+ *
+ *  Not the pure primaries. `#ff0000` against this game's grass vibrates, and a
+ *  fully saturated blue disappears into the sky at the top of the frame. Both
+ *  are pulled slightly towards warm and away from the extremes.
+ *
+ *  `glow` is the emissive, which is what keeps an orb readable in the shadow
+ *  of a tree without flattening it; `rim` is a darker shade of the SAME hue,
+ *  used for outlines and swatches — no longer the opposite end of a scale,
+ *  because there is no scale any more. */
 export const POLE_LOOK: Record<Pole, { body: number; rim: number; glow: number }> = {
-  dark:  { body: 0x241f33, rim: 0x9d7bff, glow: 0x7a4dff },
-  light: { body: 0xf2f0ea, rim: 0x4a4636, glow: 0xffe9a8 },
+  red:  { body: 0xe03b2f, rim: 0x6e1710, glow: 0xff5c3c },
+  blue: { body: 0x2f7ad8, rim: 0x103a6e, glow: 0x3ca6ff },
 };
 
 /** How close a bullet of your own colour has to get before it is pulled in.
@@ -1385,7 +1397,7 @@ export async function startLevel(
    *  coin flip per enemy, so the first thing that happens to a new player is
    *  half the bullets going the wrong way. That is the lesson, delivered by
    *  the game rather than by a panel. */
-  let pole: Pole = 'dark';
+  let pole: Pole = 'red';
   /** The one resource. Absorbing fills it; attacking, healing and upgrading
    *  spend it. It does not regenerate — see the note on `MANA_MAX`. */
   let mana = MANA_START;
@@ -2179,7 +2191,7 @@ export async function startLevel(
    *  Materials are SHARED between clones cut from one model, so each shot gets
    *  its own or repainting one repaints every bullet in the air — including the
    *  arrows the towers fire. */
-  // --- the orb, and why it is not lit ------------------------------------
+  // --- the orb -------------------------------------------------------------
   //
   // A bullet is a SPHERE, and its colour is the only thing in this game the
   // player has to read correctly every single time. A sphere is the right
@@ -2188,28 +2200,39 @@ export async function startLevel(
   // "which way is it pointing" is a second thing to decode at the moment there
   // is no time to decode anything.
   //
-  // **`MeshBasicMaterial`, so no light touches it.** This is the part that
-  // matters. Lit, a white orb crossing the hero's shadow goes grey and a dark
-  // one under the sun picks up a specular highlight — the two poles converge
-  // exactly where the board is busiest. Unlit, dark is the same dark in the
-  // shadow of a tree as it is in the open, and the decision the whole game
-  // rests on never depends on where on the field it is being made.
+  // **Lit, like everything else on the board.** The first version was not, and
+  // could not be: the poles were dark and light, value contrast is exactly
+  // what light destroys, and holding them apart meant taking the lighting off
+  // them. The result reads as a sticker laid over the scene — no shading, no
+  // highlight, no relationship to the ground it is flying across.
   //
-  // And each orb wears a SHELL of the opposite value, drawn back-faces-only so
-  // it reads as an outline. Against bright grass a white orb would have almost
-  // nothing to separate it from the ground; against the board's shadows a dark
-  // one would have nothing either. With the shell, whichever half is losing
-  // contrast, the other half is winning it — there is no background on this
-  // board that can swallow both at once.
-  const ORB = new THREE.SphereGeometry(0.16, 14, 10);
-  const ORB_SHELL = new THREE.SphereGeometry(0.205, 14, 10);
-  const orbMat: Record<Pole, THREE.Material> = {
-    dark: new THREE.MeshBasicMaterial({ color: POLE_LOOK.dark.body }),
-    light: new THREE.MeshBasicMaterial({ color: POLE_LOOK.light.body }),
-  };
+  // With the poles moved to HUE (see `POLE_LOOK`) that constraint is gone. A
+  // shaded red ball is still red in shadow, so the material can be a real one.
+  // `roughness` is kept low enough for a definite highlight, which is most of
+  // what makes a sphere read as a sphere rather than as a circle.
+  //
+  // The emissive is what carries it through the darkest part of the board
+  // without flattening it — a small amount, added to real shading, rather than
+  // the flat fill that was there before.
+  //
+  // The SHELL stays, and is now a darker shade of the orb's own hue rather
+  // than the opposite end of a value scale. It is doing a different job: not
+  // "whichever half is losing contrast the other is winning it", but a plain
+  // dark outline, which is what keeps a lit ball from dissolving into bright
+  // grass at the moment it matters.
+  const ORB = new THREE.SphereGeometry(0.16, 18, 14);
+  const ORB_SHELL = new THREE.SphereGeometry(0.2, 14, 10);
+  const litOrb = (p: Pole): THREE.Material => new THREE.MeshStandardMaterial({
+    color: POLE_LOOK[p].body,
+    emissive: POLE_LOOK[p].glow,
+    emissiveIntensity: 0.45,
+    roughness: 0.3,
+    metalness: 0.0,
+  });
+  const orbMat: Record<Pole, THREE.Material> = { red: litOrb('red'), blue: litOrb('blue') };
   const shellMat: Record<Pole, THREE.Material> = {
-    dark: new THREE.MeshBasicMaterial({ color: POLE_LOOK.dark.rim, side: THREE.BackSide }),
-    light: new THREE.MeshBasicMaterial({ color: POLE_LOOK.light.rim, side: THREE.BackSide }),
+    red: new THREE.MeshBasicMaterial({ color: POLE_LOOK.red.rim, side: THREE.BackSide }),
+    blue: new THREE.MeshBasicMaterial({ color: POLE_LOOK.blue.rim, side: THREE.BackSide }),
   };
   /** One bullet. The materials are SHARED — nothing ever repaints an orb after
    *  it is made, which is what lets every bullet of a pole be two draws for the
@@ -2264,7 +2287,7 @@ export async function startLevel(
         const c = (m as THREE.MeshStandardMaterial).clone() as THREE.MeshStandardMaterial;
         c.color.lerp(new THREE.Color(look.body), 0.72);
         c.emissive?.setHex(look.glow);
-        c.emissiveIntensity = pole === 'light' ? 0.34 : 0.5;
+        c.emissiveIntensity = 0.42;
         return c;
       };
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(paint) : paint(mesh.material);
@@ -2697,12 +2720,24 @@ export async function startLevel(
       pips.append(d);
     }
     weaponCell.append(pips);
+    // What a HIT costs, not what the next upgrade costs.
+    //
+    // It read `34g` — the upgrade price, in gold. Gold has no source and no
+    // use in this game, and upgrading is not done here any more: it is in the
+    // spend panel, priced in magic. So the cell was quoting a currency that
+    // does not exist for an action that happens somewhere else.
+    //
+    // What belongs on the weapon you are holding is what pressing attack will
+    // take off the bar, which is the number the player is deciding on several
+    // times a minute.
     const price = document.createElement('span');
     price.style.cssText = 'opacity:.85; font: 600 12px/1.25 system-ui;';
-    price.textContent = cost === null ? 'max' : `${cost}g`;
+    price.textContent = `${MANA_PER_ATTACK[cast]}`;
     weaponCell.append(price);
-    weaponCell.style.opacity = cost !== null && gold < cost ? '0.45' : '1';
-    weaponCell.style.cursor = cost === null ? 'default' : 'pointer';
+    // Dimmed when you cannot afford to swing. The cell is a readout, so this
+    // is the one place the refusal can be seen BEFORE pressing.
+    weaponCell.style.opacity = mana < MANA_PER_ATTACK[cast] ? '0.45' : '1';
+    weaponCell.style.cursor = 'default';
     weaponCell.title = cost === null
       ? 'Nothing left to learn this run'
       : RUN_TIERS[cast][runTier].label;
@@ -2858,8 +2893,8 @@ export async function startLevel(
     // The SCORE, where the gold used to be. Same corner, same shape, and the
     // number the run is actually about.
     setIconText(goldEl, 'award', ` ${score}`, HUD_ICON);
-    setIconText(towerEl, 'tower', ` ${towers.length}/${maxTowers}`, HUD_ICON);
-    towerEl.style.marginLeft = '1em';
+    // No tower counter. Nothing is built.
+    towerEl.style.display = 'none';
     buffEl.textContent = '';
     buffEl.style.display = buff ? 'flex' : 'none';
     if (buff) {
@@ -3030,7 +3065,7 @@ export async function startLevel(
     const e: Enemy = {
       obj, hp: w.hp, maxHp: w.hp, speed: w.speed, bounty: w.bounty,
       armed: w.armed, bar, barFill, wobble: 0,
-      pole: w.pole ?? (Math.random() < 0.5 ? 'dark' : 'light'),
+      pole: w.pole ?? (Math.random() < 0.5 ? 'red' : 'blue'),
       vel: path.dir.clone().multiplyScalar(w.speed),
       alive: true, shootCooldown: 1, windup: 0,
       ground: w.ground ?? false, facesTravel: w.facesTravel ?? false,
@@ -3297,29 +3332,86 @@ export async function startLevel(
     renderHud();
   };
 
-  /** The hero wears the pole.
+  /** The hero wears the pole, on their BODY.
    *
    *  This is not decoration. The player has to be able to answer "what colour
    *  am I" from the middle of the screen, where they are already looking —
    *  reading it off a bar in the corner costs a glance, and the glance costs
-   *  the crossing. The HUD says it too, for the moment after a swap when the
-   *  hero is behind something. */
-  const heroTint: THREE.Object3D[] = [];
+   *  the crossing.
+   *
+   *  It used to be emissive only, on every mesh, because repainting the base
+   *  colour would have taken the face this game spent a session rebuilding and
+   *  made it a silhouette. That turned out to be a false choice: **the model
+   *  is two meshes** — `body-mesh` and `head-mesh` — so the body can be
+   *  painted outright and the head left entirely alone.
+   *
+   *  They SHARE one material (`colormap`, one texture for the whole
+   *  character), so the body's has to be cloned first. This game has been
+   *  bitten twice by exactly that — `flashTint` turning five enemies red for
+   *  one hit, and fading the Clinic fading the Armory — and here it would have
+   *  painted the face the moment it painted the shirt.
+   *
+   *  **Nothing is cached, and that is the fix for a bug worth remembering.**
+   *  The first version held the cloned material in a variable. `flashTint`'s
+   *  `isolate()` runs once per object and CLONES every material on it,
+   *  replacing `mesh.material` — so the first hit flash orphaned that
+   *  variable, and every swap afterwards painted an object nothing renders.
+   *  It fails in the most misleading way available: the material really is
+   *  being set, a probe reading it back sees a colour, and the colour it sees
+   *  is whatever was baked in at the moment the flash cloned it.
+   *
+   *  So the current material is re-read every time and marked in `userData`,
+   *  which `Material.clone()` copies — the tint system's clone comes back
+   *  already marked and is written to directly.
+   *
+   *  **The pole is base COLOUR only, never emissive.** Emissive belongs to the
+   *  tint system: `updateTints` restores it to whatever was snapshotted when
+   *  the object was isolated, so a pole written there is reverted by the next
+   *  hit flash.
+   *
+   *  **The texture comes OFF the body and the colour replaces it.** Tinting
+   *  by multiply was tried first, on the reasoning that it keeps the model's
+   *  own shading — and it is too quiet to read. The character's palette is a
+   *  mid-toned orange; multiplied by a pale blue it comes out a muddy
+   *  grey-orange, which is not "the player is blue", it is "the player looks
+   *  slightly off". Measured rather than judged: the hero's pixels barely
+   *  moved between the two poles.
+   *
+   *  Shading is not lost by dropping the map, because the material is still
+   *  lit — a solid red body in this scene still has a light side and a dark
+   *  side. What is lost is the fold detail of a 0.72-tall character seen from
+   *  five units away, which is not what anybody is reading.
+   *
+   *  The head keeps its texture and its face, untouched. */
+  /** Marks a material as ours to paint, and SURVIVES cloning — three copies
+   *  `userData` on `Material.clone()`, which is the whole reason this works. */
+  const POLE_OWNED = 'polarityBody';
   const paintHero = (): void => {
-    if (!heroTint.length) {
-      hero.traverse((o) => { if ((o as THREE.Mesh).isMesh) heroTint.push(o); });
-    }
     const look = POLE_LOOK[pole];
-    for (const o of heroTint) {
+    hero.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const m of mats) {
-        const st = m as THREE.MeshStandardMaterial;
-        // Emissive only. Repainting the hero's BASE colour would take the
-        // face this game spent a session rebuilding and make it a silhouette.
-        if (st.emissive) { st.emissive.setHex(look.glow); st.emissiveIntensity = 0.42; }
+      // `body-mesh` only. The model is two meshes and the other one is the
+      // face this game spent a session rebuilding.
+      if (!mesh.isMesh || !mesh.name.startsWith('body')) return;
+      const cur = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as
+        THREE.MeshStandardMaterial;
+      let mat = cur;
+      if (!cur.userData?.[POLE_OWNED]) {
+        // First time we have seen this one. It is the GLB's shared `colormap`
+        // — shared with the HEAD — so it is cloned before anything is written
+        // to it, or painting the shirt paints the face.
+        mat = cur.clone();
+        mat.userData = { ...mat.userData, [POLE_OWNED]: true };
+        // The texture comes off: tinting by multiply was tried and is too
+        // quiet to read — the palette is a mid-toned orange, and multiplied by
+        // a pale blue it comes out a muddy grey-orange. Measured, not judged.
+        // Shading is not lost, because the material is still LIT.
+        mat.map = null;
+        mat.needsUpdate = true;
+        mesh.material = mat;
       }
-    }
+      mat.color.setHex(look.body);
+    });
   };
 
   // --- spending it on something other than a swing -------------------------
@@ -4362,7 +4454,7 @@ export async function startLevel(
               for (let k = 0; k < n; k++) {
                 const a = (k - (n - 1) / 2) * BOSS_FAN_SPREAD;
                 const dirK = v.clone().applyAxisAngle(UP, a);
-                const p: Pole = ((k % 2 === 0) === flip) ? 'dark' : 'light';
+                const p: Pole = ((k % 2 === 0) === flip) ? 'red' : 'blue';
                 fireOrb(e.obj.position, dirK, p, e.damage, 1.45, BULLET_SPEED * 0.78);
               }
             } else {
@@ -4761,6 +4853,25 @@ export async function startLevel(
       /** Drive the two controls a probe cannot press, because the SDK's
        *  buttons only exist on a touch screen. */
       swap: () => swapPole(),
+      /** The hero's own meshes, by name, with what material each carries.
+       *
+       *  Painting the body meant finding it, and "it is called body-mesh in
+       *  the GLB" is a fact about the FILE — what survives loading is a
+       *  separate question, and the difference between the two is a paint that
+       *  silently does nothing. */
+      heroMeshes: () => {
+        const out: unknown[] = [];
+        hero.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as
+            THREE.MeshStandardMaterial;
+          out.push({ name: m.name, type: m.type, mat: mat?.name ?? null,
+                     color: mat?.color ? `#${mat.color.getHexString()}` : null,
+                     uuid: mat?.uuid ?? null });
+        });
+        return out;
+      },
       /** Take everything off the board, so an experiment has one orb in it. */
       clearBoard: () => {
         for (const e of enemies) if (e.alive) { e.alive = false; e.obj.visible = false; }

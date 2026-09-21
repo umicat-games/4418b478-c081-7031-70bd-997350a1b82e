@@ -50,7 +50,7 @@ is safe, not merely profitable** — a player who has to wonder whether the
 absorb will win the race dodges instead of collecting, which is the game not
 being played.
 
-### The orbs are spheres, and nothing lights them
+### The orbs are spheres, and they ARE lit — because the poles are hues
 
 Reported, and right: the colour of a bullet is the only thing in this game the
 player must read correctly every single time, so it has to be readable at a
@@ -60,34 +60,80 @@ glance.
   that presents a different silhouette depending on which way it flies, which
   is a second thing to decode at the moment there is no time to decode
   anything.
-- **`MeshBasicMaterial`, so no light touches them.** This is the part that
-  matters. Lit, a white orb crossing a shadow goes grey and a dark one under
-  the sun picks up a specular highlight — the two poles converge exactly where
-  the board is busiest. Unlit, dark is the same dark everywhere, and the
-  decision the whole game rests on never depends on where it is being made.
-- **Each wears a shell of the opposite value**, drawn back-faces-only so it
-  reads as an outline. Against bright grass a light orb would have little to
-  separate it from the ground; against shadow a dark one would have nothing
-  either. With the shell, whichever half is losing contrast the other half is
-  winning it.
-- Neither pole is at an extreme. `#241f33` and `#f2f0ea`, not black and white:
-  pure black disappears into shadow, and pure white is what every existing
-  effect in this game already flashes.
+- **They are RED and BLUE, and that is what lets them be lit.** The first
+  version was dark and light and could not be lit at all: value contrast is
+  exactly what a light source destroys — a white orb crossing a shadow goes
+  grey, a dark one under the sun picks up a specular highlight, and the two
+  poles converged precisely where the board was busiest. The only way to hold
+  them apart was `MeshBasicMaterial`, and an unlit sphere on a lit board reads
+  as a sticker laid over the scene.
+
+  **Hue survives lighting.** A red ball in shadow is a darker red; it is not a
+  blue ball. So the material is a real one — `MeshStandardMaterial`, shaded,
+  with a definite highlight (`roughness` 0.3, which is most of what makes a
+  sphere read as a sphere rather than as a circle) — and a little emissive to
+  carry it through the darkest part of the board without flattening it.
+
+  This is worth stating as a rule rather than as a fix: **if two things must be
+  told apart under changing light, separate them by hue, not by value.**
+- Not the pure primaries. `#e03b2f` and `#2f7ad8`: `#ff0000` vibrates against
+  this game's grass and a fully saturated blue disappears into the sky at the
+  top of the frame.
+- **Each wears a shell**, drawn back-faces-only so it reads as an outline. It
+  used to be the opposite end of a value scale; it is a darker shade of the
+  orb's own hue now, doing a plainer job — keeping a lit ball from dissolving
+  into bright grass.
 
 The materials are SHARED per pole, because nothing ever repaints an orb after
 it is made — every bullet on the board is two draws in total. That is the
 opposite of the kit bullets, which had to be cloned per shot precisely because
 they were recoloured.
 
-### The hero wears it too
+### The hero's BODY is the colour, and the face is left alone
 
-`paintHero` writes the pole's glow into the hero's emissive, and the HUD has a
-disc at the end of the magic bar. Both, because they answer the same question
-at different costs: the hero is where the player is already looking, and the
-disc is there for the moment after a swap when the hero is behind something.
+`paintHero`, plus a disc at the end of the magic bar. Both, because they answer
+the same question at different costs: the hero is where the player is already
+looking, and the disc is there for the moment after a swap when the hero is
+behind something.
 
-Emissive rather than base colour — repainting the hero would flatten the face
-this game spent a session rebuilding.
+It was emissive-only at first, on the reasoning that repainting the hero would
+flatten the face this game spent a session rebuilding. That was a false choice:
+**the model is two meshes**, `body-mesh` and `head-mesh`, so the body can be
+painted outright and the head left entirely alone. They share one material
+(`colormap`), so the body's is cloned before anything is written to it.
+
+**The texture comes off the body and the colour replaces it.** Tinting by
+multiply was tried and is too quiet to read — the palette is a mid-toned
+orange, and multiplied by a pale blue it comes out a muddy grey-orange.
+Measured, not judged: the hero's pixels barely moved between poles. Shading is
+not lost by dropping the map, because the material is still lit; what is lost
+is fold detail on a 0.72-tall character seen from five units away.
+
+#### Two traps, and the second one is the interesting one
+
+**The pole is base COLOUR, never emissive.** Emissive belongs to the tint
+system — `updateTints` restores it to whatever was snapshotted — so a pole
+written there is reverted by the next hit flash.
+
+**Nothing may be cached.** The first version held the cloned material in a
+variable. `flashTint`'s `isolate()` runs once per object and CLONES every
+material on it, replacing `mesh.material` — so the first hit flash orphaned
+that variable, and every swap afterwards painted an object nothing renders.
+
+It fails in the most misleading way available. The material really is being
+set. A probe reading it back finds a colour. The colour it finds is whatever
+was baked in at the moment the flash cloned it — so the reading is stable,
+plausible, and wrong, and the only thing that catches it is looking at PIXELS.
+
+The fix is to re-read `mesh.material` every time and mark ours in `userData`,
+which `Material.clone()` copies — the tint system's clone comes back already
+marked and is written to directly.
+
+`verify-3d-polarity-colour` counts red-dominant against blue-dominant pixels in
+the hero's patch of screen, in each pole. Note what it does NOT assert: some
+red is correct in both poles, because the face and hands are deliberately not
+painted and skin is a warm colour. Demanding "no red when blue" would be
+demanding the face be painted.
 
 ## The board (polarity)
 
@@ -392,6 +438,7 @@ In `umicat-infra/playwright/`. The ones written for this fork:
 | `verify-3d-polarity-run` | does the curve ramp, does a boss arrive, is its fan both colours |
 | `verify-3d-polarity-board-xss` | what the board does with a name that is trying to be an element |
 | `verify-3d-polarity-rack` | are the weapons ON the plinths — the check the bare-pedestal bug slipped past |
+| `verify-3d-polarity-colour` | can you SEE which colour you are — counted in pixels, not read off a material |
 
 Four lessons from writing them, all of which cost a run:
 
