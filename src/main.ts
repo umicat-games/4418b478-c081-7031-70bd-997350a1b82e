@@ -154,7 +154,24 @@ const HERO_SYNC_OFFSET = -(HERO_HALF_HEIGHT + HERO_RADIUS);
  *  at ten or twenty a time and leaves room for a hit to be a scratch. */
 const HERO_MAX_HP = 100;
 /** What a saucer's bullet takes, before the level's defence is applied. */
-const BULLET_DAMAGE = 10;
+/** What one orb of the WRONG colour takes off the bar.
+ *
+ *  Raised from 10. The arithmetic that matters is not the number itself but
+ *  the number against `HERO_INVINCIBLE_SECONDS` (1.1), which is the real cap:
+ *  however many orbs are in the air, the most the bar can lose is one hit per
+ *  window. At 10 that was 9 a second and a full bar was eleven seconds of
+ *  standing in the wrong colour — long enough that a careless run and a
+ *  careful one ended at roughly the same place, just later.
+ *
+ *  At 16 it is 14.5 a second and about seven seconds, and a heal (35 for 30
+ *  magic) buys back two hits instead of three and a half. A run should end
+ *  because of how it was PLAYED, and the way to make that true is to make
+ *  each mistake cost enough to notice.
+ *
+ *  It also has to move with the magnet: pulling your own colour in from twice
+ *  the old radius raised income, and income is healing. Leaving the damage
+ *  alone would have made runs longer than they were before the pull existed. */
+const BULLET_DAMAGE = 16;
 /** Healing, in the same points. A drop is worth a fifth of the bar; a crate a
  *  third; clearing a wave a quarter. */
 const HEAL_DROP = 18;
@@ -504,6 +521,8 @@ interface BuffKind {
   badge: IconName;
   /** The ring under the hero while it runs. */
   color: number;
+  /** Happens once and is over. No ring, no countdown, no `buff`. */
+  instant?: boolean;
 }
 /** What a rare crate pays.
  *
@@ -517,10 +536,22 @@ interface BuffKind {
  *  WHICH one without repeating the sentence. */
 const BUFFS: BuffKind[] = [
   { id: 'strike', label: 'Your hits land twice', badge: 'sword', color: 0xff7a4d },
-  { id: 'lucky', label: 'Enemies drop more gold', badge: 'coin', color: 0xffd45e },
   { id: 'shield', label: 'Nothing can hurt you', badge: 'shield', color: 0x6ec8ff },
-  { id: 'overdrive', label: 'Your towers fire faster', badge: 'bolt', color: 0xb98cff },
+  { id: 'slow', label: 'Everything slows down', badge: 'ice', color: 0x7fd4ff },
+  // INSTANT. It has no twenty seconds to run for — the board is empty the
+  // moment it lands — so it never becomes the `buff`, wears no ring and holds
+  // no row in the readout. Kept in the same table anyway, because what a rare
+  // crate can pay should be readable as one list.
+  { id: 'wipe', label: 'The board is cleared', badge: 'bolt', color: 0xffe08a, instant: true },
 ];
+
+/** How much of their speed is LEFT while `slow` runs.
+ *
+ *  0.35, and it slows their SHOOTING too — the cadence, not just the walk. A
+ *  slow that only moved them would leave the same number of orbs arriving per
+ *  second from things that happen to be further away, which is not what "slow
+ *  down" looks like from the inside. */
+const SLOW_MULT = 0.35;
 
 // --- towers ---------------------------------------------------------------
 interface TowerKind {
@@ -2492,6 +2523,32 @@ export async function startLevel(
    *  from all three weapons rather than folded into `damage`, because a crate
    *  is not an enemy: towers ignore it, it does not walk, and giving it an
    *  Enemy record would mean every loop over enemies having to say so. */
+  /** A rare crate's one-shot effects.
+   *
+   *  Separate from the timed ones because they are a different KIND of thing
+   *  to the player: a buff is something you now have and must spend well
+   *  before it runs out, and this is something that has already happened. A
+   *  countdown on it would be counting down nothing. */
+  const takeInstant = (kind: BuffKind): void => {
+    if (kind.id !== 'wipe') return;
+    // Killed, not deleted. Going through `damage()` is what pays the mana,
+    // counts the kills, scores them and plays each one coming apart — a
+    // board that simply stops containing enemies reads as a bug, and pays
+    // nothing for the best crate in the game.
+    for (const e of [...enemies]) {
+      if (!e.alive) continue;
+      damage(e, e.hp + 1);
+    }
+    // And the orbs in the air with them. Leaving a screenful of the wrong
+    // colour behind is a "clear the board" that does not clear the board —
+    // and the thing the player pressed it to escape is the bullets, not the
+    // things that fired them.
+    for (const bu of bullets) world.scene.remove(bu.obj);
+    bullets.length = 0;
+    shake = Math.max(shake, 0.12);
+    flashScreen();
+  };
+
   const hitCrates = (x: number, z: number, radius: number, amount: number): boolean => {
     let struck = false;
     for (const c of crates) {
@@ -2507,7 +2564,8 @@ export async function startLevel(
         // crate that paid nothing.
         const pool = BUFFS.filter((k) => k.id !== buff?.kind.id);
         const kind = pool[Math.floor(Math.random() * pool.length)];
-        buff = { kind, left: BUFF_SECONDS };
+        if (kind.instant) takeInstant(kind);
+        else buff = { kind, left: BUFF_SECONDS };
         flashBanner(kind.label, kind.badge, 2600);
         audio.play(SFX.buffPickup);
         flashTint(hero, { color: 0xffd45e, ms: 500 });
@@ -4460,6 +4518,8 @@ export async function startLevel(
       // How many are already committed to a shot. Counted before the loop so
       // the cap is about the board, not about who happens to be early in the
       // list.
+      /** How much of their own speed everything on the board has right now. */
+      const foeScale = buff?.kind.id === 'slow' ? SLOW_MULT : 1;
       let shooters = 0;
       for (const e of enemies) if (e.alive && e.windup > 0 && !e.boss) shooters += 1;
       for (const e of enemies) {
@@ -4486,6 +4546,7 @@ export async function startLevel(
           if (e.chill.left <= 0) e.chill = undefined;
           else speed *= e.chill.mult;
         }
+        speed *= foeScale;
         e.mixer?.update(dt);
         const prevX = e.obj.position.x, prevZ = e.obj.position.z;
         // Straight across. `vel` already carries the speed it was made with,
@@ -4522,8 +4583,13 @@ export async function startLevel(
         // Shooting the hero. Same shape as the tower's: a wind-up you can see
         // and walk out of, rather than damage for standing nearby.
         const dHero = Math.hypot(e.obj.position.x - hero.position.x, e.obj.position.z - hero.position.z);
+        // Their clock, not the world's. `foeDt` is what makes `slow` read as
+        // everything slowing down rather than as enemies sliding about at the
+        // same rate of fire — same number of orbs a second, just from further
+        // away, which is not what a slow looks like from the inside.
+        const foeDt = dt * foeScale;
         if (e.windup > 0) {
-          e.windup -= dt;
+          e.windup -= foeDt;
           if (e.windup <= 0) {
             // Fire at where the hero IS, and then forget about them. A bullet
             // that steers is a slower contact hit wearing a costume — and here
@@ -4561,7 +4627,7 @@ export async function startLevel(
             if (e.mixer) playEnemyClip(e, 'walk');
           }
         } else if (e.shootCooldown > 0) {
-          e.shootCooldown -= dt;
+          e.shootCooldown -= foeDt;
         } else if (e.armed && dHero < ENEMY_SHOOT_RANGE && (e.boss || shooters < MAX_SHOOTERS)) {
           if (!e.boss) shooters += 1;
           e.windup = e.boss ? BOSS_WINDUP_SECONDS : ENEMY_WINDUP_SECONDS;
@@ -4612,7 +4678,10 @@ export async function startLevel(
         const bu = bullets[i];
         bu.life -= dt;
         prevPos.copy(bu.obj.position);
-        bu.obj.position.addScaledVector(bu.vel, dt);
+        // Orbs slow with everything else — they are what a slow is FOR. Their
+        // life is not scaled, so a slowed shot expires where it would have
+        // rather than hanging about for three times as long.
+        bu.obj.position.addScaledVector(bu.vel, dt * foeScale);
         heroHit.set(hero.position.x, hero.position.y + 0.3, hero.position.z);
 
         // THE RULE. Your own colour is pulled in; the other colour is a hit.
@@ -4873,12 +4942,6 @@ export async function startLevel(
       corpses: () => vfx.count,
       get crates() { return crates; },
       buff: () => (buff ? { id: buff.kind.id, left: +buff.left.toFixed(1) } : null),
-      /** Force one, for a probe that should not have to break crates until the
-       *  dice agree. The real effect, applied the real way. */
-      giveBuff: (id: string) => {
-        const kind = BUFFS.find((k) => k.id === id);
-        if (kind) { buff = { kind, left: BUFF_SECONDS }; renderHud(); }
-      },
       glide: () => ({ ...glide }),
       /** `rare` forces the kind, for a probe that should not have to roll dice
        *  until they agree — the crate it drops is the real one either way. */
@@ -4968,6 +5031,24 @@ export async function startLevel(
       /** Drive the two controls a probe cannot press, because the SDK's
        *  buttons only exist on a touch screen. */
       swap: () => swapPole(),
+      /** What a rare crate can pay, and a way to be handed one. Breaking a
+       *  real crate needs a crate to have dropped, on a cell that is free, and
+       *  then walking to it — none of which is the thing under test.
+       *
+       *  There were TWO of these for a while, in one object literal. The later
+       *  won, which is why nothing looked wrong; the earlier one knew nothing
+       *  about `instant` and would have hung a twenty-second countdown on an
+       *  effect that is over the moment it lands. `tsc` says so (TS1117) and
+       *  `vite build` does not — it never typechecks. Run both. */
+      buffs: () => BUFFS.map((b) => ({ id: b.id, label: b.label, instant: !!b.instant })),
+      giveBuff: (id: string | null) => {
+        if (id === null) { buff = null; renderHud(); return; }
+        const kind = BUFFS.find((b) => b.id === id);
+        if (!kind) return;
+        if (kind.instant) takeInstant(kind);
+        else buff = { kind, left: BUFF_SECONDS };
+        renderHud();
+      },
       /** One crossing, right now, through the game's own spawn path. Lets a
        *  probe sample what the tide actually produces rather than re-running
        *  the same arithmetic beside it and calling that a test. */

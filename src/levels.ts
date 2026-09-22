@@ -186,7 +186,10 @@ export const bossAt = (n: number): Wave => ({
   ground: true,
   facesTravel: true,
   ammo: 'td-ammo-boulder',
-  damage: 16,
+  // Per PELLET, and a boss fires seven of them at once — but the hero's
+  // invincibility window means at most one can land per 1.1s, so this is
+  // "what a boss hit costs" rather than "what a volley costs".
+  damage: 24,
   boss: true,
   label: n === 1 ? 'BOSS' : `BOSS ${n}`,
 });

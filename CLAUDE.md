@@ -325,12 +325,55 @@ one colour, which is a boss accidentally behaving like a saucer. A fan in both
 colours is the one arrangement the swap button cannot answer, so a boss is read
 with the feet.
 
+## What a crate pays (polarity)
+
+A rare crate is one in four, and the three timed effects plus one instant one
+are the three moments a player reaches for something: *get me out of this*,
+*give me time*, *let me take a hit*.
+
+| | | |
+| --- | --- | --- |
+| `wipe` | instant | everything on the board dies, and the orbs go with it |
+| `slow` | 20s | enemies, their fire and their orbs run at 0.35 |
+| `shield` | 20s | nothing can hurt you |
+| `strike` | 20s | your hits land twice |
+
+**`lucky` and `overdrive` are gone.** They paid more gold and faster tower
+reload, and in this game both are a crate that pays nothing — which is worse
+than a crate that is not there, because it spends the player's walk.
+
+**A wipe KILLS, it does not delete.** Going through `damage()` is what pays the
+magic, counts the kills, scores them and plays each one coming apart. A board
+that simply stops containing enemies reads as a bug and pays nothing for the
+best crate in the game. Measured: eight foes, +112 score, the bar filled.
+It clears the orbs too — the thing a player presses it to escape is the
+bullets, not the things that fired them.
+
+**A slow slows their SHOOTING, not just their walk.** A slow applied only to
+movement leaves the same number of orbs arriving per second from things that
+happen to be further away, which is a number nobody looks at and a feeling
+nobody gets. Their windup, their cooldown and the orbs already in flight all
+run on `foeScale`. An orb's LIFE is not scaled, so a slowed shot expires where
+it would have rather than hanging about three times as long.
+
 ## Magic, and what it buys (polarity)
 
 `MANA_MAX` 100, `MANA_START` 20 — deliberately below both a heal (30) and the
 first upgrade (34), so the opening cannot buy anything. Not zero, because
 attacking costs magic too and a hero who cannot swing until something has shot
 at them is a hero whose first input does nothing. Twenty is five sword swings.
+
+**A wrong-colour orb takes 16, raised from 10.** The number that matters is
+not the damage but the damage against `HERO_INVINCIBLE_SECONDS` (1.1), which
+is the real cap — however many orbs are in the air, the bar loses at most one
+hit per window. At 10 that was 9 a second, so a full bar was eleven seconds of
+standing in the wrong colour, and a careless run and a careful one ended in
+much the same place, just later. At 16 it is about seven, and a heal buys back
+two hits instead of three and a half.
+
+It also had to move with the magnet: pulling your own colour in from twice the
+old radius raised income, and income is healing. Leaving the damage alone would
+have made runs LONGER than before the pull existed.
 
 | in | out |
 | --- | --- |
@@ -559,6 +602,7 @@ In `umicat-infra/playwright/`. The ones written for this fork:
 | `verify-3d-polarity-colour` | can you SEE which colour you are — counted in pixels, not read off a material |
 | `verify-3d-polarity-tide` | does staying one colour stop working — sampled through the real spawn path |
 | `verify-3d-polarity-pull` | does a line that MISSES still get collected, and does the other colour stay straight |
+| `verify-3d-polarity-crates` | what each rare crate DOES, by effect rather than by label |
 
 Four lessons from writing them, all of which cost a run:
 
@@ -576,6 +620,14 @@ Four lessons from writing them, all of which cost a run:
 - **Counting what spawned measures the renderer, not the game.** Headless runs
   game time at about a quarter of wall clock, so "is the board busier at 200s"
   came back as 1 versus 2. `state().gap` is the curve's own answer.
+- **`vite build` does not typecheck, and a comment can eat your code.** Two
+  `giveBuff` handles ended up in one object literal — the later won, so
+  nothing looked wrong, but the earlier one knew nothing about `instant` and
+  would have hung a twenty-second countdown on an effect that is already over.
+  `tsc` says so (TS1117); the build does not. Then fixing it dropped a `*/`,
+  which put two handles INSIDE a comment: `tsc` clean, build clean, bundle
+  missing them, probe dead. `npx tsc --noEmit` and `npx vite build` answer
+  different questions — run both.
 - **A probe rots the same way a comment does.** Renaming the poles from
   `dark`/`light` to `red`/`blue` left `verify-3d-polarity-rule` passing
   `'dark'` to `throwOrb`, which indexed an undefined prototype and threw —
