@@ -104,10 +104,18 @@ export class Coach<Ctx> {
     await this.turn(text, ctx);
   }
 
-  /** An unprompted line. `note` is what just happened, in plain words; the
-   *  model decides how, and whether, to react. */
+  /**
+   * Something happened that the assistant should mention unprompted. `note` is
+   * the event in plain words; the model decides how (and whether) to react.
+   *
+   * **Tagged, because the protocol has no other way to say it.** A remark goes
+   * out through the same `say()` the player's own typing does and lands in the
+   * history as a turn from the player — so an English event line is, as far as
+   * the model can tell, the student switching to English. The tag is what the
+   * language rule in the observation points at.
+   */
   async remark(note: string, ctx: Ctx): Promise<void> {
-    await this.turn(note, ctx, { silentIfEmpty: true });
+    await this.turn(`[the game] ${note}`, ctx, { silentIfEmpty: true });
   }
 
   private async turn(line: string, ctx: Ctx, opts: { silentIfEmpty?: boolean } = {}): Promise<void> {

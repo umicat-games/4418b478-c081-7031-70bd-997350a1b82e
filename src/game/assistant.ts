@@ -106,7 +106,10 @@ export function gomokuAssistant(hooks: AssistantHooks): AssistantSpec<Context> {
       const base = {
         language: {
           the_game_is_in: locale(),
-          rule: 'Reply in the language the student writes to you in. When you speak first, use the language above.',
+          rule: 'Reply in the language the student writes to you in — and only their own typed messages count. '
+            + 'A line that starts with [the game] is the GAME telling you what just happened, written in English '
+            + 'for you alone; it never sets the language. If the student has not written anything yet, use the '
+            + 'language above.',
         },
         student: {
           here_for: profile.mode,
