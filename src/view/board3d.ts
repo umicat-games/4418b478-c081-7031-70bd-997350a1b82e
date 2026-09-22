@@ -60,15 +60,25 @@ const TABLE = 5;
  *  — see the note at the top of this file. */
 const FOV_DEG = 22;
 /**
- * How far the camera is tilted from overhead.
+ * How far the camera is tilted from overhead. Zero: straight down.
  *
  * FIXED, and that is the whole camera: no orbit, no pinch, nothing to
  * recentre. A board game is not a world to look around — the position is the
  * same information from every angle, so a camera the player can move is a
- * camera they can lose. Enough tilt to see the board's edge and the shadow it
- * drops on the table, and not so much that the far rows close up.
+ * camera they can lose.
+ *
+ * Straight down is the one angle at which a square board is a SQUARE. Any
+ * tilt at all makes it a trapezoid, and on a grid of intersections that costs
+ * twice: the far rows close up, and the shape the player is reading is not
+ * the shape the game is played on.
+ *
+ * What the tilt was buying was depth — the board's edge and the shadow it
+ * drops. The edge is gone from up here; the shadows are not. The lamp is
+ * still low and to one side, so the board throws a shadow on the table beside
+ * it and every stone throws one on the board, which is exactly how a
+ * photograph taken from above reads as objects rather than as a diagram.
  */
-const POLAR_DEG = 17;
+const POLAR_DEG = 0;
 
 /** Line spacing, and the inset that follows from it, for a board size. */
 function metrics(size: number): { spacing: number; margin: number } {
@@ -147,12 +157,20 @@ export class BoardView {
     // own hand on a phone; fill from the other side so stones are not half
     // black. Warm, and warmer than it was: this is a lamp over a table now,
     // not a light box.
-    // Lower than it was, and further to the side: a lamp at forty-five degrees
-    // drops the board's shadow almost straight down and there is nothing to
-    // see. This one is about twenty-five degrees above the table, which is
-    // what puts a shadow on the wood beside the board.
+    // Low, and from the top left. Two separate decisions:
+    //
+    // LOW (about thirty degrees above the table, not forty-five) because a
+    // high lamp drops the board's shadow almost straight down and there is
+    // nothing to see — and from directly overhead that shadow is the only
+    // thing left saying the board has any thickness at all.
+    //
+    // TOP LEFT because the camera looks straight down now, and a picture seen
+    // from above reads as lit when the shadows fall down and to the right. It
+    // used to come from the front so the shadow fell away from the hand
+    // holding a phone, which was the right call for a tilted view and is not
+    // a consideration from up here.
     const key = new THREE.DirectionalLight(0xfff1dc, 2.0);
-    key.position.set(-3.1, 2.3, 2.1);
+    key.position.set(-3.1, 2.3, -2.1);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
     const cam = key.shadow.camera as THREE.OrthographicCamera;
@@ -168,7 +186,7 @@ export class BoardView {
     // A little warmth bouncing back off the table, so the board's near edge
     // is not the darkest thing on screen.
     const bounce = new THREE.DirectionalLight(0xffd9a8, 0.28);
-    bounce.position.set(2.4, 1.2, -1.8);
+    bounce.position.set(2.4, 1.2, 1.8);
     this.scene.add(bounce);
 
     // The table. One big plane in dark wood, which is what makes the board
@@ -495,6 +513,12 @@ export class BoardView {
     const sp = Math.sin(this.polar), cp = Math.cos(this.polar);
     const put = (dist: number): void => {
       this.camera.position.set(dist * sp * Math.sin(this.azimuth), dist * cp, dist * sp * Math.cos(this.azimuth));
+      // Which way is up, on screen. It has to be said out loud from straight
+      // overhead: the default up (+y) is the direction the camera is looking
+      // along, `lookAt` has no way to resolve that, and the board arrives at
+      // an arbitrary rotation or as NaN. −z is the far side of the board, so
+      // row 1 stays at the top where it has always been.
+      this.camera.up.set(0, 0, -1);
       this.camera.lookAt(0, 0, 0);
       // Slide the whole picture left by half the covered strip, so the board
       // sits in the middle of what is VISIBLE rather than of the window.

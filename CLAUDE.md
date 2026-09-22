@@ -80,11 +80,20 @@ false.
 through the same helpers the engine searches with, so there is one
 implementation of a capture and not two.
 
-**The camera is FIXED.** No orbit, no pinch, nothing to recentre — a board
-game is not a world to look around, the position is the same information from
-every angle, and a camera the player can move is a camera they can lose. It
-sits 17° off overhead, which is enough to see the board's edge and the shadow
-it drops on the table. `controls.ts` still tells a second finger apart from a
+**The camera is FIXED, and it looks STRAIGHT DOWN.** No orbit, no pinch,
+nothing to recentre — a board game is not a world to look around, the position
+is the same information from every angle, and a camera the player can move is
+a camera they can lose. Straight down is the one angle at which a square board
+is a square: measured, all four sides are 524px and the line spacing is 65px
+everywhere, front to back. Any tilt costs that twice over, because the far
+rows close up AND the shape being read is not the shape the game is played on.
+
+Two things follow. `camera.up` has to be set to −z by hand: from directly
+overhead the default up is the direction the camera is looking along, `lookAt`
+cannot resolve it, and the board arrives rotated arbitrarily or as NaN. And
+the depth that the tilt used to provide is now entirely the SHADOWS — which is
+why the lamp is low (about 30°) and comes from the top left, so they fall down
+and to the right the way an overhead photograph reads. `controls.ts` still tells a second finger apart from a
 first (a second finger is never a move), it just has nothing to do with it.
 
 **The board is on a TABLE, and that is what the lighting is for.** A plane of
