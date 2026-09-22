@@ -41,6 +41,7 @@ import { underCurtain } from './ui/curtain';
 import { Autosave, load } from './save';
 import { SFX, createAudio, playPiece } from './audio';
 import { setLocale, t, type Key } from './i18n';
+import { bootStep } from './ui/boot';
 
 /**
  * How much has to evaporate on the player's own move before the companion
@@ -61,7 +62,11 @@ const WATCH = { movetime: 240, multipv: 3 };
 const HINT = { movetime: 1200, multipv: 1 };
 
 async function start(): Promise<void> {
+  // The boot screen is already up (see index.html); from here on it is told
+  // what has actually finished.
+  bootStep('bundle');
   const umicat = await ThreeUmicat.init();
+  bootStep('platform');
   // Before any UI exists: everything below asks `t()` for its words.
   setLocale(umicat.locale);
 
@@ -74,7 +79,6 @@ async function start(): Promise<void> {
   // Declared before it starts. The loop runs from the first frame, long
   // before the rest of this function exists, and a `const` it reads too early
   // is a ReferenceError that takes the whole game down at boot.
-  let idleSpin = true;
   /**
    * Keep drawing for a moment after anything is touched.
    *
@@ -154,7 +158,6 @@ async function start(): Promise<void> {
   void loading.then(() => { engineReady = true; }).catch(() => { engineReady = true; });
 
   const frame = (): void => {
-    if (idleSpin) view.orbit(0.0012, 0);
     if (performance.now() < repaintUntil) view.invalidate();
     // Only when the picture actually changed. Between two moves a chess board
     // is a still life, and redrawing it sixty times a second takes a core off
@@ -170,6 +173,7 @@ async function start(): Promise<void> {
 
   // ── state ───────────────────────────────────────────────────────────────
   const saved = await load(umicat);
+  bootStep('saved');
   const autosave = new Autosave(umicat);
 
   let game: ChessGame | null = null;
@@ -719,8 +723,7 @@ async function start(): Promise<void> {
   attachBoardControls(canvas, (x, y) => view.pick(x, y), {
     onAim: () => { /* no hover ghost: a chess piece only moves where it is sent */ },
     onPicked: select,
-    onCamera: (a, p) => view.orbit(a, p),
-    onZoom: (f) => view.zoomBy(f),
+    // No camera handlers: the view is fixed. See POLAR_DEG in board3d.ts.
   });
 
   // ── the one button, and everything behind it ────────────────────────────
@@ -756,7 +759,6 @@ async function start(): Promise<void> {
         persist();
         void finish();
       },
-      onRecentre: () => view.resetCamera(),
       onMusic: (on) => { audio.setMusicVolume(on ? 0.22 : 0); coach.profile.music = on; persist(); },
       onSound: (on) => { audio.setSfxVolume(on ? 1 : 0); coach.profile.sound = on; persist(); },
       onEval: (on) => { evalBar.setEnabled(on); refresh(); },
@@ -873,7 +875,6 @@ async function start(): Promise<void> {
     await autosave.flush();
 
     document.body.classList.add('titling');
-    idleSpin = true;
     const stored = await umicat.saves.get<ReturnType<ChessGame['snapshot']>>('game');
     const choice = await showTitle({
       canContinue: (!!game && !game.over) || !!stored,
@@ -938,8 +939,6 @@ async function start(): Promise<void> {
   /** Take the title down and give the board back. */
   function leaveTitle(): void {
     document.body.classList.remove('titling');
-    idleSpin = false;
-    view.resetCamera();
   }
 
   await toTitle();

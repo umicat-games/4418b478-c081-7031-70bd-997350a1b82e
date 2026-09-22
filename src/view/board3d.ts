@@ -34,15 +34,31 @@ const BORDER = 0.38;
 const SQUARE = (2 * HALF) / (8 + 2 * BORDER);
 /** How much of a square a piece fills. Under 1 so neighbours do not touch. */
 const PIECE_SCALE = SQUARE * 0.92;
-const TOP_Y = 0.07;
+/** How thick the board is. Thicker than it was, because it is sitting on a
+ *  table now and what says "sitting on" is the edge and the shadow. */
+const TOP_Y = 0.11;
+/** How far the table stretches past the board, in board half-widths. At this
+ *  tilt the far edge has to be well outside the frame. */
+const TABLE = 7;
 
 /** The lens. Long enough that foreshortening is a cue, not a distortion. */
 const FOV_DEG = 22;
-/** How far from overhead the camera may be tilted. Past this the back rank
- *  hides behind the pieces in front of it. */
-const MAX_POLAR_DEG = 62;
-const MIN_POLAR_DEG = 8;
-const DEFAULT_POLAR_DEG = 44;
+/**
+ * How far from overhead the camera sits. FIXED.
+ *
+ * No orbit, no pinch, nothing to recentre: a board game is not a world to
+ * look around, and a camera the player can move is a camera they can lose.
+ *
+ * Unlike the games with flat pieces, this one keeps its tilt. Chess pieces
+ * are silhouettes — a knight is a knight because of its profile — and from
+ * straight overhead they are all circles. Forty-four degrees is enough to
+ * read every piece by shape and not so much that the back rank hides behind
+ * the front one.
+ *
+ * Turning the board around when the player takes Black is a different thing
+ * and stays: that is a rule of the game, not a camera control.
+ */
+const POLAR_DEG = 44;
 
 const KINDS: Kind[] = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const SIDES: Side[] = ['white', 'black'];
@@ -98,8 +114,7 @@ export class BoardView {
   private seat: Side = 'white';
 
   private azimuth = 0;
-  private polar = THREE.MathUtils.degToRad(DEFAULT_POLAR_DEG);
-  private zoom = 1;
+  private readonly polar = THREE.MathUtils.degToRad(POLAR_DEG);
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -108,7 +123,8 @@ export class BoardView {
     // PCFSoft was removed in three 0.186; PCF is what it falls back to anyway.
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    this.scene.background = new THREE.Color('#1b1d22');
+    // Near the table's darkest tone, so anything beyond it is not a hole.
+    this.scene.background = new THREE.Color('#140e09');
     this.camera = new THREE.PerspectiveCamera(FOV_DEG, 1, 0.1, 100);
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP_Y);
 
@@ -117,11 +133,23 @@ export class BoardView {
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
     const cam = key.shadow.camera as THREE.OrthographicCamera;
-    cam.left = -1.8; cam.right = 1.8; cam.top = 1.8; cam.bottom = -1.8;
+    cam.left = -2.8; cam.right = 2.8; cam.top = 2.8; cam.bottom = -2.8;
     cam.near = 0.5; cam.far = 12;
     key.shadow.bias = -0.0008;
     this.scene.add(key);
-    this.scene.add(new THREE.HemisphereLight(0xdfe6f2, 0x2a2118, 1.05));
+    // Weaker than it was: fill is the enemy of the shadow that makes the
+    // board sit on the table rather than float over it.
+    this.scene.add(new THREE.HemisphereLight(0xcfd8e6, 0x170e07, 0.72));
+
+    // The table. The board is an object put down on something now, and this
+    // is what its shadow falls on.
+    const table = new THREE.Mesh(
+      new THREE.PlaneGeometry(2 * HALF * TABLE, 2 * HALF * TABLE).rotateX(-Math.PI / 2),
+      new THREE.MeshStandardMaterial({ map: tableTexture(), roughness: 0.78, metalness: 0 }),
+    );
+    table.position.y = -0.002;  // a hair under the board, so they never z-fight
+    table.receiveShadow = true;
+    this.scene.add(table);
     // A second, dimmer light from behind. Without it the dark pieces on the
     // near rank are a black hole: their lit side faces away from the camera.
     const rim = new THREE.DirectionalLight(0xbcd2ff, 0.55);
@@ -153,7 +181,9 @@ export class BoardView {
       this.boardMesh.geometry.dispose();
     }
     const top = new THREE.MeshStandardMaterial({ map: boardTexture(this.seat), roughness: 0.66, metalness: 0 });
-    const side = new THREE.MeshStandardMaterial({ color: 0x4a2c16, roughness: 0.75 });
+    // The edge of the board, with its own grain — visible now that the slab
+    // is thick enough to see.
+    const side = new THREE.MeshStandardMaterial({ map: edgeTexture(0x6a3f1e), roughness: 0.7, metalness: 0 });
     // BoxGeometry's material slots are +x, −x, +y, −y, +z, −z: only the top
     // (+y) carries the squares.
     this.boardMesh = new THREE.Mesh(
@@ -161,6 +191,7 @@ export class BoardView {
       [side, side, top, side, side, side],
     );
     this.boardMesh.position.y = TOP_Y / 2;
+    this.boardMesh.castShadow = true;
     this.boardMesh.receiveShadow = true;
     this.scene.add(this.boardMesh);
     this.dirty = true;
@@ -426,33 +457,16 @@ export class BoardView {
     if (side === this.seat) return;
     this.seat = side;
     this.buildBoard();
-    this.resetCamera();
+    // The camera moves to the other end of the table with the player. This is
+    // the one thing that moves it, and it is a rule of the game rather than a
+    // control: see POLAR_DEG.
+    this.frame();
   }
 
   private get baseAzimuth(): number { return this.seat === 'white' ? 0 : Math.PI; }
 
-  orbit(dAzimuth: number, dPolar: number): void {
-    this.azimuth += dAzimuth;
-    this.polar = THREE.MathUtils.clamp(
-      this.polar + dPolar,
-      THREE.MathUtils.degToRad(MIN_POLAR_DEG),
-      THREE.MathUtils.degToRad(MAX_POLAR_DEG),
-    );
-    this.frame();
-  }
 
-  zoomBy(factor: number): void {
-    this.zoom = THREE.MathUtils.clamp(this.zoom * factor, 0.8, 3);
-    this.frame();
-  }
 
-  /** Back to the view the game opens on, for whichever seat it is. */
-  resetCamera(): void {
-    this.azimuth = 0;
-    this.polar = THREE.MathUtils.degToRad(DEFAULT_POLAR_DEG);
-    this.zoom = 1;
-    this.frame();
-  }
 
   /**
    * Keep this many pixels on the right clear.
@@ -467,10 +481,10 @@ export class BoardView {
   }
 
   /**
-   * Re-derive the camera from azimuth/polar/zoom and the viewport.
+   * Re-derive the camera from the seat and the viewport.
    *
    * With a perspective camera the framing is the DISTANCE, not a frustum: back
-   * off until the board fits, then divide by the zoom. The fit measures where
+   * off until the board fits. The fit measures where
    * the CORNERS actually land, rather than backing off far enough for the
    * bounding sphere — a board seen from above covers a square, not a circle,
    * and a sphere fit leaves a third of the screen empty.
@@ -487,7 +501,7 @@ export class BoardView {
     const usable = Math.max(1, w - this.insetRight);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * (usable / h));
     const need = HALF * Math.SQRT2 * 1.06;
-    let r = Math.max(need / Math.tan(vFov / 2), need / Math.tan(hFov / 2)) / this.zoom;
+    let r = Math.max(need / Math.tan(vFov / 2), need / Math.tan(hFov / 2));
 
     const az = this.baseAzimuth + this.azimuth;
     const sp = Math.sin(this.polar), cp = Math.cos(this.polar);
@@ -517,7 +531,9 @@ export class BoardView {
       }
       if (!Number.isFinite(worst) || worst <= 0) break;
       // 0.94 leaves a little air so nothing touches an edge of the screen.
-      r *= worst / 0.94;
+      // 0.86: the board is on a table, and some of the table has to be in
+      // frame or it is not a table, it is a backdrop.
+      r *= worst / 0.86;
       put(r);
     }
   }
@@ -610,5 +626,94 @@ function boardTexture(seat: Side): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
+  return tex;
+}
+
+/**
+ * The table the board sits on.
+ *
+ * Dark walnut, drawn rather than photographed so it costs nothing to ship and
+ * can be lit by the same lamp as everything else. Three things make it read
+ * as wood rather than as brown: long grain that runs one way, a few darker
+ * streaks that do not, and a vignette so the corners of the room fall away.
+ */
+function tableTexture(): THREE.CanvasTexture {
+  const px = 1024;
+  const c = document.createElement('canvas');
+  c.width = c.height = px;
+  const ctx = c.getContext('2d')!;
+
+  ctx.fillStyle = '#3b2a1d';
+  ctx.fillRect(0, 0, px, px);
+
+  // Grain: many fine lines along one axis, with slow waves, so the eye reads a
+  // direction. Dark board, dark table — the contrast between them is the
+  // board's edge and its shadow, not their colours.
+  for (let i = 0; i < 520; i++) {
+    const y = Math.random() * px;
+    const dark = Math.random() < 0.55;
+    ctx.strokeStyle = dark
+      ? `rgba(26,17,10,${0.10 + Math.random() * 0.16})`
+      : `rgba(120,86,56,${0.05 + Math.random() * 0.10})`;
+    ctx.lineWidth = 0.6 + Math.random() * 2.6;
+    ctx.beginPath();
+    ctx.moveTo(-10, y);
+    ctx.bezierCurveTo(px * 0.3, y + (Math.random() - 0.5) * 40, px * 0.7, y + (Math.random() - 0.5) * 40, px + 10, y + (Math.random() - 0.5) * 18);
+    ctx.stroke();
+  }
+  // A few knots' worth of darker cloud, so the grain is not a barcode.
+  for (let i = 0; i < 14; i++) {
+    const x = Math.random() * px, y = Math.random() * px;
+    const r = px * (0.06 + Math.random() * 0.12);
+    const blob = ctx.createRadialGradient(x, y, 0, x, y, r);
+    blob.addColorStop(0, 'rgba(22,14,8,0.22)');
+    blob.addColorStop(1, 'rgba(22,14,8,0)');
+    ctx.fillStyle = blob;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  // The room falling away at the edges. Baked in rather than lit, because a
+  // light that did this would also darken the board.
+  const vignette = ctx.createRadialGradient(px / 2, px / 2, px * 0.18, px / 2, px / 2, px * 0.62);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.72)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, px, px);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+/** The board's own edge: end grain, lighter than the table it stands on. */
+function edgeTexture(base = 0xc99a5d): THREE.CanvasTexture {
+  const px = 256;
+  const c = document.createElement('canvas');
+  c.width = px;
+  c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = `#${base.toString(16).padStart(6, '0')}`;
+  ctx.fillRect(0, 0, px, 64);
+  for (let i = 0; i < 90; i++) {
+    const y = Math.random() * 64;
+    ctx.strokeStyle = `rgba(${90 + Math.random() * 40},${60 + Math.random() * 30},${30 + Math.random() * 20},${0.06 + Math.random() * 0.12})`;
+    ctx.lineWidth = 0.5 + Math.random() * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(px, y + (Math.random() - 0.5) * 6);
+    ctx.stroke();
+  }
+  // The underside of the board is in its own shadow; the top edge catches the
+  // lamp. A vertical gradient is the cheapest way to say both.
+  const shade = ctx.createLinearGradient(0, 0, 0, 64);
+  shade.addColorStop(0, 'rgba(255,240,215,0.18)');
+  shade.addColorStop(1, 'rgba(20,12,6,0.42)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, px, 64);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
   return tex;
 }

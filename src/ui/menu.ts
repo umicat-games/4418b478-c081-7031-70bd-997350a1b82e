@@ -31,7 +31,6 @@ export interface MenuOptions {
   onHint(): void;
   onTakeback(): void;
   onResign(): void;
-  onRecentre(): void;
   onTitle(): void;
   onMusic(on: boolean): void;
   onSound(on: boolean): void;
@@ -168,7 +167,6 @@ export class Menu {
       act('btn.hint', this.opts.onHint);
       act('btn.takeback', this.opts.onTakeback);
       act('btn.resign', this.opts.onResign);
-      act('btn.recentre', this.opts.onRecentre);
       this.el.appendChild(actions);
     }
 
