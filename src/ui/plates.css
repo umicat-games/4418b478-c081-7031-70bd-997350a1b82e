@@ -1,0 +1,179 @@
+/* The two seats at the table.
+ *
+ * No box. The HUD in the corner is bare text with a shadow over the wood, and
+ * a panel out here would be the heaviest thing on a screen whose subject is a
+ * board — the empty wood either side of a square board on a wide screen is not
+ * a hole to be filled, it is the table. So: a face, a name, the colour, and the
+ * numbers that belong to that player.
+ *
+ * It is laid out ACROSS rather than down, and mirrored, because that is the
+ * shape of the space: the gap beside a board is wide and not tall, and two
+ * players sitting at a table face each other. */
+
+#plates {
+  position: fixed;
+  inset: 0;
+  z-index: 18; /* under #chat (25) and #hud (20), over the platform layer (10) */
+  pointer-events: none; /* a seat is not a button */
+  font: 15px/1.4 system-ui, -apple-system, sans-serif;
+  color: #f4f5f7;
+}
+
+/* Hidden, not removed, in the three states where there is no room or no game:
+   the panel open (it takes the right-hand side and reframes the board into the
+   left), the title screen up, and a screen too narrow to seat anybody — which
+   `place()` decides by measuring the BOARD, because it is the board's width
+   that closes the gap and not the window's. */
+#plates[hidden],
+body.chatting #plates,
+body.titling #plates { display: none; }
+
+#plates .seat {
+  position: absolute;
+  width: 224px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+#plates .seat[hidden] { display: none; }
+/* The right-hand player faces the other way: picture outside, words inward. */
+#plates .seat.right { flex-direction: row-reverse; text-align: right; }
+
+/* ── the face ─────────────────────────────────────────────────────────── */
+
+#plates .face {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(18, 21, 28, 0.55);
+  box-shadow:
+    0 3px 14px rgba(0, 0, 0, .5),
+    inset 0 0 0 2px rgba(255, 255, 255, .18);
+  display: grid;
+  place-items: center;
+  /* The ring is what says whose turn it is, so it is the thing that moves. */
+  transition: box-shadow .3s ease;
+}
+#plates .face img {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+/* No avatar: the initial, or a shape. A broken-image icon in a nameplate is
+   worse than no picture at all. */
+#plates .face .letter {
+  font: 700 28px/1 system-ui, sans-serif;
+  color: #e8e4dc;
+  opacity: .85;
+}
+#plates .face svg {
+  width: 34px; height: 34px;
+  fill: none; stroke: #e8e4dc; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+  opacity: .8;
+}
+
+/* Whose move it is. Accent ring plus a soft halo — visible on dark wood
+   without adding a second light source to the picture. */
+#plates .seat.active .face {
+  box-shadow:
+    0 3px 14px rgba(0, 0, 0, .5),
+    0 0 0 3px rgba(127, 214, 194, .85),
+    0 0 20px rgba(127, 214, 194, .32);
+}
+
+/* ── the words ────────────────────────────────────────────────────────── */
+
+#plates .text { min-width: 0; }
+
+#plates .line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#plates .seat.right .line { flex-direction: row-reverse; }
+
+#plates .name {
+  font-weight: 650;
+  font-size: 19px;
+  text-shadow: 0 2px 7px rgba(0, 0, 0, .65);
+  /* One line. A long platform name is trimmed rather than allowed to wrap into
+     a paragraph beside the board. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#plates .meta {
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: .74;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Keep the line whether or not it has anything in it, so the two seats stay
+     level with each other and nothing jumps when a number appears. */
+  min-height: 19px;
+}
+
+/* ── the stone ────────────────────────────────────────────────────────── */
+
+/* Which colour this player is, said the way the game says it: with a stone,
+   beside the name rather than on top of anything. The gradients are the
+   board's own — the light comes from the top left out there too. */
+#plates .stone {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  /* The light ring is not decoration: a BLACK stone against dark wood is one
+     dark circle on another, and the badge that was supposed to say "you are
+     black" said nothing at all. The white one never needed it, which is
+     exactly why it was easy to miss. */
+  box-shadow:
+    0 0 0 2px rgba(238, 236, 230, .5),
+    0 2px 6px rgba(0, 0, 0, .55),
+    inset 0 0 0 1.5px rgba(0, 0, 0, .3);
+}
+/* Xiangqi pieces are wooden discs with a character on them, and the two sides
+   are told apart by the INK, not by the disc. So the badge is the disc colour
+   with a coloured rim — red for 红, black for 黑. */
+#plates .stone {
+  background: radial-gradient(circle at 34% 30%, #f6e3bd 0%, #e6cd9c 50%, #c2a674 100%);
+}
+/* The shell's two colour names are `black` and `white`; in THIS game they are
+   黑 and 红, and `white` is the red side. Renaming them per game would mean a
+   different seat module per game, which is a worse trade than one sentence. */
+#plates .stone.black { box-shadow: 0 0 0 2px rgba(32, 30, 28, .95), 0 2px 6px rgba(0, 0, 0, .55); }
+#plates .stone.white { box-shadow: 0 0 0 2px rgba(190, 58, 48, .95), 0 2px 6px rgba(0, 0, 0, .55); }
+
+/* ── when the gap narrows ─────────────────────────────────────────────── */
+
+/* One step down rather than a dozen — and the step is a STACK, not a squeeze.
+   The seat laid out across needs about 220px; made narrow it kept the shape
+   and lost the words instead, which on a 1000px window read "PW Te…" and
+   "Steady · 0 ca…". A column fits a narrow gap because that is the shape of a
+   narrow gap. Below this the seats leave entirely. */
+#plates.tight .seat {
+  width: 136px;
+  flex-direction: column;
+  gap: 7px;
+  text-align: center;
+}
+#plates.tight .seat.right { flex-direction: column; text-align: center; }
+#plates.tight .face { width: 54px; height: 54px; }
+#plates.tight .face .letter { font-size: 22px; }
+#plates.tight .face svg { width: 26px; height: 26px; }
+#plates.tight .name { font-size: 15px; }
+#plates.tight .stone { width: 16px; height: 16px; }
+/* Two short lines beat one clipped one when the column is this narrow. */
+#plates.tight .meta {
+  font-size: 12.5px;
+  white-space: normal;
+  line-height: 1.35;
+  min-height: 0;
+}
