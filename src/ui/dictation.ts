@@ -36,6 +36,16 @@ export interface DictationHandlers {
  * `SFSpeechRecognizer(locale:)` and Android's `EXTRA_LANGUAGE` all listen for
  * exactly the one language they are given, so getting this wrong does not
  * degrade — it returns confident nonsense.
+ *
+ * **And the setting is the whole answer — deliberately.** Two alternatives
+ * were considered and both turned down (2026-09-22): following the language
+ * of the CONVERSATION would move the microphone under the player without
+ * being asked, and a microphone that keeps changing what it listens for is
+ * worse than one that is occasionally wrong in a way you can predict; a
+ * separate mic-language SETTING would be one more thing to find and get
+ * wrong, and no other app on the phone asks for it. The system language is
+ * what every other dictation on the device follows, so it is also what the
+ * player already expects. Do not make this dynamic.
  */
 export function speechLang(tag: string): string {
   const t = (tag || '').toLowerCase();
