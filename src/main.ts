@@ -38,6 +38,7 @@ import { PointActions } from './ui/pointactions';
 import { AskHere } from './ui/askhere';
 import { showTitle } from './ui/title';
 import { GameOver } from './ui/gameover';
+import { Plates } from './ui/plates';
 import { underCurtain } from './ui/curtain';
 import { Autosave, load } from './save';
 import { SFX, createAudio, playStone } from './audio';
@@ -120,6 +121,9 @@ async function start(): Promise<void> {
   });
 
   /** Confirm / cancel / ask, beside the stone rather than in a corner. */
+  /** The two seats either side of the board — furniture, filled by `refresh()`. */
+  const plates = new Plates();
+
   const actions = new PointActions({
     onConfirm: (at) => commit(at),
     onCancel: () => view.setGhost(null, HUMAN),
@@ -164,6 +168,18 @@ async function start(): Promise<void> {
   let engineReady = false;
   void loading.then(() => { engineReady = true; }).catch(() => { engineReady = true; });
 
+  /**
+   * The board size the seats are measured against, and the reason it is a
+   * variable rather than a read of `game`.
+   *
+   * The render loop below runs from the very first frame — long before `let
+   * game` exists — so anything it touches has to be declared up here or it is
+   * a `ReferenceError` that takes the whole game down at boot with a blank
+   * screen. This is the third time in this family. Zero means "no board yet,
+   * nothing to seat".
+   */
+  let seatedSize = 0;
+
   const frame = (): void => {
     if (performance.now() < repaintUntil) view.invalidate();
     // Only when the picture actually changed. Between two moves a Go board is
@@ -173,6 +189,7 @@ async function start(): Promise<void> {
       if (speech.showing) placeSpeech();
       if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
       if (askHere.showing && askHere.at) askHere.place(view.screenOf(askHere.at.x, askHere.at.y), view.screenSpacing);
+      seatPlates();
     }
     requestAnimationFrame(frame);
   };
@@ -456,8 +473,52 @@ async function start(): Promise<void> {
     };
   }
 
+  /**
+   * Put the two seats against the board's own edges.
+   *
+   * The edges are taken from the grid plus one line spacing, which is what the
+   * wooden margin around the grid is — measured rather than assumed, so it
+   * stays right on a 9x9 and a 19x19 and while the board is reframing around
+   * an open panel.
+   */
+  function seatPlates(): void {
+    if (!seatedSize) return;
+    const last = seatedSize - 1;
+    const mid = (seatedSize - 1) / 2;
+    const step = view.screenSpacing;
+    const a = view.screenOf(0, Math.round(mid));
+    const b = view.screenOf(last, Math.round(mid));
+    plates.place(a.x - step, b.x + step, view.screenOf(Math.round(mid), Math.round(mid)).y);
+  }
+
+  /** Who is sitting where. The player is on the left, which is the side their
+   *  own status line and gear are already on. */
+  function fillPlates(): void {
+    if (!game) { seatedSize = 0; plates.hide(); return; }
+    seatedSize = game.size;
+    const me = umicat.user;
+    const yourTurn = !game.over && game.toPlay === HUMAN && !thinking;
+    plates.set(
+      {
+        name: me?.name || t('plate.you'),
+        avatar: me?.avatar ?? null,
+        colour: HUMAN,
+        stat: t('plate.captures', { n: game.captures[HUMAN] }),
+        active: yourTurn,
+      },
+      {
+        name: t('plate.engine'),
+        colour: HUMAN === 'black' ? 'white' : 'black',
+        stat: thinking ? t('plate.thinking') : t('plate.captures', { n: game.captures.white }),
+        active: !game.over && !yourTurn,
+      },
+    );
+    seatPlates();
+  }
+
   function refresh(): void {
     if (game) view.sync(game);
+    fillPlates();
     if (!game) { status.textContent = ''; tip.textContent = ''; return; }
     if (game.over) {
       status.textContent = score

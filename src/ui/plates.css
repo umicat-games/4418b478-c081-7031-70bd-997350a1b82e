@@ -1,0 +1,145 @@
+/* The two seats at the table.
+ *
+ * No box. The HUD in the corner is bare text with a shadow over the wood, and
+ * a panel out here would be the heaviest thing on a screen whose subject is a
+ * board — the empty wood either side of a square board on a wide screen is not
+ * a hole to be filled, it is the table. So: a face, a name, and the one number
+ * that belongs to that player. */
+
+#plates {
+  position: fixed;
+  inset: 0;
+  z-index: 18; /* under #chat (25) and #hud (20), over the platform layer (10) */
+  pointer-events: none; /* a seat is not a button */
+  font: 15px/1.4 system-ui, -apple-system, sans-serif;
+  color: #f4f5f7;
+}
+
+/* Hidden, not removed, in the three states where there is no room or no game:
+   the panel open (it takes the right-hand side and reframes the board into the
+   left), the title screen up, and a screen too narrow to seat anybody — which
+   `place()` decides by measuring, because it is the board's width that matters
+   and not the window's. */
+#plates[hidden],
+body.chatting #plates,
+body.titling #plates { display: none; }
+
+#plates .seat {
+  position: absolute;
+  top: 50%;
+  width: 132px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+  transition: opacity .25s ease;
+}
+#plates .seat[hidden] { display: none; }
+
+/* ── the face ─────────────────────────────────────────────────────────── */
+
+#plates .face {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(18, 21, 28, 0.55);
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, .45),
+    inset 0 0 0 2px rgba(255, 255, 255, .18);
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  /* The ring is what says whose turn it is, so it is the thing that moves. */
+  transition: box-shadow .3s ease;
+}
+#plates .face img {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+/* No avatar: the initial, or a shape. A broken image icon in a nameplate is
+   worse than no picture at all. */
+#plates .face .letter {
+  font: 700 22px/1 system-ui, sans-serif;
+  color: #e8e4dc;
+  opacity: .85;
+}
+#plates .face svg {
+  width: 26px; height: 26px;
+  fill: none; stroke: #e8e4dc; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+  opacity: .8;
+}
+
+/* Whose move it is. Accent ring plus a soft halo — visible on dark wood
+   without adding a second light source to the picture. */
+#plates .seat.active .face {
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, .45),
+    0 0 0 3px rgba(127, 214, 194, .85),
+    0 0 18px rgba(127, 214, 194, .35);
+}
+
+/* ── the stone ────────────────────────────────────────────────────────── */
+
+/* Which colour this player is, said the way the game says it: with a stone.
+   A badge on the face rather than a line of text, because "you are black" is
+   one glance and not one sentence. The gradients are the board's own — the
+   light comes from the top left out there too. */
+#plates .stone {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  /* A light ring around the stone, and it is not decoration: a BLACK stone on
+     the dark face disc is one dark circle on another, and the badge that was
+     supposed to say "you are black" said nothing at all. The white one never
+     needed it, which is exactly why it was easy to miss. */
+  box-shadow:
+    0 0 0 2px rgba(238, 236, 230, .55),
+    0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 0 0 1.5px rgba(0, 0, 0, .3);
+}
+#plates .stone.black {
+  background: radial-gradient(circle at 34% 30%, #55585f 0%, #24262b 46%, #101114 100%);
+}
+#plates .stone.white {
+  background: radial-gradient(circle at 34% 30%, #ffffff 0%, #ece7dc 46%, #bdb6a6 100%);
+}
+
+/* ── the words ────────────────────────────────────────────────────────── */
+
+#plates .name {
+  font-weight: 650;
+  font-size: 15px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+  /* One line. A long platform name is trimmed rather than allowed to wrap into
+     a paragraph beside the board. */
+  max-width: 132px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#plates .stat {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: .72;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .55);
+  /* Reserve the line whether or not it has anything in it, so the two seats
+     stay level with each other and nothing jumps when a number appears. */
+  min-height: 18px;
+}
+
+/* A phone in landscape has seats, but smaller ones. */
+@media (max-height: 460px) {
+  #plates .seat { width: 108px; gap: 5px; }
+  #plates .face { width: 44px; height: 44px; }
+  #plates .stone { width: 18px; height: 18px; }
+  #plates .name { font-size: 13px; }
+  #plates .stat { font-size: 12px; min-height: 16px; }
+}
