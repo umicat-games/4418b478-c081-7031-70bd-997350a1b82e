@@ -327,8 +327,14 @@ const ABSORB_RADIUS = 1.35;
 /** How close an orb of your OWN colour has to be before it starts coming to
  *  you, and how hard it is pulled.
  *
- *  Twice the absorb radius, so there is a visible stretch where the orb is
- *  curving in and has not arrived. That stretch is the point: it turns
+ *  Comfortably more than twice the absorb radius, so there is a long visible
+ *  stretch where the orb is curving in and has not arrived.
+ *
+ *  It is bounded by the BOARD, not by taste: the playfield is 4.3 deep from
+ *  the middle, so at 3.3 the ring already covers three quarters of the way to
+ *  the near or far wall. Much past this and every orb of your colour arrives
+ *  wherever you stand, which takes the positioning out of a game whose only
+ *  input is where you are standing. That stretch is the point: it turns
  *  "standing in the right place" into "standing NEAR the right place", which
  *  is a much more forgiving thing to ask of a player who is also dodging the
  *  other colour, and it says which orbs are yours without a single icon —
@@ -339,7 +345,7 @@ const ABSORB_RADIUS = 1.35;
  *  curves cannot be dodged by reading its line. This is also why the pull is
  *  not symmetric-looking: an orb swerving towards you is unambiguously good
  *  news, every time, with no case where it is the opposite. */
-const ATTRACT_RADIUS = 2.8;
+const ATTRACT_RADIUS = 3.3;
 /** How hard the orb is TURNED towards you, per second, at the centre.
  *
  *  Steering, not acceleration. Acceleration was the first model and it does
@@ -357,14 +363,30 @@ const ATTRACT_RADIUS = 2.8;
  *  chosen so the edge would be gentle, and gentle at the edge is precisely
  *  where the capture failed. */
 const ATTRACT_TURN = 7.5;
-/** How much faster a pulled orb travels at the centre. Small — it is here so
- *  the orb visibly hurries the last half-metre, not so it arrives early. */
-const ATTRACT_SPEEDUP = 0.5;
+/** How much faster a pulled orb ends up travelling, at the centre of the ring.
+ *
+ *  **It ACCELERATES.** This was a per-frame nudge of half a percent — dressed
+ *  as a speedup and delivering about a quarter of one over a whole approach,
+ *  which is a number and not a feeling. An orb that turns towards you and then
+ *  coasts in at the speed it was fired reads as a bullet that changed its mind,
+ *  not as something being pulled.
+ *
+ *  The speed is chased towards `BULLET_SPEED × (1 + SPEEDUP·k²)` at
+ *  `ATTRACT_ACCEL` per second, so it is slow at the edge of the ring and
+ *  snapping home by the time it arrives. `k²` rather than `k` because the
+ *  acceleration is the thing being felt: linear would have it already fast
+ *  where it is only just caught, and the moment worth selling is the last
+ *  half-metre. */
+const ATTRACT_SPEEDUP = 2.6;
+/** How quickly it reaches that speed. Chased rather than set, or an orb
+ *  entering the ring jumps to its new speed on one frame, which reads as a
+ *  teleport rather than as a pull. */
+const ATTRACT_ACCEL = 7;
 /** And a ceiling on how fast a pulled orb may end up going. Without it a long
  *  approach accelerates into something that crosses the absorb radius between
  *  two frames — which the swept test would still catch, but which looks like
  *  the orb teleporting into you. */
-const ATTRACT_MAX_SPEED = BULLET_SPEED * 2.2;
+const ATTRACT_MAX_SPEED = BULLET_SPEED * 3.6;
 
 /** The boss's fan: how many pellets, and how far apart.
  *
@@ -4823,9 +4845,27 @@ export async function startLevel(
           // dropped coin is moved — makes it change into a different object
           // that walks towards you.
           if (d > ABSORB_RADIUS && d <= ATTRACT_RADIUS) {
-            const k = 1 - d / ATTRACT_RADIUS;
-            const speed = Math.min(ATTRACT_MAX_SPEED,
-              bu.vel.length() * (1 + ATTRACT_SPEEDUP * k * dt));
+            // How far through the PULL it is — 0 where it is caught, 1 where
+            // it is about to be taken.
+            //
+            // It was `1 - d / ATTRACT_RADIUS`, which never reaches 1 and is
+            // not close: an orb is absorbed at 1.35 of a 3.3 ring, so that k
+            // topped out at 0.59 and every curve shaped by it — the turn, the
+            // speed, the swell — only ever ran a third of its length. Every
+            // one of those was tuned against a number that could not happen.
+            const k = (ATTRACT_RADIUS - d) / (ATTRACT_RADIUS - ABSORB_RADIUS);
+            // Chase a target speed rather than scale the current one. Scaling
+            // compounds whatever the orb happened to be doing, so a slow shot
+            // stayed slow all the way in and a boss's pellet arrived faster
+            // than the hero could see; a target is the same arrival either way.
+            const want = Math.min(ATTRACT_MAX_SPEED,
+              BULLET_SPEED * (1 + ATTRACT_SPEEDUP * k * k));
+            const cur = bu.vel.length();
+            const speed = cur + (want - cur) * Math.min(1, ATTRACT_ACCEL * dt);
+            // And it SWELLS as it comes, which is the cue that costs nothing:
+            // the material is shared between every orb of a pole, so brightness
+            // cannot be per-orb, but a transform is free.
+            bu.obj.scale.setScalar(1 + 0.42 * k);
             // Aim at the hero's chest, not their feet: an orb steered at
             // ground level dips under a model that is 0.72 tall and is
             // absorbed from somewhere nobody is looking.
@@ -4834,6 +4874,16 @@ export async function startLevel(
                       hero.position.z - bu.obj.position.z)
               .normalize().multiplyScalar(speed);
             bu.vel.lerp(_pull, Math.min(1, ATTRACT_TURN * k * dt));
+            // **The direction comes from the lerp; the SPEED is set after it.**
+            //
+            // Blending two vectors that point different ways gives one shorter
+            // than either — vector averaging, and the harder the turn the more
+            // it loses. So the tighter the orb curved the slower it got, which
+            // cancelled the acceleration exactly where the acceleration was
+            // supposed to be felt. Measured before this line existed: 4.09 a
+            // second out at the edge and 3.78 closing in, on a pull that was
+            // meant to nearly double.
+            bu.vel.setLength(speed);
           }
           if (d <= ABSORB_RADIUS) {
             absorb(bu.obj.position);
@@ -5143,7 +5193,7 @@ export async function startLevel(
         x: +e.obj.position.x.toFixed(3), z: +e.obj.position.z.toFixed(3),
       })),
       orbs: () => bullets.map((b) => ({
-        pole: b.pole, damage: b.damage,
+        pole: b.pole, damage: b.damage, scale: +b.obj.scale.x.toFixed(3),
         x: +b.obj.position.x.toFixed(3), z: +b.obj.position.z.toFixed(3),
         d: +Math.hypot(b.obj.position.x - hero.position.x,
                        b.obj.position.z - hero.position.z).toFixed(3),

@@ -64,6 +64,33 @@ dodging is the only answer to it and a bullet that curves cannot be dodged by
 reading its line. It also means an orb swerving at you is unambiguously good
 news every time, with no case where it is the opposite.
 
+**It accelerates, and it swells.** The speed is chased towards
+`BULLET_SPEED × (1 + 2.6·k²)` at 7 per second, so an orb is barely hurried
+where it is caught and snapping home by the time it arrives — measured, 4.3 a
+second at the edge of the ring against 8.0 closing in. It also scales up to
+1.4×, which is the cue that costs nothing: the material is shared between every
+orb of a pole so brightness cannot be per-orb, but a transform is free.
+
+Three things had to be right for any of that to be felt, and two of them were
+silently wrong:
+
+- **`k` never reached 1, and not by a little.** It was `1 - d / ATTRACT_RADIUS`
+  — but an orb is absorbed at 1.35 of a 3.3 ring, so it topped out at 0.59 and
+  every curve shaped by it ran a third of its length. It is normalised across
+  the range the pull actually occupies, `(ATTRACT_RADIUS - d) / (ATTRACT_RADIUS
+  - ABSORB_RADIUS)`, so 0 is caught and 1 is about to be taken.
+- **The direction comes from the lerp; the SPEED is set after it.** Blending
+  two vectors that point different ways gives one shorter than either — vector
+  averaging — so the harder the orb curved the slower it got, cancelling the
+  acceleration exactly where it was meant to be felt. Measured before
+  `setLength`: 4.09 a second at the edge and 3.78 closing in, on a pull that
+  was supposed to nearly double.
+- And the radius is 3.3, which is bounded by the BOARD rather than by taste:
+  the playfield is 4.3 deep from the middle, so the ring already covers three
+  quarters of the way to the wall. Much past this and every orb of your colour
+  arrives wherever you stand, which takes the positioning out of a game whose
+  only input is where you are standing.
+
 **Steering, not acceleration, and the difference is a capture.** Acceleration
 was the first model: add force towards the hero, scaled `k²` so the edge is
 gentle. Measured, an orb entering the ring 2.1 out bent 1.4 off its line and
@@ -768,6 +795,14 @@ Four lessons from writing them, all of which cost a run:
   which put two handles INSIDE a comment: `tsc` clean, build clean, bundle
   missing them, probe dead. `npx tsc --noEmit` and `npx vite build` answer
   different questions — run both.
+- **Polling from the driver takes its samples in the wrong places.** Each
+  `page.evaluate` is a round trip costing far more than the interval it is
+  asked for, so a driver-side loop spreads a handful of samples over the whole
+  event — and a pulled orb moves fastest at the end, so the samples that go
+  missing are exactly the ones the thing under test lives in. The pull probe
+  recorded ZERO samples inside 1.8 units of the hero, on a pull that plainly
+  worked, and reported it broken. It samples in a `requestAnimationFrame` loop
+  inside the page now and reads the array once.
 - **A threshold in PIXELS is a threshold that goes stale when the camera
   moves.** `verify-3d-polarity-colour` counted the hero's coloured pixels
   against an absolute floor, which was right under a follow camera and became a
