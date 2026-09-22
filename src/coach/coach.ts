@@ -358,11 +358,25 @@ function observe(game: GoGame | null, read: Read | null, profile: Profile): unkn
     ...base,
     game: {
       board_size: game.size,
-      // Row 1 is the TOP of the board, so row indices match the letters-and-
-      // numbers the coach speaks in only after the conversion in coords.ts.
-      // Given as `.`/`b`/`w` because a picture of the position beats any
-      // list of moves for a model trying to answer "is this group alive".
+      // A picture of the position beats any list of moves for a model trying
+      // to answer "is this group alive".
       position: game.board.map((row) => row.map((c) => (c === 'black' ? 'b' : c === 'white' ? 'w' : '.')).join('')),
+      /**
+       * How to read it — SAID OUT LOUD, not left as a comment in this file.
+       *
+       * It used to be a comment, and the model was left to work out for
+       * itself which end of the picture was the top and which character was
+       * the student. It does not work it out; it guesses, and then it narrates
+       * the guess. Reported from a real game: "the engine wants D8 — that is
+       * where most of your stones are", with every black stone on the other
+       * side of the board.
+       */
+      legend: `Each string is one row. The FIRST row printed is the TOP of the board — `
+        + `row ${game.size} — and the LAST is row 1. The first character of every row is `
+        + `column A, the last is column ${'ABCDEFGHJKLMNOPQRST'[game.size - 1]}; columns skip `
+        + `the letter I, as Go boards always do. So the top-left corner is A${game.size} and `
+        + `the bottom-left is A1. "b" is the student, playing Black. "w" is you, playing White. `
+        + `"." is an empty point.`,
       student_plays: 'black',
       to_play: game.toPlay,
       move_number: game.turns.length,
