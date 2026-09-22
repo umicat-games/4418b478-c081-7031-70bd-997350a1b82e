@@ -200,3 +200,13 @@ handled; `audio.play()` before the first tap is simply a no-op.
 
 **UI is DOM.** There is no reason to draw a score with triangles on the web;
 `index.html` has a `#hud` div for exactly this.
+
+## Current status
+
+Base scaffold: a walled arena, a controllable character (walk / run / jump /
+attack, follow camera), and a scatter of kit props (trees, rocks, crates, a
+barrel, a coin, a flag, a ladder, a platform, a spring). No game mechanic,
+scoring or goal is wired up yet.
+
+Latest change: removed the "Hello, <name>" greeting text that was written into
+the HUD on start — the top-left corner of the screen is now empty by default.
