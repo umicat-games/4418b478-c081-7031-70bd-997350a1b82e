@@ -159,7 +159,10 @@ for the game saying no.
 the exception and belongs to the assistant.
 
 **`ai` and `microphone` must be declared** in the game's Settings on the
-platform, or the backend rejects AI calls and the iframe blocks the mic.
+platform, or the backend rejects AI calls and the iframe blocks the mic. Both
+are declared for this game (2026-09-22). If the assistant ever goes silent
+here, check that first: a missing declaration is a **403** from the backend,
+which is not the same thing as a 401 and does not mean anybody is signed out.
 
 ## Building and checking
 
