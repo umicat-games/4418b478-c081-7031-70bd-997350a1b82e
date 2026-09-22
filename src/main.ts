@@ -6,6 +6,8 @@ import {
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 
+// Rebuild trigger comment
+
 /**
  * A 3D Umicat game.
  *
