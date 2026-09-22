@@ -484,11 +484,14 @@ async function start(): Promise<void> {
   function seatPlates(): void {
     if (!seatedSize) return;
     const last = seatedSize - 1;
-    const mid = (seatedSize - 1) / 2;
-    const step = view.screenSpacing;
-    const a = view.screenOf(0, Math.round(mid));
-    const b = view.screenOf(last, Math.round(mid));
-    plates.place(a.x - step, b.x + step, view.screenOf(Math.round(mid), Math.round(mid)).y);
+    const mid = Math.round((seatedSize - 1) / 2);
+    // Half a line spacing outside the grid is the wooden margin — the board's
+    // real edge, measured rather than assumed, so it stays right on a 9x9 and
+    // a 19x19 and while the board is reframing around an open panel.
+    const edge = view.screenSpacing * 0.6;
+    const l = view.screenOf(0, mid), r = view.screenOf(last, mid);
+    const t = view.screenOf(mid, 0), b = view.screenOf(mid, last);
+    plates.place({ left: l.x - edge, right: r.x + edge, top: t.y - edge, bottom: b.y + edge });
   }
 
   /** Who is sitting where. The player is on the left, which is the side their
@@ -503,13 +506,18 @@ async function start(): Promise<void> {
         name: me?.name || t('plate.you'),
         avatar: me?.avatar ?? null,
         colour: HUMAN,
-        stat: t('plate.captures', { n: game.captures[HUMAN] }),
+        meta: t('plate.captures', { n: game.captures[HUMAN] }),
         active: yourTurn,
       },
       {
         name: t('plate.engine'),
         colour: HUMAN === 'black' ? 'white' : 'black',
-        stat: thinking ? t('plate.thinking') : t('plate.captures', { n: game.captures.white }),
+        // How hard it is playing belongs to the opponent, not to the status
+        // line in the player's own corner — that is a property of who you are
+        // sitting across from.
+        meta: thinking
+          ? t('plate.thinking')
+          : `${levelLabel(level.id)} · ${t('plate.captures', { n: game.captures.white })}`,
         active: !game.over && !yourTurn,
       },
     );
@@ -943,6 +951,7 @@ async function start(): Promise<void> {
       hint,
       finish,
       toTitle: () => toTitle(),
+      plates,
       flush: () => autosave.flush(),
       board: () => game?.board.map((row) => row.map((c) => (c === 'black' ? 'b' : c === 'white' ? 'w' : '.')).join('')) ?? [],
     },

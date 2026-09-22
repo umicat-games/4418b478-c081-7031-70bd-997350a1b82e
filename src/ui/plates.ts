@@ -4,8 +4,7 @@
 // empty: the only things out there were a status line in one corner and a
 // chat pill in the other. What belongs in that space is what would be there
 // at a real table — the two players. A face, a name, the colour they are
-// playing, and the one number that is theirs (here, the stones they have
-// taken).
+// playing, and the numbers that are theirs.
 //
 // Three rules it is built on:
 //
@@ -16,10 +15,10 @@
 //     board's own screen edges, so the seats sit against the board the way
 //     two people sit against a table, and a very wide monitor does not push
 //     them into the far corners of the room.
-//   • **It gets out of the way rather than getting smaller.** When the chat
-//     panel opens it takes the right-hand side and the board slides left;
-//     there is no honest way to keep two seats in what is left, so they go.
-//     Same when the board itself grows to fill a narrow screen.
+//   • **It gets out of the way rather than getting silly.** One step down in
+//     size for a narrower gap, and below that both seats go — when the chat
+//     panel takes the right-hand side, and when the board grows to fill a
+//     small screen. One seat on its own reads as a bug, not as a design.
 import './plates.css';
 
 const PERSON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/>'
@@ -29,24 +28,38 @@ export interface Seat {
   /** What to call them. Already resolved — this module does not know about
    *  sign-in, or that an engine has no account. */
   name: string;
-  /** A picture, if there is one. Anything that fails to load falls back to
-   *  the initial, which falls back to a shape. */
+  /** A picture, if there is one (the platform's `user.avatar`). Anything that
+   *  fails to load falls back to the initial, which falls back to a shape. */
   avatar?: string | null;
   colour: 'black' | 'white';
-  /** The line under the name. Empty is fine and keeps its space. */
-  stat?: string;
+  /** The line under the name — how they play, what they have taken. Empty is
+   *  fine and keeps its space. */
+  meta?: string;
   /** Whose turn it is. Exactly one seat should have this. */
   active?: boolean;
 }
 
-/** How far a seat sits from the edge of the board, and how little room it will
- *  put up with before leaving. */
-const GAP = 22;
-const MIN_EDGE = 8;
+/**
+ * Where the two seats sit vertically.
+ *
+ * `level` puts both against the middle of the board, which is the quiet
+ * arrangement. `stagger` lifts the near player and drops the far one, which
+ * fills more of the empty wood and reads like two people at opposite corners
+ * of a table rather than two entries in a list.
+ */
+export type SeatLayout = 'level' | 'stagger';
+
+/** How far a seat sits from the edge of the board, how little room it will put
+ *  up with, and the two widths it comes in. */
+const GAP = 26;
+const MIN_EDGE = 10;
+const FULL = 224;
+const TIGHT = 136;
 
 export class Plates {
   private el: HTMLDivElement;
   private seats: Record<'left' | 'right', HTMLDivElement>;
+  private layout: SeatLayout = 'stagger';
 
   constructor() {
     this.el = document.createElement('div');
@@ -54,9 +67,11 @@ export class Plates {
     this.el.hidden = true;
     this.el.innerHTML = ['left', 'right']
       .map((side) => `<div class="seat ${side}">
-        <div class="face"><span class="letter"></span><i class="stone"></i></div>
-        <div class="name"></div>
-        <div class="stat"></div>
+        <div class="face"><span class="letter"></span></div>
+        <div class="text">
+          <div class="line"><i class="stone"></i><span class="name"></span></div>
+          <div class="meta"></div>
+        </div>
       </div>`)
       .join('');
     document.body.appendChild(this.el);
@@ -65,6 +80,8 @@ export class Plates {
       right: this.el.querySelector('.seat.right')!,
     };
   }
+
+  setLayout(layout: SeatLayout): void { this.layout = layout; }
 
   /** Fill both seats. Safe to call every time anything changes; it only
    *  touches what differs, so the avatar is not re-fetched on every move. */
@@ -78,15 +95,15 @@ export class Plates {
 
   private fill(el: HTMLDivElement, seat: Seat): void {
     const face = el.querySelector('.face') as HTMLDivElement;
-    const name = el.querySelector('.name') as HTMLDivElement;
-    const stat = el.querySelector('.stat') as HTMLDivElement;
+    const name = el.querySelector('.name') as HTMLElement;
+    const meta = el.querySelector('.meta') as HTMLElement;
 
     if (name.textContent !== seat.name) name.textContent = seat.name;
-    const line = seat.stat ?? '';
-    if (stat.textContent !== line) stat.textContent = line;
+    const line = seat.meta ?? '';
+    if (meta.textContent !== line) meta.textContent = line;
     el.classList.toggle('active', !!seat.active);
 
-    const stone = face.querySelector('.stone') as HTMLElement;
+    const stone = el.querySelector('.stone') as HTMLElement;
     stone.className = `stone ${seat.colour}`;
 
     // The picture. `dataset.src` is the guard against re-creating the <img>
@@ -100,13 +117,13 @@ export class Plates {
     if (want) {
       const img = document.createElement('img');
       img.alt = '';
-      // A picture that does not arrive leaves the initial showing rather than
-      // a broken-image glyph in a nameplate.
+      // No `crossOrigin`: nothing here reads the pixels, and asking for CORS
+      // on an image that does not need it is how a picture that would have
+      // loaded fine ends up blocked.
       img.onerror = (): void => { img.remove(); face.dataset.src = ''; };
       img.src = want;
       face.appendChild(img);
       letter.textContent = '';
-      letter.innerHTML = '';
     } else {
       const initial = [...seat.name.trim()][0] ?? '';
       // A letter if there is one to take; the shape when the name starts with
@@ -119,25 +136,33 @@ export class Plates {
   /**
    * Sit the seats against the board.
    *
-   * `boardLeft` / `boardRight` are the board's own edges in CSS pixels; `midY`
-   * is where its middle is, which is what the seats line up with. If either
-   * side cannot take a whole seat with a margin to spare, BOTH go — one seat
-   * on its own reads as a bug rather than as a design.
+   * All four numbers are the BOARD's, in CSS pixels. If either side cannot
+   * take a seat with a margin to spare, both go; if the gap is narrow but
+   * usable, both shrink by one step. Either way the two sides match, because
+   * two seats of different sizes is worse than no seats.
    */
-  place(boardLeft: number, boardRight: number, midY: number): void {
-    const seat = this.seats.left;
-    const w = seat.offsetWidth || 132;
-    const need = w + GAP + MIN_EDGE;
-    const fits = boardLeft >= need && window.innerWidth - boardRight >= need;
+  place(board: { left: number; right: number; top: number; bottom: number }): void {
+    const room = Math.min(board.left, window.innerWidth - board.right);
+    const tight = room < FULL + GAP + MIN_EDGE;
+    const fits = room >= TIGHT + GAP + MIN_EDGE;
+    this.el.classList.toggle('tight', tight);
     this.seats.left.hidden = !fits;
     this.seats.right.hidden = !fits;
     if (!fits) return;
 
-    const top = `${Math.round(midY)}px`;
-    this.seats.left.style.left = `${Math.round(Math.max(MIN_EDGE, boardLeft - GAP - w))}px`;
-    this.seats.left.style.top = top;
+    const w = tight ? TIGHT : FULL;
+    const mid = (board.top + board.bottom) / 2;
+    // A third of the way in from each end, which keeps a staggered seat beside
+    // the board rather than off past its corner.
+    const third = (board.bottom - board.top) / 3;
+    const ys = this.layout === 'stagger'
+      ? { left: mid - third, right: mid + third }
+      : { left: mid, right: mid };
+
+    this.seats.left.style.left = `${Math.round(Math.max(MIN_EDGE, board.left - GAP - w))}px`;
+    this.seats.left.style.top = `${Math.round(ys.left)}px`;
     this.seats.right.style.left =
-      `${Math.round(Math.min(window.innerWidth - MIN_EDGE - w, boardRight + GAP))}px`;
-    this.seats.right.style.top = top;
+      `${Math.round(Math.min(window.innerWidth - MIN_EDGE - w, board.right + GAP))}px`;
+    this.seats.right.style.top = `${Math.round(ys.right)}px`;
   }
 }
