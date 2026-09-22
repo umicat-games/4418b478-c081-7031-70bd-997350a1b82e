@@ -226,6 +226,20 @@ async function start(): Promise<void> {
     },
     setLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); return true; },
     startGame: (handicap) => {
+      /**
+       * A game with stones on it is NOT the assistant's to throw away.
+       *
+       * Reported from a real game: a stone each, and then both vanished and
+       * the companion said hello again — it had called `start_game` in the
+       * middle of the game, and this hook obliged, taking the board and the
+       * conversation with it. The old guard only covered the case where
+       * nothing had been played yet, which is the one case where starting
+       * over costs nothing.
+       *
+       * The player has a button for this. Losing a game in progress must
+       * take a deliberate act by the person whose game it is.
+       */
+      if (game && !game.over && game.turns.length > 0) return false;
       // A game nobody has moved in IS a new game. Starting another one throws
       // away the conversation that has just begun about this one.
       if (game && !game.over && game.turns.length === 0 && handicap === game.handicap) return true;

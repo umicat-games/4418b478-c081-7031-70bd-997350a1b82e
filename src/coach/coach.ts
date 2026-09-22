@@ -201,8 +201,14 @@ export class Coach {
     switch (name) {
       case 'set_board_size': {
         const size = Number(args.size);
-        if ([9, 13, 19].includes(size) && this.hooks.setBoardSize(size)) this.profile.boardSize = size as 9 | 13 | 19;
-        return false;
+        if (![9, 13, 19].includes(size)) return false;
+        if (this.hooks.setBoardSize(size)) { this.profile.boardSize = size as 9 | 13 | 19; return false; }
+        // Refused, which here means a game is in progress. Say so — to the
+        // model, so its next sentence is not about a board that did not
+        // change, and to the player, who was told something was happening.
+        this.npc.note('[the game] the board cannot change in the middle of a game. It was NOT changed.');
+        this.messages.push({ from: 'coach', at: Date.now(), text: t('chat.midGame'), });
+        return true;
       }
       case 'set_level': {
         const id = String(args.level ?? '');
@@ -211,8 +217,13 @@ export class Coach {
       }
       case 'start_game': {
         const handicap = Math.max(0, Math.min(5, Number(args.handicap) || 0));
-        this.hooks.startGame(handicap);
-        return false;
+        if (this.hooks.startGame(handicap)) return false;
+        // The game refused: there are stones on the board. This used to go
+        // through, and a game in progress simply disappeared.
+        this.npc.note('[the game] a game is in progress, so a new one was NOT started. '
+          + 'The student starts one themselves, from the gear at the bottom left.');
+        this.messages.push({ from: 'coach', at: Date.now(), text: t('chat.midGame') });
+        return true;
       }
       case 'show_liberties': {
         const point = String(args.point ?? '');
