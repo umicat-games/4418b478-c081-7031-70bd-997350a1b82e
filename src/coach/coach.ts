@@ -400,11 +400,19 @@ function observe(game: ChessGame | null, read: Read | null, profile: Profile): u
   return {
     ...base,
     game: {
-      // Rank 8 first, the way a book prints a diagram. Uppercase is White.
       // A picture of the position beats a move list for a model trying to
       // answer "is my knight safe" — though it must still use show_attacks
       // rather than reading the answer off this.
       position: game.diagram(),
+      /**
+       * How to read it — SAID OUT LOUD, not left as a comment in this file.
+       * The Go game left this implicit and the companion narrated a guess
+       * about which side of the board the student's stones were on.
+       */
+      legend: 'Each string is one rank. The FIRST rank printed is rank 8 (Black\'s back rank) '
+        + 'and the LAST is rank 1 (White\'s). The first character of every rank is file a, the '
+        + 'last is file h. UPPERCASE letters are White\'s pieces, lowercase are Black\'s, "." is '
+        + 'an empty square.',
       student_plays: game.human,
       to_play: game.toPlay,
       move_number: game.moveNumber,
