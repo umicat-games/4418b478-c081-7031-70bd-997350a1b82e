@@ -41,8 +41,11 @@ export interface BoardControlsHandlers {
   /** A point was chosen — pressed and released on it. What happens next is the
    *  game's business; nothing is played by pointing at it. */
   onPicked(at: { x: number; y: number } | null): void;
-  onCamera(dAzimuth: number, dPolar: number): void;
-  onZoom(factor: number): void;
+  /** Optional: a game with a fixed camera passes neither, and two-finger
+   *  gestures then simply do not aim, which is still what you want — a second
+   *  finger is never a move. */
+  onCamera?(dAzimuth: number, dPolar: number): void;
+  onZoom?(factor: number): void;
 }
 
 /** Radians of camera turn per pixel dragged. */
@@ -129,7 +132,7 @@ export function attachBoardControls(
   const onMove = (e: PointerEvent): void => {
     if (!enabled || !active.has(e.pointerId)) {
       if (mode === 'camera' && e.pointerType !== 'touch') {
-        h.onCamera(-(e.clientX - last.x) * TURN_PER_PX, -(e.clientY - last.y) * TURN_PER_PX);
+        h.onCamera?.(-(e.clientX - last.x) * TURN_PER_PX, -(e.clientY - last.y) * TURN_PER_PX);
         last = { x: e.clientX, y: e.clientY };
         return;
       }
@@ -145,13 +148,13 @@ export function attachBoardControls(
     if (mode === 'camera') {
       if (e.pointerType === 'touch' && active.size >= 2) {
         const m = mid();
-        h.onCamera(-(m.x - last.x) * TURN_PER_PX, -(m.y - last.y) * TURN_PER_PX);
+        h.onCamera?.(-(m.x - last.x) * TURN_PER_PX, -(m.y - last.y) * TURN_PER_PX);
         last = m;
         const s = spread();
-        if (pinch > 0 && s > 0) h.onZoom(s / pinch);
+        if (pinch > 0 && s > 0) h.onZoom?.(s / pinch);
         pinch = s;
       } else {
-        h.onCamera(-(e.clientX - last.x) * TURN_PER_PX, -(e.clientY - last.y) * TURN_PER_PX);
+        h.onCamera?.(-(e.clientX - last.x) * TURN_PER_PX, -(e.clientY - last.y) * TURN_PER_PX);
         last = { x: e.clientX, y: e.clientY };
       }
       return;
@@ -178,7 +181,7 @@ export function attachBoardControls(
   const onWheel = (e: WheelEvent): void => {
     if (!enabled) return;
     e.preventDefault();
-    h.onZoom(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+    h.onZoom?.(e.deltaY < 0 ? 1.1 : 1 / 1.1);
   };
   const onContextMenu = (e: Event): void => e.preventDefault();
   /** Capture lost to the browser (a system gesture, a scroll it decided to

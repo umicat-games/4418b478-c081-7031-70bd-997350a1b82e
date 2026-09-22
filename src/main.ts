@@ -73,7 +73,6 @@ async function start(): Promise<void> {
   // Declared before it starts. The loop runs from the first frame, long before
   // the rest of this function exists, and a `const` it reads too early is a
   // ReferenceError that takes the whole game down at boot.
-  let idleSpin = true;
   /**
    * Keep drawing for a moment after anything is touched.
    *
@@ -157,7 +156,6 @@ async function start(): Promise<void> {
   void loading.then(() => { engineReady = true; }).catch(() => { engineReady = true; });
 
   const frame = (): void => {
-    if (idleSpin) view.orbit(0.0012, 0);
     if (performance.now() < repaintUntil) view.invalidate();
     // Only when the picture actually changed. Between two moves a Go board is
     // a still life, and redrawing it sixty times a second takes a core off the
@@ -557,8 +555,7 @@ async function start(): Promise<void> {
       view.setGhost(at && playable?.legal(at.x, at.y) ? at : null, HUMAN);
     },
     onPicked: select,
-    onCamera: (a, p) => view.orbit(a, p),
-    onZoom: (f) => view.zoomBy(f),
+    // No camera handlers: the view is fixed. See POLAR_DEG in board3d.ts.
   });
 
   // ── the one button, and everything behind it ────────────────────────────
@@ -593,7 +590,6 @@ async function start(): Promise<void> {
         persist();
         void finish();
       },
-      onRecentre: () => view.resetCamera(),
       onMusic: (on) => { audio.setMusicVolume(on ? 0.22 : 0); coach.profile.music = on; persist(); },
       onSound: (on) => { audio.setSfxVolume(on ? 1 : 0); coach.profile.sound = on; persist(); },
       music: () => coach.profile.music !== false,
@@ -726,7 +722,6 @@ async function start(): Promise<void> {
     await autosave.flush();
 
     document.body.classList.add('titling');
-    idleSpin = true;
     const stored = await umicat.saves.get<ReturnType<GoGame['snapshot']>>('game');
     const choice = await showTitle({
       canContinue: (!!game && !game.over) || !!stored,
@@ -796,8 +791,6 @@ async function start(): Promise<void> {
   /** Take the title down and give the board back. */
   function leaveTitle(): void {
     document.body.classList.remove('titling');
-    idleSpin = false;
-    view.resetCamera();
   }
 
   await toTitle();

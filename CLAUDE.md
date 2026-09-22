@@ -46,7 +46,7 @@ factual, that is the line being crossed.
 | `src/coach/coach.ts` | the assistant: actions, observation, memory |
 | `public/playbooks/coach.md` | **its persona and rules, as editable prose** |
 | `src/view/board3d.ts` | the board drawn, the camera, hit-testing |
-| `src/view/controls.ts` | pointer handling: choose a point vs move the camera |
+| `src/view/controls.ts` | pointer handling: which point was tapped |
 | `src/ui/speech.ts` | what it says, on the board, with the reply field |
 | `src/ui/askhere.ts` | asking about a point, at the point |
 | `src/ui/pointactions.ts` | confirm / cancel / ask, beside the stone |
@@ -79,6 +79,23 @@ false.
 **The board enforces the rules for the AI exactly as for the player.** Both go
 through the same helpers the engine searches with, so there is one
 implementation of a capture and not two.
+
+**The camera is FIXED.** No orbit, no pinch, nothing to recentre — a board
+game is not a world to look around, the position is the same information from
+every angle, and a camera the player can move is a camera they can lose. It
+sits 17° off overhead, which is enough to see the board's edge and the shadow
+it drops on the table. `controls.ts` still tells a second finger apart from a
+first (a second finger is never a move), it just has nothing to do with it.
+
+**The board is on a TABLE, and that is what the lighting is for.** A plane of
+dark walnut, drawn rather than photographed so it costs nothing to ship and is
+lit by the same lamp as everything else; the board is a slab with real
+thickness standing on it, casting a real shadow. Two settings do most of the
+work and both fight the instinct to add light: the key is LOW (about 25° above
+the table, not 45°, or the shadow falls straight down and there is nothing to
+see) and the fill is weak (0.55 — fill is the enemy of the shadow that makes
+the board sit on the table). The framing pulls back to 0.84 of the screen so
+some table is always in frame: a table you cannot see is a backdrop.
 
 **The camera is a long lens, not orthographic.** Orthographic was tried: a
 square board seen from an angle with no near-and-far does not look tilted, it
