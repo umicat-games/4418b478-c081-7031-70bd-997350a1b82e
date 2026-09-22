@@ -50,6 +50,39 @@ is safe, not merely profitable** — a player who has to wonder whether the
 absorb will win the race dodges instead of collecting, which is the game not
 being played.
 
+### Your own colour comes to you
+
+Inside `ATTRACT_RADIUS` (2.8, twice the absorb), a matching orb is STEERED
+towards the hero. That stretch — visibly curving, not yet arrived — is the
+point: it turns "standing in the right place" into "standing NEAR the right
+place", which is a far more forgiving thing to ask of somebody who is also
+dodging the other colour, and it says which orbs are yours without an icon.
+The ones bending towards you are.
+
+**Only your own colour is pulled.** The other must fly dead straight, because
+dodging is the only answer to it and a bullet that curves cannot be dodged by
+reading its line. It also means an orb swerving at you is unambiguously good
+news every time, with no case where it is the opposite.
+
+**Steering, not acceleration, and the difference is a capture.** Acceleration
+was the first model: add force towards the hero, scaled `k²` so the edge is
+gentle. Measured, an orb entering the ring 2.1 out bent 1.4 off its line and
+collected NOTHING — it looked attracted, sailed past, and taught the player
+that the pull is decorative. That is the worst of both readings. Turning the
+velocity instead means anything entering the ring arrives, which is the
+promise the effect has to keep: a magnet that sometimes drops what it caught is
+a magnet nobody trusts. Scaled by `k`, linear — the square was chosen to be
+gentle at the edge, and gentle at the edge is exactly where it failed.
+
+It aims at the hero's CHEST, not their feet: steered at ground level an orb
+dips under a 0.72-tall model and is absorbed somewhere nobody is looking.
+
+`verify-3d-polarity-pull` throws on a line that MISSES, because a head-on shot
+cannot show a bend — it is already pointed at the thing doing the pulling —
+and it asks whether the orb was COLLECTED rather than how close the track got:
+a pulled orb is moving fastest in the frames before it is taken, so the
+sampler's minimum distance is an artefact of when it happened to look.
+
 ### The orbs are spheres, and they ARE lit — because the poles are hues
 
 Reported, and right: the colour of a bullet is the only thing in this game the
@@ -108,6 +141,26 @@ The materials are SHARED per pole, because nothing ever repaints an orb after
 it is made — every bullet on the board is two draws in total. That is the
 opposite of the kit bullets, which had to be cloned per shot precisely because
 they were recoloured.
+
+### An absorb wears the upgrade sparkle
+
+`updraft` — a gold ring opening with sparkles rising off it — is what a tower
+upgrade throws in Balaboo, and it is the right picture here because what it has
+always meant in this game is *you just gained something*. That is exactly the
+statement an absorb has to make, in the same half-second and the same place as
+a HIT, which is the other thing a bullet reaching you can be.
+
+**Tuned down, because of how often it runs.** An upgrade happens a few times a
+run; this happens several times a second. At `updraft`'s own settings — 12
+motes, 0.85s — five absorbs a second is ten live effects against a whole-board
+budget of about twenty draws. This project made that mistake once already, with
+the burn's flame running per BURNING ENEMY rather than per cast, and the fix is
+the same: fewer, shorter. Seven motes at 0.5s.
+
+It is GOLD rather than the pole's colour. The orb that arrived was the pole's
+colour and was on screen the frame before; what this adds is "and it paid you".
+It also keeps an absorb unmistakably distinct from a hit, which is red, shakes
+the camera and flashes the screen.
 
 ### The hero's BODY is the colour, and the face is left alone
 
@@ -505,6 +558,7 @@ In `umicat-infra/playwright/`. The ones written for this fork:
 | `verify-3d-polarity-rack` | are the weapons ON the plinths — the check the bare-pedestal bug slipped past |
 | `verify-3d-polarity-colour` | can you SEE which colour you are — counted in pixels, not read off a material |
 | `verify-3d-polarity-tide` | does staying one colour stop working — sampled through the real spawn path |
+| `verify-3d-polarity-pull` | does a line that MISSES still get collected, and does the other colour stay straight |
 
 Four lessons from writing them, all of which cost a run:
 

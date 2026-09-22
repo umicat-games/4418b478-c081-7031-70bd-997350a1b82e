@@ -307,6 +307,48 @@ export const POLE_LOOK: Record<Pole, { body: number; rim: number; glow: number }
  *  of collecting, which is the game not being played. */
 const ABSORB_RADIUS = 1.35;
 
+/** How close an orb of your OWN colour has to be before it starts coming to
+ *  you, and how hard it is pulled.
+ *
+ *  Twice the absorb radius, so there is a visible stretch where the orb is
+ *  curving in and has not arrived. That stretch is the point: it turns
+ *  "standing in the right place" into "standing NEAR the right place", which
+ *  is a much more forgiving thing to ask of a player who is also dodging the
+ *  other colour, and it says which orbs are yours without a single icon —
+ *  the ones bending towards you are.
+ *
+ *  **Only your own colour is pulled.** The other colour must fly dead
+ *  straight, because dodging is the only answer to it and a bullet that
+ *  curves cannot be dodged by reading its line. This is also why the pull is
+ *  not symmetric-looking: an orb swerving towards you is unambiguously good
+ *  news, every time, with no case where it is the opposite. */
+const ATTRACT_RADIUS = 2.8;
+/** How hard the orb is TURNED towards you, per second, at the centre.
+ *
+ *  Steering, not acceleration. Acceleration was the first model and it does
+ *  not capture: an orb entering the ring at 2.1 out gets a sideways nudge,
+ *  curves visibly, and sails past — measured, it bent 1.4 off its line and
+ *  collected nothing, which is the worst of both readings. It LOOKS attracted
+ *  and is not, so the player learns that the pull is decorative.
+ *
+ *  Turning the velocity towards the hero instead means anything that enters
+ *  the ring arrives. That is the promise the effect has to keep — "near enough
+ *  counts" — and a magnet that sometimes drops what it caught is a magnet
+ *  nobody trusts.
+ *
+ *  Scaled by `k` (linear in how far in it is) rather than `k²`: the square was
+ *  chosen so the edge would be gentle, and gentle at the edge is precisely
+ *  where the capture failed. */
+const ATTRACT_TURN = 7.5;
+/** How much faster a pulled orb travels at the centre. Small — it is here so
+ *  the orb visibly hurries the last half-metre, not so it arrives early. */
+const ATTRACT_SPEEDUP = 0.5;
+/** And a ceiling on how fast a pulled orb may end up going. Without it a long
+ *  approach accelerates into something that crosses the absorb radius between
+ *  two frames — which the swept test would still catch, but which looks like
+ *  the orb teleporting into you. */
+const ATTRACT_MAX_SPEED = BULLET_SPEED * 2.2;
+
 /** The boss's fan: how many pellets, and how far apart.
  *
  *  Seven at 13 degrees is a 78-degree spread — wide enough that standing
@@ -1938,31 +1980,42 @@ export async function startLevel(
    *  the damage does, so one cast teaches the radius better than any number
    *  in the HUD could. */
   const _burstAt = new THREE.Vector3();
-  /** An orb going in.
+  /** An orb going in — Balaboo's upgrade sparkle, at absorb frequency.
    *
-   *  It has to be unmistakable, and specifically it has to be distinguishable
-   *  from being HIT — those are the two things that happen when a bullet
-   *  reaches you, they happen in the same place, and reading the wrong one is
-   *  reading the whole game wrong. A hit is red, loud, and shakes the camera;
-   *  this is a small inward pull in the pole's own colour with no shake at
-   *  all. The difference is deliberately larger than it needs to be.
+   *  `updraft` is what a tower upgrade throws: a gold ring opening, and
+   *  twelve sparkles rising off it. It is the right picture, because what it
+   *  has always meant in this game is *you just gained something* — and that
+   *  is exactly the statement an absorb has to make, in the same half-second
+   *  and the same place as a HIT, which is the other thing a bullet reaching
+   *  you can be.
    *
-   *  Motes are thrown in the ABSORBED orb's colour rather than a neutral
-   *  spark, so the feedback names which colour was taken — the player who
-   *  swapped a moment too early sees it. */
+   *  **Tuned down, because of how often it runs.** An upgrade happens a few
+   *  times a run; this happens several times a second on a busy board. At
+   *  `updraft`'s own settings — 12 motes, 0.85s — five absorbs a second is
+   *  ten live effects against a whole-board budget of about twenty draws.
+   *  This project has made that mistake once already, with the burn's flame
+   *  running per BURNING ENEMY rather than per cast, and the fix there was the
+   *  same one: fewer, shorter. Seven motes at 0.5s, and the ring is the same
+   *  single mesh.
+   *
+   *  It is GOLD, not the pole's colour. The orb that arrived was already the
+   *  pole's colour and is still on screen the frame before; what this has to
+   *  add is "and it paid you", which is what gold says here and has said
+   *  since the tower defense. It also keeps the absorb unmistakably distinct
+   *  from a hit, which is red, shakes the camera and flashes the screen.
+   *
+   *  The ring is drawn ON THE HERO rather than where the orb died: the point
+   *  being made is that the thing arrived HERE. */
   const _absorbAt = new THREE.Vector3();
+  const _pull = new THREE.Vector3();
   const absorb = (at: THREE.Vector3): void => {
-    const look = POLE_LOOK[pole];
     motes(vfx, at, {
-      count: 7, color: look.glow, color2: look.rim,
-      radius: 0.3, rise: 0.5, spin: 2.2, life: 0.32, size: 0.1,
-      frame: FRAME.sparkle,
+      count: 7, color: 0xffc94d, color2: 0xfff2c4, frame: FRAME.sparkle,
+      radius: 0.22, rise: 1.0, spin: 2.6, life: 0.5, size: 0.15,
     });
-    // A ring ON THE HERO, not on the orb: the point being made is that the
-    // thing arrived HERE, and a mark left where it died says the opposite.
     _absorbAt.set(hero.position.x, 0.05, hero.position.z);
     ringVfx(vfx, _absorbAt, {
-      color: look.glow, from: ABSORB_RADIUS * 0.75, to: 0.15, life: 0.24, opacity: 0.5,
+      color: 0xffe08a, from: ABSORB_RADIUS * 0.7, to: 0.14, life: 0.26, opacity: 0.7,
     });
   };
 
@@ -4575,6 +4628,24 @@ export async function startLevel(
           // Armed a little wider than the absorb itself, so the lesson lands
           // as the orb closes rather than after it is already gone.
           if (d <= ABSORB_RADIUS * 2.2) sawOwnColour = true;
+          // Pulled in. The velocity is BENT rather than the position moved:
+          // the orb is a thing in flight and it should curve, which is what
+          // reads as attraction. Moving it directly at the hero — the way a
+          // dropped coin is moved — makes it change into a different object
+          // that walks towards you.
+          if (d > ABSORB_RADIUS && d <= ATTRACT_RADIUS) {
+            const k = 1 - d / ATTRACT_RADIUS;
+            const speed = Math.min(ATTRACT_MAX_SPEED,
+              bu.vel.length() * (1 + ATTRACT_SPEEDUP * k * dt));
+            // Aim at the hero's chest, not their feet: an orb steered at
+            // ground level dips under a model that is 0.72 tall and is
+            // absorbed from somewhere nobody is looking.
+            _pull.set(hero.position.x - bu.obj.position.x,
+                      (hero.position.y + 0.3) - bu.obj.position.y,
+                      hero.position.z - bu.obj.position.z)
+              .normalize().multiplyScalar(speed);
+            bu.vel.lerp(_pull, Math.min(1, ATTRACT_TURN * k * dt));
+          }
           if (d <= ABSORB_RADIUS) {
             absorb(bu.obj.position);
             gainMana(MANA_PER_ABSORB);
@@ -4931,6 +5002,15 @@ export async function startLevel(
       /** Put one orb of a named colour on a collision course, from `d` away.
        *  The only way to test the rule deterministically: waiting for the board
        *  to fire the colour you want is waiting on a coin flip. */
+      /** One orb on an arbitrary line, relative to the hero. `throwOrb` aims
+       *  straight at them, which is the one path on which a bend cannot be
+       *  seen — it is already pointed at the thing doing the pulling. */
+      throwOrbAt: (p: Pole, o: { dx: number; dz: number; vx: number; vz: number }) => {
+        const from = new THREE.Vector3(
+          hero.position.x + o.dx, hero.position.y + 0.3, hero.position.z + o.dz);
+        const dir = new THREE.Vector3(o.vx, 0, o.vz).normalize();
+        fireOrb(from, dir, p, 10, 1, BULLET_SPEED);
+      },
       throwOrb: (p: Pole, d = 3, dmg = 10) => {
         const dir = new THREE.Vector3(1, 0, 0);
         const from = new THREE.Vector3(
