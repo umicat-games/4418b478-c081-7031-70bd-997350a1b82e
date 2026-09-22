@@ -241,8 +241,13 @@ export class Coach {
         const side: Side = String(args.side ?? '').toLowerCase() === 'black' ? 'black' : 'white';
         const raw = String(args.odds ?? 'none').toLowerCase();
         const odds: Odds = raw === 'knight' || raw === 'rook' || raw === 'queen' ? raw : 'none';
-        this.hooks.startGame(side, odds);
-        return false;
+        if (this.hooks.startGame(side, odds)) return false;
+        // The game refused: there are pieces on the board. This used to go
+        // through, and a game in progress simply disappeared.
+        this.npc.note('[the game] a game is in progress, so a new one was NOT started. '
+          + 'The student starts one themselves, from the gear at the bottom left.');
+        this.messages.push({ from: 'coach', at: Date.now(), text: t('chat.midGame') });
+        return true;
       }
       case 'highlight': {
         const asked = String(args.squares ?? '');

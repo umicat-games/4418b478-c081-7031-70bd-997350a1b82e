@@ -84,6 +84,7 @@ const EN = {
   'chat.speak': 'Speak',
   'chat.stopRecording': 'Done',
   'chat.marked': 'Marked it on the board.',
+  'chat.midGame': 'This game is still going — to start a new one, use the gear at the bottom left.',
   'chat.markFailed': 'I could not find “{squares}” on this board — ask me again and I will point properly.',
   // What the board counted, said out loud by the GAME. The model asked on the
   // player's behalf and has already finished its turn; waiting for it to speak
