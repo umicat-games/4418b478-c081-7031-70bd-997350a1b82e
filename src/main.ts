@@ -37,6 +37,7 @@ import { gomokuAssistant, type Context } from './game/assistant';
 import { Autosave, load } from './save';
 import { SFX, createAudio, playStone } from './audio';
 import { setLocale, t } from './i18n';
+import { bootStep } from './shell/boot';
 
 /** The player is Black: Black moves first, and the beginner should be the one
  *  who opens rather than the one who has to answer. */
@@ -56,7 +57,11 @@ const DEFAULTS: Profile<GameProfile> = {
 };
 
 async function start(): Promise<void> {
+  // The boot screen is already up (see index.html); from here on it is told
+  // what has actually finished.
+  bootStep('bundle');
   const umicat = await ThreeUmicat.init();
+  bootStep('platform');
   // Before any UI exists: everything below asks `t()` for its words. The
   // platform's language setting, and nothing else — see i18n.ts.
   setLocale(umicat.locale);
@@ -72,7 +77,6 @@ async function start(): Promise<void> {
   // the rest of this function exists, and a `const` it reads too early is a
   // ReferenceError that takes the whole game down at boot with a blank screen.
   // This has happened twice in this family of games.
-  let idleSpin = true;
   /**
    * Keep drawing for a moment after anything is touched.
    *
@@ -146,7 +150,6 @@ async function start(): Promise<void> {
   const evalBar = new EvalBar();
 
   const frame = (): void => {
-    if (idleSpin) rig.orbit(0.0012, 0);
     if (performance.now() < repaintUntil) rig.invalidate();
     // Only when the picture actually changed. Between two moves the board is
     // a still life, and redrawing it sixty times a second takes a core off
@@ -162,6 +165,7 @@ async function start(): Promise<void> {
 
   // ── state ───────────────────────────────────────────────────────────────
   const saved = await load(umicat, DEFAULTS as Profile);
+  bootStep('saved');
   const autosave = new Autosave(umicat);
 
   let game: Gomoku | null = null;
@@ -602,8 +606,7 @@ async function start(): Promise<void> {
   attachBoardControls(canvas, (x, y) => rig.pick(x, y), {
     onAim: () => { /* the ghost belongs to the chosen point, not to the cursor */ },
     onPicked: select,
-    onCamera: (a, p) => rig.orbit(a, p),
-    onZoom: (f) => rig.zoomBy(f),
+    // No camera handlers: the view is fixed. See the tilt note in boardrig.ts.
   });
 
   // ── the one button, and everything behind it ────────────────────────────
@@ -640,7 +643,6 @@ async function start(): Promise<void> {
         persist();
         void finish();
       },
-      onRecentre: () => rig.resetCamera(),
       onMusic: (on) => { audio.setMusicVolume(on ? 0.22 : 0); coach.profile.music = on; persist(); },
       onSound: (on) => { audio.setSfxVolume(on ? 1 : 0); coach.profile.sound = on; persist(); },
       onEval: (on) => { evalBar.setEnabled(on); coach.profile.evalBar = on; refresh(); persist(); },
@@ -750,7 +752,6 @@ async function start(): Promise<void> {
     await autosave.flush();
 
     document.body.classList.add('titling');
-    idleSpin = true;
     const stored = await umicat.saves.get<ReturnType<Gomoku['snapshot']>>('game');
     const choice = await showTitle({
       canContinue: (!!game && !game.over) || !!stored,
@@ -814,8 +815,6 @@ async function start(): Promise<void> {
   /** Take the title down and give the board back. */
   function leaveTitle(): void {
     document.body.classList.remove('titling');
-    idleSpin = false;
-    rig.resetCamera();
   }
 
   await toTitle();

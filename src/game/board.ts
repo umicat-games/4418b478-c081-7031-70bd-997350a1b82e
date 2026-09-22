@@ -63,7 +63,9 @@ export class Board {
       this.wood.geometry.dispose();
     }
     const top = new THREE.MeshStandardMaterial({ map: boardTexture(this.rig, size), roughness: 0.62, metalness: 0 });
-    const side = new THREE.MeshStandardMaterial({ color: 0xd8a860, roughness: 0.7 });
+    // The edge of the board, with its own end grain — visible now that the
+    // slab is thick enough to see.
+    const side = new THREE.MeshStandardMaterial({ map: edgeTexture(), roughness: 0.68, metalness: 0 });
     // BoxGeometry's material slots are +x, −x, +y, −y, +z, −z: only the top
     // (+y) carries the grid.
     this.wood = new THREE.Mesh(
@@ -71,6 +73,7 @@ export class Board {
       [side, side, top, side, side, side],
     );
     this.wood.position.y = TOP_Y / 2;
+    this.wood.castShadow = true;
     this.wood.receiveShadow = true;
     this.rig.scene.add(this.wood);
 
@@ -234,5 +237,37 @@ function boardTexture(rig: BoardRig, size: number): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
+  return tex;
+}
+
+/** The board's own edge: end grain, lighter than the table it stands on. */
+function edgeTexture(): THREE.CanvasTexture {
+  const px = 256;
+  const c = document.createElement('canvas');
+  c.width = px;
+  c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#c99a5d';
+  ctx.fillRect(0, 0, px, 64);
+  for (let i = 0; i < 90; i++) {
+    const y = Math.random() * 64;
+    ctx.strokeStyle = `rgba(${90 + Math.random() * 40},${60 + Math.random() * 30},${30 + Math.random() * 20},${0.06 + Math.random() * 0.12})`;
+    ctx.lineWidth = 0.5 + Math.random() * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(px, y + (Math.random() - 0.5) * 6);
+    ctx.stroke();
+  }
+  // The underside of the board is in its own shadow; the top edge catches the
+  // lamp. A vertical gradient is the cheapest way to say both.
+  const shade = ctx.createLinearGradient(0, 0, 0, 64);
+  shade.addColorStop(0, 'rgba(255,240,215,0.18)');
+  shade.addColorStop(1, 'rgba(20,12,6,0.42)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, px, 64);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
   return tex;
 }
