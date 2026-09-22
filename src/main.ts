@@ -30,11 +30,12 @@ import { LEVELS, Opponent, levelById, levelLabel, type Read } from './chess/oppo
 import { openingName } from './chess/openings';
 import { Coach } from './coach/coach';
 import { ChatPanel } from './ui/chat';
-import { Speech, segment, type Segment } from './ui/speech';
+import { Speech, segment, stripAnchors, type Segment } from './ui/speech';
 import { Menu } from './ui/menu';
 import { SquareActions } from './ui/squareactions';
 import { AskHere } from './ui/askhere';
 import { EvalBar } from './ui/evalbar';
+import { GameOver } from './ui/gameover';
 import { askPromotion, type Promotion } from './ui/promotion';
 import { showTitle } from './ui/title';
 import { underCurtain } from './ui/curtain';
@@ -135,6 +136,14 @@ async function start(): Promise<void> {
   });
 
   const evalBar = new EvalBar();
+
+  /** The end of a game, as a dialog. The status line is where "your move"
+   *  lives; a result printed in the same place, in the same type, reads as
+   *  one more turn rather than as the end of something. */
+  const over = new GameOver({
+    onAgain: () => void freshGame(game?.human ?? 'white', game?.odds ?? 'none', companion),
+    onTitle: () => void toTitle(),
+  });
 
   const audio = createAudio();
   // Fetch and decode ahead of the first gesture. Without it the very first
@@ -302,7 +311,12 @@ async function start(): Promise<void> {
       // — the answer is about to appear as speech, beside whatever square the
       // answer is about, which is often not the one that was asked about.
       askHere.hide();
-      speech.show(segment(said[said.length - 1].text));
+      const latest = said[said.length - 1].text;
+      // While the end-of-game dialog is up, the assistant talks INTO it: a
+      // bubble behind that card is the assistant addressing a screen the
+      // player cannot see.
+      if (over.showing) over.note(stripAnchors(latest));
+      else speech.show(segment(latest));
     }
   };
 
@@ -440,6 +454,22 @@ async function start(): Promise<void> {
     tip.textContent = yours && !coach.profile.moved ? t('hud.howToMove') : '';
   }
 
+  /** The result, for the dialog: a headline and one factual line under it. */
+  function describeResult(g: ChessGame): { title: string; body: string; tone: 'win' | 'loss' | 'draw' } {
+    const moves = g.moveNumber;
+    const drawn = g.outcome === 'stalemate' || g.outcome === 'repetition'
+      || g.outcome === 'fifty-move' || g.outcome === 'insufficient';
+    const won = g.outcome === 'resigned' ? g.resignedBy !== g.human : g.winner === g.human;
+    const tone = drawn ? 'draw' : won ? 'win' : 'loss';
+    const body = g.outcome === 'checkmate' ? t('over.mate', { moves })
+      : g.outcome === 'resigned' ? t(won ? 'over.theyResigned' : 'over.youResigned', { moves })
+        : g.outcome === 'stalemate' ? t('over.stalemate', { moves })
+          : g.outcome === 'repetition' ? t('over.repetition', { moves })
+            : g.outcome === 'fifty-move' ? t('over.fifty')
+              : t('over.insufficient');
+    return { title: t(drawn ? 'over.draw' : won ? 'over.win' : 'over.loss'), body, tone };
+  }
+
   function resultText(g: ChessGame): string {
     const key: Key = g.outcome === 'resigned'
       ? (g.resignedBy === g.human ? 'result.youResigned' : 'result.theyResigned')
@@ -478,6 +508,7 @@ async function start(): Promise<void> {
   }
 
   function newGame(side: Side, odds: Odds): void {
+    over.hide();
     game = new ChessGame(side, odds);
     coach.profile.side = side;
     coach.profile.odds = odds;
@@ -843,6 +874,8 @@ async function start(): Promise<void> {
     refresh();
     audio.play(SFX.gameOver);
     persist();
+    speech.hide();
+    over.show(describeResult(game));
 
     const g = game;
     await remark(
@@ -871,6 +904,7 @@ async function start(): Promise<void> {
     askHere.hide();
     evalBar.hide();
     menu.close();
+    over.hide();
     chat.setOpen(false);
     await autosave.flush();
 
@@ -948,7 +982,7 @@ async function start(): Promise<void> {
   // test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar,
+      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar, over,
       get companion() { return companion; },
       setCompanion,
       get game() { return game; },
