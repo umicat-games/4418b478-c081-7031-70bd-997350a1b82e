@@ -71,43 +71,21 @@
       body.titling #hud, body.titling #chat, body.titling #speech { display: none; }
     </style>
     <style>
-      /* The boot screen, in the shape Balaboo's already has: the game's own
-         key art, its wordmark, one line of status and a thin bar. Two things
-         are different here and both are deliberate.
-
-         It is in the HTML rather than built in JavaScript, because the gap it
-         exists to cover STARTS before the bundle has parsed — Balaboo's own
-         loading screen cannot appear until its code runs, and the black
-         rectangle before that is exactly the moment this is for.
-
-         And it wears the title screen's art, at the title screen's size. The
-         two screens are then the same picture with different furniture, so
-         the hand-over is the buttons arriving rather than the screen being
-         replaced. */
+      /* The boot screen: black, and a bar.
+         It is in the HTML rather than built in JavaScript because the gap it
+         covers STARTS before the bundle has parsed — a loading screen that
+         arrives with the code it is covering for covers nothing. It carries
+         no words, in any language, because the player's language arrives at
+         the platform handshake, which is one of the things this is waiting
+         for; and no artwork, because the title screen is where the artwork
+         belongs. */
       #boot {
         position: fixed; inset: 0; z-index: 60;
         display: flex; align-items: center; justify-content: center;
-        flex-direction: column; gap: 18px;
-        background-color: #0c0e12;
-        background-image:
-          radial-gradient(ellipse at center, rgba(12, 14, 18, 0.22), rgba(12, 14, 18, 0.76)),
-          url('art/title-bg.webp');
-        background-size: cover; background-position: center;
-        color: #f4f5f7;
+        background: #0c0e12;
         transition: opacity .22s ease-out;
       }
       #boot.done { opacity: 0; pointer-events: none; }
-      /* `aspect-ratio` with the real pixel size: the layout is final before
-         the image has decoded, so nothing jumps when it does. */
-      #boot img {
-        display: block; width: min(520px, 62vw, 92vh); height: auto;
-        aspect-ratio: 1774 / 887;
-        filter: drop-shadow(0 10px 30px rgba(0, 0, 0, .55));
-      }
-      #boot .msg {
-        font: 600 14px/1.5 system-ui, sans-serif; letter-spacing: .06em;
-        opacity: .85; text-shadow: 0 1px 6px rgba(0, 0, 0, .6);
-      }
       #boot .track {
         width: min(260px, 56vw); height: 6px; border-radius: 99px;
         background: rgba(0, 0, 0, .38); box-shadow: 0 0 0 1px rgba(255, 255, 255, .18);
@@ -132,11 +110,7 @@
          for. `window.__boot` is what the game drives it with; it removes
          itself when the title screen is dressed, and on a timer regardless,
          because nobody should ever be stuck behind a progress bar. -->
-    <div id="boot">
-      <img src="art/title.webp" alt="GO with me" width="1774" height="887">
-      <div class="msg">Waking up</div>
-      <div class="track"><i></i></div>
-    </div>
+    <div id="boot"><div class="track"><i></i></div></div>
     <script>
       // In the BODY, after the element: in <head> this ran before the div
       // was parsed, `getElementById` returned null, and the whole thing was

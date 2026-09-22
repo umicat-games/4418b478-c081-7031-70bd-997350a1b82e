@@ -172,14 +172,25 @@ wood went brown, and the two lines of small text it was protecting now carry
 their own shadow instead.
 
 **The boot screen is in `index.html`, not in the bundle.** Its whole job is to
-be on screen before the bundle has parsed, so it cannot be built by it. It
-wears the title screen's art at the title screen's size, which makes the
-hand-over the buttons arriving rather than the screen being replaced — and for
-the same reason the title's own art does NOT fade in: two crossfades of the
-same picture is the flash again, in slow motion. Balaboo's loading screen is
-the model for how it looks; `window.__boot` is what `src/ui/boot.ts` drives it
+be on screen before the bundle has parsed, so it cannot be built by it. It is
+black and a bar — no words, because the player's language arrives at the
+handshake this is waiting for, and no artwork, because the title screen is
+where the artwork belongs. `window.__boot` is what `src/ui/boot.ts` drives it
 with, and it removes itself after nine seconds whatever happens, because
-nobody should ever be stuck behind a progress bar.
+nobody should ever be stuck behind a progress bar. The title's own art does
+not fade in, so the hand-over is one fade (the boot screen's) rather than two
+crossfades of the same moment.
+
+**A relative `url()` that reaches CSS through a custom property is resolved
+against the STYLESHEET, not the page.** `--art` was set to
+`url("art/title-bg.webp")` from JavaScript, which works in dev and 403s in a
+build, because the built CSS lives in `assets/` and the path became
+`assets/art/…`. The wordmark beside it was fine the whole time — it is an
+`<img src>`, resolved against the document. Two rules for the same string, and
+only one of them shows up before deploying. `asUrl()` in `title.ts` makes the
+path absolute against `document.baseURI`; anything else handed to CSS from
+code should do the same. **Check a `vite preview` of `dist/`, not just
+`npm run dev`, whenever a path is involved.**
 
 ## Building and checking
 

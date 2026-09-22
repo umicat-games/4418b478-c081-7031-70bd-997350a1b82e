@@ -45,6 +45,20 @@ const ART = {
   background: 'art/title-bg.webp',
 };
 
+/**
+ * That path, made absolute against the PAGE.
+ *
+ * A relative `url()` that reaches CSS through a custom property is resolved
+ * against the stylesheet it is substituted into — and in a production build
+ * that stylesheet is `assets/index-*.css`, so `art/title-bg.webp` became
+ * `assets/art/title-bg.webp` and 403'd. It worked in dev, where the CSS is
+ * served from the page's own directory, and it worked for the wordmark,
+ * which is an `<img src>` and therefore resolved against the document. Two
+ * different rules for the same string, one of which only shows up in a
+ * deployed build.
+ */
+const asUrl = (path: string): string => new URL(path, document.baseURI).href;
+
 export type TitleChoice = 'continue' | 'new' | 'forget';
 
 export interface TitleOptions {
@@ -68,7 +82,7 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
   // faded in; the scrim over it is deliberately light — at 0.40 the sunlit
   // wood went brown, which is throwing away the artwork in order to protect
   // two lines of small text that a shadow protects just as well.
-  el.style.setProperty('--art', `url("${ART.background}")`);
+  el.style.setProperty('--art', `url("${asUrl(ART.background)}")`);
 
   const wordmark = el.querySelector('.wordmark') as HTMLImageElement;
   wordmark.src = ART.wordmark;
