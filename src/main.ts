@@ -1539,10 +1539,23 @@ export async function startLevel(
   // What the town is worth, folded in where the run reads it — one place each,
   // so a bonus cannot apply to the HUD and not to the rule, or the other way.
   const saveNow = await readSave(umicat);
-  /** The hero's level, which decides how hard they hit and how hard they are
-   *  hit. Read once at the start: a run is played at the level you walked in
-   *  with, and the one you leave with is the summary's news. */
-  const playerLevel = saveNow.level ?? 1;
+  /** ONE, always. There is no player level any more.
+   *
+   *  It gave +8% attack and −3.5% damage taken per level, read off the save —
+   *  and this game has a SHARED SCORE BOARD. A persistent power stat and a
+   *  cross-player board cannot both be right: two players of the same skill
+   *  post different numbers because one of them has played longer, so the
+   *  board ranks accounts rather than runs. That is the board not working,
+   *  and it is invisible — nothing on screen would ever say so.
+   *
+   *  So it is not merely hidden. A stat that silently scales every fight is
+   *  the worst thing to leave switched on behind a readout somebody removed.
+   *
+   *  The save's `level` and `xp` are left alone rather than deleted: they cost
+   *  nothing, and an old save that carries them is not worth breaking. Nothing
+   *  reads them. */
+  const playerLevel = 1;
+  void saveNow.level;
   /** What this run has picked up, for the summary and for the village. */
   const earned: Materials = { ...NO_MATERIALS };
   let kills = 0;
@@ -3497,14 +3510,6 @@ export async function startLevel(
                   border-radius:18px;padding:22px 24px">
         <div style="font:800 19px/1.5 system-ui">${didWin ? 'Cleared' : 'Defeated'}</div>
         <div style="opacity:.75;margin-bottom:14px">${level.name} · ${formatTime(runClock)} · ${reached} points</div>
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <span id="sum-lv" style="font:800 17px/1.4 system-ui">Level ${fromLevel}</span>
-          <span id="sum-xp" style="opacity:.7">+${gained} XP</span>
-        </div>
-        <div style="height:12px;border-radius:6px;background:rgba(255,255,255,.14);
-                    overflow:hidden;margin:6px 0 16px">
-          <div id="sum-bar" style="height:100%;width:0%;background:#7cc4ff;border-radius:6px"></div>
-        </div>
         ${row('award', 'Score', score)}${row('sword', 'Defeated', kills)}
         <div id="sum-rank" style="margin-top:14px;opacity:.75;font-size:13px;min-height:1.6em"></div>
         <button id="sum-go" style="margin-top:18px;width:100%;padding:11px 0;border:0;
@@ -3536,36 +3541,6 @@ export async function startLevel(
       }
     })();
 
-    // Fill the bar, one level at a time. A single jump to the final number
-    // hides the thing worth watching, which is the moment it wraps.
-    const bar = panel.querySelector<HTMLElement>('#sum-bar')!;
-    const lvEl = panel.querySelector<HTMLElement>('#sum-lv')!;
-    void (async () => {
-      let lv = fromLevel;
-      let have = fromXp;
-      let left = gained;
-      bar.style.transition = 'width .5s ease-out';
-      bar.style.width = `${(have / xpToNext(lv)) * 100}%`;
-      while (left > 0) {
-        const need = xpToNext(lv) - have;
-        if (left < need) {
-          have += left; left = 0;
-          bar.style.width = `${(have / xpToNext(lv)) * 100}%`;
-          break;
-        }
-        left -= need;
-        bar.style.width = '100%';
-        await new Promise((r) => setTimeout(r, 520));
-        lv += 1; have = 0;
-        lvEl.textContent = `Level ${lv}`;
-        lvEl.style.color = '#ffd45e';
-        audio.play(SFX.levelUp);
-        bar.style.transition = 'none';
-        bar.style.width = '0%';
-        await new Promise((r) => setTimeout(r, 40));
-        bar.style.transition = 'width .5s ease-out';
-      }
-    })();
 
     panel.querySelector<HTMLButtonElement>('#sum-go')!.onclick = () => {
       panel.remove();
@@ -5176,6 +5151,10 @@ export async function startLevel(
       /** Drive the two controls a probe cannot press, because the SDK's
        *  buttons only exist on a touch screen. */
       swap: () => swapPole(),
+      /** Put the hero somewhere. (`attack` is already declared below — two of
+       *  the same key in one object literal is TS1117, which `tsc` reports and
+       *  `vite build` does not. Second time this has happened here.) */
+      teleport: (x: number, z: number) => character.teleport({ x, y: 0.5, z }),
       /** The board's four corners, in 0..1 screen space, from the REAL camera.
        *  Recomputing the projection beside the game would be checking a copy
        *  of the arithmetic rather than the camera the player is looking
@@ -5355,6 +5334,9 @@ export async function startLevel(
       // what the run is worth. A probe that cannot read `pole` cannot check a
       // single rule in this game.
       pole, mana, manaMax: MANA_MAX, score, clock: +runClock.toFixed(2),
+      /** Always 1. On `state()` so a probe can prove the account does not
+       *  change the fight, which is what the shared board rests on. */
+      playerLevel,
       // The curve itself, so "does it ramp" is a question about the game
       // rather than about how many enemies a slow headless frame managed to
       // spawn in six seconds of wall clock.

@@ -781,17 +781,19 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
   hudEl.textContent = '';
   const purse = document.createElement('div');
   purse.style.cssText = 'font: 700 15px/1.5 system-ui, sans-serif;';
+  /** Nothing. The corner is empty and the plate collapses.
+   *
+   *  It held a player LEVEL and a purse of gold, wood and stone. Nothing sells
+   *  anything any more, so the materials are three numbers that can only go
+   *  up — and the level is worse than useless, it is actively misleading: see
+   *  the note on `playerLevel` in `main.ts` for why it had to stop existing
+   *  rather than merely stop being shown.
+   *
+   *  Kept as a function rather than deleted at every call site, because it is
+   *  called from six places and an empty one says "there is deliberately
+   *  nothing here" where six deletions say nothing at all. */
   const renderPurse = (): void => {
-    // innerHTML, because the entries carry ICONS and an icon is an element.
-    // This said `textContent` and printed four hundred characters of `<span
-    // style=...>` across the top of the hub — the markup was correct, the sink
-    // was not, and nothing typed anywhere says which of these a string is.
-    purse.innerHTML = [
-      `Lv ${level}`,
-      store.gold > 0 && `${iconHtml('coin')} ${store.gold}`,
-      store.wood > 0 && `${iconHtml('wood')} ${store.wood}`,
-      store.stone > 0 && `${iconHtml('stone')} ${store.stone}`,
-    ].filter(Boolean).join('   ');
+    purse.innerHTML = '';
   };
   renderPurse();
   // Same plate as a level's readout: this is the same white text in the same
@@ -1063,24 +1065,10 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
      c.stone && `${iconHtml('stone')} ${c.stone}`]
       .filter(Boolean).join('  ');
 
-  let shopPick = 0;
   /** Anything the stall sells. Buildings are one kind of thing it sells, not
    *  the shape of the shop — the village's SIZE is for sale too, and the user
    *  expects more kinds later. Each item knows its own price, its own picture
    *  and what buying it does. */
-  interface ShopItem {
-    id: string;
-    name: string;
-    icon: IconName;
-    effect: string;
-    cost: Materials;
-    shot?: string;
-    /** Why this cannot be bought right now, whatever the price. Shown in place
-     *  of the price, because "you cannot afford it" and "you have nowhere to
-     *  put it" are different problems and only one of them is fixed by a run. */
-    refuse?: string;
-    buy: () => void;
-  }
 
   /** A picture of what more land buys: the village you have, and the one you
    *  would have, drawn to scale from the same numbers the walls are built from.
@@ -1088,94 +1076,7 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
    *  Drawn rather than photographed. A thumbnail of a wall is a picture of a
    *  wall; what is actually for sale is the SHAPE getting bigger, and that is
    *  a diagram. */
-  const landShot = (from: number): string => {
-    const S = 128;
-    const c = document.createElement('canvas');
-    c.width = S; c.height = S;
-    const g = c.getContext('2d');
-    if (!g) return '';
-    const now = LAND[from];
-    const next = LAND[from + 1];
-    const pad = 10;
-    // Both villages share their FRONT edge, because that is what happens: the
-    // gate does not move and the village grows backwards and sideways from it.
-    // Drawing them concentric made the two look almost the same size and said
-    // the wrong thing about where the new ground appears.
-    const span = Math.max(next.x * 2, next.back - FRONT);
-    const k = (S - pad * 2) / span;
-    const xOf = (x: number): number => S / 2 + x * k;
-    const yOf = (z: number): number => pad + (z - FRONT) * k;
-    const plot = (l: { x: number; back: number }, stroke: string, fill: string): void => {
-      g.beginPath();
-      g.roundRect(xOf(-l.x), yOf(FRONT), l.x * 2 * k, (l.back - FRONT) * k, 6);
-      g.fillStyle = fill; g.fill();
-      g.strokeStyle = stroke; g.lineWidth = 3; g.stroke();
-    };
-    plot(next, 'rgba(255,215,106,.95)', 'rgba(255,215,106,.18)');
-    plot(now, 'rgba(255,255,255,.7)', 'rgba(255,255,255,.12)');
-    // The gate, so the picture has a front and you can see which way it grew.
-    g.strokeStyle = '#1b2026'; g.lineWidth = 4;
-    g.beginPath(); g.moveTo(xOf(-0.7), yOf(FRONT)); g.lineTo(xOf(0.7), yOf(FRONT)); g.stroke();
-    g.strokeStyle = 'rgba(255,215,106,.95)'; g.lineWidth = 2.5;
-    g.beginPath(); g.arc(xOf(0), yOf(FRONT), 0.7 * k, Math.PI, 0); g.stroke();
-    return c.toDataURL('image/png');
-  };
 
-  const shopStock = (): ShopItem[] => {
-    const items: ShopItem[] = [];
-    // Land first. It is the thing that makes room for everything under it, and
-    // the only item whose price the player can already feel.
-    if (land < LAND.length - 1) {
-      items.push({
-        id: 'land',
-        name: 'More land',
-        icon: 'gate',
-        effect: 'Pushes the village wall out, and clears the trees behind it',
-        cost: LAND_COST[land],
-        shot: landShot(land),
-        buy: () => {
-          land += 1;
-          showLand();
-          void patchSave(shared.umicat, { land });
-          showShop();
-        },
-      });
-    }
-    // A building you cannot put down is not a purchase, it is a trap. Two
-    // things stop one being sold:
-    //
-    //  - nowhere to put it. The village fills up, and at its smallest three
-    //    badly-placed buildings can leave no legal cell at all.
-    //  - something already in your hands. One at a time keeps the whole thing
-    //    analysable: there is never a queue of bought-but-unplaced buildings,
-    //    and "is there room for one more" is a question about one building.
-    //
-    // Land is exempt from both. It is the thing that FIXES having nowhere to
-    // put something, so it must stay buyable in exactly the state where
-    // everything else is refused.
-    const noRoom = !roomForOne();
-    for (const b of TOWN) {
-      if ((town[b.id] ?? 0) !== 0) continue;
-      items.push({
-        id: b.id, name: b.name, icon: b.icon, effect: b.effect,
-        cost: b.costs[0], shot: shopShot.get(b.id),
-        refuse: carrying
-          ? `Put down the ${carrying.name} first`
-          : (noRoom ? 'Nowhere left to put it — buy more land' : undefined),
-        buy: () => {
-          town[b.id] = 1;
-          cameFrom = null;
-          void patchSave(shared.umicat, { store, town });
-          // It goes straight into your hands and the shop gets out of the way.
-          // Buying a building and then being told to find somewhere to press
-          // again is a second errand for one decision.
-          carrying = b;
-          closePanel();
-        },
-      });
-    }
-    return items;
-  };
 
   /** The score board, opened at the stall.
    *
@@ -1217,85 +1118,6 @@ export async function runHub(shared: Shared): Promise<HubChoice> {
     body.append(boardElement(rows, shared.umicat.user?.id ?? null));
   };
 
-  const showShop = (): void => {
-    panelOpen = true;
-    input.setEnabled(false);
-    panel.style.display = 'flex';
-    // A real page, not a tooltip that grew. A catalogue has two columns and
-    // wants room for both; the board-list panel beside it is a short menu and
-    // should stay the size of its own contents.
-    panel.style.width = 'min(860px, 86vw)';
-    panel.style.maxWidth = '86vw';
-    const stock = shopStock();
-    shopPick = Math.min(shopPick, Math.max(0, stock.length - 1));
-    const sel = stock[shopPick];
-
-    const rows = stock.length
-      ? stock.map((b, i) => {
-        const on = i === shopPick;
-        const afford = canAfford(store, b.cost);
-        return `<button data-pick="${i}" style="
-            display:flex; align-items:center; gap:10px; width:100%; margin:4px 0;
-            padding:9px 12px; border:0; border-radius:11px; cursor:pointer;
-            font:700 14px/1.4 system-ui; text-align:left;
-            background:${on ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.10)'};
-            color:${on ? '#1b2026' : '#fff'}; opacity:${afford || on ? 1 : 0.55}">
-            ${iconHtml(b.icon, '1.3em')}<span style="flex:1">${escapeHtml(b.name)}</span>
-          </button>`;
-      }).join('')
-      : '<div style="opacity:.7;padding:10px 2px">Nothing left to buy.</div>';
-
-    const shot = sel?.shot;
-    const detail = sel
-      ? `<div style="font:800 19px/1.4 system-ui; display:flex; align-items:center;
-                     justify-content:center; gap:9px; padding-bottom:9px;
-                     border-bottom:1px solid rgba(255,255,255,.22)">
-           ${iconHtml(sel.icon, '1.2em')}${escapeHtml(sel.name)}</div>
-         ${shot ? `<img alt="${escapeHtml(sel.name)}" src="${shot}" style="
-             display:block; margin:10px auto 0; width:min(190px, 28vh); width:min(190px, 28svh);
-             aspect-ratio:1; object-fit:contain;
-             background:rgba(255,255,255,.06); border-radius:16px">` : ''}
-         <div style="margin-top:10px; opacity:.92">${escapeHtml(sel.effect)}</div>
-         <div style="margin-top:16px">${priceOf(sel.cost)}</div>
-         ${(() => {
-    // Three states, and the refusal outranks the price: being told what it
-    // costs when the problem is that you have nowhere to put it sends you off
-    // to earn materials that will not help.
-    const can = !sel.refuse && canAfford(store, sel.cost);
-    const label = sel.refuse ?? (can ? 'Buy' : `needs ${shortfall(store, sel.cost)}`);
-    return `<button id="shop-buy" class="${LIFT.primary}" ${can ? '' : 'disabled'} style="
-             margin-top:18px; padding:11px 26px; border:0; border-radius:999px;
-             cursor:${can ? 'pointer' : 'default'}; font:800 15px system-ui;
-             max-width:100%; white-space:normal;
-             background:${can ? '#ffd76a' : 'rgba(255,255,255,.16)'};
-             color:${can ? '#241b00' : 'rgba(255,255,255,.55)'}">${label}</button>`;
-  })()}`
-      : '<div style="opacity:.7">Nothing left to buy.</div>';
-
-    panelBody.innerHTML =
-      `<div style="font:800 18px/1.6 system-ui; margin-bottom:10px">Shop</div>
-       <div style="display:flex; gap:20px; align-items:stretch">
-         <div style="width:180px; max-height:52vh; overflow:auto">${rows}</div>
-         <div style="flex:1; min-width:210px; text-align:center;
-                     border-left:1px solid rgba(255,255,255,.14); padding-left:20px">
-           ${detail}</div>
-       </div>`;
-
-    for (const el of panelBody.querySelectorAll<HTMLButtonElement>('button')) {
-      el.onclick = () => {
-        if (el.dataset.pick) { shopPick = Number(el.dataset.pick); showShop(); return; }
-        if (el.id === 'shop-buy' && sel && !sel.refuse && canAfford(store, sel.cost)) {
-          // Paying is the same for everything on the shelf; what the purchase
-          // DOES belongs to the item.
-          const c = sel.cost;
-          store.gold -= c.gold; store.wood -= c.wood; store.stone -= c.stone;
-          renderPurse();
-          audio.play(SFX.placeTower);
-          sel.buy();
-        }
-      };
-    }
-  };
 
   /** The list of boards, opened by walking through the door.
    *

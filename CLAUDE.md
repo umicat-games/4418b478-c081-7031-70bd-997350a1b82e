@@ -595,6 +595,34 @@ The village is Balaboo's, with its economy off: nothing sells anything, so no
 building can be bought and none appears. What is left is the weapon rack, the
 stall, and the door — which is what the hall was asked to be.
 
+**There is no shop, and no player LEVEL.**
+
+The shop went when the stall became the score board — it had already been
+unreachable for a while, since nothing but the shop itself opened it, and code
+that can only be reached from inside itself is code that is gone but still
+compiling.
+
+The level is the interesting one, because it was not a readout that needed
+tidying away. It gave **+8% attack and −3.5% damage taken per level**, read off
+the save, and this game has a **shared score board**. A persistent power stat
+and a cross-player board cannot both be right: two players of the same skill
+post different numbers because one of them has played longer, so the board
+ranks ACCOUNTS rather than runs.
+
+And it fails invisibly — nothing on screen would ever say the numbers are not
+comparable. So `playerLevel` is 1 for everybody. Hiding it and leaving it
+switched on would have been the worst of the three options available.
+
+`verify-3d-polarity-fairness` seeds a save at level 1 and at level 20 and plays
+the same two moments in each: one hit taken, one swing landed. 16 and 7, both
+times.
+
+The save's `level` and `xp` are left alone rather than deleted — they cost
+nothing and an old save carrying them is not worth breaking. Nothing reads
+them, the summary no longer shows the XP bar (a bar that fills for a number
+which changes nothing is a lie on screen), and the hub's purse is empty: gold,
+wood and stone have no source and nothing to buy.
+
 **Walking through the door starts the game.** There is no list. The tower
 defense had four boards and asked which; the rule it already followed was the
 right one — a brand new player with nothing unlocked went straight through,
@@ -713,6 +741,7 @@ In `umicat-infra/playwright/`. The ones written for this fork:
 | `verify-3d-polarity-pull` | does a line that MISSES still get collected, and does the other colour stay straight |
 | `verify-3d-polarity-crates` | what each rare crate DOES, by effect rather than by label |
 | `verify-3d-polarity-frame` | is the whole board on screen on five shapes — AND is it big enough to read |
+| `verify-3d-polarity-fairness` | does the ACCOUNT change the fight — which the shared board rests on |
 
 Four lessons from writing them, all of which cost a run:
 
@@ -730,7 +759,8 @@ Four lessons from writing them, all of which cost a run:
 - **Counting what spawned measures the renderer, not the game.** Headless runs
   game time at about a quarter of wall clock, so "is the board busier at 200s"
   came back as 1 versus 2. `state().gap` is the curve's own answer.
-- **`vite build` does not typecheck, and a comment can eat your code.** Two
+- **`vite build` does not typecheck, and a comment can eat your code.** (This
+  has now happened twice, both times a duplicate key in the `__game` literal.) Two
   `giveBuff` handles ended up in one object literal — the later won, so
   nothing looked wrong, but the earlier one knew nothing about `instant` and
   would have hung a twenty-second countdown on an effect that is already over.
