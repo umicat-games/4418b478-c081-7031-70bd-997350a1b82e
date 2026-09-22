@@ -150,6 +150,17 @@ belongs to the assistant: it replies in whatever it is written to.
 **`ai` and `microphone` must be declared** in the game's Settings on the
 platform, or the backend rejects AI calls and the iframe blocks the mic.
 
+**The title screen's art comes from the Asset Manager, by URL.** The wordmark
+and the background live at `cdn.umicat.ai/uploads/<game id>/…` — the same host
+the game itself is served from, so there is nothing to copy into the repo and
+no CORS to think about; the two URLs are the `ART` constant in
+`src/ui/title.ts`. Re-uploading the same filename replaces them without a
+deploy. Both are decoration and both have a fallback: the wordmark reverts to
+text, the photograph to the gradient that used to be the whole background. The
+scrim over the photo is deliberately light (0.22 in the middle) — at 0.40 the
+sunlit wood went brown, and the two lines of small text it was protecting now
+carry their own shadow instead.
+
 ## Building and checking
 
 Sound is Kenney CC0 except the music; `public/audio/CREDITS.md` says which
