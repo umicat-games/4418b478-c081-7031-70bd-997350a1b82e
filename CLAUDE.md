@@ -1,202 +1,177 @@
-# Umicat 3D game
+# Othello with me
 
-A three.js game on the Umicat platform. This file is what the agent reads first.
+Reversi/Othello against an engine, with an AI assistant sitting beside the
+board. Forked from **Gomoku with me** (`work/umicat/gomoku`), which is the
+board-game template: everything in `src/shell/` came from there and should go
+back there if it is fixed here.
+
+> **Update this file in the same commit as the change.** It arrived describing
+> a 3D platformer, which is exactly how a long session gets misled.
+
+Game id `7a3fbb1c-7bbe-4f97-9db6-0eeef4a2d8b6`, fork org `umicat-games` (the
+repo holds one branch per game). `./deploy-preview.sh` publishes `dist/`
+straight to S3 + CloudFront. **Always commit AND deploy** — a direct deploy is
+a temporary override that any workspace rebuild wipes out.
+
+Its siblings: **GO with me** (`work/umicat/go`), **Chess with me**
+(`work/umicat/chess`), **Xiangqi with me** (`work/umicat/xiangqi`), **Gomoku
+with me** (`work/umicat/gomoku`).
 
 ## Where things are
 
-| | |
-|---|---|
-| `src/main.ts` | the whole game loop — start here |
-| `src/config.ts` | the design canvas + `ORIENTATION` (set at game creation; do not change it) |
-| `public/scenes3d/main.json` | **the scene** — entities, lights, colliders, camera |
-| `public/scenes3d/manifest.json` | models, their import scale, and their **animation map** |
-| `public/assets/` | `.glb` models, textures, audio |
-
-## The two halves, and why the split matters
-
-**Platform** — `umicat.saves`, `umicat.gameData`, `umicat.rooms`, `umicat.ai`,
-`umicat.voice`, `umicat.dialogue`, `umicat.user`. Identical to what a 2D Umicat
-game gets, because it is the same package underneath
-(`@umicat/platform-sdk`). None of it knows anything is being drawn.
-
-**Engine** — `loadScene3D`, `CharacterController3D`, `Input3D`, three.js and
-Rapier. This is the part that differs from a 2D game.
-
-When something goes wrong, knowing which half you are in usually names the bug.
-
-## The scene format
-
-`scenes3d/main.json` is **design data**: what the game looks like before anyone
-plays it. No save is loaded when it is read. Rules that are decisions, not
-accidents:
-
-- **Rotation is a quaternion** `[x, y, z, w]`, never Euler angles.
-- **Ids are authored and stable.** Saves and code refer to entities by id.
-- **Transforms are local to `parent`.** World transforms are derived.
-- **Colliders are explicit.** Never use a render mesh as a dynamic collider —
-  that is the classic way to make a game that is correct and unplayably slow.
-- **Animation clips are mapped by meaning** in the manifest
-  (`{ "walk": "Walk" }`), never guessed from the clip's name.
-
-`loadScene3D` refuses duplicate ids, dangling parents, entities that would draw
-nothing, and trimesh colliders on dynamic bodies — at load, because every one of
-them otherwise shows up as a blank screen an hour later.
-
-## Building
-
-```bash
-npm run dev      # local dev server
-npm run build    # what the platform runs
 ```
+src/shell/     the half that is the same in every game.      DO NOT EDIT.
+src/game/      the rules, the engine, the board.             THIS GAME.
+src/main.ts    the loop that joins them.                     NOT generic.
+src/i18n.ts    what the buttons say.
+public/playbooks/coach.md   the assistant's persona.
+tools/         perft, the rule tests, the search benchmark.
+```
+
+The seam to the shell is four things: a grid (`BoardRig({cols, rows})`), a
+`Notation` (`a1`…`h8`), an `AssistantSpec`, and a `{share, label}` for the eval
+bar. `src/main.ts` is deliberately NOT generic — see gomoku's CLAUDE.md.
+
+## The two brains, and why they are separate
+
+**The ENGINE** (`src/game/engine.ts`) decides moves and reads positions:
+alpha-beta over the same referee the player moves through, in a Web Worker in
+this browser. No backend, no per-move cost, works signed out.
+
+**The ASSISTANT** (`src/shell/coach.ts` + `src/game/assistant.ts`) talks. It is
+the platform's runtime AI (ADR-017), handed the numbers to talk *about*. It
+never decides a move and never puts a disc down.
+
+## The referee is tested, not believed
+
+`npm run verify` = perft to depth 6 plus hand-written rule tests.
+
+**Perft is the whole rules argument.** Othello has published node counts from
+the opening position and they match to depth 8:
+
+```
+1: 4   2: 12   3: 56   4: 244   5: 1396   6: 8200   7: 55092   8: 390216
+```
+
+That is not a smoke test. Getting 390216 right means flipping, direction
+masks, the pass rule and the end condition are all right, because every one of
+them changes the count.
+
+**Legality and flipping are the same question.** `flips()` returns the discs a
+move turns over, and a move is legal exactly when that list is non-empty.
+Writing them as two functions is writing the rule twice and being wrong once.
+
+**A pass is not a move the player makes.** It is automatic: `make()` hands the
+turn back if the opponent has nothing to play, and `outcome()` ends the game
+when neither side has. The UI never offers a pass button — it says what
+happened (`hud.youPassed` / `hud.theyPassed`) and carries on.
+
+**The game can end with empty squares on the board.** 64 discs is the common
+case, not the rule. `outcome()` is "neither side has a move", and the winner is
+whoever has more discs, wherever it stops.
 
 ## Things that will bite
 
-**A `SkinnedMesh`'s bounding sphere comes from the bind pose** and does not
-follow its bones, so three.js culls a character against a stale volume and it
-vanishes the moment it moves. `loadScene3D` already sets `frustumCulled = false`
-on skinned meshes; if you add a character by hand, do the same.
+**Make/unmake, never replay.** `undo()` originally rebuilt the position from
+move one; perft(7) took four seconds. Keeping a history of what each move
+flipped and putting it back made it 642ms. Any search that gets slow in this
+family is usually doing the same thing somewhere.
 
-**An action is a one-shot, not a state.** The character ships 32 clips —
-`attack`, `kick`, `pick-up`, `interact`, `holding-*` (including shooting),
-`die`, `emote-yes/no` — and `CharacterAnimator.play('attack')` runs one once and
-hands control back. Gate on `animator.busy` so one press is one swing, and use
-an edge check if you do not want holding the key to chain them. Locomotion keeps
-following `character.state` underneath.
+**Do not negate when the opponent passed.** Negamax flips the sign because the
+side to move alternates — and here it sometimes does not:
 
-**Use the prop kit before you draw scenery out of boxes.** `public/kit/` ships
-86 real models with a catalogue at `public/kit/index.json`. A coloured box named
-`crystal` is still a box, and a scene of them reads as a prototype.
-
-**The world's unit is Kenney's, not the metre.** A character is 0.72 units tall,
-so ~4,700 CC0 props drop in at `importScale: 1`. Anything length-shaped you add —
-sizes, positions, collider extents, camera offsets, speeds, **and gravity** —
-lives in that unit. See ASSETS.md. The character takes its gravity from the
-world's, so there is one gravity in the scene and not two; the scene's own
-`gravity` in `main.json` is where it is set.
-
-**Rotate geometry, not objects, when orienting a primitive.** An object's
-rotation is overwritten by the entity's authored transform. Getting this wrong
-once left every "ground" standing upright as a wall, which renders convincingly
-until the camera crosses to the other side.
-
-**Jump and the on-screen controls belong to the SDK, not to your game.**
-`update(dt, dir, { jump })` takes the button's current state; coyote time,
-input buffering and the release-cut live in `CharacterController3D` because
-every 3D game shares this character (ADR-034). `Input3D` adds a thumbstick and
-jump button on touch devices and merges them into the same `direction()` and
-`jump`, so nothing here branches on input source.
-
-**A jump is a range, not a number — author platforms against the SHORT one.**
-Releasing the button early cuts the jump deliberately, so this character clears
-`character.maxJumpRise` held and only `character.minJumpRise` tapped — roughly a
-fifth as far. Read those off the controller rather than deriving them; a course
-laid out against the held height has a first step that tapping players cannot
-clear, and that reads as "the platform up there is unreachable", not as a bug.
-Leave headroom on top: both numbers are ballistics, and a real jump is stepped
-at frame rate.
-
-**The thumbstick is invisible until a thumb lands on the left half of the
-screen, and then it is exactly there.** That is the default; `stick: 'fixed'`
-brings back an always-drawn pad at the bottom left. Nothing in a game changes
-either way — `direction()` reads the same.
-
-**The right half of the screen turns the camera, and the stick follows it.**
-On desktop the same `look()` is fed by holding the RIGHT mouse button and
-dragging — the left button stays the game's, for selecting and aiming.
-`input.look()` returns a delta and clears on read; hand it to `world.orbit()`,
-then pass `world.cameraYaw` to `input.direction()`. Those two go together: a
-camera that turns while movement stays on world axes is worse than a camera
-that cannot turn, because the player looks at something, pushes towards it, and
-walks somewhere else. Read the look BEFORE moving, or every turn lags a frame.
-
-**What the platform has already taken, and what is left for you.** The controls
-are shared between the SDK and your game, and the SDK went first — so before
-wiring an input, check it is still free:
-
-| | Taken by the platform | Yours |
-|---|---|---|
-| Touch | left half (thumbstick), right half (camera), the button cluster bottom-right | extra buttons, via `actions` |
-| Mouse | **right button + drag** (camera), and the context menu | **left button** |
-| Keys | `WASD` / arrows, `Space` | everything else |
-| Layers | a full-screen control layer at **`z-index: 10`**, kept clear of the top `max(64px, 12%)` | anything above or below it; `#hud` is already at 20 |
-
-**Any dialog you put up must call `input.setEnabled(false)`.** The controls are
-a full-screen layer above your DOM, so a button in a modal renders perfectly
-and cannot be pressed — the taps go to the move zone behind it. Disabling also
-stops the character walking behind the dialog, and clears what was held so a
-thumb mid-push does not resume when it closes. Re-enable when the dialog goes.
-Give the dialog a `z-index` above 10 as well, so it is visible over the layer
-while it is still fading out.
-
-The one that bites: **do not wire an action to "the mouse went down."** The
-right button is the camera now, so a game that attacks on any pointerdown
-swings every time the player turns round to look at something — and it looks
-like a combat bug, not an input one. Check `e.button === 0`. Check
-`e.pointerType !== 'touch'` too, or a phone fires both your handler and the
-on-screen button and you get two swings per tap.
-
-Text selection and the iOS long-press callout are already suppressed page-wide,
-with form fields exempted — you do not need to repeat it, and you should not
-blanket `user-select: none` yourself, because that is what breaks typing in a
-name field.
-
-**Declare action buttons; never mount your own.**
-`new Input3D({ actions: [{ id: 'attack', label: '⚔', keys: ['KeyJ'] }] })`, then
-`input.consume('attack')` for one-press-one-action or `input.held('attack')` for
-hold-to-act. A game that builds its own button cannot know where the platform's
-jump button is, and the first one to try landed exactly on top of it: same
-corner, platform layer above, so on a phone the attack button could not be
-pressed at all — and it mounted perfectly, with no error. `consume` also catches
-a tap that starts and ends between two frames, which a state comparison against
-last frame cannot see.
-
-**Never write `hud.textContent`.** It wipes every child the HUD has. Append a
-child element instead. The platform's touch controls mount to `<body>` for
-exactly this reason, but anything YOU put in the HUD is still yours to lose.
-
-**A camera limit that is an angle is usually meant to be a distance.** The
-follow camera's pitch floor is expressed as "stay this far above what you are
-looking at", not as a number of radians — at an orbit radius of 5.4 a −0.25rad
-floor puts the camera almost a unit underground, because how low an angle takes
-you depends on how far out you are.
-
-**Animate from `character.state`, not from input.** `idle`/`walk`/`jump`/`fall`
-describe what the character is doing; a clip chosen from the key that is held
-leaves it walking in mid-air.
-
-**Gravity is an acceleration, not a displacement.** Feeding a character
-controller a constant downward offset each frame passes a wall test and fails a
-step test. `CharacterController3D` already handles this.
-
-**A character that moves is not a character that is animating.**
-`CharacterAnimator` now owns this — it follows `character.state` and cross-fades
-— but the failure is worth knowing, because it is what a test misses rather than
-what it catches: before the animator existed, the character slid around playing
-its idle clip, and a test asking "are bones moving?" said yes, because idle moves
-bones too. If you ever drive the mixer yourself, the question to ask is *which*
-clip is playing, never *whether* something is.
-
-**Feedback beats numbers.** `flashTint(object, { color, ms })` plus
-`updateTints(objects)` once a frame is the hit flash. It is in the SDK for one
-reason worth knowing even if you never call it: `gltf.scene.clone(true)` SHARES
-MATERIALS, so tinting one of five cloned enemies turns all five red — a
-graphics bug wearing a gameplay bug's clothes. `flashTint` clones per object.
-
-**Sound goes through `GameAudio`, never through `<audio>`.**
 ```ts
-const audio = new GameAudio({
-  clips: { coin: { volume: 0.5, throttle: 40 }, hit: { volume: 0.4 } },
-  music: 'bgm',                       // public/audio/bgm.ogg
-});
-audio.play('coin');
+const v = g.toPlay === was ? negamax(...) : -negamax(-beta, -alpha, ...);
 ```
-`HTMLAudioElement` is the trap: iOS gives each one a real audio pipeline, caps
-how many may exist, and charges for every `play()`. A game pooling forty of them
-ran at **11fps on an iPhone and a locked 60 with sound muted** — and a desktop
-A/B showed no difference at all, which is why this belongs to the platform
-rather than to whoever is unlucky. The gesture unlock, the asynchronous
-`resume()`, and iOS suspending the context when the app goes away are all
-handled; `audio.play()` before the first tap is simply a no-op.
 
-**UI is DOM.** There is no reason to draw a score with triangles on the web;
-`index.html` has a `#hud` div for exactly this.
+Without that test the engine evaluates its own good fortune as a disaster, and
+it only shows up in positions where a pass happens, which is late and rare
+enough to look like a strength problem rather than a bug.
+
+**The endgame is EXACT, and that changes what the numbers mean.** Below
+`exactFrom` empties (8/11/13 by level) the search runs to the end of the game
+and the score is a disc difference, not a heuristic. `Read.exact` says which
+kind of number this is; the assistant must not describe a heuristic score as
+"you win by 6".
+
+**Counting discs is not a strategy, and the evaluation says so.** Mobility,
+frontier discs and corners dominate until the last dozen moves; disc count is
+weighted near zero in the opening and takes over at the end. A beginner's
+instinct ("take the most") is `gentle`'s `greedy: true` — it exists so the
+easiest level plays the way a new player expects, not because it is good.
+
+**Corners are the teaching, and X-squares are the trap.** `X_SQUARES` maps the
+four diagonal neighbours to the corner they hand over (`{9:0, 14:7, 49:56,
+54:63}`); the assistant mentions it when the player is about to play one. The
+engine's own `NEAR_CORNER` correction stops it valuing those squares as if the
+corner were still contested when it is already taken.
+
+**A disc's colour is its ROTATION.** All 64 are one `InstancedMesh` of a
+two-sided cylinder — black face up at 0, white face up at π. Flipping is then
+an animation the board already knows how to do, and there is nothing to create
+or destroy mid-game. Turning it over IS the game, so it had better not be a
+material swap.
+
+**Legal moves are always shown.** Small dots on every playable square, not a
+hint the player has to ask for. Othello without them is a game of finding your
+own moves, which is a different and worse game for anybody learning.
+
+**The felt is dark, so this board wants more light than its siblings.** Key
+2.6, hemisphere 0.95 — measured against the green (35,89,57), not guessed. The
+discs carry `emissive: 0x2b2a26` so white reads as white (208) against black
+(18) from directly overhead, where there is no rim light to separate them.
+
+**`margin: 0.9`** on the grid, because the coordinate labels live in the margin
+and an 8×8 board is small enough that the default crops them.
+
+**A WebGL canvas must be RE-RENDERED in the same frame you read pixels from
+it.** The board draws only when it changes (`dirty`/`invalidate`) and there is
+no `preserveDrawingBuffer`, so a probe that samples the canvas gets black —
+which cost an afternoon chasing a "the board goes black after a few moves" bug
+that did not exist. Force a render immediately before the read or the
+screenshot. Everything else in this family's probe lore applies too: a
+screenshot is not a measurement unless you know what frame it is of.
+
+**The camera is FIXED and looks STRAIGHT DOWN**, the board is a slab on a dark
+walnut TABLE with a real shadow, and the **boot screen is in `index.html`**,
+not in the bundle. All three are the family's decisions and gomoku's CLAUDE.md
+explains each at length; the only Othello-specific note is that `camera.up`
+must be set to −z by hand or `lookAt` cannot resolve straight down.
+
+**The end of a game is a DIALOG**, not a line in the corner: what happened, the
+one line the game can prove (here, the disc count), and the two things anybody
+wants next. The assistant's closing line lands inside it.
+
+**Scores are flipped to the player's point of view exactly once**, in
+`opponent.toRead`. A second flip anywhere is an assistant cheerfully telling
+the player they are winning while they are being beaten.
+
+**Saves are quota'd** (100KB/value, 1MB/player, 64 keys) and hold the MOVES,
+replayed through the referee — so a save can never contain a position the rules
+cannot reach.
+
+**A new game is a new conversation; Continue keeps the old one.** And
+`startGame` REFUSES while a game is in progress: an AI that can restart a live
+board will eventually do it, and no amount of playbook prose is a substitute
+for the game saying no.
+
+**The platform decides the language** (`umicat.locale` at handshake). Chat is
+the exception and belongs to the assistant.
+
+**`ai` and `microphone` must be declared** in the game's Settings on the
+platform, or the backend rejects AI calls and the iframe blocks the mic.
+
+## Building and checking
+
+```bash
+npm run dev        # local dev server
+npm run build      # what the platform runs
+npm run verify     # perft 1-6 + the rule tests — before every commit touching rules.ts
+npm run typecheck  # tsc --noEmit
+npm run bench      # depth vs time, and a game against itself
+node tools/perft.mjs 8   # the full published table, ~10s
+```
+
+Playwright probes live in the session scratchpad; they drive the game through
+`window.__game`, which exists only once a game has started — the title screen
+is awaited before it is assigned.

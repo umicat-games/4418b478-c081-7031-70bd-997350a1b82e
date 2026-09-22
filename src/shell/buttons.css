@@ -1,0 +1,104 @@
+/* What a button in this game looks like when it is pressable.
+ *
+ * The same design language as Balaboo's — a face with the top edge catching
+ * the light and a deeper slab of the SAME hue underneath for it to sit on —
+ * with this game's colours instead of that one's. Two things make a coloured
+ * rectangle read as a surface, and those are the two.
+ *
+ * A stylesheet rather than inline style for one reason that cannot be worked
+ * around: **`:active` cannot be written inline.** The press is not decoration.
+ * A raised button that does not go down when pushed reads as a picture of a
+ * button, and this game is quiet enough that the press is most of the feedback
+ * it gives.
+ *
+ * The palette is the board: slate `#1b2a26` and clamshell against the teal the
+ * companion already speaks in. Balaboo is yellow-on-wood because it is a game
+ * about building things in a field; this one is green-on-slate because it is a
+ * game about two colours on a grid.
+ */
+
+.lift {
+  /* How far it sinks. The slab shrinks by the SAME number when pressed —
+     anything else and the face slides rather than seats. */
+  --d: 3px;
+  --face: #2f6f62;
+  --slab: #1d4b41;
+  --top: rgba(255, 255, 255, 0.34);
+  --ink: #f2f7f5;
+
+  position: relative;
+  border: none;
+  border-radius: 999px;
+  background: var(--face);
+  color: var(--ink);
+  font: 600 14px/1 system-ui, -apple-system, sans-serif;
+  padding: 11px 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow:
+    0 var(--d) 0 var(--slab),
+    inset 0 1px 0 var(--top),
+    0 calc(var(--d) + 4px) 12px rgba(0, 0, 0, 0.35);
+  transform: translateY(0);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.12s ease;
+}
+.lift:hover { filter: brightness(1.1); }
+.lift:active {
+  transform: translateY(var(--d));
+  box-shadow: 0 0 0 var(--slab), inset 0 1px 0 var(--top), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.lift:disabled { opacity: 0.45; cursor: default; filter: none; }
+.lift:disabled:active { transform: none; }
+
+/** The other choice on a screen. Translucent over the board. */
+.lift.quiet {
+  --face: rgba(30, 36, 45, 0.82);
+  --slab: rgba(8, 10, 14, 0.85);
+  --top: rgba(255, 255, 255, 0.22);
+  --ink: #e9ecf1;
+  backdrop-filter: blur(10px);
+}
+
+/** Resigning, and erasing what the companion knows. Solid, never translucent:
+ *  a translucent red on a dark panel comes out darker than its own slab. */
+.lift.danger {
+  --face: #9e3b34;
+  --slab: #6d2520;
+  --top: rgba(255, 255, 255, 0.28);
+}
+
+/** Chrome over the board: the gear, the cancel cross. Small and dark. */
+.lift.dark {
+  --face: rgba(16, 20, 28, 0.86);
+  --slab: rgba(0, 0, 0, 0.7);
+  --top: rgba(255, 255, 255, 0.24);
+  --ink: #fff;
+  backdrop-filter: blur(8px);
+}
+
+/**
+ * Flat, with a hairline rim. NOT a lift, and that is the point.
+ *
+ * Relief says "press me", which is wrong for a thing that is SELECTED rather
+ * than pressed — the board sizes, the levels, the handicap. They are a set of
+ * chips showing what is available, and the chosen one says so with a filled
+ * face, not by being a key on a keyboard.
+ */
+.chip {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: 600 13px/1 system-ui, sans-serif;
+  padding: 9px 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.chip:hover { background: rgba(255, 255, 255, 0.12); }
+.chip[aria-pressed='true'] {
+  background: #2f6f62;
+  border-color: #7fd6c2;
+  color: #fff;
+}
+.chip:disabled { opacity: 0.4; cursor: default; }
