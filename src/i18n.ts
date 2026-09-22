@@ -79,6 +79,7 @@ const EN = {
   'chat.noCredits': 'I am out of credits, so I will stop talking — the game plays on without me.',
   'chat.lost': 'I lost my train of thought. Ask me again?',
   'chat.marked': 'Marked it on the board.',
+  'chat.midGame': 'This game is still going — to start a new one, use the gear at the bottom left.',
   'chat.markFailed': 'I could not find “{points}” on this board — ask me again and I will point properly.',
   'chat.threats': 'You: {mine}. White: {theirs}. Ringed on the board.',
 
@@ -166,6 +167,7 @@ const ZH: Partial<Record<Key, string>> = {
   'chat.noCredits': '我的额度用完了,先不说话了 —— 棋照样能下。',
   'chat.lost': '我走神了,再问我一次?',
   'chat.marked': '标在棋盘上了。',
+  'chat.midGame': '这盘还没下完 —— 要重开的话,点左下角的设置。',
   'chat.markFailed': '我没能在棋盘上找到「{points}」—— 再问我一次,我会指对地方。',
   'chat.threats': '你:{mine}。白棋:{theirs}。已经圈在棋盘上了。',
 

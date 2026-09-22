@@ -65,9 +65,15 @@ export function gomokuAssistant(hooks: AssistantHooks): AssistantSpec<Context> {
           if (LEVELS.some((l) => l.id === id)) hooks.setLevel(id);
           return false;
         }
-        case 'start_game':
-          hooks.startGame();
-          return false;
+        case 'start_game': {
+          if (hooks.startGame()) return false;
+          // The game refused: there are stones on the board. This used to go
+          // through, and a game in progress simply disappeared.
+          note('[the game] a game is in progress, so a new one was NOT started. '
+          + 'The student starts one themselves, from the gear at the bottom left.');
+          say(t('chat.midGame'));
+          return true;
+        }
         case 'show_threats': {
           const out = hooks.showThreats();
           if (!out) return false;
