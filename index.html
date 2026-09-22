@@ -135,11 +135,17 @@
           step: function (p) { if (p > at) { at = p; paint(); } creep(Math.min(p + 0.12, 0.95)); },
           done: function () {
             if (!el) return;
+            // Hold the node in a local BEFORE letting go of `el`: the timeout
+            // below runs three hundred milliseconds later, and reading a
+            // reference that has since been nulled throws inside a callback
+            // nobody is watching — which left the screen in the DOM for ever,
+            // invisible and untouchable, with one line in the console.
+            var node = el;
+            el = null;
             clearInterval(timer);
             at = 1; paint();
-            el.classList.add('done');
-            setTimeout(function () { el.remove(); }, 300);
-            el = null;
+            node.classList.add('done');
+            setTimeout(function () { node.remove(); }, 300);
           },
         };
         // Start visible: a bar at 8% of a 260px track is four pixels, which
