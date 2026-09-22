@@ -132,7 +132,13 @@ export function gomokuAssistant(hooks: AssistantHooks): AssistantSpec<Context> {
           // answer "what is going on here". Row 1 of the array is the TOP of
           // the board, which is row `size` when spoken.
           position: game.diagram(),
-          legend: 'x = the student, playing Black and moving first. o = the engine, playing White. The first row printed is the top of the board.',
+          // How to read it, completely. Half a legend is how the Go game's
+          // assistant ended up describing the wrong side of the board.
+          legend: `Each string is one row. The FIRST row printed is the TOP of the board — `
+            + `row ${game.size} — and the LAST is row 1. The first character of every row is `
+            + `column A, the last is column ${'ABCDEFGHIJKLMNO'[game.size - 1]}. So the top-left `
+            + `point is A${game.size} and the bottom-left is A1. "x" is the student, playing `
+            + `Black and moving first; "o" is you, playing White; "." is an empty point.`,
           to_play: game.toPlay === BLACK ? 'the student' : 'the engine',
           move_number: game.moves.length,
           last_move: game.last !== null ? name(game, game.last) : null,
