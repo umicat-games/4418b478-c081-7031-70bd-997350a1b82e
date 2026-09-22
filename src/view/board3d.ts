@@ -151,7 +151,7 @@ export class BoardView {
     // drops the board's shadow almost straight down and there is nothing to
     // see. This one is about twenty-five degrees above the table, which is
     // what puts a shadow on the wood beside the board.
-    const key = new THREE.DirectionalLight(0xfff1dc, 1.85);
+    const key = new THREE.DirectionalLight(0xfff1dc, 2.0);
     key.position.set(-3.1, 2.3, 2.1);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -164,7 +164,7 @@ export class BoardView {
     this.scene.add(key);
     // Enough fill that a stone is not half black, and no more: fill is the
     // enemy of the shadow that makes the board sit on the table.
-    this.scene.add(new THREE.HemisphereLight(0xcfd8e6, 0x140c06, 0.55));
+    this.scene.add(new THREE.HemisphereLight(0xcfd8e6, 0x140c06, 0.62));
     // A little warmth bouncing back off the table, so the board's near edge
     // is not the darkest thing on screen.
     const bounce = new THREE.DirectionalLight(0xffd9a8, 0.28);
@@ -567,7 +567,10 @@ function boardTexture(size: number): THREE.CanvasTexture {
   c.width = c.height = px;
   const ctx = c.getContext('2d')!;
 
-  ctx.fillStyle = '#e0b074';
+  // Brighter than the table by a good margin, and that gap is doing work: it
+  // is what makes the board read as an object put down on the wood rather
+  // than as a lighter patch of it.
+  ctx.fillStyle = '#edc389';
   ctx.fillRect(0, 0, px, px);
   // Grain: long, low-contrast strokes. Enough to stop the board reading as a
   // flat orange rectangle, not enough to compete with the lines.
@@ -600,10 +603,12 @@ function boardTexture(size: number): THREE.CanvasTexture {
   // A soft falloff towards the edges of the board itself. Real wood under a
   // lamp is never one flat tone, and without this the board reads as printed
   // paper the moment it stopped being the only thing on screen.
-  const shade = ctx.createRadialGradient(px * 0.42, px * 0.38, px * 0.1, px * 0.5, px * 0.5, px * 0.78);
-  shade.addColorStop(0, 'rgba(255,240,214,0.10)');
-  shade.addColorStop(0.55, 'rgba(0,0,0,0)');
-  shade.addColorStop(1, 'rgba(60,36,14,0.20)');
+  const shade = ctx.createRadialGradient(px * 0.42, px * 0.38, px * 0.1, px * 0.5, px * 0.5, px * 0.82);
+  shade.addColorStop(0, 'rgba(255,244,222,0.12)');
+  shade.addColorStop(0.6, 'rgba(0,0,0,0)');
+  // Light: enough to round the board off, not enough to make the far corners
+  // look unlit. This was 0.20 and the board read as dim.
+  shade.addColorStop(1, 'rgba(60,36,14,0.10)');
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, px, px);
 
