@@ -28,6 +28,7 @@ import { PointActions } from './shell/pointactions';
 import { AskHere } from './shell/askhere';
 import { EvalBar } from './shell/evalbar';
 import { GameOver } from './shell/gameover';
+import { Plates } from './shell/plates';
 import { showTitle } from './shell/title';
 import { underCurtain } from './shell/curtain';
 import { BLACK, Gomoku, SIZES, WHITE, type BoardSize, type Point } from './game/rules';
@@ -118,6 +119,9 @@ async function start(): Promise<void> {
   speech.notation = notation(15);
 
   /** Confirm / cancel / ask, beside the stone rather than in a corner. */
+  /** The two seats either side of the board — furniture, filled by `refresh()`. */
+  const plates = new Plates();
+
   const actions = new PointActions({
     onConfirm: (at) => commit(at),
     onCancel: () => { chosen = null; board.setGhost(null); },
@@ -158,6 +162,15 @@ async function start(): Promise<void> {
     onTitle: () => void toTitle(),
   });
 
+  /**
+   * The board the seats are measured against, and the reason it is a variable
+   * rather than a read of `game`: the render loop below runs from the very
+   * first frame, long before `let game` exists, so anything it touches has to
+   * be declared up here or it is a `ReferenceError` that takes the game down
+   * at boot with a blank screen. Null means "no board yet, nothing to seat".
+   */
+  let seated: { cols: number; rows: number } | null = null;
+
   const frame = (): void => {
     if (performance.now() < repaintUntil) rig.invalidate();
     // Only when the picture actually changed. Between two moves the board is
@@ -167,6 +180,7 @@ async function start(): Promise<void> {
       if (speech.showing) placeSpeech();
       placeActions();
       if (askHere.showing && askHere.at) askHere.place(rig.screenOf(askHere.at.x, askHere.at.y), rig.screenSpacing);
+      seatPlates();
     }
     requestAnimationFrame(frame);
   };
@@ -417,7 +431,45 @@ async function start(): Promise<void> {
   tip.className = 'tip';
   hud.appendChild(tip);
 
+  /** Put the two seats against the board's own edges — measured from the grid
+   *  plus a bit of the wooden margin, so it stays right at any board size and
+   *  while the board reframes around an open panel. */
+  function seatPlates(): void {
+    if (!seated) return;
+    const cx = Math.round((seated.cols - 1) / 2), cy = Math.round((seated.rows - 1) / 2);
+    const edge = rig.screenSpacing * 0.6;
+    const l = rig.screenOf(0, cy), r = rig.screenOf(seated.cols - 1, cy);
+    const t0 = rig.screenOf(cx, 0), b0 = rig.screenOf(cx, seated.rows - 1);
+    plates.place({ left: l.x - edge, right: r.x + edge, top: t0.y - edge, bottom: b0.y + edge });
+  }
+
+  /** Who is sitting where. The player is on the left, which is the side their
+   *  own status line and gear are already on. */
+  function fillPlates(): void {
+    if (!game) { seated = null; plates.hide(); return; }
+    seated = { cols: rig.cols, rows: rig.rows };
+    const me = umicat.user;
+    const yours = !game.over && game.toPlay === HUMAN && !thinking;
+    plates.set(
+      {
+        name: me?.name || t('plate.you'),
+        avatar: me?.avatar ?? null,
+        colour: 'black',
+        meta: t('plate.moves', { n: game.moves.length }),
+        active: yours,
+      },
+      {
+        name: t('plate.engine'),
+        colour: 'white',
+        meta: thinking ? t('plate.thinking') : levelLabel(level.id),
+        active: !game.over && !yours,
+      },
+    );
+    seatPlates();
+  }
+
   function refresh(): void {
+    fillPlates();
     if (game) board.sync(game);
     if (!game) { status.textContent = ''; tip.textContent = ''; evalBar.hide(); return; }
     status.textContent = game.over ? describeOutcome(game) : thinking
