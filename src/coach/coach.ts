@@ -315,7 +315,21 @@ function observe(ctx: Context, profile: Profile): unknown {
       // Uppercase is Red (the student), lowercase is Black (the engine). The
       // first row printed is Black's back line, rank 9.
       position: game.position.diagram(),
-      legend: 'K/k general, A/a advisor, B/b elephant, N/n horse, R/r chariot, C/c cannon, P/p soldier. UPPERCASE is Red = the student.',
+      /**
+       * How to read it — SAID OUT LOUD, not left as a comment in this file.
+       *
+       * The Go game left the orientation implicit and the assistant narrated
+       * a guess about which half of the board the player's stones were on. A
+       * model that has to work out which end of the picture is the top will
+       * work out something, and then say it in the voice of someone who
+       * knows.
+       */
+      legend: 'Each string is one rank. The FIRST rank printed is rank 9 — Black\'s back line, '
+        + 'the far side from the student — and the LAST is rank 0, Red\'s own back line. The first '
+        + 'character of every rank is file a, the last is file i. So the top-left square of the '
+        + 'picture is a9 and the bottom-left is a0. UPPERCASE is Red, which is the student; '
+        + 'lowercase is Black, which is you. K/k general, A/a advisor, B/b elephant, N/n horse, '
+        + 'R/r chariot, C/c cannon, P/p soldier, "." empty.',
       student_plays: 'red',
       to_play: game.toPlay === RED ? 'red' : 'black',
       move_number: game.moves.length,
