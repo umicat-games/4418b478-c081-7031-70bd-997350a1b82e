@@ -156,6 +156,23 @@ is written first, so nothing is lost.
 **The platform decides the language.** `umicat.locale` arrives at handshake.
 Chat is the exception and belongs to the assistant.
 
+**Two rules decide what language the assistant speaks, and the second one is
+the one that goes wrong.** A REPLY follows the student's own sentence. Anything
+the assistant starts — the greeting, a remark after a blunder, the closing line
+— follows `umicat.locale`, which is the platform's language setting
+(`localStorage.language` in home-ui, else the browser's). So a player whose
+Umicat is in English and who types Chinese gets both, correctly, and it reads
+like the assistant cannot make up its mind.
+
+**And every unprompted remark is an English sentence delivered as if the
+STUDENT had typed it** — `remark()` goes out through the same `say()` the chat
+box uses, and the protocol's history has no third kind of turn. Measured
+against the live model: one remark in three came back in English mid-Chinese
+conversation. Remarks are therefore tagged `[the game] `, and both the
+observation's language rule and the playbook say what the tag means. Three in
+three afterwards. **If you add a new kind of unprompted line, it goes through
+`remark()` — never straight into `say()`.**
+
 **`ai` and `microphone` must be declared** in the game's Settings on the
 platform, or the backend rejects AI calls and the iframe blocks the mic.
 
