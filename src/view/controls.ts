@@ -15,6 +15,25 @@
 // What still branches on the device is the CAMERA: a phone has no second
 // button and no wheel, so "choose" and "look" are told apart by finger count.
 
+//
+// **Finger counting is the dangerous part, and it is why this file is
+// defensive.** Reported from a phone: tap the board with a few fingers
+// quickly and it stops taking stones — for good, while every button still
+// works. The cause was a pointer that never left the book: `pointerdown`
+// recorded the finger and then THREW on `setPointerCapture` ("no active
+// pointer with the given id"), which happens when the touch has already
+// ended by the time the handler runs. The throw skipped the rest of the
+// handler, the entry stayed, and from then on every single tap looked like a
+// second finger — so the board was permanently in camera mode.
+//
+// Three rules came out of that:
+//
+//   nothing in `pointerdown` may throw before the mode is decided;
+//   a release is listened for on the WINDOW as well, because the one the
+//   canvas never sees is exactly the one that wedges it;
+//   and a primary touch means every other finger has ended — the browser
+//   says so — so the book is emptied when one arrives.
+
 export interface BoardControlsHandlers {
   /** The pointer moved over the board with a mouse. This game has nothing to
    *  hover — a piece is picked up, not pointed at — but the hook stays so the
@@ -35,11 +54,24 @@ export function attachBoardControls(
   pick: (clientX: number, clientY: number) => { x: number; y: number } | null,
   h: BoardControlsHandlers,
 ): () => void {
-  const active = new Map<number, { x: number; y: number }>();
+  /** The fingers currently down — position, and when they were last heard
+   *  from, so a stale one can be dropped. */
+  const active = new Map<number, { x: number; y: number; at: number }>();
+  /** How long a pointer may go unheard-of before it is assumed gone. */
+  const STALE_MS = 4000;
   let mode: 'idle' | 'aim' | 'camera' = 'idle';
   let last = { x: 0, y: 0 };
   let pinch = 0;
   let enabled = true;
+
+  /** Forget fingers the browser never told us about again, and put the mode
+   *  back if that leaves nothing down. An invariant, checked rather than
+   *  assumed: state that can only accumulate will. */
+  const sweep = (): void => {
+    const now = performance.now();
+    for (const [id, p] of active) if (now - p.at > STALE_MS) active.delete(id);
+    if (active.size === 0 && mode !== 'idle') mode = 'idle';
+  };
 
   const mid = (): { x: number; y: number } => {
     const pts = [...active.values()];
@@ -55,8 +87,20 @@ export function attachBoardControls(
 
   const onDown = (e: PointerEvent): void => {
     if (!enabled) return;
-    active.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    canvas.setPointerCapture(e.pointerId);
+    // `isPrimary` is the browser saying "this is the first finger of a new
+    // gesture", which means every other touch it told us about has ended —
+    // whether or not it ever said so.
+    if (e.isPrimary && e.pointerType === 'touch') {
+      for (const id of [...active.keys()]) if (id !== e.pointerId) active.delete(id);
+      mode = 'idle';
+    }
+    sweep();
+    active.set(e.pointerId, { x: e.clientX, y: e.clientY, at: performance.now() });
+    // Capture keeps a drag alive when the finger leaves the canvas. It is an
+    // improvement, not a requirement — and it THROWS for a pointer that has
+    // already ended, which used to take the rest of this handler with it and
+    // leave the board deaf. Never let it.
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
 
     if (e.pointerType === 'touch') {
       if (active.size >= 2) {
@@ -93,7 +137,7 @@ export function attachBoardControls(
       if (mode === 'idle' && e.pointerType !== 'touch') h.onAim(pick(e.clientX, e.clientY));
       return;
     }
-    active.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    active.set(e.pointerId, { x: e.clientX, y: e.clientY, at: performance.now() });
 
     if (mode === 'camera') {
       if (e.pointerType === 'touch' && active.size >= 2) {
@@ -114,9 +158,13 @@ export function attachBoardControls(
   };
 
   const onUp = (e: PointerEvent): void => {
-    const wasAiming = mode === 'aim' && (e.pointerType === 'touch' || e.button === 0);
+    // A release for a pointer we never saw start is not ours, but it still
+    // says that finger is gone — which is the whole point of also listening
+    // on the window.
+    const known = active.has(e.pointerId);
+    const wasAiming = known && mode === 'aim' && (e.pointerType === 'touch' || e.button === 0);
     active.delete(e.pointerId);
-    if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    try { if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
 
     if (!enabled) { mode = active.size ? mode : 'idle'; return; }
     if (wasAiming) h.onPicked(pick(e.clientX, e.clientY));
@@ -130,13 +178,24 @@ export function attachBoardControls(
     h.onZoom(e.deltaY < 0 ? 1.1 : 1 / 1.1);
   };
   const onContextMenu = (e: Event): void => e.preventDefault();
+  /** Capture lost to the browser (a system gesture, a scroll it decided to
+   *  own) — the finger is no longer ours, so it is no longer counted. */
+  const onLostCapture = (e: PointerEvent): void => {
+    active.delete(e.pointerId);
+    if (active.size === 0) mode = 'idle';
+  };
 
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onUp);
+  canvas.addEventListener('lostpointercapture', onLostCapture);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('contextmenu', onContextMenu);
+  // The releases the canvas never sees. Capture normally delivers them here,
+  // but capture is exactly what fails in the case this guards against.
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
 
   return () => {
     enabled = false;
@@ -144,7 +203,10 @@ export function attachBoardControls(
     canvas.removeEventListener('pointermove', onMove);
     canvas.removeEventListener('pointerup', onUp);
     canvas.removeEventListener('pointercancel', onUp);
+    canvas.removeEventListener('lostpointercapture', onLostCapture);
     canvas.removeEventListener('wheel', onWheel);
     canvas.removeEventListener('contextmenu', onContextMenu);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
   };
 }
