@@ -161,7 +161,7 @@ async function start(): Promise<void> {
     // the engine — which is the thing the player is waiting for.
     if (view.render()) {
       if (speech.showing) placeSpeech();
-      if (actions.showing && actions.at) actions.place(view.screenOf(actions.at.x, actions.at.y), view.screenSpacing);
+      placeActions();
       if (askHere.showing && askHere.at) askHere.place(view.screenOf(askHere.at.x, askHere.at.y), view.screenSpacing);
     }
     requestAnimationFrame(frame);
@@ -436,6 +436,24 @@ async function start(): Promise<void> {
     return t(key);
   }
 
+  /**
+   * Put the cluster beside its square, off the squares the player still has to
+   * be able to tap: where the piece in hand may go, and the piece itself.
+   *
+   * Without this the cross sat on h1 whenever the king on g1 was picked up,
+   * and pressing it only put the king down — so g1-h1 could not be played at
+   * all. Measured, and then measured again after.
+   */
+  function placeActions(): void {
+    const at = actions.at;
+    if (!actions.showing || !at) return;
+    const keep = (from ? game?.movesFrom(from).map((m) => m.to) ?? [] : [])
+      .concat(from ? [from] : [])
+      .filter((q) => q.x !== at.x || q.y !== at.y)
+      .map((q) => view.screenOf(q.x, q.y));
+    actions.place(view.screenOf(at.x, at.y), view.screenSpacing, keep);
+  }
+
   function clearSelection(): void {
     from = null;
     actions.hide();
@@ -641,15 +659,20 @@ async function start(): Promise<void> {
       if (move) {
         const moving = game.at(from)!;
         view.setGhost(at, moving.kind, moving.side);
-        actions.show(at, true, companion);
-        actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+        actions.show(at, { confirm: true, cancel: true, ask: companion });
+        placeActions();
         return;
       }
+      // The piece already in hand: tapping it again puts it down. That is
+      // what a cancel button would be for, which is why there is no cancel
+      // button at that stage — one fewer button is one fewer square standing
+      // under one.
+      if (from.x === at.x && from.y === at.y) { clearSelection(); return; }
       // Tapping another of your own pieces is picking that one up instead,
       // not a mistake worth a noise.
       if (piece && piece.side === game.human && yours) { pickUp(at); return; }
       clearSelection();
-      if (piece) { actions.show(at, false, companion); actions.place(view.screenOf(at.x, at.y), view.screenSpacing); }
+      if (piece) { actions.show(at, { cancel: true, ask: companion }); placeActions(); }
       return;
     }
 
@@ -661,8 +684,8 @@ async function start(): Promise<void> {
     }
     view.setSelection(null);
     if (piece) {
-      actions.show(at, false, companion);
-      actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+      actions.show(at, { cancel: true, ask: companion });
+      placeActions();
     } else {
       actions.hide();
     }
@@ -674,8 +697,11 @@ async function start(): Promise<void> {
     const moves = game.movesFrom(at);
     view.setGhost(null, null, 'white');
     view.setSelection(at, moves.filter((m) => !m.capture).map((m) => m.to), moves.filter((m) => m.capture).map((m) => m.to));
-    actions.show(at, false, companion);
-    actions.place(view.screenOf(at.x, at.y), view.screenSpacing);
+    // Only "ask" while the piece is in hand: the cross here would cancel a
+    // pick-up that tapping the piece again already cancels, and it would do
+    // it from on top of a square the piece can move to.
+    actions.show(at, { ask: companion });
+    placeActions();
   }
 
   attachBoardControls(canvas, (x, y) => view.pick(x, y), {

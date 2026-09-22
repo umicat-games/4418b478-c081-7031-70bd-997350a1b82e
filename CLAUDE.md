@@ -169,6 +169,17 @@ whole game down at boot with a blank screen. It happened twice in the Go game.
   hiding it reads as the game not knowing it rather than as tact.
 - **Two taps, never a drag.** On a phone the finger covers the square it is
   over, and a mis-drop in chess costs a piece.
+- **The action buttons move out of the way of the board.** A button standing
+  on a square is a square that cannot be tapped, and pressing it only put the
+  piece down — pick it up again and the button is back in the same place, so
+  the move could not be played at all. Measured before: with the king castled
+  on g1, the cross sat 33px from h1 on a 77px square; the queen on d1 could
+  not be sent to e1. `SquareActions.place()` is now handed the squares that
+  must stay tappable and turns the cluster until it is off them, and picking a
+  piece up offers only "ask" — tapping the piece again is what puts it down.
+  Measured after, over every white piece at both stages, in two positions: 0
+  covered, tightest gap 47px. (Found in Xiangqi with me, which has a whole
+  board of pieces that move sideways one square.)
 - **The conversation happens ON the board.** The assistant's reply is a bubble
   beside the square it is about, with a reply field on its last page; asking
   about a piece opens a composer at that piece. The panel on the right is for
