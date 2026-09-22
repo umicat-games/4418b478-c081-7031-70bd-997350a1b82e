@@ -163,8 +163,13 @@ export class Coach {
       }
       case 'start_game': {
         const handicap = String(args.handicap ?? 'none');
-        this.hooks.startGame(handicap);
-        return false;
+        if (this.hooks.startGame(handicap)) return false;
+        // The game refused: there are pieces on the board. This used to go
+        // through, and a game in progress simply disappeared.
+        this.npc.note('[the game] a game is in progress, so a new one was NOT started. '
+          + 'The student starts one themselves, from the gear at the bottom left.');
+        this.messages.push({ from: 'coach', at: Date.now(), text: t('chat.midGame') });
+        return true;
       }
       case 'show_moves': {
         const point = String(args.point ?? '');
