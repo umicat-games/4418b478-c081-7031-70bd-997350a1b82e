@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {
   ThreeUmicat, loadScene3D, CharacterController3D, CharacterAnimator, Input3D,
+  setupScreenshotListener, setupRecordingListener,
   type Scene3D, type Manifest3D, type LoadedScene3D,
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
@@ -87,9 +88,19 @@ async function start(): Promise<void> {
   // 4) Render. The canvas is in index.html; the game owns the loop.
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const hud = document.getElementById('hud')!;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  // preserveDrawingBuffer: true — required for the editor's screenshot
+  // capture (canvas.toDataURL right after a render can otherwise come back
+  // blank on WebGL). Same setting umicat-phaser-sdk's UmicatGame sets for
+  // every 2D game; here the game owns renderer construction, so the SDK
+  // can't set it for us.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  // Screenshot + video capture for the editor's Capture menu — same
+  // postMessage protocol umicat-phaser-sdk speaks, so the host never needs
+  // to know which engine is running.
+  setupScreenshotListener(renderer);
+  setupRecordingListener(renderer);
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);

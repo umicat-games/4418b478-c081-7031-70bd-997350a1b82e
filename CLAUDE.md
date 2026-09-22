@@ -200,3 +200,13 @@ handled; `audio.play()` before the first tap is simply a no-op.
 
 **UI is DOM.** There is no reason to draw a score with triangles on the web;
 `index.html` has a `#hud` div for exactly this.
+
+**The editor's screenshot/record buttons need three specific lines you did not
+write for gameplay reasons.** `new THREE.WebGLRenderer({ canvas, antialias:
+true, preserveDrawingBuffer: true })` plus `setupScreenshotListener(renderer)`
+and `setupRecordingListener(renderer)` right after — drop any of the three
+("cleaning up" renderer construction is the usual way this happens) and the
+Game Editor's Capture menu goes back to silently doing nothing on this game,
+same as every 3D game before 0.16.0. `preserveDrawingBuffer` is what actually
+matters for screenshots — without it `canvas.toDataURL()` can come back
+blank depending on exactly when the browser clears the drawing buffer.
