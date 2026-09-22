@@ -22,6 +22,11 @@ Its siblings, in the order they were built: **GO with me**
 me** (`work/umicat/xiangqi`). Most of what is in `src/shell/` was learned the
 hard way in those three.
 
+**Othello with me** (`work/umicat/othello`) is the first game forked FROM
+here, and its `src/shell/` is still byte-for-byte this one — which is the
+evidence that the seam holds. Anything fixed in a shell file there belongs
+back here.
+
 ## If you have just forked this
 
 ```
