@@ -19,6 +19,32 @@ export interface DictationHandlers {
   onError?(kind: string): void;
 }
 
+/**
+ * Which language to listen for, from the platform's locale tag.
+ *
+ * **Never compare a locale tag with `===`.** The three hosts send three
+ * different shapes of the same answer: home-ui sends the platform language
+ * setting (`zh-CN`), Android sends `Locale.getDefault().toLanguageTag()`
+ * (`zh-CN`), and iOS sends `Locale.preferredLanguages.first`, which carries
+ * the SCRIPT — `zh-Hans-CN`. An exact test against 'zh-CN' therefore passed
+ * on the web and on Android and failed on an iPhone, where the UI came up in
+ * Chinese (the string table falls back on the base language) while the
+ * microphone listened in English. Nobody testing in a browser could ever see
+ * it.
+ *
+ * Nothing auto-detects the spoken language: the web `SpeechRecognition`, iOS
+ * `SFSpeechRecognizer(locale:)` and Android's `EXTRA_LANGUAGE` all listen for
+ * exactly the one language they are given, so getting this wrong does not
+ * degrade — it returns confident nonsense.
+ */
+export function speechLang(tag: string): string {
+  const t = (tag || '').toLowerCase();
+  if (!t.startsWith('zh')) return 'en-US';
+  // Traditional-script regions get the Traditional recognizer; everything
+  // else Chinese gets Simplified.
+  return /hant|-tw|-hk|-mo/.test(t) ? 'zh-TW' : 'zh-CN';
+}
+
 export class Dictation {
   private session: { cancel(): void; stop(): void; level(): number } | null = null;
   private levels: number[] = [];
@@ -33,7 +59,7 @@ export class Dictation {
   async toggle(): Promise<void> {
     if (this.session) { this.session.stop(); return; }
     this.handlers.onState(true);
-    const session = await this.umicat.voice.start(this.umicat.locale === 'zh-CN' ? 'zh-CN' : 'en-US', {
+    const session = await this.umicat.voice.start(speechLang(this.umicat.locale), {
       onPartial: () => { /* the meter is what moves while they speak */ },
       onFinal: (text) => { const said = text.trim(); if (said) this.handlers.onFinal(said); },
       onError: (kind) => this.handlers.onError?.(kind),
