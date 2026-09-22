@@ -22,11 +22,12 @@ import { BoardRig } from './shell/boardrig';
 import { attachBoardControls } from './shell/controls';
 import { Coach, type Profile } from './shell/coach';
 import { ChatPanel } from './shell/chat';
-import { Speech, segment } from './shell/speech';
+import { Speech, segment, stripAnchors } from './shell/speech';
 import { Menu, type SetupGroup } from './shell/menu';
 import { PointActions } from './shell/pointactions';
 import { AskHere } from './shell/askhere';
 import { EvalBar } from './shell/evalbar';
+import { GameOver } from './shell/gameover';
 import { showTitle } from './shell/title';
 import { underCurtain } from './shell/curtain';
 import { BLACK, Gomoku, SIZES, WHITE, type BoardSize, type Point } from './game/rules';
@@ -148,6 +149,14 @@ async function start(): Promise<void> {
   const loading = opponent.ready();
   /** The engine's opinion, where the player can see it. */
   const evalBar = new EvalBar();
+
+  /** The end of a game, as a dialog. The status line is where "your move"
+   *  lives; a result in the same place, in the same type, reads as one more
+   *  turn rather than as the end of something. */
+  const over = new GameOver({
+    onAgain: () => void freshGame(nextSize, companion),
+    onTitle: () => void toTitle(),
+  });
 
   const frame = (): void => {
     if (performance.now() < repaintUntil) rig.invalidate();
@@ -277,7 +286,12 @@ async function start(): Promise<void> {
       repaintSoon();
       // The reply has arrived, so the waiting dots beside the stone are done.
       askHere.hide();
-      speech.show(segment(said[said.length - 1].text, speech.notation));
+      const latest = said[said.length - 1].text;
+      // While the end-of-game dialog is up, the assistant talks INTO it: a
+      // speech bubble behind that card is the assistant addressing a screen
+      // the player cannot see.
+      if (over.showing) over.note(stripAnchors(latest));
+      else speech.show(segment(latest, speech.notation));
     }
   };
 
@@ -419,6 +433,37 @@ async function start(): Promise<void> {
     });
   }
 
+  /**
+   * The result, for the dialog: a headline, and one factual line under it.
+   *
+   * The facts come from the referee — which stone made five, on which move —
+   * because "you won" and "you lost" are the two sentences a player is most
+   * likely to want a reason for, and a reason the game can prove is worth
+   * more than a reason the assistant can phrase.
+   */
+  function describeResult(g: Gomoku): { title: string; body: string; tone: 'win' | 'loss' | 'draw' } {
+    const out = g.outcome();
+    const moves = g.moves.length;
+    const won = 'winner' in out && out.winner === HUMAN;
+    if (out.kind === 'draw') {
+      return { title: t('over.draw'), body: t('over.drawFull', { moves }), tone: 'draw' };
+    }
+    if (out.kind === 'resign') {
+      return {
+        title: t(won ? 'over.win' : 'over.loss'),
+        body: t(won ? 'over.theyResigned' : 'over.youResigned', { moves }),
+        tone: won ? 'win' : 'loss',
+      };
+    }
+    const last = g.last;
+    const point = last !== null ? nameOf(last) : '';
+    return {
+      title: t(won ? 'over.win' : 'over.loss'),
+      body: t(won ? 'over.fiveYou' : 'over.fiveThem', { point, moves }),
+      tone: won ? 'win' : 'loss',
+    };
+  }
+
   function describeOutcome(g: Gomoku): string {
     const out = g.outcome();
     const won = 'winner' in out && out.winner === HUMAN;
@@ -441,6 +486,7 @@ async function start(): Promise<void> {
   }
 
   function newGame(size: BoardSize): void {
+    over.hide();
     game = new Gomoku(size);
     (coach.profile.game as GameProfile).boardSize = size;
     speech.notation = notation(size);
@@ -727,6 +773,10 @@ async function start(): Promise<void> {
     refresh();
     persist();
     audio.play(SFX.gameOver);
+    // The board keeps the winning line lit underneath; the dialog can be
+    // closed to look at it.
+    speech.hide();
+    over.show(describeResult(game));
 
     await remark(`The game is over after ${game.moves.length} moves. ${describeOutcome(game)} `
       + 'Say one thing worth remembering about it, and nothing else.');
@@ -747,6 +797,7 @@ async function start(): Promise<void> {
     actions.hide();
     askHere.hide();
     menu.close();
+    over.hide();
     chat.setOpen(false);
     evalBar.hide();
     await autosave.flush();
@@ -824,7 +875,7 @@ async function start(): Promise<void> {
   // a test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, rig, board, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar,
+      umicat, rig, board, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar, over,
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },
