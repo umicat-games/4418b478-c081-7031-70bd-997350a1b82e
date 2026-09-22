@@ -33,11 +33,12 @@ import { LEVELS, Opponent, levelById, levelLabel, type Read } from './xiangqi/op
 import { openingName } from './xiangqi/openings';
 import { Coach, pieceName } from './coach/coach';
 import { ChatPanel } from './ui/chat';
-import { Speech, segment } from './ui/speech';
+import { Speech, segment, stripAnchors } from './ui/speech';
 import { Menu } from './ui/menu';
 import { PointActions } from './ui/pointactions';
 import { AskHere } from './ui/askhere';
 import { EvalBar } from './ui/evalbar';
+import { GameOver } from './ui/gameover';
 import { showTitle } from './ui/title';
 import { underCurtain } from './ui/curtain';
 import { Autosave, load } from './save';
@@ -158,6 +159,14 @@ async function start(): Promise<void> {
   const loading = opponent.ready();
   /** The engine's opinion, where the player can see it — see `evalbar.ts`. */
   const evalBar = new EvalBar();
+
+  /** The end of a game, as a dialog. The status line is where "your move"
+   *  lives; a result printed in the same place, in the same type, reads as
+   *  one more turn rather than as the end of something. */
+  const over = new GameOver({
+    onAgain: () => void freshGame((coach.profile.handicap as Handicap) ?? 'none', companion),
+    onTitle: () => void toTitle(),
+  });
 
   const frame = (): void => {
     if (performance.now() < repaintUntil) view.invalidate();
@@ -303,7 +312,12 @@ async function start(): Promise<void> {
       repaintSoon();
       // The reply has arrived, so the waiting dots beside the piece are done.
       askHere.hide();
-      speech.show(segment(said[said.length - 1].text));
+      const latest = said[said.length - 1].text;
+      // While the end-of-game dialog is up, the assistant talks INTO it: a
+      // bubble behind that card is the assistant addressing a screen the
+      // player cannot see.
+      if (over.showing) over.note(stripAnchors(latest));
+      else speech.show(segment(latest));
     }
   };
 
@@ -407,6 +421,21 @@ async function start(): Promise<void> {
     evalBar.show(game && !game.over ? read : null);
   }
 
+  /** The result, for the dialog: a headline and one factual line under it. */
+  function describeResult(g: XiangqiGame): { title: string; body: string; tone: 'win' | 'loss' | 'draw' } {
+    const out = g.outcome();
+    const moves = g.moves.length;
+    const won = 'winner' in out && out.winner === HUMAN;
+    const tone = out.kind === 'draw' ? 'draw' : won ? 'win' : 'loss';
+    const title = t(out.kind === 'draw' ? 'over.draw' : won ? 'over.win' : 'over.loss');
+    const body = out.kind === 'checkmate' ? t('over.mate', { moves })
+      : out.kind === 'stalemate' ? t('over.stuck', { moves })
+        : out.kind === 'perpetual' ? t('over.perpetual', { moves })
+          : out.kind === 'resign' ? t(won ? 'over.theyResigned' : 'over.youResigned', { moves })
+            : t('over.drawn', { moves });
+    return { title, body, tone };
+  }
+
   function describeOutcome(g: XiangqiGame): string {
     const out = g.outcome();
     const won = 'winner' in out && out.winner === HUMAN;
@@ -433,6 +462,7 @@ async function start(): Promise<void> {
   }
 
   function newGame(handicap: Handicap): void {
+    over.hide();
     game = new XiangqiGame(handicap);
     coach.profile.handicap = handicap;
     clearBoardMarks();
@@ -762,6 +792,8 @@ async function start(): Promise<void> {
     refresh();
     persist();
     audio.play(SFX.gameOver);
+    speech.hide();
+    over.show(describeResult(game));
 
     const opening = openingName(game.movesIccs());
     await remark(
@@ -785,6 +817,7 @@ async function start(): Promise<void> {
     actions.hide();
     askHere.hide();
     menu.close();
+    over.hide();
     chat.setOpen(false);
     await autosave.flush();
 
@@ -859,7 +892,7 @@ async function start(): Promise<void> {
   // of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar,
+      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar, over,
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },
