@@ -79,8 +79,10 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
       forget.onclick = () => { if (window.confirm(t('title.freshConfirm'))) choose('forget'); };
     }
 
+    // Once it's ready there's nothing worth telling the player — the buttons
+    // already work. Only a failure is worth a line here.
     void opts.loading
-      .then(() => { status.textContent = t('title.ready'); })
+      .then(() => { status.textContent = ''; })
       .catch(() => { status.textContent = t('title.failed'); });
   });
 }

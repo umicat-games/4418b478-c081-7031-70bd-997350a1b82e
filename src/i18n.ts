@@ -25,7 +25,6 @@ const EN = {
   'title.freshHint': 'Erase what the companion knows about you — your games, your habits, everything it has learned.',
   'title.freshConfirm': 'This erases everything the companion knows about you: its notes, your games, the unfinished board. A new game does NOT do this. Sure?',
   'title.loading': 'Waking up the engine…',
-  'title.ready': 'Engine ready.',
   'title.failed': 'The engine could not load — the coach can still talk.',
 
   'hud.yourMove': 'Your move · {level}',
@@ -139,7 +138,6 @@ const ZH: Partial<Record<Key, string>> = {
   'title.freshHint': '清除陪练对你的全部记忆——下过的棋、你的习惯、它学到的一切。',
   'title.freshConfirm': '这会清除陪练关于你的一切：它的笔记、你的对局、没下完的棋。新开一局不会这样。确定吗？',
   'title.loading': '正在唤醒引擎…',
-  'title.ready': '引擎就绪。',
   'title.failed': '引擎没能加载——陪练照样能说话。',
 
   'hud.yourMove': '该你走 · {level}',
