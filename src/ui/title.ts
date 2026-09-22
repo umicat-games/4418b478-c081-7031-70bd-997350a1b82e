@@ -7,22 +7,42 @@
 import './buttons.css';
 import './title.css';
 import { t } from '../i18n';
+import { bootDone } from './boot';
 
 /**
  * The title art.
  *
- * Uploaded through the platform's Asset Manager, which puts a game's files
- * under its own prefix on the CDN — the same host this game is served from,
- * so there is no CORS to think about and nothing to copy into the repo. The
- * game id is in the path because that prefix IS the game's.
+ * The originals were uploaded through the platform's Asset Manager and live
+ * at `cdn.umicat.ai/uploads/<game id>/go-with-me-title{,-bg}.png`. What ships
+ * here are derived copies: the same pictures at the size they are actually
+ * drawn, as WebP. **2.6MB became 181KB**, and that is the difference between
+ * a title screen and a loading screen — at the originals' weight the boot bar
+ * was still crawling two seconds into a throttled load, because a title
+ * screen cannot appear until its title has arrived.
+ *
+ * Re-export the originals and they will need re-deriving; the recipe is in
+ * CLAUDE.md.
  *
  * Both are decoration: if either fails to load, the wordmark falls back to
  * text and the background falls back to the gradient underneath it, which is
  * what the screen looked like before.
+ *
+ * **The fallback must not be what you see first.** The first version showed
+ * the words and the plain gradient immediately and painted the art over them
+ * when it arrived — which, with 2.6MB of PNG, read as the title screen
+ * flashing the old design before settling into the new one. So the words are
+ * hidden to begin with and only appear if the art genuinely is not coming,
+ * and the picture fades in rather than popping. `index.html` starts both
+ * downloads at parse time, before the bundle has even run.
  */
+/** How long the screen waits for its artwork before falling back to words.
+ *  Long enough to cover a warm cache and a decent connection, short enough
+ *  that nobody is looking at a blank rectangle wondering. */
+const ART_WAIT_MS = 1200;
+
 const ART = {
-  wordmark: 'https://cdn.umicat.ai/uploads/f60d9eec-40ae-42fd-be1d-2c1f2cf428db/go-with-me-title.png',
-  background: 'https://cdn.umicat.ai/uploads/f60d9eec-40ae-42fd-be1d-2c1f2cf428db/go-with-me-title-bg.png',
+  wordmark: 'art/title.webp',
+  background: 'art/title-bg.webp',
 };
 
 export type TitleChoice = 'continue' | 'new' | 'forget';
@@ -44,20 +64,42 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
     <div class="buttons"></div>
     <p class="status"></p>`;
 
-  // The photograph sits under a scrim, so the buttons keep their contrast
-  // whatever the picture is doing behind them — but a lighter one than the
-  // gradient used to be on its own: at the old 0.40 in the middle the wood
-  // went from sunlit to brown, which is throwing away the artwork in order
-  // to protect two lines of text that a shadow protects just as well.
-  el.style.backgroundImage =
-    `radial-gradient(ellipse at center, rgba(12, 14, 18, 0.22), rgba(12, 14, 18, 0.76)), url("${ART.background}")`;
+  // The photograph goes on a layer of its own (`#title::before`) so it can be
+  // faded in; the scrim over it is deliberately light — at 0.40 the sunlit
+  // wood went brown, which is throwing away the artwork in order to protect
+  // two lines of small text that a shadow protects just as well.
+  el.style.setProperty('--art', `url("${ART.background}")`);
 
   const wordmark = el.querySelector('.wordmark') as HTMLImageElement;
-  // Words until the picture is there, and words again if it never arrives —
-  // a title screen with no title on it is worse than a plain one.
-  wordmark.onload = () => el.classList.add('arted');
-  wordmark.onerror = () => wordmark.remove();
   wordmark.src = ART.wordmark;
+
+  /**
+   * Show the art when it is all there, and the words only if it is not.
+   *
+   * Waiting for both together is what stops the screen assembling itself in
+   * front of the player — a wordmark landing a second before its background
+   * is the same flash, in two parts. The cap is what stops a slow network
+   * leaving them looking at an empty screen: past it, the words appear and
+   * the picture is welcome to arrive whenever it likes.
+   */
+  const settled = (src: string): Promise<boolean> => new Promise((done) => {
+    const img = new Image();
+    img.onload = () => done(true);
+    img.onerror = () => done(false);
+    img.src = src;
+  });
+  let decided = false;
+  const decide = (art: boolean): void => {
+    if (decided) return;
+    decided = true;
+    el.classList.add(art ? 'arted' : 'no-art');
+    // The first thing the player sees is a finished screen, not one
+    // assembling itself: the boot screen stays up until this decides.
+    bootDone();
+  };
+  void Promise.all([settled(ART.wordmark), settled(ART.background)])
+    .then(([a, b]) => decide(a && b));
+  setTimeout(() => decide(false), ART_WAIT_MS);
 
   // Set as text, not as markup: a translation is content, and content does not
   // go through innerHTML.

@@ -41,6 +41,7 @@ import { underCurtain } from './ui/curtain';
 import { Autosave, load } from './save';
 import { SFX, createAudio, playStone } from './audio';
 import { setLocale, t } from './i18n';
+import { bootStep } from './ui/boot';
 
 /** The player is Black: Black moves first, and the beginner should be the one
  *  who gets to start rather than the one who has to answer. */
@@ -54,7 +55,11 @@ const BLUNDER_POINTS = 5;
 const REMARK_COOLDOWN = 4;
 
 async function start(): Promise<void> {
+  // The boot screen is already up (see index.html); from here on it is told
+  // what has actually finished.
+  bootStep('bundle');
   const umicat = await ThreeUmicat.init();
+  bootStep('platform');
   // Before any UI exists: everything below asks `t()` for its words. The
   // platform's language setting, and nothing else — see i18n.ts.
   setLocale(umicat.locale);
@@ -168,6 +173,7 @@ async function start(): Promise<void> {
 
   // ── state ───────────────────────────────────────────────────────────────
   const saved = await load(umicat);
+  bootStep('saved');
   const autosave = new Autosave(umicat);
 
   let game: GoGame | null = null;

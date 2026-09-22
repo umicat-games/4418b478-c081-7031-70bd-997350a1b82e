@@ -12,20 +12,52 @@
   position: fixed;
   inset: 0;
   z-index: 40;
+  isolation: isolate;
   display: grid;
   place-content: center;
   gap: 22px;
   justify-items: center;
   text-align: center;
-  background-color: #0c0e12;
-  background: radial-gradient(ellipse at center, rgba(12, 14, 18, 0.55), rgba(12, 14, 18, 0.92));
-  background-size: cover;
-  background-position: center;
+  /* The gradient IS the screen until the photograph arrives, and stays under
+     it afterwards — so a picture that never loads is not a blank screen. */
+  background: radial-gradient(ellipse at center, rgba(12, 14, 18, 0.55), rgba(12, 14, 18, 0.92)), #0c0e12;
   color: #f4f5f7;
   font: 15px/1.5 system-ui, -apple-system, sans-serif;
   transition: opacity 0.35s ease;
 }
 #title.leaving { opacity: 0; pointer-events: none; }
+
+/* The photograph, on its own layer so it can fade in, with the scrim over it
+   on another. Both sit behind the content; `isolation` keeps the negative
+   z-indexes inside this screen rather than behind the whole page. */
+#title::before,
+#title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* No transition on any of this, deliberately.
+ *
+ * The boot screen is showing the SAME picture at the same size while this is
+ * being got ready, and it is the thing that fades. If the art underneath
+ * faded in as well, the two crossfades would overlap and the player would
+ * watch the screen brighten into place — which is the flash again, in slow
+ * motion. A cut under a fading layer of the identical image is invisible. */
+#title::before {
+  z-index: -2;
+  background-image: var(--art);
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+}
+#title::after {
+  z-index: -1;
+  background: radial-gradient(ellipse at center, rgba(12, 14, 18, 0.22), rgba(12, 14, 18, 0.76));
+  opacity: 0;
+}
+#title.arted::before,
+#title.arted::after { opacity: 1; }
 
 #title h1 {
   font-size: clamp(34px, 7vw, 64px);
@@ -40,17 +72,23 @@
 /* Sized against the SHORTER side as well as the width: on a phone in
    landscape the screen is 360px tall, and a wordmark that only respects vw
    pushes the buttons off the bottom. */
+/* Hidden until the whole picture is ready, then faded in with it. Showing it
+   the moment it decodes is what made the screen assemble itself in front of
+   the player. */
 #title .wordmark {
   display: block;
   width: min(520px, 62vw, 92vh);
   height: auto;
   filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.55));
+  opacity: 0;
 }
+#title.arted .wordmark { opacity: 1; }
+#title.no-art .wordmark { display: none; }
 
-/* The words are the fallback, and they stop being needed the moment the
-   picture loads. */
-#title.arted .words { display: none; }
-#title .words { line-height: 1.2; }
+/* The words are the fallback, and they are not what anybody should see first:
+   they appear only once the art has been given up on. */
+#title .words { display: none; line-height: 1.2; }
+#title.no-art .words { display: block; }
 #title .buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
 
 #title button.quiet-link {

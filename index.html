@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>GO with me</title>
+    <!-- The title screen's artwork, fetched while the bundle is still being
+         parsed rather than when the screen is built: a preload the HTML
+         parser can see starts seconds before one JavaScript asks for. These
+         are the derived copies in public/art/ — see CLAUDE.md for where the
+         originals live and how these were made. -->
+    <link rel="preload" as="image" href="art/title.webp">
+    <link rel="preload" as="image" href="art/title-bg.webp">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { height: 100%; overflow: hidden; background: #000; }
@@ -63,8 +70,114 @@
       /* While the title is up, the game's own furniture is not. */
       body.titling #hud, body.titling #chat, body.titling #speech { display: none; }
     </style>
+    <style>
+      /* The boot screen, in the shape Balaboo's already has: the game's own
+         key art, its wordmark, one line of status and a thin bar. Two things
+         are different here and both are deliberate.
+
+         It is in the HTML rather than built in JavaScript, because the gap it
+         exists to cover STARTS before the bundle has parsed — Balaboo's own
+         loading screen cannot appear until its code runs, and the black
+         rectangle before that is exactly the moment this is for.
+
+         And it wears the title screen's art, at the title screen's size. The
+         two screens are then the same picture with different furniture, so
+         the hand-over is the buttons arriving rather than the screen being
+         replaced. */
+      #boot {
+        position: fixed; inset: 0; z-index: 60;
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column; gap: 18px;
+        background-color: #0c0e12;
+        background-image:
+          radial-gradient(ellipse at center, rgba(12, 14, 18, 0.22), rgba(12, 14, 18, 0.76)),
+          url('art/title-bg.webp');
+        background-size: cover; background-position: center;
+        color: #f4f5f7;
+        transition: opacity .22s ease-out;
+      }
+      #boot.done { opacity: 0; pointer-events: none; }
+      /* `aspect-ratio` with the real pixel size: the layout is final before
+         the image has decoded, so nothing jumps when it does. */
+      #boot img {
+        display: block; width: min(520px, 62vw, 92vh); height: auto;
+        aspect-ratio: 1774 / 887;
+        filter: drop-shadow(0 10px 30px rgba(0, 0, 0, .55));
+      }
+      #boot .msg {
+        font: 600 14px/1.5 system-ui, sans-serif; letter-spacing: .06em;
+        opacity: .85; text-shadow: 0 1px 6px rgba(0, 0, 0, .6);
+      }
+      #boot .track {
+        width: min(260px, 56vw); height: 6px; border-radius: 99px;
+        background: rgba(0, 0, 0, .38); box-shadow: 0 0 0 1px rgba(255, 255, 255, .18);
+        overflow: hidden;
+      }
+      #boot .track i {
+        display: block; height: 100%; width: 0%; border-radius: 99px;
+        /* Solid, not a gradient: at eight per cent a gradient shows only its
+           dark end, which reads as an empty track. */
+        background: #7fd6c2;
+        transition: width .35s cubic-bezier(.3,.8,.4,1);
+      }
+    </style>
   </head>
   <body>
+    <!-- The boot screen.
+         Written into the HTML, with its own styles, because its whole job is
+         to be on screen BEFORE the bundle has parsed — a loading bar that
+         arrives with the code it is covering for is a loading bar that covers
+         nothing. It is wordless on purpose: the player's language comes from
+         the platform at handshake, which is one of the things this is waiting
+         for. `window.__boot` is what the game drives it with; it removes
+         itself when the title screen is dressed, and on a timer regardless,
+         because nobody should ever be stuck behind a progress bar. -->
+    <div id="boot">
+      <img src="art/title.webp" alt="GO with me" width="1774" height="887">
+      <div class="msg">Waking up</div>
+      <div class="track"><i></i></div>
+    </div>
+    <script>
+      // In the BODY, after the element: in <head> this ran before the div
+      // was parsed, `getElementById` returned null, and the whole thing was
+      // a silent no-op — a loading bar that never moved and never left.
+      (function () {
+        var el = document.getElementById('boot');
+        var fill = el && el.querySelector('i');
+        var at = 0, timer;
+        function paint() { if (fill) fill.style.width = Math.min(at, 1) * 100 + '%'; }
+        // Creep between milestones, so a bar that is genuinely waiting still
+        // looks like it is doing something — but never past the next one, so
+        // it is not pretending to know more than it does.
+        function creep(target) {
+          clearInterval(timer);
+          timer = setInterval(function () {
+            if (at >= target) { clearInterval(timer); return; }
+            at += (target - at) * 0.08;
+            paint();
+          }, 120);
+        }
+        window.__boot = {
+          step: function (p) { if (p > at) { at = p; paint(); } creep(Math.min(p + 0.12, 0.95)); },
+          done: function () {
+            if (!el) return;
+            clearInterval(timer);
+            at = 1; paint();
+            el.classList.add('done');
+            setTimeout(function () { el.remove(); }, 300);
+            el = null;
+          },
+        };
+        // Start visible: a bar at 8% of a 260px track is four pixels, which
+        // nobody reads as "it has started".
+        window.__boot.step(0.14);
+        // The backstop. If anything below never reports, the game is still
+        // behind this rectangle, and a game nobody can reach is worse than a
+        // game that looks unfinished for a moment.
+        setTimeout(function () { window.__boot.done(); }, 9000);
+      }());
+    </script>
+
     <canvas id="game"></canvas>
     <div id="hud"></div>
     <script type="module" src="/src/main.ts"></script>
