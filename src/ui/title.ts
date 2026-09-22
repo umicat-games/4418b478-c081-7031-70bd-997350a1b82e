@@ -7,6 +7,7 @@
 import './buttons.css';
 import './title.css';
 import { t } from '../i18n';
+import { bootDone } from './boot';
 
 export type TitleChoice = 'continue' | 'new' | 'forget';
 
@@ -35,6 +36,9 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
   // quiet "forget me" link above it.
   el.querySelector('.status')!.textContent = '';
   document.body.appendChild(el);
+  // The first thing the player sees is a finished screen, not one assembling
+  // itself: the boot screen stays up until this one is in the DOM.
+  bootDone();
 
   const buttons = el.querySelector('.buttons')!;
   const status = el.querySelector('.status')!;

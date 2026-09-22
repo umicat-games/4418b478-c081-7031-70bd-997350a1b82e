@@ -31,7 +31,6 @@ export interface MenuOptions {
   onLevel(level: string): void;
   onHint(): void;
   onResign(): void;
-  onRecentre(): void;
   onTitle(): void;
   /** Switched mid-game; a new game takes it from `onStart`'s choice. */
   onCompanion(on: boolean): void;
@@ -153,7 +152,6 @@ export class Menu {
       };
       act('btn.hint', this.opts.onHint);
       act('btn.resign', this.opts.onResign);
-      act('btn.recentre', this.opts.onRecentre);
       this.el.appendChild(actions);
     }
 

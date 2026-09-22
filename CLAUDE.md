@@ -221,6 +221,33 @@ platform, or the backend rejects AI calls and the iframe blocks the mic.
   square it is about, with a reply field on its last page; asking about a piece
   opens a composer at that piece. The panel on the right is for reading back.
 
+**The camera is FIXED and looks STRAIGHT DOWN.** No orbit, no pinch, nothing
+to recentre: a board game is not a world to look around — the position is the
+same information from every angle — so a camera the player can move is a
+camera they can lose. Straight down is also the one angle at which the board
+is the shape it actually is; any tilt makes it a trapezoid and closes up the
+far rows. `camera.up` has to be set to −z by hand, because from directly
+overhead the default up is the direction the camera is looking along and
+`lookAt` cannot resolve it.
+
+**The board sits on a TABLE, and that is what the lighting is for.** A plane
+of dark walnut, drawn rather than photographed; the board is a slab with real
+thickness standing on it, casting a real shadow. Two settings do the work and
+both fight the instinct to add light: the key is LOW (about 30° above the
+table, not 45°, or the shadow falls straight down and there is nothing to see
+— and from overhead that shadow is the only thing left saying the board has
+thickness) and the fill is weak, because fill is the enemy of that shadow. The
+framing pulls back to 0.84 of the screen so some table is always in frame.
+
+**The boot screen is in `index.html`, not in the bundle.** Its job is to be on
+screen before the bundle has parsed, so it cannot be built by it. Black and a
+bar — no words, because the player's language arrives at the platform
+handshake, which is one of the things it is waiting for. `window.__boot` is
+what `boot.ts` drives it with; it removes itself after nine seconds whatever
+happens. Watch the removal: holding the element in a local before nulling the
+reference is not style, it is the difference between the screen going away and
+it sitting there invisible for ever with one line in the console.
+
 ## Building and checking
 
 ```bash
