@@ -236,11 +236,26 @@ trusting. Thirty-four iterations of "does it fit at this distance" is exact to
 a millimetre, runs on resize only, and cannot be subtly wrong in a way nobody
 notices.
 
-**Solve at BOTH y = 0 and y = `CAM_AT_Y`.** Raising the sample point moves it
-UP the screen, so fitting only the raised one protects the far edge and stops
-protecting the near one — the near corners of the ground fell off the bottom
-while every far corner sat comfortably inside. It passed on a phone, where the
-width binds, and failed on a laptop.
+**Solve the GROUND at all four corners, and the headroom at the FAR two only.**
+
+Two mistakes in opposite directions, and the pair is the lesson.
+
+Solving only at `CAM_AT_Y` protects the far edge and stops protecting the near
+one, because raising the sample point moves it UP the screen — the near corners
+of the ground fell off the bottom while every far corner sat comfortably
+inside. It passed on a phone, where the width binds, and failed on a laptop.
+
+Then reserving headroom at BOTH ends charged it twice for nothing. The camera
+looks down from +Z, so a standing thing at the near edge projects its base at
+the bottom of the frame and its head further UP — *into* the board, not out of
+the picture. Only the far edge has a head that leaves the top. That mistake was
+about a tenth of the frame's height, given to the tree line, and taking it back
+is most of what answered "the trees still take up a lot of room on a phone".
+
+`verify-3d-polarity-frame` checks the heads, because that reasoning is exactly
+the kind that is right until it is not, and being wrong means the hero is
+decapitated at the one edge you cannot afford not to see them at. Measured:
+far head at 0.16 of the frame, near head at 0.96.
 
 ### Three numbers, and each one is zoom
 
@@ -261,6 +276,13 @@ is the only thing this game asks anyone to read.
   `cos(pitch)` of its height, so it draws the hero taller as well. 55° → 42°
   is about a third more hero for nothing. Past this the far half starts hiding
   behind the near half.
+- **The lens is LONG — `fov: 32`, not the 50 a third-person camera wants.** A
+  rectangle seen at an angle projects as a trapezoid, near edge wide and far
+  edge narrow, and a trapezoid cannot fill a rectangular screen. The gap is
+  tree line, and at 50° it was most of the top of the frame. Narrowing the lens
+  and moving the camera back keeps the board the same size on screen while
+  flattening the perspective, so the far edge comes out nearly as wide as the
+  near one. Free: it costs a longer `position.z` and nothing else.
 - **`CAM_MARGIN` is 1.0** — the wall sits exactly on the frame edge. Padding is
   charged on both sides and buys nothing: enemies spawn outside the wall and
   are visible coming in regardless, because what is beyond the wall is forest
@@ -273,7 +295,9 @@ phone and the rest is this. Lower and the hero's head clips at the far edge,
 which is the one place you cannot afford not to see them.
 
 Measured after all of it, at the smallest shape that matters (852×393): the
-board fills 92% × 71% of the frame, the hero is 13.2 CSS px and an orb 9.2.
+board fills **98% × 81%** of the frame, the hero is 15.7 CSS px and an orb
+10.9. (It was 92% × 71% at 13.2 and 9.2 before the long lens and the
+one-sided headroom — both of which gave zoom back rather than costing it.)
 
 ### Framing is not playability
 
@@ -714,6 +738,13 @@ Four lessons from writing them, all of which cost a run:
   which put two handles INSIDE a comment: `tsc` clean, build clean, bundle
   missing them, probe dead. `npx tsc --noEmit` and `npx vite build` answer
   different questions — run both.
+- **A threshold in PIXELS is a threshold that goes stale when the camera
+  moves.** `verify-3d-polarity-colour` counted the hero's coloured pixels
+  against an absolute floor, which was right under a follow camera and became a
+  colour bug that never happened the moment a fixed one pulled back: 1800 px
+  became 85. It asserts the FLIP as a ratio now, which is what was ever being
+  claimed. Its sampling box was hardcoded screen coordinates for the same
+  reason and now asks `heroOnScreen()`.
 - **A probe rots the same way a comment does.** Renaming the poles from
   `dark`/`light` to `red`/`blue` left `verify-3d-polarity-rule` passing
   `'dark'` to `throwOrb`, which indexed an undefined prototype and threw —

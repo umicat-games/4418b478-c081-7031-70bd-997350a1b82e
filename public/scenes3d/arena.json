@@ -40,7 +40,7 @@
   ],
   "camera": {
     "kind": "fixed",
-    "fov": 50,
+    "fov": 32,
     "offset": {
       "x": 0,
       "y": 13,

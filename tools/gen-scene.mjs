@@ -865,11 +865,21 @@ function buildArena(def) {
     // whole board is visible at all times and the player is a thing inside a
     // frame, which is what makes a bullet's line readable before it arrives.
     //
+    // **A LONG LENS.** 32°, not the 50 a third-person camera wants.
+    //
+    // A rectangle seen at an angle projects as a TRAPEZOID — near edge wide,
+    // far edge narrow — and a trapezoid cannot fill a rectangular screen. The
+    // gap is the tree line, and at 50° it was most of the top of the frame.
+    // Narrowing the lens and moving the camera back keeps the board the same
+    // size on screen while flattening the perspective, so the far edge comes
+    // out nearly as wide as the near one and the board fills the frame instead
+    // of tapering away from it.
+    //
     // The offset below is only a sensible default — where the camera would sit
     // on a square viewport. `fitCamera` in `main.ts` replaces it on load and on
     // every resize, because where it BELONGS depends on the aspect ratio, and
     // the generator has no idea what screen this will be played on.
-    camera: { kind: 'fixed', fov: 50, offset: { x: 0, y: 13, z: 10 } },
+    camera: { kind: 'fixed', fov: 32, offset: { x: 0, y: 13, z: 10 } },
     entities,
   };
 }

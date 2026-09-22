@@ -1420,16 +1420,24 @@ export async function startLevel(
     const tanX = tanY * aspect;
     const FX = FIELD_X * CAM_MARGIN;
     const FZ = FIELD_Z * CAM_MARGIN;
-    // BOTH heights, at all four corners.
+    // Headroom at the FAR edge only.
     //
-    // Solving only at `CAM_AT_Y` is wrong in a way that hides: raising the
-    // sample point moves it UP the screen, which protects the far edge and
-    // stops protecting the near one — so the near corners of the GROUND fell
-    // off the bottom while every far corner sat comfortably inside. It passed
-    // on a phone, where the width binds, and failed on a laptop, which is the
-    // shape nobody checks first.
-    for (const y of [0, CAM_AT_Y]) {
-      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+    // The ground's corners are all four; the raised ones are only the two at
+    // -Z. That is not a shortcut, it is where the room is actually needed: the
+    // camera looks down from +Z, so a standing thing at the NEAR edge projects
+    // its base at the bottom of the frame and its head further UP — into the
+    // board, not out of the picture. Only the far edge has a head that leaves
+    // the top.
+    //
+    // Reserving it at both ends charged the headroom twice and gave the
+    // difference to the tree line, which is what "the trees still take up a
+    // lot of room" was. It is about a tenth of the frame's height, and it goes
+    // straight into the playfield.
+    //
+    // Both ENDS of the ground still have to be solved, though — dropping the
+    // near corners is how the board fell off the bottom of a laptop once.
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      for (const y of sz < 0 ? [0, CAM_AT_Y] : [0]) {
         _corner.set(sx * FX, y, sz * FZ).applyMatrix4(inv);
         const depth = -_corner.z;
         if (depth <= 0.01) return false;
@@ -5195,6 +5203,33 @@ export async function startLevel(
           // And at the far corner, the smallest anything ever gets.
           orbFar: at(FIELD_X * 0.8, -FIELD_Z * 0.8, 0.28),
         };
+      },
+      /** Where the TOP of a hero standing at each edge of the board lands, in
+       *  0..1 screen space.
+       *
+       *  Headroom is reserved at the far edge only, on the reasoning that a
+       *  near-edge head projects INTO the board rather than out of the frame.
+       *  That reasoning is worth a check rather than a comment: if it is wrong
+       *  the hero is decapitated in the one place a player cannot afford not
+       *  to see them, and nothing else in this game would report it. */
+      headsOnScreen: () => {
+        const cam = world.camera as THREE.PerspectiveCamera;
+        cam.updateMatrixWorld(true);
+        const top = HERO_HALF_HEIGHT * 2;
+        return ([['far', -1], ['near', 1]] as const).map(([where, sz]) => {
+          const v = new THREE.Vector3(0, top, sz * FIELD_Z).project(cam);
+          return { where, y: +((1 - v.y) / 2).toFixed(4) };
+        });
+      },
+      /** Where the hero actually IS on screen, 0..1, from the real camera.
+       *  Inferring it from the board's corners is close and not exact, and a
+       *  probe that samples "close to the hero" samples grass. */
+      heroOnScreen: () => {
+        const cam = world.camera as THREE.PerspectiveCamera;
+        cam.updateMatrixWorld(true);
+        const v = new THREE.Vector3(hero.position.x, hero.position.y + HERO_HALF_HEIGHT,
+                                    hero.position.z).project(cam);
+        return { x: +((v.x + 1) / 2).toFixed(4), y: +((1 - v.y) / 2).toFixed(4) };
       },
       cornersOnScreen: () => {
         const cam = world.camera as THREE.PerspectiveCamera;
