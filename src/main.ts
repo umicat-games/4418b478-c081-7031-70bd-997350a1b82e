@@ -20,6 +20,8 @@
 //
 // This file is the loop that joins the pieces, and nothing else. When something
 // is wrong, the first question is which piece it belongs to.
+//
+// (build trigger: no functional change)
 import { ThreeUmicat } from '@umicat/three-sdk';
 import { BoardView } from './view/board3d';
 import { attachBoardControls } from './view/controls';
