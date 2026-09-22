@@ -374,6 +374,7 @@ const ATTRACT_MAX_SPEED = BULLET_SPEED * 2.2;
 const BOSS_FAN = 7;
 const BOSS_FAN_SPREAD = 0.227;
 const UP = new THREE.Vector3(0, 1, 0);
+const ZERO = new THREE.Vector3(0, 0, 0);
 
 // --- mana ------------------------------------------------------------------
 /** The one resource. Absorbing fills it, everything the hero does spends it.
@@ -864,8 +865,13 @@ export async function startLevel(
    *  to be kept in step by hand, and this project already has one of those
    *  (`LAND`, in `hub.ts` and `gen-scene.mjs`) with a note in CLAUDE.md saying
    *  what it costs. Resizing the arena is one number in `gen-scene.mjs`. */
-  const arena = (scene3d as unknown as { arena?: { field: number; outside: number } }).arena;
-  const FIELD = arena?.field ?? 6.6;
+  const arena = (scene3d as unknown as {
+    arena?: { field: { x: number; z: number }; outside: number };
+  }).arena;
+  /** Half-width and half-DEPTH of the playfield — they differ, because the
+   *  board is a landscape rectangle and the screen it is played on is too. */
+  const FIELD_X = arena?.field.x ?? 6.6;
+  const FIELD_Z = arena?.field.z ?? 4.6;
   const OUTSIDE = arena?.outside ?? 8.6;
   /** Anywhere on the board a thing may be dropped. There is no road and no
    *  build spot to avoid any more, so this is simply the field. */
@@ -873,8 +879,8 @@ export async function startLevel(
   {
     // The cell centres inside the wall. Derived, so a smaller board does not
     // quietly keep dropping crates outside itself.
-    const h = Math.floor(FIELD - 1.1);
-    for (let x = -h; x <= h; x += 1) for (let z = -h; z <= h; z += 1) BACKFIELD.push([x, z]);
+    const hx = Math.floor(FIELD_X - 1.1), hz = Math.floor(FIELD_Z - 1.1);
+    for (let x = -hx; x <= hx; x += 1) for (let z = -hz; z <= hz; z += 1) BACKFIELD.push([x, z]);
   }
 
   /** Where the hero comes in, and where a knocked-out one is carried back to —
@@ -1340,13 +1346,135 @@ export async function startLevel(
     resize();
   };
   renderer.shadowMap.enabled = true;
+  // --- the camera is the frame, and the frame is the screen -----------------
+  //
+  // The board fits the viewport. Not "roughly" — the four corners of the air
+  // wall are solved for, so on any screen the whole playfield is visible and
+  // nothing of it is off the edge.
+  //
+  // **Fitted to whichever axis is tighter.** On a wide screen the HEIGHT runs
+  // out first, so the camera settles at the distance the board's depth needs
+  // and the spare width is filled with forest — which is the look this was
+  // asked for. On a tall one the width runs out first and the camera pulls
+  // back until it fits, putting trees above and below instead. Either way the
+  // player never sees past the world, and the board is never cropped.
+  //
+  // Solved by BISECTION rather than in closed form. The projection of a tilted
+  // square is a trapezoid and its four corners are at four different depths,
+  // so "how far back fits it" has no one-line answer worth trusting; thirty
+  // iterations of "does it fit at this distance" is exact to a millimetre,
+  // runs only on resize, and cannot be subtly wrong in a way nobody notices.
+
+  /** How steep.
+   *
+   *  42°, and the angle is not only taste — it decides how big everything is.
+   *  Two effects, pushing the same way:
+   *
+   *   - the board's DEPTH projects as `2·fieldZ·sin(pitch)`, so a shallower
+   *     camera needs less of the screen's height for the same board and can
+   *     therefore sit closer;
+   *   - a standing thing keeps `cos(pitch)` of its height, so a shallower
+   *     camera draws the hero taller in the bargain.
+   *
+   *  55° to 42° is about a third more hero for nothing. Past this it stops
+   *  reading as looking DOWN at a board and the far half begins hiding behind
+   *  the near half, which is where the trade turns. */
+  const CAM_PITCH = 42 * (Math.PI / 180);
+  /** A little air around the playfield, so the wall is not flush with the
+   *  screen edge and the hero at the far corner is not half a pixel from it.
+   *
+   *  ONE. The wall sits exactly on the frame edge.
+   *
+   *  Every percent here is zoom given away twice over — the board is the
+   *  screen, so padding around it comes straight off how big everything on it
+   *  is, on both sides. And it buys nothing: enemies are spawned outside the
+   *  wall and are visible on their way in regardless, because what is beyond
+   *  the wall is forest rather than the edge of the world. */
+  const CAM_MARGIN = 1.0;
+  /** The height the fit is solved AT.
+   *
+   *  It was the wall's top, 1.6, which is conservative in the expensive
+   *  direction: the far wall's top is the highest thing in frame, so fitting
+   *  it pushed the camera back and shrank everything for the sake of a
+   *  handspan of masonry nobody looks at. What has to be visible is the
+   *  GROUND, the hero (0.72) and the flyers (0.38 plus their own height).
+   *
+   *  This is expensive and unavoidable: headroom is charged at BOTH ends of
+   *  the board, so 0.8 of world height costs about a fifth of the screen's.
+   *  Measured on a landscape phone, the ground corners sit at 67% of the
+   *  frame's height and the rest is this. Lower than 0.8 and the hero's head
+   *  clips at the far edge, which is the one place you cannot afford not to
+   *  see them. */
+  const CAM_AT_Y = 0.8;
+
+  const _corner = new THREE.Vector3();
+  /** Does everything that must be on screen fit, from this far away? */
+  const fitsAt = (dist: number, aspect: number): boolean => {
+    const cam = world.camera as THREE.PerspectiveCamera;
+    const eye = new THREE.Vector3(0, Math.sin(CAM_PITCH), Math.cos(CAM_PITCH))
+      .multiplyScalar(dist);
+    // `Matrix4.lookAt` writes the ROTATION and leaves the translation alone,
+    // so this is the camera's world matrix once the eye is put in it.
+    const inv = new THREE.Matrix4().lookAt(eye, ZERO, UP).setPosition(eye).invert();
+    const tanY = Math.tan((cam.fov * Math.PI / 180) / 2);
+    const tanX = tanY * aspect;
+    const FX = FIELD_X * CAM_MARGIN;
+    const FZ = FIELD_Z * CAM_MARGIN;
+    // BOTH heights, at all four corners.
+    //
+    // Solving only at `CAM_AT_Y` is wrong in a way that hides: raising the
+    // sample point moves it UP the screen, which protects the far edge and
+    // stops protecting the near one — so the near corners of the GROUND fell
+    // off the bottom while every far corner sat comfortably inside. It passed
+    // on a phone, where the width binds, and failed on a laptop, which is the
+    // shape nobody checks first.
+    for (const y of [0, CAM_AT_Y]) {
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        _corner.set(sx * FX, y, sz * FZ).applyMatrix4(inv);
+        const depth = -_corner.z;
+        if (depth <= 0.01) return false;
+        if (Math.abs(_corner.x) > tanX * depth) return false;
+        if (Math.abs(_corner.y) > tanY * depth) return false;
+      }
+    }
+    return true;
+  };
+
+  /** Put the camera where the whole board is on screen. */
+  const fitCamera = (): void => {
+    const cam = world.camera as THREE.PerspectiveCamera;
+    const aspect = Math.max(0.2, canvas.clientWidth / Math.max(1, canvas.clientHeight));
+    let lo = 1, hi = 200;
+    if (!fitsAt(hi, aspect)) lo = hi;      // nothing fits: take the far end
+    else {
+      for (let i = 0; i < 34; i++) {
+        const mid = (lo + hi) / 2;
+        if (fitsAt(mid, aspect)) hi = mid; else lo = mid;
+      }
+    }
+    const dist = hi;
+    cam.position.set(0, Math.sin(CAM_PITCH) * dist, Math.cos(CAM_PITCH) * dist);
+    cam.lookAt(0, 0, 0);
+    // The far plane is 500 by default, which is plenty; the NEAR plane matters
+    // more here — at this distance a 0.1 near plane wastes most of the depth
+    // buffer and the merged ground z-fights with the tiles on it.
+    cam.near = Math.max(0.5, dist * 0.05);
+    cam.far = dist + 120;
+    cam.updateProjectionMatrix();
+  };
+
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     world.camera.aspect = window.innerWidth / window.innerHeight;
     world.camera.updateProjectionMatrix();
+    // Where the camera BELONGS depends on the aspect, so it is re-solved here
+    // rather than once at load. A phone rotated from portrait to landscape is
+    // the case that matters, and it is also the one nobody tests.
+    fitCamera();
   };
   resize();
   window.addEventListener('resize', resize);
+  fitCamera();
   applyQuality();
 
   // --- Warm every shader before the game starts ---
@@ -3186,15 +3314,17 @@ export async function startLevel(
   const crossing = (): { from: THREE.Vector3; dir: THREE.Vector3 } => {
     const side = Math.floor(Math.random() * 4);
     // Pulled in from the edge, proportionally: a line between two points near
-    // the SAME corner clips the field and is over before it is a threat.
-    const along = () => (Math.random() * 2 - 1) * FIELD * 0.72;
+    // the SAME corner clips the field and is over before it is a threat. The
+    // two axes are different lengths now, so each side gets its own.
+    const alongX = () => (Math.random() * 2 - 1) * FIELD_X * 0.72;
+    const alongZ = () => (Math.random() * 2 - 1) * FIELD_Z * 0.72;
     const from = new THREE.Vector3();
     const to = new THREE.Vector3();
     // 0 north, 1 south, 2 west, 3 east — and the exit is on the opposite one.
-    if (side === 0) { from.set(along(), 0, -OUTSIDE); to.set(along(), 0, OUTSIDE); }
-    else if (side === 1) { from.set(along(), 0, OUTSIDE); to.set(along(), 0, -OUTSIDE); }
-    else if (side === 2) { from.set(-OUTSIDE, 0, along()); to.set(OUTSIDE, 0, along()); }
-    else { from.set(OUTSIDE, 0, along()); to.set(-OUTSIDE, 0, along()); }
+    if (side === 0) { from.set(alongX(), 0, -OUTSIDE); to.set(alongX(), 0, OUTSIDE); }
+    else if (side === 1) { from.set(alongX(), 0, OUTSIDE); to.set(alongX(), 0, -OUTSIDE); }
+    else if (side === 2) { from.set(-OUTSIDE, 0, alongZ()); to.set(OUTSIDE, 0, alongZ()); }
+    else { from.set(OUTSIDE, 0, alongZ()); to.set(-OUTSIDE, 0, alongZ()); }
     return { from, dir: to.sub(from).normalize() };
   };
 
@@ -4331,8 +4461,15 @@ export async function startLevel(
       return;
     }
 
-    const turn = input.look();
-    if (turn.x || turn.y) world.orbit(turn.x, turn.y);
+    // NO ORBIT. The camera is the frame: it does not move and it does not
+    // turn, so "left" means left for the whole run. A turnable camera is right
+    // for a board you walk around inside and wrong for one that IS the screen
+    // — it would rotate the playfield under a player who is reading the line a
+    // bullet is travelling on.
+    //
+    // The look input is still CONSUMED, so a drag on the right half of the
+    // screen does nothing rather than being handed to something else.
+    input.look();
 
     // Walking is not part of "the game is running" — it is how you leave.
     const move = input.direction(world.cameraYaw);
@@ -5031,6 +5168,42 @@ export async function startLevel(
       /** Drive the two controls a probe cannot press, because the SDK's
        *  buttons only exist on a touch screen. */
       swap: () => swapPole(),
+      /** The board's four corners, in 0..1 screen space, from the REAL camera.
+       *  Recomputing the projection beside the game would be checking a copy
+       *  of the arithmetic rather than the camera the player is looking
+       *  through. */
+      /** How big the things you must READ come out, in screen pixels.
+       *
+       *  The board being on screen says nothing about whether the game can be
+       *  played on it: fit the whole world into a phone and every check about
+       *  framing passes while the hero is twelve pixels and an orb is six —
+       *  and six pixels cannot carry a colour, which is the one thing this
+       *  game asks you to read. */
+      pixelSizes: () => {
+        const cam = world.camera as THREE.PerspectiveCamera;
+        cam.updateMatrixWorld(true);
+        const h = canvas.clientHeight;
+        const at = (x: number, z: number, top: number) => {
+          const a = new THREE.Vector3(x, 0, z).project(cam);
+          const b = new THREE.Vector3(x, top, z).project(cam);
+          return +(Math.abs(b.y - a.y) / 2 * h).toFixed(1);
+        };
+        return {
+          // At the board's centre, which is where they are read.
+          hero: at(0, 0, HERO_HALF_HEIGHT * 2),
+          orb: at(0, 0, 0.28),
+          // And at the far corner, the smallest anything ever gets.
+          orbFar: at(FIELD_X * 0.8, -FIELD_Z * 0.8, 0.28),
+        };
+      },
+      cornersOnScreen: () => {
+        const cam = world.camera as THREE.PerspectiveCamera;
+        cam.updateMatrixWorld(true);
+        return ([[-1, -1], [1, -1], [-1, 1], [1, 1]] as const).map(([sx, sz]) => {
+          const v = new THREE.Vector3(sx * FIELD_X, 0, sz * FIELD_Z).project(cam);
+          return { x: +((v.x + 1) / 2).toFixed(4), y: +((1 - v.y) / 2).toFixed(4) };
+        });
+      },
       /** What a rare crate can pay, and a way to be handed one. Breaking a
        *  real crate needs a crate to have dropped, on a cell that is free, and
        *  then walking to it — none of which is the thing under test.

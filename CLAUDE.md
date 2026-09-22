@@ -208,20 +208,105 @@ red is correct in both poles, because the face and hands are deliberately not
 painted and skin is a warm colour. Demanding "no red when blue" would be
 demanding the face be painted.
 
+## The camera is the frame (polarity)
+
+**The board IS the screen.** All of it is visible all of the time, the camera
+does not move and it cannot be turned, and the player is a thing inside a
+frame. A follow camera is right for a board you walk around and wrong for one
+that is the screen: it drifts, so the edges of the world come and go, and it
+turns, so "left" stops meaning left — under a player who is reading the line a
+bullet is travelling on.
+
+The scene declares `kind: 'fixed'`, which makes the SDK's `update` leave the
+camera alone; `fitCamera` in `main.ts` places it on load and on every resize.
+`input.look()` is still consumed, so a drag on the right half does nothing
+rather than being handed to something else.
+
+### Fitting it, and why by bisection
+
+The four corners of the air wall are solved for, so no part of the playfield is
+ever off frame. Whichever axis is tighter wins: on a wide screen the height
+runs out first and the spare width fills with forest; on a tall one the width
+binds and the trees go above and below. Either way nothing is cropped and you
+never see past the world.
+
+The projection of a tilted rectangle is a trapezoid with its four corners at
+four different depths, so "how far back fits it" has no one-line answer worth
+trusting. Thirty-four iterations of "does it fit at this distance" is exact to
+a millimetre, runs on resize only, and cannot be subtly wrong in a way nobody
+notices.
+
+**Solve at BOTH y = 0 and y = `CAM_AT_Y`.** Raising the sample point moves it
+UP the screen, so fitting only the raised one protects the far edge and stops
+protecting the near one — the near corners of the ground fell off the bottom
+while every far corner sat comfortably inside. It passed on a phone, where the
+width binds, and failed on a laptop.
+
+### Three numbers, and each one is zoom
+
+With the whole board on screen, everything about the framing trades directly
+against how big the pieces are — and the pieces have to carry a COLOUR, which
+is the only thing this game asks anyone to read.
+
+- **The playfield is a RECTANGLE**, `half: { x: 5, z: 3.2 }`. It was square,
+  inherited from boards that were square because a road wandered inside them.
+  Nothing wanders here and the screen is landscape, so a square board is a
+  board whose left and right thirds are trees — and those thirds are paid for
+  in zoom, because the camera must sit back far enough to fit the width it is
+  not using. Matching the board's shape to the screen's is most of what made
+  the pieces readable on a phone, and it took the tree line off the sides.
+- **`CAM_PITCH` is 42°**, and the angle is not only taste. The board's depth
+  projects as `2·fieldZ·sin(pitch)`, so a shallower camera needs less screen
+  height for the same board and can sit closer; and a standing thing keeps
+  `cos(pitch)` of its height, so it draws the hero taller as well. 55° → 42°
+  is about a third more hero for nothing. Past this the far half starts hiding
+  behind the near half.
+- **`CAM_MARGIN` is 1.0** — the wall sits exactly on the frame edge. Padding is
+  charged on both sides and buys nothing: enemies spawn outside the wall and
+  are visible coming in regardless, because what is beyond the wall is forest
+  rather than the edge of the world.
+
+`CAM_AT_Y` (0.8) is the headroom, and it is the expensive one that cannot go:
+it is charged at both ends, so 0.8 of world height costs about a fifth of the
+screen's — measured, the ground corners sit at 71% of the frame on a landscape
+phone and the rest is this. Lower and the hero's head clips at the far edge,
+which is the one place you cannot afford not to see them.
+
+Measured after all of it, at the smallest shape that matters (852×393): the
+board fills 92% × 71% of the frame, the hero is 13.2 CSS px and an orb 9.2.
+
+### Framing is not playability
+
+`verify-3d-polarity-frame` checks five shapes for three things, and the third
+is the one worth having. The whole world fits on a phone at any distance you
+like — every framing check passes while the hero is twelve pixels and an orb
+is six, and six pixels cannot carry a colour. It reads `pixelSizes()` off the
+real camera.
+
+Its thresholds are a FLOOR checked against a screenshot at the smallest shape,
+not a target invented in advance. The first version demanded 18px, a size
+nothing had ever been measured at, and the only way to satisfy it would have
+been to shrink the playfield until there was nowhere to dodge.
+
+Legibility is asserted on landscape only. Orientation is platform data fixed
+when a game is created and this one is landscape, so a portrait player never
+happens — the shape stays in the list because "the board is whole" must hold
+everywhere.
+
 ## The board (polarity)
 
 ONE board, `arena`, generated by `buildArena` in `tools/gen-scene.mjs`. A
 clearing: an air wall, and the forest rings outside it that every Balaboo board
 has.
 
-**It is SMALLER than a tower-defense board, and its size is written down
-once.** A tower-defense board is big because the road has to be long — road
+**It is a landscape RECTANGLE, smaller than a tower-defense board, and its size
+is written down once.** A tower-defense board is big because the road has to be long — road
 length is how much time a gun gets with what walks past it. Nothing walks a
 road here. What size decides instead is how long it takes to get out of the way
 of something, and at the inherited ±5.5 the far corner was four seconds away,
-so half the board was somewhere nothing ever happened. `half` is 4 in
+so half the board was somewhere nothing ever happened. `half` is `{ x: 5, z: 3.2 }` in
 `gen-scene.mjs` and **the generator writes the result into the scene**
-(`arena: { field, outside }`), which the level reads. The alternative is the
+(`arena: { field: { x, z }, outside }`), which the level reads. The alternative is the
 same constant in two files kept in step by hand, which this project already
 has one of (`LAND`) and has the scars to prove it.
 
@@ -603,6 +688,7 @@ In `umicat-infra/playwright/`. The ones written for this fork:
 | `verify-3d-polarity-tide` | does staying one colour stop working — sampled through the real spawn path |
 | `verify-3d-polarity-pull` | does a line that MISSES still get collected, and does the other colour stay straight |
 | `verify-3d-polarity-crates` | what each rare crate DOES, by effect rather than by label |
+| `verify-3d-polarity-frame` | is the whole board on screen on five shapes — AND is it big enough to read |
 
 Four lessons from writing them, all of which cost a run:
 

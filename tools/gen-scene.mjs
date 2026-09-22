@@ -685,28 +685,43 @@ function buildArena(def) {
   // here. What the size decides instead is how long it takes to get out of the
   // way of something, and at 5.5 the far corner was four seconds away — long
   // enough that half the board was somewhere nothing was ever happening.
-  const H = def.half;
-  const WALL = H + 1.1;      // same relation the generated boards use
-  const GROUND = 2 * H + 2;
+  // The playfield is a RECTANGLE, wider than it is deep.
+  //
+  // It was square, inherited from boards that were square because a road had
+  // to wander around inside them. Nothing wanders here, and the screen this is
+  // played on is landscape — so a square board is a board whose left and right
+  // thirds are trees, and those thirds are paid for in ZOOM: the camera has to
+  // sit back far enough to fit the width it is not using, and everything on
+  // the board gets smaller for it.
+  //
+  // Matching the board's shape to the screen's is most of what makes the
+  // pieces readable on a phone. It also takes the tree line off the sides,
+  // where it was eating a third of the frame.
+  const HX = def.half.x;
+  const HZ = def.half.z;
+  const WALL_X = HX + 1.1;   // same relation the generated boards use
+  const WALL_Z = HZ + 1.1;
+  const GROUND_X = 2 * HX + 2;
+  const GROUND_Z = 2 * HZ + 2;
 
   // The floor of the playable field — invisible, here for its collider. Same
   // as every board: the tiles ARE the ground, with one box underneath them.
   add({
     id: 'ground', name: 'ground',
-    primitive: { kind: 'box', size: { x: GROUND, y: 0.4, z: GROUND }, color: t.skirt },
+    primitive: { kind: 'box', size: { x: GROUND_X, y: 0.4, z: GROUND_Z }, color: t.skirt },
     visible: false,
     transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
     castShadow: false,
     collider: {
-      shape: { kind: 'box', halfExtents: { x: GROUND / 2, y: 0.3, z: GROUND / 2 } },
+      shape: { kind: 'box', halfExtents: { x: GROUND_X / 2, y: 0.3, z: GROUND_Z / 2 } },
       body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
     },
   });
 
   // The field. Plain tiles, every cell, rotated at random so the texture does
   // not tile visibly. No scenery: see the note above.
-  for (let gx = -H; gx <= H; gx += 1) {
-    for (let gz = -H; gz <= H; gz += 1) {
+  for (let gx = -HX; gx <= HX; gx += 1) {
+    for (let gz = -HZ; gz <= HZ; gz += 1) {
       add({
         id: `ground_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'ground_tile',
         modelAssetId: t.tile,
@@ -723,17 +738,31 @@ function buildArena(def) {
   // gets, minus the openings. There is no door in this one: a run ends when the
   // health bar does, so a gap in the tree line would be a way out that is not
   // there.
-  const FOREST_OUT = 7;
-  const OUTER = H + FOREST_OUT;
+  // The forest has to reach past the widest screen the fixed camera can show.
+  //
+  // The camera fits the BOARD to the viewport's height, so a wide screen shows
+  // more to the left and right — which is the whole point, that is where the
+  // trees go — and a very wide one shows a lot more. At 21:9 the visible
+  // half-width at the board's depth is about `field × 2.3`, and past the
+  // board's far edge it is wider still. Seven rings was enough for a camera
+  // that sat close behind the hero and is not enough for this one: the ground
+  // simply stopped, with sky under it.
+  //
+  // It is not free — this is the outermost ring of a 33×33 field of tiles —
+  // but almost all of it is `forest_far`, which is the group the cheap picture
+  // setting drops, and none of it is in the shadow pass.
+  const FOREST_OUT = def.forest ?? 14;
+  const OUTER_X = HX + FOREST_OUT;
+  const OUTER_Z = HZ + FOREST_OUT;
   add({
     id: 'ground_skirt', name: 'ground_skirt',
-    primitive: { kind: 'box', size: { x: 2 * OUTER + 1, y: 0.4, z: 2 * OUTER + 1 }, color: t.skirt },
+    primitive: { kind: 'box', size: { x: 2 * OUTER_X + 1, y: 0.4, z: 2 * OUTER_Z + 1 }, color: t.skirt },
     transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
     castShadow: false,
   });
-  for (let gx = -OUTER; gx <= OUTER; gx += 1) {
-    for (let gz = -OUTER; gz <= OUTER; gz += 1) {
-      if (Math.abs(gx) <= H && Math.abs(gz) <= H) continue;
+  for (let gx = -OUTER_X; gx <= OUTER_X; gx += 1) {
+    for (let gz = -OUTER_Z; gz <= OUTER_Z; gz += 1) {
+      if (Math.abs(gx) <= HX && Math.abs(gz) <= HZ) continue;
       add({
         id: `outer_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'forest_ground',
         modelAssetId: t.tile,
@@ -743,7 +772,7 @@ function buildArena(def) {
         },
         castShadow: false,
       });
-      const depth = Math.max(Math.abs(gx), Math.abs(gz)) - H;
+      const depth = Math.max(Math.abs(gx) - HX, Math.abs(gz) - HZ);
       const chance = Math.min(0.96, 0.72 + depth * 0.05);
       const r = rand();
       const n = r < chance ? (r < chance * 0.45 ? 2 : 1) : 0;
@@ -773,8 +802,9 @@ function buildArena(def) {
   // the enemies fly, and were never touching it.
   for (const side of ['n', 's', 'w', 'e']) {
     const along = side === 'n' || side === 's' ? 'x' : 'z';
-    const fixed = side === 'n' || side === 'w' ? -WALL : WALL;
-    const len = 2 * WALL + 0.2;
+    const fixed = side === 'n' || side === 'w'
+      ? -(along === 'x' ? WALL_Z : WALL_X) : (along === 'x' ? WALL_Z : WALL_X);
+    const len = 2 * (along === 'x' ? WALL_X : WALL_Z) + 0.2;
     add({
       id: `wall_${side}`, name: `wall_${side}`,
       primitive: {
@@ -818,7 +848,7 @@ function buildArena(def) {
      *  the scars to prove it. `field` is where the air wall stands — what the
      *  hero is held inside — and `outside` is where enemies are made and
      *  where they are gone, comfortably past anything the camera shows. */
-    arena: { field: WALL, outside: WALL + 2.0 },
+    arena: { field: { x: WALL_X, z: WALL_Z }, outside: Math.max(WALL_X, WALL_Z) + 2.0 },
     environment: { background: t.sky },
     gravity: { x: 0, y: -4.1692, z: 0 },
     lights: [
@@ -827,7 +857,19 @@ function buildArena(def) {
       { id: 'sun', kind: 'directional', color: t.sun, intensity: t.sunIntensity,
         position: { x: 4, y: 8, z: 5 }, castShadow: true },
     ],
-    camera: { kind: 'follow', target: 'hero', fov: 55, offset: { x: 0, y: 5.2, z: 6.4 } },
+    // FIXED, and the game places it.
+    //
+    // A follow camera is right for a board you walk around and wrong for one
+    // that IS the screen: it moves, so the edges of the world drift in and out
+    // of frame, and it can be turned, so "left" stops meaning left. Here the
+    // whole board is visible at all times and the player is a thing inside a
+    // frame, which is what makes a bullet's line readable before it arrives.
+    //
+    // The offset below is only a sensible default — where the camera would sit
+    // on a square viewport. `fitCamera` in `main.ts` replaces it on load and on
+    // every resize, because where it BELONGS depends on the aspect ratio, and
+    // the generator has no idea what screen this will be played on.
+    camera: { kind: 'fixed', fov: 50, offset: { x: 0, y: 13, z: 10 } },
     entities,
   };
 }
@@ -862,10 +904,22 @@ const ARENA = {
   name: 'The Clearing',
   theme: 'grass',
   scenerySeed: 47,
-  // Outermost cell centre. 5.5 is what the tower-defense boards use and it was
-  // simply inherited; at that size the far corner of this board is four
-  // seconds away and most of it is somewhere nothing happens.
-  half: 4,
+  // Outermost cell centre.
+  //
+  // 5.5 is what the tower-defense boards use and was simply inherited; at that
+  // size the far corner is four seconds away and most of the board is
+  // somewhere nothing happens. 4 fixed that for a camera that followed the
+  // hero — and then the camera became the FRAME, which changes what this
+  // number is for.
+  //
+  // With the whole board on screen at once, the board's size IS the zoom: a
+  // wider board is the same screen divided among more of it, so everything on
+  // it is smaller. At 4 the hero came out about twelve pixels tall on a
+  // landscape phone and an orb about six, and six pixels cannot carry the one
+  // thing this game asks you to read. The number is set by legibility now,
+  // not by walking distance.
+  // Wider than deep, because the screen is. See `buildArena`.
+  half: { x: 5, z: 3.2 },
 };
 
 {
