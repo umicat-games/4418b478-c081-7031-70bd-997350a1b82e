@@ -190,6 +190,27 @@ observation's language rule and the playbook say what the tag means. Three in
 three afterwards. **If you add a new kind of unprompted line, it goes through
 `remark()` — never straight into `say()`.**
 
+**Voice input listens in ONE language, and it is the platform's.** Nothing
+auto-detects: the web `SpeechRecognition`, iOS `SFSpeechRecognizer(locale:)`
+and Android's `EXTRA_LANGUAGE` each listen for exactly the language they are
+handed, and a wrong one comes back as confident nonsense rather than as an
+error. `speechLang()` derives it from `umicat.locale` — which is the platform
+language setting on the web and the DEVICE's system language in both apps,
+where there is no language setting at all.
+
+**Match the tag, never compare it.** iOS sends
+`Locale.preferredLanguages.first`, which carries the script — `zh-Hans-CN` —
+so `locale === 'zh-CN'` was true on the web and on Android and false on a
+Chinese iPhone, which came up with a Chinese UI (the string table falls back
+to the base language) and an English microphone. Only a real device could
+show it.
+
+**Following the conversation instead was considered and turned down**
+(2026-09-22): a microphone that silently changes language under the player
+reads as broken, and a separate mic-language setting is one more thing nobody
+else's app asks for. The system language is what every other dictation on the
+phone follows. Keep it static.
+
 **`ai` and `microphone` must be declared** in the game's Settings on the
 platform, or the backend rejects AI calls and the iframe blocks the mic.
 
