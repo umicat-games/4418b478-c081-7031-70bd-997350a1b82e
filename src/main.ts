@@ -32,11 +32,12 @@ import { describe as describeScore, scoreFrom, type Score } from './go/scoring';
 import { getLiberties } from './engine/utils/gameLogic';
 import { Coach } from './coach/coach';
 import { ChatPanel } from './ui/chat';
-import { Speech, segment } from './ui/speech';
+import { Speech, segment, stripAnchors } from './ui/speech';
 import { Menu } from './ui/menu';
 import { PointActions } from './ui/pointactions';
 import { AskHere } from './ui/askhere';
 import { showTitle } from './ui/title';
+import { GameOver } from './ui/gameover';
 import { underCurtain } from './ui/curtain';
 import { Autosave, load } from './save';
 import { SFX, createAudio, playStone } from './audio';
@@ -146,6 +147,14 @@ async function start(): Promise<void> {
     const el = e.target as HTMLElement | null;
     if (el?.closest('button')) audio.play(SFX.uiPress);
   }, true);
+
+  /** The end of a game, as a dialog. The status line is where "your move"
+   *  lives; a result printed in the same place, in the same type, reads as
+   *  one more turn rather than as the end of something. */
+  const over = new GameOver({
+    onAgain: () => void freshGame(coach.profile.boardSize, 0, companion),
+    onTitle: () => void toTitle(),
+  });
 
   const opponent = new Opponent();
   // Begin the 4MB download now, behind the title screen, so that by the time
@@ -303,7 +312,12 @@ async function start(): Promise<void> {
       // answer is about, which is often not the point that was asked about.
       askHere.hide();
       const size = game?.size ?? 9;
-      speech.show(segment(said[said.length - 1].text, size), size);
+      const latest = said[said.length - 1].text;
+      // While the end-of-game dialog is up, the assistant talks INTO it: a
+      // bubble behind that card is the assistant addressing a screen the
+      // player cannot see.
+      if (over.showing) over.note(stripAnchors(latest));
+      else speech.show(segment(latest, size), size);
     }
   };
 
@@ -410,6 +424,38 @@ async function start(): Promise<void> {
   tip.className = 'tip';
   hud.appendChild(tip);
 
+  /**
+   * The result, for the dialog: a headline and one factual line under it.
+   *
+   * The line is the COUNT — which stones, how many points, how much komi —
+   * because at the end of a game of Go "who won" is the least interesting
+   * half of the answer and the arithmetic is the half a beginner wants to see.
+   */
+  function describeResult(g: GoGame, s: Score | null): { title: string; body: string; tone: 'win' | 'loss' | 'draw' } {
+    if (g.resignedBy) {
+      const won = g.resignedBy !== HUMAN;
+      return {
+        title: t(won ? 'over.win' : 'over.loss'),
+        body: t(won ? 'over.theyResigned' : 'over.youResigned'),
+        tone: won ? 'win' : 'loss',
+      };
+    }
+    const won = s ? s.winner === HUMAN : false;
+    const margin = s ? Math.abs(s.lead) : 0;
+    return {
+      title: t(won ? 'over.win' : 'over.loss'),
+      body: s
+        ? t('over.counted', {
+          black: s.black,
+          white: s.white,
+          komi: g.komi,
+          margin: margin % 1 === 0 ? margin : margin.toFixed(1),
+        }) + (s.unsettled ? ` ${t('over.unsettled')}` : '')
+        : '',
+      tone: won ? 'win' : 'loss',
+    };
+  }
+
   function refresh(): void {
     if (game) view.sync(game);
     if (!game) { status.textContent = ''; tip.textContent = ''; return; }
@@ -429,6 +475,7 @@ async function start(): Promise<void> {
   }
 
   function newGame(size: BoardSize, handicap: number): void {
+    over.hide();
     game = new GoGame(size, { handicap });
     coach.profile.boardSize = size;
     view.setBoardSize(size);
@@ -706,6 +753,9 @@ async function start(): Promise<void> {
     }
     refresh();
     audio.play(SFX.gameOver);
+    // The board keeps the count on it underneath; the dialog closes to show it.
+    speech.hide();
+    over.show(describeResult(game, score));
 
     await remark(score
       ? `The game is over and counted. ${describeScore(score, game)}`
@@ -732,6 +782,7 @@ async function start(): Promise<void> {
     actions.hide();
     askHere.hide();
     menu.close();
+    over.hide();
     chat.setOpen(false);
     await autosave.flush();
 
@@ -814,7 +865,7 @@ async function start(): Promise<void> {
   // a test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio,
+      umicat, view, opponent, coach, chat, speech, menu, actions, askHere, audio, over,
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },

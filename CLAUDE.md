@@ -218,6 +218,17 @@ path absolute against `document.baseURI`; anything else handed to CSS from
 code should do the same. **Check a `vite preview` of `dist/`, not just
 `npm run dev`, whenever a path is involved.**
 
+**The end of a game is a DIALOG, not a line in the corner.** The status line
+is where "your move" lives, and a result printed in the same place in the same
+type reads as one more turn rather than as the end of something. The card
+carries three things and nothing else: what happened, one factual line the
+GAME can prove (the count, the mate, the move number), and the two things
+anybody wants next. It can be dismissed, because the board underneath has the
+result drawn on it and a dialog that will not get out of the way of the thing
+it is describing is one people learn to close before reading. The assistant's
+closing line lands INSIDE it when it arrives — a speech bubble behind that
+card is the assistant talking to a screen the player cannot see.
+
 ## Building and checking
 
 Sound is Kenney CC0 except the music; `public/audio/CREDITS.md` says which

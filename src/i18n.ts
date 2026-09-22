@@ -93,6 +93,16 @@ const EN = {
   'lesson.territory.goal': 'Play a whole game to the end.',
   'lesson.territory.quiz': 'Play it out. Pass when nothing useful is left.',
 
+  'over.win': 'You win',
+  'over.loss': 'White wins',
+  'over.again': 'Play again',
+  'over.toTitle': 'Back to title',
+  'over.close': 'Look at the board',
+  'over.counted': 'Black {black}, White {white} (komi {komi} included) — {margin} points in it.',
+  'over.unsettled': 'The position was still unsettled, so treat the count as approximate.',
+  'over.youResigned': 'You resigned.',
+  'over.theyResigned': 'White resigned.',
+
   'btn.place': 'Place',
   'btn.pass': 'Pass',
   'btn.resign': 'Resign',
@@ -225,6 +235,16 @@ const ZH: Partial<Record<Key, string>> = {
   'lesson.territory': '地盘与数子',
   'lesson.territory.goal': '下完整整一盘。',
   'lesson.territory.quiz': '下到底。没棋可下的时候停一手。',
+
+  'over.win': '你赢了',
+  'over.loss': '白棋赢了',
+  'over.again': '再来一盘',
+  'over.toTitle': '返回标题',
+  'over.close': '看看棋盘',
+  'over.counted': '黑 {black},白 {white}(含贴目 {komi})—— 相差 {margin} 目。',
+  'over.unsettled': '局面还没定下来,这个数只能算大概。',
+  'over.youResigned': '你认输了。',
+  'over.theyResigned': '白棋认输。',
 
   'btn.place': '落子',
   'btn.pass': '停一手',
