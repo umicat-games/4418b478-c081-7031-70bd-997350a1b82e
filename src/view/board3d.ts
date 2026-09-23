@@ -77,6 +77,24 @@ const MAX_PER_KIND = 10;
  * measured at 1.2:1 — the weakest reading on the screen after the table
  * itself.
  */
+/**
+ * The table's own tone.
+ *
+ * Its LUMINANCE is the load-bearing part — that is what holds the board off
+ * the background — and the hue is taste. **Warmth is not free to choose by
+ * eye**: pushing a colour warmer at the same numbers makes it DARKER, because
+ * green carries 71% of luminance and warming is mostly taking green down. A
+ * hand-picked warm hex is a table that is quietly warmer AND dimmer, and the
+ * gap this was all for comes back in. Solve for green instead: fix red and
+ * blue where the warmth wants them, then binary-search green until the
+ * relative luminance matches. Four warmths were rendered that way and
+ * compared; this is the second, which is as warm as it goes before two things
+ * start to cost. The table joins the board's own hue family, which is what it
+ * was moved away from; and the white pieces, being neutral ivory, read grey
+ * against a cream surface. A warmer table than this wants warmer pieces too.
+ */
+const TABLE_TONE = '#ede5d0';
+
 const LIGHT_SQ = '#d9bd91';
 const DARK_SQ = '#8b5c38';
 const FRAME = '#4e3019';
@@ -884,7 +902,7 @@ function tableTexture(): THREE.CanvasTexture {
 
   // Warm ivory. Light enough to push the board away from it, warm enough not
   // to read as a UI panel: a neutral grey under a warm key light goes green.
-  ctx.fillStyle = '#e9e5dc';
+  ctx.fillStyle = TABLE_TONE;
   ctx.fillRect(0, 0, px, px);
 
   // The frost. Per-pixel, monochrome, and small — it exists to break up the
