@@ -204,6 +204,31 @@ is trimmed to its tail and the rest lives in the assistant's summary — which i
 also what stops each turn getting more expensive, since every turn ships the
 history.
 
+**The setup panel is three parts: a pinned lid, a scrolling middle, and a
+button that is the floor.** The start button is full-bleed and reaches the
+panel's own corners — the panel's `overflow: hidden` is what rounds it, so the
+button sets no radius of its own and this keeps working if the panel's does
+change. It has no slab shadow and does not travel on press, because a raised
+button cannot sit flush in a corner and pressing one that did would open a gap
+underneath it.
+
+The reason it is pinned is the phone: open "more settings" and the list is
+twice the height of the panel, and a start button that scrolls with it is a
+button the player has to go looking for immediately after being handed a list
+of things to read. The heading is pinned for a smaller reason that is just as
+visible — the close control sits in its corner, and with the heading scrolled
+away it floated over a row of chips and read as part of them.
+
+`pin()` does this as a last step in `draw()` rather than the panel being built
+in two halves, because every game in the family writes its own `draw()` and
+they all append to the same element. It is the one step they can share.
+
+**There is no "back to the title" button. The corner × is the only way out**,
+and what closing MEANS belongs to the caller: over a game it puts the board
+back, opened from the title there is no board to put back so `onClose` goes
+there. One button that is right in both places beats a button whose label is a
+destination.
+
 **A new game gets a new NPC, not `npc.reset()`** — and the difference is a
 bug that shipped with the NPC itself (2026-09-10 to 2026-09-23). Reset points the NPC's history at a fresh array;
 a `say()` already in flight still pushes its answer into `this.npc.history`

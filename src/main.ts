@@ -800,7 +800,6 @@ async function start(): Promise<void> {
       onSound: (on) => { audio.setSfxVolume(on ? 1 : 0); coach.profile.sound = on; persist(); },
       music: () => coach.profile.music !== false,
       sound: () => coach.profile.sound !== false,
-      onTitle: () => void toTitle(),
       // Dismissed from the title screen, where there is no board behind it.
       onClose: () => { if (!game) void toTitle(); },
     },

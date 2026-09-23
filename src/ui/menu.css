@@ -9,7 +9,10 @@
 #menu {
   position: fixed;
   max-height: calc(100vh - 140px);
-  overflow-y: auto;
+  /* The panel does not scroll — `.body` does. Hidden rather than auto because
+     this is also what rounds the button's bottom corners: the footer sets no
+     radius of its own and is clipped to the panel's. */
+  overflow: hidden;
   z-index: 30; /* over the HUD (20), under the title (40) */
   left: max(16px, env(safe-area-inset-left));
   /* Clear of the whole HUD block, not just the buttons: the status line sits
@@ -24,6 +27,22 @@
   backdrop-filter: blur(12px);
   color: #f4f5f7;
   font: 14px/1.45 system-ui, -apple-system, sans-serif;
+  display: flex;
+  flex-direction: column;
+  /* No padding: the footer has to reach all four edges. The padding moved to
+     `.body`, which is everything that is not the footer. */
+  padding: 0;
+}
+
+/* Everything above the button, and the only thing that scrolls. `min-height:
+   0` is what lets it: without it a flex child refuses to shrink below its
+   content and the panel grows instead of the body scrolling. */
+#menu .body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 16px;
   display: grid;
   gap: 14px;
 }
@@ -38,7 +57,47 @@
   width: min(360px, 88vw);
 }
 
-#menu .title { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
+/* The lid. Pinned like the button is, so the close control in its corner has
+   something behind it once the settings have scrolled; the hairline and the
+   shadow under it are what make the settings read as passing UNDER rather
+   than stopping there. Right padding keeps a long heading off the button. */
+#menu .title {
+  flex: none;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 14px 44px 11px 16px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 14px rgba(10, 12, 16, 0.45);
+  z-index: 1;
+}
+
+/* The way out, where a phone keeps it.
+   Outside the scrolling half — `pin()` leaves it a direct child of the panel
+   — so it is still there after the settings have been scrolled. No plate
+   behind it: the panel is already dark and opaque, and a button with its own
+   background in a corner reads as a second, smaller panel. */
+#menu .shut {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #f4f5f7;
+  opacity: 0.6;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#menu .shut svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
+#menu .shut:hover { opacity: 1; }
+#menu .shut:active { opacity: 1; background: rgba(255, 255, 255, 0.12); }
 
 /* Hint, pass, resign, recentre — the old corner, folded inside. */
 #menu .actions { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -63,8 +122,31 @@
 /* Layout only — how a button LOOKS is buttons.css. */
 #menu .choices button { flex: 1 1 auto; }
 #menu .actions button { flex: 1 1 auto; font-size: 13px; padding: 9px 10px; }
-#menu .go { width: 100%; }
-#menu .home { width: 100%; font-weight: 500; }
+/* The floor of the panel.
+   No radius of its own (the panel's `overflow: hidden` gives it the corners),
+   no slab shadow and no travel on press — a raised button cannot sit flush in
+   a corner, and pressing one that did would open a gap under it. What it has
+   instead is a hairline and a lift of shadow ABOVE it, so the settings
+   visibly pass under it rather than stopping at it. */
+#menu .go {
+  flex: none;
+  width: 100%;
+  border-radius: 0;
+  padding: 15px 18px calc(15px + env(safe-area-inset-bottom) * 0);
+  font-size: 15px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 -10px 18px rgba(0, 0, 0, 0.30);
+}
+#menu .go:active {
+  transform: none;
+  filter: brightness(0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 -10px 18px rgba(0, 0, 0, 0.30);
+}
 
 /* The rest of the settings, and the one word that opens them.
    The link is centred and quiet: it is a way to MORE, not a thing to do —
