@@ -534,9 +534,11 @@ async function start(): Promise<void> {
         // How hard it is playing belongs to the opponent, not to the status
         // line in the player's own corner — that is a property of who you are
         // sitting across from.
-        meta: thinking
-          ? t('plate.thinking')
-          : `${levelLabel(level.id)} · ${t('plate.captures', { n: game.captures.white })}`,
+        meta: `${levelLabel(level.id)} · ${t('plate.captures', { n: game.captures.white })}`,
+        // The dots go BESIDE what the seat already says rather than replacing
+        // it: "thinking" is a state, and a state that erases the level and
+        // the count is a seat that flickers between two different sentences.
+        thinking,
         active: !game.over && !yourTurn,
       },
     );
