@@ -444,6 +444,7 @@ async function start(): Promise<void> {
 
   // ── the board ───────────────────────────────────────────────────────────
   const status = document.createElement('div');
+  status.className = 'status';
   hud.appendChild(status);
   /** How to place a stone, until they have placed one — ever. */
   const tip = document.createElement('div');
