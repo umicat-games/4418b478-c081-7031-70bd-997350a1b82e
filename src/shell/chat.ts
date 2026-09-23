@@ -32,6 +32,8 @@ export class ChatPanel {
   private input: HTMLInputElement;
   private micBtn: HTMLButtonElement;
   private open = false;
+  /** The other player's name, when this is a table and not a lesson. */
+  private peer: string | null = null;
   private thinking = false;
   private messages: ChatMessage[] = [];
   private bars: HTMLElement[] = [];
@@ -101,12 +103,25 @@ export class ChatPanel {
     this.relabel();
   }
 
+  /**
+   * Who this panel is a conversation WITH.
+   *
+   * `null` is the assistant, which is what it was built for. A name is the
+   * person on the other side of the board — and then it must say so, because
+   * a panel headed "Assistant" with a box that says "Ask the assistant…" is
+   * the game telling a player their opponent is a robot.
+   */
+  setPeer(name: string | null): void {
+    this.peer = name;
+    this.relabel();
+  }
+
   /** Re-read every fixed string. Called when the UI language changes under us —
    *  which it does the first time a player types in Chinese. */
   relabel(): void {
-    this.el.querySelector('.pill .who')!.textContent = t('chat.coach');
+    this.el.querySelector('.pill .who')!.textContent = this.peer ?? t('chat.coach');
     this.el.querySelector('.pill .more')!.textContent = t(this.open ? 'chat.close' : 'chat.tap');
-    this.input.placeholder = t('chat.ask');
+    this.input.placeholder = this.peer ? t('chat.sayTo', { name: this.peer }) : t('chat.ask');
     this.micBtn.title = t(this.dictation.listening ? 'chat.stopRecording' : 'chat.speak');
     this.render(this.messages, this.thinking);
   }
@@ -143,6 +158,17 @@ export class ChatPanel {
     this.thinking = thinking;
 
     const last = [...messages].reverse().find((m) => m.from === 'coach');
+    if (this.peer) {
+      this.pillText.textContent = last ? last.text : t('chat.nobodySaid');
+      this.log.replaceChildren(...messages.map((m) => {
+        const div = document.createElement('div');
+        div.className = `msg ${m.from}`;
+        div.textContent = m.text;
+        return div;
+      }));
+      if (this.open) this.scrollToEnd();
+      return;
+    }
     this.pillText.textContent = thinking ? t('chat.thinking')
       : this.echoed && !this.open ? ''
         : last ? stripAnchors(last.text) : t('chat.sayHello');

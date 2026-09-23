@@ -142,7 +142,20 @@ export class Gomoku {
 
   resign(p: Player): void { this.resignedBy = p; }
 
+  /**
+   * Both players agreed to stop.
+   *
+   * Free-style gomoku has no draw by agreement — a full board is the only
+   * draw the rules know. This is not a rule, it is the two people playing
+   * deciding they are done, which only exists when there are two people; the
+   * engine never offers and never accepts. It is checked before the board is,
+   * because an agreement ends the game wherever the stones happen to be.
+   */
+  agreed = false;
+  agreeDraw(): void { this.agreed = true; }
+
   outcome(): Outcome {
+    if (this.agreed) return { kind: 'draw' };
     if (this.resignedBy !== null) return { kind: 'resign', winner: other(this.resignedBy) };
     const last = this.last;
     if (last !== null) {

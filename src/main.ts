@@ -20,7 +20,7 @@
 import { ThreeUmicat } from '@umicat/three-sdk';
 import { BoardRig } from './shell/boardrig';
 import { attachBoardControls } from './shell/controls';
-import { Coach, type Profile } from './shell/coach';
+import { Coach, type ChatMessage, type Profile } from './shell/coach';
 import { ChatPanel } from './shell/chat';
 import { Speech, segment, stripAnchors } from './shell/speech';
 import { Menu, type SetupGroup } from './shell/menu';
@@ -31,7 +31,10 @@ import { GameOver } from './shell/gameover';
 import { Plates } from './shell/plates';
 import { showTitle } from './shell/title';
 import { underCurtain } from './shell/curtain';
-import { BLACK, Gomoku, SIZES, WHITE, type BoardSize, type Point } from './game/rules';
+import { BLACK, Gomoku, SIZES, WHITE, type BoardSize, type Player, type Point } from './game/rules';
+import { showLobby } from './shell/lobby';
+import { Table, type SeatNo, type Snapshot } from './shell/net/table';
+import { CLOCK, LOW_MS, afterMove, flagged, fmt, freshClock, left } from './shell/net/clock';
 import { notation } from './game/coords';
 import { Board } from './game/board';
 import { LEVELS, Opponent, levelAbout, levelById, levelLabel, type Read } from './game/opponent';
@@ -43,7 +46,14 @@ import { bootStep } from './shell/boot';
 
 /** The player is Black: Black moves first, and the beginner should be the one
  *  who opens rather than the one who has to answer. */
-const HUMAN = BLACK;
+/**
+ * Which colour the player has.
+ *
+ * Black against the engine, always — the player moves first. Online it is
+ * whichever seat they took: seat 0 moves first, which in this game is Black.
+ * It is a `let` for that one reason.
+ */
+let me: Player = BLACK;
 
 /** How much of the player's position has to evaporate on their own move — in
  *  the engine's own units, where an open three is about 12,000 — before the
@@ -110,7 +120,7 @@ async function start(): Promise<void> {
     // It names cells it is NOT suggesting — where White would answer, where
     // the threat runs — so the offer to play one appears only where a stone
     // could actually go, this turn.
-    canPlay: (at) => !!game && !game.over && !thinking && game.toPlay === HUMAN && game.legal(game.idx(at.x, at.y)),
+    canPlay: (at) => !!game && !game.over && !thinking && game.toPlay === me && game.legal(game.idx(at.x, at.y)),
     onPlay: (at) => commit(at),
     // Answering from the box the answer arrived in, rather than opening the
     // log to type.
@@ -158,8 +168,13 @@ async function start(): Promise<void> {
    *  lives; a result in the same place, in the same type, reads as one more
    *  turn rather than as the end of something. */
   const over = new GameOver({
-    onAgain: () => void freshGame(nextSize, companion),
-    onTitle: () => void toTitle(),
+    // At a table, "again" is a request the other person has to accept, and
+    // "back to the title" means getting up and leaving.
+    onAgain: () => {
+      if (table) { table.offer('rematch'); say(t('net.rematchOffered')); return; }
+      void freshGame(nextSize, companion);
+    },
+    onTitle: () => { if (table) void leaveOnline(); else void toTitle(); },
   });
 
   /**
@@ -217,12 +232,34 @@ async function start(): Promise<void> {
    * calls to the platform's AI, no bubble, and no buttons that would open one.
    */
   let companion = true;
+
+  /** What was said at this table. The coach's log holds a conversation with
+   *  the assistant; this holds one with the other player, and the two never
+   *  mix — an online game has no assistant at all. */
+  const netChat: ChatMessage[] = [];
+
+  /**
+   * The table, when the opponent is a person.
+   *
+   * `null` is a game against the engine, and everything that follows from
+   * that — an assistant, an eval bar, a hint button — is gated on it. Against
+   * a person none of those exist: they are all the engine talking, and an
+   * engine talking to one player in a game between two is called cheating.
+   */
+  let table: Table | null = null;
+  /** The room's copy of the game, as we last read or wrote it. */
+  let snapshot: Snapshot | null = null;
+  /** The clock redraw. One a second, and only while a game is on. */
+  let ticker: number | null = null;
+  /** When the other side dropped out of the room, if they have. */
+  let goneSince: number | null = null;
+
   /** Staged in the new-game panel; applies to the next game. */
   let nextSize: BoardSize = ((saved.profile.game as GameProfile)?.boardSize ?? 15) as BoardSize;
 
   // ── the assistant ───────────────────────────────────────────────────────
   const chat = new ChatPanel(umicat, {
-    onSend: (text) => void talk(text),
+    onSend: (text) => { if (table) void table.say(text); else void talk(text); },
     onLayout: (open) => {
       document.body.classList.toggle('chatting', open);
       rig.reserveRight(open ? panelWidth() : 0);
@@ -270,7 +307,7 @@ async function start(): Promise<void> {
     // model must not be asked to.
     showThreats: () => {
       if (!game) return null;
-      const mine = game.threats(HUMAN);
+      const mine = game.threats(me);
       const theirs = game.threats(WHITE);
       const marks = [...mine.win, ...mine.openFour, ...mine.openThree, ...theirs.win, ...theirs.openFour]
         .map((i) => point(i));
@@ -293,6 +330,10 @@ async function start(): Promise<void> {
   let spoken = coach.messages.filter((m) => m.from === 'coach').length;
 
   const redrawChat = (): void => {
+    // At a table, the panel is the room's chat: the same component, a
+    // different conversation. Nothing of the assistant's is on screen,
+    // including the bubble over the board.
+    if (table) { chat.render(netChat, false); return; }
     chat.render(coach.messages, coach.thinking);
     const said = coach.messages.filter((m) => m.from === 'coach');
     if (said.length > spoken) {
@@ -443,26 +484,49 @@ async function start(): Promise<void> {
     plates.place({ left: l.x - edge, right: r.x + edge, top: t0.y - edge, bottom: b0.y + edge });
   }
 
-  /** Who is sitting where. The player is on the left, which is the side their
-   *  own status line and gear are already on. */
+  /**
+   * Who is sitting where. The player is on the left, which is the side their
+   * own status line and gear are already on; the opponent — the engine, or
+   * the person who sat down — is on the right.
+   *
+   * Online, everything on the right comes from the ROOM: the name and the
+   * picture are theirs, and the clocks are arithmetic on the snapshot rather
+   * than anything either machine sends.
+   */
   function fillPlates(): void {
     if (!game) { seated = null; plates.hide(); return; }
     seated = { cols: rig.cols, rows: rig.rows };
-    const me = umicat.user;
-    const yours = !game.over && game.toPlay === HUMAN && !thinking;
+    const user = umicat.user;
+    const yours = !game.over && game.toPlay === me && !thinking;
+    const them = table?.who(table.them) ?? null;
+    // Their name arrives with the room's state, which is a moment after the
+    // join — so the panel is told again whenever it changes rather than once,
+    // at a point where the answer was still "nobody".
+    if (table) chat.setPeer(them?.name ?? t('plate.them'));
+    const now = Date.now();
+    const clockOf = (seat: SeatNo): { clock?: string; low?: boolean } => {
+      if (!table || !snapshot) return {};
+      const ms = left(snapshot, seat, game!.toPlay === me ? table.seat : table.them, now);
+      return { clock: fmt(ms), low: !game!.over && ms <= LOW_MS };
+    };
     plates.set(
       {
-        name: me?.name || t('plate.you'),
-        avatar: me?.avatar ?? null,
-        colour: 'black',
+        name: user?.name || t('plate.you'),
+        avatar: user?.avatar ?? null,
+        colour: me === BLACK ? 'black' : 'white',
         meta: t('plate.moves', { n: game.moves.length }),
         active: yours,
+        ...(table ? clockOf(table.seat) : {}),
       },
       {
-        name: t('plate.engine'),
-        colour: 'white',
-        meta: thinking ? t('plate.thinking') : levelLabel(level.id),
+        name: table ? (them?.name ?? t('plate.them')) : t('plate.engine'),
+        avatar: them?.avatar ?? null,
+        colour: me === BLACK ? 'white' : 'black',
+        meta: table
+          ? (table.present(table.them) ? '' : t('net.waitingRejoin'))
+          : thinking ? t('plate.thinking') : levelLabel(level.id),
         active: !game.over && !yours,
+        ...(table ? clockOf(table.them) : {}),
       },
     );
     seatPlates();
@@ -472,10 +536,11 @@ async function start(): Promise<void> {
     fillPlates();
     if (game) board.sync(game);
     if (!game) { status.textContent = ''; tip.textContent = ''; evalBar.hide(); return; }
-    status.textContent = game.over ? describeOutcome(game) : thinking
-      ? t('hud.thinking')
-      : game.toPlay === HUMAN ? t('hud.yourMove', { level: levelLabel(level.id) }) : t('hud.theirMove');
-    const yours = !game.over && game.toPlay === HUMAN && !thinking;
+    status.textContent = game.over ? describeOutcome(game)
+      : table ? (game.toPlay === me ? t('net.yourMove') : t('net.theirMove'))
+        : thinking ? t('hud.thinking')
+          : game.toPlay === me ? t('hud.yourMove', { level: levelLabel(level.id) }) : t('hud.theirMove');
+    const yours = !game.over && game.toPlay === me && !thinking;
     tip.textContent = yours && !coach.profile.placed ? t('hud.howToPlace') : '';
     evalBar.show(game.over || !read ? null : {
       // The engine's units are shapes, not points. A logistic curve turns
@@ -496,7 +561,23 @@ async function start(): Promise<void> {
   function describeResult(g: Gomoku): { title: string; body: string; tone: 'win' | 'loss' | 'draw' } {
     const out = g.outcome();
     const moves = g.moves.length;
-    const won = 'winner' in out && out.winner === HUMAN;
+    const won = 'winner' in out && out.winner === me;
+    // "White wins" is the right sentence when White is the engine and the
+    // player is always Black. At a table the player can BE White, and the
+    // opponent has a name.
+    const them = table ? (table.who(table.them)?.name ?? t('plate.them')) : '';
+    if (table && out.kind !== 'draw') {
+      const last = g.last;
+      return {
+        title: t(won ? 'net.youWon' : 'net.youLost'),
+        body: out.kind === 'resign'
+          ? t(won ? 'net.theyResigned' : 'net.youResigned')
+          : won
+            ? t('over.fiveYou', { point: last !== null ? nameOf(last) : '', moves })
+            : t('net.fiveThem', { name: them, point: last !== null ? nameOf(last) : '', moves }),
+        tone: won ? 'win' : 'loss',
+      };
+    }
     if (out.kind === 'draw') {
       return { title: t('over.draw'), body: t('over.drawFull', { moves }), tone: 'draw' };
     }
@@ -518,7 +599,7 @@ async function start(): Promise<void> {
 
   function describeOutcome(g: Gomoku): string {
     const out = g.outcome();
-    const won = 'winner' in out && out.winner === HUMAN;
+    const won = 'winner' in out && out.winner === me;
     switch (out.kind) {
       case 'win': return t(won ? 'result.youWin' : 'result.youLose');
       case 'resign': return t(won ? 'result.theyResigned' : 'result.youResigned');
@@ -583,7 +664,7 @@ async function start(): Promise<void> {
       read = await opponent.read(game, 4, 8, 500);
       leadBefore = read.score;
       bestBefore = read.candidates.slice(0, 2).map((c) => nameOf(c.move));
-      winBefore = game.threats(HUMAN).win;
+      winBefore = game.threats(me).win;
       refresh();
     } catch { /* a missing read costs commentary, not the game */ }
   }
@@ -597,7 +678,8 @@ async function start(): Promise<void> {
    * `read` a moment later, so the caller has to be given it.
    */
   async function engineTurn(): Promise<Read | null> {
-    if (!game || game.over || game.toPlay === HUMAN) return null;
+    if (table) return null;
+    if (!game || game.over || game.toPlay === me) return null;
     thinking = true;
     refresh();
     let decidedFrom: Read | null = null;
@@ -625,7 +707,7 @@ async function start(): Promise<void> {
   }
 
   function commit(at: Point): void {
-    if (!game || thinking || game.over || game.toPlay !== HUMAN) return;
+    if (!game || thinking || game.over || game.toPlay !== me) return;
     const i = game.idx(at.x, at.y);
     const missedWin = winBefore.filter((c) => c !== i);
     const hadWin = winBefore.length > 0;
@@ -635,6 +717,16 @@ async function start(): Promise<void> {
     const played = nameOf(i);
     clearMarks();
     askHere.hide();
+
+    // At a table: publish, and that is the whole turn. No engine to answer,
+    // nothing to say about it, and the clock has already moved on.
+    if (table) {
+      publishMove();
+      refresh();
+      if (game.over) { stopTicking(); over.show(describeResult(game)); }
+      return;
+    }
+
     refresh();
     persist();
 
@@ -675,7 +767,7 @@ async function start(): Promise<void> {
     if (!at || !game) { clearMarks(); return; }
     askHere.hide();
     const i = game.idx(at.x, at.y);
-    const yours = !game.over && !thinking && game.toPlay === HUMAN;
+    const yours = !game.over && !thinking && game.toPlay === me;
     const canPlace = yours && game.legal(i);
 
     // Tapping the aimed-at point again puts the stone down there — the same
@@ -685,7 +777,7 @@ async function start(): Promise<void> {
     if (canPlace) {
       chosen = at;
       rig.setSelection(at);
-      board.setGhost(at, HUMAN);
+      board.setGhost(at, me);
       actions.show(at, { confirm: true, cancel: true, ask: companion });
       placeActions();
       return;
@@ -727,6 +819,10 @@ async function start(): Promise<void> {
       onLevel: (id) => { level = levelById(id); coach.profile.level = id; refresh(); persist(); },
       onCompanion: (on) => setCompanion(on),
       onStart: ({ companion: withCompanion }) => void (async () => {
+        // Starting a game against the engine while sitting at a table means
+        // leaving the table — quietly, but really, so the other person is not
+        // left staring at a board nobody is going to move.
+        if (table) { stopTicking(); table.close(); table = null; snapshot = null; netChat.length = 0; me = BLACK; }
         // Started from the title, the board is still behind a title screen.
         leaveTitle();
         await underCurtain(t('title.loading'), loading);
@@ -735,12 +831,16 @@ async function start(): Promise<void> {
       onHint: () => void hint(),
       onResign: () => {
         if (!game || game.over) return;
-        if (!window.confirm(t('confirm.resign'))) return;
-        game.resign(HUMAN);
+        if (!window.confirm(table ? t('net.resignSure') : t('confirm.resign'))) return;
+        if (table) { endOnline('resign', table.seat); return; }
+        game.resign(me);
         refresh();
         persist();
         void finish();
       },
+      // Offering a draw only exists when there is somebody to offer it to.
+      offerDraw: () => !!table && !!game && !game.over,
+      onDraw: () => { table?.offer('draw'); say(t('net.drawOffered')); },
       onMusic: (on) => { audio.setMusicVolume(on ? 0.22 : 0); coach.profile.music = on; persist(); },
       onSound: (on) => { audio.setSfxVolume(on ? 1 : 0); coach.profile.sound = on; persist(); },
       onEval: (on) => { evalBar.setEnabled(on); coach.profile.evalBar = on; refresh(); persist(); },
@@ -789,7 +889,9 @@ async function start(): Promise<void> {
    * that is the call worth paying for.
    */
   async function hint(): Promise<void> {
-    if (!game || game.over || thinking || game.toPlay !== HUMAN) return;
+    // The hint is the engine. Against a person, the engine is not a hint.
+    if (table) return;
+    if (!game || game.over || thinking || game.toPlay !== me) return;
     const was = status.textContent;
     status.textContent = t('hud.looking');
     try {
@@ -807,6 +909,10 @@ async function start(): Promise<void> {
 
   // ── saving ──────────────────────────────────────────────────────────────
   function persist(): void {
+    // An online game belongs to the room and to the two people in it.
+    // Restoring one from this side would put a board on screen that nobody
+    // else is sitting at.
+    if (table) return;
     coach.profile.level = level.id;
     autosave.queue({
       profile: coach.profile,
@@ -835,6 +941,249 @@ async function start(): Promise<void> {
     // Written last, when the game it is about is genuinely finished.
     await coach.summarise();
     persist();
+  }
+
+  // ── playing a person ────────────────────────────────────────────────────
+
+  /**
+   * Sit down at a table and start the game.
+   *
+   * Seat 0 moves first and therefore has Black. Only seat 0 publishes the
+   * opening snapshot: two clients each writing "here is the empty board"
+   * would each write a different `at`, and the clocks would disagree from the
+   * first second.
+   */
+  function startOnline(tbl: Table): void {
+    table = tbl;
+    me = tbl.seat === 0 ? BLACK : WHITE;
+    // No assistant, no eval bar, no hint. See the comment on `table`.
+    setCompanion(false);
+    evalBar.setEnabled(false);
+    plates.hush();
+    chat.setEchoed(false);
+    redrawChat();
+    over.hide();
+    leaveTitle();
+
+    game = new Gomoku(nextSize);
+    speech.notation = notation(nextSize);
+    board.build(nextSize);
+    clearMarks();
+    read = null;
+
+    tbl.onChange(() => applyRemote());
+    tbl.onChat((m) => {
+      // Mine come back to me through the same handler, which is what makes
+      // the two sides of the conversation land in the same place.
+      const mine = m.from === tbl.room?.sessionId;
+      if (m.kind !== 'user') return;
+      plates.bubble(mine ? 'left' : 'right', m.text);
+      netChat.push({ from: mine ? 'player' : 'coach', text: m.text, at: m.ts });
+      redrawChat();
+    });
+    tbl.onOffer((kind) => {
+      if (!table) return;
+      if (kind === 'draw') {
+        if (!game || game.over) return;
+        if (window.confirm(t('net.drawAsked') + '\n' + t('net.accept') + '?')) {
+          endOnline('draw');
+          table.answer('draw', true);
+        } else {
+          table.answer('draw', false);
+        }
+        return;
+      }
+      if (window.confirm(t('net.rematchAsked') + '\n' + t('net.accept') + '?')) {
+        table.answer('rematch', true);
+        restartOnline();
+      } else {
+        table.answer('rematch', false);
+      }
+    });
+    tbl.onAnswer((kind, yes) => {
+      if (kind === 'draw') { if (!yes) say(t('net.drawDeclined')); return; }
+      if (yes) restartOnline();
+      else say(t('net.rematchDeclined'));
+    });
+    tbl.onGone(() => {
+      // Our own connection, not theirs: either way there is no game left.
+      if (game && !game.over) endLocal('left', tbl.them);
+    });
+
+    if (tbl.seat === 0) {
+      snapshot = { moves: [], ...freshClock(Date.now()) };
+      tbl.publish(snapshot);
+    } else {
+      applyRemote();
+    }
+    startTicking();
+    logBtn.hidden = false;
+    chat.setPeer(tbl.who(tbl.them)?.name ?? t('plate.them'));
+    refresh();
+  }
+
+  /** A rematch is the same table with a new board — and the colours swap, so
+   *  nobody has the first move twice running. */
+  function restartOnline(): void {
+    if (!table) return;
+    me = me === BLACK ? WHITE : BLACK;
+    plates.hush();
+    over.hide();
+    game = new Gomoku(nextSize);
+    board.build(nextSize);
+    clearMarks();
+    // Whoever now has Black owns the opening snapshot, for the same reason as
+    // at the start: one writer, one stamp.
+    if (me === BLACK) {
+      snapshot = { moves: [], ...freshClock(Date.now()) };
+      table.publish(snapshot);
+    }
+    startTicking();
+    refresh();
+  }
+
+  /**
+   * The room's copy changed — take it as the truth.
+   *
+   * Everything is replayed through the referee rather than trusted: a move
+   * arriving from another machine is checked exactly as one arriving from
+   * this one's screen, so a client that plays out of turn, by racing or on
+   * purpose, is refused rather than obeyed.
+   */
+  function applyRemote(): void {
+    if (!table || !game) return;
+    const next = table.read();
+    if (!next) return;
+    snapshot = next;
+
+    if (next.moves.length !== game.moves.length) {
+      const rebuilt = new Gomoku(game.size as BoardSize);
+      for (const m of next.moves) {
+        if (!rebuilt.play(m)) { console.warn('[net] refused a move from the room', m); break; }
+      }
+      const grew = rebuilt.moves.length > game.moves.length;
+      game = rebuilt;
+      if (grew) playStone(audio, lastClip);
+      chosen = null;
+      board.setGhost(null);
+      clearMarks();
+    }
+    if (next.end && !game.over) { endLocal(next.end.kind, next.end.by); return; }
+    refresh();
+    // Their move finished it — five in a row on their side of the board.
+    if (game.over) { stopTicking(); over.show(describeResult(game)); }
+  }
+
+  /** Put my move where the other side can see it, with the clocks moved on. */
+  function publishMove(): void {
+    if (!table || !game || !snapshot) return;
+    const now = Date.now();
+    snapshot = { ...snapshot, moves: [...game.moves], ...afterMove(snapshot, table.seat, now) };
+    table.publish(snapshot);
+  }
+
+  /** I am ending it: resigning, agreeing a draw, or claiming their flag. */
+  function endOnline(kind: 'resign' | 'draw' | 'timeout' | 'left', by?: SeatNo): void {
+    if (!table || !game || game.over || !snapshot) return;
+    const loser = kind === 'draw' ? undefined : (by ?? table.seat);
+    snapshot = { ...snapshot, end: { kind, ...(loser === undefined ? {} : { by: loser }) } };
+    table.publish(snapshot);
+    endLocal(kind, loser);
+  }
+
+  /**
+   * The game is over for a reason that is not on the board.
+   *
+   * `by` is the seat it happened TO — who resigned, whose flag fell, who
+   * left. The referee is told, so the board shows a finished game, and the
+   * dialog says which of the four it was.
+   */
+  function endLocal(kind: 'resign' | 'draw' | 'timeout' | 'left', by?: SeatNo): void {
+    if (!game || !table) return;
+    stopTicking();
+    if (!game.over) {
+      if (kind === 'draw') game.agreeDraw();
+      else game.resign(by === table.seat ? me : (me === BLACK ? WHITE : BLACK));
+    }
+    refresh();
+    const mine = by === table.seat;
+    const line = kind === 'draw' ? t('net.drawAgreed')
+      : kind === 'left' ? t('net.youWinLeft')
+        : kind === 'timeout' ? (mine ? t('net.youLoseTime') : t('net.youWinTime'))
+          : (mine ? t('net.youResigned') : t('net.theyResigned'));
+    over.show({
+      title: kind === 'draw' ? t('over.draw') : mine ? t('net.youLost') : t('net.youWon'),
+      body: line,
+      tone: kind === 'draw' ? 'draw' : mine ? 'loss' : 'win',
+    });
+  }
+
+  /** Leave the table and go back to the title. */
+  async function leaveOnline(): Promise<void> {
+    stopTicking();
+    table?.close();
+    table = null;
+    snapshot = null;
+    netChat.length = 0;
+    me = BLACK;
+    game = null;
+    chat.setPeer(null);
+    plates.hush();
+    evalBar.setEnabled(coach.profile.evalBar !== false);
+    await toTitle();
+  }
+
+  /**
+   * One redraw a second, which is all a clock needs — and the only place a
+   * flag is claimed.
+   *
+   * The claim is made by the player who is NOT on the clock, because they are
+   * the one with time to notice; `flagged()` holds a couple of seconds back
+   * for the fact that the two machines disagree about what time it is.
+   */
+  function startTicking(): void {
+    stopTicking();
+    goneSince = null;
+    ticker = window.setInterval(() => {
+      if (!table || !game || game.over || !snapshot) return;
+
+      // Gone, and how long we wait before saying so.
+      //
+      // The rule is that leaving loses — that is what makes a result worth
+      // ranking. But a phone going through a tunnel, a laptop lid, or iOS
+      // suspending a backgrounded WebView all look exactly like leaving for
+      // a few seconds, and ending a game on those would take a loss off
+      // somebody who never left the table. So: a short wait, said out loud
+      // on their seat, and then it is a loss.
+      if (!table.present(table.them)) {
+        if (goneSince === null) goneSince = Date.now();
+        else if (Date.now() - goneSince > LEAVE_GRACE_MS) { endOnline('left', table.them); return; }
+        fillPlates();
+      } else if (goneSince !== null) {
+        goneSince = null;
+        fillPlates();
+      }
+
+      const toMove = game.toPlay === me ? table.seat : table.them;
+      if (toMove === table.them && flagged(snapshot, toMove, Date.now())) {
+        endOnline('timeout', table.them);
+        return;
+      }
+      fillPlates();
+    }, 1000);
+  }
+  function stopTicking(): void {
+    if (ticker !== null) window.clearInterval(ticker);
+    ticker = null;
+  }
+
+  /** How long a silent opponent has before it counts as leaving. */
+  const LEAVE_GRACE_MS = 15_000;
+
+  /** A line in the log that nobody said — an answer to an offer. */
+  function say(text: string): void {
+    netChat.push({ from: 'coach', text, at: Date.now() });
+    redrawChat();
   }
 
   // ── the way in, and back out ────────────────────────────────────────────
@@ -873,6 +1222,13 @@ async function start(): Promise<void> {
       return;
     }
 
+    if (choice === 'online') {
+      const result = await showLobby(umicat);
+      if (result.kind === 'table') { startOnline(result.table); return; }
+      await toTitle();
+      return;
+    }
+
     if (choice === 'new') {
       // Not straight into a game: the board, the opponent and whether there
       // is an assistant are chosen here. A new game always OFFERS the
@@ -895,7 +1251,7 @@ async function start(): Promise<void> {
         void observePosition();
         // A game saved with White to move — the tab closed while the engine
         // was thinking — would otherwise sit there forever.
-        if (!game.over && game.toPlay !== HUMAN) void engineTurn();
+        if (!game.over && game.toPlay !== me) void engineTurn();
         return;
       }
     }
@@ -906,7 +1262,11 @@ async function start(): Promise<void> {
    *  from it: the buttons that reach it, and whatever it had on screen. */
   function setCompanion(on: boolean): void {
     companion = on;
-    logBtn.hidden = !on;
+    // The button opens the panel, and the panel is two different
+    // conversations: the assistant's, or the other player's. Turning the
+    // assistant off at a table must not take the way to talk to the person
+    // sitting opposite with it.
+    logBtn.hidden = !on && !table;
     if (!on) {
       speech.hide();
       askHere.hide();
@@ -927,7 +1287,12 @@ async function start(): Promise<void> {
   // a test of the test.
   Object.assign(window as unknown as Record<string, unknown>, {
     __game: {
-      umicat, rig, board, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar, over,
+      umicat, rig, board, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar, over, plates,
+      // The table, for probes: `startOnline(Table.online(room, seats))` with a
+      // stand-in room is how the two-seat flow is driven without a platform.
+      Table, startOnline, showLobby,
+      get table() { return table; },
+      get snapshot() { return snapshot; },
       get game() { return game; },
       get thinking() { return thinking; },
       get read() { return read; },

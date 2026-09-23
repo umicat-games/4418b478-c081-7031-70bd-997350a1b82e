@@ -37,6 +37,12 @@ export interface Seat {
   meta?: string;
   /** Whose turn it is. Exactly one seat should have this. */
   active?: boolean;
+  /** A clock, already formatted — the seat does not know what a second is.
+   *  Absent in a game that is not timed. */
+  clock?: string;
+  /** Running out. Turns the clock red; it is the one thing out here that has
+   *  to be noticed without being looked at. */
+  low?: boolean;
 }
 
 /**
@@ -55,6 +61,9 @@ const GAP = 26;
 const MIN_EDGE = 10;
 const FULL = 224;
 const TIGHT = 136;
+/** How many of a player's lines stay up, and for how long. */
+const MAX_BUBBLES = 4;
+const BUBBLE_MS = 11_000;
 
 export class Plates {
   private el: HTMLDivElement;
@@ -66,11 +75,18 @@ export class Plates {
     this.el.id = 'plates';
     this.el.hidden = true;
     this.el.innerHTML = ['left', 'right']
+      // The bubbles hang ABOVE the row and are positioned out of the flow, so
+      // a burst of chat never moves the face and the name the player is
+      // looking at. Messages rise; the seat stays put.
       .map((side) => `<div class="seat ${side}">
-        <div class="face"><span class="letter"></span></div>
-        <div class="text">
-          <div class="line"><i class="stone"></i><span class="name"></span></div>
-          <div class="meta"></div>
+        <div class="bubbles"></div>
+        <div class="row">
+          <div class="face"><span class="letter"></span></div>
+          <div class="text">
+            <div class="line"><i class="stone"></i><span class="name"></span></div>
+            <div class="meta"></div>
+            <div class="clock"></div>
+          </div>
         </div>
       </div>`)
       .join('');
@@ -106,12 +122,25 @@ export class Plates {
     const stone = el.querySelector('.stone') as HTMLElement;
     stone.className = `stone ${seat.colour}`;
 
+    const clock = el.querySelector('.clock') as HTMLElement;
+    const shown = seat.clock ?? '';
+    if (clock.textContent !== shown) clock.textContent = shown;
+    clock.hidden = !shown;
+    clock.classList.toggle('low', !!seat.low);
+
     // The picture. `dataset.src` is the guard against re-creating the <img>
     // (and re-fetching it) on every refresh, which at one refresh per move is
     // a request per move.
+    //
+    // **The NAME is part of that key**, and it was not: with no avatar the
+    // fallback initial is drawn from the name, and guarding on the picture
+    // alone meant a seat whose name arrived late (which is every online
+    // opponent — the room's state lands a moment after the join) kept the
+    // letter of whoever was sitting there before.
     const want = seat.avatar ?? '';
-    if (face.dataset.src === want) return;
-    face.dataset.src = want;
+    const key = `${want}|${seat.name}`;
+    if (face.dataset.key === key) return;
+    face.dataset.key = key;
     face.querySelector('img')?.remove();
     const letter = face.querySelector('.letter') as HTMLElement;
     if (want) {
@@ -120,7 +149,7 @@ export class Plates {
       // No `crossOrigin`: nothing here reads the pixels, and asking for CORS
       // on an image that does not need it is how a picture that would have
       // loaded fine ends up blocked.
-      img.onerror = (): void => { img.remove(); face.dataset.src = ''; };
+      img.onerror = (): void => { img.remove(); face.dataset.key = ''; };
       img.src = want;
       face.appendChild(img);
       letter.textContent = '';
@@ -130,6 +159,42 @@ export class Plates {
       // something that is not a letter (an emoji, a bracket, a space).
       if (/\p{L}|\p{N}/u.test(initial)) letter.textContent = initial.toUpperCase();
       else letter.innerHTML = PERSON;
+    }
+  }
+
+  /**
+   * Something that player said, over their own seat.
+   *
+   * Each side shows only its OWN messages — which is what a table looks like:
+   * you do not see your words appear over the other person's head. They rise
+   * as new ones arrive and go of their own accord, because a conversation
+   * beside a board is a thing that happened, not a log to be managed. The
+   * panel in the corner is the log.
+   */
+  bubble(side: 'left' | 'right', text: string): void {
+    const line = text.trim();
+    if (!line) return;
+    const stack = this.seats[side].querySelector('.bubbles') as HTMLElement;
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    b.textContent = line;
+    stack.appendChild(b);
+    // Only ever a few on screen: the oldest goes as the newest arrives, which
+    // is also what stops a spammer covering the board.
+    while (stack.childElementCount > MAX_BUBBLES) stack.firstElementChild?.remove();
+    // Out on its own after a while. `animationend` would be neater and is not
+    // reliable in a backgrounded tab, which is exactly when a stack would be
+    // left standing.
+    setTimeout(() => {
+      b.classList.add('going');
+      setTimeout(() => b.remove(), 400);
+    }, BUBBLE_MS);
+  }
+
+  /** Clear everything anybody said — a new game is a new conversation. */
+  hush(): void {
+    for (const side of ['left', 'right'] as const) {
+      (this.seats[side].querySelector('.bubbles') as HTMLElement).replaceChildren();
     }
   }
 

@@ -32,13 +32,16 @@ body.titling #plates { display: none; }
   position: absolute;
   width: 224px;
   transform: translateY(-50%);
+}
+#plates .seat[hidden] { display: none; }
+
+#plates .row {
   display: flex;
   align-items: center;
   gap: 14px;
 }
-#plates .seat[hidden] { display: none; }
 /* The right-hand player faces the other way: picture outside, words inward. */
-#plates .seat.right { flex-direction: row-reverse; text-align: right; }
+#plates .seat.right .row { flex-direction: row-reverse; text-align: right; }
 
 /* ── the face ─────────────────────────────────────────────────────────── */
 
@@ -146,6 +149,58 @@ body.titling #plates { display: none; }
   background: radial-gradient(circle at 34% 30%, #ffffff 0%, #ece7dc 46%, #bdb6a6 100%);
 }
 
+/* ── the clock ────────────────────────────────────────────────────────── */
+
+#plates .clock {
+  margin-top: 2px;
+  font: 600 17px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums; /* or the seat twitches once a second */
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+  opacity: .92;
+}
+#plates .clock[hidden] { display: none; }
+/* The one thing out here that has to be noticed without being looked at. */
+#plates .clock.low { color: #ff8d80; animation: plate-tick 1s steps(2, end) infinite; }
+@keyframes plate-tick { 50% { opacity: .45; } }
+#plates .seat.active .clock { opacity: 1; }
+
+/* ── what they said ───────────────────────────────────────────────────── */
+
+/* Above the seat and out of its flow, so a burst of chat never moves the face
+   underneath it. Each side carries only its own player's words — that is what
+   a table looks like. */
+#plates .bubbles {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  align-items: flex-start;
+}
+#plates .seat.right .bubbles { align-items: flex-end; }
+
+#plates .bubble {
+  max-width: 100%;
+  padding: 7px 12px;
+  border-radius: 14px;
+  background: rgba(18, 21, 28, 0.88);
+  box-shadow: 0 3px 14px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .12);
+  font-size: 14px;
+  line-height: 1.35;
+  text-align: left;
+  /* A pasted paragraph is still one bubble, and it wraps rather than pushing
+     the seat off the screen. */
+  overflow-wrap: anywhere;
+  animation: bubble-in .22s ease-out;
+}
+#plates .seat.right .bubble { text-align: right; }
+#plates .bubble.going { opacity: 0; transform: translateY(-6px); transition: opacity .35s ease, transform .35s ease; }
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(6px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
 /* ── when the gap narrows ─────────────────────────────────────────────── */
 
 /* One step down rather than a dozen — and the step is a STACK, not a squeeze.
@@ -153,17 +208,20 @@ body.titling #plates { display: none; }
    and lost the words instead, which on a 1000px window read "PW Te…" and
    "Steady · 0 ca…". A column fits a narrow gap because that is the shape of a
    narrow gap. Below this the seats leave entirely. */
-#plates.tight .seat {
-  width: 136px;
+#plates.tight .seat { width: 136px; }
+#plates.tight .row {
   flex-direction: column;
   gap: 7px;
   text-align: center;
 }
-#plates.tight .seat.right { flex-direction: column; text-align: center; }
+#plates.tight .seat.right .row { flex-direction: column; text-align: center; }
+#plates.tight .bubbles, #plates.tight .seat.right .bubbles { align-items: center; }
+#plates.tight .bubble { font-size: 12.5px; padding: 6px 10px; text-align: center; }
 #plates.tight .face { width: 54px; height: 54px; }
 #plates.tight .face .letter { font-size: 22px; }
 #plates.tight .face svg { width: 26px; height: 26px; }
 #plates.tight .name { font-size: 15px; }
+#plates.tight .clock { font-size: 15px; }
 #plates.tight .stone { width: 16px; height: 16px; }
 /* Two short lines beat one clipped one when the column is this narrow. */
 #plates.tight .meta {

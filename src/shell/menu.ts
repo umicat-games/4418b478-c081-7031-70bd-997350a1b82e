@@ -44,6 +44,13 @@ export interface MenuOptions {
   onLevel(level: string): void;
   onHint(): void;
   onResign(): void;
+  /**
+   * Whether this game HAS the two things that only exist against a person: a
+   * draw to offer, and no hint to ask for. Asked every time the panel draws,
+   * because a player can sit down at a table without closing it.
+   */
+  offerDraw?(): boolean;
+  onDraw?(): void;
   onTitle(): void;
   /** Switched mid-game; a new game takes it from `onStart`'s choice. */
   onCompanion(on: boolean): void;
@@ -167,7 +174,11 @@ export class Menu {
         b.onclick = () => { this.el.hidden = true; run(); };
         actions.appendChild(b);
       };
-      act('btn.hint', this.opts.onHint);
+      // The hint is the engine. Against a person, the engine is not a hint —
+      // so the button is not there rather than there and refusing.
+      const atTable = this.opts.offerDraw?.() ?? false;
+      if (!atTable) act('btn.hint', this.opts.onHint);
+      else if (this.opts.onDraw) act('net.offerDraw', this.opts.onDraw);
       act('btn.resign', this.opts.onResign);
       this.el.appendChild(actions);
     }

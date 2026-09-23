@@ -235,6 +235,74 @@ it is describing is one people learn to close before reading. The assistant's
 closing line lands INSIDE it when it arrives — a speech bubble behind that
 card is the assistant talking to a screen the player cannot see.
 
+## Playing a person
+
+The third door on the title screen. `src/shell/lobby.ts` gets two people to
+the same table; `src/shell/net/table.ts` is what the game talks to afterwards,
+and `src/shell/net/clock.ts` is the two clocks. All three are SHELL — the next
+game in this family should get online play by filling in the same four
+contracts, not by writing this again.
+
+**Against a person there is no assistant, no eval bar and no hint.** All three
+are the engine talking, and an engine talking to one player in a game between
+two is called cheating. `startOnline()` turns them off and the gear hides the
+hint button; the chat panel stays, because it is now a conversation with the
+opponent rather than with a coach (`chat.setPeer(name)` is what makes it say
+so — a panel headed "Assistant" in a game against a person is the game telling
+somebody their opponent is a robot).
+
+**The whole game crosses the network as ONE value under one key, and only the
+player on turn writes it.** That is what makes a last-writer-wins map safe:
+one writer at any moment, and the rules say who it is. The value is the MOVE
+LIST, replayed through the referee — the same thing a save is, so there is one
+format and not two. Blokus learned the separate-keys lesson the expensive way:
+a client could read a board from after a move and a hand from before it.
+
+**A move arriving from the other machine is checked exactly like a local one.**
+`applyRemote()` replays into a fresh `Gomoku` and refuses anything the referee
+refuses. A client that plays out of turn, by racing or on purpose, is ignored
+rather than obeyed.
+
+**Nothing ever sends a clock tick.** The snapshot says what each side had left
+when `at` was stamped, and the side to move has been spending since; a running
+clock would be sixty messages a minute saying what arithmetic already knows.
+Ten minutes each plus five seconds a move (`CLOCK`).
+
+**The flag is claimed by the player who is NOT on the clock**, with two
+seconds of grace — they are the one with time to notice, but they are reading
+a stamp written by a machine whose idea of "now" is not the same, and a claim
+that fires a second early takes a game off somebody who was still moving.
+
+**Leaving loses, but not for fifteen seconds.** The rule is that quitting
+costs you the game (that is what will make a ranking worth having). A phone in
+a tunnel, a closed laptop lid and iOS suspending a backgrounded WebView all
+look exactly like quitting for a few seconds, so the seat says "they have gone
+quiet" first and only then is it a loss. `LEAVE_GRACE_MS`.
+
+**A rematch swaps the colours**, so nobody has the first move twice running,
+and whoever now has Black publishes the opening snapshot — one writer, one
+stamp, same rule as at the start.
+
+**Online games are not saved.** An online game belongs to the room and to the
+two people in it; restoring one from this side would put a board on screen
+that nobody else is sitting at.
+
+**What a ranking would need, and does not have yet.** The realtime service is
+a RELAY: `room.data` is a shared map any client may write, and the clock is
+stamped by the machine that moved. Between friends that is fine. A leaderboard
+that costs people points cannot be settled by "the other client said I won" —
+that needs the result decided somewhere neither player controls.
+
+**Testing it without a platform.** `umicat.rooms` is unavailable standalone
+(`npm run dev`, or the CDN preview opened directly), and the lobby says so in
+a sentence rather than failing one button at a time. The probes in the session
+scratchpad drive two tabs against a stand-in room over a `BroadcastChannel`
+(`fakeroom.js`) — that covers seating, the snapshot exchange, the clocks,
+resignation, draws, rematches, flags and disconnects, but NOT Colyseus itself.
+One thing the stand-in taught: it has to hydrate a late joiner the way a real
+join is hydrated with `room.state`, or every test of the second player is a
+test of the stand-in.
+
 ## Building and checking
 
 ```bash

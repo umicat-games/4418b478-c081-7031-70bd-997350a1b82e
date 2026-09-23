@@ -9,7 +9,7 @@ import './title.css';
 import { t } from '../i18n';
 import { bootDone } from './boot';
 
-export type TitleChoice = 'continue' | 'new' | 'forget';
+export type TitleChoice = 'continue' | 'new' | 'online' | 'forget';
 
 export interface TitleOptions {
   /** This player has been here before, even if no game is unfinished. */
@@ -80,6 +80,10 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
     // that offers both is offering the same door twice.
     if (opts.canContinue) add(t('title.continue'), 'continue', true);
     add(t('title.newGame'), 'new', !opts.canContinue);
+    // The third door. Offered whatever the platform says about multiplayer:
+    // a button that is missing tells the player nothing, and the lobby can
+    // say "you need to be signed in" in a sentence.
+    add(t('title.online'), 'online');
     // Only offered to someone who has a past worth erasing, and never made the
     // easy button to hit by accident.
     if (opts.returning) {
