@@ -204,6 +204,21 @@ is trimmed to its tail and the rest lives in the assistant's summary — which i
 also what stops each turn getting more expensive, since every turn ships the
 history.
 
+**A new game gets a new NPC, not `npc.reset()`** — and the difference is a
+bug that was live for weeks. Reset points the NPC's history at a fresh array;
+a `say()` already in flight still pushes its answer into `this.npc.history`
+when it lands, which by then is the NEW array. The last game's sentence became
+the first thing in the next game's model context — invisible in the panel,
+because the generation fence drops a stale answer from the screen, and fully
+present to the model, which carried on from it. What the player saw was a
+brand new board being told "that g4 push left the pawn hanging", about a move
+nobody had played, with the assistant ringing the square.
+
+The fence and the fresh NPC are two different guarantees and both are needed:
+the fence is about what is SHOWN, the new NPC is about what is REMEMBERED. It
+was fixed in `@umicat/platform-sdk` as well (`say()` binds the array it
+started with), but the games do not wait for a version to be safe.
+
 **A new game is a new conversation; Continue keeps the old one.** The summary
 is written first, so nothing is lost.
 
