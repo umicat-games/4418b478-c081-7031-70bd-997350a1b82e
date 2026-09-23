@@ -155,6 +155,36 @@ cannot reach.
 board will eventually do it, and no amount of playbook prose is a substitute
 for the game saying no.
 
+**The title screen is a wordmark on a table, and the art ships in
+`public/art/`.** `logo.webp` is this game's own; `table-bg.webp` is the same
+photograph in every game in the family. Both are derived from the originals in
+the platform's Asset Manager (`cdn.umicat.ai/uploads/<game id>/`), which are
+1–3MB each — and **a title screen cannot appear until its title has arrived**,
+so shipping the originals means shipping a loading screen. There is no `cwebp`
+on the machine this was done on; Chromium encodes WebP perfectly well, alpha
+included, so the recipe is: draw the PNG into a canvas at the size it is
+actually drawn and `canvas.toDataURL('image/webp', q)`. 1000px wide at 0.9 for
+a wordmark (~90KB), 1400px at 0.72 for the table (133KB).
+
+Three rules the screen is built on, all of them learned in the Go game:
+
+- **The fallback must not be what you see first.** The words and the flat
+  background are what happens when the art does not load — so they stay hidden
+  until both images have either arrived or timed out, and the boot screen
+  stays up for exactly that long. Showing them first and painting over them is
+  a title screen that visibly assembles itself.
+- **Wait for BOTH.** A wordmark landing a second before its background is the
+  same flash in two parts.
+- **A relative `url()` that reaches CSS through a custom property resolves
+  against the STYLESHEET**, which in a build lives in `assets/` — so it 403s
+  there and works in dev. `asUrl()` makes it absolute against `document.baseURI`.
+  Check a `vite preview` of `dist/`, not just `npm run dev`, whenever a path
+  is involved.
+
+The grey veil over the photograph is a RADIAL, spreading from the middle
+outwards: the centre stays open enough to read the grain, the edges close down
+far enough to hold small text. A flat wash takes the wood with it.
+
 **The platform decides the language** (`umicat.locale` at handshake). Chat is
 the exception and belongs to the assistant.
 
