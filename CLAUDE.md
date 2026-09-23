@@ -205,7 +205,7 @@ also what stops each turn getting more expensive, since every turn ships the
 history.
 
 **A new game gets a new NPC, not `npc.reset()`** — and the difference is a
-bug that was live for weeks. Reset points the NPC's history at a fresh array;
+bug that shipped with the NPC itself (2026-09-10 to 2026-09-23). Reset points the NPC's history at a fresh array;
 a `say()` already in flight still pushes its answer into `this.npc.history`
 when it lands, which by then is the NEW array. The last game's sentence became
 the first thing in the next game's model context — invisible in the panel,
