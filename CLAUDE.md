@@ -132,11 +132,50 @@ that did not exist. Force a render immediately before the read or the
 screenshot. Everything else in this family's probe lore applies too: a
 screenshot is not a measurement unless you know what frame it is of.
 
-**The camera is FIXED and looks STRAIGHT DOWN**, the board is a slab on a dark
-walnut TABLE with a real shadow, and the **boot screen is in `index.html`**,
+**The camera is FIXED and looks STRAIGHT DOWN**, the board is a slab on a pale
+stone TABLE with a real shadow, and the **boot screen is in `index.html`**,
 not in the bundle. All three are the family's decisions and gomoku's CLAUDE.md
 explains each at length; the only Othello-specific note is that `camera.up`
 must be set to −z by hand or `lookAt` cannot resolve straight down.
+
+**The table is NOT wood, and that came from measuring it** (2026-09-23). In
+the four WOODEN-board games of the family, the board and the table were
+sampled off the canvas at the same luminance — 1.01:1, 1.02:1, 1.08:1 — with
+hue as the only thing separating them, which is what "the whole screen is one
+brown photograph" actually is. **This game was the exception**: dark green
+felt on pale wood already measured 5.68:1. The table changed here anyway,
+because the family shares one, and the felt did not.
+
+So it became a matte pale stone — `TABLE_TONE` at `roughness: 0.95`, with **no
+grain**, because a texture on the table competes with the grid, which is the
+only texture anybody is meant to be reading. Measured after: the board against the table at 8.24:1. Four
+things go with it and each one is a separate decision:
+
+- **The felt did NOT go darker, and that is the point of measuring instead of applying a recipe: at 0.02 against a table at 0.50 this board was already an object on a surface. The four wooden boards in the family needed the step; this one needed the table and nothing else.**
+- **The scene background followed the table.** It was near-black, to sit near
+  the table's own darkest tone; on a pale table that is a hole cut in it.
+- **The fill's GROUND colour is the table**, so it went from near-black to a
+  pale bounce, and the warm bounce light with it. Fill is still the enemy of
+  the shadow, but this is not the dark brown room any more.
+- **The key came down a little**, because a pale floor does some of its work.
+
+**Warmth cannot be picked by eye.** Pushing a colour warmer at the same
+numbers also makes it DARKER — green carries 71% of luminance and warming is
+mostly taking green down — so a hand-picked warm hex is a table that is
+quietly warmer AND dimmer, and the gap this was all for comes back in. Fix red
+and blue where the warmth wants them and binary-search green against a target
+luminance. Four warmths were rendered that way and compared; `TABLE_TONE` is
+the second of them.
+
+**Softening a shadow with a blurred shadow map softens the wrong thing.** VSM
+with `shadow.radius = 6` was tried on the chess board: its contact shadow
+washed out to 1.02:1 against the table — gone — while every PIECE's shadow
+spread into a smear two squares wide. A shadow comes down with LIGHT, which
+lifts the inside of it without touching the edge, and the edge does the work.
+
+**Sampling a board of INTERSECTIONS: measure the middle of a cell.** A patch
+centred on a point is centred on two crossing black lines, and reports the
+wood as near-black. That cost a wrong baseline before it was spotted.
 
 **The end of a game is a DIALOG**, not a line in the corner: what happened, the
 one line the game can prove (here, the disc count), and the two things anybody
