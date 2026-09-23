@@ -405,32 +405,41 @@ async function start(): Promise<void> {
     const box = speech.rect();
     const margin = 10;
     const free = window.innerWidth - (chat.isOpen ? panelWidth() : 0);
+    const floor = window.innerHeight - margin;
+
+    /**
+     * On screen beats anywhere else.
+     *
+     * This used to prefer the side of the point that was not covering a ring
+     * it had just drawn — which is a nice thought and the wrong priority: on
+     * a phone in landscape there is no room below the board, so dodging put
+     * the box off the bottom of the screen and the sentence was simply gone.
+     * A box standing on something can be read and then closed; a box nobody
+     * can see cannot. So: above the point when it fits, below when it does
+     * not, and clamped so the whole of it is always on screen.
+     */
+    const put = (x: number, bottom: number, pointsAt: { x: number; y: number } | null): void => {
+      const left = Math.min(Math.max(x, box.width / 2 + margin), free - box.width / 2 - margin);
+      const low = Math.min(Math.max(bottom, margin + box.height), floor);
+      // The tail only makes sense when the box really is sitting above the
+      // thing it is about, and lined up with it.
+      const tail = !!pointsAt && Math.abs(left - pointsAt.x) < 2 && low <= pointsAt.y;
+      speech.place(left, low, tail);
+    };
 
     if (page.at && game) {
       const p = view.screenOf(page.at.x, page.at.y);
       const gap = view.screenSpacing * 0.7 + 12;
-      const x = Math.min(Math.max(p.x, box.width / 2 + margin), free - box.width / 2 - margin);
-      const top = p.y - gap;
-      // Above unless there is no room, and then below — but if the side it
-      // would take is sitting on a ring it has just drawn, take the other one.
-      const above = { top: top - box.height, bottom: top };
-      const below = { top: p.y + gap, bottom: p.y + gap + box.height };
-      const fits = (r: { top: number; bottom: number }): boolean => r.top >= margin;
-      const covers = (r: { top: number; bottom: number }): number => shown.filter((m) => {
-        const s = view.screenOf(m.x, m.y);
-        return s.x > x - box.width / 2 - 8 && s.x < x + box.width / 2 + 8 && s.y > r.top - 8 && s.y < r.bottom + 8;
-      }).length;
-      const useAbove = fits(above) && (covers(above) <= covers(below) || !fits(below));
-      if (useAbove) speech.place(x, top, Math.abs(x - p.x) < 2);
-      else speech.place(x, below.bottom, false);
+      const above = p.y - gap;
+      // Above unless its top would run off, and then below the point.
+      put(p.x, above - box.height >= margin ? above : p.y + gap + box.height, p);
       return;
     }
     // Nothing to point at: the middle of the board, because this is someone
     // talking about the game in front of you, not a notification.
     const size = game?.size ?? 9;
     const middle = view.screenOf((size - 1) / 2, (size - 1) / 2);
-    const x = Math.min(Math.max(middle.x, box.width / 2 + margin), free - box.width / 2 - margin);
-    speech.place(x, Math.max(middle.y, box.height + margin), false);
+    put(middle.x, Math.max(middle.y, box.height + margin), null);
   }
 
   // ── the board ───────────────────────────────────────────────────────────
