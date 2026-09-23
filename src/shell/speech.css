@@ -16,16 +16,22 @@
      about is often underneath it. "I've marked it" over an opaque box that
      covers the mark is the companion contradicting itself. The blur is what
      keeps the text readable over wood grain at this alpha. */
-  background: rgba(16, 20, 27, 0.52);
+  background: rgba(16, 20, 27, 0.32);
   border: 1px solid rgba(127, 214, 194, 0.45);
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
   /* **The prefix is not optional.** Safari and every iOS browser drop an
-     unprefixed `backdrop-filter`, and what is left is a flat dark panel — the
-     alpha without the blur. It looked like glass on a laptop and like a
-     sticker on a phone, which is exactly where it matters, because that is
-     where it covers half the board. */
-  -webkit-backdrop-filter: blur(16px) saturate(0.85);
-  backdrop-filter: blur(16px) saturate(0.85);
+     unprefixed `backdrop-filter`, and what is left is the alpha without the
+     blur — a flat dark panel. It looked like glass on a laptop and like a
+     sticker on a phone, which is where it matters, because that is where it
+     covers half the board.
+     **And the blur was doing the covering.** Sixteen pixels of it over a
+     board is not frosted glass, it is a grey wash: the pieces behind stopped
+     being pieces. Three is enough to keep the text off the grain while the
+     shapes behind stay recognisable — which is the whole point of putting the
+     sentence on the board instead of in a panel. Compared at five settings
+     over the busiest and the brightest parts of the board before picking. */
+  -webkit-backdrop-filter: blur(3px) saturate(1);
+  backdrop-filter: blur(3px) saturate(1);
   color: #f4f5f7;
   font: 15px/1.5 system-ui, -apple-system, sans-serif;
   cursor: pointer;
@@ -49,6 +55,10 @@
   margin-bottom: 3px;
 }
 #speech .text { white-space: pre-wrap; word-break: break-word; }
+
+/* The words carry their own contrast, so the panel does not have to. A shadow
+   under white text is what lets the fill go light enough to see through. */
+#speech .who, #speech .text { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
 
 /* Never taller than the screen it is on. A box that cannot fit has to scroll,
    not overflow: a sentence nobody can reach is the same as a sentence that
