@@ -167,14 +167,14 @@ async function host(umicat: ThreeUmicat, tc: TimeControl | undefined, presets: P
   s.say(t('lobby.oneMoment'));
   const code = roomCode();
   try {
-    const room = await umicat.rooms.create<unknown>(ROOM_TYPE, {
+    const room = await twice(() => umicat.rooms.create<unknown>(ROOM_TYPE, {
       roomCode: code,
       maxClients: 2,
       displayName: umicat.user?.name || t('plate.you'),
-    });
+    }));
     await handOver(umicat, room, code, tc, presets, done);
   } catch (err) {
-    fail(s, umicat, presets, done, err);
+    fail(s, umicat, presets, done, err, () => void host(umicat, tc, presets, done));
   }
 }
 
@@ -207,9 +207,14 @@ function byCode(umicat: ThreeUmicat, presets: Preset[], done: Done): void {
         displayName: umicat.user?.name || t('plate.you'),
       });
       await handOver(umicat, room, code, undefined, presets, done);
-    } catch {
+    } catch (err) {
       go.disabled = false;
-      s.say(t('lobby.noSuchRoom'), true);
+      // A mistyped code and a broken platform are different problems, and
+      // telling somebody to check their code when the backend is down sends
+      // them looking in the wrong place.
+      const e = err as { code?: unknown } | null;
+      const missing = !e?.code || e.code === 'ROOM_NOT_FOUND' || /not found|no rooms/i.test(String((err as Error)?.message ?? ''));
+      s.say(missing ? t('lobby.noSuchRoom') : `${t('lobby.failed')} ${reason(err)}`, true);
     }
   };
   go.onclick = () => void attempt();
@@ -265,12 +270,12 @@ async function enter(umicat: ThreeUmicat, entry: RoomListEntry, presets: Preset[
   const s = screen();
   s.title.textContent = t('lobby.joining');
   try {
-    const room = await umicat.rooms.joinById<unknown>(entry.roomId, {
+    const room = await twice(() => umicat.rooms.joinById<unknown>(entry.roomId, {
       displayName: umicat.user?.name || t('plate.you'),
-    });
+    }));
     await handOver(umicat, room, entry.roomCode, undefined, presets, done);
   } catch (err) {
-    fail(s, umicat, presets, done, err);
+    fail(s, umicat, presets, done, err, () => void enter(umicat, entry, presets, done));
   }
 }
 
@@ -282,22 +287,67 @@ async function quickMatch(umicat: ThreeUmicat, presets: Preset[], done: Done): P
   try {
     // No roomCode: the default bucket is the public table, and joinOrCreate
     // is exactly "sit at one if there is one, otherwise start one".
-    const room = await umicat.rooms.joinOrCreate<unknown>(ROOM_TYPE, {
+    const room = await twice(() => umicat.rooms.joinOrCreate<unknown>(ROOM_TYPE, {
       maxClients: 2,
       displayName: umicat.user?.name || t('plate.you'),
-    });
+    }));
     await handOver(umicat, room, '', presets[Math.floor(presets.length / 2)]?.tc, presets, done);
   } catch (err) {
-    fail(s, umicat, presets, done, err);
+    fail(s, umicat, presets, done, err, () => void quickMatch(umicat, presets, done));
   }
 }
 
-function fail(s: Screen, umicat: ThreeUmicat, presets: Preset[], done: Done, err: unknown): void {
+/**
+ * What went wrong, in words the player can repeat to somebody.
+ *
+ * "That did not work, try again in a moment" is true and useless: it was on
+ * screen for a real failure and there was no way — on a phone, with no
+ * console — to tell a backend restart from a missing sign-in from a dead
+ * network. Whatever the platform called it goes on screen, because the person
+ * who can act on it is reading it.
+ */
+function reason(err: unknown): string {
+  const e = err as { code?: unknown; message?: unknown } | null;
+  const code = typeof e?.code === 'string' ? e.code : '';
+  const known: Record<string, string> = {
+    UNAUTHENTICATED: t('lobby.needSignIn'),
+    SIGN_IN_REQUIRED: t('lobby.needSignIn'),
+    REALTIME_UNAVAILABLE: t('lobby.unavailable'),
+    RATE_LIMITED: t('lobby.tooFast'),
+  };
+  if (code && known[code]) return known[code];
+  const said = typeof e?.message === 'string' ? e.message : String(err ?? '');
+  // The code first — it is the part worth reading out — and then whatever the
+  // platform said, trimmed to a line.
+  return [code, said].filter(Boolean).join(' · ').slice(0, 160) || t('lobby.failed');
+}
+
+function fail(s: Screen, umicat: ThreeUmicat, presets: Preset[], done: Done, err: unknown, again?: () => void): void {
   console.warn('[lobby]', err);
-  s.say(t('lobby.failed'), true);
-  const back = button(t('lobby.back'), true);
-  s.body.replaceChildren(stack(back));
+  s.say(`${t('lobby.failed')} ${reason(err)}`, true);
+  const retry = again ? button(t('lobby.tryAgain'), true) : null;
+  const back = button(t('lobby.back'), !again);
+  s.body.replaceChildren(stack(...(retry ? [retry] : []), back));
+  if (retry && again) retry.onclick = () => again();
   back.onclick = () => menu(umicat, presets, done);
+}
+
+/**
+ * Once more, a beat later, before giving up.
+ *
+ * The backend restarts (twice in an hour, the day this was written), and a
+ * restart is a few seconds during which minting a token fails. One quiet
+ * retry turns that into a pause instead of a dead end; two would just be
+ * hiding something worse.
+ */
+async function twice<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    console.warn('[lobby] first try failed, retrying', err);
+    await new Promise((r) => setTimeout(r, 1200));
+    return run();
+  }
 }
 
 // ── handing over ───────────────────────────────────────────────────────────
