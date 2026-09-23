@@ -400,7 +400,21 @@ function observe(game: GoGame | null, read: Read | null, profile: Profile): unkn
       student_plays: 'black',
       to_play: game.toPlay,
       move_number: game.turns.length,
-      last_move: game.lastStone ? toGtp(game.lastStone.x, game.lastStone.y, game.size) : null,
+      /**
+       * The last stone, and WHOSE it was.
+       *
+       * A coordinate alone is a fact the model has to finish for itself —
+       * whose turn is it now, so whose stone was that — and it gets it
+       * backwards. In the chess game that came out as congratulating the
+       * student on a capture the ENGINE had just made against them.
+       */
+      last_move: game.lastStone
+        ? {
+          at: toGtp(game.lastStone.x, game.lastStone.y, game.size),
+          by: game.lastStone.player === 'black' ? 'the student' : 'the opponent',
+          note: 'Whose move this was is stated here. Never work it out from the position.',
+        }
+        : null,
       captures: { by_black: game.captures.black, by_white: game.captures.white },
       finished: game.over,
     },
