@@ -17,6 +17,10 @@ import './gameover.css';
 import { t } from '../i18n';
 
 export interface GameOverOptions {
+  /** Called whenever the card goes away — by either button, by the ×, or by a
+   *  tap on the dark part. Whatever was waiting to be shown INSTEAD of it can
+   *  go up then. */
+  onHide?(): void;
   /** Play again, on the same settings. */
   onAgain(): void;
   onTitle(): void;
@@ -117,5 +121,9 @@ export class GameOver {
     this.noteEl.hidden = false;
   }
 
-  hide(): void { this.el.hidden = true; }
+  hide(): void {
+    const was = !this.el.hidden;
+    this.el.hidden = true;
+    if (was) this.opts.onHide?.();
+  }
 }

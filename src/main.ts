@@ -176,6 +176,10 @@ async function start(): Promise<void> {
       void freshGame(nextSize, companion);
     },
     onTitle: () => { if (table) void leaveTable(); else void toTitle(); },
+    // The card and the waiting screen are two answers to the same question,
+    // so only one of them is ever up. When this one goes, the table works out
+    // what should be there instead.
+    onHide: () => { if (table) syncTable(); },
   });
 
   /**
@@ -1114,6 +1118,11 @@ async function start(): Promise<void> {
    */
   function waitAtTable(note: string): void {
     stopTicking();
+    // **Never behind the result card.** They are both full-screen answers to
+    // "what now", and drawn together they were literally on top of each other
+    // — a room code across the middle of "you win". The card goes first,
+    // carries the same two choices, and `onHide` brings this up after it.
+    if (over.showing) { waitingNote = null; return; }
     if (waitingNote === note) return;
     waitingNote = note;
     showWaiting({ code: table?.code ?? '', note, onLeave: () => void leaveTable() });
