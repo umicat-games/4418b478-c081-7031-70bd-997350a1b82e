@@ -19,6 +19,7 @@
 type Vars = Record<string, string | number>;
 
 const EN = {
+  'title.name': 'Chess with me',
   'title.continue': 'Continue',
   'title.newGame': 'New game',
   'title.fresh': 'Make it forget me',
@@ -152,6 +153,7 @@ const EN = {
 export type Key = keyof typeof EN;
 
 const ZH: Partial<Record<Key, string>> = {
+  'title.name': '陪你下国际象棋',
   'title.continue': '继续',
   'title.newGame': '新开一局',
   'title.fresh': '让它忘了我',

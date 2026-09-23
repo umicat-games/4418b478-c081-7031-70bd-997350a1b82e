@@ -9,6 +9,41 @@ import './title.css';
 import { t } from '../i18n';
 import { bootDone } from './boot';
 
+/**
+ * The title art: a wordmark over the table it is played on.
+ *
+ * Both files ship in `public/art/` at the size they are actually drawn, as
+ * WebP. The originals — uploaded through the platform's Asset Manager and
+ * served from `cdn.umicat.ai/uploads/<game id>/` — are well over a megabyte
+ * each, and **a title screen cannot appear until its title has arrived**: at
+ * the originals' weight the boot bar was still crawling two seconds into a
+ * throttled load. CLAUDE.md has the recipe for re-deriving them.
+ *
+ * Both are decoration. If the wordmark does not load the game's name appears
+ * as text; if the photograph does not, the flat colour underneath is what was
+ * there before. **But the fallback must not be what you see FIRST** — the
+ * words are hidden until the art has either arrived or given up, and the boot
+ * screen stays up for that whole time, so the first thing anybody sees is a
+ * finished screen rather than one assembling itself.
+ */
+const ART = { logo: 'art/logo.webp', table: 'art/table-bg.webp' };
+
+/** How long the screen waits for its artwork before falling back to words. */
+const ART_WAIT_MS = 1400;
+
+/**
+ * A path, made absolute against the PAGE.
+ *
+ * A relative `url()` that reaches CSS through a custom property is resolved
+ * against the STYLESHEET it is substituted into — and in a production build
+ * that stylesheet lives in `assets/`, so `art/table-bg.webp` became
+ * `assets/art/table-bg.webp` and 403'd. It worked in dev, and it worked for
+ * the wordmark, which is an `<img src>` and therefore resolved against the
+ * document. Two rules for the same string, and only one of them shows up
+ * before deploying.
+ */
+const asUrl = (path: string): string => new URL(path, document.baseURI).href;
+
 export type TitleChoice = 'continue' | 'new' | 'forget';
 
 export interface TitleOptions {
@@ -24,16 +59,48 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
   const el = document.createElement('div');
   el.id = 'title';
   el.innerHTML = `
-    <h1>Chess with me</h1>
+    <img class="logo" alt="">
+    <h1 class="words"></h1>
     <div class="buttons"></div>
     <p class="status"></p>`;
   // Set as text, not as markup: a translation is content, and content does not
   // go through innerHTML.
+  el.querySelector('h1')!.textContent = t('title.name');
+  const logo = el.querySelector('.logo') as HTMLImageElement;
+  logo.alt = t('title.name');
+  logo.src = ART.logo;
+  // The photograph goes on a layer of its own so it can fade in, and the grey
+  // scrim spreads from the middle outwards on the layer above it.
+  el.style.setProperty('--table', `url("${asUrl(ART.table)}")`);
   el.querySelector('.status')!.textContent = t('title.loading');
   document.body.appendChild(el);
-  // The first thing the player sees is a finished screen, not one assembling
-  // itself: the boot screen stays up until this one is in the DOM.
-  bootDone();
+
+  /**
+   * Show the art when it is ALL there, and the words only if it is not.
+   *
+   * Waiting for both together is what stops the screen assembling itself in
+   * front of the player — a wordmark landing a second before its background
+   * is the same flash, in two parts. The cap is what stops a slow network
+   * leaving them looking at an empty screen: past it the words appear, and
+   * the picture is welcome whenever it likes.
+   */
+  const settled = (src: string): Promise<boolean> => new Promise((done) => {
+    const img = new Image();
+    img.onload = () => done(true);
+    img.onerror = () => done(false);
+    img.src = src;
+  });
+  let decided = false;
+  const decide = (art: boolean): void => {
+    if (decided) return;
+    decided = true;
+    el.classList.add(art ? 'arted' : 'no-art');
+    // The first thing the player sees is a finished screen, not one
+    // assembling itself: the boot screen stays up until this decides.
+    bootDone();
+  };
+  void Promise.all([settled(ART.logo), settled(ART.table)]).then(([a, b]) => decide(a && b));
+  setTimeout(() => decide(false), ART_WAIT_MS);
 
   const buttons = el.querySelector('.buttons')!;
   const status = el.querySelector('.status')!;
