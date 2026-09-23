@@ -99,9 +99,28 @@ export class Coach<Ctx> {
 
   constructor(private umicat: ThreeUmicat, private spec: AssistantSpec<Ctx>, defaults: Profile) {
     this.profile = { ...defaults };
-    this.npc = umicat.ai.npc({
-      playbook: spec.playbook,
-      actions: spec.actions as unknown as Parameters<ThreeUmicat['ai']['npc']>[0]['actions'],
+    this.npc = this.freshNpc();
+  }
+
+  /**
+   * A conversation with nothing in it.
+   *
+   * **Not `npc.reset()`.** Reset points the NPC's history at a new array, and
+   * a `say()` that was already in flight still pushes its answer into
+   * `this.npc.history` when it lands — which is now the NEW array. The last
+   * game's sentence ends up in the next game's model context, invisible in
+   * the panel (the generation fence below drops it from the screen) and fully
+   * present to the model, which then carries on from it: "that g4 push left
+   * the pawn hanging", on move one of a game where nobody has moved.
+   *
+   * A new NPC has its own array and the in-flight call keeps pushing into the
+   * old one, which nothing reads again. Reproduced with a stubbed `ai.act`
+   * held open by hand before this was written.
+   */
+  private freshNpc(): ReturnType<ThreeUmicat['ai']['npc']> {
+    return this.umicat.ai.npc({
+      playbook: this.spec.playbook,
+      actions: this.spec.actions as unknown as Parameters<ThreeUmicat['ai']['npc']>[0]['actions'],
     });
   }
 
@@ -237,7 +256,7 @@ export class Coach<Ctx> {
     this.gen++;
     this.busy = false;
     this.queued = null;
-    this.npc.reset();
+    this.npc = this.freshNpc();
     this.messages.length = 0;
     if (past.length) await this.summarise(past);
   }
