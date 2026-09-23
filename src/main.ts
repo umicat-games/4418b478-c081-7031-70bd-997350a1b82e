@@ -941,11 +941,15 @@ async function start(): Promise<void> {
       music: () => coach.profile.music !== false,
       sound: () => coach.profile.sound !== false,
       evalBar: () => evalBar.enabled,
-      // Getting up, really: a client that stays connected while its player
-      // is on the title screen is a table on the list with nobody at it.
-      onTitle: () => { if (table) void leaveTable(); else void toTitle(); },
-      // Dismissed from the title screen, where there is no board behind it.
-      onClose: () => { if (!game) void toTitle(); },
+      // Dismissed with no board behind it — from the title screen, or at a
+      // table between games. Getting up has to go through `leaveTable`: a
+      // client that stays connected while its player is on the title screen
+      // is a table on the list with nobody at it. This is the panel's only
+      // way out now, so it is the one that has to know that.
+      onClose: () => {
+        if (game) return;
+        if (table) void leaveTable(); else void toTitle();
+      },
     },
   );
 
