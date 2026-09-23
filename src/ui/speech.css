@@ -16,10 +16,16 @@
      about is often underneath it. "I've marked it" over an opaque box that
      covers the mark is the companion contradicting itself. The blur is what
      keeps the text readable over wood grain at this alpha. */
-  background: rgba(16, 20, 27, 0.66);
+  background: rgba(16, 20, 27, 0.52);
   border: 1px solid rgba(127, 214, 194, 0.45);
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(14px) saturate(0.85);
+  /* **The prefix is not optional.** Safari and every iOS browser drop an
+     unprefixed `backdrop-filter`, and what is left is a flat dark panel — the
+     alpha without the blur. It looked like glass on a laptop and like a
+     sticker on a phone, which is exactly where it matters, because that is
+     where it covers half the board. */
+  -webkit-backdrop-filter: blur(16px) saturate(0.85);
+  backdrop-filter: blur(16px) saturate(0.85);
   color: #f4f5f7;
   font: 15px/1.5 system-ui, -apple-system, sans-serif;
   cursor: pointer;
@@ -43,6 +49,11 @@
   margin-bottom: 3px;
 }
 #speech .text { white-space: pre-wrap; word-break: break-word; }
+
+/* Never taller than the screen it is on. A box that cannot fit has to scroll,
+   not overflow: a sentence nobody can reach is the same as a sentence that
+   was never said. */
+#speech .text { max-height: calc(100vh - 190px); overflow-y: auto; }
 
 /* Close, top-right. The bubble is dismissed by reading it to the end too, but
    a box with a field in it has to be closable on purpose. */
