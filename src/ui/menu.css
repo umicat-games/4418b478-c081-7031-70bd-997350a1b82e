@@ -65,3 +65,10 @@
 #menu .actions button { flex: 1 1 auto; font-size: 13px; padding: 9px 10px; }
 #menu .go { width: 100%; }
 #menu .home { width: 100%; font-weight: 500; }
+
+/* The rest of the settings, and the one word that opens them.
+   The link is centred and quiet: it is a way to MORE, not a thing to do —
+   the thing to do is the green button under it. */
+#menu .more-toggle { justify-self: center; margin: 2px 0 0; }
+#menu .more { display: contents; }
+#menu .more[hidden] { display: none; }
