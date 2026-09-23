@@ -428,7 +428,25 @@ function observe(game: ChessGame | null, read: Read | null, profile: Profile): u
       to_play: game.toPlay,
       move_number: game.moveNumber,
       moves_so_far: moves.slice(-16).join(' '),
-      last_move: game.lastMove?.san ?? null,
+      /**
+       * The last move, and WHOSE it was.
+       *
+       * The san alone was a fact the model had to finish for itself — work
+       * out from `to_play` whose turn it is now, and therefore whose move
+       * that was — and it got it wrong in the way that matters: it congratu-
+       * lated the student on a capture the ENGINE had just made against them,
+       * pointing at the opponent's pawn on the square it had taken. Anything
+       * the game knows and the model would otherwise infer is a sentence the
+       * model will eventually get backwards.
+       */
+      last_move: game.lastMove
+        ? {
+          san: game.lastMove.san,
+          by: game.lastMove.by === game.human ? 'the student' : 'the opponent',
+          took: game.lastMove.captured ?? null,
+          note: 'Whose move this was is stated here. Never work it out from the position.',
+        }
+        : null,
       in_check: game.inCheck ? game.toPlay : null,
       opening: openingName(moves),
       material_balance_for_student: game.material(game.human),
