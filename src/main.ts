@@ -593,10 +593,16 @@ async function start(): Promise<void> {
    */
   async function freshGame(size: BoardSize, handicap: number, withCompanion = true): Promise<void> {
     setCompanion(withCompanion);
-    await coach.newSession();
+    // **The board first.** Starting a new game used to wait for the
+    // assistant to summarise the LAST one — a round trip to a language model
+    // — so the player pressed "new game" and looked at an empty board until
+    // a note about a finished game had been written. It read as the pieces
+    // loading; nothing was loading. `newSession` now clears the conversation
+    // in this same tick and writes its note behind us.
+    newGame(size, handicap);
     spoken = 0;
     redrawChat();
-    newGame(size, handicap);
+    void coach.newSession();
     void remark(
       'A new game has just started. One line: greet them if you have not yet, and name the first thing '
       + 'worth thinking about on an empty board. Do not recap the last game.',
