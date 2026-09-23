@@ -102,3 +102,36 @@
   color: #fff;
 }
 .chip:disabled { opacity: 0.4; cursor: default; }
+
+
+/**
+ * The quiet way out: a link that happens to be a button.
+ *
+ * `.quiet-link` was referenced by the title screen and by a comment in
+ * title.css promising it lived here — but nobody had actually written it,
+ * so the browser drew a bare, unstyled `<button>`: a pale rounded control
+ * sitting in the middle of an otherwise designed screen. (gomoku's
+ * buttons.css hit the same gap from a different angle — written scoped as
+ * `#title button.quiet-link` there, it went invisible on every OTHER screen
+ * that also used the class, because a class that only resolves under one id
+ * is not a class. Global, here, for the same reason.)
+ *
+ * Anything that is a real choice gets `.lift`. This is for "let it forget
+ * me" — a way back, not a thing to do.
+ */
+button.quiet-link {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 6px 12px;
+  font: 500 13px/1.4 system-ui, -apple-system, sans-serif;
+  opacity: 0.55;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  box-shadow: none;
+  transition: opacity .2s ease;
+}
+button.quiet-link:hover { opacity: 0.9; }
+button.quiet-link:active { opacity: 1; transform: translateY(1px); }
