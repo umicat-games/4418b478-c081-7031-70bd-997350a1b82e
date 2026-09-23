@@ -333,8 +333,12 @@ export class Coach {
    * turn ships the history, so an unsummarised chat gets more expensive for
    * the player every time they speak.
    */
-  async summarise(): Promise<string> {
-    const transcript = this.messages.slice(-40).map((m) => `${m.from}: ${m.text}`).join('\n');
+  async summarise(from?: ChatMessage[]): Promise<string> {
+    // Takes the transcript rather than reading the live one, so a caller can
+    // hand over what was said, clear the screen, and let the writing happen
+    // behind it — see `newSession`.
+    const said = from ?? this.messages;
+    const transcript = said.slice(-40).map((m) => `${m.from}: ${m.text}`).join('\n');
     if (!transcript) return this.profile.summary;
     const res = await this.umicat.ai.complete({
       prompt:
@@ -358,9 +362,24 @@ export class Coach {
    * which is where the long memory has always lived.
    */
   async newSession(): Promise<void> {
-    if (this.messages.length) await this.summarise();
+    /**
+     * **The board must not wait for this.**
+     *
+     * Summarising the last game is a round trip to a language model, and it
+     * used to happen BEFORE the new board was built — so pressing "new game"
+     * showed an empty board for as long as the model took to write a note
+     * about a game that was already over. It looked like the pieces were
+     * loading. Nothing was loading; the game was waiting for its own
+     * bookkeeping.
+     *
+     * The conversation is therefore taken and cleared SYNCHRONOUSLY — the
+     * caller can put a board up in the same tick — and the note is written
+     * from the copy, behind it.
+     */
+    const past = this.messages.slice();
     this.npc.reset();
     this.messages.length = 0;
+    if (past.length) await this.summarise(past);
   }
 
   /** Restore a saved conversation so the coach remembers a player who left. */
