@@ -144,7 +144,17 @@ export function gomokuAssistant(hooks: AssistantHooks): AssistantSpec<Context> {
             + `Black and moving first; "o" is you, playing White; "." is an empty point.`,
           to_play: game.toPlay === BLACK ? 'the student' : 'the engine',
           move_number: game.moves.length,
-          last_move: game.last !== null ? name(game, game.last) : null,
+          /** The last stone, and WHOSE it was. Left as a bare coordinate the
+           *  model works out whose it was from the turn and gets it backwards
+           *  — which in the chess game came out as praising the student for a
+           *  capture the engine had just made against them. */
+          last_move: game.last !== null
+            ? {
+              at: name(game, game.last),
+              by: game.toPlay === BLACK ? 'the opponent' : 'the student',
+              note: 'Whose move this was is stated here. Never work it out from the position.',
+            }
+            : null,
           finished: game.over,
         },
         // Measured by the referee, not by you — and this is the part you are
