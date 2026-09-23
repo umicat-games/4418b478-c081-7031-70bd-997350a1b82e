@@ -293,6 +293,42 @@ happens. Watch the removal: holding the element in a local before nulling the
 reference is not style, it is the difference between the screen going away and
 it sitting there invisible for ever with one line in the console.
 
+**A move is a piece being CARRIED, and the board has to be told what the move
+was.** `animateMove(played)` is handed the move the referee just returned,
+because by then the position is already the one after it. Three things it does
+that a naive lift-and-drop does not:
+
+- **The square the piece lands on is held EMPTY while it flies** (`hidden`),
+  or the piece is in two places at once — and when the flight ends the
+  layout is RE-RUN, not just unflagged. `sync()` is what puts a piece on a
+  square; clearing the flag without calling it leaves a hole where the piece
+  landed until the next move happens to sync. That is `this.shown`.
+- **A captured piece leaves towards whoever TOOK it**, which reads backwards
+  in the code: a black pawn goes to White's end of the table. It starts from
+  `move.took`, which is the square it was STANDING on — not `move.to`, which
+  is a different square when it was taken en passant.
+- **Castling is one move with two pieces in it.** `move.rook` carries the
+  rook's own two squares; it goes 110ms after the king, because the king is
+  the move and the rook is the consequence.
+
+**Never clone a material per flight.** A new material is a new shader program,
+compiled the first time it is drawn: profiled, cloning one per move added
+about 150ms of main-thread work to the exact frame the piece was supposed to
+start moving on. The two fading materials are built once, with the skins.
+
+**Anything that rewrites the board mid-flight must `clearFlights()`** — a new
+game and a takeback both do. A flight outliving its move is a piece flying to
+a square that no longer wants it, while holding that square empty.
+
+**Sampling an animation needs the page's clock FROZEN.** A screenshot takes
+longer than a 260ms arc, so a probe that sets up a flight and then asks for a
+picture "at 100ms" gets a picture of the board after it finished — which looks
+exactly like the animation not rendering at all, and was read that way for an
+hour. Override `performance.now` to a value the probe advances by hand, call
+`animate()` and `render()`, and only then take the shot. Note also that the
+local preview is `vite preview` of `dist/`: a source edit is not on screen
+until `npm run build`.
+
 **The end of a game is a DIALOG, not a line in the corner.** The status line
 is where "your move" lives, and a result printed in the same place in the same
 type reads as one more turn rather than as the end of something. The card

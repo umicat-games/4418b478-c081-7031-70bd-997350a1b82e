@@ -47,6 +47,19 @@ export interface PlayedMove {
   check: boolean;
   mate: boolean;
   castle: boolean;
+  /** The two squares the ROOK travels between when this was a castle. The
+   *  king's move does not describe it, and anything drawing the move has to
+   *  put the rook somewhere. */
+  rook: { from: Sq; to: Sq } | null;
+  /**
+   * Where the captured piece was STANDING.
+   *
+   * `to` in every ordinary capture and not in the one that matters: taken en
+   * passant, a pawn is beside the square the capturer lands on. Anything that
+   * animates a capture, or points at it, needs the square the piece was on
+   * rather than the square the mover went to.
+   */
+  took: Sq | null;
   promotion: Kind | null;
 }
 
@@ -291,14 +304,23 @@ function describe(m: {
 }): PlayedMove {
   const from = fromSan(m.from)!;
   const to = fromSan(m.to)!;
+  const king = m.flags.includes('k');
+  const queen = m.flags.includes('q');
   return {
     from, to, san: m.san, uci: m.lan,
     piece: KIND[m.piece],
     captured: m.captured ? KIND[m.captured] : null,
+    // 'e' is chess.js for en passant: the pawn stood BESIDE the landing
+    // square, on the capturer's own rank.
+    took: m.captured ? (m.flags.includes('e') ? { x: to.x, y: from.y } : to) : null,
     by: sideOf(m.color),
     check: m.san.includes('+'),
     mate: m.san.includes('#'),
-    castle: m.flags.includes('k') || m.flags.includes('q'),
+    castle: king || queen,
+    // The rook's corner and the square it lands on, either side of the king.
+    rook: king ? { from: { x: 7, y: from.y }, to: { x: 5, y: from.y } }
+      : queen ? { from: { x: 0, y: from.y }, to: { x: 3, y: from.y } }
+        : null,
     promotion: m.promotion ? KIND[m.promotion] : null,
   };
 }

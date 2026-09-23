@@ -181,6 +181,9 @@ async function start(): Promise<void> {
 
   const frame = (): void => {
     if (performance.now() < repaintUntil) view.invalidate();
+    // A piece in the air is the one thing on this board that moves of its
+    // own accord; while it does, the still-life rule is suspended.
+    view.animate();
     // Only when the picture actually changed. Between two moves a chess board
     // is a still life, and redrawing it sixty times a second takes a core off
     // the engine — which is the thing the player is waiting for.
@@ -588,6 +591,7 @@ async function start(): Promise<void> {
   }
 
   function newGame(side: Side, odds: Odds): void {
+    view.clearFlights();
     over.hide();
     game = new ChessGame(side, odds);
     coach.profile.side = side;
@@ -684,6 +688,7 @@ async function start(): Promise<void> {
           moved = true;
           playPiece(audio, lastKnock);
           if (played.captured) { audio.play(SFX.capture); took = played.captured; }
+          view.animateMove(played);
         }
       }
     } catch (err) {
@@ -737,6 +742,11 @@ async function start(): Promise<void> {
     if (!played) return;
     playPiece(audio, lastKnock);
     if (played.captured) audio.play(SFX.capture);
+    // Shown as a move rather than as a new arrangement: the piece is lifted,
+    // carried and set down, and anything it took goes off the side first.
+    // `game` is already in the position AFTER the move, which is exactly why
+    // the view needs to be told what the move WAS.
+    view.animateMove(played);
     coach.profile.moved = true;
     clearSelection();
     askHere.hide();
@@ -863,6 +873,9 @@ async function start(): Promise<void> {
       onTakeback: () => {
         if (!game || thinking || game.over) return;
         if (!game.undoPair()) return;
+        // Anything still in the air belongs to a move that no longer
+        // happened, and it is holding a square empty while it flies.
+        view.clearFlights();
         clearSelection();
         refresh();
         persist();

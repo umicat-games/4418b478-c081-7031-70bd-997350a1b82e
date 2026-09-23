@@ -23,7 +23,7 @@
 // The labels matter more here than they look: the companion talks in
 // coordinates, and a beginner who cannot find e4 cannot use a word it says.
 import * as THREE from 'three';
-import type { ChessGame, Kind, Side } from '../chess/rules';
+import type { ChessGame, Kind, PlayedMove, Side } from '../chess/rules';
 import { pieceGeometry, bishopSlit, HEIGHT } from './pieces';
 import type { Sq } from '../chess/coords';
 
@@ -71,6 +71,43 @@ const MAX_PER_KIND = 10;
 const LIGHT_SQ = '#e9d3ab';
 const DARK_SQ = '#9c6a41';
 const FRAME = '#5d3a20';
+
+// ── pieces in the air ──────────────────────────────────────────────────────
+
+/**
+ * A piece between two squares, or on its way off the board.
+ *
+ * Pieces live in `InstancedMesh`es laid out from the position, which is the
+ * right way to draw sixteen bishops and the wrong way to move ONE of them:
+ * the position is already the new one by the time anybody wants to watch the
+ * move. So a move is drawn by a transient mesh of its own — a real piece,
+ * with the same geometry and skin — while `sync()` is told to leave the
+ * square it is heading for empty until it lands.
+ *
+ * The captured piece is simpler: the position no longer contains it at all,
+ * so the flight IS the only copy of it, and nothing has to be hidden.
+ */
+interface Flight {
+  mesh: THREE.Mesh;
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  /** How high it rises at the top of the arc, in world units. */
+  lift: number;
+  start: number;
+  ms: number;
+  /** Taken pieces shrink away as they go; a moving piece does not. */
+  fade: boolean;
+  /** A square `sync()` must leave empty until this lands. */
+  hide: string | null;
+}
+
+/** Long enough to read as a hand moving a piece, short enough that nobody
+ *  waits for it. Measured against how long a fast level takes to reply
+ *  (about a second): the move has to be finished well before the answer. */
+const MOVE_MS = 260;
+const TAKE_MS = 380;
+const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
 
 export class BoardView {
   readonly scene = new THREE.Scene();
@@ -226,6 +263,13 @@ export class BoardView {
         this.scene.add(mesh);
         this.pieces[s][k] = mesh;
       }
+      // One transparent copy per side, built now so its shader is compiled
+      // with the rest and never in the middle of a move.
+      const fade = skin[s].clone();
+      fade.transparent = true;
+      fade.depthWrite = false;
+      this.fading[s] = fade;
+
       const slitMat = skin[s].clone();
       slitMat.color = skin[s].color.clone().multiplyScalar(0.34);
       const slit = new THREE.InstancedMesh(bishopSlit(), slitMat, MAX_PER_KIND);
@@ -339,8 +383,155 @@ export class BoardView {
 
   // ── what is on it ───────────────────────────────────────────────────────
   /** Put the board on screen in the state the game is in. */
+  /** The position last laid out — see `animate()`. */
+  private shown: ChessGame | null = null;
+  /** Pieces currently in the air, and the squares `sync()` must leave empty
+   *  while they are. */
+  private flights: Flight[] = [];
+  private hidden = new Set<string>();
+  private fading: Record<Side, THREE.MeshStandardMaterial> =
+    {} as Record<Side, THREE.MeshStandardMaterial>;
+
+  /**
+   * Show a move happening: lift, travel, set down — and the taken piece off
+   * the side of the board first, the way a hand clears it before putting the
+   * other one down.
+   *
+   * Called with the move that was just played, so the position on the board
+   * is already the one AFTER it; everything here is about what the player did
+   * not get to see.
+   */
+  animateMove(move: PlayedMove): void {
+    const now = performance.now();
+    if (move.captured && move.took) {
+      // Off towards whoever TOOK it — which is the other side from the piece
+      // that was taken, and the reason this reads backwards: a black pawn
+      // leaves towards White's end of the table, not its own.
+      const side: Side = move.by === 'white' ? 'black' : 'white';
+      const home = move.by === 'white' ? 7 : 0;
+      const edge = this.at(move.took.x, home).clone();
+      edge.z += (home === 7 ? 1 : -1) * SQUARE * 2.2;
+      edge.y += SQUARE * 1.6;
+      this.launch({
+        kind: move.captured, side,
+        from: this.at(move.took.x, move.took.y), to: edge,
+        lift: SQUARE * 0.9, ms: TAKE_MS, start: now, fade: true, hide: null,
+      });
+    }
+    // A promoting pawn arrives as what it became: the piece is put down as a
+    // queen, which is what a hand does — the pawn does not travel and then
+    // change on the square.
+    const mover = move.promotion ?? move.piece;
+    this.launch({
+      kind: mover, side: move.by,
+      from: this.at(move.from.x, move.from.y), to: this.at(move.to.x, move.to.y),
+      lift: SQUARE * 0.55, ms: MOVE_MS,
+      // A beat after the capture starts, so the two are legible as one act in
+      // order — clear the square, then land on it — rather than a collision.
+      start: now + (move.captured ? 60 : 0), fade: false,
+      hide: `${move.to.x},${move.to.y}`,
+    });
+    // Castling is ONE move with two pieces in it. The rook goes a little
+    // later and a little lower: the king is the move, the rook is the
+    // consequence, and sending them together looks like two moves at once.
+    if (move.rook) {
+      this.launch({
+        kind: 'rook', side: move.by,
+        from: this.at(move.rook.from.x, move.rook.from.y),
+        to: this.at(move.rook.to.x, move.rook.to.y),
+        lift: SQUARE * 0.4, ms: MOVE_MS, start: now + 110, fade: false,
+        hide: `${move.rook.to.x},${move.rook.to.y}`,
+      });
+    }
+    this.dirty = true;
+  }
+
+  private launch(spec: {
+    kind: Kind; side: Side; from: THREE.Vector3; to: THREE.Vector3;
+    lift: number; ms: number; start: number; fade: boolean; hide: string | null;
+  }): void {
+    const source = this.pieces[spec.side][spec.kind];
+    if (!source) return;
+    /**
+     * Two materials, both made when the board was built — never a clone per
+     * flight.
+     *
+     * A new material is a new shader program, and a new program is compiled
+     * the first time it is drawn: profiled, cloning one per move added about
+     * 150ms of main-thread work to every move, on the frame where the piece
+     * was supposed to start moving. An animation that stutters because of the
+     * animation is worse than no animation.
+     *
+     * A piece that does not fade uses the skin the other pieces are already
+     * drawn with; a piece being taken uses the one transparent copy per side,
+     * and only one piece is ever being taken at a time.
+     */
+    const mat = spec.fade ? this.fading[spec.side] : (source.material as THREE.MeshStandardMaterial);
+    if (spec.fade) mat.opacity = 1;
+    const mesh = new THREE.Mesh(source.geometry, mat);
+    mesh.scale.setScalar(PIECE_SCALE);
+    if (spec.side === 'black') mesh.rotation.y = Math.PI;
+    mesh.castShadow = true;
+    mesh.position.copy(spec.from);
+    this.scene.add(mesh);
+    if (spec.hide) this.hidden.add(spec.hide);
+    this.flights.push({
+      mesh, from: spec.from.clone(), to: spec.to.clone(), lift: spec.lift,
+      start: spec.start, ms: spec.ms, fade: spec.fade, hide: spec.hide,
+    });
+  }
+
+  /** Move everything that is in the air. Returns whether anything still is —
+   *  the caller keeps the render loop awake while that is true. */
+  animate(): boolean {
+    if (!this.flights.length) return false;
+    const now = performance.now();
+    let moved = false;
+    let relay = false;
+    for (const f of [...this.flights]) {
+      const t = (now - f.start) / f.ms;
+      if (t < 0) { moved = true; continue; }
+      if (t >= 1) {
+        this.scene.remove(f.mesh);
+        // The square this piece was covering for goes back to the layout —
+        // and the layout has to be RE-RUN to put it there. Clearing the flag
+        // alone leaves a hole where the piece landed until the next move
+        // happens to call `sync()` again, which is exactly what it looked
+        // like: a piece that flew across the board and then disappeared.
+        if (f.hide) { this.hidden.delete(f.hide); relay = true; }
+        this.flights.splice(this.flights.indexOf(f), 1);
+        this.dirty = true;
+        continue;
+      }
+      moved = true;
+      const k = f.fade ? easeOut(t) : easeInOut(t);
+      f.mesh.position.lerpVectors(f.from, f.to, k);
+      // The arc: up and down again, so it reads as picked up rather than slid.
+      f.mesh.position.y += Math.sin(Math.PI * Math.min(1, t)) * f.lift;
+      if (f.fade) {
+        (f.mesh.material as THREE.MeshStandardMaterial).opacity = 1 - easeOut(Math.max(0, (t - 0.45) / 0.55));
+        f.mesh.scale.setScalar(PIECE_SCALE * (1 - 0.35 * t));
+      }
+      this.dirty = true;
+    }
+    if (relay && this.shown) this.sync(this.shown);
+    return moved;
+  }
+
+  /** Nothing in the air. Used when the board is rebuilt under them — a new
+   *  game while a piece is still travelling. */
+  clearFlights(): void {
+    for (const f of this.flights) this.scene.remove(f.mesh);
+    this.flights.length = 0;
+    this.hidden.clear();
+    this.dirty = true;
+  }
+
   sync(game: ChessGame): void {
     this.dirty = true;
+    // Kept so a landing flight can put the board back the way it is now,
+    // without the caller having to be told a piece finished moving.
+    this.shown = game;
     const counts: Record<Side, Partial<Record<Kind, number>>> = { white: {}, black: {} };
     const slitCount: Record<Side, number> = { white: 0, black: 0 };
     const m = new THREE.Matrix4();
@@ -354,6 +545,9 @@ export class BoardView {
     for (const p of game.pieces()) {
       const mesh = this.pieces[p.side][p.kind];
       if (!mesh) continue;
+      // A square with a piece in the air above it is drawn by the flight,
+      // not by the layout — otherwise the piece is in two places at once.
+      if (this.hidden.has(`${p.x},${p.y}`)) continue;
       const i = counts[p.side][p.kind] ?? 0;
       // The capacity, not the previous frame's count. Writing past the end of
       // an InstancedMesh's buffer is silent until it is not.
