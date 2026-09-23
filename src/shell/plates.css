@@ -50,7 +50,7 @@ body.titling #plates { display: none; }
   gap: 10px;
   margin-top: 3px;
   /* Indented to the name above it, so the two lines read as one block. */
-  padding-left: 26px;
+  padding-left: 33px;
 }
 /* The right-hand player faces the other way: picture outside, words inward. */
 #plates .seat.right .row { flex-direction: row-reverse; }
@@ -64,13 +64,16 @@ body.titling #plates { display: none; }
  * It started at 72px standing beside two lines of text, which made the seat a
  * card; then 34px on one line, which was still the loudest thing out there.
  * A seat is a NAME with a picture on it, not a picture with a name under it —
- * so the picture is the height of the words it sits beside, and nothing more.
+ * so the picture is the height of the WORDS it sits beside — the name's line
+ * box, measured at 27px for 19px type — and nothing more. At 17px it had gone
+ * the other way and become smaller than the colour badge next to it, which
+ * made the badge the loud one.
  */
 #plates .face {
   position: relative;
   flex: none;
-  width: 17px;
-  height: 17px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: rgba(36, 31, 25, 0.62);
   box-shadow:
@@ -89,12 +92,12 @@ body.titling #plates { display: none; }
 /* No avatar: the initial, or a shape. A broken-image icon in a nameplate is
    worse than no picture at all. */
 #plates .face .letter {
-  font: 700 9px/1 system-ui, sans-serif;
+  font: 700 12px/1 system-ui, sans-serif;
   color: #e8e4dc;
   opacity: .85;
 }
 #plates .face svg {
-  width: 11px; height: 11px;
+  width: 15px; height: 15px;
   fill: none; stroke: #e8e4dc; stroke-width: 1.7;
   stroke-linecap: round; stroke-linejoin: round;
   opacity: .8;
@@ -168,8 +171,8 @@ body.titling #plates { display: none; }
    board's own — the light comes from the top left out there too. */
 #plates .stone {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   /* The light ring is not decoration: a BLACK stone against dark wood is one
      dark circle on another, and the badge that was supposed to say "you are
@@ -201,12 +204,12 @@ body.titling #plates { display: none; }
 #plates.tight .seat.right .under { flex-direction: row; padding: 0; }
 #plates.tight .bubbles, #plates.tight .seat.right .bubbles { align-items: center; }
 #plates.tight .bubble { font-size: 12.5px; padding: 6px 10px; text-align: center; }
-#plates.tight .face { width: 15px; height: 15px; }
-#plates.tight .face .letter { font-size: 8px; }
-#plates.tight .face svg { width: 10px; height: 10px; }
+#plates.tight .face { width: 20px; height: 20px; }
+#plates.tight .face .letter { font-size: 10px; }
+#plates.tight .face svg { width: 13px; height: 13px; }
 #plates.tight .name { font-size: 15px; }
 #plates.tight .clock { font-size: 15px; }
-#plates.tight .stone { width: 16px; height: 16px; }
+#plates.tight .stone { width: 14px; height: 14px; }
 /* Two short lines beat one clipped one when the column is this narrow. */
 #plates.tight .meta {
   font-size: 12.5px;
