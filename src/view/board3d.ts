@@ -671,11 +671,13 @@ function tableTexture(): THREE.CanvasTexture {
   // 135; the room around it was the dark part, and the game looked dim
   // because two thirds of it was.
   //
-  // Lifted to a mid walnut. Measured after: the table goes 38 -> 51 and the
+  // Lifted twice: first to a mid walnut, then further, because at 47 the
+  // black pieces standing above the far edge of a chess board were still
+  // being read against it. Measured after: the table goes 38 -> 73 and the
   // shadow beside the board goes 20 -> 31, so the difference that makes the
   // board an object sitting on something is unchanged (18 -> 19). The
   // brightness was never paying for the shadow.
-  ctx.fillStyle = '#55402c';
+  ctx.fillStyle = '#6b5238';
   ctx.fillRect(0, 0, px, px);
 
   // Grain: many fine lines along one axis, with slow waves, so the eye reads a
@@ -686,7 +688,7 @@ function tableTexture(): THREE.CanvasTexture {
     const dark = Math.random() < 0.55;
     ctx.strokeStyle = dark
       ? `rgba(26,17,10,${0.10 + Math.random() * 0.16})`
-      : `rgba(140,104,70,${0.05 + Math.random() * 0.10})`;
+      : `rgba(150,114,78,${0.05 + Math.random() * 0.10})`;
     ctx.lineWidth = 0.6 + Math.random() * 2.6;
     ctx.beginPath();
     ctx.moveTo(-10, y);
