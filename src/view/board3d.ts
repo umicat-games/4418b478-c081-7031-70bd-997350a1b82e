@@ -672,32 +672,33 @@ function tableTexture(): THREE.CanvasTexture {
   c.width = c.height = px;
   const ctx = c.getContext('2d')!;
 
-  // The table's wood.
+  // The table's wood — PALE and COOL, and that is a decision, not a tint.
   //
-  // It used to be `#3b2a1d`, which is a dark walnut — and with a low key and
-  // a weak fill (both of which the shadow needs) that came out at a measured
-  // luminance of 38 out of 255 across most of the screen. The board reads at
-  // 135; the room around it was the dark part, and the game looked dim
-  // because two thirds of it was.
+  // It was a dark walnut, twice lifted and still the darkest thing on screen.
+  // A pale table turns every relationship round: measured on the chess board,
+  // a black piece against it goes from a difference of 43 to 142, and the
+  // board's shadow from 31 to 68 — a shadow reads on light wood the way it
+  // never does on dark.
   //
-  // Lifted twice: first to a mid walnut, then further, because at 47 the
-  // black pieces standing above the far edge of a chess board were still
-  // being read against it. Measured after: the table goes 38 -> 73 and the
-  // shadow beside the board goes 20 -> 31, so the difference that makes the
-  // board an object sitting on something is unchanged (18 -> 19). The
-  // brightness was never paying for the shadow.
-  ctx.fillStyle = '#6b5238';
+  // COOL grey rather than pale BROWN, because the pieces that are now at risk
+  // are the light ones: warm cream against warm wood is the same merge in a
+  // mirror. Hue does the separating where luminance cannot.
+  //
+  // What it costs is every white word of UI, which is why the HUD, the seats
+  // and the eval bar are dark ink with a light halo. A light room is a
+  // different room, not the same room with the brightness turned up.
+  ctx.fillStyle = '#c4c4c2';
   ctx.fillRect(0, 0, px, px);
 
   // Grain: many fine lines along one axis, with slow waves, so the eye reads a
   // direction. Dark board, dark table — the contrast between them is the
   // board's edge and its shadow, not their colours.
-  for (let i = 0; i < 520; i++) {
+  for (let i = 0; i < 340; i++) {
     const y = Math.random() * px;
     const dark = Math.random() < 0.55;
     ctx.strokeStyle = dark
-      ? `rgba(26,17,10,${0.10 + Math.random() * 0.16})`
-      : `rgba(150,114,78,${0.05 + Math.random() * 0.10})`;
+      ? `rgba(122,120,114,${0.05 + Math.random() * 0.08})`
+      : `rgba(255,255,255,${0.05 + Math.random() * 0.09})`;
     ctx.lineWidth = 0.6 + Math.random() * 2.6;
     ctx.beginPath();
     ctx.moveTo(-10, y);
@@ -709,8 +710,8 @@ function tableTexture(): THREE.CanvasTexture {
     const x = Math.random() * px, y = Math.random() * px;
     const r = px * (0.06 + Math.random() * 0.12);
     const blob = ctx.createRadialGradient(x, y, 0, x, y, r);
-    blob.addColorStop(0, 'rgba(22,14,8,0.22)');
-    blob.addColorStop(1, 'rgba(22,14,8,0)');
+    blob.addColorStop(0, 'rgba(120,118,112,0.14)');
+    blob.addColorStop(1, 'rgba(120,118,112,0)');
     ctx.fillStyle = blob;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   }
@@ -719,7 +720,7 @@ function tableTexture(): THREE.CanvasTexture {
   // light that did this would also darken the board.
   const vignette = ctx.createRadialGradient(px / 2, px / 2, px * 0.18, px / 2, px / 2, px * 0.62);
   vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(0,0,0,0.72)');
+  vignette.addColorStop(1, 'rgba(60,58,54,0.30)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, px, px);
 
