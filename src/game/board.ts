@@ -180,7 +180,7 @@ function boardTexture(rig: BoardRig, size: number): THREE.CanvasTexture {
   c.width = c.height = px;
   const ctx = c.getContext('2d')!;
 
-  ctx.fillStyle = '#e8c48c';
+  ctx.fillStyle = '#c9a978';
   ctx.fillRect(0, 0, px, px);
   // Grain: long, low-contrast strokes. Enough to stop the board reading as a
   // flat orange rectangle, not enough to compete with the lines.
@@ -247,7 +247,7 @@ function edgeTexture(): THREE.CanvasTexture {
   c.width = px;
   c.height = 64;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#c99a5d';
+  ctx.fillStyle = '#ad854f';
   ctx.fillRect(0, 0, px, 64);
   for (let i = 0; i < 90; i++) {
     const y = Math.random() * 64;
