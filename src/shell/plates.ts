@@ -38,6 +38,9 @@ export interface Seat {
   meta?: string;
   /** Whose turn it is. Exactly one seat should have this. */
   active?: boolean;
+  /** They are working something out — shown as three moving dots beside
+   *  whatever `meta` says. */
+  thinking?: boolean;
   /** A clock, already formatted — the seat does not know what a second is.
    *  Absent in a game that is not timed. */
   clock?: string;
@@ -126,8 +129,22 @@ export class Plates {
     const meta = el.querySelector('.meta') as HTMLElement;
 
     if (name.textContent !== seat.name) name.textContent = seat.name;
+    // `thinking` is a state, not a sentence: it gets dots that move rather
+    // than a word that sits there looking like a message.
     const line = seat.meta ?? '';
-    if (meta.textContent !== line) meta.textContent = line;
+    const metaKey = seat.thinking ? `\u0000${line}` : line;
+    if (meta.dataset.shown !== metaKey) {
+      meta.dataset.shown = metaKey;
+      meta.replaceChildren();
+      if (line) meta.append(document.createTextNode(line));
+      if (seat.thinking) {
+        const dots = document.createElement('span');
+        dots.className = 'thinking';
+        dots.innerHTML = '<i></i><i></i><i></i>';
+        if (line) meta.append(document.createTextNode(' '));
+        meta.append(dots);
+      }
+    }
     el.classList.toggle('active', !!seat.active);
 
     const stone = el.querySelector('.stone') as HTMLElement;

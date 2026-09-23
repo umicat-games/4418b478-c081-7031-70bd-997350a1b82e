@@ -606,7 +606,11 @@ async function start(): Promise<void> {
         colour: me === BLACK ? 'white' : 'black',
         meta: table
           ? (table.full ? '' : game && !game.over ? t('net.waitingRejoin') : t('net.emptySeat'))
-          : thinking ? t('plate.thinking') : levelLabel(level.id),
+          : levelLabel(level.id),
+        // Only against the engine: a person taking their time is not a
+        // machine working, and dots over their seat would be the game
+        // narrating something it cannot know.
+        thinking: !table && thinking,
         active: !game.over && !yours,
         ...(table ? clockOf(theirSeat) : {}),
       },
