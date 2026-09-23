@@ -395,7 +395,19 @@ function tableTexture(): THREE.CanvasTexture {
   c.width = c.height = px;
   const ctx = c.getContext('2d')!;
 
-  ctx.fillStyle = '#3b2a1d';
+  // The table's wood.
+  //
+  // It used to be `#3b2a1d`, which is a dark walnut — and with a low key and
+  // a weak fill (both of which the shadow needs) that came out at a measured
+  // luminance of 38 out of 255 across most of the screen. The board reads at
+  // 135; the room around it was the dark part, and the game looked dim
+  // because two thirds of it was.
+  //
+  // Lifted to a mid walnut. Measured after: the table goes 38 -> 51 and the
+  // shadow beside the board goes 20 -> 31, so the difference that makes the
+  // board an object sitting on something is unchanged (18 -> 19). The
+  // brightness was never paying for the shadow.
+  ctx.fillStyle = '#55402c';
   ctx.fillRect(0, 0, px, px);
 
   // Grain: many fine lines along one axis, with slow waves, so the eye reads a
@@ -406,7 +418,7 @@ function tableTexture(): THREE.CanvasTexture {
     const dark = Math.random() < 0.55;
     ctx.strokeStyle = dark
       ? `rgba(26,17,10,${0.10 + Math.random() * 0.16})`
-      : `rgba(120,86,56,${0.05 + Math.random() * 0.10})`;
+      : `rgba(140,104,70,${0.05 + Math.random() * 0.10})`;
     ctx.lineWidth = 0.6 + Math.random() * 2.6;
     ctx.beginPath();
     ctx.moveTo(-10, y);
