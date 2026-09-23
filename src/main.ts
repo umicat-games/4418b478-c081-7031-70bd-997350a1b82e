@@ -369,9 +369,8 @@ async function start(): Promise<void> {
       {
         name: t('plate.engine'),
         colour: 'white',
-        meta: thinking
-          ? t('plate.thinking')
-          : levelLabel(level.id) + ' · ' + t('plate.discs', { n: counts.white }),
+        meta: levelLabel(level.id) + ' · ' + t('plate.discs', { n: counts.white }),
+        thinking,
         active: !game.over && !yours,
       },
     );
