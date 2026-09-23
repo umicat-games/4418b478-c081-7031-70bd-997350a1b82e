@@ -182,7 +182,7 @@ export class BoardView {
 
     // Near the table's own darkest tone, so the sliver beyond the table at a
     // wide aspect ratio does not read as a hole.
-    this.scene.background = new THREE.Color('#140e09');
+    this.scene.background = new THREE.Color('#d5cec0');
     this.camera = new THREE.PerspectiveCamera(FOV_DEG, 1, 0.1, 100);
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP_Y);
 
@@ -202,7 +202,7 @@ export class BoardView {
     // used to come from the front so the shadow fell away from the hand
     // holding a phone, which was the right call for a tilted view and is not
     // a consideration from up here.
-    const key = new THREE.DirectionalLight(0xfff1dc, 2.0);
+    const key = new THREE.DirectionalLight(0xfff1dc, 1.82);
     key.position.set(-3.1, 2.3, -2.1);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -215,10 +215,10 @@ export class BoardView {
     this.scene.add(key);
     // Enough fill that a stone is not half black, and no more: fill is the
     // enemy of the shadow that makes the board sit on the table.
-    this.scene.add(new THREE.HemisphereLight(0xcfd8e6, 0x140c06, 0.72));
+    this.scene.add(new THREE.HemisphereLight(0xcfd8e6, 0xb8b2a6, 0.84));
     // A little warmth bouncing back off the table, so the board's near edge
     // is not the darkest thing on screen.
-    const bounce = new THREE.DirectionalLight(0xffd9a8, 0.28);
+    const bounce = new THREE.DirectionalLight(0xffeeda, 0.34);
     bounce.position.set(2.4, 1.2, 1.8);
     this.scene.add(bounce);
 
@@ -227,7 +227,7 @@ export class BoardView {
     // the dark — and it is what the board's shadow falls on.
     const table = new THREE.Mesh(
       new THREE.PlaneGeometry(2 * HALF * TABLE, 2 * HALF * TABLE).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ map: tableTexture(), roughness: 0.78, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ map: tableTexture(), roughness: 0.95, metalness: 0 }),
     );
     table.position.y = -0.002;  // a hair under the board, so they never z-fight
     table.receiveShadow = true;
@@ -778,7 +778,7 @@ function boardTexture(size: number): THREE.CanvasTexture {
   // Brighter than the table by a good margin, and that gap is doing work: it
   // is what makes the board read as an object put down on the wood rather
   // than as a lighter patch of it.
-  ctx.fillStyle = '#edc389';
+  ctx.fillStyle = '#cda876';
   ctx.fillRect(0, 0, px, px);
   // Grain: long, low-contrast strokes. Enough to stop the board reading as a
   // flat orange rectangle, not enough to compete with the lines.
@@ -834,68 +834,66 @@ function boardTexture(size: number): THREE.CanvasTexture {
 }
 
 /**
+ * The table's own tone.
+ *
+ * Its LUMINANCE is the load-bearing part — that is what holds the board off
+ * the background — and the hue is taste. **Warmth is not free to choose by
+ * eye**: pushing a colour warmer at the same numbers makes it DARKER, because
+ * green carries 71% of luminance and warming is mostly taking green down. A
+ * hand-picked warm hex is a table that is quietly warmer AND dimmer, and the
+ * gap this was all for comes back in. Solve for green instead: fix red and
+ * blue where the warmth wants them, then binary-search green until the
+ * relative luminance matches. Four warmths were rendered that way and
+ * compared; this is the second, which is as warm as it goes before two things
+ * start to cost. The table joins the board's own hue family, which is what it
+ * was moved away from; and light pieces, being neutral ivory, read grey
+ * against a cream surface.
+ */
+const TABLE_TONE = '#ede5d0';
+
+/**
  * The table the board sits on.
  *
- * Dark walnut, drawn rather than photographed so it costs nothing to ship and
- * can be lit by the same lamp as everything else. Three things make it read
- * as wood rather than as brown: long grain that runs one way, a few darker
- * streaks that do not, and a vignette so the corners of the room fall away.
+ * **Not wood.** It was dark walnut, then pale wood, and the pale wood was
+ * measured off the canvas: the board and the table came out at the SAME
+ * luminance — 1.01:1 here, 1.08:1 on the Go board, 1.02:1 on the Gomoku one.
+ * What separated board from table was hue and nothing else, which is what
+ * "the whole screen is one brown photograph" actually is.
+ *
+ * So the table stopped being wood. It is a matte pale stone: flat, quiet, a
+ * good deal lighter than anything on the board, and with **no grain** — a
+ * texture on the table competes with the grid, which is the only texture
+ * anybody is meant to be reading.
+ *
+ * The only thing painted into it is a very faint noise. A flat fill is not
+ * cleaner: an 8-bit gradient across a plane this size bands, and the banding
+ * is far more visible than the grain it replaced. Two per cent of noise is
+ * what a frosted surface looks like anyway.
  */
 function tableTexture(): THREE.CanvasTexture {
-  const px = 1024;
+  const px = 512;
   const c = document.createElement('canvas');
   c.width = c.height = px;
   const ctx = c.getContext('2d')!;
 
-  // The table's wood — PALE and COOL, and that is a decision, not a tint.
-  //
-  // It was a dark walnut, twice lifted and still the darkest thing on screen.
-  // A pale table turns every relationship round: measured on the chess board,
-  // a black piece against it goes from a difference of 43 to 142, and the
-  // board's shadow from 31 to 68 — a shadow reads on light wood the way it
-  // never does on dark.
-  //
-  // COOL grey rather than pale BROWN, because the pieces that are now at risk
-  // are the light ones: warm cream against warm wood is the same merge in a
-  // mirror. Hue does the separating where luminance cannot.
-  //
-  // What it costs is every white word of UI, which is why the HUD, the seats
-  // and the eval bar are dark ink with a light halo. A light room is a
-  // different room, not the same room with the brightness turned up.
-  ctx.fillStyle = '#c4c4c2';
+  ctx.fillStyle = TABLE_TONE;
   ctx.fillRect(0, 0, px, px);
 
-  // Grain: many fine lines along one axis, with slow waves, so the eye reads a
-  // direction. Dark board, dark table — the contrast between them is the
-  // board's edge and its shadow, not their colours.
-  for (let i = 0; i < 340; i++) {
-    const y = Math.random() * px;
-    const dark = Math.random() < 0.55;
-    ctx.strokeStyle = dark
-      ? `rgba(122,120,114,${0.05 + Math.random() * 0.08})`
-      : `rgba(255,255,255,${0.05 + Math.random() * 0.09})`;
-    ctx.lineWidth = 0.6 + Math.random() * 2.6;
-    ctx.beginPath();
-    ctx.moveTo(-10, y);
-    ctx.bezierCurveTo(px * 0.3, y + (Math.random() - 0.5) * 40, px * 0.7, y + (Math.random() - 0.5) * 40, px + 10, y + (Math.random() - 0.5) * 18);
-    ctx.stroke();
+  // The frost. Per-pixel, monochrome, and small — it exists to break up the
+  // gradient, not to be seen.
+  const img = ctx.getImageData(0, 0, px, px);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 11;
+    img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n;
   }
-  // A few knots' worth of darker cloud, so the grain is not a barcode.
-  for (let i = 0; i < 14; i++) {
-    const x = Math.random() * px, y = Math.random() * px;
-    const r = px * (0.06 + Math.random() * 0.12);
-    const blob = ctx.createRadialGradient(x, y, 0, x, y, r);
-    blob.addColorStop(0, 'rgba(120,118,112,0.14)');
-    blob.addColorStop(1, 'rgba(120,118,112,0)');
-    ctx.fillStyle = blob;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  }
+  ctx.putImageData(img, 0, 0);
 
-  // The room falling away at the edges. Baked in rather than lit, because a
-  // light that did this would also darken the board.
+  // The room falling away at the edges. Baked rather than lit, because a
+  // light that did this would also darken the board — and NEUTRAL, because a
+  // warm vignette on a pale surface reads as a stain rather than as distance.
   const vignette = ctx.createRadialGradient(px / 2, px / 2, px * 0.18, px / 2, px / 2, px * 0.62);
   vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(60,58,54,0.30)');
+  vignette.addColorStop(1, 'rgba(64,66,72,0.20)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, px, px);
 
@@ -912,7 +910,7 @@ function edgeTexture(): THREE.CanvasTexture {
   c.width = px;
   c.height = 64;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#c99a5d';
+  ctx.fillStyle = '#ad854f';
   ctx.fillRect(0, 0, px, 64);
   for (let i = 0; i < 90; i++) {
     const y = Math.random() * 64;

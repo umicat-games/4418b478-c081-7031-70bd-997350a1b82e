@@ -96,15 +96,53 @@ why the lamp is low (about 30°) and comes from the top left, so they fall down
 and to the right the way an overhead photograph reads. `controls.ts` still tells a second finger apart from a
 first (a second finger is never a move), it just has nothing to do with it.
 
-**The board is on a TABLE, and that is what the lighting is for.** A plane of
-dark walnut, drawn rather than photographed so it costs nothing to ship and is
-lit by the same lamp as everything else; the board is a slab with real
+**The board is on a TABLE, and that is what the lighting is for.** A plane
+drawn rather than photographed, so it costs nothing to ship and is lit by the
+same lamp as everything else (what it is MADE of is the note below); the board is a slab with real
 thickness standing on it, casting a real shadow. Two settings do most of the
 work and both fight the instinct to add light: the key is LOW (about 25° above
 the table, not 45°, or the shadow falls straight down and there is nothing to
 see) and the fill is weak (0.55 — fill is the enemy of the shadow that makes
 the board sit on the table). The framing pulls back to 0.84 of the screen so
 some table is always in frame: a table you cannot see is a backdrop.
+
+**The table is NOT wood, and that came from measuring it** (2026-09-23). It
+was dark walnut, then pale wood, and the pale wood was sampled off the canvas:
+the board and the table came out at the SAME luminance — 1.08:1 here, and the
+same story in every game in the family. What separated board from table was
+hue and nothing else, which is what "the whole screen is one brown photograph"
+actually is.
+
+So it became a matte pale stone — `TABLE_TONE` at `roughness: 0.95`, with **no
+grain**, because a texture on the table competes with the grid, which is the
+only texture anybody is meant to be reading. Measured after: the board against the table at 1.58:1, and a white stone against the board at 1.62:1 (was 1.27:1). Four
+things go with it and each one is a separate decision:
+
+- **The board went one step DARKER, in LINEAR light rather than in hex digits (×0.72). On a pale table a light board is a lighter patch of the same thing — and the board is also what a white stone sits on, which was the second-weakest pair on the screen.**
+- **The scene background followed the table.** It was near-black, to sit near
+  the table's own darkest tone; on a pale table that is a hole cut in it.
+- **The fill's GROUND colour is the table**, so it went from near-black to a
+  pale bounce, and the warm bounce light with it. Fill is still the enemy of
+  the shadow, but this is not the dark brown room any more.
+- **The key came down a little**, because a pale floor does some of its work.
+
+**Warmth cannot be picked by eye.** Pushing a colour warmer at the same
+numbers also makes it DARKER — green carries 71% of luminance and warming is
+mostly taking green down — so a hand-picked warm hex is a table that is
+quietly warmer AND dimmer, and the gap this was all for comes back in. Fix red
+and blue where the warmth wants them and binary-search green against a target
+luminance. Four warmths were rendered that way and compared; `TABLE_TONE` is
+the second of them.
+
+**Softening a shadow with a blurred shadow map softens the wrong thing.** VSM
+with `shadow.radius = 6` was tried on the chess board: its contact shadow
+washed out to 1.02:1 against the table — gone — while every PIECE's shadow
+spread into a smear two squares wide. A shadow comes down with LIGHT, which
+lifts the inside of it without touching the edge, and the edge does the work.
+
+**Sampling a board of INTERSECTIONS: measure the middle of a cell.** A patch
+centred on a point is centred on two crossing black lines, and reports the
+wood as near-black. That cost a wrong baseline before it was spotted.
 
 **The camera is a long lens, not orthographic.** Orthographic was tried: a
 square board seen from an angle with no near-and-far does not look tilted, it
