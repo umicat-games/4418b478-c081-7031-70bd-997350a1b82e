@@ -62,6 +62,16 @@ export class Menu {
   /** Centred over the whole screen (from the title) rather than parked in the
    *  corner (over a game). */
   private standalone = false;
+  /**
+   * Whether the rest of the settings are showing.
+   *
+   * One or two things decide what game you are about to play — which colour,
+   * here — and those get a row on a panel somebody opened in order to press
+   * Start. Everything else is a preference, and a preference in front of
+   * somebody who wants to play is a question they did not ask. A panel opened
+   * again is the short one again.
+   */
+  private showMore = false;
 
   constructor(initial: MenuChoice, private opts: MenuOptions) {
     this.choice = { ...initial };
@@ -77,6 +87,7 @@ export class Menu {
   toggle(): void { this.el.hidden ? this.show() : this.close(); }
 
   show(): void {
+    this.showMore = false;
     this.el.hidden = false;
     this.draw();
   }
@@ -115,6 +126,18 @@ export class Menu {
       pick: () => { this.choice.side = s.id; this.draw(); },
     }))));
 
+    // A game-level switch, not a preference: it decides whether this game
+    // talks to a language model at all. Off means no calls, no buttons, no
+    // bubble — see `companion` in main.ts.
+    this.el.appendChild(this.group(t('menu.companion'), [
+      { label: t('menu.on'), on: this.choice.companion, pick: () => { this.choice.companion = true; this.opts.onCompanion(true); this.draw(); } },
+      { label: t('menu.off'), on: !this.choice.companion, pick: () => { this.choice.companion = false; this.opts.onCompanion(false); this.draw(); } },
+    ]));
+
+    const more = document.createElement('div');
+    more.className = 'more';
+    more.hidden = !this.showMore;
+
     const levels = this.group(t('menu.opponent'), LEVELS.map((l) => ({
       label: levelLabel(l.id),
       on: l.id === level.id,
@@ -124,15 +147,7 @@ export class Menu {
     about.className = 'about';
     about.textContent = levelAbout(level.id);
     levels.appendChild(about);
-    this.el.appendChild(levels);
-
-    // A game-level switch, not a preference: it decides whether this game
-    // talks to a language model at all. Off means no calls, no buttons, no
-    // bubble — see `companion` in main.ts.
-    this.el.appendChild(this.group(t('menu.companion'), [
-      { label: t('menu.on'), on: this.choice.companion, pick: () => { this.choice.companion = true; this.opts.onCompanion(true); this.draw(); } },
-      { label: t('menu.off'), on: !this.choice.companion, pick: () => { this.choice.companion = false; this.opts.onCompanion(false); this.draw(); } },
-    ]));
+    more.appendChild(levels);
 
     const odds = this.group(t('menu.odds'), ODDS.map((o) => ({
       label: t(o.key),
@@ -143,7 +158,20 @@ export class Menu {
     oddsAbout.className = 'about';
     oddsAbout.textContent = t('menu.oddsAbout');
     odds.appendChild(oddsAbout);
-    this.el.appendChild(odds);
+    more.appendChild(odds);
+
+    if (!this.standalone) more.appendChild(this.group(t('menu.sound'), [
+      { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
+      { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
+      { label: t('menu.eval'), on: this.opts.evalBar(), pick: () => { this.opts.onEval(!this.opts.evalBar()); this.draw(); } },
+    ]));
+
+    const disclose = document.createElement('button');
+    disclose.className = 'more-toggle quiet-link';
+    disclose.textContent = t(this.showMore ? 'menu.less' : 'menu.more');
+    disclose.onclick = () => { this.showMore = !this.showMore; this.draw(); };
+    this.el.appendChild(disclose);
+    this.el.appendChild(more);
 
     const go = document.createElement('button');
     go.className = 'go lift';
@@ -177,11 +205,6 @@ export class Menu {
     //
     // Switches, not sliders. A chess board makes one sound; the useful
     // question is whether it makes it.
-    if (!this.standalone) this.el.appendChild(this.group(t('menu.sound'), [
-      { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
-      { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
-      { label: t('menu.eval'), on: this.opts.evalBar(), pick: () => { this.opts.onEval(!this.opts.evalBar()); this.draw(); } },
-    ]));
 
     const home = document.createElement('button');
     home.className = 'home lift quiet';
