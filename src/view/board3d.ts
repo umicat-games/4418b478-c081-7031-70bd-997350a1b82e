@@ -203,7 +203,18 @@ export class BoardView {
     // exactly where the light does not reach.
     const skin: Record<Side, THREE.MeshStandardMaterial> = {
       white: new THREE.MeshStandardMaterial({ color: 0xe8dcc6, roughness: 0.42, metalness: 0.02 }),
-      black: new THREE.MeshStandardMaterial({ color: 0x35281f, roughness: 0.38, metalness: 0.04 }),
+      /**
+       * Black, and not BROWN.
+       *
+       * These were `0x35281f`, a warm dark brown — a handsome piece colour on
+       * its own and the wrong one here, because the far rank stands above the
+       * board's edge and is read against the table, which is also warm brown.
+       * Measured: 25 against 53, a difference of 28 out of 255, and the
+       * pieces disappeared into the wood. A neutral dark separates by hue as
+       * well as by luminance, which is what makes it hold up on a bright
+       * phone screen outdoors as well as here.
+       */
+      black: new THREE.MeshStandardMaterial({ color: 0x262428, roughness: 0.38, metalness: 0.04 }),
     };
     for (const s of SIDES) {
       for (const k of KINDS) {
@@ -410,7 +421,7 @@ export class BoardView {
       this.ghostKind = kind;
     }
     const mat = this.ghost.material as THREE.MeshStandardMaterial;
-    mat.color.set(side === 'white' ? 0xe8dcc6 : 0x35281f);
+    mat.color.set(side === 'white' ? 0xe8dcc6 : 0x262428);
     const p = this.at(at.x, at.y);
     this.ghost.position.copy(p);
     this.ghost.scale.setScalar(PIECE_SCALE);
@@ -651,11 +662,13 @@ function tableTexture(): THREE.CanvasTexture {
   // 135; the room around it was the dark part, and the game looked dim
   // because two thirds of it was.
   //
-  // Lifted to a mid walnut. Measured after: the table goes 38 -> 51 and the
+  // Lifted twice: first to a mid walnut, then further, because at 47 the
+  // black pieces standing above the far edge of a chess board were still
+  // being read against it. Measured after: the table goes 38 -> 73 and the
   // shadow beside the board goes 20 -> 31, so the difference that makes the
   // board an object sitting on something is unchanged (18 -> 19). The
   // brightness was never paying for the shadow.
-  ctx.fillStyle = '#55402c';
+  ctx.fillStyle = '#6b5238';
   ctx.fillRect(0, 0, px, px);
 
   // Grain: many fine lines along one axis, with slow waves, so the eye reads a
@@ -666,7 +679,7 @@ function tableTexture(): THREE.CanvasTexture {
     const dark = Math.random() < 0.55;
     ctx.strokeStyle = dark
       ? `rgba(26,17,10,${0.10 + Math.random() * 0.16})`
-      : `rgba(140,104,70,${0.05 + Math.random() * 0.10})`;
+      : `rgba(150,114,78,${0.05 + Math.random() * 0.10})`;
     ctx.lineWidth = 0.6 + Math.random() * 2.6;
     ctx.beginPath();
     ctx.moveTo(-10, y);
