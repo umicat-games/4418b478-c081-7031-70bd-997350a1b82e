@@ -500,7 +500,16 @@ async function start(): Promise<void> {
     const edge = view.screenSpacing * 0.6;
     const l = view.screenOf(0, mid), r = view.screenOf(last, mid);
     const t = view.screenOf(mid, 0), b = view.screenOf(mid, last);
-    plates.place({ left: l.x - edge, right: r.x + edge, top: t.y - edge, bottom: b.y + edge });
+    // The edges are the min and the max, never the first and the second: on a
+    // board that can be turned round (chess, when the student has Black)
+    // column 0 is on the RIGHT, and taking it as the left edge puts both
+    // seats inside the board, on top of the pieces.
+    plates.place({
+      left: Math.min(l.x, r.x) - edge,
+      right: Math.max(l.x, r.x) + edge,
+      top: Math.min(t.y, b.y) - edge,
+      bottom: Math.max(t.y, b.y) + edge,
+    });
   }
 
   /** Who is sitting where. The player is on the left, which is the side their
