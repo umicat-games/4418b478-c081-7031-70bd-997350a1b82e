@@ -62,10 +62,13 @@
 
 #title > * { position: relative; z-index: 1; }
 
-/* The wordmark: the subject of the screen, and never wider than the screen. */
+/* The wordmark: the subject of the screen, and never wider than the screen.
+ * 520px read as a small logo lost in the middle of a wide desktop monitor —
+ * the vw share was already tuned for phones, so raising the CAP is what
+ * actually grows it on anything wider than a phone. */
 #title .logo {
   display: none;
-  width: min(520px, 78vw);
+  width: min(760px, 78vw);
   max-height: 32vh;
   object-fit: contain;
   filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.55));
