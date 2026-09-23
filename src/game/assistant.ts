@@ -119,7 +119,16 @@ export function othelloAssistant(hooks: AssistantHooks): AssistantSpec<Context> 
             + 'and moving first; "o" is you, playing White; "." is an empty square.',
           to_play: game.toPlay === BLACK ? 'the student' : 'the engine',
           move_number: game.moves.length,
-          last_move: game.last !== null ? name(game.last) : null,
+          /** The last disc, and WHOSE it was. A bare coordinate leaves the
+           *  model to infer the mover from the turn — and with passes in this
+           *  game that inference is wrong more often than in most. */
+          last_move: game.last !== null
+            ? {
+              at: name(game.last),
+              by: game.at(game.last) === BLACK ? 'the student' : 'you',
+              note: 'Whose move this was is stated here. Never work it out from the position.',
+            }
+            : null,
           empty_squares: game.empties,
           finished: game.over,
         },
