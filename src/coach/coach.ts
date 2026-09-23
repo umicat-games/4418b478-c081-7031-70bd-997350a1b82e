@@ -121,6 +121,17 @@ export class Coach {
   private queued: { text: string; ctx: { game: ChessGame | null; read: Read | null } } | null = null;
   private npc: ReturnType<ThreeUmicat['ai']['npc']>;
   private busy = false;
+
+  /**
+   * Which conversation is on the board.
+   *
+   * A turn is a round trip to a language model, and a player can start a new
+   * game in the middle of one. The answer then arrives about a position that
+   * is no longer there — which is exactly what it looked like: a brand new
+   * board being told "your opponent played e5 and blocked your pawn". The
+   * number is taken when a turn starts and checked when it lands.
+   */
+  private gen = 0;
   /**
    * Called whenever the conversation or its state changed.
    *
@@ -165,17 +176,22 @@ export class Coach {
     opts: { silentIfEmpty?: boolean } = {},
   ): Promise<void> {
     if (this.busy) return;
+    const gen = this.gen;
     this.busy = true;
     this.onChange?.();
     try {
       const res = await this.npc.say(line, { observation: observe(ctx.game, ctx.read, this.profile) });
+      // The game it was about may be over and cleared away by now.
+      if (gen !== this.gen) return;
       this.handle(res, opts);
     } finally {
-      this.busy = false;
-      this.onChange?.();
+      // Only the current conversation owns the flag; a stale turn
+      // clearing it would let two answers run at once.
+      if (gen === this.gen) { this.busy = false; this.onChange?.(); }
     }
     // A question that arrived mid-answer gets its turn now. After `busy` is
     // cleared, so the recursion is one deep and not a chain of stacked awaits.
+    if (gen !== this.gen) return;
     const next = this.queued;
     this.queued = null;
     if (next) await this.turn(next.text, next.ctx);
@@ -377,6 +393,13 @@ export class Coach {
      * from the copy, behind it.
      */
     const past = this.messages.slice();
+    // Everything in flight belonged to the game that just ended: it must not
+    // speak into this one, and it must not keep holding the turn — a dropped
+    // greeting is how a new game opened with the last game's post-mortem and
+    // nothing else.
+    this.gen++;
+    this.busy = false;
+    this.queued = null;
     this.npc.reset();
     this.messages.length = 0;
     if (past.length) await this.summarise(past);
