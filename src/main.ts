@@ -473,9 +473,8 @@ async function start(): Promise<void> {
         colour: HUMAN === RED ? 'black' : 'white',
         // How hard it is playing belongs to the opponent, not to a suffix on
         // "your move" in the player's own corner.
-        meta: thinking
-          ? t('plate.thinking')
-          : `${levelLabel(level.id)} · ${t('plate.taken', { n: game.captured[HUMAN === RED ? BLACK : RED].length })}`,
+        meta: `${levelLabel(level.id)} · ${t('plate.taken', { n: game.captured[HUMAN === RED ? BLACK : RED].length })}`,
+        thinking,
         active: !game.over && !yours,
       },
     );
