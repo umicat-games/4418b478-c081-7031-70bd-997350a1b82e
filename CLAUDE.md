@@ -311,6 +311,26 @@ seconds of grace — they are the one with time to notice, but they are reading
 a stamp written by a machine whose idea of "now" is not the same, and a claim
 that fires a second early takes a game off somebody who was still moving.
 
+**Saying something about a point is ONE act, whoever is listening.** The tap,
+the message button beside the point, the composer that opens there — all of it
+is the same flow as asking the assistant; at a table the sentence goes to the
+other player instead. The point travels as the `[H8]` marker the assistant
+already uses to aim its own sentences, so the chat relay only ever carries
+text and `segment()` at the far end already knows how to read it. Both sides
+see it on the board, in that place, with the sender's name on the box — and
+the box's reply field answers the person, in the same place, because a
+conversation about a point belongs at the point.
+
+**A line with no point in it stands over the head of whoever said it**, one at
+a time, and only while the log is closed (the seats hide when the panel
+opens). That is a glance, not a log: a stack of them is a second panel growing
+out of somebody's head, and whatever it pushes up is the part you had already
+read.
+
+**The "play here" shortcut belongs to the assistant's sentences only.** An
+opponent saying "this corner is yours" is not offering you a button, and one
+that appears under their words reads as the game taking their side.
+
 **Leaving loses, but not for fifteen seconds.** The rule is that quitting
 costs you the game (that is what will make a ranking worth having). A phone in
 a tunnel, a closed laptop lid and iOS suspending a backgrounded WebView all

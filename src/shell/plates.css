@@ -35,21 +35,34 @@ body.titling #plates { display: none; }
 }
 #plates .seat[hidden] { display: none; }
 
+/* Line one: the face, the colour, the name. Line two: everything else.
+   The face is one line tall — a picture as tall as two lines of text turns a
+   seat into a card, and a card out here is a panel. */
 #plates .row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 9px;
+  min-width: 0;
+}
+#plates .under {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 3px;
+  /* Indented to the name above it, so the two lines read as one block. */
+  padding-left: 43px;
 }
 /* The right-hand player faces the other way: picture outside, words inward. */
-#plates .seat.right .row { flex-direction: row-reverse; text-align: right; }
+#plates .seat.right .row { flex-direction: row-reverse; }
+#plates .seat.right .under { flex-direction: row-reverse; padding-left: 0; padding-right: 43px; }
 
 /* ── the face ─────────────────────────────────────────────────────────── */
 
 #plates .face {
   position: relative;
   flex: none;
-  width: 72px;
-  height: 72px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: rgba(18, 21, 28, 0.55);
   box-shadow:
@@ -68,12 +81,12 @@ body.titling #plates { display: none; }
 /* No avatar: the initial, or a shape. A broken-image icon in a nameplate is
    worse than no picture at all. */
 #plates .face .letter {
-  font: 700 28px/1 system-ui, sans-serif;
+  font: 700 15px/1 system-ui, sans-serif;
   color: #e8e4dc;
   opacity: .85;
 }
 #plates .face svg {
-  width: 34px; height: 34px;
+  width: 18px; height: 18px;
   fill: none; stroke: #e8e4dc; stroke-width: 1.7;
   stroke-linecap: round; stroke-linejoin: round;
   opacity: .8;
@@ -84,20 +97,11 @@ body.titling #plates { display: none; }
 #plates .seat.active .face {
   box-shadow:
     0 3px 14px rgba(0, 0, 0, .5),
-    0 0 0 3px rgba(127, 214, 194, .85),
-    0 0 20px rgba(127, 214, 194, .32);
+    0 0 0 2.5px rgba(127, 214, 194, .9),
+    0 0 16px rgba(127, 214, 194, .35);
 }
 
 /* ── the words ────────────────────────────────────────────────────────── */
-
-#plates .text { min-width: 0; }
-
-#plates .line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-#plates .seat.right .line { flex-direction: row-reverse; }
 
 #plates .name {
   font-weight: 650;
@@ -110,7 +114,6 @@ body.titling #plates { display: none; }
   text-overflow: ellipsis;
 }
 #plates .meta {
-  margin-top: 3px;
   font-size: 14px;
   font-weight: 500;
   opacity: .74;
@@ -122,6 +125,7 @@ body.titling #plates { display: none; }
      level with each other and nothing jumps when a number appears. */
   min-height: 19px;
 }
+#plates .meta:empty { min-width: 0; }
 
 /* ── the stone ────────────────────────────────────────────────────────── */
 
@@ -130,8 +134,8 @@ body.titling #plates { display: none; }
    board's own — the light comes from the top left out there too. */
 #plates .stone {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   /* The light ring is not decoration: a BLACK stone against dark wood is one
      dark circle on another, and the badge that was supposed to say "you are
@@ -152,8 +156,7 @@ body.titling #plates { display: none; }
 /* ── the clock ────────────────────────────────────────────────────────── */
 
 #plates .clock {
-  margin-top: 2px;
-  font: 600 17px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 600 16px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums; /* or the seat twitches once a second */
   text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
   opacity: .92;
@@ -208,18 +211,16 @@ body.titling #plates { display: none; }
    and lost the words instead, which on a 1000px window read "PW Te…" and
    "Steady · 0 ca…". A column fits a narrow gap because that is the shape of a
    narrow gap. Below this the seats leave entirely. */
-#plates.tight .seat { width: 136px; }
-#plates.tight .row {
-  flex-direction: column;
-  gap: 7px;
-  text-align: center;
-}
-#plates.tight .seat.right .row { flex-direction: column; text-align: center; }
+#plates.tight .seat { width: 150px; text-align: center; }
+#plates.tight .row { justify-content: center; gap: 7px; }
+#plates.tight .seat.right .row { flex-direction: row; }
+#plates.tight .under { justify-content: center; padding: 0; }
+#plates.tight .seat.right .under { flex-direction: row; padding: 0; }
 #plates.tight .bubbles, #plates.tight .seat.right .bubbles { align-items: center; }
 #plates.tight .bubble { font-size: 12.5px; padding: 6px 10px; text-align: center; }
-#plates.tight .face { width: 54px; height: 54px; }
-#plates.tight .face .letter { font-size: 22px; }
-#plates.tight .face svg { width: 26px; height: 26px; }
+#plates.tight .face { width: 28px; height: 28px; }
+#plates.tight .face .letter { font-size: 13px; }
+#plates.tight .face svg { width: 16px; height: 16px; }
 #plates.tight .name { font-size: 15px; }
 #plates.tight .clock { font-size: 15px; }
 #plates.tight .stone { width: 16px; height: 16px; }

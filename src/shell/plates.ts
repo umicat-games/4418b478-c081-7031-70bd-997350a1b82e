@@ -20,6 +20,7 @@
 //     panel takes the right-hand side, and when the board grows to fill a
 //     small screen. One seat on its own reads as a bug, not as a design.
 import './plates.css';
+import { stripAnchors } from './speech';
 
 const PERSON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/>'
   + '<path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg>';
@@ -61,8 +62,14 @@ const GAP = 26;
 const MIN_EDGE = 10;
 const FULL = 224;
 const TIGHT = 136;
-/** How many of a player's lines stay up, and for how long. */
-const MAX_BUBBLES = 4;
+/**
+ * How much of what they said stands over a seat, and for how long.
+ *
+ * One line: this is the glance you get when the log is closed, not the log.
+ * A stack of four was a second panel growing out of somebody's head, and
+ * whatever it pushed up was the part you had already read.
+ */
+const MAX_BUBBLES = 1;
 const BUBBLE_MS = 11_000;
 
 export class Plates {
@@ -78,15 +85,19 @@ export class Plates {
       // The bubbles hang ABOVE the row and are positioned out of the flow, so
       // a burst of chat never moves the face and the name the player is
       // looking at. Messages rise; the seat stays put.
+      // Two lines, and the face belongs to the FIRST one rather than standing
+      // beside both: a seat is a name with a picture on it, and a picture as
+      // tall as two lines of text makes the whole thing a card.
       .map((side) => `<div class="seat ${side}">
         <div class="bubbles"></div>
         <div class="row">
           <div class="face"><span class="letter"></span></div>
-          <div class="text">
-            <div class="line"><i class="stone"></i><span class="name"></span></div>
-            <div class="meta"></div>
-            <div class="clock"></div>
-          </div>
+          <i class="stone"></i>
+          <span class="name"></span>
+        </div>
+        <div class="under">
+          <span class="meta"></span>
+          <span class="clock"></span>
         </div>
       </div>`)
       .join('');
@@ -172,7 +183,7 @@ export class Plates {
    * panel in the corner is the log.
    */
   bubble(side: 'left' | 'right', text: string): void {
-    const line = text.trim();
+    const line = stripAnchors(text).trim();
     if (!line) return;
     const stack = this.seats[side].querySelector('.bubbles') as HTMLElement;
     const b = document.createElement('div');

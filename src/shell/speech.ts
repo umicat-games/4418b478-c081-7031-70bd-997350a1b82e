@@ -158,6 +158,26 @@ export class Speech {
    *  on a bigger board "H8" is a different place. */
   notation: Notation = { parse: () => null, format: () => '' };
 
+  /**
+   * Whose voice this is.
+   *
+   * `null` is the assistant, which is what this box was built for. A name is
+   * the other player: at a table the same box carries what THEY said about a
+   * point, because pointing at a place and saying something about it is the
+   * same act whoever is doing it — and a box labelled "assistant" over another
+   * person's words is the game lying about who is talking.
+   */
+  private speakerName: string | null = null;
+  get speaker(): string | null { return this.speakerName; }
+  set speaker(name: string | null) {
+    if (this.speakerName === name) return;
+    this.speakerName = name;
+    // Written through `relabel()` rather than left for the next `show()`:
+    // the label is only painted when the box is (re)built, so assigning the
+    // name and expecting it to appear is a field that silently does nothing.
+    this.relabel();
+  }
+
   private el: HTMLDivElement;
   private textEl: HTMLDivElement;
   private moreEl: HTMLSpanElement;
@@ -247,9 +267,13 @@ export class Speech {
   }
 
   relabel(): void {
-    this.el.querySelector('.who')!.textContent = t('chat.coach');
+    this.el.querySelector('.who')!.textContent = this.speakerName ?? t('chat.coach');
     this.input.placeholder = t('speech.reply');
   }
+
+  /** The point the page on screen is about, if it names one — which is where
+   *  a reply to it belongs. */
+  get at(): { x: number; y: number } | null { return this.pages[this.index]?.at ?? null; }
 
   get showing(): boolean { return !this.el.hidden; }
   get current(): Segment | null { return this.showing ? this.pages[this.index] ?? null : null; }

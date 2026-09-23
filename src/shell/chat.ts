@@ -159,11 +159,13 @@ export class ChatPanel {
 
     const last = [...messages].reverse().find((m) => m.from === 'coach');
     if (this.peer) {
-      this.pillText.textContent = last ? last.text : t('chat.nobodySaid');
+      // The `[H8]` marker aims the bubble on the board; read as prose it is
+      // noise, the same way it is for the assistant's own lines.
+      this.pillText.textContent = last ? stripAnchors(last.text) : t('chat.nobodySaid');
       this.log.replaceChildren(...messages.map((m) => {
         const div = document.createElement('div');
         div.className = `msg ${m.from}`;
-        div.textContent = m.text;
+        div.textContent = stripAnchors(m.text);
         return div;
       }));
       if (this.open) this.scrollToEnd();

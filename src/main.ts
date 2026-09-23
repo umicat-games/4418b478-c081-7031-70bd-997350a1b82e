@@ -121,11 +121,22 @@ async function start(): Promise<void> {
     // It names cells it is NOT suggesting — where White would answer, where
     // the threat runs — so the offer to play one appears only where a stone
     // could actually go, this turn.
-    canPlay: (at) => !!game && !game.over && !thinking && game.toPlay === me && game.legal(game.idx(at.x, at.y)),
+    // The shortcut to play the point a sentence is about. It belongs to the
+    // ASSISTANT's sentences — an opponent saying "this corner is yours" is
+    // not offering you a button, and one that appears under their words reads
+    // as the game taking their side.
+    canPlay: (at) => !table && !!game && !game.over && !thinking
+      && game.toPlay === me && game.legal(game.idx(at.x, at.y)),
     onPlay: (at) => commit(at),
     // Answering from the box the answer arrived in, rather than opening the
-    // log to type.
-    onReply: (text) => void talk(text),
+    // log to type. At a table it answers the person, in the place they were
+    // pointing at — the conversation stays where it is about.
+    onReply: (text) => {
+      if (!table) { void talk(text); return; }
+      const at = speech.at ?? saidAbout;
+      if (at) sayAt(speech.notation.format(at), text);
+      else void table.say(text);
+    },
   });
   speech.notation = notation(15);
 
@@ -139,11 +150,29 @@ async function start(): Promise<void> {
     onAsk: (at) => askAbout(at),
   });
 
-  /** And the question itself, in the same place. */
+  /**
+   * And the question itself, in the same place.
+   *
+   * At a table the same box sends the same sentence to the other PLAYER
+   * instead of to the assistant. Pointing at a place and saying something
+   * about it is one act; who is on the other end of it is not the player's
+   * problem, and it should not be two different buttons.
+   */
   const askHere = new AskHere(umicat, {
-    onAsk: (point, text) => void talk(`${point}: ${text}`),
+    onAsk: (point, text) => {
+      if (!table) { void talk(`${point}: ${text}`); return; }
+      // Sent, and gone. Against the assistant the box stays up with its dots
+      // running because an answer is coming; the other player is under no
+      // such obligation, and a composer left open is a composer sitting on
+      // top of whatever they say back.
+      sayAt(point, text);
+      askHere.hide();
+    },
     onCancel: () => rig.setFocus(null),
   });
+
+  /** Is there anyone to say something TO? An assistant, or an opponent. */
+  const canTalk = (): boolean => companion || !!table;
 
   const audio = createAudio();
   // Fetch and decode ahead of the first gesture. Without it the very first
@@ -279,6 +308,8 @@ async function start(): Promise<void> {
   let gen = -1;
   /** What the waiting screen is currently saying, or null when it is down. */
   let waitingNote: string | null = null;
+  /** The point the last thing said at this table was about. */
+  let saidAbout: Point | null = null;
   /** The result on the card, and whether it was drawn for somebody sitting
    *  alone — because "play again" stops being true the moment they get up. */
   let lastResult: { title: string; body: string; tone: 'win' | 'loss' | 'draw' } | null = null;
@@ -376,7 +407,7 @@ async function start(): Promise<void> {
       // speech bubble behind that card is the assistant addressing a screen
       // the player cannot see.
       if (over.showing) over.note(stripAnchors(latest));
-      else speech.show(segment(latest, speech.notation));
+      else { speech.speaker = null; speech.show(segment(latest, speech.notation)); }
     }
   };
 
@@ -810,7 +841,7 @@ async function start(): Promise<void> {
       chosen = at;
       rig.setSelection(at);
       board.setGhost(at, me);
-      actions.show(at, { confirm: true, cancel: true, ask: companion });
+      actions.show(at, { confirm: true, cancel: true, ask: canTalk() });
       placeActions();
       return;
     }
@@ -818,7 +849,7 @@ async function start(): Promise<void> {
     // An occupied point, or not your turn. Nothing to place; still worth
     // asking about.
     clearMarks();
-    if (companion) {
+    if (canTalk()) {
       rig.setFocus(at);
       actions.show(at, { ask: true });
       placeActions();
@@ -1015,9 +1046,26 @@ async function start(): Promise<void> {
     tbl.onChat((m) => {
       if (m.kind !== 'user') return;
       const mine = m.from === tbl.sid;
-      plates.bubble(mine ? 'left' : 'right', m.text);
       netChat.push({ from: mine ? 'player' : 'coach', text: m.text, at: m.ts });
       redrawChat();
+
+      // Two kinds of thing to say, and they belong in two different places.
+      //
+      // Something said ABOUT A POINT goes on the board, at that point, for
+      // both of them — it is the same box the assistant uses, because
+      // pointing at a place and saying something about it is one act whoever
+      // is doing it. Anything else is just talk, and talk stands over the
+      // head of whoever said it.
+      const spot = anchorOf(m.text);
+      if (spot) {
+        saidAbout = spot.at;
+        askHere.hide();
+        rig.setFocus(spot.at);
+        speech.speaker = mine ? t('plate.you') : (tbl.who(tbl.them)?.name ?? t('plate.them'));
+        speech.show(segment(m.text, speech.notation));
+        return;
+      }
+      plates.bubble(mine ? 'left' : 'right', m.text);
     });
     tbl.onOffer((kind) => {
       if (!table) return;
@@ -1292,6 +1340,8 @@ async function start(): Promise<void> {
     me = BLACK;
     game = null;
     plates.hush();
+    speech.speaker = null;
+    saidAbout = null;
     chat.setPeer(null);
     evalBar.setEnabled(coach.profile.evalBar !== false);
     if (note) console.info('[net]', note);
@@ -1344,6 +1394,27 @@ async function start(): Promise<void> {
 
   /** How long a silent opponent has before it counts as leaving. */
   const LEAVE_GRACE_MS = 15_000;
+
+  /**
+   * Say something about a point, to the person opposite.
+   *
+   * The point rides in the text as the same `[H8]` marker the assistant uses
+   * to aim its own sentences — one convention, already understood by
+   * `segment()` at the other end, and a chat relay that only carries text
+   * does not have to learn a second shape.
+   */
+  function sayAt(point: string, text: string): void {
+    const said = text.trim();
+    if (!table || !said) return;
+    void table.say(`[${point}] ${said}`);
+  }
+
+  /** Does this message point at a place on THIS board? */
+  function anchorOf(text: string): { at: Point } | null {
+    const m = /^\s*\[([^\]]{1,6})\]/.exec(text);
+    const at = m ? speech.notation.parse(m[1]) : null;
+    return at ? { at } : null;
+  }
 
   /** A line in the log that nobody said — an answer to an offer. */
   function say(text: string): void {
