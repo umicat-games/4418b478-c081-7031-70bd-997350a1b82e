@@ -505,9 +505,11 @@ async function start(): Promise<void> {
       {
         name: t('plate.engine'),
         colour: theirs,
-        meta: thinking
-          ? t('plate.thinking')
-          : levelLabel(level.id) + ' · ' + t('plate.taken', { n: taken[theirs].length }),
+        meta: levelLabel(level.id) + ' · ' + t('plate.taken', { n: taken[theirs].length }),
+        // The dots go BESIDE what the seat already says rather than replacing
+        // it: "thinking" is a state, and a state that erases the level and
+        // the count is a seat that flickers between two different sentences.
+        thinking,
         active: !game.over && !yours,
       },
     );
