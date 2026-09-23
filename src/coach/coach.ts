@@ -344,7 +344,16 @@ function observe(ctx: Context, profile: Profile): unknown {
       student_plays: 'red',
       to_play: game.toPlay === RED ? 'red' : 'black',
       move_number: game.moves.length,
-      last_move: last ? `${toIccs(fileOf(last.from), rankOf(last.from))}${toIccs(fileOf(last.to), rankOf(last.to))}` : null,
+      /** The last move, and WHOSE it was — see the note. A coordinate pair
+       *  alone leaves the model to work out whose turn it was, and it gets
+       *  that backwards in exactly the place it matters. */
+      last_move: last
+        ? {
+          move: `${toIccs(fileOf(last.from), rankOf(last.from))}${toIccs(fileOf(last.to), rankOf(last.to))}`,
+          by: game.toPlay === RED ? 'the opponent' : 'the student',
+          note: 'Whose move this was is stated here. Never work it out from the position.',
+        }
+        : null,
       in_check: game.position.inCheck() ? (game.toPlay === RED ? 'red is in check' : 'black is in check') : null,
       // Looked up, never guessed — see `openings.ts`. Null means the book does
       // not know this one, and saying nothing is then the honest answer.
