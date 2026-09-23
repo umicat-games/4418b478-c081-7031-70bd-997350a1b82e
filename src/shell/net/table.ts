@@ -20,6 +20,7 @@
 // resignation, a flag, an opponent who left — and it is marked where it
 // happens.
 import type { UmicatRoom, ChatMessage } from '@umicat/platform-sdk';
+import type { TimeControl } from './clock';
 
 /** Seats, in move order. Seat 0 moves first. */
 export type SeatNo = 0 | 1;
@@ -39,6 +40,16 @@ export interface Snapshot {
   clock: [number, number];
   /** `Date.now()` on the machine that wrote it, when the current turn began. */
   at: number;
+  /**
+   * The time control, written once by whoever opened the table.
+   *
+   * It rides in the snapshot rather than being a constant on both sides
+   * because the table-maker CHOOSES it: two clients each using their own
+   * default would each be right about a different game.
+   */
+  tc?: TimeControl;
+  /** Byo-yomi periods left, per seat. Absent when the control has none. */
+  periods?: [number, number];
   end?: { kind: EndKind; by?: SeatNo };
 }
 

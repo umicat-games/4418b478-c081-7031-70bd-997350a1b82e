@@ -16,9 +16,18 @@ import type { UmicatRoom, RoomListEntry } from '@umicat/platform-sdk';
 import type { ThreeUmicat } from '@umicat/three-sdk';
 import { t } from '../i18n';
 import { KEY, Table, roomCode } from './net/table';
+import type { Preset, TimeControl } from './net/clock';
 
-/** How the lobby ends. `back` is the title screen again. */
-export type LobbyResult = { kind: 'table'; table: Table } | { kind: 'back' };
+/**
+ * How the lobby ends.
+ *
+ * `tc` is the clock the table-MAKER chose; a player joining somebody else's
+ * table gets theirs from the first snapshot instead, because the table-maker
+ * is the one who decides and two defaults would be two different games.
+ */
+export type LobbyResult =
+  | { kind: 'table'; table: Table; tc: TimeControl }
+  | { kind: 'back' };
 
 type Done = (r: LobbyResult) => void;
 
@@ -34,8 +43,14 @@ function playersOf(room: UmicatRoom<unknown>): string[] {
   return out;
 }
 
-export function showLobby(umicat: ThreeUmicat): Promise<LobbyResult> {
-  return new Promise<LobbyResult>((done) => { menu(umicat, done); });
+/** `presets` are the game's own clocks, in the order they are offered; the
+ *  middle one is the default. Go wants byo-yomi, a five-in-a-row game wants an
+ *  increment, and neither of those is the shell's business to know. */
+export function showLobby(umicat: ThreeUmicat, presets: Preset[] = []): Promise<LobbyResult> {
+  // Defaulted rather than required, because the one place this is called from
+  // is a click handler — and a click handler that throws does so silently,
+  // leaving a button that simply does nothing. That cost a debugging round.
+  return new Promise<LobbyResult>((done) => { menu(umicat, presets ?? [], done); });
 }
 
 // ── the screen ─────────────────────────────────────────────────────────────
@@ -89,7 +104,7 @@ function stack(...kids: HTMLElement[]): HTMLDivElement {
 
 // ── the four doors ─────────────────────────────────────────────────────────
 
-function menu(umicat: ThreeUmicat, done: Done): void {
+function menu(umicat: ThreeUmicat, presets: Preset[], done: Done): void {
   const s = screen();
   s.title.textContent = t('lobby.title');
 
@@ -110,15 +125,38 @@ function menu(umicat: ThreeUmicat, done: Done): void {
   s.body.append(stack(create, join, browse, quick, back));
   s.say(t('lobby.hint'));
 
-  create.onclick = () => void host(umicat, done);
-  join.onclick = () => byCode(umicat, done);
-  browse.onclick = () => void openTables(umicat, done);
-  quick.onclick = () => void quickMatch(umicat, done);
+  create.onclick = () => pickClock(umicat, presets, done);
+  join.onclick = () => byCode(umicat, presets, done);
+  browse.onclick = () => void openTables(umicat, presets, done);
+  quick.onclick = () => void quickMatch(umicat, presets, done);
   back.onclick = () => { s.close(); done({ kind: 'back' }); };
 }
 
+/**
+ * Which clock, before there is a table to put it on.
+ *
+ * Asked only of the person MAKING the table: whoever joins is joining a game
+ * that already has a shape, and being asked to choose one they cannot choose
+ * is worse than not being asked.
+ */
+function pickClock(umicat: ThreeUmicat, presets: Preset[], done: Done): void {
+  if (!presets || presets.length <= 1) { void host(umicat, presets?.[0]?.tc, presets ?? [], done); return; }
+  const s = screen();
+  s.title.textContent = t('lobby.howLong');
+  const buttons = presets.map((p, i) => {
+    const b = button(p.label, i === Math.floor(presets.length / 2));
+    b.onclick = () => void host(umicat, p.tc, presets, done);
+    return b;
+  });
+  const back = button(t('lobby.back'));
+  back.className = 'quiet-link';
+  back.onclick = () => menu(umicat, presets, done);
+  s.body.append(stack(...buttons, back));
+  s.say(t('lobby.clockHint'));
+}
+
 /** Make a table and wait beside it, with the code on screen. */
-async function host(umicat: ThreeUmicat, done: Done): Promise<void> {
+async function host(umicat: ThreeUmicat, tc: TimeControl | undefined, presets: Preset[], done: Done): Promise<void> {
   const s = screen();
   s.title.textContent = t('lobby.creating');
   s.say(t('lobby.oneMoment'));
@@ -129,14 +167,14 @@ async function host(umicat: ThreeUmicat, done: Done): Promise<void> {
       maxClients: 2,
       displayName: umicat.user?.name || t('plate.you'),
     });
-    await waitingRoom(umicat, room, code, true, done);
+    await waitingRoom(umicat, room, code, true, tc, presets, done);
   } catch (err) {
-    fail(s, umicat, done, err);
+    fail(s, umicat, presets, done, err);
   }
 }
 
 /** Somebody read you a code. */
-function byCode(umicat: ThreeUmicat, done: Done): void {
+function byCode(umicat: ThreeUmicat, presets: Preset[], done: Done): void {
   const s = screen();
   s.title.textContent = t('lobby.enterCode');
   const input = document.createElement('input');
@@ -163,7 +201,7 @@ function byCode(umicat: ThreeUmicat, done: Done): void {
         roomCode: code,
         displayName: umicat.user?.name || t('plate.you'),
       });
-      await waitingRoom(umicat, room, code, false, done);
+      await waitingRoom(umicat, room, code, false, undefined, presets, done);
     } catch {
       go.disabled = false;
       s.say(t('lobby.noSuchRoom'), true);
@@ -171,11 +209,11 @@ function byCode(umicat: ThreeUmicat, done: Done): void {
   };
   go.onclick = () => void attempt();
   input.onkeydown = (e) => { if (e.key === 'Enter') void attempt(); };
-  back.onclick = () => menu(umicat, done);
+  back.onclick = () => menu(umicat, presets, done);
 }
 
 /** What is open right now. */
-async function openTables(umicat: ThreeUmicat, done: Done): Promise<void> {
+async function openTables(umicat: ThreeUmicat, presets: Preset[], done: Done): Promise<void> {
   const s = screen();
   s.title.textContent = t('lobby.open');
   const list = document.createElement('div');
@@ -184,7 +222,7 @@ async function openTables(umicat: ThreeUmicat, done: Done): Promise<void> {
   const back = button(t('lobby.back'));
   back.className = 'quiet-link';
   s.body.append(stack(list, again, back));
-  back.onclick = () => menu(umicat, done);
+  back.onclick = () => menu(umicat, presets, done);
 
   const load = async (): Promise<void> => {
     s.say(t('lobby.looking'));
@@ -210,7 +248,7 @@ async function openTables(umicat: ThreeUmicat, done: Done): Promise<void> {
       seats.className = 'seats';
       seats.textContent = `${r.clients}/${Math.max(2, r.maxClients)}`;
       row.append(who, seats);
-      row.onclick = () => void enter(umicat, r, done);
+      row.onclick = () => void enter(umicat, r, presets, done);
       list.appendChild(row);
     }
   };
@@ -218,21 +256,21 @@ async function openTables(umicat: ThreeUmicat, done: Done): Promise<void> {
   await load();
 }
 
-async function enter(umicat: ThreeUmicat, entry: RoomListEntry, done: Done): Promise<void> {
+async function enter(umicat: ThreeUmicat, entry: RoomListEntry, presets: Preset[], done: Done): Promise<void> {
   const s = screen();
   s.title.textContent = t('lobby.joining');
   try {
     const room = await umicat.rooms.joinById<unknown>(entry.roomId, {
       displayName: umicat.user?.name || t('plate.you'),
     });
-    await waitingRoom(umicat, room, entry.roomCode, false, done);
+    await waitingRoom(umicat, room, entry.roomCode, false, undefined, presets, done);
   } catch (err) {
-    fail(s, umicat, done, err);
+    fail(s, umicat, presets, done, err);
   }
 }
 
 /** Put me anywhere. Joins whatever public table has a seat, or opens one. */
-async function quickMatch(umicat: ThreeUmicat, done: Done): Promise<void> {
+async function quickMatch(umicat: ThreeUmicat, presets: Preset[], done: Done): Promise<void> {
   const s = screen();
   s.title.textContent = t('lobby.quick');
   s.say(t('lobby.looking'));
@@ -243,18 +281,18 @@ async function quickMatch(umicat: ThreeUmicat, done: Done): Promise<void> {
       maxClients: 2,
       displayName: umicat.user?.name || t('plate.you'),
     });
-    await waitingRoom(umicat, room, '', false, done);
+    await waitingRoom(umicat, room, '', false, presets[Math.floor(presets.length / 2)]?.tc, presets, done);
   } catch (err) {
-    fail(s, umicat, done, err);
+    fail(s, umicat, presets, done, err);
   }
 }
 
-function fail(s: Screen, umicat: ThreeUmicat, done: Done, err: unknown): void {
+function fail(s: Screen, umicat: ThreeUmicat, presets: Preset[], done: Done, err: unknown): void {
   console.warn('[lobby]', err);
   s.say(t('lobby.failed'), true);
   const back = button(t('lobby.back'), true);
   s.body.replaceChildren(stack(back));
-  back.onclick = () => menu(umicat, done);
+  back.onclick = () => menu(umicat, presets, done);
 }
 
 // ── the waiting room ───────────────────────────────────────────────────────
@@ -271,6 +309,8 @@ async function waitingRoom(
   room: UmicatRoom<unknown>,
   code: string,
   hosting: boolean,
+  tc: TimeControl | undefined,
+  presets: Preset[],
   done: Done,
 ): Promise<void> {
   const s = screen();
@@ -303,7 +343,7 @@ async function waitingRoom(
     settled = true;
     off();
     s.close();
-    done({ kind: 'table', table });
+    done({ kind: 'table', table, tc: tc ?? presets[Math.floor(presets.length / 2)]?.tc ?? { mainMs: 600_000, incrementMs: 5_000 } });
   };
 
   const look = (): void => {
@@ -328,7 +368,7 @@ async function waitingRoom(
     settled = true;
     off();
     void room.leave();
-    menu(umicat, done);
+    menu(umicat, presets, done);
   };
 
   // And once now, in case the state arrived before the handler did.

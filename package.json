@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "verify": "node tools/rules-test.mjs",
+    "verify": "node tools/rules-test.mjs && node tools/clock-test.mjs",
     "typecheck": "tsc --noEmit",
     "bench": "node tools/bench.mjs"
   },

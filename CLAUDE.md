@@ -266,7 +266,15 @@ rather than obeyed.
 **Nothing ever sends a clock tick.** The snapshot says what each side had left
 when `at` was stamped, and the side to move has been spending since; a running
 clock would be sixty messages a minute saying what arithmetic already knows.
-Ten minutes each plus five seconds a move (`CLOCK`).
+
+**The table-maker chooses the clock, and the game supplies the choices.**
+`CLOCKS` in `main.ts` is this game's three (3+2, 10+5, 20+15); the control
+rides in the snapshot, so whoever joins plays the same game rather than their
+own default. `net/clock.ts` knows two shapes: an INCREMENT, which is a budget,
+and BYO-YOMI, which is permission — a period RESETS if you move inside it, so
+a Go game ends when somebody can no longer think for thirty seconds rather
+than when they have thought for ten minutes. Go is the reason byo-yomi is
+there; it is tested (`npm run verify`) and waiting for Go to get a table.
 
 **The flag is claimed by the player who is NOT on the clock**, with two
 seconds of grace — they are the one with time to notice, but they are reading

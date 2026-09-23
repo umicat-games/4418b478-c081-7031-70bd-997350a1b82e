@@ -34,7 +34,7 @@ import { underCurtain } from './shell/curtain';
 import { BLACK, Gomoku, SIZES, WHITE, type BoardSize, type Player, type Point } from './game/rules';
 import { showLobby } from './shell/lobby';
 import { Table, type SeatNo, type Snapshot } from './shell/net/table';
-import { CLOCK, LOW_MS, afterMove, flagged, fmt, freshClock, left } from './shell/net/clock';
+import { afterMove, controlOf, flagged, freshClock, left, low, show, type Preset, type TimeControl } from './shell/net/clock';
 import { notation } from './game/coords';
 import { Board } from './game/board';
 import { LEVELS, Opponent, levelAbout, levelById, levelLabel, type Read } from './game/opponent';
@@ -237,6 +237,23 @@ async function start(): Promise<void> {
    *  the assistant; this holds one with the other player, and the two never
    *  mix — an online game has no assistant at all. */
   const netChat: ChatMessage[] = [];
+
+  /**
+   * The clocks this game offers; the middle one is the default.
+   *
+   * An INCREMENT rather than byo-yomi, because five-in-a-row is a game of
+   * short decisions and an increment is a budget for the two or three moves
+   * that actually need thinking about. Go is the one that wants periods, and
+   * `net/clock.ts` has them ready for when it gets a table of its own.
+   */
+  const CLOCKS: Preset[] = [
+    { id: 'blitz', label: t('clock.blitz'), tc: { mainMs: 3 * 60_000, incrementMs: 2_000 } },
+    { id: 'normal', label: t('clock.normal'), tc: { mainMs: 10 * 60_000, incrementMs: 5_000 } },
+    { id: 'slow', label: t('clock.slow'), tc: { mainMs: 20 * 60_000, incrementMs: 15_000 } },
+  ];
+  /** The clock this table is playing with — the maker's choice, or whatever
+   *  the first snapshot says when somebody else made it. */
+  let timeControl: TimeControl = CLOCKS[1].tc;
 
   /**
    * The table, when the opponent is a person.
@@ -506,8 +523,8 @@ async function start(): Promise<void> {
     const now = Date.now();
     const clockOf = (seat: SeatNo): { clock?: string; low?: boolean } => {
       if (!table || !snapshot) return {};
-      const ms = left(snapshot, seat, game!.toPlay === me ? table.seat : table.them, now);
-      return { clock: fmt(ms), low: !game!.over && ms <= LOW_MS };
+      const l = left(snapshot, seat, game!.toPlay === me ? table.seat : table.them, now);
+      return { clock: show(l), low: !game!.over && low(l) };
     };
     plates.set(
       {
@@ -953,8 +970,9 @@ async function start(): Promise<void> {
    * would each write a different `at`, and the clocks would disagree from the
    * first second.
    */
-  function startOnline(tbl: Table): void {
+  function startOnline(tbl: Table, tc: TimeControl = timeControl): void {
     table = tbl;
+    timeControl = tc;
     me = tbl.seat === 0 ? BLACK : WHITE;
     // No assistant, no eval bar, no hint. See the comment on `table`.
     setCompanion(false);
@@ -1011,7 +1029,7 @@ async function start(): Promise<void> {
     });
 
     if (tbl.seat === 0) {
-      snapshot = { moves: [], ...freshClock(Date.now()) };
+      snapshot = { moves: [], ...freshClock(Date.now(), timeControl) };
       tbl.publish(snapshot);
     } else {
       applyRemote();
@@ -1035,7 +1053,7 @@ async function start(): Promise<void> {
     // Whoever now has Black owns the opening snapshot, for the same reason as
     // at the start: one writer, one stamp.
     if (me === BLACK) {
-      snapshot = { moves: [], ...freshClock(Date.now()) };
+      snapshot = { moves: [], ...freshClock(Date.now(), controlOf(snapshot)) };
       table.publish(snapshot);
     }
     startTicking();
@@ -1223,8 +1241,8 @@ async function start(): Promise<void> {
     }
 
     if (choice === 'online') {
-      const result = await showLobby(umicat);
-      if (result.kind === 'table') { startOnline(result.table); return; }
+      const result = await showLobby(umicat, CLOCKS);
+      if (result.kind === 'table') { startOnline(result.table, result.tc); return; }
       await toTitle();
       return;
     }
@@ -1290,7 +1308,7 @@ async function start(): Promise<void> {
       umicat, rig, board, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar, over, plates,
       // The table, for probes: `startOnline(Table.online(room, seats))` with a
       // stand-in room is how the two-seat flow is driven without a platform.
-      Table, startOnline, showLobby,
+      Table, startOnline, showLobby, clocks: CLOCKS,
       get table() { return table; },
       get snapshot() { return snapshot; },
       get game() { return game; },
