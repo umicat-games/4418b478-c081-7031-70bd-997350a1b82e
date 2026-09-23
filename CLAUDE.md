@@ -241,6 +241,50 @@ an `<img src>`, resolved against the document. `asUrl()` makes the path
 absolute against `document.baseURI`. **Check a `vite preview` of `dist/`, not
 just `npm run dev`, whenever a path is involved.**
 
+**A capture is a handful of stones picked up ONE AT A TIME.** The rules take
+them off in the same instant — by the time anything can ask, the points are
+empty — so `GoGame.lastCaptured` keeps where they were standing (the turn log
+keeps only the COUNT, because that is all a replay needs) and the view draws
+them for as long as they are leaving. Three things it is built on:
+
+- **They go in order, nearest the played stone first.** All at once is a group
+  blinking out; one after another is a hand, and the order says which move
+  did it. The stagger is by DISTANCE from the move, not by array index — the
+  list comes out of a flood fill and its order means nothing on the board. A
+  big capture staggers tighter rather than taking proportionally longer.
+- **They RISE in place before they go anywhere.** A single curve from the
+  board to the bowl reads as being flicked off the edge; the lift is the part
+  that reads as being picked up.
+- **They fly to the seat that counts them** — the player's plate is on the
+  left, the engine's on the right — **and the count waits for them.** The
+  plates read `counted`, not `game.captures`: a number that goes up while
+  five stones are still visibly sitting on the wood is the HUD contradicting
+  the board. `settleCounts()` is what puts them level again, and it must be
+  called anywhere the board is rewritten without a cascade — a new game, a
+  restored one, a cascade cut short (`clearFlights` reports too, or the count
+  stays one capture behind for the rest of the game).
+
+**A flight that has not started yet still has to be SOMEWHERE**, and a mesh
+nobody has positioned is at the world origin — the middle of the board. The
+stones waiting their turn stand on their own points, which is also what they
+are: stones nobody has picked up yet.
+
+**Each pooled flying stone owns its material.** They are a stagger apart, so a
+shared material fades them all at whatever the last one written says. Made
+once and reused: identical materials share a compiled program, so the first
+capture pays for one shader and none after it pays for any. Building one per
+flight is what made the chess board stutter — a new program, compiled on the
+frame the stone was supposed to start moving.
+
+**Sampling an animation needs the page's clock FROZEN.** A screenshot takes
+longer than the cascade does, so a probe that captures a group and asks for a
+picture "at 100ms" gets the board after it finished — which looks exactly like
+nothing rendering. Override `performance.now` with a value the probe advances
+by hand, call `animate()` then `render()`, and only then shoot. Stub
+`opponent.decide` to a promise that never settles while doing it, or the
+engine's reply lands between two frames. And the local preview is `vite
+preview` of `dist/`: a source edit is not on screen until `npm run build`.
+
 **The end of a game is a DIALOG, not a line in the corner.** The status line
 is where "your move" lives, and a result printed in the same place in the same
 type reads as one more turn rather than as the end of something. The card

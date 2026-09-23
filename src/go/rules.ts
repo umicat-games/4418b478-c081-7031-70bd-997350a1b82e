@@ -62,6 +62,15 @@ export class GoGame {
   toPlay: Player;
   readonly turns: Turn[] = [];
   readonly captures = { black: 0, white: 0 };
+  /**
+   * The stones the last play lifted, where they were standing.
+   *
+   * The turn log keeps the COUNT, because that is all a replay needs — a
+   * saved game is the move list and the rules put the stones back. Anything
+   * that has to show the capture happening needs the points, and by the time
+   * it is asked the board no longer has them.
+   */
+  lastCaptured: Array<{ x: number; y: number }> = [];
   /** Winner by resignation, if someone resigned. */
   resignedBy: Player | null = null;
 
@@ -107,6 +116,7 @@ export class GoGame {
     this.board[y][x] = player;
     const captured = applyCapturesInPlace(this.board, x, y, player);
     this.captures[player] += captured.length;
+    this.lastCaptured = captured;
 
     this.turns.push({ kind: 'play', x, y, player, captured: captured.length });
     this.toPlay = getOpponent(player);
@@ -116,6 +126,7 @@ export class GoGame {
 
   pass(): void {
     if (this.over) return;
+    this.lastCaptured = [];
     this.previousPrevious = this.previous;
     this.previous = this.board.map((row) => [...row]);
     this.turns.push({ kind: 'pass', player: this.toPlay });

@@ -80,6 +80,34 @@ const FOV_DEG = 22;
  */
 const POLAR_DEG = 0;
 
+/**
+ * Taking stones off, in three numbers.
+ *
+ * A capture is not one event — it is a handful of stones picked out of the
+ * board one at a time, and the only thing that says so is that they do not
+ * all move at once. `CASCADE_MS` is the gap between one stone starting and
+ * the next; `RISE_MS` is the lift off the wood, straight up and in place,
+ * which is the part that reads as being picked up; `BOWL_MS` is the quick
+ * trip to the bowl afterwards. A big capture staggers tighter rather than
+ * taking proportionally longer — `CASCADE_TOTAL_MS` is the whole budget.
+ */
+const CASCADE_MS = 52;
+const CASCADE_TOTAL_MS = 420;
+const RISE_MS = 170;
+const BOWL_MS = 300;
+const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+
+interface Flight {
+  mesh: THREE.Mesh;
+  colour: 'black' | 'white';
+  /** Where it was standing. */
+  from: THREE.Vector3;
+  /** The bowl: past the edge of the board, on the side of whoever took it. */
+  to: THREE.Vector3;
+  lift: number;
+  start: number;
+}
+
 /** Line spacing, and the inset that follows from it, for a board size. */
 function metrics(size: number): { spacing: number; margin: number } {
   const spacing = (2 * HALF) / (size - 1 + 2 * MARGIN_RATIO);
@@ -132,6 +160,11 @@ export class BoardView {
   private territory: Record<'black' | 'white', THREE.InstancedMesh> | null = null;
   /** Keys of stones the count found dead, so they can be drawn as removed. */
   private dead = new Set<string>();
+  /** Stones being taken off the board: see `liftCaptures`. */
+  private flights: Flight[] = [];
+  private readonly flightPool: Record<'black' | 'white', THREE.Mesh[]> = { black: [], white: [] };
+  /** Called when the last stone of a capture reaches the bowl. */
+  private onCaptured: (() => void) | null = null;
   /** Screen width, in pixels, the chat panel is occupying on the right. */
   private insetRight = 0;
 
@@ -565,6 +598,157 @@ export class BoardView {
 
   /** Draw, if there is anything new to draw. Returns whether it did, so the
    *  DOM overlays pinned to board points know when to follow. */
+  // ── stones coming off ───────────────────────────────────────────────────
+
+  /**
+   * Take a group off the board, one stone at a time.
+   *
+   * The rules have already removed them — by the time anybody can ask, the
+   * points are empty — so this is handed the stones themselves and draws them
+   * for as long as they are leaving. Two things it is built on:
+   *
+   * **They go in ORDER, nearest the played stone first.** A capture where
+   * every stone rises at the same instant is a group blinking out; one where
+   * they go one after another is a hand picking them up, and the order says
+   * which move did it. That is what the stagger is for, and why it is by
+   * DISTANCE from the move rather than by array index — the list comes out of
+   * a flood fill and its order means nothing on the board.
+   *
+   * **They fly to the seat that counts them.** The two players sit either side
+   * of the board and each has their own prisoner count on their plate; a
+   * stone that sails off towards the number that is about to go up is the
+   * whole explanation of why it went up. `onArrived` is how the count waits
+   * for them: it is the arithmetic being told the hand has finished.
+   */
+  liftCaptures(
+    points: Array<{ x: number; y: number }>,
+    colour: 'black' | 'white',
+    towards: 'left' | 'right',
+    at: { x: number; y: number } | null,
+    onArrived?: () => void,
+  ): void {
+    if (!points.length) return;
+    const now = performance.now();
+    const step = Math.min(CASCADE_MS, CASCADE_TOTAL_MS / points.length);
+    const origin = at ?? points[0];
+    const order = [...points].sort((a, b) =>
+      ((a.x - origin.x) ** 2 + (a.y - origin.y) ** 2) - ((b.x - origin.x) ** 2 + (b.y - origin.y) ** 2));
+    order.forEach((p, i) => {
+      const from = this.at(p.x, p.y);
+      // Past the edge, beside the board, at the height it was lifted to.
+      const bowl = new THREE.Vector3(
+        (towards === 'left' ? -1 : 1) * (HALF + this.spacing * 2.4),
+        TOP_Y + this.spacing * 1.1,
+        from.z,
+      );
+      const mesh = this.takeFlight(colour);
+      // Standing on its point, at full size, until its turn comes. A stone
+      // waiting for the stagger is a stone nobody has picked up yet — and a
+      // mesh that has not been positioned is a mesh at the world origin,
+      // which is the middle of the board.
+      mesh.position.copy(from);
+      mesh.scale.setScalar(this.spacing);
+      (mesh.material as THREE.MeshStandardMaterial).opacity = 1;
+      this.flights.push({
+        mesh, colour, from, to: bowl,
+        lift: this.spacing * 0.85, start: now + i * step,
+      });
+    });
+    // Only the last hand to finish reports; a count that ticked up per stone
+    // would be right and would also be a slot machine.
+    this.onCaptured = onArrived ?? null;
+    this.dirty = true;
+  }
+
+  /**
+   * A stone to fly, out of the pool.
+   *
+   * **Each one owns its material**, because the stones in a cascade are a
+   * stagger apart and a shared material means they all fade at whatever the
+   * last one written says — the whole point being that they are NOT at the
+   * same point of the same journey. They are made once and reused for the
+   * rest of the game: identical materials share a compiled program, so the
+   * first capture pays for one shader and no capture after it pays for any.
+   * (Building one per flight is what made the chess board stutter: a new
+   * program, compiled on the frame the piece was supposed to start moving.)
+   */
+  private takeFlight(colour: 'black' | 'white'): THREE.Mesh {
+    const free = this.flightPool[colour].find((m) => !m.visible);
+    if (free) { free.visible = true; return free; }
+    const slate = colour === 'black';
+    const mesh = new THREE.Mesh(stoneGeometry(), new THREE.MeshStandardMaterial({
+      color: slate ? 0x14161a : 0xf2efe6,
+      roughness: slate ? 0.28 : 0.44,
+      metalness: 0.02,
+      transparent: true,
+      depthWrite: false,
+    }));
+    // No shadow: the depth pass does not read opacity, so a stone that has
+    // faded out would leave a full-strength shadow on the wood behind it.
+    this.scene.add(mesh);
+    this.flightPool[colour].push(mesh);
+    return mesh;
+  }
+
+  /**
+   * Move the stones that are leaving. Returns whether any still are, which is
+   * what keeps the frame loop awake.
+   *
+   * A stone RISES first, straight up and in place, and only then goes to the
+   * bowl. Sending it on a single curve from the board to the bowl looked like
+   * it had been flicked off the edge; the pause at the top is what makes it a
+   * stone being picked up.
+   */
+  animate(): boolean {
+    if (!this.flights.length) return false;
+    const now = performance.now();
+    let moving = false;
+    for (const f of [...this.flights]) {
+      const t = now - f.start;
+      if (t < 0) { moving = true; continue; }
+      if (t >= RISE_MS + BOWL_MS) {
+        f.mesh.visible = false;
+        this.flights.splice(this.flights.indexOf(f), 1);
+        this.dirty = true;
+        continue;
+      }
+      moving = true;
+      const mat = f.mesh.material as THREE.MeshStandardMaterial;
+      if (t < RISE_MS) {
+        const k = easeOut(t / RISE_MS);
+        f.mesh.position.set(f.from.x, f.from.y + f.lift * k, f.from.z);
+        f.mesh.scale.setScalar(this.spacing);
+        mat.opacity = 1;
+      } else {
+        const k = easeOut((t - RISE_MS) / BOWL_MS);
+        const top = new THREE.Vector3(f.from.x, f.from.y + f.lift, f.from.z);
+        f.mesh.position.lerpVectors(top, f.to, k);
+        f.mesh.scale.setScalar(this.spacing * (1 - 0.3 * k));
+        mat.opacity = 1 - easeOut(Math.max(0, (k - 0.4) / 0.6));
+      }
+      this.dirty = true;
+    }
+    if (!this.flights.length && this.onCaptured) {
+      const tell = this.onCaptured;
+      this.onCaptured = null;
+      tell();
+    }
+    return moving;
+  }
+
+  /** Put everything down. For a new game, or anything else that rewrites the
+   *  board under a stone that is still leaving it. */
+  clearFlights(): void {
+    for (const f of this.flights) f.mesh.visible = false;
+    this.flights.length = 0;
+    // Whoever was waiting on the count still has to be told, or the number
+    // stays one capture behind for the rest of the game.
+    const tell = this.onCaptured;
+    this.onCaptured = null;
+    tell?.();
+    this.dirty = true;
+  }
+
   render(): boolean {
     if (!this.dirty) return false;
     this.dirty = false;

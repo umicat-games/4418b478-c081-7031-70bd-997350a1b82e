@@ -182,6 +182,9 @@ async function start(): Promise<void> {
 
   const frame = (): void => {
     if (performance.now() < repaintUntil) view.invalidate();
+    // Stones on their way to a bowl. Before the render, so the frame about to
+    // be drawn is the one they have just moved into.
+    view.animate();
     // Only when the picture actually changed. Between two moves a Go board is
     // a still life, and redrawing it sixty times a second takes a core off the
     // engine — which is the thing the player is waiting for.
@@ -513,6 +516,48 @@ async function start(): Promise<void> {
     });
   }
 
+  /**
+   * What the two plates SAY they have taken, which is not always what the
+   * rules say yet.
+   *
+   * The stones are still on their way there. A count that goes up the instant
+   * the move is played is a number contradicting the board in front of it —
+   * five stones still visibly sitting on the wood, and the plate already
+   * claiming them — so it waits for them to arrive. Everything else reads
+   * `game.captures`; only the plates read this.
+   */
+  const counted = { black: 0, white: 0 };
+
+  /** Put the shown counts back level with the rules — a new game, a restored
+   *  one, or anything that cut a cascade short. */
+  function settleCounts(): void {
+    counted.black = game?.captures.black ?? 0;
+    counted.white = game?.captures.white ?? 0;
+  }
+
+  /**
+   * Take the stones that move just captured off the board, visibly.
+   *
+   * Called with the game ALREADY in the position after the move: the rules
+   * have removed them, so the view is handed the stones themselves. The count
+   * on the plate goes up when they land, which is what `settleCounts` is
+   * doing inside the callback — and `fillPlates` after it, because a number
+   * that changes with nobody redrawing it does not change.
+   */
+  function liftCaptures(by: 'black' | 'white'): void {
+    if (!game || !game.lastCaptured.length) return;
+    const last = game.lastStone;
+    view.liftCaptures(
+      game.lastCaptured,
+      by === 'black' ? 'white' : 'black',
+      // Towards the seat that is about to count them: the player is on the
+      // left of the board, the engine on the right.
+      by === HUMAN ? 'left' : 'right',
+      last ? { x: last.x, y: last.y } : null,
+      () => { settleCounts(); fillPlates(); },
+    );
+  }
+
   /** Who is sitting where. The player is on the left, which is the side their
    *  own status line and gear are already on. */
   function fillPlates(): void {
@@ -525,7 +570,7 @@ async function start(): Promise<void> {
         name: me?.name || t('plate.you'),
         avatar: me?.avatar ?? null,
         colour: HUMAN,
-        meta: t('plate.captures', { n: game.captures[HUMAN] }),
+        meta: t('plate.captures', { n: counted[HUMAN] }),
         active: yourTurn,
       },
       {
@@ -534,7 +579,7 @@ async function start(): Promise<void> {
         // How hard it is playing belongs to the opponent, not to the status
         // line in the player's own corner — that is a property of who you are
         // sitting across from.
-        meta: `${levelLabel(level.id)} · ${t('plate.captures', { n: game.captures.white })}`,
+        meta: `${levelLabel(level.id)} · ${t('plate.captures', { n: counted.white })}`,
         // The dots go BESIDE what the seat already says rather than replacing
         // it: "thinking" is a state, and a state that erases the level and
         // the count is a seat that flickers between two different sentences.
@@ -565,8 +610,10 @@ async function start(): Promise<void> {
   }
 
   function newGame(size: BoardSize, handicap: number): void {
+    view.clearFlights();
     over.hide();
     game = new GoGame(size, { handicap });
+    settleCounts();
     coach.profile.boardSize = size;
     view.setBoardSize(size);
     view.setHighlights([]);
@@ -631,6 +678,7 @@ async function start(): Promise<void> {
       read = out.read;
       if (out.decision.kind === 'play') {
         game.play(out.decision.x, out.decision.y);
+        liftCaptures('white');
         playStone(audio, lastStone);
       } else if (out.decision.kind === 'pass') game.pass();
       else game.resign('white');
@@ -656,6 +704,7 @@ async function start(): Promise<void> {
     if (!game || thinking || game.over || game.toPlay !== HUMAN) return;
     const taken = game.captures.black;
     if (!game.play(at.x, at.y)) return;  // illegal: the board simply does not take it
+    liftCaptures(HUMAN);
     playStone(audio, lastStone);
     if (game.captures.black > taken) audio.play(SFX.capture);
     coach.profile.placed = true;
@@ -925,6 +974,9 @@ async function start(): Promise<void> {
       if (game && !game.over) { refresh(); void observePosition(); return; }
       if (stored) {
         game = GoGame.restore(stored);
+        // The prisoners in a restored game were taken before this tab
+        // existed: there is nothing to fly, and the plates say so at once.
+        settleCounts();
         // What is on the board wins over what was last chosen in the panel.
         coach.profile.boardSize = game.size;
         view.setBoardSize(game.size);
