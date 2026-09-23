@@ -318,6 +318,7 @@ async function start(): Promise<void> {
 
   // ── the board ───────────────────────────────────────────────────────────
   const status = document.createElement('div');
+  status.className = 'status';
   hud.appendChild(status);
   const tip = document.createElement('div');
   tip.className = 'tip';
