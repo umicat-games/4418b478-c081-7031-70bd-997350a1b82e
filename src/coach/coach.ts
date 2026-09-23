@@ -99,7 +99,27 @@ export class Coach {
   onChange: (() => void) | null = null;
 
   constructor(private umicat: ThreeUmicat, private hooks: CoachHooks) {
-    this.npc = umicat.ai.npc({ playbook: 'coach', actions: ACTIONS as unknown as typeof ACTIONS[number][] });
+    this.npc = this.freshNpc();
+  }
+
+  /**
+   * A conversation with nothing in it.
+   *
+   * **Not `npc.reset()`.** Reset points the NPC's history at a new array, and
+   * a `say()` that was already in flight still pushes its answer into
+   * `this.npc.history` when it lands — which is now the NEW array. The last
+   * game's sentence ends up in the next game's model context: invisible in
+   * the panel, because the generation fence drops it from the screen, and
+   * fully present to the model, which carries on from it. That is a brand new
+   * game opening with "that g4 push left the pawn hanging", about a move
+   * nobody has played.
+   *
+   * A new NPC has its own array, and the call still in flight keeps pushing
+   * into the old one, which nothing reads again. Reproduced with a stubbed
+   * `ai.act` held open by hand before this was written.
+   */
+  private freshNpc(): ReturnType<ThreeUmicat['ai']['npc']> {
+    return this.umicat.ai.npc({ playbook: 'coach', actions: ACTIONS as unknown as typeof ACTIONS[number][] });
   }
 
   get thinking(): boolean { return this.busy; }
@@ -298,7 +318,7 @@ export class Coach {
     this.gen++;
     this.busy = false;
     this.queued = null;
-    this.npc.reset();
+    this.npc = this.freshNpc();
     this.messages.length = 0;
     if (past.length) await this.summarise(past);
   }
