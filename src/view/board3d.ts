@@ -68,9 +68,18 @@ const SIDES: Side[] = ['white', 'black'];
  *  past it — going over is not a visual glitch, it is a GPU buffer overrun. */
 const MAX_PER_KIND = 10;
 
-const LIGHT_SQ = '#e9d3ab';
-const DARK_SQ = '#9c6a41';
-const FRAME = '#5d3a20';
+/**
+ * The board, one step darker than it was.
+ *
+ * Not for its own sake: on a pale table the whole board has to sit BELOW the
+ * surface it is on, or it reads as a lighter patch of the same thing. The
+ * light square is also what a white piece stands on, and that pair was
+ * measured at 1.2:1 — the weakest reading on the screen after the table
+ * itself.
+ */
+const LIGHT_SQ = '#d9bd91';
+const DARK_SQ = '#8b5c38';
+const FRAME = '#4e3019';
 
 // ── pieces in the air ──────────────────────────────────────────────────────
 
@@ -158,14 +167,23 @@ export class BoardView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     // PCFSoft was removed in three 0.186; PCF is what it falls back to anyway.
+    //
+    // **Not VSM.** Blurring the shadow map was tried, as the way to take the
+    // shadow down a step on a pale table — and it softens the wrong thing.
+    // The board's contact shadow washed out to 1.02:1 against the table (gone)
+    // while every PIECE's shadow spread into a smear the size of two squares.
+    // The shadow is taken down by LIGHT instead: a weaker key and a fill that
+    // bounces off a pale floor. That lifts the inside of a shadow without
+    // touching its edge, which is the part doing the work.
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    // Near the table's darkest tone, so anything beyond it is not a hole.
-    this.scene.background = new THREE.Color('#140e09');
+    // Near the table's own tone, so anything beyond the table's edge is not a
+    // hole cut in it. It followed the table when the table went pale.
+    this.scene.background = new THREE.Color('#cfccc4');
     this.camera = new THREE.PerspectiveCamera(FOV_DEG, 1, 0.1, 100);
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP_Y);
 
-    const key = new THREE.DirectionalLight(0xfff3e4, 1.9);
+    const key = new THREE.DirectionalLight(0xfff3e4, 1.72);
     key.position.set(-2.4, 4.6, 2.4);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -174,15 +192,19 @@ export class BoardView {
     cam.near = 0.5; cam.far = 12;
     key.shadow.bias = -0.0008;
     this.scene.add(key);
-    // Weaker than it was: fill is the enemy of the shadow that makes the
-    // board sit on the table rather than float over it.
-    this.scene.add(new THREE.HemisphereLight(0xcfd8e6, 0x170e07, 0.72));
+    // Fill is the enemy of the shadow that makes the board sit on the table
+    // rather than float over it — but a pale stone floor bounces, and a room
+    // whose ground is dark brown is a room this one is not in any more.
+    this.scene.add(new THREE.HemisphereLight(0xcfd8e6, 0xb8b2a6, 0.84));
 
     // The table. The board is an object put down on something now, and this
     // is what its shadow falls on.
     const table = new THREE.Mesh(
       new THREE.PlaneGeometry(2 * HALF * TABLE, 2 * HALF * TABLE).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ map: tableTexture(), roughness: 0.78, metalness: 0 }),
+      // Fully rough: a frosted stone has no sheen, and a highlight travelling
+      // across the table as the board is framed is the one thing that would
+      // put the surface back in front of the game.
+      new THREE.MeshStandardMaterial({ map: tableTexture(), roughness: 0.95, metalness: 0 }),
     );
     table.position.y = -0.002;  // a hair under the board, so they never z-fight
     table.receiveShadow = true;
@@ -837,74 +859,49 @@ function boardTexture(seat: Side): THREE.CanvasTexture {
 /**
  * The table the board sits on.
  *
- * Dark walnut, drawn rather than photographed so it costs nothing to ship and
- * can be lit by the same lamp as everything else. Three things make it read
- * as wood rather than as brown: long grain that runs one way, a few darker
- * streaks that do not, and a vignette so the corners of the room fall away.
+ * **Not wood.** It was dark walnut, then pale wood, and the pale wood was
+ * measured: the board and the table came out at the SAME luminance (1.00:1 on
+ * the Go board, 1.01:1 on the Xiangqi one, 2.4:1 here only because a chess
+ * board has a dark frame round it). What was separating them was hue and
+ * nothing else — a wooden board on a wooden table, lit by the same lamp, is
+ * one brown object with lines on it.
+ *
+ * So the table stopped being wood. It is a matte pale stone: flat, quiet, a
+ * good deal lighter than anything on the board, and with no grain to compete
+ * with the grid. The eye is then looking at a board on a surface rather than
+ * at a photograph of a table with a game somewhere in it.
+ *
+ * The only thing painted into it is a very faint noise. A flat fill is not
+ * cleaner — an 8-bit gradient across a 5-unit plane bands, and the banding is
+ * far more visible than the grain it replaced. Two per cent of noise is what
+ * a frosted surface looks like anyway.
  */
 function tableTexture(): THREE.CanvasTexture {
-  const px = 1024;
+  const px = 512;
   const c = document.createElement('canvas');
   c.width = c.height = px;
   const ctx = c.getContext('2d')!;
 
-  // The table's wood — PALE, and that is a decision, not a tint.
-  //
-  // It was a dark walnut, twice lifted and still the darkest thing on screen.
-  // A pale table turns every relationship round: measured, a black piece
-  // against it goes from a difference of 43 to 142, and the board's shadow
-  // from 31 to 68 — a shadow reads on light wood the way it never does on
-  // dark. What it costs is the white pieces (73 -> 26 against the table) and
-  // every white word of UI, which is why the HUD, the seats and the eval bar
-  // are dark ink with a light halo now. A light room is a different room, not
-  // the same room with the brightness up.
-  //
-  // It used to be `#3b2a1d`, which is a dark walnut — and with a low key and
-  // a weak fill (both of which the shadow needs) that came out at a measured
-  // luminance of 38 out of 255 across most of the screen. The board reads at
-  // 135; the room around it was the dark part, and the game looked dim
-  // because two thirds of it was.
-  //
-  // Lifted twice: first to a mid walnut, then further, because at 47 the
-  // black pieces standing above the far edge of a chess board were still
-  // being read against it. Measured after: the table goes 38 -> 73 and the
-  // shadow beside the board goes 20 -> 31, so the difference that makes the
-  // board an object sitting on something is unchanged (18 -> 19). The
-  // brightness was never paying for the shadow.
-  ctx.fillStyle = '#c4c4c2';
+  // Warm ivory. Light enough to push the board away from it, warm enough not
+  // to read as a UI panel: a neutral grey under a warm key light goes green.
+  ctx.fillStyle = '#e9e5dc';
   ctx.fillRect(0, 0, px, px);
 
-  // Grain: many fine lines along one axis, with slow waves, so the eye reads a
-  // direction. Dark board, dark table — the contrast between them is the
-  // board's edge and its shadow, not their colours.
-  for (let i = 0; i < 340; i++) {
-    const y = Math.random() * px;
-    const dark = Math.random() < 0.55;
-    ctx.strokeStyle = dark
-      ? `rgba(120,118,112,${0.05 + Math.random() * 0.08})`
-      : `rgba(255,255,255,${0.05 + Math.random() * 0.09})`;
-    ctx.lineWidth = 0.6 + Math.random() * 2.6;
-    ctx.beginPath();
-    ctx.moveTo(-10, y);
-    ctx.bezierCurveTo(px * 0.3, y + (Math.random() - 0.5) * 40, px * 0.7, y + (Math.random() - 0.5) * 40, px + 10, y + (Math.random() - 0.5) * 18);
-    ctx.stroke();
+  // The frost. Per-pixel, monochrome, and small — it exists to break up the
+  // gradient, not to be seen.
+  const img = ctx.getImageData(0, 0, px, px);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 11;
+    img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n;
   }
-  // A few knots' worth of darker cloud, so the grain is not a barcode.
-  for (let i = 0; i < 14; i++) {
-    const x = Math.random() * px, y = Math.random() * px;
-    const r = px * (0.06 + Math.random() * 0.12);
-    const blob = ctx.createRadialGradient(x, y, 0, x, y, r);
-    blob.addColorStop(0, 'rgba(120,110,98,0.16)');
-    blob.addColorStop(1, 'rgba(120,110,98,0)');
-    ctx.fillStyle = blob;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  }
+  ctx.putImageData(img, 0, 0);
 
-  // The room falling away at the edges. Baked in rather than lit, because a
-  // light that did this would also darken the board.
+  // The room falling away at the edges. Baked rather than lit, because a
+  // light that did this would also darken the board — and NEUTRAL, because a
+  // warm vignette on a pale surface reads as a stain rather than as distance.
   const vignette = ctx.createRadialGradient(px / 2, px / 2, px * 0.18, px / 2, px / 2, px * 0.62);
   vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(60,54,46,0.34)');
+  vignette.addColorStop(1, 'rgba(64,66,72,0.20)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, px, px);
 
@@ -915,7 +912,7 @@ function tableTexture(): THREE.CanvasTexture {
 }
 
 /** The board's own edge: end grain, lighter than the table it stands on. */
-function edgeTexture(base = 0xc99a5d): THREE.CanvasTexture {
+function edgeTexture(base = 0xb0854e): THREE.CanvasTexture {
   const px = 256;
   const c = document.createElement('canvas');
   c.width = px;

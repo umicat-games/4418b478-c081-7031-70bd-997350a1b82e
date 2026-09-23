@@ -275,14 +275,51 @@ overhead they are all circles. Turning the board around when the player takes
 Black is a different thing and stays — that is a rule of the game, not a
 camera control.
 
-**The board sits on a TABLE, and that is what the lighting is for.** A plane
-of dark walnut, drawn rather than photographed; the board is a slab with real
-thickness standing on it, casting a real shadow. Two settings do the work and
-both fight the instinct to add light: the key is LOW (about 30° above the
-table, not 45°, or the shadow falls straight down and there is nothing to see
-— and from overhead that shadow is the only thing left saying the board has
-thickness) and the fill is weak, because fill is the enemy of that shadow. The
-framing pulls back to 0.84 of the screen so some table is always in frame.
+**The board sits on a TABLE, and that is what the lighting is for.** The board
+is a slab with real thickness standing on it, casting a real shadow. The key
+is LOW (about 30° above the table, not 45°, or the shadow falls straight down
+and there is nothing to see — and from overhead that shadow is the only thing
+left saying the board has thickness). The framing pulls back to 0.84 of the
+screen so some table is always in frame.
+
+**The table is NOT wood, and that came from measuring it** (2026-09-23). It
+was dark walnut, then pale wood, and the pale wood was sampled off the canvas:
+the board and the table came out at the SAME luminance — 1.00:1 on the Go
+board, 1.01:1 on the Xiangqi one, and here 2.4:1 only because a chess board
+has a dark frame round it. What separated board from table was hue and nothing
+else, which is what "the whole screen is one brown photograph" actually is.
+
+So it became a matte pale stone: `#e9e5dc`, `roughness: 0.95`, and **no
+grain** — a texture on the table competes with the grid, which is the only
+texture anybody is meant to be reading. The measured result is the table at
+L=0.49 against L=0.34 before, the light squares at 3.9:1 against it, and the
+board as a whole an object put down on a surface. Two things go with it:
+
+- **The board went one step DARKER** (`LIGHT_SQ`, `DARK_SQ`, `FRAME`, and the
+  edge grain). On a pale table a light board is a lighter patch of the same
+  thing. The light square is also what a white piece stands on, and that was
+  the weakest pair on the screen after the table itself.
+- **The scene background followed the table.** It was near-black, to be the
+  table's own darkest tone; on a pale table that is a hole cut in it.
+- **The fill went UP, not down** (hemisphere 0.72 → 0.84, and its ground
+  colour from near-black to a pale bounce), and the key came down a little.
+  Fill is still the enemy of the shadow, but a room whose floor is pale stone
+  bounces, and this is not the dark-brown room any more.
+
+**Softening a shadow with a blurred shadow map softens the wrong thing.** VSM
+with `shadow.radius = 6` was tried, to take the shadow down a step now that a
+pale table shows it harder: the board's contact shadow washed out to 1.02:1
+against the table — gone — while every PIECE's shadow spread into a smear two
+squares wide. A shadow is taken down with LIGHT (a weaker key, a stronger
+bounce), which lifts the inside of it without touching the edge, and the edge
+is the part doing the work.
+
+**The board's own shadow is thin, and that is geometry, not a setting.** The
+slab is 0.1 deep and the key is 4.6 up and 2.4 across, so the shadow beside
+the board is about 0.05 world units — a quarter of a square. A probe that
+samples "just outside the board" at one square out is sampling bare table and
+will report, wrongly, that there is no shadow at all. Walk a profile outwards
+instead of picking a distance.
 
 **The boot screen is in `index.html`, not in the bundle.** Its job is to be on
 screen before the bundle has parsed, so it cannot be built by it. Black and a
