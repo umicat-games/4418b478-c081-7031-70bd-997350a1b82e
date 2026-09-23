@@ -35,6 +35,31 @@
         text-shadow: 0 1px 0 rgba(255,255,255,.75), 0 0 8px rgba(255,255,255,.65);
         max-width: 80vw;
       }
+      /* **A ground, because the background is no longer one thing.**
+         This line sits over the pale table AND over the board, which is mid
+         wood — dark ink survives the first and not the second, white ink the
+         other way round. A halo was not enough: it thins out exactly where
+         the letters cross the board's edge. So the words get their own pale
+         plate and stop depending on what is behind them. It hugs the text
+         (inline-block) rather than drawing a bar across the corner. */
+      #hud .status, #hud .tip {
+        /* `fit-content`, not `inline-block`: the plate has to hug the words
+           AND stay on its own line. Inline-block did the first and put the
+           two lines side by side, which on a phone is one long line that
+           wraps in the middle of a sentence. */
+        display: block;
+        width: fit-content;
+        max-width: 100%;
+        padding: 3px 10px;
+        border-radius: 9px;
+        background: rgba(246, 245, 243, 0.72);
+        -webkit-backdrop-filter: blur(7px) saturate(1.05);
+        backdrop-filter: blur(7px) saturate(1.05);
+        box-shadow: 0 1px 8px rgba(0, 0, 0, 0.14);
+        text-shadow: none;
+      }
+      #hud .status:empty, #hud .tip:empty { display: none; }
+      #hud .tip { margin-top: 5px; }
       /* The HUD itself stays click-through so the board behind it is still
          playable; anything interactive turns pointer events back on. */
       #hud .lesson { margin-bottom: 6px; }
