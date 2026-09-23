@@ -183,6 +183,9 @@ async function start(): Promise<void> {
 
   const frame = (): void => {
     if (performance.now() < repaintUntil) view.invalidate();
+    // Pieces on their way somewhere. Before the render, so the frame that is
+    // about to be drawn is the one they have just moved into.
+    view.animate();
     // Only when the picture actually changed. Between two moves the board is a
     // still life, and redrawing it sixty times a second takes a core off the
     // engine — which is the thing the player is waiting for.
@@ -536,6 +539,7 @@ async function start(): Promise<void> {
   }
 
   function newGame(handicap: Handicap): void {
+    view.clearFlights();
     over.hide();
     game = new XiangqiGame(handicap);
     coach.profile.handicap = handicap;
@@ -614,6 +618,10 @@ async function start(): Promise<void> {
         // engine somehow proposed illegally. Silence would be the engine
         // skipping its turn, so it is worth saying out loud.
         if (captured === null) throw new Error(`engine proposed an illegal move ${nameOf(pointOf(out.move.from))}${nameOf(pointOf(out.move.to))}`);
+        // Carried, not teleported. The position is already the one after the
+        // move, which is why the view has to be told what the move WAS — the
+        // piece now on `to` is the one that travelled.
+        view.animateMove(out.move.from, out.move.to, game.position.board[out.move.to], captured);
         playStone(audio, lastClip);
         if (captured) { audio.play(SFX.capture); took = captured; }
       }
@@ -640,8 +648,10 @@ async function start(): Promise<void> {
 
   function commit(from: Point, to: Point): void {
     if (!game || thinking || game.over || game.toPlay !== HUMAN) return;
-    const captured = game.play(squareOf(from), squareOf(to));
+    const fromSq = squareOf(from), toSq = squareOf(to);
+    const captured = game.play(fromSq, toSq);
     if (captured === null) return;  // illegal: the board simply does not take it
+    view.animateMove(fromSq, toSq, game.position.board[toSq], captured);
     playStone(audio, lastClip);
     if (captured) audio.play(SFX.capture);
     coach.profile.moved = true;

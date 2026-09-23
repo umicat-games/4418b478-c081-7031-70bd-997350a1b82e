@@ -26,6 +26,26 @@
 import * as THREE from 'three';
 import { FILES, RANKS, RED, fileOf, rankOf, sideOf, typeOf, type PieceType, type Side, type XiangqiGame } from '../xiangqi/rules';
 
+/** How long a piece takes to be carried, and how long one that has been
+ *  taken takes to leave. Taking is FASTER: it is the consequence, and it has
+ *  to be out of the way before the other piece lands. */
+const MOVE_MS = 260;
+const TAKE_MS = 380;
+const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
+
+interface Flight {
+  piece: PieceMesh;
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  lift: number;
+  start: number;
+  ms: number;
+  fade: boolean;
+  /** A square `sync()` must leave empty until this lands. */
+  hide: number | null;
+}
+
 /** Half the longer side of the slab, in world units. */
 const HALF = 1;
 /** How much wood there is outside the outermost line, in spacings. */
@@ -102,6 +122,19 @@ export class BoardView {
   private readonly pool: PieceMesh[] = [];
   private readonly glyphTextures = new Map<string, THREE.Texture>();
   private ghost: PieceMesh | null = null;
+  /**
+   * Pieces in the air, and the squares `sync()` must leave empty while they
+   * fly — a piece cannot be on its square and on its way there at once.
+   *
+   * They come out of their own pool: a flight is a piece that is not in the
+   * position, so it cannot borrow one of the pieces that are.
+   */
+  private flights: Flight[] = [];
+  private readonly flightPool: PieceMesh[] = [];
+  private readonly fadePool: PieceMesh[] = [];
+  private hidden = new Set<number>();
+  /** The position last laid out, so a landing flight can put it back. */
+  private shown: XiangqiGame | null = null;
   /** Where a piece may go, if the player has picked one up. */
   private dots: THREE.Mesh[] = [];
   private highlights: THREE.Mesh[] = [];
@@ -216,14 +249,19 @@ export class BoardView {
   /** Put the board on screen in the state the game is in. */
   sync(game: XiangqiGame): void {
     this.dirty = true;
+    this.shown = game;
     const pieces = game.position.pieces();
-    pieces.forEach((p, i) => {
-      const mesh = this.takeFromPool(i);
+    let n = 0;
+    for (const p of pieces) {
+      // A square with a piece in the air above it is drawn by the flight, not
+      // by the layout, or the piece is in two places at once.
+      if (this.hidden.has(p.square)) continue;
+      const mesh = this.takeFromPool(n++);
       mesh.group.visible = true;
       mesh.group.position.copy(this.at(fileOf(p.square), rankOf(p.square)));
       mesh.setFace(this.glyphTexture(p.side, p.type), p.side);
-    });
-    for (let i = pieces.length; i < this.pool.length; i++) this.pool[i].group.visible = false;
+    }
+    for (let i = n; i < this.pool.length; i++) this.pool[i].group.visible = false;
 
     const last = game.lastMove;
     this.fromMark = this.markAt(this.fromMark, last ? { x: fileOf(last.from), y: rankOf(last.from) } : null, 0xff5a4d, 0.30);
@@ -445,6 +483,113 @@ export class BoardView {
     }
   }
 
+  // ── pieces in the air ───────────────────────────────────────────────────
+
+  /**
+   * Show a move happening: lift, travel, set down — and anything it took off
+   * the side of the board first, the way a hand clears the square before
+   * putting the other piece on it.
+   *
+   * Called with the move the referee has just accepted, so the position is
+   * already the one AFTER it; every argument here is about what the player
+   * did not get to see. Squares are board indices and pieces are codes,
+   * which is what the rules deal in.
+   */
+  animateMove(from: number, to: number, mover: number, taken = 0): void {
+    if (!mover) return;
+    const now = performance.now();
+    if (taken) {
+      // Off towards whoever TOOK it, which is the other side from the piece
+      // that was taken: a black horse leaves towards Red's end of the table.
+      const by = sideOf(mover);
+      const home = by === RED ? RANKS - 1 : 0;
+      const edge = this.at(fileOf(to), home);
+      edge.z += (by === RED ? 1 : -1) * this.spacing * 2.2;
+      edge.y += this.spacing * 1.4;
+      this.launch({
+        side: sideOf(taken), type: typeOf(taken),
+        from: this.at(fileOf(to), rankOf(to)), to: edge,
+        lift: this.spacing * 0.8, ms: TAKE_MS, start: now, fade: true, hide: null,
+      });
+    }
+    this.launch({
+      side: sideOf(mover), type: typeOf(mover),
+      from: this.at(fileOf(from), rankOf(from)),
+      to: this.at(fileOf(to), rankOf(to)),
+      lift: this.spacing * 0.5, ms: MOVE_MS,
+      // A beat after the capture starts, so the two read as one act in order
+      // — clear the square, then land on it — rather than as a collision.
+      start: now + (taken ? 60 : 0), fade: false, hide: to,
+    });
+    this.dirty = true;
+  }
+
+  private launch(spec: {
+    side: Side; type: PieceType; from: THREE.Vector3; to: THREE.Vector3;
+    lift: number; ms: number; start: number; fade: boolean; hide: number | null;
+  }): void {
+    const pool = spec.fade ? this.fadePool : this.flightPool;
+    let piece = pool.find((m) => !m.group.visible);
+    if (!piece) {
+      piece = makePiece(this.spacing, 1, spec.fade);
+      this.scene.add(piece.group);
+      pool.push(piece);
+    }
+    piece.group.scale.setScalar(this.spacing);
+    piece.group.visible = true;
+    piece.setOpacity(1);
+    piece.setFace(this.glyphTexture(spec.side, spec.type), spec.side);
+    piece.group.position.copy(spec.from);
+    if (spec.hide !== null) this.hidden.add(spec.hide);
+    this.flights.push({ piece, ...spec });
+  }
+
+  /** Move everything in the air on. Returns whether anything is still
+   *  flying, which is what keeps the frame loop awake. */
+  animate(): boolean {
+    if (!this.flights.length) return false;
+    const now = performance.now();
+    let moving = false;
+    let relay = false;
+    for (const f of [...this.flights]) {
+      const t = (now - f.start) / f.ms;
+      if (t < 0) { moving = true; continue; }
+      if (t >= 1) {
+        f.piece.group.visible = false;
+        // The square goes back to the layout — and the layout has to be
+        // RE-RUN to put the piece there. Clearing the flag alone leaves a
+        // hole where the piece landed until the next move happens to sync.
+        if (f.hide !== null) { this.hidden.delete(f.hide); relay = true; }
+        this.flights.splice(this.flights.indexOf(f), 1);
+        this.dirty = true;
+        continue;
+      }
+      moving = true;
+      const k = f.fade ? easeOut(t) : easeInOut(t);
+      f.piece.group.position.lerpVectors(f.from, f.to, k);
+      // The arc: up and down again, so it reads as picked up rather than slid.
+      f.piece.group.position.y += Math.sin(Math.PI * t) * f.lift;
+      if (f.fade) {
+        f.piece.setOpacity(1 - easeOut(Math.max(0, (t - 0.45) / 0.55)));
+        f.piece.group.scale.setScalar(this.spacing * (1 - 0.35 * t));
+      }
+      this.dirty = true;
+    }
+    if (relay && this.shown) this.sync(this.shown);
+    return moving;
+  }
+
+  /** Put everything down where it is. For anything that rewrites the board
+   *  under a flight — a new game — because a flight that outlives its move
+   *  is a piece flying to a square that no longer wants it, while holding
+   *  that square empty. */
+  clearFlights(): void {
+    for (const f of this.flights) f.piece.group.visible = false;
+    this.flights.length = 0;
+    this.hidden.clear();
+    this.dirty = true;
+  }
+
   resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);
@@ -467,24 +612,31 @@ export class BoardView {
 interface PieceMesh {
   group: THREE.Group;
   setFace(texture: THREE.Texture, side: Side): void;
+  /** For a piece on its way off the board. Only pieces built with `fades`
+   *  can do this — a material's transparency is part of its shader, and
+   *  switching it mid-game recompiles one. */
+  setOpacity(o: number): void;
 }
 
 /** A disc with a character on it. The character is a separate plane sitting a
  *  hair above the disc rather than a texture on the cylinder's cap, because a
  *  cylinder cap's UVs are a circle mapped from the side and the glyph comes
  *  out rotated by whatever the geometry felt like. */
-function makePiece(spacing: number, opacity = 1): PieceMesh {
+function makePiece(spacing: number, opacity = 1, fades = false): PieceMesh {
   const group = new THREE.Group();
   const r = 0.46, h = 0.22;
   const disc = new THREE.Mesh(
     new THREE.CylinderGeometry(r, r * 0.96, h, 28),
     new THREE.MeshStandardMaterial({
       color: 0xf0dcb4, roughness: 0.55, metalness: 0.02,
-      transparent: opacity < 1, opacity,
+      transparent: opacity < 1 || fades, opacity,
     }),
   );
   disc.position.y = h / 2;
-  disc.castShadow = opacity === 1;
+  // A piece that fades casts no shadow: a shadow does not fade with it (the
+  // depth pass does not read opacity), so a piece that has gone leaves a
+  // full-strength shadow behind on the wood.
+  disc.castShadow = opacity === 1 && !fades;
   disc.receiveShadow = true;
   group.add(disc);
 
@@ -500,6 +652,10 @@ function makePiece(spacing: number, opacity = 1): PieceMesh {
   group.visible = false;
   return {
     group,
+    setOpacity(o): void {
+      (disc.material as THREE.MeshStandardMaterial).opacity = o;
+      (face.material as THREE.MeshBasicMaterial).opacity = o;
+    },
     setFace(texture, side): void {
       const mat = face.material as THREE.MeshBasicMaterial;
       mat.map = texture;

@@ -316,6 +316,34 @@ happens. Watch the removal: holding the element in a local before nulling the
 reference is not style, it is the difference between the screen going away and
 it sitting there invisible for ever with one line in the console.
 
+**A move is a piece being CARRIED.** `animateMove(from, to, mover, taken)` is
+called with the move the referee has just accepted, so the position is already
+the one after it — everything the view is told is about what the player did
+not get to see. Three things hold it up:
+
+- **The square the piece lands on is held EMPTY while it flies** (`hidden`),
+  or the piece is on its square and on its way to it at the same time. When
+  the flight ends the layout is RE-RUN (`this.shown`), not just unflagged:
+  `sync()` is what puts a piece on a square, so clearing the flag alone leaves
+  a hole where the piece landed until the next move happens to sync.
+- **A taken piece leaves towards whoever TOOK it**, which reads backwards in
+  the code: a black horse goes to Red's end of the table.
+- **Flights come out of their OWN pool.** A piece in the air is not in the
+  position, so it cannot borrow one of the pooled discs `sync()` is handing
+  out. The fading pool is separate again, because transparency is part of a
+  material's shader and switching it at runtime recompiles one — which, on
+  the frame a piece starts moving, is the one frame that must not stall.
+  A fading piece also casts NO shadow: the depth pass does not read opacity,
+  so a piece that has gone would leave its shadow behind on the wood.
+
+**Sampling an animation needs the page's clock FROZEN.** A screenshot takes
+longer than a 260ms arc, so a probe that starts a flight and asks for a
+picture "at 100ms" gets the board after it finished — which looks exactly like
+the animation not rendering at all. Override `performance.now` with a value
+the probe advances by hand, call `animate()` then `render()`, and only then
+shoot. And the local preview is `vite preview` of `dist/`: a source edit is
+not on screen until `npm run build`.
+
 **The end of a game is a DIALOG, not a line in the corner.** The status line
 is where "your move" lives, and a result printed in the same place in the same
 type reads as one more turn rather than as the end of something. The card
