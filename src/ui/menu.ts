@@ -55,6 +55,15 @@ export class Menu {
   /** Centred over the whole screen (from the title) rather than parked in the
    *  corner (over a game). */
   private standalone = false;
+  /**
+   * Whether the rest of the settings are showing.
+   *
+   * This game has nothing that has to be decided before a move — no board
+   * size, no colour — so the short panel is the assistant switch and Start.
+   * Everything else is a preference, and a preference in front of somebody
+   * who wants to play is a question they did not ask.
+   */
+  private showMore = false;
 
   constructor(initial: MenuChoice, private opts: MenuOptions) {
     this.choice = { ...initial };
@@ -70,6 +79,7 @@ export class Menu {
   toggle(): void { this.el.hidden ? this.show() : this.close(); }
 
   show(): void {
+    this.showMore = false;
     this.el.hidden = false;
     this.draw();
   }
@@ -106,16 +116,6 @@ export class Menu {
     head.textContent = t(this.standalone ? 'menu.newHeading' : 'menu.heading');
     this.el.appendChild(head);
 
-    const levels = this.group(t('menu.opponent'), LEVELS.map((l: { id: string }) => ({
-      label: levelLabel(l.id),
-      on: l.id === level.id,
-      pick: () => { this.choice.level = l.id; this.opts.onLevel(l.id); this.draw(); },
-    })));
-    const about = document.createElement('div');
-    about.className = 'about';
-    about.textContent = levelAbout(level.id);
-    levels.appendChild(about);
-    this.el.appendChild(levels);
 
     // A game-level switch, not a preference: it decides whether this game
     // talks to a language model at all. Off means no calls, no buttons, no
@@ -125,11 +125,40 @@ export class Menu {
       { label: t('menu.off'), on: !this.choice.companion, pick: () => { this.choice.companion = false; this.opts.onCompanion(false); this.draw(); } },
     ]));
 
-    this.el.appendChild(this.group(t('menu.handicap'), HANDICAPS.map((h) => ({
+
+    const more = document.createElement('div');
+    more.className = 'more';
+    more.hidden = !this.showMore;
+
+    const levels = this.group(t('menu.opponent'), LEVELS.map((l: { id: string }) => ({
+      label: levelLabel(l.id),
+      on: l.id === level.id,
+      pick: () => { this.choice.level = l.id; this.opts.onLevel(l.id); this.draw(); },
+    })));
+    const about = document.createElement('div');
+    about.className = 'about';
+    about.textContent = levelAbout(level.id);
+    levels.appendChild(about);
+    more.appendChild(levels);
+
+    more.appendChild(this.group(t('menu.handicap'), HANDICAPS.map((h) => ({
       label: t(`handicap.${h}` as Key),
       on: this.choice.handicap === h,
       pick: () => { this.choice.handicap = h; this.draw(); },
     }))));
+
+    if (!this.standalone) more.appendChild(this.group(t('menu.sound'), [
+      { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
+      { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
+      { label: t('menu.eval'), on: this.opts.evalBar(), pick: () => { this.opts.onEval(!this.opts.evalBar()); this.draw(); } },
+    ]));
+
+    const disclose = document.createElement('button');
+    disclose.className = 'more-toggle quiet-link';
+    disclose.textContent = t(this.showMore ? 'menu.less' : 'menu.more');
+    disclose.onclick = () => { this.showMore = !this.showMore; this.draw(); };
+    this.el.appendChild(disclose);
+    this.el.appendChild(more);
 
     const go = document.createElement('button');
     go.className = 'go lift';
@@ -162,11 +191,6 @@ export class Menu {
     //
     // Two switches, not two sliders. The useful question is whether a piece
     // makes a noise when it lands, not how loud it is.
-    if (!this.standalone) this.el.appendChild(this.group(t('menu.sound'), [
-      { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
-      { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
-      { label: t('menu.eval'), on: this.opts.evalBar(), pick: () => { this.opts.onEval(!this.opts.evalBar()); this.draw(); } },
-    ]));
 
     const home = document.createElement('button');
     home.className = 'home lift quiet';
