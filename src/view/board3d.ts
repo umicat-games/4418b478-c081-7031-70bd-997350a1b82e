@@ -197,7 +197,7 @@ export class BoardView {
 
     // Near the table's own tone, so anything beyond the table's edge is not a
     // hole cut in it. It followed the table when the table went pale.
-    this.scene.background = new THREE.Color('#cfccc4');
+    this.scene.background = new THREE.Color('#d5cec0');
     this.camera = new THREE.PerspectiveCamera(FOV_DEG, 1, 0.1, 100);
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP_Y);
 
