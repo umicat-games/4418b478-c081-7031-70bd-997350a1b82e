@@ -66,10 +66,31 @@
  * 520px read as a small logo lost in the middle of a wide desktop monitor —
  * the vw share was already tuned for phones, so raising the CAP is what
  * actually grows it on anything wider than a phone. */
+/**
+ * The wordmark, and the two numbers that decide how big it looks.
+ *
+ * **Sized by two CAPS, not by a width** — and that is the whole fix. With
+ * `width` set and `max-height` clamping it, an `<img>` keeps the width it was
+ * given and `object-fit: contain` letterboxes the picture INSIDE it: the
+ * element measured 699px across on a phone while the wordmark drawn in it was
+ * 306. It looked small because it WAS small, and the box around it made the
+ * measurement say otherwise.
+ *
+ * With both caps and auto sizing, the image is fitted to the smaller of them
+ * and the element hugs the art, so what is measured is what is seen.
+ *
+ * The height cap is stated as what is actually left: the buttons, the gaps
+ * and the status line come to about 90px, and 130 leaves them room on the
+ * shortest screen this runs on — an iPhone in landscape, 393px tall, which
+ * the old phone rule was giving a 101px-tall wordmark.
+ */
 #title .logo {
   display: none;
-  width: min(760px, 78vw);
-  max-height: 32vh;
+  width: auto;
+  height: auto;
+  max-width: min(880px, 84vw);
+  max-height: calc(100vh - 130px);
+  max-height: calc(100dvh - 130px);
   object-fit: contain;
   filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.55));
 }
@@ -93,7 +114,10 @@
 #title .status { font-size: 13px; opacity: 0.6; min-height: 1.4em; }
 
 /* A phone in landscape: the wordmark gives up height before the buttons do. */
+/* A phone in landscape. The wordmark is NOT shrunk here — the height cap
+   above already gives it exactly what is left — but everything else tightens
+   up to leave it more. */
 @media (max-height: 460px) {
-  #title { gap: 14px; }
-  #title .logo { width: min(380px, 62vw); max-height: 26vh; }
+  #title { gap: 12px; }
+  #title .status { font-size: 12px; min-height: 1.2em; }
 }
