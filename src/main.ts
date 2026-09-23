@@ -895,7 +895,6 @@ async function start(): Promise<void> {
       music: () => coach.profile.music !== false,
       sound: () => coach.profile.sound !== false,
       evalBar: () => evalBar.enabled,
-      onTitle: () => void toTitle(),
       // Dismissed from the title screen, where there is no board behind it.
       onClose: () => { if (!game) void toTitle(); },
     },
