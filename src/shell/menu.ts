@@ -54,7 +54,6 @@ export interface MenuOptions {
   onLevel(level: string): void;
   onHint(): void;
   onResign(): void;
-  onTitle(): void;
   /** Switched mid-game; a new game takes it from `onStart`'s choice. */
   onCompanion(on: boolean): void;
   onMusic(on: boolean): void;
@@ -120,6 +119,24 @@ export class Menu {
     const level = levels.find((l) => l.id === this.choice.level) ?? levels[0];
     this.el.className = this.standalone ? 'standalone' : '';
     this.el.replaceChildren();
+
+    /**
+     * The way out, in the corner where every panel on a phone keeps it.
+     *
+     * It is `close()` and not "back to the title": what closing MEANS is
+     * already the caller's business — over a game it puts the board back,
+     * and opened from the title there is no board to put back, so `onClose`
+     * returns there. One button, right in both places, instead of a button
+     * whose label is a destination.
+     */
+    const shut = document.createElement('button');
+    shut.className = 'shut';
+    shut.type = 'button';
+    shut.setAttribute('aria-label', t('menu.close'));
+    shut.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+      + '<path d="M6 6l12 12M18 6L6 18"/></svg>';
+    shut.onclick = () => this.close();
+    this.el.appendChild(shut);
 
     const head = document.createElement('div');
     head.className = 'title';
@@ -209,13 +226,44 @@ export class Menu {
       this.el.appendChild(actions);
     }
 
-    // Sound is a setting, not a question about the game being started. Opened
-    // from the title, this panel asks the fewest things it can.
-    const home = document.createElement('button');
-    home.className = 'home lift quiet';
-    home.textContent = t('menu.toTitle');
-    home.onclick = () => { this.el.hidden = true; this.opts.onTitle(); };
-    this.el.appendChild(home);
+
+    this.pin();
+  }
+
+  /**
+   * The button is the floor of the panel.
+   *
+   * Everything above it scrolls; it does not. On a phone the settings are
+   * taller than the panel — open "more" and they are much taller — and a
+   * start button that scrolls with them is a start button the player has to
+   * go looking for, directly after being given a list of things to read.
+   *
+   * It is full-bleed, and that is the point rather than a flourish: a button
+   * that reaches the panel's own corners IS the bottom of the panel, so there
+   * is nothing under it to scroll to and nothing to mistake it for. The
+   * panel's `overflow: hidden` is what rounds it — the button sets no radius
+   * of its own, so this keeps working if the panel's radius changes.
+   *
+   * Done here rather than by building the panel in two halves, because each
+   * game in the family writes its own `draw()` and they all append to the
+   * same element. This is the one step they can share.
+   */
+  private pin(): void {
+    const go = this.el.querySelector(':scope > .go');
+    const shut = this.el.querySelector(':scope > .shut');
+    // The heading stays too, and not for symmetry: the close button is pinned
+    // to the corner, and with the heading scrolled away it was left floating
+    // over a row of settings, reading as part of whatever had scrolled under
+    // it. A pinned button needs something pinned behind it.
+    const head = this.el.querySelector(':scope > .title');
+    if (!go) return;
+    const body = document.createElement('div');
+    body.className = 'body';
+    // `appendChild` MOVES, so this empties the panel down to what stays put.
+    for (const node of [...this.el.children]) {
+      if (node !== go && node !== shut && node !== head) body.appendChild(node);
+    }
+    this.el.replaceChildren(...(head ? [head] : []), ...(shut ? [shut] : []), body, go);
   }
 
   private group(label: string, items: Array<{ label: string; on: boolean; pick(): void }>): HTMLDivElement {

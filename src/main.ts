@@ -648,7 +648,6 @@ async function start(): Promise<void> {
       music: () => coach.profile.music !== false,
       sound: () => coach.profile.sound !== false,
       evalBar: () => evalBar.enabled,
-      onTitle: () => void toTitle(),
       onClose: () => { if (!game) void toTitle(); },
     },
   );
