@@ -26,20 +26,6 @@
 }
 #title .buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
 
-#title button.quiet-link {
-  border: none;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  opacity: 0.55;
-  background: none;
-  border-color: transparent;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-#title button.quiet-link:hover { opacity: 0.9; }
+/* `.quiet-link` is in buttons.css, where every screen can see it. */
 
 #title .status { font-size: 13px; opacity: 0.6; min-height: 1.4em; }

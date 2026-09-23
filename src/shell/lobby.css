@@ -30,6 +30,8 @@
 #lobby .buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 #lobby .stack { display: grid; gap: 10px; justify-items: stretch; min-width: min(320px, 80vw); }
 #lobby .stack button { width: 100%; }
+/* Except the way out, which is a link and sizes itself. */
+#lobby .stack button.quiet-link { width: auto; justify-self: center; }
 #lobby .status { font-size: 13px; opacity: 0.68; min-height: 1.4em; max-width: 34em; }
 #lobby .status.bad { color: #ffb3aa; opacity: 0.95; }
 

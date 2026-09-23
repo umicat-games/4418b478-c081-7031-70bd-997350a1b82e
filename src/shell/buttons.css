@@ -102,3 +102,33 @@
   color: #fff;
 }
 .chip:disabled { opacity: 0.4; cursor: default; }
+
+
+/**
+ * The quiet way out: a link that happens to be a button.
+ *
+ * It lives HERE rather than beside the screen that first wanted it. Written
+ * as `#title button.quiet-link` it was invisible everywhere else — the
+ * lobby's four back buttons and the waiting screen's "leave the table" came
+ * out as raw browser buttons, grey rectangles in the middle of a designed
+ * screen, because a class that only exists under one id is not a class.
+ *
+ * Anything that is a real choice gets `.lift`. This is for the ones that are
+ * a way back rather than a thing to do.
+ */
+button.quiet-link {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 6px 12px;
+  font: 500 13px/1.4 system-ui, -apple-system, sans-serif;
+  opacity: 0.55;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  box-shadow: none;
+  transition: opacity .2s ease;
+}
+button.quiet-link:hover { opacity: 0.9; }
+button.quiet-link:active { opacity: 1; transform: translateY(1px); }
