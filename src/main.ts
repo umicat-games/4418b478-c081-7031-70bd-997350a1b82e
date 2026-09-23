@@ -32,8 +32,9 @@ import { Plates } from './shell/plates';
 import { showTitle } from './shell/title';
 import { underCurtain } from './shell/curtain';
 import { BLACK, Gomoku, SIZES, WHITE, type BoardSize, type Player, type Point } from './game/rules';
-import { showLobby } from './shell/lobby';
+import { hideWaiting, showLobby, showWaiting } from './shell/lobby';
 import { Table, type SeatNo, type Snapshot } from './shell/net/table';
+import type { UmicatRoom } from '@umicat/platform-sdk';
 import { afterMove, controlOf, flagged, freshClock, left, low, show, type Preset, type TimeControl } from './shell/net/clock';
 import { notation } from './game/coords';
 import { Board } from './game/board';
@@ -174,7 +175,7 @@ async function start(): Promise<void> {
       if (table) { table.offer('rematch'); say(t('net.rematchOffered')); return; }
       void freshGame(nextSize, companion);
     },
-    onTitle: () => { if (table) void leaveOnline(); else void toTitle(); },
+    onTitle: () => { if (table) void leaveTable(); else void toTitle(); },
   });
 
   /**
@@ -270,6 +271,14 @@ async function start(): Promise<void> {
   let ticker: number | null = null;
   /** When the other side dropped out of the room, if they have. */
   let goneSince: number | null = null;
+  /** Which game at the table is on screen. A table outlives its games. */
+  let gen = -1;
+  /** What the waiting screen is currently saying, or null when it is down. */
+  let waitingNote: string | null = null;
+  /** The result on the card, and whether it was drawn for somebody sitting
+   *  alone — because "play again" stops being true the moment they get up. */
+  let lastResult: { title: string; body: string; tone: 'win' | 'loss' | 'draw' } | null = null;
+  let resultAlone = false;
 
   /** Staged in the new-game panel; applies to the next game. */
   let nextSize: BoardSize = ((saved.profile.game as GameProfile)?.boardSize ?? 15) as BoardSize;
@@ -515,15 +524,17 @@ async function start(): Promise<void> {
     seated = { cols: rig.cols, rows: rig.rows };
     const user = umicat.user;
     const yours = !game.over && game.toPlay === me && !thinking;
-    const them = table?.who(table.them) ?? null;
+    const mySeat = table?.seat ?? null;
+    const theirSeat = table?.them ?? null;
+    const them = table?.who(theirSeat) ?? null;
     // Their name arrives with the room's state, which is a moment after the
     // join — so the panel is told again whenever it changes rather than once,
     // at a point where the answer was still "nobody".
     if (table) chat.setPeer(them?.name ?? t('plate.them'));
     const now = Date.now();
-    const clockOf = (seat: SeatNo): { clock?: string; low?: boolean } => {
-      if (!table || !snapshot) return {};
-      const l = left(snapshot, seat, game!.toPlay === me ? table.seat : table.them, now);
+    const clockOf = (seat: SeatNo | null): { clock?: string; low?: boolean } => {
+      if (!table || !snapshot || seat === null || mySeat === null || theirSeat === null) return {};
+      const l = left(snapshot, seat, game!.toPlay === me ? mySeat : theirSeat, now);
       return { clock: show(l), low: !game!.over && low(l) };
     };
     plates.set(
@@ -533,17 +544,17 @@ async function start(): Promise<void> {
         colour: me === BLACK ? 'black' : 'white',
         meta: t('plate.moves', { n: game.moves.length }),
         active: yours,
-        ...(table ? clockOf(table.seat) : {}),
+        ...(table ? clockOf(mySeat) : {}),
       },
       {
         name: table ? (them?.name ?? t('plate.them')) : t('plate.engine'),
         avatar: them?.avatar ?? null,
         colour: me === BLACK ? 'white' : 'black',
         meta: table
-          ? (table.present(table.them) ? '' : t('net.waitingRejoin'))
+          ? (table.full ? '' : game && !game.over ? t('net.waitingRejoin') : t('net.emptySeat'))
           : thinking ? t('plate.thinking') : levelLabel(level.id),
         active: !game.over && !yours,
-        ...(table ? clockOf(table.them) : {}),
+        ...(table ? clockOf(theirSeat) : {}),
       },
     );
     seatPlates();
@@ -839,7 +850,7 @@ async function start(): Promise<void> {
         // Starting a game against the engine while sitting at a table means
         // leaving the table — quietly, but really, so the other person is not
         // left staring at a board nobody is going to move.
-        if (table) { stopTicking(); table.close(); table = null; snapshot = null; netChat.length = 0; me = BLACK; }
+        if (table) { stopTicking(); stopWaiting(); table.close(); table = null; snapshot = null; gen = -1; netChat.length = 0; me = BLACK; chat.setPeer(null); }
         // Started from the title, the board is still behind a title screen.
         leaveTitle();
         await underCurtain(t('title.loading'), loading);
@@ -849,7 +860,7 @@ async function start(): Promise<void> {
       onResign: () => {
         if (!game || game.over) return;
         if (!window.confirm(table ? t('net.resignSure') : t('confirm.resign'))) return;
-        if (table) { endOnline('resign', table.seat); return; }
+        if (table) { endOnline('resign', table.seat ?? undefined); return; }
         game.resign(me);
         refresh();
         persist();
@@ -864,7 +875,9 @@ async function start(): Promise<void> {
       music: () => coach.profile.music !== false,
       sound: () => coach.profile.sound !== false,
       evalBar: () => evalBar.enabled,
-      onTitle: () => void toTitle(),
+      // Getting up, really: a client that stays connected while its player
+      // is on the title screen is a table on the list with nobody at it.
+      onTitle: () => { if (table) void leaveTable(); else void toTitle(); },
       // Dismissed from the title screen, where there is no board behind it.
       onClose: () => { if (!game) void toTitle(); },
     },
@@ -963,38 +976,41 @@ async function start(): Promise<void> {
   // ── playing a person ────────────────────────────────────────────────────
 
   /**
-   * Sit down at a table and start the game.
+   * Sit down at a table.
    *
-   * Seat 0 moves first and therefore has Black. Only seat 0 publishes the
-   * opening snapshot: two clients each writing "here is the empty board"
-   * would each write a different `at`, and the clocks would disagree from the
-   * first second.
+   * A table is a LIFETIME, not a game: people arrive, play, rematch, leave
+   * and are replaced, and the room outlives all of it. So nothing here
+   * decides anything once — `syncTable()` re-derives who is sitting where on
+   * every change to the room, which is what makes a late joiner, a rematch
+   * and somebody closing their laptop the same code path.
    */
-  function startOnline(tbl: Table, tc: TimeControl = timeControl): void {
+  function startTable(room: UmicatRoom<unknown>, code: string, tc: TimeControl): void {
+    // Getting up from any table we are already at. Two connections from one
+    // player is two players in the room, and one of them is a ghost.
+    table?.close();
+    const tbl = new Table(room, code);
     table = tbl;
     timeControl = tc;
-    me = tbl.seat === 0 ? BLACK : WHITE;
+    gen = -1;
     // No assistant, no eval bar, no hint. See the comment on `table`.
     setCompanion(false);
     evalBar.setEnabled(false);
     plates.hush();
-    chat.setEchoed(false);
+    netChat.length = 0;
     redrawChat();
     over.hide();
     leaveTitle();
+    logBtn.hidden = false;
+    // Whatever was on the board belonged to the game before this one. There
+    // is nothing to look at at an empty table but the waiting screen.
+    game = null;
+    snapshot = null;
+    refresh();
 
-    game = new Gomoku(nextSize);
-    speech.notation = notation(nextSize);
-    board.build(nextSize);
-    clearMarks();
-    read = null;
-
-    tbl.onChange(() => applyRemote());
+    tbl.onChange(() => syncTable());
     tbl.onChat((m) => {
-      // Mine come back to me through the same handler, which is what makes
-      // the two sides of the conversation land in the same place.
-      const mine = m.from === tbl.room?.sessionId;
       if (m.kind !== 'user') return;
+      const mine = m.from === tbl.sid;
       plates.bubble(mine ? 'left' : 'right', m.text);
       netChat.push({ from: mine ? 'player' : 'coach', text: m.text, at: m.ts });
       redrawChat();
@@ -1003,61 +1019,131 @@ async function start(): Promise<void> {
       if (!table) return;
       if (kind === 'draw') {
         if (!game || game.over) return;
-        if (window.confirm(t('net.drawAsked') + '\n' + t('net.accept') + '?')) {
-          endOnline('draw');
+        if (window.confirm(`${t('net.drawAsked')}\n${t('net.accept')}?`)) {
           table.answer('draw', true);
+          endOnline('draw');
         } else {
           table.answer('draw', false);
         }
         return;
       }
-      if (window.confirm(t('net.rematchAsked') + '\n' + t('net.accept') + '?')) {
+      if (window.confirm(`${t('net.rematchAsked')}\n${t('net.accept')}?`)) {
         table.answer('rematch', true);
-        restartOnline();
+        // The side that ACCEPTS publishes, so there is one writer for the new
+        // game the same way there is one writer for every move in it.
+        freshGameAtTable();
       } else {
         table.answer('rematch', false);
       }
     });
     tbl.onAnswer((kind, yes) => {
       if (kind === 'draw') { if (!yes) say(t('net.drawDeclined')); return; }
-      if (yes) restartOnline();
-      else say(t('net.rematchDeclined'));
+      if (!yes) say(t('net.rematchDeclined'));
     });
-    tbl.onGone(() => {
-      // Our own connection, not theirs: either way there is no game left.
-      if (game && !game.over) endLocal('left', tbl.them);
-    });
+    tbl.onGone(() => { if (table === tbl) void leaveTable(t('net.connectionLost')); });
 
-    if (tbl.seat === 0) {
-      snapshot = { moves: [], ...freshClock(Date.now(), timeControl) };
-      tbl.publish(snapshot);
-    } else {
-      applyRemote();
-    }
-    startTicking();
-    logBtn.hidden = false;
-    chat.setPeer(tbl.who(tbl.them)?.name ?? t('plate.them'));
-    refresh();
+    syncTable();
   }
 
-  /** A rematch is the same table with a new board — and the colours swap, so
-   *  nobody has the first move twice running. */
-  function restartOnline(): void {
-    if (!table) return;
-    me = me === BLACK ? WHITE : BLACK;
-    plates.hush();
-    over.hide();
-    game = new Gomoku(nextSize);
-    board.build(nextSize);
-    clearMarks();
-    // Whoever now has Black owns the opening snapshot, for the same reason as
-    // at the start: one writer, one stamp.
-    if (me === BLACK) {
-      snapshot = { moves: [], ...freshClock(Date.now(), controlOf(snapshot)) };
-      table.publish(snapshot);
+  /**
+   * Work out where everybody is, and make the screen agree with it.
+   *
+   * Called on every change to the room. It is deliberately a re-read rather
+   * than a diff: "what is true now" has one answer and half a dozen ways of
+   * arriving, and the version that tried to know which of them had happened
+   * is the version that showed a newcomer somebody else's finished game.
+   */
+  function syncTable(): void {
+    const tbl = table;
+    if (!tbl || tbl.left) return;
+
+    // One client keeps the seating written down; everyone else reads it.
+    tbl.maintainSeats();
+
+    if (!tbl.full) {
+      // **A live game is not interrupted by an empty chair.**
+      //
+      // Somebody's connection dropping shows up here first, and the waiting
+      // screen used to go straight up — which stopped the clock, and the
+      // clock is where the fifteen seconds of grace are counted. The game
+      // then never ended, and the player sat in front of a waiting screen
+      // holding a result nobody had declared. So while there is a game to
+      // lose, the tick keeps running and their seat says they have gone
+      // quiet; the waiting screen comes up once it is over.
+      if (game && !game.over && snapshot && !snapshot.end) { fillPlates(); return; }
+
+      // An empty chair. Whatever was on the board belonged to a pair that no
+      // longer exists, so it is not started again and not shown as live.
+      //
+      // If the card from that game is still up, it is re-drawn: its first
+      // button said "play again", and there is nobody left to play.
+      if (over.showing && lastResult && !resultAlone) showTableResult(lastResult);
+      waitAtTable(tbl.code ? t('lobby.readItOut') : t('lobby.waitingQuick'));
+      return;
     }
-    startTicking();
-    refresh();
+
+    if (tbl.seat === null) {
+      // Two people, and neither is me: somebody else got here first. Nothing
+      // to show but the door.
+      waitAtTable(t('net.noSeat'));
+      return;
+    }
+
+    if (over.showing && lastResult && resultAlone) showTableResult(lastResult);
+
+    const snap = tbl.read();
+    if (!tbl.isOurs(snap)) {
+      // Two people, and no game that belongs to THEM. The maintainer deals a
+      // new one; the other waits a beat for it to arrive.
+      if (tbl.maintainer) freshGameAtTable(snap?.gen ?? 0);
+      else waitAtTable(t('net.starting'));
+      return;
+    }
+
+    stopWaiting();
+    applyRemote(snap!);
+  }
+
+  /**
+   * Waiting for somebody, with the code up. The board behind it is whatever
+   * was last on it; nothing is played from here.
+   *
+   * Rebuilt only when what it SAYS changes: `syncTable` runs on every change
+   * to the room, including the other person's typing indicator, and a screen
+   * that is torn down and rebuilt each time flickers and loses its fade.
+   */
+  function waitAtTable(note: string): void {
+    stopTicking();
+    if (waitingNote === note) return;
+    waitingNote = note;
+    showWaiting({ code: table?.code ?? '', note, onLeave: () => void leaveTable() });
+  }
+
+  /** Take the waiting screen down, and remember that it is down. */
+  function stopWaiting(): void {
+    if (waitingNote === null) return;
+    waitingNote = null;
+    hideWaiting();
+  }
+
+  /**
+   * Deal a new game to the two people sitting here.
+   *
+   * One writer: the maintainer when a pair has just formed, the accepter of a
+   * rematch when it is a rematch. `gen` is what tells the other side this is
+   * a different game rather than a strange move.
+   */
+  function freshGameAtTable(after?: number): void {
+    const tbl = table;
+    const pair = tbl?.pair();
+    if (!tbl || !pair) return;
+    const previous = after ?? tbl.read()?.gen ?? 0;
+    tbl.publish({
+      gen: previous + 1,
+      for: pair,
+      moves: [],
+      ...freshClock(Date.now(), timeControl),
+    });
   }
 
   /**
@@ -1068,11 +1154,31 @@ async function start(): Promise<void> {
    * this one's screen, so a client that plays out of turn, by racing or on
    * purpose, is refused rather than obeyed.
    */
-  function applyRemote(): void {
-    if (!table || !game) return;
-    const next = table.read();
-    if (!next) return;
+  function applyRemote(next: Snapshot): void {
+    const tbl = table;
+    if (!tbl) return;
+    const seat = tbl.seat;
+    if (seat === null) return;
     snapshot = next;
+    timeControl = controlOf(next);
+
+    // A new game at this table: a rematch, or a new pair. Everything that
+    // belonged to the last one goes, including its result.
+    if (next.gen !== gen) {
+      gen = next.gen;
+      me = seat === 0 ? BLACK : WHITE;
+      over.hide();
+      game = new Gomoku(nextSize);
+      speech.notation = notation(nextSize);
+      board.build(nextSize);
+      clearMarks();
+      chosen = null;
+      board.setGhost(null);
+      read = null;
+      startTicking();
+      chat.setPeer(tbl.who(tbl.them)?.name ?? t('plate.them'));
+    }
+    if (!game) return;
 
     if (next.moves.length !== game.moves.length) {
       const rebuilt = new Gomoku(game.size as BoardSize);
@@ -1089,23 +1195,29 @@ async function start(): Promise<void> {
     if (next.end && !game.over) { endLocal(next.end.kind, next.end.by); return; }
     refresh();
     // Their move finished it — five in a row on their side of the board.
-    if (game.over) { stopTicking(); over.show(describeResult(game)); }
+    if (game.over && !over.showing) showTableResult(describeResult(game));
   }
 
   /** Put my move where the other side can see it, with the clocks moved on. */
   function publishMove(): void {
-    if (!table || !game || !snapshot) return;
+    const tbl = table;
+    if (!tbl || !game || !snapshot) return;
+    const seat = tbl.seat;
+    if (seat === null) return;
     const now = Date.now();
-    snapshot = { ...snapshot, moves: [...game.moves], ...afterMove(snapshot, table.seat, now) };
-    table.publish(snapshot);
+    snapshot = { ...snapshot, moves: [...game.moves], ...afterMove(snapshot, seat, now) };
+    tbl.publish(snapshot);
   }
 
   /** I am ending it: resigning, agreeing a draw, or claiming their flag. */
   function endOnline(kind: 'resign' | 'draw' | 'timeout' | 'left', by?: SeatNo): void {
-    if (!table || !game || game.over || !snapshot) return;
-    const loser = kind === 'draw' ? undefined : (by ?? table.seat);
+    const tbl = table;
+    if (!tbl || !game || game.over || !snapshot) return;
+    const seat = tbl.seat;
+    if (seat === null) return;
+    const loser = kind === 'draw' ? undefined : (by ?? seat);
     snapshot = { ...snapshot, end: { kind, ...(loser === undefined ? {} : { by: loser }) } };
-    table.publish(snapshot);
+    tbl.publish(snapshot);
     endLocal(kind, loser);
   }
 
@@ -1114,46 +1226,72 @@ async function start(): Promise<void> {
    *
    * `by` is the seat it happened TO — who resigned, whose flag fell, who
    * left. The referee is told, so the board shows a finished game, and the
-   * dialog says which of the four it was.
+   * card says which of the four it was.
    */
   function endLocal(kind: 'resign' | 'draw' | 'timeout' | 'left', by?: SeatNo): void {
-    if (!game || !table) return;
+    const tbl = table;
+    if (!game || !tbl) return;
     stopTicking();
+    const seat = tbl.seat ?? 0;
     if (!game.over) {
       if (kind === 'draw') game.agreeDraw();
-      else game.resign(by === table.seat ? me : (me === BLACK ? WHITE : BLACK));
+      else game.resign(by === seat ? me : (me === BLACK ? WHITE : BLACK));
     }
     refresh();
-    const mine = by === table.seat;
-    const line = kind === 'draw' ? t('net.drawAgreed')
-      : kind === 'left' ? t('net.youWinLeft')
-        : kind === 'timeout' ? (mine ? t('net.youLoseTime') : t('net.youWinTime'))
-          : (mine ? t('net.youResigned') : t('net.theyResigned'));
-    over.show({
+    const mine = by === seat;
+    showTableResult({
       title: kind === 'draw' ? t('over.draw') : mine ? t('net.youLost') : t('net.youWon'),
-      body: line,
+      body: kind === 'draw' ? t('net.drawAgreed')
+        : kind === 'left' ? t('net.youWinLeft')
+          : kind === 'timeout' ? (mine ? t('net.youLoseTime') : t('net.youWinTime'))
+            : (mine ? t('net.youResigned') : t('net.theyResigned')),
       tone: kind === 'draw' ? 'draw' : mine ? 'loss' : 'win',
     });
   }
 
+  /**
+   * The card at the end of a game at a table.
+   *
+   * Its two buttons are not the solo game's two. If the other player is still
+   * sitting there, the thing to offer is another game — which they have to
+   * agree to, so it is a request and says so. If they have gone, the only two
+   * things left are to wait for somebody else or to get up, and the player
+   * has to be ASKED rather than left sitting in a room with a dead board,
+   * which is what the first version did.
+   */
+  function showTableResult(r: { title: string; body: string; tone: 'win' | 'loss' | 'draw' }): void {
+    const tbl = table;
+    const alone = !tbl || !tbl.full;
+    lastResult = r;
+    resultAlone = alone;
+    over.show({
+      ...r,
+      againLabel: alone ? t('net.keepWaiting') : t('net.rematch'),
+      homeLabel: t('net.leave'),
+    });
+  }
+
   /** Leave the table and go back to the title. */
-  async function leaveOnline(): Promise<void> {
+  async function leaveTable(note?: string): Promise<void> {
     stopTicking();
+    stopWaiting();
     table?.close();
     table = null;
     snapshot = null;
+    gen = -1;
     netChat.length = 0;
     me = BLACK;
     game = null;
-    chat.setPeer(null);
     plates.hush();
+    chat.setPeer(null);
     evalBar.setEnabled(coach.profile.evalBar !== false);
+    if (note) console.info('[net]', note);
     await toTitle();
   }
 
   /**
    * One redraw a second, which is all a clock needs — and the only place a
-   * flag is claimed.
+   * flag is claimed or an absence becomes a result.
    *
    * The claim is made by the player who is NOT on the clock, because they are
    * the one with time to notice; `flagged()` holds a couple of seconds back
@@ -1163,30 +1301,30 @@ async function start(): Promise<void> {
     stopTicking();
     goneSince = null;
     ticker = window.setInterval(() => {
-      if (!table || !game || game.over || !snapshot) return;
+      const tbl = table;
+      if (!tbl || !game || game.over || !snapshot) return;
+      const seat = tbl.seat;
+      const them = tbl.them;
+      if (seat === null || them === null) return;
 
       // Gone, and how long we wait before saying so.
       //
       // The rule is that leaving loses — that is what makes a result worth
-      // ranking. But a phone going through a tunnel, a laptop lid, or iOS
-      // suspending a backgrounded WebView all look exactly like leaving for
-      // a few seconds, and ending a game on those would take a loss off
-      // somebody who never left the table. So: a short wait, said out loud
-      // on their seat, and then it is a loss.
-      if (!table.present(table.them)) {
+      // ranking. But a phone going through a tunnel, a laptop lid, and iOS
+      // suspending a backgrounded WebView all look exactly like leaving for a
+      // few seconds, and ending a game on those would take a loss off
+      // somebody who never left the table. So: a short wait, said out loud on
+      // their seat, and then it is a loss.
+      if (!tbl.here(tbl.seats()[them])) {
         if (goneSince === null) goneSince = Date.now();
-        else if (Date.now() - goneSince > LEAVE_GRACE_MS) { endOnline('left', table.them); return; }
+        else if (Date.now() - goneSince > LEAVE_GRACE_MS) { endOnline('left', them); return; }
         fillPlates();
-      } else if (goneSince !== null) {
-        goneSince = null;
-        fillPlates();
-      }
-
-      const toMove = game.toPlay === me ? table.seat : table.them;
-      if (toMove === table.them && flagged(snapshot, toMove, Date.now())) {
-        endOnline('timeout', table.them);
         return;
       }
+      if (goneSince !== null) { goneSince = null; fillPlates(); }
+
+      const toMove = game.toPlay === me ? seat : them;
+      if (toMove === them && flagged(snapshot, them, Date.now())) { endOnline('timeout', them); return; }
       fillPlates();
     }, 1000);
   }
@@ -1203,6 +1341,7 @@ async function start(): Promise<void> {
     netChat.push({ from: 'coach', text, at: Date.now() });
     redrawChat();
   }
+
 
   // ── the way in, and back out ────────────────────────────────────────────
   /**
@@ -1242,7 +1381,7 @@ async function start(): Promise<void> {
 
     if (choice === 'online') {
       const result = await showLobby(umicat, CLOCKS);
-      if (result.kind === 'table') { startOnline(result.table, result.tc); return; }
+      if (result.kind === 'room') { startTable(result.room, result.code, result.tc); return; }
       await toTitle();
       return;
     }
@@ -1298,6 +1437,14 @@ async function start(): Promise<void> {
     document.body.classList.remove('titling');
   }
 
+  // Closing the tab is getting up from the table. Colyseus notices a dropped
+  // socket on its own, but not before the room has sat there with a player in
+  // it who is no longer anywhere — and `pagehide` is the one that fires on
+  // iOS, where `beforeunload` does not.
+  for (const type of ['pagehide', 'beforeunload'] as const) {
+    window.addEventListener(type, () => table?.close());
+  }
+
   await toTitle();
 
   // The probe surface. Playwright drives the game through this rather than
@@ -1308,7 +1455,9 @@ async function start(): Promise<void> {
       umicat, rig, board, opponent, coach, chat, speech, menu, actions, askHere, audio, evalBar, over, plates,
       // The table, for probes: `startOnline(Table.online(room, seats))` with a
       // stand-in room is how the two-seat flow is driven without a platform.
-      Table, startOnline, showLobby, clocks: CLOCKS,
+      Table, startTable, showLobby, clocks: CLOCKS,
+      get seats() { return table?.seats() ?? null; },
+      get gen() { return gen; },
       get table() { return table; },
       get snapshot() { return snapshot; },
       get game() { return game; },

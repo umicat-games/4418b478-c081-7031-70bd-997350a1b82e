@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>host</title>
+<style>html,body{margin:0;height:100%;background:#111}iframe{border:0;width:100%;height:100%;display:block}</style>
+<!--
+  A minimal stand-in for umicat-home-ui, so the game can be driven against the
+  REAL realtime service instead of a stand-in room.
+
+  It speaks the parent half of the postMessage protocol: the init handshake
+  (with a realtimeUrl, which is what turns multiplayer on) and the handful of
+  RPCs a board game makes at boot. `realtime.getToken` is the one that matters
+  — it mints a token from the prod API with whatever id token this page was
+  given, which is why two browser contexts signed in as the same account are
+  two different players in a room.
+-->
+<iframe id="game" allow="microphone"></iframe>
+<script>
+const qs = new URLSearchParams(location.search);
+const GAME = qs.get('game');
+const SRC = qs.get('src');
+const NAME = qs.get('name') || 'Tester';
+const TOKEN = sessionStorage.getItem('idToken') || qs.get('token') || '';
+const API = 'https://api.umicat.ai';
+const saves = {};   // per-tab, in memory: a table is not a save anyway
+
+const frame = document.getElementById('game');
+frame.src = SRC;
+
+const reply = (id, result) => frame.contentWindow.postMessage({ type: 'umicat:rpc.result', id, ok: true, result }, '*');
+const fail = (id, code, message) => frame.contentWindow.postMessage({ type: 'umicat:rpc.result', id, ok: false, error: { code, message } }, '*');
+
+window.addEventListener('message', async (e) => {
+  const m = e.data;
+  if (!m || typeof m !== 'object') return;
+  if (m.type === 'umicat:hello') {
+    frame.contentWindow.postMessage({
+      type: 'umicat:init',
+      protocolVersion: m.protocolVersion ?? 1,
+      gameId: GAME,
+      user: { id: qs.get('uid') || 'tester', name: NAME },
+      capabilities: ['realtime'],
+      realtimeUrl: 'wss://ws.umicat.ai/rt',
+      locale: 'en',
+    }, '*');
+    window.__hostReady = true;
+    return;
+  }
+  if (m.type !== 'umicat:rpc') return;
+  try {
+    if (m.method === 'realtime.getToken') {
+      // Minted in node when there is a binding for it: the prod API does not
+      // allow a localhost origin, and a stand-in host is not worth a CORS
+      // rule. In a real host this is a same-origin call.
+      if (typeof window.__rtToken === 'function') return reply(m.id, { token: await window.__rtToken() });
+      const r = await fetch(`${API}/games/${encodeURIComponent(GAME)}/rt-token`, {
+        method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` },
+      });
+      if (!r.ok) return fail(m.id, 'REALTIME_UNAVAILABLE', `rt-token ${r.status}`);
+      const j = await r.json();
+      return reply(m.id, { token: j.token });
+    }
+    if (m.method === 'saves.get') return reply(m.id, { value: saves[m.params?.key] ?? null });
+    if (m.method === 'saves.set') { saves[m.params?.key] = m.params?.value; return reply(m.id, {}); }
+    if (m.method === 'saves.delete') { delete saves[m.params?.key]; return reply(m.id, {}); }
+    if (m.method === 'saves.list') return reply(m.id, { keys: Object.keys(saves) });
+    return fail(m.id, 'UNSUPPORTED', m.method);
+  } catch (err) {
+    fail(m.id, 'HOST_ERROR', String(err));
+  }
+});
+</script>

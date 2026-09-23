@@ -29,11 +29,23 @@ export interface Result {
   body: string;
   /** Colours the headline. Nothing else changes. */
   tone: 'win' | 'loss' | 'draw';
+  /**
+   * What the two buttons say, when the usual words are wrong.
+   *
+   * Against the engine they are "play again" and "back to the title", and
+   * both do exactly what they say. At a table neither is true: another game
+   * is a REQUEST the other player has to accept, and if they have already
+   * gone the only two things left are to wait for somebody else or to get up.
+   */
+  againLabel?: string;
+  homeLabel?: string;
 }
 
 export class GameOver {
   private el: HTMLDivElement;
   private card: HTMLDivElement;
+  private again!: HTMLButtonElement;
+  private home!: HTMLButtonElement;
   private titleEl: HTMLDivElement;
   private bodyEl: HTMLDivElement;
   private noteEl: HTMLDivElement;
@@ -62,6 +74,8 @@ export class GameOver {
 
     const again = this.el.querySelector('.again') as HTMLButtonElement;
     const home = this.el.querySelector('.home') as HTMLButtonElement;
+    this.again = again;
+    this.home = home;
     again.textContent = t('over.again');
     home.textContent = t('over.toTitle');
     again.onclick = () => { this.hide(); this.opts.onAgain(); };
@@ -75,6 +89,8 @@ export class GameOver {
   get showing(): boolean { return !this.el.hidden; }
 
   show(result: Result): void {
+    this.again.textContent = result.againLabel ?? t('over.again');
+    this.home.textContent = result.homeLabel ?? t('over.toTitle');
     this.titleEl.textContent = result.title;
     this.titleEl.className = `result ${result.tone}`;
     this.bodyEl.textContent = result.body;

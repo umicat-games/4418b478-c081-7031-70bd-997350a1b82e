@@ -15,18 +15,23 @@ import './lobby.css';
 import type { UmicatRoom, RoomListEntry } from '@umicat/platform-sdk';
 import type { ThreeUmicat } from '@umicat/three-sdk';
 import { t } from '../i18n';
-import { KEY, Table, roomCode } from './net/table';
+import { roomCode } from './net/table';
 import type { Preset, TimeControl } from './net/clock';
 
 /**
  * How the lobby ends.
  *
- * `tc` is the clock the table-MAKER chose; a player joining somebody else's
- * table gets theirs from the first snapshot instead, because the table-maker
- * is the one who decides and two defaults would be two different games.
+ * A ROOM, not a table: sitting down, waiting for somebody, starting a game
+ * and getting up again all belong to the table's own lifetime, and the lobby
+ * is only the door. It used to hold on until two people were seated, which is
+ * why the room had two different ideas of who was in it.
+ *
+ * `tc` is the clock the table-MAKER chose; somebody joining an existing table
+ * gets theirs from the first snapshot instead, because the maker decides and
+ * two defaults would be two different games.
  */
 export type LobbyResult =
-  | { kind: 'table'; table: Table; tc: TimeControl }
+  | { kind: 'room'; room: UmicatRoom<unknown>; code: string; tc: TimeControl }
   | { kind: 'back' };
 
 type Done = (r: LobbyResult) => void;
@@ -167,7 +172,7 @@ async function host(umicat: ThreeUmicat, tc: TimeControl | undefined, presets: P
       maxClients: 2,
       displayName: umicat.user?.name || t('plate.you'),
     });
-    await waitingRoom(umicat, room, code, true, tc, presets, done);
+    await handOver(umicat, room, code, tc, presets, done);
   } catch (err) {
     fail(s, umicat, presets, done, err);
   }
@@ -201,7 +206,7 @@ function byCode(umicat: ThreeUmicat, presets: Preset[], done: Done): void {
         roomCode: code,
         displayName: umicat.user?.name || t('plate.you'),
       });
-      await waitingRoom(umicat, room, code, false, undefined, presets, done);
+      await handOver(umicat, room, code, undefined, presets, done);
     } catch {
       go.disabled = false;
       s.say(t('lobby.noSuchRoom'), true);
@@ -263,7 +268,7 @@ async function enter(umicat: ThreeUmicat, entry: RoomListEntry, presets: Preset[
     const room = await umicat.rooms.joinById<unknown>(entry.roomId, {
       displayName: umicat.user?.name || t('plate.you'),
     });
-    await waitingRoom(umicat, room, entry.roomCode, false, undefined, presets, done);
+    await handOver(umicat, room, entry.roomCode, undefined, presets, done);
   } catch (err) {
     fail(s, umicat, presets, done, err);
   }
@@ -281,7 +286,7 @@ async function quickMatch(umicat: ThreeUmicat, presets: Preset[], done: Done): P
       maxClients: 2,
       displayName: umicat.user?.name || t('plate.you'),
     });
-    await waitingRoom(umicat, room, '', false, presets[Math.floor(presets.length / 2)]?.tc, presets, done);
+    await handOver(umicat, room, '', presets[Math.floor(presets.length / 2)]?.tc, presets, done);
   } catch (err) {
     fail(s, umicat, presets, done, err);
   }
@@ -295,32 +300,50 @@ function fail(s: Screen, umicat: ThreeUmicat, presets: Preset[], done: Done, err
   back.onclick = () => menu(umicat, presets, done);
 }
 
-// ── the waiting room ───────────────────────────────────────────────────────
+// ── handing over ───────────────────────────────────────────────────────────
 
 /**
- * Both of us are here; one of us says so.
+ * We have a room. That is the lobby's whole job.
  *
- * Seats are decided ONCE, by the player who made the table, and written into
- * the room's shared map. Two clients each deciding for themselves would each
- * decide they were first — join order is not the same thing as agreement.
+ * Note what is NOT done here: nobody is seated, no game is started and
+ * nothing waits for a second person. A table looks after all of that for as
+ * long as it exists, which is longer than one game and longer than one pair
+ * of people.
  */
-async function waitingRoom(
+async function handOver(
   umicat: ThreeUmicat,
   room: UmicatRoom<unknown>,
   code: string,
-  hosting: boolean,
   tc: TimeControl | undefined,
   presets: Preset[],
   done: Done,
 ): Promise<void> {
+  // The avatar goes in my own player map, where the other side can read it —
+  // the room's Player schema carries a display name and nothing else.
+  if (umicat.user?.avatar) room.player.set('avatar', umicat.user.avatar);
+  const chosen = tc ?? presets[Math.floor(presets.length / 2)]?.tc ?? { mainMs: 600_000, incrementMs: 5_000 };
+  document.getElementById('lobby')?.classList.add('leaving');
+  setTimeout(() => document.getElementById('lobby')?.remove(), 380);
+  done({ kind: 'room', room, code, tc: chosen });
+}
+
+/**
+ * Waiting for somebody, with the code on screen — shown by the GAME, over its
+ * own board, for as long as a seat is empty.
+ *
+ * It lives here because it is the lobby's screen, and because the code has to
+ * look the same when you are waiting for the first person as when you are
+ * waiting for the next one.
+ */
+export function showWaiting(opts: { code: string; note: string; onLeave(): void }): void {
   const s = screen();
   s.title.textContent = t('lobby.waiting');
   const wrap = document.createElement('div');
   wrap.className = 'waiting';
-  if (code) {
+  if (opts.code) {
     const c = document.createElement('div');
     c.className = 'code';
-    c.textContent = code;
+    c.textContent = opts.code;
     wrap.appendChild(c);
   }
   const dots = document.createElement('div');
@@ -329,48 +352,15 @@ async function waitingRoom(
   wrap.appendChild(dots);
   const leave = button(t('lobby.leave'));
   leave.className = 'quiet-link';
+  leave.onclick = () => { hideWaiting(); opts.onLeave(); };
   wrap.appendChild(leave);
   s.body.replaceChildren(wrap);
-  s.say(code ? t('lobby.readItOut') : t('lobby.waitingQuick'));
+  s.say(opts.note);
+}
 
-  // The avatar goes in my own player map, where the other side can read it —
-  // the room's Player schema carries a display name and nothing else.
-  if (umicat.user?.avatar) room.player.set('avatar', umicat.user.avatar);
-
-  let settled = false;
-  const finish = (table: Table): void => {
-    if (settled) return;
-    settled = true;
-    off();
-    s.close();
-    done({ kind: 'table', table, tc: tc ?? presets[Math.floor(presets.length / 2)]?.tc ?? { mainMs: 600_000, incrementMs: 5_000 } });
-  };
-
-  const look = (): void => {
-    if (settled) return;
-    const seated = room.data.get<string[]>(KEY.seats);
-    if (seated && seated.length === 2) { finish(Table.online(room, seated)); return; }
-    const here = playersOf(room);
-    // Only the table's maker writes the seats — and only when there are two
-    // people to seat.
-    if (hosting && here.length >= 2) room.data.set(KEY.seats, here.slice(0, 2));
-  };
-
-  const offChange = room.onStateChange(() => look());
-  const offGone = room.onLeave(() => {
-    if (settled) return;
-    s.say(t('lobby.lost'), true);
-  });
-  const off = (): void => { offChange(); offGone(); };
-
-  leave.onclick = () => {
-    if (settled) return;
-    settled = true;
-    off();
-    void room.leave();
-    menu(umicat, presets, done);
-  };
-
-  // And once now, in case the state arrived before the handler did.
-  look();
+export function hideWaiting(): void {
+  const el = document.getElementById('lobby');
+  if (!el) return;
+  el.classList.add('leaving');
+  setTimeout(() => el.remove(), 380);
 }

@@ -301,15 +301,66 @@ stamped by the machine that moved. Between friends that is fine. A leaderboard
 that costs people points cannot be settled by "the other client said I won" —
 that needs the result decided somewhere neither player controls.
 
-**Testing it without a platform.** `umicat.rooms` is unavailable standalone
-(`npm run dev`, or the CDN preview opened directly), and the lobby says so in
-a sentence rather than failing one button at a time. The probes in the session
-scratchpad drive two tabs against a stand-in room over a `BroadcastChannel`
-(`fakeroom.js`) — that covers seating, the snapshot exchange, the clocks,
-resignation, draws, rematches, flags and disconnects, but NOT Colyseus itself.
-One thing the stand-in taught: it has to hydrate a late joiner the way a real
-join is hydrated with `room.state`, or every test of the second player is a
-test of the stand-in.
+## The table's life, which is longer than a game
+
+Four bugs, one cause: the first version decided the seats ONCE, when the
+second player arrived, and never looked again. Every one of them appeared the
+first time two real people used it.
+
+**Seats are derived from presence, every time, and written by one client.**
+`Table.seats()` reads the room's map and drops anybody who has gone;
+`maintainSeats()` fills the empty chairs and is a no-op for everyone except
+the longest-standing connection. **Nobody is seated alone** — a client that
+joins, looks around before the room has told it about anybody else, and writes
+itself into the first chair is a write that lands after the real maintainer's
+and clobbers it. That is how the table-maker ended up in the second seat.
+
+**A snapshot says which game it is (`gen`) and whose it is (`for`).** Without
+that, the finished game left in the room is handed to whoever sits down next,
+who is shown a result they had no part in — which is exactly what happened.
+When two people are seated and the state does not belong to THEM, the
+maintainer deals a new one; every client treats a changed `gen` as a new game
+and drops the old board, the old result and the old card.
+
+**A live game is not interrupted by an empty chair.** A dropped connection
+shows up as an empty seat first, and the waiting screen used to go straight up
+— which stopped the clock, which is where the fifteen seconds of grace are
+counted, so the game never ended and the player sat in front of a waiting
+screen holding a result nobody had declared.
+
+**The card at the end follows the room.** "Play again" stops being true the
+moment the other player gets up, so the buttons become "wait for someone" and
+"leave" and the player is ASKED rather than left in a room with a dead board.
+
+**Every way out has to go through `Table.close()`** — the gear's "back to the
+title", starting a game against the engine, and `pagehide`/`beforeunload`.
+A client that stays connected while its player is somewhere else is a table on
+the list of open tables with nobody at it. That was the fourth bug.
+
+## Testing it
+
+`umicat.rooms` is unavailable standalone (`npm run dev`, or the CDN preview
+opened directly), and the lobby says so in a sentence rather than failing one
+button at a time. There are two ways to drive it, and they cover different
+things:
+
+- **A stand-in room** (`fakeroom.js` in the session scratchpad): two tabs over
+  a `BroadcastChannel`. Fast, no accounts, covers seating, the snapshot
+  exchange, the clocks, resignation, draws, rematches, flags and disconnects.
+  It must hydrate a late joiner the way a real join is hydrated with
+  `room.state`, or every test of the second player is a test of the stand-in.
+- **The real service**, which is what actually settles a question about
+  Colyseus: `tools/host/index.html` is a stand-in for home-ui — it does the
+  init handshake WITH a `realtimeUrl`, which is the thing that turns
+  multiplayer on. Serve it (`python3 -m http.server 4190 --directory
+  tools/host`) and open
+  `?game=<id>&src=<encoded preview url>&name=Ann&uid=ann`. Two browser
+  contexts signed into the SAME account are two different players, because a
+  seat is a session and not a user. The one wrinkle: `POST /games/{id}/rt-token`
+  refuses a localhost origin (CORS), so the harness calls a
+  `window.__rtToken` binding when one exists and the probe mints the token in
+  node. **The rt-token endpoint checks that you are signed in, not that you are
+  a member of the game** — which is why this works at all.
 
 ## Building and checking
 
