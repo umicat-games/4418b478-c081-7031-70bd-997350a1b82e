@@ -17,6 +17,16 @@ import { t, type Key } from '../i18n';
 /** One row of chips the game wants in the new-game panel. */
 export interface SetupGroup {
   label: string;
+  /**
+   * Shown without being asked for.
+   *
+   * At most one or two things decide what game you are about to play — the
+   * board size here, which colour in chess — and those are worth a row on a
+   * panel somebody opened to press Start. Everything else is a preference,
+   * and a preference in front of somebody who wants to play is a question
+   * they did not ask.
+   */
+  primary?: boolean;
   options: Array<{ id: string; label: string }>;
   /** Which one is on, right now. */
   value: string;
@@ -73,6 +83,9 @@ export class Menu {
   /** Centred over the whole screen (from the title) rather than parked in the
    *  corner (over a game). */
   private standalone = false;
+  /** Whether the rest of the settings are showing. A panel opened again is
+   *  the short one again: the point is what you see WITHOUT asking. */
+  private showMore = false;
 
   constructor(initial: MenuChoice, private opts: MenuOptions) {
     this.choice = { ...initial };
@@ -88,6 +101,7 @@ export class Menu {
   toggle(): void { this.el.hidden ? this.show() : this.close(); }
 
   show(): void {
+    this.showMore = false;
     this.el.hidden = false;
     this.draw();
   }
@@ -121,13 +135,21 @@ export class Menu {
     head.textContent = t(this.standalone ? 'menu.newHeading' : 'menu.heading');
     this.el.appendChild(head);
 
-    for (const group of this.opts.groups()) {
-      this.el.appendChild(this.group(group.label, group.options.map((o) => ({
-        label: o.label,
-        on: group.value === o.id,
-        pick: () => { group.pick(o.id); this.draw(); },
-      }))));
-    }
+    const rowFor = (group: SetupGroup): HTMLDivElement => this.group(group.label, group.options.map((o) => ({
+      label: o.label,
+      on: group.value === o.id,
+      pick: () => { group.pick(o.id); this.draw(); },
+    })));
+    const all = this.opts.groups();
+    for (const group of all.filter((g) => g.primary)) this.el.appendChild(rowFor(group));
+
+    // Everything that is not one of the two or three things worth asking
+    // before a game goes behind one word. The panel is opened to press Start.
+    const more = document.createElement('div');
+    more.className = 'more';
+    more.hidden = !this.showMore;
+
+    for (const group of all.filter((g) => !g.primary)) more.appendChild(rowFor(group));
 
     const levelRow = this.group(t('menu.opponent'), levels.map((l) => ({
       label: l.label,
@@ -138,7 +160,7 @@ export class Menu {
     about.className = 'about';
     about.textContent = level.about;
     levelRow.appendChild(about);
-    this.el.appendChild(levelRow);
+    more.appendChild(levelRow);
 
     // A game-level switch, not a preference: it decides whether this game
     // talks to a language model at all. Off means no calls, no buttons, no
@@ -147,6 +169,21 @@ export class Menu {
       { label: t('menu.on'), on: this.choice.companion, pick: () => { this.choice.companion = true; this.opts.onCompanion(true); this.draw(); } },
       { label: t('menu.off'), on: !this.choice.companion, pick: () => { this.choice.companion = false; this.opts.onCompanion(false); this.draw(); } },
     ]));
+
+    if (!this.standalone) {
+      more.appendChild(this.group(t('menu.sound'), [
+        { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
+        { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
+        { label: t('menu.eval'), on: this.opts.evalBar(), pick: () => { this.opts.onEval(!this.opts.evalBar()); this.draw(); } },
+      ]));
+    }
+
+    const disclose = document.createElement('button');
+    disclose.className = 'more-toggle quiet-link';
+    disclose.textContent = t(this.showMore ? 'menu.less' : 'menu.more');
+    disclose.onclick = () => { this.showMore = !this.showMore; this.draw(); };
+    this.el.appendChild(disclose);
+    this.el.appendChild(more);
 
     const go = document.createElement('button');
     go.className = 'go lift';
@@ -185,14 +222,6 @@ export class Menu {
 
     // Sound is a setting, not a question about the game being started. Opened
     // from the title, this panel asks the fewest things it can.
-    if (!this.standalone) {
-      this.el.appendChild(this.group(t('menu.sound'), [
-        { label: t('menu.music'), on: this.opts.music(), pick: () => { this.opts.onMusic(!this.opts.music()); this.draw(); } },
-        { label: t('menu.effects'), on: this.opts.sound(), pick: () => { this.opts.onSound(!this.opts.sound()); this.draw(); } },
-        { label: t('menu.eval'), on: this.opts.evalBar(), pick: () => { this.opts.onEval(!this.opts.evalBar()); this.draw(); } },
-      ]));
-    }
-
     const home = document.createElement('button');
     home.className = 'home lift quiet';
     home.textContent = t('menu.toTitle');

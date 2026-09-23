@@ -898,6 +898,8 @@ async function start(): Promise<void> {
 
   const sizeGroup = (): SetupGroup => ({
     label: t('menu.board'),
+    // The one thing that decides what game this is going to be.
+    primary: true,
     options: SIZES.map((s) => ({ id: String(s), label: `${s}×${s}` })),
     value: String(nextSize),
     pick: (id) => { nextSize = Number(id) as BoardSize; },
