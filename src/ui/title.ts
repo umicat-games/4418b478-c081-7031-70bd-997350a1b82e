@@ -40,10 +40,7 @@ import { bootDone } from './boot';
  *  that nobody is looking at a blank rectangle wondering. */
 const ART_WAIT_MS = 1200;
 
-const ART = {
-  wordmark: 'art/title.webp',
-  background: 'art/title-bg.webp',
-};
+const ART = { logo: 'art/logo.webp', table: 'art/table-bg.webp' };
 
 /**
  * That path, made absolute against the PAGE.
@@ -74,7 +71,8 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
   const el = document.createElement('div');
   el.id = 'title';
   el.innerHTML = `
-    <h1><img class="wordmark" alt="GO with me"><span class="words">GO with me</span></h1>
+    <img class="logo" alt="GO with me">
+    <h1 class="words">GO with me</h1>
     <div class="buttons"></div>
     <p class="status"></p>`;
 
@@ -82,10 +80,10 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
   // faded in; the scrim over it is deliberately light — at 0.40 the sunlit
   // wood went brown, which is throwing away the artwork in order to protect
   // two lines of small text that a shadow protects just as well.
-  el.style.setProperty('--art', `url("${asUrl(ART.background)}")`);
+  el.style.setProperty('--table', `url("${asUrl(ART.table)}")`);
 
-  const wordmark = el.querySelector('.wordmark') as HTMLImageElement;
-  wordmark.src = ART.wordmark;
+  const logo = el.querySelector('.logo') as HTMLImageElement;
+  logo.src = ART.logo;
 
   /**
    * Show the art when it is all there, and the words only if it is not.
@@ -111,7 +109,7 @@ export function showTitle(opts: TitleOptions): Promise<TitleChoice> {
     // assembling itself: the boot screen stays up until this decides.
     bootDone();
   };
-  void Promise.all([settled(ART.wordmark), settled(ART.background)])
+  void Promise.all([settled(ART.logo), settled(ART.table)])
     .then(([a, b]) => decide(a && b));
   setTimeout(() => decide(false), ART_WAIT_MS);
 

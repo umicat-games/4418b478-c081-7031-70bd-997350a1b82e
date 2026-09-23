@@ -215,46 +215,31 @@ phone follows. Keep it static.
 platform, or the backend rejects AI calls and the iframe blocks the mic.
 
 **The title art ships in `public/art/`, derived from the Asset Manager
-originals.** The originals — `go-with-me-title.png` and
-`go-with-me-title-bg.png`, uploaded through the platform and served from
-`cdn.umicat.ai/uploads/<game id>/` — are 2.6MB between them, and the game
-cannot show a title screen until its title has arrived: on a throttled load
-the boot bar was still crawling two seconds in. The shipped copies are the
-same pictures at the size they are drawn, as WebP: **181KB**, visually
-identical at 520px and 1600px respectively.
+originals.** `logo.webp` is this game's wordmark; `table-bg.webp` is the
+photograph of the table, and it is the SAME picture in every game in this
+family — the five of them now share one title screen design, so a player who
+has seen one knows where they are in the next.
 
-If the originals are re-exported, re-derive them. There is no `cwebp` on the
-machine this was done on; Chromium encodes WebP perfectly well, alpha
-included, so the recipe was: load the PNG into a canvas at the target width
-(1100px for the wordmark, 1600px for the background) and
-`canvas.toDataURL('image/webp', 0.92 / 0.82)`.
+The originals are 1–3MB each and **a title screen cannot appear until its
+title has arrived**: at that weight the boot bar was still crawling two
+seconds into a throttled load. There is no `cwebp` here; Chromium encodes WebP
+perfectly well, alpha included, so the recipe is to draw the PNG into a canvas
+at the size it is actually drawn and `canvas.toDataURL('image/webp', q)` —
+1000px at 0.9 for a wordmark, 1400px at 0.72 for the table.
 
-Both are decoration and both have a fallback: the wordmark reverts to text,
-the photograph to the gradient that used to be the whole background. The scrim
-over the photo is deliberately light (0.22 in the middle) — at 0.40 the sunlit
-wood went brown, and the two lines of small text it was protecting now carry
-their own shadow instead.
-
-**The boot screen is in `index.html`, not in the bundle.** Its whole job is to
-be on screen before the bundle has parsed, so it cannot be built by it. It is
-black and a bar — no words, because the player's language arrives at the
-handshake this is waiting for, and no artwork, because the title screen is
-where the artwork belongs. `window.__boot` is what `src/ui/boot.ts` drives it
-with, and it removes itself after nine seconds whatever happens, because
-nobody should ever be stuck behind a progress bar. The title's own art does
-not fade in, so the hand-over is one fade (the boot screen's) rather than two
-crossfades of the same moment.
+Both are decoration and both have a fallback, and **the fallback must not be
+what you see first**: the words stay hidden until the art has either arrived
+or given up, and the boot screen stays up for exactly that long. Wait for
+BOTH — a wordmark landing a second before its background is the same flash in
+two parts.
 
 **A relative `url()` that reaches CSS through a custom property is resolved
-against the STYLESHEET, not the page.** `--art` was set to
-`url("art/title-bg.webp")` from JavaScript, which works in dev and 403s in a
-build, because the built CSS lives in `assets/` and the path became
-`assets/art/…`. The wordmark beside it was fine the whole time — it is an
-`<img src>`, resolved against the document. Two rules for the same string, and
-only one of them shows up before deploying. `asUrl()` in `title.ts` makes the
-path absolute against `document.baseURI`; anything else handed to CSS from
-code should do the same. **Check a `vite preview` of `dist/`, not just
-`npm run dev`, whenever a path is involved.**
+against the STYLESHEET, not the page.** `--table` set from JavaScript works in
+dev and 403s in a build, because the built CSS lives in `assets/` and the path
+becomes `assets/art/…`. The wordmark beside it was fine the whole time — it is
+an `<img src>`, resolved against the document. `asUrl()` makes the path
+absolute against `document.baseURI`. **Check a `vite preview` of `dist/`, not
+just `npm run dev`, whenever a path is involved.**
 
 **The end of a game is a DIALOG, not a line in the corner.** The status line
 is where "your move" lives, and a result printed in the same place in the same
