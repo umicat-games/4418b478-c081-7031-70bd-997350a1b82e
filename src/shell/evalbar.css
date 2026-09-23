@@ -32,12 +32,12 @@
 }
 #evalbar .num {
   font: 700 12px/1 system-ui, sans-serif;
-  color: #e8e4dc;
-  text-shadow: 0 1px 4px rgba(0,0,0,.6);
+  color: #241f19;
+  text-shadow: 0 1px 0 rgba(255,255,255,.75), 0 0 7px rgba(255,255,255,.6);
   min-width: 34px;
   text-align: center;
 }
-#evalbar.losing .num { color: #ffb3aa; }
+#evalbar.losing .num { color: #a3271c; }
 
 /* On a phone the bar would sit under the thumb that moves the camera. */
 @media (max-width: 520px) {
