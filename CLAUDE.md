@@ -42,6 +42,70 @@ accidents:
 nothing, and trimesh colliders on dynamic bodies — at load, because every one of
 them otherwise shows up as a blank screen an hour later.
 
+## 从 Balaboo 搬过来的东西（以及没搬的）
+
+这个游戏是**新建的**，不是 fork —— 所以下面这些是手工搬过来的，不是继承来的。
+每一样都有它被选中的理由，而理由基本都是同一个：**幸存者类的瓶颈是每帧提交
+多少次绘制，不是三角形数量**。
+
+| 搬了 | 为什么 |
+|---|---|
+| `src/vfx.ts` | 特效库。关键不在特效多好看，在于 `motes()` 是**一次实例化绘制画任意多个**，`quads()` 是**一个 mesh 画任意多个四边形** —— 这两个正是敌人和血条将来要走的路 |
+| `src/merge.ts` | 把上千个静态场景对象折成几个 mesh。一块 2574 实体的空地不这么做就没法跑 |
+| `src/audio.ts` + `public/audio/` | 带 throttle 的 clip 表。见下 |
+| `src/hud.ts` `src/buttons.ts` `src/icons.ts` `src/sky.ts` | 读数板、按钮浮雕、图标、画进背景的天空 |
+| `public/kit/td/` | 敌人（飞碟）和地块。模板只带 platformer kit，里面没有能当敌人的东西 |
+| `tools/gen-arena.mjs` | 竞技场生成器 |
+
+**没搬的**：武器表、关卡表、村庄、商店、教程、瞄准、塔的一切。那是另一个
+游戏的形状；把它们搬来再注释掉，下一个读代码的人会以为它有用。
+
+`tools/gen-arena.mjs` 只是原 `gen-scene.mjs` 的竞技场那一半。原文件 1200 行，
+大部分在铺一条塔防的路（折线展开、拐角选瓦片、大门开口、分叉），这里一行没带。
+
+## 量过的两件事
+
+**敌人是按只算绘制的，这是要改的那件事。** 在 Balaboo 的分支上实测：
+
+| 敌人数 | draw calls | 三角形 |
+|---|---|---|
+| 0 | 11 | 358k |
+| 100 | 283 | 441k |
+| 400 | **1161** | 688k |
+
+**每只 2.88 个 draw call**（本体 1 个 + 血条 2 个），825 个三角形。三角形不是
+问题；draw call 是 —— 一整关的预算是 ~20 个。
+
+飞碟是 **1 mesh、0 蒙皮、0 动画**的静态网格，所以可以直接上 `InstancedMesh`：
+一份几何 + 一份材质 + N 个矩阵 = **1 个 draw call**。血条走 `quads()`。按这个
+改完 400 只应该回到十几个 draw call。
+
+跟着要改的三处：受击闪光现在靠**克隆材质**改自发光，实例化后只有一份材质，
+得换成 `instanceColor`；boss 若是蒙皮网格不能实例化（单独画）；每帧对每只敌人
+做四元数运算的血条朝向要并进 `quads()` 一次性重建。
+
+**音效不是瓶颈，前提是每个 clip 都有 throttle。** 实测「一次性杀死全场」：
+
+| 同时死亡 | 实际播放的音效 |
+|---|---|
+| 25 | 1 |
+| 100 | 1 |
+| 400 | **1** |
+
+`enemy-die` 的 `throttle: 40` 就把它挡住了。`GameAudio` 每次 `play()` 建一个
+`BufferSource` + 一个 `GainNode`，**除了按 clip 的节流之外没有任何总量上限** ——
+所以在这个类型里，**一个没有 throttle 的 clip 就是 bug**。真正的历史杀手是
+`HTMLAudioElement`（iPhone 上 11fps，静音 60fps），而 `GameAudio` 已经绕开了。
+
+## 搬相机时踩的坑
+
+搬过来的生成器原本声明 `kind: 'fixed'` —— 那是 Balaboo 分支的用法，相机由游戏
+代码里的 `fitCamera()` 摆位并对准。模板里没有那段代码，于是相机停在偏移点上
+平视前方，拍到的全是天：**没有报错、没有 404、canvas 也在**，就是什么都没有。
+
+这是本文件下面「Things that will bite」里说的那种失败的标准形状。现在生成的是
+跟随相机 —— 幸存者类绕着场地跑，相机跟着人本来就对。
+
 ## Building
 
 ```bash
