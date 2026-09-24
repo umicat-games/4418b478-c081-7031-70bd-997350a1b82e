@@ -3,6 +3,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import {
   ThreeUmicat, loadScene3D, CharacterController3D, CharacterAnimator, Input3D,
   setupScreenshotListener, setupRecordingListener, runEditorDesignPlayer3D,
+  flashTint, updateTints, isTinted,
   type Scene3D, type Manifest3D, type LoadedScene3D,
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
@@ -114,11 +115,16 @@ const SPAWN_RING = [26, 34] as const;
  *  吸血鬼幸存者给受伤设了上限（无尽模式的描述里提到「玩家的单次受伤上限每轮
  *  −1」），所以被五十只围住不会瞬间蒸发 —— 围住你的是**压力**，不是处决。
  *
- *  上限取 3 只：一只贴着是 2/秒（可以忽略），三只以上都是 6/秒，满血约 17 秒。
- *  够长到能反应过来往外挤，够短到不能站着不动。 */
+ *  **这两个数往上调过一次，因为「玩家太强了」。** 2/秒 × 上限 3 只 = 6/秒，
+ *  满血能在人堆里站 17 秒 —— 而这个游戏唯一的输法就是被围住，17 秒长到足以
+ *  让「被围住」不构成威胁。再加上击退一直在把贴身的那圈往外推（那是我加的，
+ *  也是玩家变强的一个来源），实际挨打还要更少。
+ *
+ *  现在 3.2/秒、上限 4 只：一只贴着仍然可以忽略，四只以上是 12.8/秒，满血
+ *  约 **8 秒**。够长到能反应过来往外挤，够短到站着不动一定会死。 */
 const PLAYER_HP = 100;
-const CONTACT_DPS = 2;
-const CONTACT_CAP = 3;
+const CONTACT_DPS = 3.2;
+const CONTACT_CAP = 4;
 
 const SPAWN = { x: 0, y: 0.4, z: 1.7 };
 const RESPAWN_BELOW_Y = -5;
@@ -579,6 +585,10 @@ async function start(): Promise<void> {
     // already playing.
     if (input.consume('attack') && animator && !animator.busy) animator.play('attack');
     animator?.update(character.state);
+    // 受击闪光要每帧收尾，否则主角会一直红着。`flashTint` 是按对象克隆材质的
+    // （共享材质上改自发光会把场上所有同模型的东西一起染红，这个坑本项目踩过
+    // 两次），所以这里传的就是主角自己。
+    updateTints([hero]);
     // Save only while STANDING on something. A position saved mid-air restores
     // you mid-air, which turns one fall into a permanently broken save.
     if (Math.hypot(dir.x, dir.z) > 0 && character.grounded) save();
@@ -661,10 +671,24 @@ async function start(): Promise<void> {
           // 正在看的地方。节流靠声音那边的 420ms，视觉这边按时间自己卡。
           hurtCue -= dt;
           if (hurtCue <= 0) {
-            hurtCue = 0.42;
+            hurtCue = 0.34;
             audio.play(SFX.hurt);
-            sparks.burst(p.x, 0.5, p.z,
-              { count: 12, color: 0xff6a5a, color2: 0xff2f2f, speed: 2.4, up: 0.9, life: 0.45 });
+            // **主角整个人闪红。** 这是挨打反馈里唯一一个在玩家眼睛正落着的
+            // 地方发生的事 —— 上一版只在脚下炸一圈粒子，而粒子从脚下冒出来
+            // 会被主角自己的身体挡住大半，玩家的原话是「被攻击到之后没效果」。
+            //
+            // 敌人挨打有白光 + 晃 + 退三层，主角挨打却什么都没有，这个不对称
+            // 本身就是答案。
+            if (!isTinted(hero)) flashTint(hero, { color: 0xff2a18, ms: 240, intensity: 0.85 });
+            // 粒子从**胸口高度往外炸**，不是从脚下往上冒：脚下那一圈的下半截
+            // 在身体后面，而且和地上的掉落物、尾迹混在一起。
+            sparks.burst(p.x, 0.62, p.z,
+              { count: 26, color: 0xff7a68, color2: 0xd81414,
+                speed: 4.2, up: 0.55, life: 0.5, size: 0.2 });
+            // 再补一圈贴地的红环 —— 余光里「我挨打了」比「掉了几点血」重要，
+            // 而环是唯一一个不会被身体挡住的形状。
+            ring(vfx, new THREE.Vector3(p.x, 0.05, p.z),
+              { color: 0xff3a2a, from: 0.5, to: 1.9, life: 0.32, opacity: 0.8 });
           }
           if (hp <= 0) {
             hp = 0; over = true;
