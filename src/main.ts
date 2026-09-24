@@ -23,6 +23,7 @@ import {
 import { makeGems, makeCoins, xpToNext } from './xp';
 import { HeroBar } from './herobar';
 import { createLevelUp, type Offer } from './levelup';
+import { createGameOver } from './gameover';
 
 /**
  * A 3D Umicat game.
@@ -175,8 +176,10 @@ async function start(): Promise<void> {
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
 
   const hero = world.entities.get('hero')!;
-  const saved = (await umicat.saves.get<
-    { x: number; y: number; z: number; gold?: number }>(SAVE_KEY)) ?? null;
+  const saved = (await umicat.saves.get<{
+    x: number; y: number; z: number;
+    gold?: number; bestClock?: number; bestKills?: number;
+  }>(SAVE_KEY)) ?? null;
 
   // Sized for THIS character and this world's unit. The capsule's total height
   // is 2*halfHeight + 2*radius = 0.72, which is the character's own height —
@@ -249,7 +252,8 @@ async function start(): Promise<void> {
     clearTimeout(pending);
     pending = setTimeout(() => {
       const p = character.position;
-      void umicat.saves.set(SAVE_KEY, { x: p.x, y: p.y, z: p.z, gold });
+      void umicat.saves.set(SAVE_KEY,
+        { x: p.x, y: p.y, z: p.z, gold, bestClock, bestKills });
     }, 500);
   };
 
@@ -352,11 +356,11 @@ async function start(): Promise<void> {
   // `swarm.onDamage` 里那一条，它已经把追踪弹盖住了。留着的话这一把武器
   // 的每次命中会响两声。
 
-  // 一局的状态。
+  // 一局的状态。**初值在 `resetRun()` 里，不在这里** —— 见那个函数的注释。
   let runClock = 0;
   let kills = 0;
-  let spawnTimer = 1.5;
-  let eliteTimer = ELITE_EVERY;
+  let spawnTimer = 0;
+  let eliteTimer = 0;
   let elites = 0;
   let over = false;
   let paused = false;
@@ -369,6 +373,10 @@ async function start(): Promise<void> {
    *  金币在吸血鬼幸存者里是**局外**货币（买永久强化），所以它的去处是一个
    *  局间商店，那是下一步，不是这一步。 */
   let gold = saved?.gold ?? 0;
+  /** 这一局捡了多少（`gold` 是跨局总数）。 */
+  let runGold = 0;
+  let bestClock = saved?.bestClock ?? 0;
+  let bestKills = saved?.bestKills ?? 0;
   let hp = PLAYER_HP;
   let hpMax = PLAYER_HP;
   let level = 1;
@@ -382,6 +390,14 @@ async function start(): Promise<void> {
    *  人就弹出三选一，面板**暂停整局**，于是后面四把全量到 0 击杀 —— 读起来
    *  像四把武器都坏了。测单个系统的探针必须能把别的系统按住。 */
   let levelsOff = false;
+  /** 探针用：不掉血。
+   *
+   *  加它的直接原因：贴身伤害从 6/秒提到 12.8/秒之后，**探针在开场等待期间
+   *  就被打死了** —— 主角站在出生点不动，十秒足够死一次，于是后面所有测量都
+   *  在结束对话框后面冻着，读出来是「场上 0 只、速度平均 NaN」。
+   *
+   *  量别的东西的探针不该同时在打一局游戏。 */
+  let god = false;
   /** 尾迹武器要**选到了才有**。这是升级池里唯一一个「开一样新东西」的选项，
    *  也是这个游戏现在唯一的第二把武器。 */
   let hasTrail = false;
@@ -389,6 +405,16 @@ async function start(): Promise<void> {
   let hasShock = false;
   let hasChain = false;
   let speedMult = 1;
+
+  /** 五把武器出厂时的那几个数。
+   *
+   *  **要在这里抄一份，因为升级是直接改武器对象上的字段的。** 重开一局如果不
+   *  还原，玩家会带着上一局的六把刀和七跳闪电开局 —— 而这种 bug 不报错、不
+   *  崩溃，只是让第二局变成另一个游戏。 */
+  const WEAPON_BASE = {
+    blades: blades.count, trail: trail.life, bolt: bolt.shots,
+    shock: shock.half, chain: chain.jumps, magnet: gems.magnet,
+  };
 
   // 敌人死在哪，经验就掉在哪 —— 顺手在那儿炸一把。
   //
@@ -466,6 +492,81 @@ async function start(): Promise<void> {
     press: () => audio.play(SFX.uiPress),
   });
 
+  /**
+   * 开一局。
+   *
+   * **开局和重开走的是同一段代码，这是刻意的。** 如果「重开」另写一份，漏掉
+   * 一个字段的代价是第二局悄悄变成另一个游戏（还带着上一局的六把刀）；而共用
+   * 一段之后，漏掉的那个字段**第一局就是错的**，五秒钟就能发现。
+   *
+   * 这也是为什么上面那些 `let` 的初值都不重要 —— 真正的初值在这里。
+   */
+  function resetRun(): void {
+    runClock = 0;
+    kills = 0;
+    spawnTimer = 1.5;
+    eliteTimer = ELITE_EVERY;
+    elites = 0;
+    over = false;
+    hurtCue = 0;
+    hp = hpMax = PLAYER_HP;
+    level = 1;
+    xp = 0;
+    xpNeed = xpToNext(1);
+    pendingLevels = 0;
+    runGold = 0;
+    hasTrail = hasBolt = hasShock = hasChain = false;
+    speedMult = 1;
+    setSpeed(PLAYER_SPEED);
+
+    blades.count = WEAPON_BASE.blades;
+    trail.life = WEAPON_BASE.trail;
+    bolt.shots = WEAPON_BASE.bolt;
+    shock.half = WEAPON_BASE.shock;
+    chain.jumps = WEAPON_BASE.chain;
+    gems.magnet = coins.magnet = WEAPON_BASE.magnet;
+
+    swarm.clear();
+    gems.clear();
+    coins.clear();
+    sparks.clear();
+    slashes.clear();
+    dmgNums.clear();
+    vfx.clear();
+    character.teleport(SPAWN);
+    ground.update(SPAWN.x, SPAWN.z);
+  }
+
+  /** 一局结束时的对话框。
+   *
+   *  **结束必须是一个事件，不是一个状态。** 在这之前，一局结束只是角落那行字
+   *  换了措辞，然后世界停住 —— 没有任何东西说这局完了，也没有任何办法再来
+   *  一局，除非重新加载页面。 */
+  const gameOver = createGameOver({
+    pause: (on) => { paused = on; input.setEnabled(!on); },
+    press: () => audio.play(SFX.uiPress),
+    restart: () => resetRun(),
+    // 独立打开（没有 Umicat 宿主）时没有「返回」可言，SDK 说得很明白：
+    // 与其给一个按了没反应的控件，不如不给。
+    exit: umicat.platform.canExit ? () => { void umicat.platform.exit(); } : null,
+  });
+
+  /** 一局结束。存成绩，弹对话框。 */
+  function endRun(won: boolean): void {
+    over = true;
+    audio.play(won ? SFX.victory : SFX.lose);
+    const s = {
+      clock: runClock, level, kills, gold: runGold, totalGold: gold, won,
+      bestClock, bestKills,
+    };
+    // 纪录在**弹面板之前**存、但在**读进面板之后**更新 —— 面板要显示的是
+    // 「上次的纪录」，不是刚刚被自己覆盖掉的那个。
+    bestClock = Math.max(bestClock, runClock);
+    bestKills = Math.max(bestKills, kills);
+    save();
+    gameOver.show(s);
+  }
+
   /** 升级池。
    *
    *  **每一项都要改变你怎么玩，不是改变一个数字。** 所以这里没有「伤害
@@ -538,6 +639,10 @@ async function start(): Promise<void> {
     return out;
   };
 
+  // 第一局也走 `resetRun()`。见那个函数的注释：开局和重开共用一段，是为了让
+  // 漏掉的字段在第一局就暴露出来，而不是等到玩家重开时才变成一个怪现象。
+  resetRun();
+
   // three.js deprecated Clock, and setAnimationLoop already hands us the
   // timestamp, so there is nothing to replace it with.
   let last = performance.now();
@@ -599,7 +704,7 @@ async function start(): Promise<void> {
 
       if (!over) {
         runClock += dt;
-        if (runClock >= RUN_SECONDS) { over = true; audio.play(SFX.victory); }
+        if (runClock >= RUN_SECONDS) endRun(true);
 
         // 难度全部按时钟读 —— 见 `src/curve.ts`。
         spawnTimer -= dt;
@@ -648,7 +753,7 @@ async function start(): Promise<void> {
         const picked = coins.update(dt, p.x, p.z, now / 1000);
         // 捡到金币就存 —— `save()` 自己会合并 500ms 内的多次调用，所以一把
         // 金币同时飞进来只写一次。
-        if (picked > 0) { gold += picked; save(); }
+        if (picked > 0) { gold += picked; runGold += picked; save(); }
         if (got > 0 || picked > 0) audio.play(SFX.gem);
         while (xp >= xpNeed) {
           xp -= xpNeed;
@@ -664,7 +769,7 @@ async function start(): Promise<void> {
         }
 
         // 接触伤害。贴着你的每一只都在扣血。
-        if (swarm.touching > 0) {
+        if (swarm.touching > 0 && !god) {
           hp -= Math.min(swarm.touching, CONTACT_CAP) * CONTACT_DPS * dt;
           // 挨打要有反馈，而**这是唯一一个玩家在被围着时还看得见的**：血条在
           // 左上角，而屏幕中间全是敌人。所以受伤在脚底下炸一圈红的，就在眼睛
@@ -691,11 +796,10 @@ async function start(): Promise<void> {
               { color: 0xff3a2a, from: 0.5, to: 1.9, life: 0.32, opacity: 0.8 });
           }
           if (hp <= 0) {
-            hp = 0; over = true;
-            save();                       // 最后几秒捡的金币也要落账
-            audio.play(SFX.lose);
+            hp = 0;
             ring(vfx, new THREE.Vector3(p.x, 0.05, p.z),
               { color: 0xff4b4b, from: 0.6, to: 6, life: 0.9 });
+            endRun(false);
           }
         }
       }
@@ -813,8 +917,14 @@ async function start(): Promise<void> {
       setClock: (t: number) => { runClock = t; },
       giveXp: (n: number) => { xp += n; },
       levelPanel: () => levelUp.open,
+      overPanel: () => gameOver.open,
+      /** 直接把人打死 —— 探针不用真等十五分钟或者真被围死。 */
+      kill: () => { hp = 0; endRun(false); },
+      restart: () => resetRun(),
       /** 量单个系统时把三选一按住 —— 它会暂停整局。 */
       setLevelsOff: (on: boolean) => { levelsOff = on; },
+      /** 量别的东西时别被打死 —— 见 `god`。 */
+      setGod: (on: boolean) => { god = on; },
       clearFoes: () => swarm.clear(),
       /** 清掉地上的掉落物。**探针必须有这个** —— 「刚掉的那颗在不在」不能靠
        *  总数的增减去推：上一轮留在地上的宝石这会儿正被吸走，一加一减，

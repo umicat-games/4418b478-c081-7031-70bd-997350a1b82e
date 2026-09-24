@@ -423,6 +423,14 @@ export class Swarm {
   }
 
   private sync(): void {
+    // 动画循环和 `resetRun()` 都可能在 `load()` 之前跑到这里 —— `update()` 早就
+    // 有这道门了，而 `clear()` → `sync()` 这条路没有，于是「开局即重开」一上线
+    // 就把游戏整个打挂了（`Cannot set properties of undefined (setting 'count')`，
+    // 而且是在 `start()` 里抛的，所以画面直接停在 "Failed to start"）。
+    //
+    // 这正是开局和重开共用一段代码的好处：这个洞本来只会在某个玩家按下「再来
+    // 一局」时才出现，现在第一局就炸了。
+    if (!this.bodies) return;
     const n = this.mode === 'instanced' ? this.foes.length : 0;
     this.bodies.count = n;
     this.barBack.count = n;
