@@ -37,7 +37,16 @@ const CLIPS: Record<string, AudioClipSpec> = {
   // 节流略大于各自的冷却，免得一次齐射响三声。
   'cannon-shot': { volume: 0.32, throttle: 200 },                        // 追踪弹
   'fire-magic-wand-sound-effect.mp3': { volume: 0.4, throttle: 500 },    // 前向冲击
-  'lightning-magic-wand-sound-effect.mp3': { volume: 0.42, throttle: 400 }, // 链式闪电
+  // 链式闪电。**换过一次**：原来是 `lightning-magic-wand-sound-effect.mp3`，
+  // 4.0 秒长，而这把武器每 1.3 秒放一次 —— 同一段声音有三份叠在一起，听起来
+  // 是一团糊的嗡嗡，而不是一次施法。新的这个 2.06 秒，叠不到两份。
+  //
+  // **音量是量出来的，不是听出来的**（这张表一贯如此）：按「最响的那四分之一」
+  // 算 RMS，新 0.2028、旧 0.2769，所以 0.42 × (0.2769/0.2028) ≈ 0.57。
+  // 整段 RMS 会被前后的静音拉低，长度不同的两个 clip 那样比是不可比的。
+  //
+  // （顺带：旧那个的峰值是 1.121，本身就已经削顶了。）
+  'magic-attack-sound.mp3': { volume: 0.57, throttle: 400 },               // 链式闪电
   // 挨打。**这个不能节流得太狠** —— 它是玩家唯一一个"我正在掉血"的耳朵信号，
   // 而被围住的时候屏幕上全是敌人，血条在角落里。
   'hero-hurt': { volume: 0.6, throttle: 420 },
@@ -57,7 +66,7 @@ export const SFX = {
   kill: 'enemy-die',
   bolt: 'cannon-shot',
   shock: 'fire-magic-wand-sound-effect.mp3',
-  chain: 'lightning-magic-wand-sound-effect.mp3',
+  chain: 'magic-attack-sound.mp3',
   hurt: 'hero-hurt',
   gem: 'coin',
   levelUp: 'upgrade',
