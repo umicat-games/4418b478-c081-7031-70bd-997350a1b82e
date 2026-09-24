@@ -112,10 +112,37 @@ const RISE_MS = 200;
 const HANG_MS = 300;
 const BOWL_MS = 260;
 const FLIGHT_MS = RISE_MS + HANG_MS + BOWL_MS;
-/** How far a held stone drifts while it waits. Small — it is breathing, not
- *  bobbing — and a full sine, so it ends exactly where it started and the
- *  trip to the bowl begins from a still stone. */
-const HANG_DRIFT = 0.07;
+/**
+ * How a stone says it is off the board, to a camera looking STRAIGHT DOWN.
+ *
+ * This is the whole problem with the hold, and the first version got it
+ * backwards: it drifted along Y, which is the one axis this camera cannot
+ * see. From overhead, height is worth almost nothing — the lens is long
+ * (`FOV_DEG` 22), so a stone lifted a fifth of a cell grows by about a per
+ * cent. What reads instead is everything the camera DOES see:
+ *
+ *   • `HANG_DRIFT` — a slow horizontal wander, a full circle so it returns to
+ *     where it started. Sideways motion with no reason on the board is the
+ *     plainest "this is not sitting anywhere" there is.
+ *   • `TUMBLE_TURNS` — it turns over. A Go stone is a flattened lens, so
+ *     rolling it about a horizontal axis takes its outline from a circle to a
+ *     thin ellipse and back, which from above is unmistakable and impossible
+ *     for a stone on a board to do.
+ *   • `RAISED_SCALE` — bigger than perspective would make it. An honest 1%
+ *     is not a cue; this is the lens being helped.
+ *
+ * And the fourth, which is not a number here but a flag in `animate()`: the
+ * stone CASTS A SHADOW again while it is up. Its shadow stays on the wood and
+ * slides away from it — at this key angle, about a cell away — which is the
+ * strongest depth cue an overhead view has, and the first version threw it
+ * away to avoid a fading stone leaving a hard shadow behind. It is kept for
+ * the two solid beats and dropped for the fade.
+ */
+const HANG_DRIFT = 0.16;
+const TUMBLE_TURNS = 2;
+const RAISED_SCALE = 1.18;
+/** Half a stone's thickness, in geometry units — see `flightGeometry`. */
+const STONE_HALF = 0.47 * 0.42;
 const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
 /** Slow away, then quick: what being taken looks like, where `easeOut` (quick
  *  then slow) looks like being thrown and landing somewhere. */
@@ -124,6 +151,8 @@ const easeIn = (t: number): number => t * t;
 interface Flight {
   mesh: THREE.Mesh;
   colour: 'black' | 'white';
+  /** The axis it turns over about — across its own direction of travel. */
+  spin: THREE.Vector3;
   /** Where it was standing. */
   from: THREE.Vector3;
   /** The bowl: past the edge of the board, on the side of whoever took it. */
@@ -670,11 +699,21 @@ export class BoardView {
       // waiting for the stagger is a stone nobody has picked up yet — and a
       // mesh that has not been positioned is a mesh at the world origin,
       // which is the middle of the board.
-      mesh.position.copy(from);
+      mesh.position.set(from.x, from.y + STONE_HALF * this.spacing, from.z);
+      mesh.rotation.set(0, 0, 0);
       mesh.scale.setScalar(this.spacing);
       (mesh.material as THREE.MeshStandardMaterial).opacity = 1;
+      mesh.castShadow = true;
+      // It rolls FORWARD along the way it is about to go, which means about
+      // the axis across that direction. A group tumbling in lockstep about
+      // one world axis looks like a mechanism; this way each stone's tumble
+      // belongs to its own journey.
+      const away = new THREE.Vector3().subVectors(bowl, from).setY(0);
+      const spin = (away.lengthSq() > 1e-6
+        ? new THREE.Vector3(-away.z, 0, away.x)
+        : new THREE.Vector3(1, 0, 0)).normalize();
       this.flights.push({
-        mesh, colour, from, to: bowl,
+        mesh, colour, from, to: bowl, spin,
         lift: this.spacing * 0.85, start: now + i * step,
       });
     });
@@ -700,15 +739,20 @@ export class BoardView {
     const free = this.flightPool[colour].find((m) => !m.visible);
     if (free) { free.visible = true; return free; }
     const slate = colour === 'black';
-    const mesh = new THREE.Mesh(stoneGeometry(), new THREE.MeshStandardMaterial({
+    const mesh = new THREE.Mesh(flightGeometry(), new THREE.MeshStandardMaterial({
       color: slate ? 0x14161a : 0xf2efe6,
       roughness: slate ? 0.28 : 0.44,
       metalness: 0.02,
       transparent: true,
       depthWrite: false,
     }));
-    // No shadow: the depth pass does not read opacity, so a stone that has
-    // faded out would leave a full-strength shadow on the wood behind it.
+    // It DOES cast a shadow, and `animate()` turns that off for the fade —
+    // the depth pass does not read opacity, so a stone that had faded out
+    // would leave a full-strength shadow on the wood behind it. For the two
+    // solid beats the shadow is the point: it stays on the board while the
+    // stone leaves it, and from straight overhead that gap is the only thing
+    // that says the stone is in the air at all.
+    mesh.castShadow = true;
     this.scene.add(mesh);
     this.flightPool[colour].push(mesh);
     return mesh;
@@ -738,29 +782,35 @@ export class BoardView {
       }
       moving = true;
       const mat = f.mesh.material as THREE.MeshStandardMaterial;
-      const top = f.from.y + f.lift;
-      if (t < RISE_MS) {
-        // Up, off the wood, in place.
-        const k = easeOut(t / RISE_MS);
-        f.mesh.position.set(f.from.x, f.from.y + f.lift * k, f.from.z);
-        f.mesh.scale.setScalar(this.spacing);
-        mat.opacity = 1;
-      } else if (t < RISE_MS + HANG_MS) {
-        // Held. The drift is a whole sine, so it returns to the top exactly
-        // as the trip begins and there is nothing to jump.
-        const u = (t - RISE_MS) / HANG_MS;
+      const base = f.from.y + STONE_HALF * this.spacing;
+      const top = base + f.lift;
+      const up = RISE_MS + HANG_MS;
+      if (t < up) {
+        // OFF THE BOARD. Height does almost nothing from here, so the work is
+        // done by the turn, by the size, and by the shadow left behind.
+        const rise = Math.min(1, t / RISE_MS);
+        const k = easeOut(rise);
+        // Decelerating into flat: two whole turns, ending exactly level, so
+        // the stone leaves as a stone rather than mid-roll.
+        f.mesh.setRotationFromAxisAngle(f.spin, TUMBLE_TURNS * 2 * Math.PI * easeOut(t / up));
+        f.mesh.scale.setScalar(this.spacing * (1 + (RAISED_SCALE - 1) * k));
+        // A slow circle while it waits, in the plane the camera can see. A
+        // full turn of it, so it comes back to where it started.
+        const u = t < RISE_MS ? 0 : (t - RISE_MS) / HANG_MS;
+        const r = f.lift * HANG_DRIFT * (t < RISE_MS ? 0 : 1);
         f.mesh.position.set(
-          f.from.x,
-          top + Math.sin(u * Math.PI * 2) * f.lift * HANG_DRIFT,
-          f.from.z,
+          f.from.x + Math.sin(u * Math.PI * 2) * r,
+          base + f.lift * k,
+          f.from.z + (1 - Math.cos(u * Math.PI * 2)) * r,
         );
-        f.mesh.scale.setScalar(this.spacing);
         mat.opacity = 1;
       } else {
-        // And away, accelerating.
-        const k = easeIn((t - RISE_MS - HANG_MS) / BOWL_MS);
+        // And away, accelerating. The shadow goes now: it cannot fade with
+        // the stone, and a hard shadow under nothing is worse than none.
+        f.mesh.castShadow = false;
+        const k = easeIn((t - up) / BOWL_MS);
         f.mesh.position.lerpVectors(new THREE.Vector3(f.from.x, top, f.from.z), f.to, k);
-        f.mesh.scale.setScalar(this.spacing * (1 - 0.3 * k));
+        f.mesh.scale.setScalar(this.spacing * RAISED_SCALE * (1 - 0.3 * k));
         // Late, so it is still a stone for most of the trip rather than a
         // smudge leaving the board.
         mat.opacity = 1 - easeIn(Math.max(0, (k - 0.35) / 0.65));
@@ -804,6 +854,21 @@ function stoneGeometry(): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(0.47, 24, 16);
   g.scale(1, 0.42, 1);
   g.translate(0, 0.47 * 0.42, 0);
+  return g;
+}
+
+/**
+ * The same stone, with its origin in the MIDDLE rather than on its base.
+ *
+ * A stone on the board is positioned by the point it sits on, so its origin
+ * belongs at its base. A stone in the air turns over, and something rotated
+ * about its base does not spin — it swings, around a pivot on the wood
+ * underneath it. Only the flights use this, and they add `STONE_HALF` back
+ * when they place themselves.
+ */
+function flightGeometry(): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(0.47, 24, 16);
+  g.scale(1, 0.42, 1);
   return g;
 }
 

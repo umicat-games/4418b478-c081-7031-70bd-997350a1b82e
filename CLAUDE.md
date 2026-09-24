@@ -330,6 +330,25 @@ them for as long as they are leaving. Three things it is built on:
   did it. The stagger is by DISTANCE from the move, not by array index — the
   list comes out of a flood fill and its order means nothing on the board. A
   big capture staggers tighter rather than taking proportionally longer.
+- **Height is worth nothing to this camera, and the first two attempts both
+  spent their effort on it.** The camera looks STRAIGHT DOWN through a long
+  lens, so a stone lifted a fifth of a cell grows by about one per cent and
+  moves not at all — the hold was drifting along Y, the single axis the view
+  cannot see. What says "off the board" here is everything else: it TURNS
+  OVER (two whole turns, decelerating into flat, about the axis across its
+  own direction of travel — a Go stone is a flattened lens, so from above its
+  outline goes from a circle to a thin ellipse and back, which nothing on the
+  board can do); it drifts sideways in a slow circle; it is drawn larger than
+  perspective would make it; and **it casts a shadow again**. The shadow is
+  the strongest of the four and it was thrown away in the first version — it
+  stays on the wood while the stone leaves, and at this key angle that gap is
+  about a cell wide. It is kept for the two solid beats and dropped for the
+  fade, because the depth pass does not read opacity and a faded stone would
+  leave a hard shadow under nothing.
+- **A flight's geometry has its origin in the MIDDLE, the board's has it on
+  the base** (`flightGeometry` vs `stoneGeometry`). A stone on a point is
+  placed by the point; a stone that turns over has to turn about itself, and
+  something rotated about its base swings around a pivot on the wood instead.
 - **Three beats, and the middle one is the one that was missing.** A stone
   rises in place (200ms), is HELD there (300ms), and only then leaves
   (260ms). Rising straight into the departure — which is what it did at
