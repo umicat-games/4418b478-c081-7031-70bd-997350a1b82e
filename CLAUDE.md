@@ -364,7 +364,10 @@ them for as long as they are leaving. Three things it is built on:
   lens, so a stone lifted a fifth of a cell grows by about one per cent and
   moves not at all — the hold was drifting along Y, the single axis the view
   cannot see. What says "off the board" here is everything else: it TURNS
-  OVER (two whole turns, decelerating into flat, about the axis across its
+  OVER (two whole turns over 820ms on `easeRoll`, which is a gentler
+  deceleration than `easeOut` — the quadratic put all of its speed in the
+  first instant and peaked near six revolutions a second, which is a coin
+  being flipped however long the tail is — decelerating into flat, about the axis across its
   own direction of travel — a Go stone is a flattened lens, so from above its
   outline goes from a circle to a thin ellipse and back, which nothing on the
   board can do); it drifts sideways in a slow circle; it is drawn larger than
@@ -378,14 +381,14 @@ them for as long as they are leaving. Three things it is built on:
   the base** (`flightGeometry` vs `stoneGeometry`). A stone on a point is
   placed by the point; a stone that turns over has to turn about itself, and
   something rotated about its base swings around a pivot on the wood instead.
-- **Three beats, and the middle one is the one that was missing.** A stone
-  rises in place (200ms), is HELD there (300ms), and only then leaves
-  (260ms). Rising straight into the departure — which is what it did at
-  first — is one flick at this speed, not a hand picking something up; the
-  hold is what makes the other two legible, and with a 68ms stagger it is
-  also why four or five stones are in the air together rather than one at a
-  time. The hold has a small breathing drift, a FULL sine, so the stone ends
-  exactly where it started and the departure begins from something still.
+- **Four beats: up, turning, STILL, away** — 200ms of rise inside an 820ms
+  roll, then 240ms of nothing at all, then 260ms of leaving. The still beat
+  has to be genuinely still, and it was not at first: the turn was spread
+  across the whole time the stone was up, so the "pause" was still rotating,
+  just slowly. There was nothing to pause ON. The roll and the pause are
+  separate windows now, the drift runs on the roll's window and returns to
+  where it started, and the beat is measurable — zero rotation, zero movement
+  for 240ms. With a 68ms stagger, four or five stones are up together.
 - **It leaves accelerating** (`easeIn`), because being taken is a pull.
   `easeOut` — quick then slow — reads as being thrown and landing somewhere,
   which is a different sentence about what just happened.

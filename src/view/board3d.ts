@@ -100,18 +100,28 @@ const CASCADE_MS = 68;
 const CASCADE_TOTAL_MS = 520;
 const RISE_MS = 200;
 /**
- * The beat in the middle, and the reason the whole thing reads as a hand.
+ * The turn, and then the beat.
  *
- * Without it a stone went up and was gone in the same movement, which at this
- * speed is not "picked up and taken away" — it is one flick. Rising, HOLDING,
- * and then leaving is three beats, and the hold is what makes the other two
- * legible. It is also what lets a capture of six stones look like six things
- * happening rather than a smear: each stone is still in the air when the next
- * one starts to rise.
+ * These were one window and it was wrong in a way that is obvious once the
+ * stone slows down: the two turns were spread across the whole time the stone
+ * was up, so the "pause" at the end of it was still rotating, just slowly.
+ * There was nothing to pause ON.
+ *
+ * They are separate now. `TUMBLE_MS` is how long two whole turns take, ending
+ * flat and decelerating into it, so the roll visibly runs out rather than
+ * being cut off. `STILL_MS` is after that: flat, motionless, nothing moving
+ * at all — which is the beat, and the thing that makes being taken afterwards
+ * read as a decision rather than as the end of a slide.
+ *
+ * Both are longer than they were. A stone turning over twice in half a second
+ * is a coin flip; at this speed it is a stone being looked at.
  */
-const HANG_MS = 300;
+const TUMBLE_MS = 820;
+const STILL_MS = 240;
 const BOWL_MS = 260;
-const FLIGHT_MS = RISE_MS + HANG_MS + BOWL_MS;
+/** The whole time a stone spends over the board before it is taken. */
+const UP_MS = TUMBLE_MS + STILL_MS;
+const FLIGHT_MS = UP_MS + BOWL_MS;
 /**
  * How a stone says it is off the board, to a camera looking STRAIGHT DOWN.
  *
@@ -144,6 +154,17 @@ const RAISED_SCALE = 1.18;
 /** Half a stone's thickness, in geometry units — see `flightGeometry`. */
 const STONE_HALF = 0.47 * 0.42;
 const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+/**
+ * The roll's own curve, gentler than `easeOut`.
+ *
+ * A quadratic ease-out puts all of its speed in the first instant — two turns
+ * in 700ms peaks near six revolutions a second, which is a coin being
+ * flipped, however long the tail is. The lower power spreads the same two
+ * turns out: it still runs out rather than stopping dead, but it starts at
+ * about two thirds the speed and spends most of the window at a rate you can
+ * follow.
+ */
+const easeRoll = (t: number): number => 1 - (1 - t) ** 1.5;
 /** Slow away, then quick: what being taken looks like, where `easeOut` (quick
  *  then slow) looks like being thrown and landing somewhere. */
 const easeIn = (t: number): number => t * t;
@@ -784,20 +805,24 @@ export class BoardView {
       const mat = f.mesh.material as THREE.MeshStandardMaterial;
       const base = f.from.y + STONE_HALF * this.spacing;
       const top = base + f.lift;
-      const up = RISE_MS + HANG_MS;
+      const up = UP_MS;
       if (t < up) {
         // OFF THE BOARD. Height does almost nothing from here, so the work is
         // done by the turn, by the size, and by the shadow left behind.
         const rise = Math.min(1, t / RISE_MS);
         const k = easeOut(rise);
-        // Decelerating into flat: two whole turns, ending exactly level, so
-        // the stone leaves as a stone rather than mid-roll.
-        f.mesh.setRotationFromAxisAngle(f.spin, TUMBLE_TURNS * 2 * Math.PI * easeOut(t / up));
+        // Two whole turns, decelerating into flat and DONE before the beat —
+        // `Math.min` is what ends it, and everything after that is the stone
+        // simply being up there.
+        const roll = Math.min(1, t / TUMBLE_MS);
+        f.mesh.setRotationFromAxisAngle(f.spin, TUMBLE_TURNS * 2 * Math.PI * easeRoll(roll));
         f.mesh.scale.setScalar(this.spacing * (1 + (RAISED_SCALE - 1) * k));
-        // A slow circle while it waits, in the plane the camera can see. A
-        // full turn of it, so it comes back to where it started.
-        const u = t < RISE_MS ? 0 : (t - RISE_MS) / HANG_MS;
-        const r = f.lift * HANG_DRIFT * (t < RISE_MS ? 0 : 1);
+        // A slow circle in the plane the camera can see, over the same window
+        // as the turn: a full one, so it ends where it started and the beat
+        // afterwards is genuinely still. A drift that ran on through the
+        // pause would be the pause not happening.
+        const u = t < RISE_MS ? 0 : Math.min(1, (t - RISE_MS) / (TUMBLE_MS - RISE_MS));
+        const r = t < RISE_MS ? 0 : f.lift * HANG_DRIFT;
         f.mesh.position.set(
           f.from.x + Math.sin(u * Math.PI * 2) * r,
           base + f.lift * k,
