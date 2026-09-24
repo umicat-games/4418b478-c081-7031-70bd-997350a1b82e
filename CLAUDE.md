@@ -330,9 +330,17 @@ them for as long as they are leaving. Three things it is built on:
   did it. The stagger is by DISTANCE from the move, not by array index — the
   list comes out of a flood fill and its order means nothing on the board. A
   big capture staggers tighter rather than taking proportionally longer.
-- **They RISE in place before they go anywhere.** A single curve from the
-  board to the bowl reads as being flicked off the edge; the lift is the part
-  that reads as being picked up.
+- **Three beats, and the middle one is the one that was missing.** A stone
+  rises in place (200ms), is HELD there (300ms), and only then leaves
+  (260ms). Rising straight into the departure — which is what it did at
+  first — is one flick at this speed, not a hand picking something up; the
+  hold is what makes the other two legible, and with a 68ms stagger it is
+  also why four or five stones are in the air together rather than one at a
+  time. The hold has a small breathing drift, a FULL sine, so the stone ends
+  exactly where it started and the departure begins from something still.
+- **It leaves accelerating** (`easeIn`), because being taken is a pull.
+  `easeOut` — quick then slow — reads as being thrown and landing somewhere,
+  which is a different sentence about what just happened.
 - **They fly to the seat that counts them** — the player's plate is on the
   left, the engine's on the right — **and the count waits for them.** The
   plates read `counted`, not `game.captures`: a number that goes up while

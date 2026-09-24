@@ -81,21 +81,45 @@ const FOV_DEG = 22;
 const POLAR_DEG = 0;
 
 /**
- * Taking stones off, in three numbers.
+ * Taking stones off, in time.
  *
  * A capture is not one event — it is a handful of stones picked out of the
- * board one at a time, and the only thing that says so is that they do not
- * all move at once. `CASCADE_MS` is the gap between one stone starting and
- * the next; `RISE_MS` is the lift off the wood, straight up and in place,
- * which is the part that reads as being picked up; `BOWL_MS` is the quick
- * trip to the bowl afterwards. A big capture staggers tighter rather than
- * taking proportionally longer — `CASCADE_TOTAL_MS` is the whole budget.
+ * board one at a time — and none of that is visible unless the timing says
+ * it. One stone's journey is three beats: `RISE_MS` off the wood, straight up
+ * and in place; `HANG_MS` held there; `BOWL_MS` away, accelerating. The hold
+ * is the one that was missing, and without it the rise and the departure are
+ * a single flick rather than a hand picking something up.
+ *
+ * `CASCADE_MS` is the gap between one stone starting and the next, which is
+ * what makes a group come off in order instead of all at once. A big capture
+ * staggers TIGHTER rather than taking proportionally longer —
+ * `CASCADE_TOTAL_MS` is the whole budget for the stagger, however many stones
+ * there are.
  */
-const CASCADE_MS = 52;
-const CASCADE_TOTAL_MS = 420;
-const RISE_MS = 170;
-const BOWL_MS = 300;
+const CASCADE_MS = 68;
+const CASCADE_TOTAL_MS = 520;
+const RISE_MS = 200;
+/**
+ * The beat in the middle, and the reason the whole thing reads as a hand.
+ *
+ * Without it a stone went up and was gone in the same movement, which at this
+ * speed is not "picked up and taken away" — it is one flick. Rising, HOLDING,
+ * and then leaving is three beats, and the hold is what makes the other two
+ * legible. It is also what lets a capture of six stones look like six things
+ * happening rather than a smear: each stone is still in the air when the next
+ * one starts to rise.
+ */
+const HANG_MS = 300;
+const BOWL_MS = 260;
+const FLIGHT_MS = RISE_MS + HANG_MS + BOWL_MS;
+/** How far a held stone drifts while it waits. Small — it is breathing, not
+ *  bobbing — and a full sine, so it ends exactly where it started and the
+ *  trip to the bowl begins from a still stone. */
+const HANG_DRIFT = 0.07;
 const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+/** Slow away, then quick: what being taken looks like, where `easeOut` (quick
+ *  then slow) looks like being thrown and landing somewhere. */
+const easeIn = (t: number): number => t * t;
 
 interface Flight {
   mesh: THREE.Mesh;
@@ -706,7 +730,7 @@ export class BoardView {
     for (const f of [...this.flights]) {
       const t = now - f.start;
       if (t < 0) { moving = true; continue; }
-      if (t >= RISE_MS + BOWL_MS) {
+      if (t >= FLIGHT_MS) {
         f.mesh.visible = false;
         this.flights.splice(this.flights.indexOf(f), 1);
         this.dirty = true;
@@ -714,17 +738,32 @@ export class BoardView {
       }
       moving = true;
       const mat = f.mesh.material as THREE.MeshStandardMaterial;
+      const top = f.from.y + f.lift;
       if (t < RISE_MS) {
+        // Up, off the wood, in place.
         const k = easeOut(t / RISE_MS);
         f.mesh.position.set(f.from.x, f.from.y + f.lift * k, f.from.z);
         f.mesh.scale.setScalar(this.spacing);
         mat.opacity = 1;
+      } else if (t < RISE_MS + HANG_MS) {
+        // Held. The drift is a whole sine, so it returns to the top exactly
+        // as the trip begins and there is nothing to jump.
+        const u = (t - RISE_MS) / HANG_MS;
+        f.mesh.position.set(
+          f.from.x,
+          top + Math.sin(u * Math.PI * 2) * f.lift * HANG_DRIFT,
+          f.from.z,
+        );
+        f.mesh.scale.setScalar(this.spacing);
+        mat.opacity = 1;
       } else {
-        const k = easeOut((t - RISE_MS) / BOWL_MS);
-        const top = new THREE.Vector3(f.from.x, f.from.y + f.lift, f.from.z);
-        f.mesh.position.lerpVectors(top, f.to, k);
+        // And away, accelerating.
+        const k = easeIn((t - RISE_MS - HANG_MS) / BOWL_MS);
+        f.mesh.position.lerpVectors(new THREE.Vector3(f.from.x, top, f.from.z), f.to, k);
         f.mesh.scale.setScalar(this.spacing * (1 - 0.3 * k));
-        mat.opacity = 1 - easeOut(Math.max(0, (k - 0.4) / 0.6));
+        // Late, so it is still a stone for most of the trip rather than a
+        // smudge leaving the board.
+        mat.opacity = 1 - easeIn(Math.max(0, (k - 0.35) / 0.65));
       }
       this.dirty = true;
     }
