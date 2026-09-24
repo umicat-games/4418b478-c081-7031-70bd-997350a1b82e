@@ -115,8 +115,22 @@ const WOBBLE_TILT = 0.30;
 /** 敌人贴到多近就停。 */
 export const CONTACT = 0.7;
 /** 多大比例生成在移动方向上，以及那个扇形有多宽。 */
-const AHEAD_SHARE = 0.55;
+const AHEAD_SHARE = 0.7;
 const AHEAD_CONE = Math.PI * 0.8;
+/** 有多少是**追兵**，以及它们快多少。
+ *
+ *  **敌人整体调慢之后，「跑」又变成免费的了** —— 探针量到：直线跑 20 秒，
+ *  场上 45 只而**前方只剩 2 只、身后 43 只**。慢到一定程度，玩家和每只敌人
+ *  只会相遇一次，然后永远把它甩在后面，压力无法累积。
+ *
+ *  但答案不是把速度调回去（玩家要的就是整体慢一点），而是**给速度一个分布的
+ *  尾巴**：绝大多数仍然是慢慢推过来的墙，少数是咬着你的追兵。吸血鬼幸存者
+ *  就是这么做的——蝙蝠那种快的品种混在慢的大群里。
+ *
+ *  1.45 倍配上 `SPEED_CAP`，追兵最快 3.85，仍然低于玩家的 4.6：**追得上不等于
+ *  追得到**，它只是让你没法靠直线跑解决问题。 */
+const CHASER_SHARE = 0.18;
+const CHASER_SPEED = 1.45;
 
 export class Swarm {
   readonly foes: Foe[] = [];
@@ -272,7 +286,9 @@ export class Swarm {
         // 封 4.2、系数上界 1.28，实际最快 5.4，比玩家的 4.6 还快，而曲线那边
         // 的注释还写着「刻意低于玩家」。封在乘之前等于没封。
         // 速度**有分布**，但分布要收着，而且要有硬上限 —— 见下。
-        hp, maxHp: hp, speed: Math.min(SPEED_CAP, speed * (0.82 + Math.random() * 0.30)),
+        hp, maxHp: hp,
+        speed: Math.min(SPEED_CAP, speed * (0.82 + Math.random() * 0.30)
+          * (Math.random() < CHASER_SHARE ? CHASER_SPEED : 1)),
         flash: 0, lastHit: {}, elite: false, kx: 0, kz: 0, wobble: 0,
         obj: this.mode === 'clone' ? this.makeClone(false) : null,
       };

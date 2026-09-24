@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Swarm, Foe } from './swarm';
 import type { Sparks } from './sparks';
-import { type Vfx, type Quad, quads, FRAME } from './vfx';
+import { type Vfx, type Quad, quads, FRAME, atlas, setFrameUv } from './vfx';
 
 /**
  * 武器。现在只有一把 —— 这是个能上手试手感的切片，不是最终的五把。
@@ -105,13 +105,16 @@ export class OrbitBlades {
  */
 export class TrailBurn {
   private mesh!: THREE.InstancedMesh;
-  private spots: { x: number; z: number; life: number }[] = [];
+  private spots: { x: number; z: number; life: number; spin: number }[] = [];
   private lastX = NaN;
   private lastZ = NaN;
 
-  /** 隔多远留一个。太密就成了一条连续的带子（好看但没有取舍），
-   *  太疏则跑起来是一串断点。 */
-  gap = 0.9;
+  /** 隔多远留一个。
+   *
+   *  0.9 配上放大后的符文仍然是一串**断开的圈**（截图看过）。0.7 让相邻两块
+   *  稍微叠上，读起来是一条烧过去的路，而不是一排盖下去的印章 —— 而「一条
+   *  连续的路」正是这把武器要玩家理解的东西：你跑过的地方在烧。 */
+  gap = 0.7;
   /** 一个留多久、多大、每秒多少伤害。`life` 是这把武器的升级轴：
    *  留得久 = 你绕的那个圈更长时间还在生效。 */
   life = 2.6;
@@ -124,15 +127,48 @@ export class TrailBurn {
   private readonly q = new THREE.Quaternion();
   private readonly pos = new THREE.Vector3();
   private readonly scl = new THREE.Vector3();
+  private readonly up = new THREE.Vector3(0, 1, 0);
+  private readonly col = new THREE.Color();
+  // 普通混合下颜色是直接画上去的，所以这两个就是眼睛看到的颜色本身。
+  // 红分量给满、绿蓝压低，这样加到草地上是橙黄而不是白。
+  private readonly hot = new THREE.Color(0xffd27a);
+  private readonly cold = new THREE.Color(0xff4a08);
 
   constructor(scene: THREE.Scene) {
-    // 贴地的一个圆片。不投影、不写深度 —— 它是地上的一块痕迹，
-    // 不该和地面 z-fighting，也不该挡住站在上面的敌人。
-    const g = new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2);
+    // **符文圈，不是一块橙色的圆片。**
+    //
+    // 第一版是 `CircleGeometry` + 半透明纯橙，玩家的评价是「太丑了」，而且
+    // 说得对：一块均匀的半透明色块在草地上既不像火也不像痕迹，它只像一个
+    // 没做完的占位图形。
+    //
+    // 现在用 Balaboo 那道闪电**落地那一半**的贴图（`FRAME.runeCircle`）——
+    // `lightning()` 里的原注释说得很准：「一个圈读起来像一团烟；符文才是在说
+    // 『这里有法术生效过』」。加色混合让它在深色地面上发光，而不是糊上一层。
+    //
+    // 只取符文这一层，不要那道 `glowRing`：多一层就要第二个网格、第二次
+    // 绘制，而整关预算 20、最坏情况已经用到 19。形状上符文是主角，光环是陪衬。
+    //
+    // 不投影、不写深度 —— 它是地上的一块痕迹，不该和地面 z-fighting，
+    // 也不该挡住站在上面的敌人。
+    const g = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    setFrameUv(g, FRAME.runeCircle);
+    // **加色混合，而且没得选。**
+    //
+    // 中间试过普通混合，想让橙色在亮草地上不被洗白 —— 结果是一条**泥巴路**。
+    // 原因去看一眼贴图就明白了（`public/vfx/particles.png`）：这张图是
+    // **黑底灰度、没有 alpha 通道**，黑的地方 alpha 仍然是 1。加色混合下黑
+    // 等于透明，普通混合下黑就是黑 —— 我等于在草地上刷了一块黑方片。
+    //
+    // 这类图只能加色。代价是颜色会被草地洗淡（草大约 0.35/0.78/0.45，绿通道
+    // 先饱和，所以加什么都偏黄白）—— 但 Balaboo 那道闪电落地的圈本来就是这个
+    // 样子，而这正是要的那个效果。**身份靠形状给，不靠颜色。**
     const m = new THREE.MeshBasicMaterial({
-      color: 0xff7a3c, transparent: true, opacity: 0.42, depthWrite: false,
+      map: atlas(), transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
     this.mesh = new THREE.InstancedMesh(g, m, 96);
+    this.mesh.instanceColor =
+      new THREE.InstancedBufferAttribute(new Float32Array(96 * 3), 3);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 2;
     this.mesh.count = 0;
@@ -143,7 +179,9 @@ export class TrailBurn {
     // 走够一段才留一个 —— 站着不动不该堆出一个越来越浓的池子。
     if (!(Math.hypot(px - this.lastX, pz - this.lastZ) < this.gap)) {
       this.lastX = px; this.lastZ = pz;
-      if (this.spots.length < 96) this.spots.push({ x: px, z: pz, life: this.life });
+      if (this.spots.length < 96) {
+        this.spots.push({ x: px, z: pz, life: this.life, spin: Math.random() * Math.PI * 2 });
+      }
     }
 
     let killed = 0, n = 0;
@@ -157,16 +195,38 @@ export class TrailBurn {
       }
       killed += swarm.damageNear(s.x, s.z, this.radius, this.dps * this.reHit,
                                  'trail', this.reHit, now);
-      // 快烧完的时候缩小，这样「还剩多久」是看得出来的 —— 一块突然消失的
-      // 伤害区会让玩家以为自己记错了它在哪。
-      const k = Math.min(1, s.life / this.life * 2.2);
+      // 快烧完的时候暗下去、也小下去，这样「还剩多久」是看得出来的 ——
+      // 一块突然消失的伤害区会让玩家以为自己记错了它在哪。
+      const left = s.life / this.life;                     // 1 → 0
+      const born = Math.min(1, (this.life - s.life) * 7);  // 落地那 0.14 秒长出来
+      const k = Math.min(1, left * 2.2);
       this.pos.set(s.x, 0.03, s.z);
-      this.scl.set(this.radius * k, 1, this.radius * k);
-      this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+      // 每块符文**自己转**，起始角度还各不相同。步调一致的话，一条尾迹读起来
+      // 像一排盖下去的印章，不像一串还在烧的东西。
+      this.q.setFromAxisAngle(this.up, s.spin + now * 0.5);
+      // **贴图里的符文只占方片的约 3/4**，所以方片要比想画的圈大一圈。
+      // 截图量过：方片 1.6 的时候画出来的圈只有 1.2，而伤害直径是 1.7 ——
+      // 看得见的火比打得到的范围小 30%，玩家会以为自己站位错了。
+      // 2.6 × 0.85 = 2.21 的方片 → 画出来约 1.65，和伤害直径基本齐平。
+      const r = this.radius * 2.6 * born * (0.62 + 0.38 * k);
+      this.scl.set(r, 1, r);
+      this.mesh.setMatrixAt(n, this.m.compose(this.pos, this.q, this.scl));
+      // 刚落地偏白热，烧到最后是暗红。加色混合下「压向黑」就是淡出，
+      // 所以「还剩多亮」和「什么颜色」是同一个乘法。
+      // 加色混合下「压向黑」就是淡出，所以「还剩多亮」和「什么颜色」是同一个
+      // 乘法。系数敢超过 1：加色是往上加的，只是让它更接近纯亮橙。
+      //
+      // 热度用 `left` 而不是 `left²`：平方让白热只在最开始零点几秒出现，
+      // 整条尾迹绝大部分时间都停在暗的那一端。
+      this.col.copy(this.cold).lerp(this.hot, left)
+        .multiplyScalar(0.35 + 1.15 * k);
+      this.mesh.setColorAt(n, this.col);
+      n += 1;
     }
     this.mesh.count = n;
     this.mesh.visible = n > 0;   // 见 `sparks.ts`：空的实例化网格也要一次绘制
     this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
     return killed;
   }
 }
