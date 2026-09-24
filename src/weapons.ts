@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Swarm, Foe } from './swarm';
 import type { Sparks } from './sparks';
-import { type Vfx, arcBetween } from './vfx';
+import { type Vfx, type Quad, quads, FRAME } from './vfx';
 
 /**
  * 武器。现在只有一把 —— 这是个能上手试手感的切片，不是最终的五把。
@@ -190,7 +190,17 @@ export class HomingBolt {
   /** 一次发几发。**这把的升级轴** —— 多一发意味着一次齐射能覆盖更多目标
    *  （同一次齐射里每发挑不同的目标，见下），不是同一只挨两下。 */
   shots = 1;
-  interval = 1.15;
+  private _interval = 1.15;
+  /** 隔多久开一次火。
+   *
+   *  **写成 getter/setter，因为改它必须同时收住正在倒数的冷却。** 直接改字段
+   *  的话，冷却是上一次开火时按**旧**间隔设下的：把间隔从 1.6 调到 0.5，玩家
+   *  还得等完那 1.6 秒。现在没有升级项动它，但探针动它 —— 而且那正是这个 bug
+   *  被发现的方式：「把间隔调小再等一会儿」什么都不会发生，探针于是时红时绿，
+   *  读起来像武器本身不稳定。 */
+  get interval(): number { return this._interval; }
+  set interval(v: number) { this._interval = v; this.timer = Math.min(this.timer, v); }
+
   damage = 34;
   speed = 11;
   /** 找多远以内的目标，和飞多久没打到就消失。 */
@@ -333,7 +343,17 @@ export class ShockLance {
   /** 波有多宽（弧长的一半，弧度）。**这把的升级轴** —— 更宽的波清掉更大的
    *  一片正面，而这正是它存在的理由。看得见，也改变你敢往多密的地方冲。 */
   half = 0.55;
-  interval = 1.6;
+  private _interval = 1.6;
+  /** 隔多久开一次火。
+   *
+   *  **写成 getter/setter，因为改它必须同时收住正在倒数的冷却。** 直接改字段
+   *  的话，冷却是上一次开火时按**旧**间隔设下的：把间隔从 1.6 调到 0.5，玩家
+   *  还得等完那 1.6 秒。现在没有升级项动它，但探针动它 —— 而且那正是这个 bug
+   *  被发现的方式：「把间隔调小再等一会儿」什么都不会发生，探针于是时红时绿，
+   *  读起来像武器本身不稳定。 */
+  get interval(): number { return this._interval; }
+  set interval(v: number) { this._interval = v; this.timer = Math.min(this.timer, v); }
+
   damage = 22;
   /** 往前推多远、多快，和波自己有多厚。 */
   reach = 7.5;
@@ -440,7 +460,17 @@ export class ChainLightning {
   /** 跳几次。**这把的升级轴** —— 看得见（弧一条一条连出去），而且它改变的
    *  是"这一团我能吃掉多少"，不是一个数字。 */
   jumps = 3;
-  interval = 1.3;
+  private _interval = 1.3;
+  /** 隔多久开一次火。
+   *
+   *  **写成 getter/setter，因为改它必须同时收住正在倒数的冷却。** 直接改字段
+   *  的话，冷却是上一次开火时按**旧**间隔设下的：把间隔从 1.6 调到 0.5，玩家
+   *  还得等完那 1.6 秒。现在没有升级项动它，但探针动它 —— 而且那正是这个 bug
+   *  被发现的方式：「把间隔调小再等一会儿」什么都不会发生，探针于是时红时绿，
+   *  读起来像武器本身不稳定。 */
+  get interval(): number { return this._interval; }
+  set interval(v: number) { this._interval = v; this.timer = Math.min(this.timer, v); }
+
   damage = 26;
   /** 第一跳找多远，之后每跳能跨多远。 */
   range = 12;
@@ -453,8 +483,6 @@ export class ChainLightning {
   private timer = 0.6;
   /** 这一次链里已经打过谁。复用，免得每次开火分配一个 Set。 */
   private readonly hit = new Set<Foe>();
-  private readonly a = new THREE.Vector3();
-  private readonly b = new THREE.Vector3();
 
   constructor(private readonly vfx: Vfx, private readonly sparks: Sparks) {}
 
@@ -472,14 +500,28 @@ export class ChainLightning {
     let dmg = this.damage;
     // 从玩家身上起第一条弧，这样"是我放的"读得出来。
     let fx = px, fz = pz, fy = 0.7;
+    // **整条链画成一个网格，不是一段一条。**
+    //
+    // 原来每一跳调一次 `arcBetween`，而它内部一次 `quads()` = 一份几何 +
+    // 一份材质 + 一个网格 = **一次绘制**。满级七跳就是八次绘制，实测把
+    // 「五把全开 + 400 只」从 16 次顶到了 **40 次**，预算是 20。
+    //
+    // 这个数之前一直没被看见，因为在那个测量里闪电根本没开过火（冷却被探针
+    // 顶到了 999）—— 一个沉默的系统让预算看起来很宽裕。
+    //
+    // `quads()` 本来就吃一个列表，所以把整条链的所有片段攒进同一个列表再调
+    // 一次，八次绘制变一次，画面一模一样。
+    const list: Quad[] = [];
+    const bolt = [FRAME.boltA, FRAME.boltB, FRAME.strandA, FRAME.strandB];
     for (let j = 0; j <= this.jumps && f; j++) {
       this.hit.add(f);
       const tx = f.x, tz = f.z;
-      this.a.set(fx, fy, fz);
-      this.b.set(tx, 0.55, tz);
-      // 弧走 `Vfx` 注册表而不是粒子池：它一次施放只有几条、0.3 秒就没，
-      // 正好是 `Vfx` 被设计来装的东西。粒子池装的是**每秒几十次**的那种。
-      arcBetween(this.vfx, this.a, this.b, { color: 0xbfe4ff, life: 0.26, width: 0.7 });
+      list.push(
+        { at: new THREE.Vector3(fx, fy, fz), to: new THREE.Vector3(tx, 0.55, tz),
+          frame: bolt[j % bolt.length], w: 0.75, h: 1, mode: 'beam' },
+        { at: new THREE.Vector3(tx, 0.55, tz), frame: FRAME.starBurst,
+          w: 0.85, h: 0.85, mode: 'face' },
+      );
       this.sparks.burst(tx, 0.55, tz,
         { count: 7, color: 0xd6f0ff, color2: 0x6fb6ff, speed: 3, life: 0.36 });
       if (swarm.hitFoe(f, dmg)) killed += 1;
@@ -488,6 +530,24 @@ export class ChainLightning {
       // 跳过已经打过的 —— 没有这个，闪电会在最近的两只之间来回弹，
       // "链"就退化成"对一只打好几次"。
       f = swarm.nearest(tx, tz, this.jumpRange, this.hit);
+    }
+    if (list.length) {
+      let flick = 0;
+      quads(this.vfx, list, {
+        life: 0.26, color: 0xbfe4ff,
+        alpha: (k) => (k < 0.2 ? 1 : Math.max(0, 1 - ((k - 0.2) / 0.8) ** 0.6)),
+        step: (qs, _k, dt) => {
+          // 闪一下。照搬 `arcBetween` 里的做法：每 40ms 换一张 bolt 贴图，
+          // 不换的话它是一根静止的光棍，不是电。
+          flick += dt;
+          if (flick < 0.04) return;
+          flick = 0;
+          for (let i = 0; i < qs.length; i += 2) {
+            qs[i].frame = bolt[Math.floor(Math.random() * bolt.length)];
+            qs[i].w = 0.62 + Math.random() * 0.45;
+          }
+        },
+      });
     }
     return killed;
   }

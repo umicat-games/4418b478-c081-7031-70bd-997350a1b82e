@@ -743,6 +743,8 @@ async function start(): Promise<void> {
         return { id, level: o.level };
       },
       fx: () => ({ sparks: sparks.live, slashes: slashes.live, vfx: vfx.count }),
+      /** 真正被画出来的那几个实例化网格 —— 探针要读画面，不读状态。 */
+      swarmMeshes: () => swarm.meshes,
       /** 敌人被打退了多少 —— 「稍微退一下」只能量，不能看。 */
       knock: () => swarm.foes.map((f) => Math.hypot(f.kx, f.kz)),
       /** 敌群，和量它的东西。 */

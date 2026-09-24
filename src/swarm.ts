@@ -55,8 +55,12 @@ export interface Foe {
   elite: boolean;
   /** 被打退的速度，每帧衰减。见 `KNOCK_*`。 */
   kx: number; kz: number;
+  /** 挨打之后晃一下，剩余秒数。见 `WOBBLE_*`。 */
+  wobble: number;
 }
 
+/** 飞碟自己的前后轴。晃动绕它滚。 */
+const FWD = new THREE.Vector3(0, 0, 1);
 const BODY_Y = 0.42;          // 飞碟离地高度
 const BAR_Y = 1.02;           // 血条在头顶多高
 const BAR_W = 0.62, BAR_H = 0.09;
@@ -75,10 +79,33 @@ const FLASH_SECONDS = 0.16;
  *  的那个数。
  *
  *  精英只吃四成，不然一只该逼你停下来处理的东西会被你推着走。 */
-const KNOCK_DIST = 0.22;
-const KNOCK_TAU = 0.09;
+/** **第二次调这个数，这次按「看不看得见」调。**
+ *
+ *  0.22 格是量得到、看不见：这个取景下主角本人只有 21 像素高，0.22 格在屏幕上
+ *  是个位数像素，而且 0.09 秒就走完 —— 探针说「打了会往后退（0.281 格）」全绿，
+ *  玩家说「往后退一下的效果没做么」。**两句话都是对的**，因为我验的是它动了，
+ *  没验有人看得见它动。
+ *
+ *  上限不是环刃（它覆盖离玩家 0.30–1.80 格，敌人贴到 0.7 就停，推到 1.15 还
+ *  绰绰有余），是尾迹和冲击那两个 0.85 的半径。0.45 格离它们还有一半余量，
+ *  而它已经超过敌人自己的宽度 —— 一次位移大于自身宽度的移动才读得出来。
+ *
+ *  时间也拉长了一点：0.12 秒比 0.09 秒多几帧，而「看得见」一半是位移、
+ *  一半是**它花了几帧走完**。 */
+const KNOCK_DIST = 0.45;
+const KNOCK_TAU = 0.12;
 const KNOCK_SPEED = KNOCK_DIST / KNOCK_TAU;
 const KNOCK_ELITE = 0.4;
+/** 挨打晃一下：多久、最大倾多少弧度。
+ *
+ *  **照搬 Balaboo 的两个数**（0.34 秒 / 0.30 弧度 / 三个来回），包括它的理由：
+ *  再长就「不再读作被打了一下，而是读作这东西本来就在晃」。
+ *
+ *  晃和击退是**两件不同的事**，都要有：击退说的是「这一下有力」，晃说的是
+ *  「挨打的是它」。只有击退的话，一群挤在一起的敌人被推开时你分不清是哪几只
+ *  挨了打；只有晃的话，打击没有重量。 */
+const WOBBLE_SECONDS = 0.34;
+const WOBBLE_TILT = 0.30;
 /** 敌人贴到多近就停。 */
 export const CONTACT = 0.7;
 /** 多大比例生成在移动方向上，以及那个扇形有多宽。 */
@@ -117,6 +144,8 @@ export class Swarm {
 
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
+  /** 晃动那一下的滚转，单独一个 —— `q` 每帧被朝向覆写。 */
+  private readonly qRoll = new THREE.Quaternion();
   private readonly qInv = new THREE.Quaternion();
   private readonly pos = new THREE.Vector3();
   private readonly scl = new THREE.Vector3();
@@ -231,7 +260,7 @@ export class Swarm {
         // 慢的堆成墙 —— 一群速度完全一样的敌人会保持队形，那读起来像一堵
         // 平移的墙，而不是一群在追你的东西。
         hp, maxHp: hp, speed: speed * (0.78 + Math.random() * 0.5),
-        flash: 0, lastHit: {}, elite: false, kx: 0, kz: 0,
+        flash: 0, lastHit: {}, elite: false, kx: 0, kz: 0, wobble: 0,
         obj: this.mode === 'clone' ? this.makeClone(false) : null,
       };
       this.foes.push(f);
@@ -251,7 +280,7 @@ export class Swarm {
     const r = ringMin + Math.random() * (ringMax - ringMin);
     this.foes.push({
       x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r,
-      hp, maxHp: hp, speed, flash: 0, lastHit: {}, elite: true, kx: 0, kz: 0,
+      hp, maxHp: hp, speed, flash: 0, lastHit: {}, elite: true, kx: 0, kz: 0, wobble: 0,
       obj: this.mode === 'clone' ? this.makeClone(false) : null,
     });
     this.sync();
@@ -283,6 +312,15 @@ export class Swarm {
       this.onDamage?.(fx, fz, died, elite);
     }
     return killed;
+  }
+
+  /** 画出来的那三个网格。**探针要能读真正被画的东西，不是读状态。**
+   *
+   *  「晃了没有」从 `f.wobble` 反推只能证明那个数在变，证明不了它到了画面上 ——
+   *  而这两件事之间正好隔着整个渲染分支（剔除、矩阵合成、实例打包）。 */
+  get meshes(): { bodies: THREE.InstancedMesh; barBack: THREE.InstancedMesh;
+                  barFill: THREE.InstancedMesh } {
+    return { bodies: this.bodies, barBack: this.barBack, barFill: this.barFill };
   }
 
   /** 离某处最近的一只，找不到就是 `null`。
@@ -339,6 +377,8 @@ export class Swarm {
     const s = KNOCK_SPEED * (f.elite ? KNOCK_ELITE : 1);
     f.kx = (dx / d) * s;
     f.kz = (dz / d) * s;
+    // 晃和退是同一下的两半，所以在同一处点起来。
+    f.wobble = WOBBLE_SECONDS;
   }
 
   /** 伤害一只。返回它是否死了。 */
@@ -398,6 +438,9 @@ export class Swarm {
     for (let i = 0; i < this.foes.length; i++) {
       const f = this.foes[i];
       if (f.flash > 0) f.flash = Math.max(0, f.flash - dt);
+      // **衰减在剔除之前**。写在下面的绘制分支里的话，屏幕外挨了打的敌人会
+      // 把这一下攒着，等走进画面再晃 —— 一个迟到半秒的反馈比没有更糟。
+      if (f.wobble > 0) f.wobble = Math.max(0, f.wobble - dt);
 
       const dx = px - f.x, dz = pz - f.z;
       const d = Math.hypot(dx, dz) || 1;
@@ -424,6 +467,18 @@ export class Swarm {
         }
         this.pos.set(f.x, BODY_Y, f.z);
         this.q.setFromAxisAngle(UP, Math.atan2(dx, dz));
+        // 挨打晃一下。**乘在朝向后面**，所以它是绕飞碟自己的前后轴滚 ——
+        // 直接写世界 Z 轴的话，朝着不同方向的敌人晃的方向不一样，那读起来
+        // 像一阵风刮过去，不像各自挨了一下。
+        //
+        // 实例化让这件事是免费的：晃动只改这一个矩阵，不新增任何绘制。克隆
+        // 那条路上 Balaboo 是写 `obj.rotation.z`，效果一样，代价是每只一个对象。
+        if (f.wobble > 0) {
+          const w = f.wobble / WOBBLE_SECONDS;
+          // 在 k 从 1 走到 0 的过程里来回三次，幅度跟着 k 收 —— 照搬 Balaboo。
+          this.q.multiply(this.qRoll.setFromAxisAngle(
+            FWD, Math.sin(w * Math.PI * 6) * WOBBLE_TILT * w));
+        }
         // 精英大一圈。血条能告诉你它还剩多少，但**得先看见它**才会去读 ——
         // 一个和杂兵长得一样的东西，玩家不会知道自己面对的是另一种问题。
         const sc = f.elite ? 1.15 : 0.62;
@@ -453,6 +508,12 @@ export class Swarm {
       } else if (f.obj) {
         f.obj.position.set(f.x, BODY_Y, f.z);
         f.obj.rotation.y = Math.atan2(dx, dz);
+        // 克隆这条路只用来和实例化对比，所以它必须画出**一样**的东西 ——
+        // 两条路长得不一样的话，A/B 比的就不再是同一个画面了。
+        f.obj.rotation.z = f.wobble > 0
+          ? Math.sin((f.wobble / WOBBLE_SECONDS) * Math.PI * 6)
+            * WOBBLE_TILT * (f.wobble / WOBBLE_SECONDS)
+          : 0;
         f.obj.scale.setScalar(0.62);
         // 血条面向相机，每只单独算一次 —— 这是克隆那条路上每帧的 CPU 开销，
         // 400 只就是 400 次四元数求逆。实例化那边这件事每帧只做一次。
