@@ -229,6 +229,35 @@ back, opened from the title there is no board to put back so `onClose` goes
 there. One button that is right in both places beats a button whose label is a
 destination.
 
+**A new game must clear the CONVERSATION before the counter that tracks
+it.** `spoken` is how many of the coach's lines have already been said out
+loud, and `redrawChat()` speaks anything past it. Resetting it to 0 while the
+last game's conversation is still in `coach.messages` — which is what
+`freshGame` used to do — makes the redraw find unspoken lines and put the most
+recent one in the speech bubble: a brand new empty board with the previous
+game's last sentence floating over it, ringing a point with nothing on it and
+offering a move from a position that no longer exists.
+
+**No model is called on that path at all.** It was reported twice as "the
+assistant is talking about my old game" and it is not the assistant — the game
+is reading its own transcript back. It needs a SAVED conversation to bite,
+which is why it appeared after walking out of a game mid-way and coming back:
+`coach.load()` restores the thread, and starting a new game then re-speaks the
+end of it. The test for it walks exactly that path
+(`stale-bubble.mjs`-shaped: play, talk, reload, new game, assert the bubble)
+and it fails on the old ordering.
+
+**The coach's running NOTE must not carry coordinates**, for the same reason
+one layer up. It is the long memory: it outlives the game it was written in
+and is handed to the model at the start of the next one, where the board is
+empty and the note is the only thing on the table. Measured: a note that the
+student "likes to play K13 and L13 to connect groups" came back, on move one
+of a fresh board, as "good, this stone is close to L13 — they are connected".
+The model was not inventing; it was reading its notes aloud and nothing said
+they were about somewhere else. The summary prompt now forbids coordinates and
+says why, `scrubNote` enforces it, and the observation labels the notes as
+being about the PERSON rather than about this board.
+
 **A new game gets a new NPC, not `npc.reset()`** — and the difference is a
 bug that shipped with the NPC itself (2026-09-10 to 2026-09-23). Reset points the NPC's history at a fresh array;
 a `say()` already in flight still pushes its answer into `this.npc.history`

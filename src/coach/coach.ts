@@ -84,6 +84,25 @@ export interface CoachHooks {
   highlight(points: string): number;
 }
 
+/**
+ * A coordinate in the coach's notes is a coordinate from a board that no
+ * longer exists.
+ *
+ * The note is the long memory: it survives the game it was written in and is
+ * handed to the model at the start of the NEXT one, where it is the only
+ * thing on the table — the board is empty and there is nothing else to talk
+ * about. Measured from a real game: a note saying the student "likes to play
+ * K13 and L13 to connect groups" came back, on move one of a fresh board, as
+ * "good, this stone is close to L13 now — they are connected", with the
+ * point ringed. The model was not making it up; it was reading its notes
+ * aloud, and nothing in them said they were about somewhere else.
+ *
+ * The prompt asks for a note with no coordinates in it. This is what makes
+ * that a rule rather than a request.
+ */
+const NOTE_COORDS = /\b[A-HJ-T](?:1[0-9]|[1-9])\b/g;
+const scrubNote = (note: string): string => note.replace(NOTE_COORDS, 'a point');
+
 export class Coach {
   /** Everything said, oldest first. Trimmed for the model, kept for the player. */
   readonly messages: ChatMessage[] = [];
@@ -334,10 +353,15 @@ export class Coach {
         `Write the updated note: at most 120 words, third person, factual. Cover what the ` +
         `student is here for (learning or just playing), roughly how strong they are and on what ` +
         `evidence, what they have been taught already, and anything they keep getting wrong. ` +
-        `Keep anything from the previous note that still holds. Reply with the note only.`,
+        `Keep anything from the previous note that still holds. `
+        + `NO COORDINATES, no specific moves and no particular groups or pieces: this note is read `
+        + `at the start of the NEXT game, where none of that is on the board and quoting it reads `
+        + `as a description of the position in front of the student. Write about the PERSON — what `
+        + `they understand, what they keep getting wrong, what they are working on. `
+        + `Reply with the note only.`,
       maxTokens: 300,
     });
-    if (res.ok && res.text.trim()) this.profile.summary = res.text.trim();
+    if (res.ok && res.text.trim()) this.profile.summary = scrubNote(res.text.trim());
     return this.profile.summary;
   }
 
@@ -431,6 +455,11 @@ function observe(game: GoGame | null, read: Read | null, profile: Profile): unkn
       here_for: profile.mode,
       games_played: profile.gamesPlayed,
       what_you_know_about_them: profile.summary || '(you have not met them before)',
+      // Said out loud, because the alternative is the model working it out —
+      // and it does not work it out, it narrates. What it narrated was its
+      // own notes, as if they described the board in front of the student.
+      note: 'These notes are about the PERSON, from games that are finished. '
+        + 'Nothing in them is on the board now; the board is below.',
     },
     settings: { board_size: profile.boardSize, opponent_level: profile.level },
   };
