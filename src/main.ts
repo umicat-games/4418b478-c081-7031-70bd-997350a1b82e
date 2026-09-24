@@ -342,10 +342,9 @@ async function start(): Promise<void> {
   bolt.onFire = () => audio.play(SFX.bolt);
   shock.onFire = () => audio.play(SFX.shock);
   chain.onFire = () => audio.play(SFX.chain);
-  // 追踪弹的命中是**唯一**一个值得单独出声的命中：它是单体、有飞行时间，
-  // 「打到了没有」是玩家真会去听的一件事。其余四把是持续或群体的，那种
-  // 武器的命中声只会变成一层白噪音。
-  bolt.onHit = () => audio.play(SFX.hit);
+  // 追踪弹的命中不再单独出声 —— 现在**所有**没打死的命中都走
+  // `swarm.onDamage` 里那一条，它已经把追踪弹盖住了。留着的话这一把武器
+  // 的每次命中会响两声。
 
   // 一局的状态。
   let runClock = 0;
@@ -410,8 +409,20 @@ async function start(): Promise<void> {
   // 同样的代码，而漏掉一把会变成「某些武器打上去没反应」这种玄学。这里是唯一
   // 一个知道「有东西挨打了」的地方 —— 和 `onDeath` 同一个道理。
   swarm.onDamage = (x, z, amount, killed, elite) => {
-    // 打死的那一下不划白光：紧接着就是爆裂和掉落，再叠一道光只是糊在一起。
-    if (!killed) slashes.cut(x, 0.55, z, elite ? 0xffe2b0 : 0xffd9c2, elite ? 0.7 : 0);
+    // 打死的那一下不划白光、也不放命中声：紧接着就是爆裂、掉落和死亡音，
+    // 再叠一层只是糊在一起。
+    //
+    // **「活下来才响」是 Balaboo 的规则，照搬。** 这不是「一次事件两个声音」，
+    // 是**一次事件一个声音，按结果选**：没死 → `hit-enemy`，死了 → `enemy-die`
+    // （在 `onDeath` 里）。
+    //
+    // 上一版我把 `hit` 挂在「这一帧杀掉了谁」上，于是每次死亡**同时**放命中声
+    // 和死亡声 —— 乱战里每秒 11.1 声，一半是这个重复。当时的修法是把命中声几乎
+    // 全关掉，那是把症状连着功能一起切了：真正错的只是挂错了地方。
+    if (!killed) {
+      slashes.cut(x, 0.55, z, elite ? 0xffe2b0 : 0xffd9c2, elite ? 0.7 : 0);
+      audio.play(SFX.hit);
+    }
     // 伤害数字。`add` 自己会把近处、同一瞬间的几下并成一个数 —— 后段每秒
     // 上百次命中，一命中一个数字是一面读不了的数字墙。
     dmgNums.add(x, z, amount);

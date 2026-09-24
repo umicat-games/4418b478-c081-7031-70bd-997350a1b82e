@@ -21,10 +21,17 @@
 import { GameAudio, type AudioClipSpec } from '@umicat/three-sdk';
 
 const CLIPS: Record<string, AudioClipSpec> = {
-  // 打中和打死。两个都卡得很死：后段每秒几十次，节流之外的每一次都是
-  // 纯粹的浪费 —— 玩家也分辨不出第三十只和第三十一只。
-  // 只给追踪弹的命中用 —— 别的武器的命中**没有声音**，理由见 `main.ts`。
-  'hit-enemy': { volume: 0.26, throttle: 140 },
+  // 打中和打死。**一次事件一个声音，按结果选**：没死放 `hit-enemy`，死了放
+  // `enemy-die`（Balaboo 的规则，照搬）。
+  //
+  // 两个都卡得很死：后段每秒几十次命中，节流之外的每一次都是纯粹的浪费 ——
+  // 玩家也分辨不出第三十只和第三十一只。170ms 意味着命中声最多每秒 5.9 次，
+  // 加上死亡声的 7.7 次，乱战里是一层稳定的底噪而不是一串可数的响声。
+  //
+  // 命中声**比死亡声轻一半**：它是垫在下面的质感层，死亡才是要被听见的事件。
+  // 这个比例是按耳朵定的，真机上值得再听一遍 —— 无头浏览器跑不满帧，量出来的
+  // 「每秒几声」比真机低。
+  'hit-enemy': { volume: 0.22, throttle: 170 },
   'enemy-die': { volume: 0.4, throttle: 130 },
   // 三把要开火的武器各有自己的声音，这样"我刚才放了什么"是听得出来的。
   // 节流略大于各自的冷却，免得一次齐射响三声。
@@ -45,6 +52,7 @@ export const MUSIC = { level: 'bgm-level.mp3' } as const;
 
 /** 名字按**事件**起，不按文件名 —— 调用处该读起来像发生了什么事。 */
 export const SFX = {
+  /** 打中了但没打死。打死了放 `kill`。 */
   hit: 'hit-enemy',
   kill: 'enemy-die',
   bolt: 'cannon-shot',

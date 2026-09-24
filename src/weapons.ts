@@ -215,8 +215,6 @@ export class HomingBolt {
   /** 开火时响一声。**回调，不是让武器自己拿着 `GameAudio`** —— 武器不该知道
    *  声音是怎么放的，那是平台那一半的事（见 CLAUDE.md 的两半分界）。 */
   onFire: (() => void) | null = null;
-  /** 命中时响一声 —— 只有这把武器有，理由在 `main.ts` 的接线处。 */
-  onHit: (() => void) | null = null;
 
   private timer = 0.35;
   private readonly m = new THREE.Matrix4();
@@ -289,7 +287,6 @@ export class HomingBolt {
         b.vz += ((dz / d) * this.speed - b.vz) * k;
         if (d < this.hitAt) {
           if (swarm.hitFoe(b.target, this.damage)) killed += 1;
-          this.onHit?.();
           // 命中的那一下要看得见。这是**唯一**一把要玩家读「打中了没有」的
           // 武器 —— 环刃和尾迹是持续的，看不出单次命中也无所谓。
           this.sparks.burst(b.target.x, 0.5, b.target.z,
