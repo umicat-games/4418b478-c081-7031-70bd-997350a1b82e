@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {
   ThreeUmicat, loadScene3D, CharacterController3D, CharacterAnimator, Input3D,
-  setupScreenshotListener, setupRecordingListener,
+  setupScreenshotListener, setupRecordingListener, runEditorDesignPlayer3D,
   type Scene3D, type Manifest3D, type LoadedScene3D,
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
@@ -33,10 +33,39 @@ async function start(): Promise<void> {
   //    what makes a reload resume instead of restart.
   const umicat = await ThreeUmicat.init();
 
-  // 2) Physics. Rapier is WASM and must be initialised before use.
+  // 2) Render setup, hoisted ahead of physics/scene-load so the Edit-mode
+  //    branch below can use it without booting anything else. The canvas is
+  //    in index.html; the game owns the loop.
+  // preserveDrawingBuffer: true — required for the editor's screenshot
+  // capture (canvas.toDataURL right after a render can otherwise come back
+  // blank on WebGL). Same setting umicat-phaser-sdk's UmicatGame sets for
+  // every 2D game; here the game owns renderer construction, so the SDK
+  // can't set it for us.
+  const canvas = document.getElementById('game') as HTMLCanvasElement;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  // Screenshot + video capture for the editor's Capture menu — same
+  // postMessage protocol umicat-phaser-sdk speaks, so the host never needs
+  // to know which engine is running.
+  setupScreenshotListener(renderer);
+  setupRecordingListener(renderer);
+
+  // Edit mode (ADR-021's `?umicatEdit=1`, mirrored from 2D): the platform's
+  // Edit tab wants a read-only render of the scene's AUTHORED data, no game
+  // code, no save — never the real game. `runEditorDesignPlayer3D` owns the
+  // renderer from here on; the rest of `start()` (physics, character, saves)
+  // must never run alongside it.
+  const params = new URLSearchParams(location.search);
+  if (params.has('umicatEdit')) {
+    await runEditorDesignPlayer3D(renderer, { sceneId: params.get('umicatScene') ?? undefined });
+    return;
+  }
+
+  // 3) Physics. Rapier is WASM and must be initialised before use.
   await RAPIER.init();
 
-  // 3) The world, from design data on disk. Nothing here runs game logic —
+  // 4) The world, from design data on disk. Nothing here runs game logic —
   //    same separation the 2D editor relies on (ADR-021).
   const [manifest, scene3d] = await Promise.all([
     fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
@@ -85,22 +114,9 @@ async function start(): Promise<void> {
     ? new CharacterAnimator(heroMixer, world.clips.get('hero') ?? [], clipMap)
     : null;
 
-  // 4) Render. The canvas is in index.html; the game owns the loop.
-  const canvas = document.getElementById('game') as HTMLCanvasElement;
+  // 5) The rest of render setup. `canvas`/`renderer` already exist (step 2,
+  //    above the Edit-mode branch) — this game is definitely the real one now.
   const hud = document.getElementById('hud')!;
-  // preserveDrawingBuffer: true — required for the editor's screenshot
-  // capture (canvas.toDataURL right after a render can otherwise come back
-  // blank on WebGL). Same setting umicat-phaser-sdk's UmicatGame sets for
-  // every 2D game; here the game owns renderer construction, so the SDK
-  // can't set it for us.
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  // Screenshot + video capture for the editor's Capture menu — same
-  // postMessage protocol umicat-phaser-sdk speaks, so the host never needs
-  // to know which engine is running.
-  setupScreenshotListener(renderer);
-  setupRecordingListener(renderer);
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);

@@ -210,3 +210,19 @@ Game Editor's Capture menu goes back to silently doing nothing on this game,
 same as every 3D game before 0.16.0. `preserveDrawingBuffer` is what actually
 matters for screenshots — without it `canvas.toDataURL()` can come back
 blank depending on exactly when the browser clears the drawing buffer.
+
+**The Game Editor's "Edit" tab now works on this game too (0.17.0 /
+`EditorDesignPlayer3D`).** Same reason renderer construction can't move: the
+platform boots this game with `?umicatEdit=1` on the URL when the user opens
+Edit, and `main.ts` checks for it **right after `canvas`/`renderer` exist, before
+`RAPIER.init()`** — `if (params.has('umicatEdit')) { await
+runEditorDesignPlayer3D(renderer, {...}); return; }`. That call takes over the
+renderer's animation loop for the rest of the page's life and renders ONLY the
+scene named by `?umicatScene=<id>` (a filename under `scenes3d/`, chosen by
+the platform's scene list — never guessed here) — no physics, no character, no
+save, same "authored design data only" rule the scene JSON format itself
+already follows. **Don't move this branch below `RAPIER.init()` or the scene
+fetch** — Edit mode must never pay for or trigger either. Mirrors 2D's
+`?umicatEdit=1` (ADR-021); the 3D SDK has no central game-boot wrapper the way
+`createUmicatGame` is for Phaser, so every 3D game's own `main.ts` has to carry
+this branch by hand, same as the screenshot/recording lines above it.
