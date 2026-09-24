@@ -8,6 +8,7 @@ import {
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { Swarm } from './swarm';
 import { InfiniteGround } from './ground';
+import { OrbitBlades } from './weapons';
 import { mergeStatic } from './merge';
 
 /**
@@ -67,6 +68,26 @@ const CAM = { pitchDeg: 39, radius: 10, fov: 55 };
  *  的注释。 */
 const PLAYER_SPEED = 4.6;
 const FOE_SPEED = 2.8;
+
+/** 一局 15 分钟（见 docs/DESIGN.md）。 */
+const RUN_SECONDS = 15 * 60;
+/** 刷怪。这是个**切片**的数值，不是最终曲线 —— 曲线要等玩法定型再写。
+ *
+ *  敌人生成在**屏幕外的一个环上**（内径大于可见距离），所以它们是走进来的，
+ *  不是凭空出现在你旁边。这条是这个类型的硬规则：在你看得见的地方生成，
+ *  玩家会觉得是游戏在作弊而不是自己站错了位置。 */
+const SPAWN_RING = [26, 34] as const;
+const SPAWN_EVERY = 0.9;      // 秒
+const SPAWN_BATCH = 3;
+const FOE_HP = 24;
+
+/** 玩家的血，和贴身挨打的代价。
+ *
+ *  伤害按**贴着你的敌人数量**算，不是「有没有被碰到」—— 一只和十只贴着你
+ *  代价一样的话，「被包围」就不是一件要躲的事了，而被包围正是这个类型唯一
+ *  的输法。 */
+const PLAYER_HP = 100;
+const CONTACT_DPS = 4;
 
 const SPAWN = { x: 0, y: 0.4, z: 1.7 };
 const RESPAWN_BELOW_Y = -5;
@@ -194,6 +215,27 @@ async function start(): Promise<void> {
     }, 500);
   };
 
+  /** 极简读数。DOM，不画进场景（`index.html` 有个 `#hud` 就是干这个的）。
+   *
+   *  **绝不写 `hud.textContent`** —— 那会清空平台挂在里面的触屏控件层。追加
+   *  子元素。 */
+  const readout = (() => {
+    const root = document.createElement('div');
+    root.style.cssText = `position:absolute; top:42px; left:50%; transform:translateX(-50%);
+      font:700 15px/1.5 system-ui,sans-serif; color:#fff; text-align:center;
+      text-shadow:0 2px 6px rgba(0,0,0,.6); pointer-events:none;`;
+    hud.appendChild(root);   // 追加子元素，绝不写 hud.textContent
+    const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+    return {
+      set(clock: number, kills: number, alive: number, hp: number, over: boolean) {
+        root.textContent = over
+          ? (hp <= 0 ? `倒下了 · ${mmss(clock)} · 击杀 ${kills}`
+                     : `撑满 15 分钟 · 击杀 ${kills}`)
+          : `${mmss(clock)}   ♥ ${Math.ceil(hp)}   击杀 ${kills}   场上 ${alive}`;
+      },
+    };
+  })();
+
   // 这两个系统必须在**动画循环开始之前**就存在。
   //
   // 它们原本声明在循环后面，于是头几帧里 `swarm.update(...)` 访问的是一个
@@ -206,6 +248,14 @@ async function start(): Promise<void> {
   // 各有一道门挡住还没加载好的情况。这里要的只是变量**存在**。
   const ground = new InfiniteGround(world.scene);
   const swarm = new Swarm(world.scene);
+  const blades = new OrbitBlades(world.scene);
+
+  // 一局的状态。切片阶段就这几个数。
+  let runClock = 0;
+  let kills = 0;
+  let spawnTimer = 1.5;
+  let over = false;
+  let hp = PLAYER_HP;
   void Promise.all([
     ground.load(manifest, 'td-tile', 'td-tree').then(() => ground.update(SPAWN.x, SPAWN.z)),
     swarm.load(manifest, 'td-ufo-a'),
@@ -262,7 +312,27 @@ async function start(): Promise<void> {
     {
       const p = character.position;
       ground.update(p.x, p.z);
+
+      if (!over) {
+        runClock += dt;
+        if (runClock >= RUN_SECONDS) over = true;
+
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnTimer = SPAWN_EVERY;
+          swarm.spawn(SPAWN_BATCH, SPAWN_RING[0], SPAWN_RING[1], p.x, p.z, FOE_HP, FOE_SPEED);
+        }
+        kills += blades.update(dt, p.x, p.z, swarm, now / 1000);
+
+        // 接触伤害。贴着你的每一只都在扣血。
+        if (swarm.touching > 0) {
+          hp -= swarm.touching * CONTACT_DPS * dt;
+          if (hp <= 0) { hp = 0; over = true; }
+        }
+      }
+
       swarm.update(dt, p.x, p.z, world.camera.quaternion, world.camera);
+      readout.set(runClock, kills, swarm.foes.length, hp, over);
     }
 
     world.update(dt);                        // animation + physics + follow camera

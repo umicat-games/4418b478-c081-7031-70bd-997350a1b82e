@@ -40,15 +40,22 @@ interface Foe {
   flash: number;
   /** `clone` 模式下这只敌人自己的对象；实例化模式下是 null。 */
   obj: THREE.Object3D | null;
+  /** 每把武器上一次打中这只的时间。见 `damageNear`。 */
+  lastHit: Record<string, number>;
 }
 
 const BODY_Y = 0.42;          // 飞碟离地高度
 const BAR_Y = 1.02;           // 血条在头顶多高
 const BAR_W = 0.62, BAR_H = 0.09;
 const FLASH_SECONDS = 0.16;
+/** 敌人贴到多近就停。 */
+export const CONTACT = 0.7;
 
 export class Swarm {
   readonly foes: Foe[] = [];
+  /** 这一帧有几只贴在玩家身上。接触伤害按这个算 —— 一只和十只贴着你，
+   *  代价不该一样。 */
+  touching = 0;
   private mode: SwarmMode = 'instanced';
 
   private geom!: THREE.BufferGeometry;
@@ -155,11 +162,35 @@ export class Swarm {
       const f: Foe = {
         x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r,
         hp, maxHp: hp, speed: speed * (0.85 + Math.random() * 0.3),
-        flash: 0, obj: this.mode === 'clone' ? this.makeClone() : null,
+        flash: 0, lastHit: {}, obj: this.mode === 'clone' ? this.makeClone() : null,
       };
       this.foes.push(f);
     }
     this.sync();
+  }
+
+  /** 打一片区域里的所有敌人。返回杀掉几只。
+   *
+   *  `tag` 是**每把武器各自的命中节流**，不是全局的。吸血鬼幸存者里每把武器
+   *  对同一个目标都有自己的再命中间隔 —— 没有它，一把环刃在贴身的那一帧里
+   *  会把敌人打成碎末，伤害数值也就失去意义了。
+   *
+   *  从后往前遍历：`remove` 是交换删除，会把最后一只挪到当前位置，正着走
+   *  会漏掉那一只。 */
+  damageNear(x: number, z: number, radius: number, amount: number,
+             tag: string, cooldown: number, now: number): number {
+    let killed = 0;
+    const r2 = radius * radius;
+    for (let i = this.foes.length - 1; i >= 0; i--) {
+      const f = this.foes[i];
+      const dx = f.x - x, dz = f.z - z;
+      if (dx * dx + dz * dz > r2) continue;
+      const last = f.lastHit[tag] ?? -1e9;
+      if (now - last < cooldown) continue;
+      f.lastHit[tag] = now;
+      if (this.hit(i, amount)) killed += 1;
+    }
+    return killed;
   }
 
   /** 伤害一只。返回它是否死了。 */
@@ -203,6 +234,7 @@ export class Swarm {
     // 每帧一条 `Cannot read properties of undefined` —— 游戏照跑，控制台在
     // 刷屏，而这正是「错误多到没人看」的起点。
     if (!this.bodies) return;
+    this.touching = 0;
     const instanced = this.mode === 'instanced';
     if (instanced && camera) {
       camera.updateMatrixWorld();
@@ -219,8 +251,10 @@ export class Swarm {
 
       const dx = px - f.x, dz = pz - f.z;
       const d = Math.hypot(dx, dz) || 1;
-      // 贴身就停下 —— 这个原型不做伤害，只是不要挤成一个点。
-      if (d > 0.7) { f.x += (dx / d) * f.speed * dt; f.z += (dz / d) * f.speed * dt; }
+      // 贴身就停下，不然会挤成一个点。这个距离和武器的射程是**一对**数字 ——
+      // 见 `weapons.ts` 里环刃半径的注释。
+      if (d > CONTACT) { f.x += (dx / d) * f.speed * dt; f.z += (dz / d) * f.speed * dt; }
+      else this.touching += 1;
 
       if (instanced) {
         // 看不见就不占槽。走位照常算过了 —— 剔除的是绘制，不是行为。
