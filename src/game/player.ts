@@ -4,6 +4,7 @@ import {
   type Manifest3D,
 } from '@umicat/three-sdk';
 import {
+  GUN_POSE,
   WEAPONS, PLAYER_HP, PLAYER_REGEN_DELAY, PLAYER_REGEN_RATE,
   WALK_SPEED, SPRINT_SPEED, LOOK_SENSITIVITY, EYE_ABOVE_FEET,
   type WeaponDef,
@@ -119,7 +120,8 @@ export class Player {
     }
 
     // 持枪 rig 挂在相机上
-    this.gunRig.position.set(0.25, -0.24, -0.5);
+    this.gunRig.position.set(GUN_POSE.x, GUN_POSE.y, GUN_POSE.z);
+    this.gunRig.rotation.set(GUN_POSE.pitch, GUN_POSE.yaw, GUN_POSE.roll);
     this.camera.add(this.gunRig);
     this.muzzle.position.set(0, 0.06, -0.62);
     this.gunRig.add(this.muzzle);
@@ -134,9 +136,11 @@ export class Player {
     for (const w of this.weapons) {
       const { object } = await loadModelAsset(manifest, w.def.modelId, { assetBase: '' });
       const holder = new THREE.Group();
-      // Kenney blaster 朝 +z，持枪视角需要朝 -z（相机前方）
+      // Kenney blaster 朝 +z，持枪视角需要朝 -z（相机前方）。
+      // 这是模型自身的修正，和 `GUN_POSE.yaw` 是两回事：前者把模型摆正，
+      // 后者是你想让枪偏多少。要调朝向请动 GUN_POSE。
       object.rotation.y = Math.PI;
-      object.scale.setScalar(0.9);
+      object.scale.setScalar(GUN_POSE.scale);
       holder.add(object);
       holder.visible = false;
       this.gunRig.add(holder);
@@ -344,8 +348,16 @@ export class Player {
   update(dt: number): void {
     const w = this.weapon;
 
-    // 视角：锁定模式走 mousemove 累计；降级模式走 SDK 右键拖拽
-    if (this.active && !this.locked && !this.botActive && !this.isTouch) {
+    // 视角：锁定模式走 mousemove 累计；其余一律走 SDK 的 look()。
+    //
+    // 这里原本有一个 `!this.isTouch` —— 于是手机上 `input.look()` 从来没被
+    // 读过，而它正是 SDK 右半屏拖动的来源。手指划过去，SDK 收集到了，游戏
+    // 把它丢掉了；HUD 同时还在写「右侧滑动旋转视角」，宣传一个代码拒绝
+    // 读取的控件。
+    //
+    // 排除触屏的本意应该是「锁定时别重复施加」，而那已经由 `!this.locked`
+    // 覆盖了 —— 触屏上永远不会有指针锁定。
+    if (this.active && !this.locked && !this.botActive) {
       const turn = this.input.look();
       if (turn.x || turn.y) {
         this.yaw -= turn.x;
@@ -443,12 +455,14 @@ export class Player {
     this.bobPhase += dt * (4 + moving * 2.2);
     const bobA = Math.min(1, moving) * 0.014;
     const switchDip = this.switching !== 0 ? -0.18 * Math.min(1, Math.abs(this.switching) / 0.16) : 0;
+    // 摇摆、起伏、后坐力都是加在基准姿态上的 —— 基准只有 GUN_POSE 一处。
     this.gunRig.position.set(
-      0.25 + this.swayX + Math.cos(this.bobPhase * 0.5) * bobA * 0.6,
-      -0.24 + this.swayY + Math.abs(Math.sin(this.bobPhase)) * bobA + switchDip,
-      -0.5 + this.recoil * 0.07,
+      GUN_POSE.x + this.swayX + Math.cos(this.bobPhase * 0.5) * bobA * 0.6,
+      GUN_POSE.y + this.swayY + Math.abs(Math.sin(this.bobPhase)) * bobA + switchDip,
+      GUN_POSE.z + this.recoil * 0.07,
     );
-    this.gunRig.rotation.x = this.recoil * 0.12;
+    this.gunRig.rotation.set(
+      GUN_POSE.pitch + this.recoil * 0.12, GUN_POSE.yaw, GUN_POSE.roll);
 
     // HUD
     this.hud.setHealth(this.hp, PLAYER_HP);
