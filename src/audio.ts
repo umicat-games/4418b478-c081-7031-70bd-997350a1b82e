@@ -1,129 +1,76 @@
 /**
- * This game's sound: which clips, how loud, and how often each may retrigger.
+ * 这个游戏的声音：用哪几个 clip、多响、多久才允许再响一次。
  *
- * Everything hard about web audio — Web Audio instead of `<audio>` elements
- * (forty of those took this game to 11fps on an iPhone), the gesture unlock,
- * the asynchronous `resume()`, iOS suspending the context when the app goes
- * away — lives in `GameAudio` in the SDK now. Every 3D game needs all of it
- * and none of the failures are visible anywhere a creator would look.
+ * Web 音频里所有难的部分 —— 用 Web Audio 而不是 `<audio>` 元素（四十个
+ * `HTMLAudioElement` 曾把一个游戏拖到 iPhone 上 11fps，静音就回到 60）、
+ * 手势解锁、异步的 `resume()`、iOS 在切后台时挂起音频上下文 —— 现在都在
+ * SDK 的 `GameAudio` 里。每个 3D 游戏都需要这一整套，而且没有一个失败模式
+ * 会出现在创作者看得到的地方。
+ *
+ * **这张表是按这个游戏重写过的，不是从 Balaboo 搬过来的那张。** 原来那张
+ * 有二十八个 clip，塔防的炮、闸门、建造、村庄音乐全在里面 —— 搬过来再
+ * 注释掉，下一个读代码的人会以为它有用；而且 `GameAudio` 在第一次手势里会
+ * 把表里每个文件都去拉一遍，留着就是白付的流量。
+ *
+ * **在这个类型里，一个没有 `throttle` 的 clip 就是 bug。** 已经量过：一次性
+ * 杀死 25 / 100 / 400 只，实际播放的音效都是 **1 个** —— 挡住它的正是
+ * `throttle`。`GameAudio` 每次 `play()` 建一个 `BufferSource` + 一个
+ * `GainNode`，除了按 clip 的节流之外**没有任何总量上限**，而这个游戏后段
+ * 每秒死三十只。
  */
 import { GameAudio, type AudioClipSpec } from '@umicat/three-sdk';
 
 const CLIPS: Record<string, AudioClipSpec> = {
-  'tower-shot': { volume: 0.35, throttle: 45 },
-  'cannon-shot': { volume: 0.4, throttle: 60 },
-  'hit-enemy': { volume: 0.4, throttle: 30 },
-  'enemy-shot': { volume: 0.3, throttle: 40 },
-  'enemy-die': { volume: 0.5, throttle: 40 },
-  // The sword's connecting blow, and the ONLY thing a swing makes now.
-  // Uploaded through the Assets tool; the filename says "swing" and it is the
-  // HIT, which is why the call site goes through `SFX.swordHit` rather than
-  // naming the file.
-  //
-  // Its profile is a whoosh by the numbers — 0.79s, peaking 86ms in, silent
-  // for the first 40 — and it was inaudible as a change while `swing.ogg` was
-  // still playing underneath it, because the two were 290Hz apart in spectral
-  // centre. With the whoosh gone it is what a swing sounds like, and it was
-  // kept on that basis: judged by ear, which is the right instrument for the
-  // last question even where measurement is the right one for the first.
-  //
-  // Volume matched by measurement rather than by ear, over the loud quarter of
-  // each clip: 0.356 RMS against the old 0.408 at 0.55.
-  'swing-sword-sound.mp3': { volume: 0.62, throttle: 300 },
-  'hero-hurt': { volume: 0.7, throttle: 200 },
-  coin: { volume: 0.5, throttle: 40 },
-  build: { volume: 0.6 },
-  // The press under every raised button. Kenney's Interface Sounds
-  // `click_001`, CC0 — 0.10s, and QUIET at source (RMS 0.048 against `build`'s
-  // own), which is why the volume here is high for what is only a click.
-  //
-  // Throttled: a modal's OK and whatever it opens can land inside one frame,
-  // and two clicks on one press reads as a rattle.
+  // 打中和打死。两个都卡得很死：后段每秒几十次，节流之外的每一次都是
+  // 纯粹的浪费 —— 玩家也分辨不出第三十只和第三十一只。
+  // 只给追踪弹的命中用 —— 别的武器的命中**没有声音**，理由见 `main.ts`。
+  'hit-enemy': { volume: 0.26, throttle: 140 },
+  'enemy-die': { volume: 0.4, throttle: 130 },
+  // 三把要开火的武器各有自己的声音，这样"我刚才放了什么"是听得出来的。
+  // 节流略大于各自的冷却，免得一次齐射响三声。
+  'cannon-shot': { volume: 0.32, throttle: 200 },                        // 追踪弹
+  'fire-magic-wand-sound-effect.mp3': { volume: 0.4, throttle: 500 },    // 前向冲击
+  'lightning-magic-wand-sound-effect.mp3': { volume: 0.42, throttle: 400 }, // 链式闪电
+  // 挨打。**这个不能节流得太狠** —— 它是玩家唯一一个"我正在掉血"的耳朵信号，
+  // 而被围住的时候屏幕上全是敌人，血条在角落里。
+  'hero-hurt': { volume: 0.6, throttle: 420 },
+  coin: { volume: 0.22, throttle: 120 },
+  upgrade: { volume: 0.6 },
   'ui-press': { volume: 0.55, throttle: 60 },
-  upgrade: { volume: 0.65 },
-  // Uploaded through the Assets tool, and `.mp3` while the rest are `.ogg`.
-  // The key IS the filename when it carries an extension, which is how a game
-  // mixes formats without the platform having to guess.
-  'place-weapon.mp3': { volume: 0.7 },
-  'upgrade-weapon.mp3': { volume: 0.7 },
-  'enter-door.mp3': { volume: 0.75 },
-  // One per staff — see `sound` in `weapons.ts`, which is where a weapon says
-  // which of these is its own.
-  //
-  // The VOLUMES are matched by measurement, not by ear through a laptop
-  // speaker: over the loud quarter of each clip, fire and lightning are about
-  // one and a half times the RMS of ice. That is a difference between library
-  // recordings, not a decision anybody made about fire, and left alone it means
-  // changing staff changes how loud the game is.
-  'fire-magic-wand-sound-effect.mp3': { volume: 0.5, throttle: 300 },
-  'ice-magic-wand-sound-effect.mp3': { volume: 0.75, throttle: 300 },
-  'lightning-magic-wand-sound-effect.mp3': { volume: 0.48, throttle: 300 },
-  // Once a WAVE, where the jingle used to be. It was one per arrival first,
-  // which is a real cue — the gates are at the far end of the board and you
-  // spend the wave somewhere else — but fourteen of them a wave is the board
-  // talking over the player.
-  'enemy-spawn.mp3': { volume: 0.6, throttle: 400 },
-  denied: { volume: 0.5 },
-  leak: { volume: 0.7 },
-  wave: { volume: 0.6 },
-  // CLEARING A BOARD. Uploaded through the Assets tool. A phrase rather than a
-  // blip, which is what the old one could not be: 3.0s against 0.79s, three
-  // note onsets against one, and it resolves into silence instead of stopping.
-  // There is room for it because `endRun` ducks the music for ten seconds.
-  //
-  // Volume matched by measurement over the loud part of each, not by ear:
-  // 0.344 RMS against the old clip's 0.261 at 0.8.
   'victory-sound.mp3': { volume: 0.62 },
-  // NOT the victory sound any more, and the name is historical. One clip, two
-  // small good things: a rare crate's buff and the level bar wrapping in the
-  // summary — `SFX.buffPickup` and `SFX.levelUp`. All THREE used to share it,
-  // and a crate that blares a full victory phrase is a crate claiming to have
-  // ended the run.
-  win: { volume: 0.8 },
   lose: { volume: 0.7 },
 };
 
+export const MUSIC = { level: 'bgm-level.mp3' } as const;
 
-/** Each scene has its own track, uploaded through the Assets tool. They are
- *  `.mp3` next to `.ogg` effects, which the SDK allows precisely so a game can
- *  use whatever its assets came as. */
-export const MUSIC = { lobby: 'bgm-lobby.mp3', level: 'bgm-level.mp3' } as const;
-
-/** Named so the call sites read as events rather than filenames. */
+/** 名字按**事件**起，不按文件名 —— 调用处该读起来像发生了什么事。 */
 export const SFX = {
-  placeTower: 'place-weapon.mp3',
-  upgradeTower: 'upgrade-weapon.mp3',
-  door: 'enter-door.mp3',
-  enemySpawn: 'enemy-spawn.mp3',
+  hit: 'hit-enemy',
+  kill: 'enemy-die',
+  bolt: 'cannon-shot',
+  shock: 'fire-magic-wand-sound-effect.mp3',
+  chain: 'lightning-magic-wand-sound-effect.mp3',
+  hurt: 'hero-hurt',
+  gem: 'coin',
+  levelUp: 'upgrade',
   uiPress: 'ui-press',
-  swordHit: 'swing-sword-sound.mp3',
   victory: 'victory-sound.mp3',
-  buffPickup: 'win',
-  levelUp: 'win',
+  lose: 'lose',
 } as const;
 
 /**
- * The click under a button — and why the FIRST press of a session is silent.
+ * 按钮底下的那一声 —— 以及**为什么一局里第一次按下是哑的**。
  *
- * `GameAudio` creates its context and starts fetching every clip inside the
- * first gesture (its `start()` is private; the game cannot warm it earlier).
- * On that gesture there is therefore no decoded buffer yet, and `play()`
- * returns without a sound. The gesture in question is the title screen's own
- * button, which is the one press every player makes.
+ * `GameAudio` 在第一次手势里才建上下文、才开始拉所有 clip（它的 `start()`
+ * 是私有的，游戏没法更早预热）。所以就在那一次手势上，还没有任何解码好的
+ * 缓冲区，`play()` 什么都不放。
  *
- * Measured, both engines: at the moment the title is pressed, ZERO audio files
- * have been requested. The press runs the handler and the context is ready —
- * there is simply nothing to play.
+ * 重试的方案试过又拿掉了，它做不安全：延迟要同时盖住一次 fetch 和一次
+ * decode，`setTimeout` 在跑 3D 场景的页面上漂得厉害，而一次落在节流窗口
+ * 外的重试会让**每一个普通按钮响两声**（实测：一次按下两个 buffer）。
+ * 何况按下 500ms 之后的一声本来也不算反馈。
  *
- * A retry was tried and taken out again. It cannot be made safe: the delay has
- * to clear a fetch and a decode, `setTimeout` drifts badly on a page rendering
- * a 3D scene, and a retry that lands outside the clip's throttle window plays
- * the click TWICE on every ordinary button — measured, two buffers for one
- * press. A blip 500ms after a press is not feedback anyway.
- *
- * Every press after the first one sounds. Making the first one sound needs a
- * generic `preload()` on the SDK's audio — which is a capability every game
- * with a title screen wants, not a Balaboo-shaped one.
+ * 真正的修法是 SDK 开一个通用的 `preload()`。
  */
 export const createAudio = (): GameAudio =>
-  new GameAudio({ clips: CLIPS, base: 'audio/', music: MUSIC.lobby, musicVolume: 0.3 });
+  new GameAudio({ clips: CLIPS, base: 'audio/', music: MUSIC.level, musicVolume: 0.28 });

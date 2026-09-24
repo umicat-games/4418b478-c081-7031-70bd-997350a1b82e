@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import type { Swarm } from './swarm';
+import type { Swarm, Foe } from './swarm';
+import type { Sparks } from './sparks';
+import { type Vfx, arcBetween } from './vfx';
 
 /**
  * 武器。现在只有一把 —— 这是个能上手试手感的切片，不是最终的五把。
@@ -83,7 +85,410 @@ export class OrbitBlades {
       killed += swarm.damageNear(x, z, this.hitRadius, this.damage, 'orbit', this.reHit, now);
     }
     this.mesh.count = this.count;
+    this.mesh.visible = this.count > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
+    return killed;
+  }
+}
+
+
+/** 尾迹灼烧：在你走过的路上留下伤害区。
+ *
+ *  回答的问题是**「追在我身后的那条尾巴」** —— 五把武器里唯一朝后的那个。
+ *
+ *  它是专门为我们加的，因为无限地图解锁了绕圈放风筝，而放风筝在别的武器下
+ *  是纯防御动作：你跑，敌人跟着，你一点输出都没有。有了它，**绕圈跑从保命
+ *  动作变成输出动作** —— 同一个操作，意义完全变了，这正是「一把武器是一个
+ *  答案」该有的样子。
+ *
+ *  它也顺手治了一个实测出来的毛病：一直走直线既不挨打也不输出。
+ */
+export class TrailBurn {
+  private mesh!: THREE.InstancedMesh;
+  private spots: { x: number; z: number; life: number }[] = [];
+  private lastX = NaN;
+  private lastZ = NaN;
+
+  /** 隔多远留一个。太密就成了一条连续的带子（好看但没有取舍），
+   *  太疏则跑起来是一串断点。 */
+  gap = 0.9;
+  /** 一个留多久、多大、每秒多少伤害。`life` 是这把武器的升级轴：
+   *  留得久 = 你绕的那个圈更长时间还在生效。 */
+  life = 2.6;
+  radius = 0.85;
+  dps = 9;
+  /** 对同一只敌人的再命中间隔。 */
+  reHit = 0.35;
+
+  private readonly m = new THREE.Matrix4();
+  private readonly q = new THREE.Quaternion();
+  private readonly pos = new THREE.Vector3();
+  private readonly scl = new THREE.Vector3();
+
+  constructor(scene: THREE.Scene) {
+    // 贴地的一个圆片。不投影、不写深度 —— 它是地上的一块痕迹，
+    // 不该和地面 z-fighting，也不该挡住站在上面的敌人。
+    const g = new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2);
+    const m = new THREE.MeshBasicMaterial({
+      color: 0xff7a3c, transparent: true, opacity: 0.42, depthWrite: false,
+    });
+    this.mesh = new THREE.InstancedMesh(g, m, 96);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 2;
+    this.mesh.count = 0;
+    scene.add(this.mesh);
+  }
+
+  update(dt: number, px: number, pz: number, swarm: Swarm, now: number): number {
+    // 走够一段才留一个 —— 站着不动不该堆出一个越来越浓的池子。
+    if (!(Math.hypot(px - this.lastX, pz - this.lastZ) < this.gap)) {
+      this.lastX = px; this.lastZ = pz;
+      if (this.spots.length < 96) this.spots.push({ x: px, z: pz, life: this.life });
+    }
+
+    let killed = 0, n = 0;
+    for (let i = this.spots.length - 1; i >= 0; i--) {
+      const s = this.spots[i];
+      s.life -= dt;
+      if (s.life <= 0) {
+        const last = this.spots.pop()!;
+        if (i < this.spots.length) this.spots[i] = last;
+        continue;
+      }
+      killed += swarm.damageNear(s.x, s.z, this.radius, this.dps * this.reHit,
+                                 'trail', this.reHit, now);
+      // 快烧完的时候缩小，这样「还剩多久」是看得出来的 —— 一块突然消失的
+      // 伤害区会让玩家以为自己记错了它在哪。
+      const k = Math.min(1, s.life / this.life * 2.2);
+      this.pos.set(s.x, 0.03, s.z);
+      this.scl.set(this.radius * k, 1, this.radius * k);
+      this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+    }
+    this.mesh.count = n;
+    this.mesh.visible = n > 0;   // 见 `sparks.ts`：空的实例化网格也要一次绘制
+    this.mesh.instanceMatrix.needsUpdate = true;
+    return killed;
+  }
+}
+
+
+/** 追踪弹：飞出去找一只打。
+ *
+ *  回答的问题是**「那只我还够不到的」** —— 前两把武器的射程都是「贴着我」
+ *  和「我走过的地方」，都以玩家自己为中心。这是第一把能伸出去的。
+ *
+ *  **瞄准规则就是这把武器的设计。** 它优先打精英，没有精英才打最近的 ——
+ *  于是它是全场唯一一把**单体**武器：伤害高、频率低、一发只解决一个问题。
+ *  精英那种「必须处理掉的目标」正好是它的答案，而它对一团杂兵几乎没用，
+ *  那是链式闪电的活。
+ */
+export class HomingBolt {
+  private mesh!: THREE.InstancedMesh;
+  private bolts: { x: number; z: number; vx: number; vz: number;
+                   target: Foe | null; life: number }[] = [];
+
+  /** 一次发几发。**这把的升级轴** —— 多一发意味着一次齐射能覆盖更多目标
+   *  （同一次齐射里每发挑不同的目标，见下），不是同一只挨两下。 */
+  shots = 1;
+  interval = 1.15;
+  damage = 34;
+  speed = 11;
+  /** 找多远以内的目标，和飞多久没打到就消失。 */
+  range = 17;
+  maxLife = 2.4;
+  /** 多近算打中。 */
+  hitAt = 0.55;
+  /** 每秒转多少弧度。**不是无限转** —— 追得太死就没有「它会不会脱靶」这回事，
+   *  而看着它拐弯追上去正是这把武器好看的地方。 */
+  turn = 6.5;
+
+  /** 开火时响一声。**回调，不是让武器自己拿着 `GameAudio`** —— 武器不该知道
+   *  声音是怎么放的，那是平台那一半的事（见 CLAUDE.md 的两半分界）。 */
+  onFire: (() => void) | null = null;
+  /** 命中时响一声 —— 只有这把武器有，理由在 `main.ts` 的接线处。 */
+  onHit: (() => void) | null = null;
+
+  private timer = 0.35;
+  private readonly m = new THREE.Matrix4();
+  private readonly q = new THREE.Quaternion();
+  private readonly pos = new THREE.Vector3();
+  private readonly scl = new THREE.Vector3(1, 1, 1);
+  private readonly up = new THREE.Vector3(0, 1, 0);
+  /** 一次齐射里已经被认领的目标。复用同一个 Set，免得每次开火都分配一个。 */
+  private readonly claimed = new Set<Foe>();
+
+  constructor(scene: THREE.Scene, private readonly sparks: Sparks) {
+    const g = new THREE.ConeGeometry(0.1, 0.34, 6).rotateX(Math.PI / 2);
+    const m = new THREE.MeshStandardMaterial({
+      color: 0xfff0b0, emissive: 0xffb43c, emissiveIntensity: 1.4,
+      roughness: 0.4, metalness: 0,
+    });
+    this.mesh = new THREE.InstancedMesh(g, m, 64);
+    this.mesh.frustumCulled = false;
+    this.mesh.count = 0;
+    scene.add(this.mesh);
+  }
+
+  /** 挑一个目标：先精英，再最近的，且跳过这次齐射已经认领的。 */
+  private pick(swarm: Swarm, x: number, z: number): Foe | null {
+    let elite: Foe | null = null;
+    let eliteD = this.range * this.range;
+    for (const f of swarm.foes) {
+      if (!f.elite || this.claimed.has(f)) continue;
+      const dx = f.x - x, dz = f.z - z;
+      const d = dx * dx + dz * dz;
+      if (d < eliteD) { eliteD = d; elite = f; }
+    }
+    return elite ?? swarm.nearest(x, z, this.range, this.claimed);
+  }
+
+  update(dt: number, px: number, pz: number, swarm: Swarm, now: number): number {
+    this.timer -= dt;
+    if (this.timer <= 0) {
+      this.timer = this.interval;
+      let fired = false;
+      // 一次齐射里每发挑**不同的**目标。少了这一句，三发全扎在最近那一只
+      // 身上，「三发」就只是「伤害 ×3」—— 又是一档数值，不是一个答案。
+      this.claimed.clear();
+      for (let i = 0; i < this.shots && this.bolts.length < 64; i++) {
+        const t = this.pick(swarm, px, pz);
+        if (!t) break;
+        this.claimed.add(t);
+        const dx = t.x - px, dz = t.z - pz;
+        const d = Math.hypot(dx, dz) || 1;
+        this.bolts.push({ x: px, z: pz, vx: (dx / d) * this.speed,
+                          vz: (dz / d) * this.speed, target: t, life: this.maxLife });
+        fired = true;
+      }
+      if (fired) this.onFire?.();
+    }
+
+    let killed = 0, n = 0;
+    for (let i = this.bolts.length - 1; i >= 0; i--) {
+      const b = this.bolts[i];
+      b.life -= dt;
+      // 目标死了就**当场换一个**。没有这一句，清场的时候半空中全是飞向空气的
+      // 弹（`hp <= 0` 是死亡的标记 —— 敌人从数组里被交换删除了，但对象还在，
+      // 所以拿着引用的武器能自己发现）。
+      if (b.target && b.target.hp <= 0) b.target = this.pick(swarm, b.x, b.z);
+      if (b.target) {
+        const dx = b.target.x - b.x, dz = b.target.z - b.z;
+        const d = Math.hypot(dx, dz) || 1;
+        const k = Math.min(1, this.turn * dt);
+        b.vx += ((dx / d) * this.speed - b.vx) * k;
+        b.vz += ((dz / d) * this.speed - b.vz) * k;
+        if (d < this.hitAt) {
+          if (swarm.hitFoe(b.target, this.damage)) killed += 1;
+          this.onHit?.();
+          // 命中的那一下要看得见。这是**唯一**一把要玩家读「打中了没有」的
+          // 武器 —— 环刃和尾迹是持续的，看不出单次命中也无所谓。
+          this.sparks.burst(b.target.x, 0.5, b.target.z,
+            { count: 10, color: 0xffd36e, color2: 0xff7a2f, speed: 3.4, life: 0.4 });
+          const last = this.bolts.pop()!;
+          if (i < this.bolts.length) this.bolts[i] = last;
+          continue;
+        }
+      }
+      b.x += b.vx * dt; b.z += b.vz * dt;
+      if (b.life <= 0) {
+        const last = this.bolts.pop()!;
+        if (i < this.bolts.length) this.bolts[i] = last;
+        continue;
+      }
+      this.pos.set(b.x, 0.55, b.z);
+      this.q.setFromAxisAngle(this.up, Math.atan2(b.vx, b.vz));
+      this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+      // 一条细细的尾迹。每发每帧一颗，不是每帧一把 —— 三千颗的池子经得起
+      // 这个，但经不起一发一把。
+      if (Math.random() < 0.6) {
+        this.sparks.burst(b.x, 0.55, b.z,
+          { count: 1, color: 0xffc247, speed: 0.5, up: 0.2, life: 0.26, size: 0.11 });
+      }
+      void now;
+    }
+    this.mesh.count = n;
+    this.mesh.visible = n > 0;
+    this.mesh.instanceMatrix.needsUpdate = true;
+    return killed;
+  }
+}
+
+
+/** 前向冲击：朝你跑的方向推出去一道波。
+ *
+ *  回答的问题是**「我要往哪儿突围」**。
+ *
+ *  它和生成偏向是**一对**：敌人有一半是朝着你移动的方向生成的（`Swarm.spawn`
+ *  里为什么要这样，写在那儿），所以「前面」永远是最挤的那一侧 —— 这把武器就是
+ *  那件事的解药。而且它的方向**由走位决定**，于是这是全场唯一一把玩家能"瞄"的
+ *  武器：想清路就朝那边跑。
+ *
+ *  没在动的时候用最后一次的朝向。站着不动仍然能开火，但你放弃了选方向这件事。
+ */
+export class ShockLance {
+  private mesh!: THREE.InstancedMesh;
+  private waves: { x: number; z: number; dx: number; dz: number; travelled: number }[] = [];
+  private heading = 0;
+
+  /** 波有多宽（弧长的一半，弧度）。**这把的升级轴** —— 更宽的波清掉更大的
+   *  一片正面，而这正是它存在的理由。看得见，也改变你敢往多密的地方冲。 */
+  half = 0.55;
+  interval = 1.6;
+  damage = 22;
+  /** 往前推多远、多快，和波自己有多厚。 */
+  reach = 7.5;
+  speed = 13;
+  thick = 0.85;
+  /** 弧上取几个采样点算伤害。点太少波会漏人，太多只是白费 —— 相邻采样点
+   *  的间距要小于 `thick`，否则两点之间有缝。 */
+  private get segs(): number {
+    return Math.max(3, Math.ceil((this.half * 2 * 2.6) / (this.thick * 0.9)) + 1);
+  }
+
+  onFire: (() => void) | null = null;
+
+  private timer = 0.8;
+  private readonly m = new THREE.Matrix4();
+  private readonly q = new THREE.Quaternion();
+  private readonly pos = new THREE.Vector3();
+  private readonly scl = new THREE.Vector3();
+  private readonly up = new THREE.Vector3(0, 1, 0);
+
+  constructor(scene: THREE.Scene, private readonly sparks: Sparks) {
+    // 一片贴地的扇形碎片。整道波是同一个 `InstancedMesh` 上的十几个实例 ——
+    // 一道波一次绘制，八道波还是一次绘制。
+    const g = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const m = new THREE.MeshBasicMaterial({
+      color: 0x8fe3ff, transparent: true, opacity: 0.8,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    this.mesh = new THREE.InstancedMesh(g, m, 160);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 3;
+    this.mesh.count = 0;
+    scene.add(this.mesh);
+  }
+
+  update(dt: number, px: number, pz: number, dirX: number, dirZ: number,
+         swarm: Swarm, now: number): number {
+    if (Math.hypot(dirX, dirZ) > 0.1) this.heading = Math.atan2(dirX, dirZ);
+
+    this.timer -= dt;
+    if (this.timer <= 0) {
+      this.timer = this.interval;
+      this.waves.push({ x: px, z: pz, dx: Math.sin(this.heading),
+                        dz: Math.cos(this.heading), travelled: 0 });
+      this.onFire?.();
+    }
+
+    let killed = 0, n = 0;
+    const segs = this.segs;
+    for (let i = this.waves.length - 1; i >= 0; i--) {
+      const w = this.waves[i];
+      w.travelled += this.speed * dt;
+      if (w.travelled > this.reach) {
+        const last = this.waves.pop()!;
+        if (i < this.waves.length) this.waves[i] = last;
+        continue;
+      }
+      const base = Math.atan2(w.dx, w.dz);
+      // 波越往前推，弧越长 —— 它是从玩家身上扩散出去的一段圆弧，不是一根
+      // 平移的棍子。扩散读起来是「推开」，平移读起来是「飞过去」。
+      const r = w.travelled;
+      const k = 1 - w.travelled / this.reach;
+      for (let s = 0; s < segs && n < 160; s++) {
+        const a = base + (s / (segs - 1) - 0.5) * this.half * 2;
+        const x = w.x + Math.sin(a) * r;
+        const z = w.z + Math.cos(a) * r;
+        // 每个采样点是一次独立的命中判定，但共用一个节流 tag —— 否则一道波
+        // 上相邻的两片会各打一次，"更宽"就变成了"伤害更高"。
+        killed += swarm.damageNear(x, z, this.thick, this.damage, 'shock', 0.6, now);
+        this.pos.set(x, 0.06, z);
+        this.q.setFromAxisAngle(this.up, -a);
+        this.scl.set(this.thick * 1.7, 1, this.thick * 1.5 * k + 0.3);
+        this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+      }
+      // 波前沿上撒几颗火星，这样它在草地上也读得出来 —— 一片半透明的蓝
+      // 在浅色地面上几乎看不见，而这是一把靠"我知道它清了哪儿"工作的武器。
+      if (Math.random() < 0.7) {
+        const a = base + (Math.random() - 0.5) * this.half * 2;
+        this.sparks.burst(w.x + Math.sin(a) * r, 0.25, w.z + Math.cos(a) * r,
+          { count: 2, color: 0x9fefff, color2: 0x4fa8ff, speed: 2.2, up: 1.1, life: 0.42 });
+      }
+    }
+    this.mesh.count = n;
+    this.mesh.visible = n > 0;
+    this.mesh.instanceMatrix.needsUpdate = true;
+    return killed;
+  }
+}
+
+
+/** 链式闪电：打一只，再跳到旁边那只。
+ *
+ *  回答的问题是**「挤成一团的那些」**。
+ *
+ *  它是追踪弹的反面，而这正是它该在的位置：追踪弹对一只落单的精英最强、
+ *  对一团杂兵几乎没用；闪电对一团最强、对落单的那只只是一次普通伤害。
+ *  **一把武器在什么地方没用，和它在什么地方好用一样重要** —— 两把都强的
+ *  武器不构成选择。
+ *
+ *  跳的距离是固定的，所以它**随敌人密度变强**：后段那条曲线越往上走，它
+ *  越好用。这是刻意的，也是它和前面四把在时间轴上的分工。
+ */
+export class ChainLightning {
+  /** 跳几次。**这把的升级轴** —— 看得见（弧一条一条连出去），而且它改变的
+   *  是"这一团我能吃掉多少"，不是一个数字。 */
+  jumps = 3;
+  interval = 1.3;
+  damage = 26;
+  /** 第一跳找多远，之后每跳能跨多远。 */
+  range = 12;
+  jumpRange = 3.4;
+  /** 每跳衰减。不衰减的话它就是一把没有代价的群体武器。 */
+  falloff = 0.86;
+
+  onFire: (() => void) | null = null;
+
+  private timer = 0.6;
+  /** 这一次链里已经打过谁。复用，免得每次开火分配一个 Set。 */
+  private readonly hit = new Set<Foe>();
+  private readonly a = new THREE.Vector3();
+  private readonly b = new THREE.Vector3();
+
+  constructor(private readonly vfx: Vfx, private readonly sparks: Sparks) {}
+
+  update(dt: number, px: number, pz: number, swarm: Swarm): number {
+    this.timer -= dt;
+    if (this.timer > 0) return 0;
+    this.timer = this.interval;
+
+    let f = swarm.nearest(px, pz, this.range);
+    if (!f) return 0;
+
+    this.onFire?.();
+    this.hit.clear();
+    let killed = 0;
+    let dmg = this.damage;
+    // 从玩家身上起第一条弧，这样"是我放的"读得出来。
+    let fx = px, fz = pz, fy = 0.7;
+    for (let j = 0; j <= this.jumps && f; j++) {
+      this.hit.add(f);
+      const tx = f.x, tz = f.z;
+      this.a.set(fx, fy, fz);
+      this.b.set(tx, 0.55, tz);
+      // 弧走 `Vfx` 注册表而不是粒子池：它一次施放只有几条、0.3 秒就没，
+      // 正好是 `Vfx` 被设计来装的东西。粒子池装的是**每秒几十次**的那种。
+      arcBetween(this.vfx, this.a, this.b, { color: 0xbfe4ff, life: 0.26, width: 0.7 });
+      this.sparks.burst(tx, 0.55, tz,
+        { count: 7, color: 0xd6f0ff, color2: 0x6fb6ff, speed: 3, life: 0.36 });
+      if (swarm.hitFoe(f, dmg)) killed += 1;
+      dmg *= this.falloff;
+      fx = tx; fz = tz; fy = 0.55;
+      // 跳过已经打过的 —— 没有这个，闪电会在最近的两只之间来回弹，
+      // "链"就退化成"对一只打好几次"。
+      f = swarm.nearest(tx, tz, this.jumpRange, this.hit);
+    }
     return killed;
   }
 }

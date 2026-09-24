@@ -8,8 +8,19 @@ import {
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { Swarm } from './swarm';
 import { InfiniteGround } from './ground';
-import { OrbitBlades } from './weapons';
+import { OrbitBlades, TrailBurn, HomingBolt, ShockLance, ChainLightning } from './weapons';
+import { Sparks, Slashes } from './sparks';
+import { Vfx, ring, preloadAtlas } from './vfx';
+import { createAudio, SFX } from './audio';
+import { readoutPlate } from './hud';
 import { mergeStatic } from './merge';
+import {
+  RUN_SECONDS, spawnGapAt, batchAt, hpAt, hpLevelScale, speedAt,
+  ELITE_EVERY, eliteHp,
+} from './curve';
+import { makeGems, makeCoins, xpToNext } from './xp';
+import { HeroBar } from './herobar';
+import { createLevelUp, type Offer } from './levelup';
 
 /**
  * A 3D Umicat game.
@@ -67,7 +78,10 @@ const CAM = { pitchDeg: 39, radius: 10, fov: 55 };
 /** 玩家和敌人的速度。比值比绝对值重要 —— 见 `CharacterController3D` 那里
  *  的注释。 */
 const PLAYER_SPEED = 4.6;
-/** 敌人的基准速度。
+/** 敌人的基准速度 —— **只剩调试用的那个生成器在读它**。
+ *
+ *  正式的生成走 `curve.speedAt(t)`，这个数是它的起点。留在这里是因为下面
+ *  那段推导（为什么是 3.5 而不是 2.8）解释了整条曲线的上下界从哪来。
  *
  *  **比值决定一切，而 1.64 倍太大了。** 先前定 2.8 的理由是「把一团敌人拉成
  *  一条尾巴」—— 实测那个比值拉出来的不是尾巴，是彻底甩掉：直线跑三十秒，
@@ -80,17 +94,12 @@ const PLAYER_SPEED = 4.6;
  *  只能穿插走位 —— 那才是这个类型要玩家做的事。 */
 const FOE_SPEED = 3.5;
 
-/** 一局 15 分钟（见 docs/DESIGN.md）。 */
-const RUN_SECONDS = 15 * 60;
-/** 刷怪。这是个**切片**的数值，不是最终曲线 —— 曲线要等玩法定型再写。
- *
- *  敌人生成在**屏幕外的一个环上**（内径大于可见距离），所以它们是走进来的，
+/** 敌人生成在**屏幕外的一个环上**（内径大于可见距离），所以它们是走进来的，
  *  不是凭空出现在你旁边。这条是这个类型的硬规则：在你看得见的地方生成，
- *  玩家会觉得是游戏在作弊而不是自己站错了位置。 */
+ *  玩家会觉得是游戏在作弊而不是自己站错了位置。
+ *
+ *  「多久一批、一批几只、多少血、多快」现在全在 `src/curve.ts` 里按时间读。 */
 const SPAWN_RING = [26, 34] as const;
-const SPAWN_EVERY = 0.9;      // 秒
-const SPAWN_BATCH = 4;
-const FOE_HP = 24;
 
 /** 玩家的血，和贴身挨打的代价。
  *
@@ -159,7 +168,8 @@ async function start(): Promise<void> {
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
 
   const hero = world.entities.get('hero')!;
-  const saved = (await umicat.saves.get<{ x: number; y: number; z: number }>(SAVE_KEY)) ?? null;
+  const saved = (await umicat.saves.get<
+    { x: number; y: number; z: number; gold?: number }>(SAVE_KEY)) ?? null;
 
   // Sized for THIS character and this world's unit. The capsule's total height
   // is 2*halfHeight + 2*radius = 0.72, which is the character's own height —
@@ -232,27 +242,53 @@ async function start(): Promise<void> {
     clearTimeout(pending);
     pending = setTimeout(() => {
       const p = character.position;
-      void umicat.saves.set(SAVE_KEY, { x: p.x, y: p.y, z: p.z });
+      void umicat.saves.set(SAVE_KEY, { x: p.x, y: p.y, z: p.z, gold });
     }, 500);
   };
 
-  /** 极简读数。DOM，不画进场景（`index.html` 有个 `#hud` 就是干这个的）。
+  /** 读数：一条血条，加时间和击杀。
    *
-   *  **绝不写 `hud.textContent`** —— 那会清空平台挂在里面的触屏控件层。追加
-   *  子元素。 */
+   *  **血量是一条看得见的血条，不是一个数字。** 第一版是顶部中间挤成三行的
+   *  一行字，还被平台自己的「Playing as a guest」压着 —— 结果是伤害一直在扣
+   *  而玩家**看不见自己在掉血**，于是「碰到我也没伤害呀」。一个读不到的读数
+   *  等于没有读数，而且它骗的不只是眼睛：玩家会据此得出错误的结论去调数值。
+   *
+   *  一眼能读的是**颜色和长度**，不是位数 —— 这也是本项目一直的结论：
+   *  「血条本身就是那个数字」。
+   *
+   *  放在左上角、平台那块 chip 下面。DOM，不画进场景。
+   *  **绝不写 `hud.textContent`** —— 那会清空平台挂在里面的触屏控件层。 */
   const readout = (() => {
-    const root = document.createElement('div');
-    root.style.cssText = `position:absolute; top:42px; left:50%; transform:translateX(-50%);
-      font:700 15px/1.5 system-ui,sans-serif; color:#fff; text-align:center;
-      text-shadow:0 2px 6px rgba(0,0,0,.6); pointer-events:none;`;
-    hud.appendChild(root);   // 追加子元素，绝不写 hud.textContent
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:absolute; top:44px; left:12px; pointer-events:none;';
+
+    // **血条不在这里了** —— 它搬到主角头顶（`herobar.ts`），因为这个类型里
+    // 玩家的眼睛整局钉在自己身上。角落这块牌子现在只放「慢」的信息：时间、
+    // 等级、经验、击杀、金币。血是快信息，快信息要长在眼睛已经在看的地方。
+    const xpTrack = document.createElement('div');
+    xpTrack.style.cssText = `position:relative; margin-top:3px; width:172px; height:7px;
+      border-radius:4px; background:rgba(0,0,0,.42);
+      box-shadow:inset 0 0 0 2px rgba(255,255,255,.22); overflow:hidden;`;
+    const xpFill = document.createElement('div');
+    xpFill.style.cssText = 'height:100%; width:0%; border-radius:4px; background:#5fe0ff;';
+    xpTrack.appendChild(xpFill);
+
+    const line = document.createElement('div');
+    line.style.cssText = `margin-top:5px; font:700 13px/1.4 system-ui,sans-serif; color:#fff;
+      font-variant-numeric:tabular-nums;`;
+
+    wrap.appendChild(readoutPlate(xpTrack, line));
+    hud.appendChild(wrap);   // 追加子元素，绝不写 hud.textContent
+
     const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     return {
-      set(clock: number, kills: number, alive: number, hp: number, over: boolean) {
-        root.textContent = over
-          ? (hp <= 0 ? `倒下了 · ${mmss(clock)} · 击杀 ${kills}`
-                     : `撑满 15 分钟 · 击杀 ${kills}`)
-          : `${mmss(clock)}   ♥ ${Math.ceil(hp)}   击杀 ${kills}   场上 ${alive}`;
+      set(clock: number, kills: number, alive: number, hp: number,
+          level: number, xp: number, need: number, gold: number, over: boolean) {
+        xpFill.style.width = `${(Math.min(1, xp / need) * 100).toFixed(1)}%`;
+        line.textContent = over
+          ? (hp <= 0 ? `倒下了 · ${mmss(clock)} · ${level} 级 · 击杀 ${kills} · 金币 ${gold}`
+                     : `撑满 15 分钟 · ${level} 级 · 击杀 ${kills} · 金币 ${gold}`)
+          : `${mmss(clock)}   Lv${level}   击杀 ${kills}   金币 ${gold}   场上 ${alive}`;
       },
     };
   })();
@@ -269,18 +305,212 @@ async function start(): Promise<void> {
   // 各有一道门挡住还没加载好的情况。这里要的只是变量**存在**。
   const ground = new InfiniteGround(world.scene);
   const swarm = new Swarm(world.scene);
-  const blades = new OrbitBlades(world.scene);
+  const gems = makeGems(world.scene);
+  // 金币。掉落**比经验稀得多**，而且走同一套磁吸 —— 走过去就飞过来那件事
+  // 本身是奖励的一部分，两种掉落物都该有。
+  const coins = makeCoins(world.scene);
+  const heroBar = new HeroBar(world.scene);
 
-  // 一局的状态。切片阶段就这几个数。
+  // 反馈层。**两套，而且分工是按频率分的，不是按好看程度分的。**
+  //
+  //  - `Sparks` 是常驻粒子池：一次绘制、帧里不分配内存，装的是**每秒几十次**
+  //    的东西（每一次命中、每一只死亡、每一发弹的尾迹）。
+  //  - `Vfx` 是搬过来的特效注册表，一次施放新建一份网格，上限 48 个。装的是
+  //    **偶尔一次**的东西（闪电的弧、升级的光环）。
+  //
+  // 搞反了就是这个游戏最容易踩的坑：把死亡爆裂交给 `Vfx`，后段一秒三十次，
+  // 一秒半就把 48 个槽塞满，然后特效开始**互相挤掉** —— 你刚打死的那只没有
+  // 火花，因为一秒前的那批还占着位置。细节写在 `sparks.ts` 开头。
+  const sparks = new Sparks(world.scene);
+  // 每次命中的那道白光。形状是 Balaboo 那道「两边窄中间宽」的线，实现换成了
+  // 实例化池 —— 理由写在 `sparks.ts` 的 `Slashes` 上：后段每秒上百次命中。
+  const slashes = new Slashes(world.scene);
+  const vfx = new Vfx(world.scene, () => world.camera);
+  const audio = createAudio();
+
+  const blades = new OrbitBlades(world.scene);
+  const trail = new TrailBurn(world.scene);
+  const bolt = new HomingBolt(world.scene, sparks);
+  const shock = new ShockLance(world.scene, sparks);
+  const chain = new ChainLightning(vfx, sparks);
+  // 三把要「开火」的武器各有自己的一声。**这是玩家分辨自己拿了什么的主要
+  // 渠道** —— 环刃和尾迹是持续的、没有开火这回事，而这三把是有节奏的，
+  // 听得出来就知道哪把在工作、什么时候该往前冲。
+  bolt.onFire = () => audio.play(SFX.bolt);
+  shock.onFire = () => audio.play(SFX.shock);
+  chain.onFire = () => audio.play(SFX.chain);
+  // 追踪弹的命中是**唯一**一个值得单独出声的命中：它是单体、有飞行时间，
+  // 「打到了没有」是玩家真会去听的一件事。其余四把是持续或群体的，那种
+  // 武器的命中声只会变成一层白噪音。
+  bolt.onHit = () => audio.play(SFX.hit);
+
+  // 一局的状态。
   let runClock = 0;
   let kills = 0;
   let spawnTimer = 1.5;
+  let eliteTimer = ELITE_EVERY;
+  let elites = 0;
   let over = false;
+  let paused = false;
+  /** 距离下一次「挨打」的提示还有多久。见接触伤害那段。 */
+  let hurtCue = 0;
+  /** 金币。**跨局累计**，存在云存档里。
+   *
+   *  它现在**还没有地方花** —— 这件事必须说清楚，因为一个看得见、涨得动、
+   *  却什么都换不到的数字，正是这个项目一直在反对的那种「升级了但没变化」。
+   *  金币在吸血鬼幸存者里是**局外**货币（买永久强化），所以它的去处是一个
+   *  局间商店，那是下一步，不是这一步。 */
+  let gold = saved?.gold ?? 0;
   let hp = PLAYER_HP;
+  let hpMax = PLAYER_HP;
+  let level = 1;
+  let xp = 0;
+  let xpNeed = xpToNext(1);
+  /** 还欠玩家几次三选一。见循环里为什么这是个队列。 */
+  let pendingLevels = 0;
+  /** 探针用：别弹升级面板。
+   *
+   *  这不是「方便」，是一次真实的误诊换来的：量五把武器的时候，第一把杀够了
+   *  人就弹出三选一，面板**暂停整局**，于是后面四把全量到 0 击杀 —— 读起来
+   *  像四把武器都坏了。测单个系统的探针必须能把别的系统按住。 */
+  let levelsOff = false;
+  /** 尾迹武器要**选到了才有**。这是升级池里唯一一个「开一样新东西」的选项，
+   *  也是这个游戏现在唯一的第二把武器。 */
+  let hasTrail = false;
+  let hasBolt = false;
+  let hasShock = false;
+  let hasChain = false;
+  let speedMult = 1;
+
+  // 敌人死在哪，经验就掉在哪 —— 顺手在那儿炸一把。
+  //
+  // **死亡反馈必须在这里，不能在各把武器里。** 五把武器都会杀人，写在武器里
+  // 就是五份同样的代码，而且漏掉一把的话"某些死法没有爆炸"会像个玄学 bug。
+  // 这里是唯一一个知道"有东西死了"的地方。
+  swarm.onDeath = (x, z, elite) => {
+    gems.drop(x, z, elite ? 12 : 1);
+    // 金币是**偶尔**掉的，精英必掉一把。天天掉的东西不构成一件值得绕路去捡
+    // 的事 —— 而绕路正是掉落物在这个类型里的全部作用。
+    if (elite) coins.drop(x, z, 25);
+    else if (Math.random() < 0.09) coins.drop(x, z, 1);
+    sparks.burst(x, 0.45, z, elite
+      ? { count: 40, color: 0xffe08a, color2: 0xff5a2a, speed: 6, life: 0.8, size: 0.26 }
+      : { count: 9, color: 0xffc98a, color2: 0xff6a3c, speed: 2.8, life: 0.42 });
+    if (elite) ring(vfx, new THREE.Vector3(x, 0.05, z),
+      { color: 0xffb057, from: 0.5, to: 3.4, life: 0.5 });
+    audio.play(SFX.kill);
+  };
+
+  // 每挨一下：白光 + 往后退一下（退势在 `Swarm` 里，见 `knock`）。
+  //
+  // **挂在敌群上，不挂在各把武器里。** 五把武器都会打人，写在武器里就是五份
+  // 同样的代码，而漏掉一把会变成「某些武器打上去没反应」这种玄学。这里是唯一
+  // 一个知道「有东西挨打了」的地方 —— 和 `onDeath` 同一个道理。
+  swarm.onDamage = (x, z, killed, elite) => {
+    // 打死的那一下不划白光：紧接着就是爆裂和掉落，再叠一道光只是糊在一起。
+    if (!killed) slashes.cut(x, 0.55, z, elite ? 0xffe2b0 : 0xffd9c2, elite ? 0.7 : 0);
+  };
+
   void Promise.all([
     ground.load(manifest, 'td-tile', 'td-tree').then(() => ground.update(SPAWN.x, SPAWN.z)),
     swarm.load(manifest, 'td-ufo-a'),
+    // 贴图要在第一次放特效**之前**到位。`TextureLoader.load` 是异步的，材质
+    // 建好时图还没来 —— 而在加色混合下，空贴图采样出来是黑的，黑加到屏幕上
+    // 就是看不见。这条是 `vfx.ts` 里记着的：第一次施放画了十个完全正确、
+    // 谁也看不见的三角形。
+    preloadAtlas(),
   ]);
+
+  /** 升级面板。暂停整局 —— 理由写在 `levelup.ts` 里。 */
+  const levelUp = createLevelUp({
+    pause: (on) => {
+      paused = on;
+      // 平台的触屏控件是盖在上面的一整层，不关掉的话面板上的按钮点不到 ——
+      // 点下去的是它背后的移动区，而且人物还会在面板后面走。
+      input.setEnabled(!on);
+      if (on) {
+        audio.play(SFX.levelUp);
+        const c = character.position;
+        ring(vfx, new THREE.Vector3(c.x, 0.05, c.z),
+          { color: 0x8fe3ff, from: 0.6, to: 4.2, life: 0.7 });
+        sparks.burst(c.x, 0.5, c.z,
+          { count: 34, color: 0xbfe9ff, color2: 0x5fe0ff, speed: 4, up: 1.4, life: 0.9 });
+      }
+    },
+    press: () => audio.play(SFX.uiPress),
+  });
+
+  /** 升级池。
+   *
+   *  **每一项都要改变你怎么玩，不是改变一个数字。** 所以这里没有「伤害
+   *  +10%」—— 那种项在三选一里永远是安全牌，而安全牌多了，三选一就退化成
+   *  一道算术题。
+   *
+   *  三选一每次从**还没满级**的项里抽。抽不满三个就用「回血」补位 ——
+   *  它可以无限拿，所以池子永远不会空；而且到了后期，什么都满级的时候，
+   *  能换血才是真正稀缺的东西。 */
+  const heal = (): Offer => ({
+    id: 'heal', title: '补给', body: `立刻回 40 点血（现在 ${Math.ceil(hp)}/${hpMax}）`,
+    level: 0, max: Infinity,
+    take: () => { hp = Math.min(hpMax, hp + 40); },
+  });
+  const pool: Offer[] = [
+    { id: 'blades', title: '环刃', body: '多一把刀绕着你转 —— 覆盖更满，不是伤害更高',
+      get level() { return blades.count - 2; }, max: 4,
+      take: () => { blades.count += 1; } },
+    { id: 'trail', title: '尾迹灼烧', body: '走过的地方留下火，跑起来就是输出',
+      isNew: true,
+      get level() { return hasTrail ? Math.round((trail.life - 2.6) / 0.8) + 1 : 0; }, max: 4,
+      take: () => { if (hasTrail) trail.life += 0.8; else hasTrail = true; } },
+    { id: 'bolt', title: '追踪弹', body: '飞出去找一只打 —— 优先招呼精英',
+      isNew: true,
+      get level() { return hasBolt ? bolt.shots : 0; }, max: 4,
+      take: () => { if (hasBolt) bolt.shots += 1; else hasBolt = true; } },
+    { id: 'shock', title: '前向冲击', body: '朝你跑的方向推出一道波 —— 想清哪边就朝哪边跑',
+      isNew: true,
+      get level() { return hasShock ? Math.round((shock.half - 0.55) / 0.22) + 1 : 0; }, max: 4,
+      take: () => { if (hasShock) shock.half += 0.22; else hasShock = true; } },
+    { id: 'chain', title: '链式闪电', body: '打一只再跳到旁边那只 —— 越挤越强',
+      isNew: true,
+      get level() { return hasChain ? chain.jumps - 2 : 0; }, max: 4,
+      take: () => { if (hasChain) chain.jumps += 1; else hasChain = true; } },
+    { id: 'magnet', title: '吸引', body: '经验从更远的地方飞过来 —— 你能少走几趟险路',
+      get level() { return Math.round((gems.magnet - 3.2) / 1.3); }, max: 3,
+      take: () => { gems.magnet += 1.3; } },
+    { id: 'boots', title: '疾行', body: '跑得快 8% —— 跑是这个游戏唯一的防御',
+      get level() { return Math.round((speedMult - 1) / 0.08); }, max: 4,
+      take: () => { speedMult += 0.08; setSpeed(PLAYER_SPEED * speedMult); } },
+    { id: 'vigor', title: '体魄', body: '血上限 +25，并且补满',
+      get level() { return Math.round((hpMax - PLAYER_HP) / 25); }, max: 3,
+      take: () => { hpMax += 25; hp = hpMax; } },
+  ];
+  /** 改移动速度。
+   *
+   *  **这是一个 SDK 的缺口，写在这里而不是藏起来。** `CharacterController3D`
+   *  在构造时吃一个 `speed`，之后没有任何接口能改它 —— 而「跑得更快」是这个
+   *  类型最基本的成长项之一（吸血鬼幸存者的翅膀就是它）。合适的修法是 SDK
+   *  开一个可写的 `speed`，那要发版，得先问过。
+   *
+   *  在那之前走内部字段。关键是**够不到就让这个选项根本不出现**，而不是让它
+   *  出现了却什么也不做 —— 一个点下去没有变化的升级，比少一个选项坏得多：
+   *  玩家会以为自己看错了，然后继续拿它。 */
+  const speedField = (character as unknown as { opts?: { speed?: number } }).opts;
+  const canSetSpeed = typeof speedField?.speed === 'number';
+  const setSpeed = (v: number): void => { if (speedField) speedField.speed = v; };
+  if (!canSetSpeed) {
+    console.warn('[survivor] 控制器没有可写的 speed，「疾行」不进升级池');
+    pool.splice(pool.findIndex((o) => o.id === 'boots'), 1);
+  }
+
+  const offerThree = (): Offer[] => {
+    const live = pool.filter((o) => o.level < o.max);
+    const out: Offer[] = [];
+    while (out.length < 3 && live.length) {
+      out.push(...live.splice(Math.floor(Math.random() * live.length), 1));
+    }
+    while (out.length < 3) out.push(heal());
+    return out;
+  };
 
   // three.js deprecated Clock, and setAnimationLoop already hands us the
   // timestamp, so there is nothing to replace it with.
@@ -290,6 +520,9 @@ async function start(): Promise<void> {
     // everything tunnels through the floor in one step.
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
+    // 暂停时整个世界停住，只继续画。面板开着的时候还在走的敌人，会让「停下
+    // 来选一个」变成「一边选一边被咬」，那就等于没暂停。
+    if (paused) { renderer.render(world.scene, world.camera); return; }
     // Turn the camera from the right half of the screen, then walk relative to
     // where it now points. The order matters: reading `look` first means this
     // frame's movement already accounts for this frame's turn, rather than
@@ -336,28 +569,104 @@ async function start(): Promise<void> {
 
       if (!over) {
         runClock += dt;
-        if (runClock >= RUN_SECONDS) over = true;
+        if (runClock >= RUN_SECONDS) { over = true; audio.play(SFX.victory); }
 
+        // 难度全部按时钟读 —— 见 `src/curve.ts`。
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
-          spawnTimer = SPAWN_EVERY;
+          spawnTimer = spawnGapAt(runClock);
           // 朝玩家正在跑的方向偏着生成 —— 见 `Swarm.spawn`：不这样的话
           // 「跑」是免费的，加多少怪都只是让身后的尾巴更长。
           const moving = Math.hypot(dir.x, dir.z) > 0.1;
-          swarm.spawn(SPAWN_BATCH, SPAWN_RING[0], SPAWN_RING[1], p.x, p.z, FOE_HP, FOE_SPEED,
+          // 血量同时看**时间**和**玩家等级**：升得快的人遇到的敌人也更硬，
+          // 这条自平衡是从吸血鬼幸存者抄来的（`curve.ts` 里写了为什么）。
+          swarm.spawn(batchAt(runClock), SPAWN_RING[0], SPAWN_RING[1], p.x, p.z,
+            hpAt(runClock) * hpLevelScale(level), speedAt(runClock),
             moving ? Math.atan2(dir.x, dir.z) : undefined);
         }
+
+        eliteTimer -= dt;
+        if (eliteTimer <= 0) {
+          eliteTimer = ELITE_EVERY;
+          elites += 1;
+          swarm.spawnElite(SPAWN_RING[0], SPAWN_RING[1], p.x, p.z,
+            eliteHp(elites) * hpLevelScale(level), speedAt(runClock) * 0.72);
+        }
+
+        // 五把武器。**没拿到的那把连 `update` 都不跑** —— 不是跑了但伤害为 0：
+        // 一把"存在但不生效"的武器迟早会因为某个字段没归零而偷偷开火，而那种
+        // bug 在一屏几百只敌人里根本看不出来。
+        // 「打中」**没有**自己的声音，而这是量出来的：第一版在"这一帧杀掉了
+        // 谁"上放 `hit`，同时 `onDeath` 在放 `kill` —— 一次死亡两声。乱战里
+        // 每秒 11.1 声，其中一半是这个重复。现在只有追踪弹的命中有声（见
+        // `bolt.onHit`），因为它是唯一一把单次命中算一个事件的武器。
+        const killsBefore = kills;
         kills += blades.update(dt, p.x, p.z, swarm, now / 1000);
+        if (hasTrail) kills += trail.update(dt, p.x, p.z, swarm, now / 1000);
+        if (hasBolt) kills += bolt.update(dt, p.x, p.z, swarm, now / 1000);
+        if (hasShock) kills += shock.update(dt, p.x, p.z, dir.x, dir.z, swarm, now / 1000);
+        if (hasChain) kills += chain.update(dt, p.x, p.z, swarm);
+        void killsBefore;
+
+        // 捡经验。够了就升级 —— **`while` 不是 `if`**：清掉一堆精英时一帧内
+        // 能跨两级，用 `if` 的话多出来的那一级会被默默吞掉。
+        const got = gems.update(dt, p.x, p.z, now / 1000);
+        xp += got;
+        // 金币和经验共用吸取半径（「吸引」这一项同时加两个）—— 它们在玩家
+        // 眼里是同一个动作：走过去，东西飞过来。
+        coins.magnet = gems.magnet;
+        const picked = coins.update(dt, p.x, p.z, now / 1000);
+        // 捡到金币就存 —— `save()` 自己会合并 500ms 内的多次调用，所以一把
+        // 金币同时飞进来只写一次。
+        if (picked > 0) { gold += picked; save(); }
+        if (got > 0 || picked > 0) audio.play(SFX.gem);
+        while (xp >= xpNeed) {
+          xp -= xpNeed;
+          level += 1;
+          xpNeed = xpToNext(level);
+          // **排队，不是直接弹。** 一帧内跨两级是常事（清掉一只精英就够了），
+          // 而连弹两次的第二次会盖掉第一次 —— 玩家升了两级，只选到一个。
+          pendingLevels += 1;
+        }
+        if (pendingLevels > 0 && !levelUp.open && !levelsOff) {
+          pendingLevels -= 1;
+          levelUp.show(level - pendingLevels, offerThree());
+        }
 
         // 接触伤害。贴着你的每一只都在扣血。
         if (swarm.touching > 0) {
           hp -= Math.min(swarm.touching, CONTACT_CAP) * CONTACT_DPS * dt;
-          if (hp <= 0) { hp = 0; over = true; }
+          // 挨打要有反馈，而**这是唯一一个玩家在被围着时还看得见的**：血条在
+          // 左上角，而屏幕中间全是敌人。所以受伤在脚底下炸一圈红的，就在眼睛
+          // 正在看的地方。节流靠声音那边的 420ms，视觉这边按时间自己卡。
+          hurtCue -= dt;
+          if (hurtCue <= 0) {
+            hurtCue = 0.42;
+            audio.play(SFX.hurt);
+            sparks.burst(p.x, 0.5, p.z,
+              { count: 12, color: 0xff6a5a, color2: 0xff2f2f, speed: 2.4, up: 0.9, life: 0.45 });
+          }
+          if (hp <= 0) {
+            hp = 0; over = true;
+            save();                       // 最后几秒捡的金币也要落账
+            audio.play(SFX.lose);
+            ring(vfx, new THREE.Vector3(p.x, 0.05, p.z),
+              { color: 0xff4b4b, from: 0.6, to: 6, life: 0.9 });
+          }
         }
       }
 
       swarm.update(dt, p.x, p.z, world.camera.quaternion, world.camera);
-      readout.set(runClock, kills, swarm.foes.length, hp, over);
+      // 粒子和特效**不受 `over` 影响**：倒下那一刻的爆炸要放完，不然死亡
+      // 反馈自己被死亡掐掉了。
+      sparks.update(dt, world.camera.quaternion);
+      slashes.update(dt, world.camera.quaternion);
+      vfx.update(dt);
+      readout.set(runClock, kills, swarm.foes.length, hp, level, xp, xpNeed, gold, over);
+      // 血条跟着人走。**倒下之后收起来** —— 一条挂在尸体上的空血条是在报告
+      // 一个已经结束的状态。
+      if (over && hp <= 0) heroBar.hide();
+      else heroBar.update(dt, p.x, p.y, p.z, hp, hpMax, world.camera.quaternion);
     }
 
     world.update(dt);                        // animation + physics + follow camera
@@ -425,9 +734,37 @@ async function start(): Promise<void> {
         world.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push(o.name || '(无名)'); });
         return { counts: folded, meshes: out };
       },
+      /** 五把武器，和反馈层 —— 探针要能单独打开某一把来量它。 */
+      weapons: { blades, trail, bolt, shock, chain },
+      give: (id: string) => {
+        const o = pool.find((x) => x.id === id);
+        if (!o) return null;
+        o.take();
+        return { id, level: o.level };
+      },
+      fx: () => ({ sparks: sparks.live, slashes: slashes.live, vfx: vfx.count }),
+      /** 敌人被打退了多少 —— 「稍微退一下」只能量，不能看。 */
+      knock: () => swarm.foes.map((f) => Math.hypot(f.kx, f.kz)),
       /** 敌群，和量它的东西。 */
       swarm,
       spawn: (n: number) => swarm.spawn(n, 8, 18, character.position.x, character.position.z, 30, FOE_SPEED),
+      /** 一局的状态，探针读它。 */
+      run: () => ({ clock: runClock, kills, level, xp, xpNeed, hp, hpMax, over, paused,
+                    alive: swarm.foes.length, gems: gems.count, coins: coins.count,
+                    gold, elites, hasTrail, blades: blades.count,
+                    magnet: gems.magnet, speedMult }),
+      /** 曲线在任意时刻读出来是什么样 —— 不用玩到那儿就能问。 */
+      curveAt: (t: number) => ({
+        gap: +spawnGapAt(t).toFixed(3), batch: batchAt(t),
+        perSec: +(batchAt(t) / spawnGapAt(t)).toFixed(2),
+        hp: +hpAt(t).toFixed(1), speed: +speedAt(t).toFixed(2),
+      }),
+      /** 把时钟拨到某一秒。难度曲线只能这样测 —— 真跑到第十二分钟要十二分钟。 */
+      setClock: (t: number) => { runClock = t; },
+      giveXp: (n: number) => { xp += n; },
+      levelPanel: () => levelUp.open,
+      /** 量单个系统时把三选一按住 —— 它会暂停整局。 */
+      setLevelsOff: (on: boolean) => { levelsOff = on; },
       clearFoes: () => swarm.clear(),
       setMode: (m: 'instanced' | 'clone') => swarm.setMode(m),
       foeCount: () => swarm.foes.length,

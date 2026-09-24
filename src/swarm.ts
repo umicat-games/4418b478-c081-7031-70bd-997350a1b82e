@@ -41,7 +41,7 @@ const MAX = 1000;
 
 export type SwarmMode = 'instanced' | 'clone';
 
-interface Foe {
+export interface Foe {
   x: number; z: number;
   hp: number; maxHp: number;
   speed: number;
@@ -53,12 +53,32 @@ interface Foe {
   lastHit: Record<string, number>;
   /** 精英/boss。只有它们头上有血条。 */
   elite: boolean;
+  /** 被打退的速度，每帧衰减。见 `KNOCK_*`。 */
+  kx: number; kz: number;
 }
 
 const BODY_Y = 0.42;          // 飞碟离地高度
 const BAR_Y = 1.02;           // 血条在头顶多高
 const BAR_W = 0.62, BAR_H = 0.09;
 const FLASH_SECONDS = 0.16;
+/** 挨打往后退：**退多远**、用多久退完。
+ *
+ *  **「稍微」是重点。** 击退是一种反馈，不是一个机制：它要让每一次命中都
+ *  看得出落在了谁身上，而不能把敌人推出武器的作用范围 —— 那会变成「打得
+ *  越狠越打不到」。环刃的刀刃半径是 0.75，所以位移必须远小于它。
+ *
+ *  **参数写成「距离 + 时间常数」，不是「速度 + 衰减率」。** 第一版写的是
+ *  速度 5.0、每秒衰减到 2%，本以为位移约 0.25 格 —— 实测 **1.738 格**。
+ *  指数衰减的总位移是 `v₀ × τ`，而那组参数的 τ 是 1/ln(1/0.02) ≈ 0.26 秒，
+ *  位移 1.28 格，比刀刃半径还大：打一下就把敌人推出自己的射程。
+ *  两个参数都「看起来合理」，乘出来的那个数却没人看 —— 所以现在直接写想要
+ *  的那个数。
+ *
+ *  精英只吃四成，不然一只该逼你停下来处理的东西会被你推着走。 */
+const KNOCK_DIST = 0.22;
+const KNOCK_TAU = 0.09;
+const KNOCK_SPEED = KNOCK_DIST / KNOCK_TAU;
+const KNOCK_ELITE = 0.4;
 /** 敌人贴到多近就停。 */
 export const CONTACT = 0.7;
 /** 多大比例生成在移动方向上，以及那个扇形有多宽。 */
@@ -70,6 +90,19 @@ export class Swarm {
   /** 这一帧有几只贴在玩家身上。接触伤害按这个算 —— 一只和十只贴着你，
    *  代价不该一样。 */
   touching = 0;
+  /** 死在哪里。
+   *
+   *  经验宝石要掉在**尸体的位置**上，而 `damageNear` 只返回「死了几只」——
+   *  那个数字足够记分，但捡东西是个空间动作：掉在你脚下的经验不构成任何
+   *  决定，掉在远处的才逼你走过去。所以死亡要带坐标出来，回调是最便宜的
+   *  办法（不必为此每帧分配一个数组）。 */
+  onDeath: ((x: number, z: number, elite: boolean) => void) | null = null;
+  /** 挨了一下（不管死没死）。
+   *
+   *  和 `onDeath` 分开，因为它们喂的是两个不同的反馈：死亡是爆裂 + 掉落，
+   *  命中是那道白光 + 往后退一下。一次命中同时触发两个的情况（被打死）是
+   *  对的 —— 你既看见了这一刀落在哪儿，也看见了它死。 */
+  onDamage: ((x: number, z: number, killed: boolean, elite: boolean) => void) | null = null;
   private mode: SwarmMode = 'instanced';
 
   private geom!: THREE.BufferGeometry;
@@ -88,6 +121,10 @@ export class Swarm {
   private readonly pos = new THREE.Vector3();
   private readonly scl = new THREE.Vector3();
   private readonly col = new THREE.Color();
+  /** 玩家上一帧在哪。击退要按「远离玩家」推，而伤害是从各把武器里进来的，
+   *  它们不一定知道玩家的位置。 */
+  private px = 0;
+  private pz = 0;
   /** 自己做剔除用的。每帧重建一次，比每只敌人一次投影便宜得多。 */
   private readonly frustum = new THREE.Frustum();
   private readonly viewProj = new THREE.Matrix4();
@@ -194,11 +231,29 @@ export class Swarm {
         // 慢的堆成墙 —— 一群速度完全一样的敌人会保持队形，那读起来像一堵
         // 平移的墙，而不是一群在追你的东西。
         hp, maxHp: hp, speed: speed * (0.78 + Math.random() * 0.5),
-        flash: 0, lastHit: {}, elite: false,
+        flash: 0, lastHit: {}, elite: false, kx: 0, kz: 0,
         obj: this.mode === 'clone' ? this.makeClone(false) : null,
       };
       this.foes.push(f);
     }
+    this.sync();
+  }
+
+  /** 放一只精英。
+   *
+   *  和一批杂兵是同一段生成逻辑，只是**一只、血厚、有血条、走得慢**。
+   *  慢是刻意的：精英的作用是逼你停下来处理它，而一个既厚又追得上你的
+   *  东西只会把「绕圈跑」这唯一的答案也删掉。 */
+  spawnElite(ringMin: number, ringMax: number, cx: number, cz: number,
+             hp: number, speed: number): void {
+    if (this.foes.length >= MAX) return;
+    const a = Math.random() * Math.PI * 2;
+    const r = ringMin + Math.random() * (ringMax - ringMin);
+    this.foes.push({
+      x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r,
+      hp, maxHp: hp, speed, flash: 0, lastHit: {}, elite: true, kx: 0, kz: 0,
+      obj: this.mode === 'clone' ? this.makeClone(false) : null,
+    });
     this.sync();
   }
 
@@ -221,9 +276,69 @@ export class Swarm {
       const last = f.lastHit[tag] ?? -1e9;
       if (now - last < cooldown) continue;
       f.lastHit[tag] = now;
-      if (this.hit(i, amount)) killed += 1;
+      const fx = f.x, fz = f.z, elite = f.elite;
+      this.knock(f, x, z);
+      const died = this.hit(i, amount);
+      if (died) killed += 1;
+      this.onDamage?.(fx, fz, died, elite);
     }
     return killed;
+  }
+
+  /** 离某处最近的一只，找不到就是 `null`。
+   *
+   *  **瞄准规则是武器设计的一半。** 环刃和尾迹不需要它（它们的形状就是答案），
+   *  但追踪弹、冲击、闪电都要挑目标，而挑法不同它们就是不同的武器：最近的
+   *  那只、正前方那只、还没被这次闪电打过的那只。
+   *
+   *  `skip` 让链式闪电能跳过已经打过的 —— 没有它，闪电会在两只之间来回弹，
+   *  「链」就退化成「对一只打六次」。 */
+  nearest(x: number, z: number, maxR: number, skip?: Set<Foe>): Foe | null {
+    let best: Foe | null = null;
+    let bestD = maxR * maxR;
+    for (const f of this.foes) {
+      if (skip?.has(f)) continue;
+      const dx = f.x - x, dz = f.z - z;
+      const d = dx * dx + dz * dz;
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return best;
+  }
+
+  /** 打指定的一只。返回它是否死了。
+   *
+   *  索引会变（删除是交换删除），所以拿着一只敌人跨帧的武器必须按**对象**
+   *  指名，不能按下标 —— 按下标的话，前面死了一只，你的追踪弹就换了个目标。 */
+  hitFoe(f: Foe, amount: number, fromX?: number, fromZ?: number): boolean {
+    const i = this.foes.indexOf(f);
+    if (i < 0) return false;
+    const fx = f.x, fz = f.z, elite = f.elite;
+    this.knock(f, fromX ?? this.px, fromZ ?? this.pz);
+    const died = this.hit(i, amount);
+    this.onDamage?.(fx, fz, died, elite);
+    return died;
+  }
+
+  /** 推一下。方向是**远离玩家**，不是远离伤害来源。
+   *
+   *  第一版用的是远离来源，量出来击退是 **0** —— 而且它不报错，因为它在
+   *  数学上是对的：环刃的刀刃就绕在敌人身上，命中那一刻刀和敌人的距离接近
+   *  零，于是「远离来源」的方向是一个长度为零的向量，归一化之后推力也是零。
+   *  五把武器里有两把（环刃、尾迹）的来源天然压在目标身上。
+   *
+   *  远离玩家才是这个类型里击退的意思：被打的东西从你身上弹开。它对五把
+   *  武器一致，而且恰好也是玩家会预期的方向 —— 打中的反应该指向「我」，
+   *  不是指向某个玩家根本不知道位置的内部坐标。
+   *
+   *  `fromX/fromZ` 只在敌人正好站在玩家身上时兜底。 */
+  private knock(f: Foe, fromX: number, fromZ: number): void {
+    let dx = f.x - this.px, dz = f.z - this.pz;
+    let d = Math.hypot(dx, dz);
+    if (d < 1e-3) { dx = f.x - fromX; dz = f.z - fromZ; d = Math.hypot(dx, dz); }
+    if (d < 1e-3) { dx = Math.random() - 0.5; dz = Math.random() - 0.5; d = Math.hypot(dx, dz); }
+    const s = KNOCK_SPEED * (f.elite ? KNOCK_ELITE : 1);
+    f.kx = (dx / d) * s;
+    f.kz = (dz / d) * s;
   }
 
   /** 伤害一只。返回它是否死了。 */
@@ -233,6 +348,7 @@ export class Swarm {
     f.hp -= amount;
     f.flash = FLASH_SECONDS;
     if (f.hp > 0) return false;
+    this.onDeath?.(f.x, f.z, f.elite);
     this.remove(i);
     return true;
   }
@@ -267,6 +383,7 @@ export class Swarm {
     // 每帧一条 `Cannot read properties of undefined` —— 游戏照跑，控制台在
     // 刷屏，而这正是「错误多到没人看」的起点。
     if (!this.bodies) return;
+    this.px = px; this.pz = pz;
     this.touching = 0;
     const instanced = this.mode === 'instanced';
     if (instanced && camera) {
@@ -289,6 +406,16 @@ export class Swarm {
       if (d > CONTACT) { f.x += (dx / d) * f.speed * dt; f.z += (dz / d) * f.speed * dt; }
       else this.touching += 1;
 
+      // 击退。**加在走位之后**，所以贴身的那只也会被推开 —— 上面那个分支在
+      // `d <= CONTACT` 时根本不动它，写在前面的话被围住时的每一次命中都毫无
+      // 反应，而那正是最需要看见反馈的时刻。
+      if (f.kx || f.kz) {
+        f.x += f.kx * dt; f.z += f.kz * dt;
+        const keep = Math.exp(-dt / KNOCK_TAU);
+        f.kx *= keep; f.kz *= keep;
+        if (Math.abs(f.kx) + Math.abs(f.kz) < 0.08) { f.kx = 0; f.kz = 0; }
+      }
+
       if (instanced) {
         // 看不见就不占槽。走位照常算过了 —— 剔除的是绘制，不是行为。
         if (camera) {
@@ -297,7 +424,10 @@ export class Swarm {
         }
         this.pos.set(f.x, BODY_Y, f.z);
         this.q.setFromAxisAngle(UP, Math.atan2(dx, dz));
-        this.scl.set(0.62, 0.62, 0.62);
+        // 精英大一圈。血条能告诉你它还剩多少，但**得先看见它**才会去读 ——
+        // 一个和杂兵长得一样的东西，玩家不会知道自己面对的是另一种问题。
+        const sc = f.elite ? 1.15 : 0.62;
+        this.scl.set(sc, sc, sc);
         this.bodies.setMatrixAt(n, this.m.compose(this.pos, this.q, this.scl));
         // 受击闪光走 instanceColor：一份材质喂所有实例，改材质等于全场变红。
         const k = f.flash / FLASH_SECONDS;
@@ -310,11 +440,11 @@ export class Swarm {
         // 相机朝向直接烘进实例矩阵 —— 每只单独做一次四元数运算，400 只就是
         // 1200 次，而这里每帧只有一个朝向。
         const frac = Math.max(0, f.hp / f.maxHp);
-        this.pos.set(f.x, BODY_Y + BAR_Y, f.z);
+        this.pos.set(f.x, BODY_Y + BAR_Y * 1.5, f.z);
         this.scl.set(BAR_W, BAR_H, 1);
         this.barBack.setMatrixAt(bn, this.m.compose(this.pos, camQuat, this.scl));
         // 左对齐：缩放后往左挪半个缺口，这样是从右边空的。
-        this.pos.set(f.x - (BAR_W * (1 - frac)) / 2, BODY_Y + BAR_Y, f.z);
+        this.pos.set(f.x - (BAR_W * (1 - frac)) / 2, BODY_Y + BAR_Y * 1.5, f.z);
         this.scl.set(BAR_W * frac, BAR_H * 0.74, 1);
         this.barFill.setMatrixAt(bn, this.m.compose(this.pos, camQuat, this.scl));
         this.col.setRGB(frac > 0.5 ? 0.29 : 1, frac > 0.25 ? 0.87 : 0.29, 0.35);
