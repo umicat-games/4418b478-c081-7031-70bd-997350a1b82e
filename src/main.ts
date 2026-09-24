@@ -6,6 +6,8 @@ import {
   type Scene3D, type Manifest3D, type LoadedScene3D,
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
+import { Swarm } from './swarm';
+import { mergeStatic } from './merge';
 
 /**
  * A 3D Umicat game.
@@ -45,8 +47,11 @@ const SAVE_KEY = 'progress';
  * 实测（横屏手机 852×393，同角度同 FOV）：
  *
  *     半径 8.25 → 看见 20.5 格，主角 25.5px，远处敌人 14.1px   ← Balaboo
- *     半径 12   → 看见 29.5 格，主角 17.6px，远处敌人  9.8px   ← 这里
+ *     半径 10   → 看见 25 格，  主角 21.1px，远处敌人 11.6px   ← 这里
+ *     半径 12   → 看见 29.5 格，主角 17.6px，远处敌人  9.8px
  *     半径 14   → 看见 34 格，  主角 15.1px，远处敌人  8.4px
+ *
+ * 12 试过，回来说太宽了；10 是 Balaboo 的 1.22 倍，主角还有 21px。
  *
  * 一次失败的尝试留在这里当记录：先前试过「拉远 + 收窄 FOV」，以为能又宽又
  * 压平透视 —— 结果 FOV 收得比半径加得还快，**反而更窄了**（15 格）。在这个
@@ -55,7 +60,7 @@ const SAVE_KEY = 'progress';
  * 这些数字都是「一只敌人」的。真正要判断的是**一群**敌人读不读得出来，那要
  * 等场上真有几百只才能定 —— 所以 12 是起点不是结论，14 就在旁边。
  */
-const CAM = { pitchDeg: 39, radius: 12, fov: 55 };
+const CAM = { pitchDeg: 39, radius: 10, fov: 55 };
 
 const SPAWN = { x: 0, y: 0.4, z: 1.7 };
 const RESPAWN_BELOW_Y = -5;
@@ -222,6 +227,11 @@ async function start(): Promise<void> {
     // you mid-air, which turns one fall into a permanently broken save.
     if (Math.hypot(dir.x, dir.z) > 0 && character.grounded) save();
 
+    {
+      const p = character.position;
+      swarm.update(dt, p.x, p.z, world.camera.quaternion, world.camera);
+    }
+
     world.update(dt);                        // animation + physics + follow camera
     // 相机放在 `world.update` **之后**，因为 SDK 的跟随相机每帧都会重写
     // `camera.position` —— 在它之前摆位等于没摆。
@@ -244,6 +254,29 @@ async function start(): Promise<void> {
     cam.lookAt(p.x, p.y, p.z);
   }
 
+  // 把静态场景折成几个 mesh。
+  //
+  // 这一步忘了调的代价是**空场 1618 次绘制** —— 这块空地有 2574 个实体，
+  // 一棵树一次。它不报错、画面也对，只是把整关的预算在第一帧就花光了，
+  // 而且大到足以淹没任何关于敌人的测量。
+  const folded = mergeStatic(world, scene3d, manifest);
+
+  /** 把景物（树、外圈地面）开关掉。
+   *
+   *  量敌人开销时要关掉：合批之后它们只有几次绘制，但仍然是 27 万三角形，
+   *  足以把敌人自己的几何量淹没 —— 一个基线里混着别的东西的测量，读出来
+   *  的每一个数都掺着水。 */
+  const setScenery = (on: boolean): void => {
+    // `mergeStatic` 返回的是计数不是网格 —— 合批后的东西要到场景里按名字找。
+    world.scene.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh && /forest|scenery|prop/i.test(o.name)) o.visible = on;
+    });
+  };
+
+  // 敌人。两种画法都在里面，`setMode` 当场切 —— 这是要量的那件事。
+  const swarm = new Swarm(world.scene);
+  await swarm.load(manifest, 'td-ufo-a');
+
   // Handy while developing; harmless in a published build.
   Object.assign(window as unknown as Record<string, unknown>,
     { __game: { umicat, world, character, input, animator,
@@ -253,6 +286,25 @@ async function start(): Promise<void> {
       setCam: (o: Partial<typeof CAM>) => Object.assign(CAM, o),
       /** 这个取景下，要读的东西有多大、看得见多远 —— 「更宽」的代价只能
        *  这样量，不能靠看。 */
+      /** 景物开关 —— 量敌人时关掉。 */
+      setScenery,
+      merged: () => {
+        const out: string[] = [];
+        world.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push(o.name || '(无名)'); });
+        return { counts: folded, meshes: out };
+      },
+      /** 敌群，和量它的东西。 */
+      swarm,
+      spawn: (n: number) => swarm.spawn(n, 8, 18, character.position.x, character.position.z, 30, 1.6),
+      clearFoes: () => swarm.clear(),
+      setMode: (m: 'instanced' | 'clone') => swarm.setMode(m),
+      foeCount: () => swarm.foes.length,
+      /** 渲染器自己的统计。「这套架构能画多少」只能问它，不能算。 */
+      renderStats: () => {
+        const i = renderer.info;
+        return { calls: i.render.calls, triangles: i.render.triangles,
+                 geometries: i.memory.geometries, textures: i.memory.textures };
+      },
       view: () => {
         const cam = world.camera as THREE.PerspectiveCamera;
         cam.updateMatrixWorld(true);
