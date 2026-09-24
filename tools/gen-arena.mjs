@@ -138,164 +138,39 @@ function buildArena(def) {
   const t = THEMES[def.theme];
   const entities = [];
   const add = (e) => entities.push(e);
-  const rand = rng(def.scenerySeed);
-  // The arena is SMALLER than a tower-defense board, and has its own half-size
-  // rather than borrowing the module's `HALF`.
-  //
-  // A tower defense board is big because the road has to be long: road length
-  // is how much time a gun gets with what walks past it. Nothing walks a road
-  // here. What the size decides instead is how long it takes to get out of the
-  // way of something, and at 5.5 the far corner was four seconds away — long
-  // enough that half the board was somewhere nothing was ever happening.
-  // The playfield is a RECTANGLE, wider than it is deep.
-  //
-  // It was square, inherited from boards that were square because a road had
-  // to wander around inside them. Nothing wanders here, and the screen this is
-  // played on is landscape — so a square board is a board whose left and right
-  // thirds are trees, and those thirds are paid for in ZOOM: the camera has to
-  // sit back far enough to fit the width it is not using, and everything on
-  // the board gets smaller for it.
-  //
-  // Matching the board's shape to the screen's is most of what makes the
-  // pieces readable on a phone. It also takes the tree line off the sides,
-  // where it was eating a third of the frame.
-  const HX = def.half.x;
-  const HZ = def.half.z;
-  const WALL_X = HX + 1.1;   // same relation the generated boards use
-  const WALL_Z = HZ + 1.1;
-  const GROUND_X = 2 * HX + 2;
-  const GROUND_Z = 2 * HZ + 2;
 
-  // The floor of the playable field — invisible, here for its collider. Same
-  // as every board: the tiles ARE the ground, with one box underneath them.
+  // 这个场景**不再包含地面**。
+  //
+  // 地是 `src/ground.ts` 在运行时铺的，无限、跟着玩家、一次绘制。原来这里
+  // 生成 2568 个实体（225 块地砖 + 1000 块外圈 + 1342 棵树）和四面空气墙 ——
+  // 墙和这个类型的核心动作直接冲突（唯一的防御是跑，有墙就意味着被逼到角落
+  // 必死，而且不是玩家判断失误，是地图不让他执行那个唯一的答案）。
+  //
+  // 留下来的只有三样：光、天空、和主角。它们是无限地图上仍然成立的东西。
+
+  // 一块很薄、很大的碰撞地板。看不见 —— 看得见的地是实例化铺的那层 ——
+  // 它在这里只为了给角色控制器一个站的地方。
+  //
+  // 它有多大就限制了玩家能跑多远：400 格边长，按角色速度约四分钟跑到头，
+  // 而一局只有 15 分钟且玩家是被追着绕圈的，不是直线逃跑。真要彻底无限，
+  // 这块板子也要跟着玩家移动 —— 那是下一步，不是现在。
   add({
     id: 'ground', name: 'ground',
-    primitive: { kind: 'box', size: { x: GROUND_X, y: 0.4, z: GROUND_Z }, color: t.skirt },
+    primitive: { kind: 'box', size: { x: 400, y: 0.4, z: 400 }, color: t.skirt },
     visible: false,
     transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
     castShadow: false,
     collider: {
-      shape: { kind: 'box', halfExtents: { x: GROUND_X / 2, y: 0.3, z: GROUND_Z / 2 } },
+      shape: { kind: 'box', halfExtents: { x: 200, y: 0.3, z: 200 } },
       body: 'fixed', offset: { x: 0, y: 0.1, z: 0 },
     },
   });
 
-  // The field. Plain tiles, every cell, rotated at random so the texture does
-  // not tile visibly. No scenery: see the note above.
-  for (let gx = -HX; gx <= HX; gx += 1) {
-    for (let gz = -HZ; gz <= HZ; gz += 1) {
-      add({
-        id: `ground_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'ground_tile',
-        modelAssetId: t.tile,
-        transform: {
-          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
-          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
-        },
-        castShadow: false,
-      });
-    }
-  }
-
-  // The forest, and the ground it stands on — the same treatment every board
-  // gets, minus the openings. There is no door in this one: a run ends when the
-  // health bar does, so a gap in the tree line would be a way out that is not
-  // there.
-  // The forest has to reach past the widest screen the fixed camera can show.
-  //
-  // The camera fits the BOARD to the viewport's height, so a wide screen shows
-  // more to the left and right — which is the whole point, that is where the
-  // trees go — and a very wide one shows a lot more. At 21:9 the visible
-  // half-width at the board's depth is about `field × 2.3`, and past the
-  // board's far edge it is wider still. Seven rings was enough for a camera
-  // that sat close behind the hero and is not enough for this one: the ground
-  // simply stopped, with sky under it.
-  //
-  // It is not free — this is the outermost ring of a 33×33 field of tiles —
-  // but almost all of it is `forest_far`, which is the group the cheap picture
-  // setting drops, and none of it is in the shadow pass.
-  const FOREST_OUT = def.forest ?? 14;
-  const OUTER_X = HX + FOREST_OUT;
-  const OUTER_Z = HZ + FOREST_OUT;
-  add({
-    id: 'ground_skirt', name: 'ground_skirt',
-    primitive: { kind: 'box', size: { x: 2 * OUTER_X + 1, y: 0.4, z: 2 * OUTER_Z + 1 }, color: t.skirt },
-    transform: { position: { x: 0, y: GROUND_Y - 0.4, z: 0 } },
-    castShadow: false,
-  });
-  for (let gx = -OUTER_X; gx <= OUTER_X; gx += 1) {
-    for (let gz = -OUTER_Z; gz <= OUTER_Z; gz += 1) {
-      if (Math.abs(gx) <= HX && Math.abs(gz) <= HZ) continue;
-      add({
-        id: `outer_${gx}_${gz}`.replace(/[.-]/g, '_'), name: 'forest_ground',
-        modelAssetId: t.tile,
-        transform: {
-          position: { x: gx, y: GROUND_Y - TILE_TOP, z: gz },
-          rotation: yaw(Math.floor(rand() * 4) * (Math.PI / 2)),
-        },
-        castShadow: false,
-      });
-      const depth = Math.max(Math.abs(gx) - HX, Math.abs(gz) - HZ);
-      const chance = Math.min(0.96, 0.72 + depth * 0.05);
-      const r = rand();
-      const n = r < chance ? (r < chance * 0.45 ? 2 : 1) : 0;
-      for (let k = 0; k < n; k++) {
-        add({
-          id: `forest_${gx}_${gz}_${k}`.replace(/[.-]/g, '_'),
-          // `forest_far` is what the picture-quality toggle drops. The
-          // outermost ring keeps its own name and always stays: it is what
-          // hides the edge of the ground against the sky.
-          name: depth >= 4 && depth < FOREST_OUT ? 'forest_far' : 'forest',
-          modelAssetId: rand() < 0.22 ? t.props[1] : t.props[0],
-          transform: {
-            position: {
-              x: gx + (rand() - 0.5) * 0.75,
-              y: GROUND_Y,
-              z: gz + (rand() - 0.5) * 0.75,
-            },
-            rotation: yaw(rand() * Math.PI * 2),
-          },
-          castShadow: false,
-        });
-      }
-    }
-  }
-
-  // The air wall, unbroken on all four sides. The hero is held inside ±6.6;
-  // the enemies fly, and were never touching it.
-  for (const side of ['n', 's', 'w', 'e']) {
-    const along = side === 'n' || side === 's' ? 'x' : 'z';
-    const fixed = side === 'n' || side === 'w'
-      ? -(along === 'x' ? WALL_Z : WALL_X) : (along === 'x' ? WALL_Z : WALL_X);
-    const len = 2 * (along === 'x' ? WALL_X : WALL_Z) + 0.2;
-    add({
-      id: `wall_${side}`, name: `wall_${side}`,
-      primitive: {
-        kind: 'box',
-        size: along === 'x' ? { x: len, y: 1.6, z: 0.4 } : { x: 0.4, y: 1.6, z: len },
-        color: t.wall,
-      },
-      visible: false,
-      transform: {
-        position: along === 'x' ? { x: 0, y: 0.6, z: fixed } : { x: fixed, y: 0.6, z: 0 },
-      },
-      collider: {
-        shape: {
-          kind: 'box',
-          halfExtents: along === 'x'
-            ? { x: len / 2, y: 0.8, z: 0.2 } : { x: 0.2, y: 0.8, z: len / 2 },
-        },
-        body: 'fixed',
-      },
-    });
-  }
-
-  // Dead centre, because every side is a side they can come from. A hero who
-  // starts against one wall starts with a quarter of the board behind them.
   add({
     id: 'hero', name: 'hero', modelAssetId: 'hero',
     transform: { position: { x: 0, y: GROUND_Y, z: 0 } },
-    // Declaring a starting clip is what creates the MIXER, and without one
-    // there is no CharacterAnimator and the hero never moves a limb.
+    // 声明一个起始 clip 才会创建 mixer，没有 mixer 的角色会一动不动地滑行 ——
+    // 而且不报错。
     animation: { play: 'idle', loop: true },
   });
 
@@ -303,14 +178,6 @@ function buildArena(def) {
     schemaVersion: 1,
     id: def.id,
     name: def.name,
-    /** How big the board is, written down ONCE and read by the game.
-     *
-     *  The alternative is the same constant in two files that must be kept in
-     *  step by hand, which this project already has one of (`LAND`) and has
-     *  the scars to prove it. `field` is where the air wall stands — what the
-     *  hero is held inside — and `outside` is where enemies are made and
-     *  where they are gone, comfortably past anything the camera shows. */
-    arena: { field: { x: WALL_X, z: WALL_Z }, outside: Math.max(WALL_X, WALL_Z) + 2.0 },
     environment: { background: t.sky },
     gravity: { x: 0, y: -4.1692, z: 0 },
     lights: [
@@ -319,51 +186,17 @@ function buildArena(def) {
       { id: 'sun', kind: 'directional', color: t.sun, intensity: t.sunIntensity,
         position: { x: 4, y: 8, z: 5 }, castShadow: true },
     ],
-    // FIXED, and the game places it.
-    //
-    // A follow camera is right for a board you walk around and wrong for one
-    // that IS the screen: it moves, so the edges of the world drift in and out
-    // of frame, and it can be turned, so "left" stops meaning left. Here the
-    // whole board is visible at all times and the player is a thing inside a
-    // frame, which is what makes a bullet's line readable before it arrives.
-    //
-    // **A LONG LENS.** 32°, not the 50 a third-person camera wants.
-    //
-    // A rectangle seen at an angle projects as a TRAPEZOID — near edge wide,
-    // far edge narrow — and a trapezoid cannot fill a rectangular screen. The
-    // gap is the tree line, and at 50° it was most of the top of the frame.
-    // Narrowing the lens and moving the camera back keeps the board the same
-    // size on screen while flattening the perspective, so the far edge comes
-    // out nearly as wide as the near one and the board fills the frame instead
-    // of tapering away from it.
-    //
-    // The offset below is only a sensible default — where the camera would sit
-    // on a square viewport. `fitCamera` in `main.ts` replaces it on load and on
-    // every resize, because where it BELONGS depends on the aspect ratio, and
-    // the generator has no idea what screen this will be played on.
-    // 跟随相机，俯视。
-    //
-    // 搬过来时这里是 `kind: 'fixed'` —— 那是 Balaboo 分支的用法，它的相机由
-    // 游戏代码里的 `fitCamera()` 摆位并对准。模板里没有那段代码，于是相机停
-    // 在偏移点上平视前方，拍到的全是天：**没有报错、没有 404、canvas 也在**，
-    // 就是什么都没有。这是本项目文档里说的「一小时后才发现的黑屏」的标准形状。
-    //
-    // 幸存者类是绕着一大片场地跑，相机跟着人走本来就是对的；等玩法定型后
-    // 若要改成固定取景，那时再连着 `fitCamera` 一起搬。
-    camera: { kind: 'follow', target: 'hero', fov: 45, offset: { x: 0, y: 9, z: 7 } },
+    // 相机由游戏代码摆位（`CAM` in main.ts）。这里的值只是个起始姿态。
+    camera: { kind: 'follow', target: 'hero', fov: 55, offset: { x: 0, y: 6.3, z: 7.8 } },
     entities,
   };
 }
-
 
 const ARENA = {
   id: 'main',
   name: 'The Clearing',
   theme: 'grass',
   // 幸存者类要的是一块能绕圈跑的空地。先给一个方形，之后按相机和敌人密度调。
-  half: { x: 7, z: 7 },
-  scenerySeed: 7,
-  forest: 10,
 };
 
 const scene = buildArena(ARENA);

@@ -7,6 +7,7 @@ import {
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 import { Swarm } from './swarm';
+import { InfiniteGround } from './ground';
 import { mergeStatic } from './merge';
 
 /**
@@ -61,6 +62,11 @@ const SAVE_KEY = 'progress';
  * 等场上真有几百只才能定 —— 所以 12 是起点不是结论，14 就在旁边。
  */
 const CAM = { pitchDeg: 39, radius: 10, fov: 55 };
+
+/** 玩家和敌人的速度。比值比绝对值重要 —— 见 `CharacterController3D` 那里
+ *  的注释。 */
+const PLAYER_SPEED = 4.6;
+const FOE_SPEED = 2.8;
 
 const SPAWN = { x: 0, y: 0.4, z: 1.7 };
 const RESPAWN_BELOW_Y = -5;
@@ -121,7 +127,16 @@ async function start(): Promise<void> {
     position: saved ?? SPAWN,
     halfHeight: 0.2,
     radius: 0.16,
-    speed: 1.9,        // ~2.6 character-heights per second
+    // 跑得过大部分敌人，因为跑就是这个类型唯一的防御动作。
+    //
+    // 模板给的是 1.9，试出来「很慢」—— Balaboo 那个要走位去摆塔的游戏都用
+    // 4.2，而这里视野还更宽（相机半径 10 对它的 8.25），同样的速度在屏幕上
+    // 读起来更慢。
+    //
+    // 真正决定手感的是它和 `FOE_SPEED` 的**比值**，不是这个数本身：追不上
+    // 的敌人不是威胁，追得上的敌人让「跑」这个答案失效。4.6 : 2.8 大约是
+    // 1.64 倍，意味着一团敌人会被拉成一条尾巴而不是散开或贴上来。
+    speed: PLAYER_SPEED,
     stepHeight: 0.17,  // a quarter of the character's height
     // ~0.94 units at full height, a bit over one character height. The SDK owns
     // how a jump FEELS — coyote time, buffering, variable height — because
@@ -179,6 +194,23 @@ async function start(): Promise<void> {
     }, 500);
   };
 
+  // 这两个系统必须在**动画循环开始之前**就存在。
+  //
+  // 它们原本声明在循环后面，于是头几帧里 `swarm.update(...)` 访问的是一个
+  // 还在暂时性死区里的 `const` —— 每帧一条 `Cannot access 'H' before
+  // initialization`，而游戏照常运行。这个项目记过这个形状（「被提升的函数
+  // 用到还没初始化的 const」），它的恶劣之处是**看起来没事**：画面对、玩法
+  // 对，只有控制台在刷屏，而错误多到没人看就等于没有错误报告。
+  //
+  // 注意这和「加载完没完」是两回事：`load()` 是异步的，两个 `update()` 里
+  // 各有一道门挡住还没加载好的情况。这里要的只是变量**存在**。
+  const ground = new InfiniteGround(world.scene);
+  const swarm = new Swarm(world.scene);
+  void Promise.all([
+    ground.load(manifest, 'td-tile', 'td-tree').then(() => ground.update(SPAWN.x, SPAWN.z)),
+    swarm.load(manifest, 'td-ufo-a'),
+  ]);
+
   // three.js deprecated Clock, and setAnimationLoop already hands us the
   // timestamp, so there is nothing to replace it with.
   let last = performance.now();
@@ -229,6 +261,7 @@ async function start(): Promise<void> {
 
     {
       const p = character.position;
+      ground.update(p.x, p.z);
       swarm.update(dt, p.x, p.z, world.camera.quaternion, world.camera);
     }
 
@@ -259,7 +292,12 @@ async function start(): Promise<void> {
   // 这一步忘了调的代价是**空场 1618 次绘制** —— 这块空地有 2574 个实体，
   // 一棵树一次。它不报错、画面也对，只是把整关的预算在第一帧就花光了，
   // 而且大到足以淹没任何关于敌人的测量。
+  // 场景里只剩光、天空、碰撞地板和主角了（见 `tools/gen-arena.mjs`），
+  // 所以合批没什么可折的 —— 留着是因为它是免费的，而且以后场景里再放任何
+  // 静态东西时，忘了调它的代价是「空场 1618 次绘制」。
   const folded = mergeStatic(world, scene3d, manifest);
+
+
 
   /** 把景物（树、外圈地面）开关掉。
    *
@@ -273,9 +311,7 @@ async function start(): Promise<void> {
     });
   };
 
-  // 敌人。两种画法都在里面，`setMode` 当场切 —— 这是要量的那件事。
-  const swarm = new Swarm(world.scene);
-  await swarm.load(manifest, 'td-ufo-a');
+
 
   // Handy while developing; harmless in a published build.
   Object.assign(window as unknown as Record<string, unknown>,
@@ -286,6 +322,7 @@ async function start(): Promise<void> {
       setCam: (o: Partial<typeof CAM>) => Object.assign(CAM, o),
       /** 这个取景下，要读的东西有多大、看得见多远 —— 「更宽」的代价只能
        *  这样量，不能靠看。 */
+      ground: () => ground.stats(),
       /** 景物开关 —— 量敌人时关掉。 */
       setScenery,
       merged: () => {
@@ -295,7 +332,7 @@ async function start(): Promise<void> {
       },
       /** 敌群，和量它的东西。 */
       swarm,
-      spawn: (n: number) => swarm.spawn(n, 8, 18, character.position.x, character.position.z, 30, 1.6),
+      spawn: (n: number) => swarm.spawn(n, 8, 18, character.position.x, character.position.z, 30, FOE_SPEED),
       clearFoes: () => swarm.clear(),
       setMode: (m: 'instanced' | 'clone') => swarm.setMode(m),
       foeCount: () => swarm.foes.length,
