@@ -24,6 +24,7 @@ import { makeGems, makeCoins, xpToNext } from './xp';
 import { HeroBar } from './herobar';
 import { createLevelUp, type Offer } from './levelup';
 import { createGameOver } from './gameover';
+import { Crates, BUFF_SECONDS, type BuffKind } from './crates';
 
 /**
  * A 3D Umicat game.
@@ -304,6 +305,28 @@ async function start(): Promise<void> {
     };
   })();
 
+  /** 一句话横幅。**写它做什么，不写它叫什么。**
+   *
+   *  Balaboo 那边的原始反馈是「我打开了它，没有任何东西告诉我发生了什么变化」
+   *  —— 一个只在屏幕上待一秒半的**名字**，等于没说。 */
+  const banner = (() => {
+    const el = document.createElement('div');
+    el.dataset.banner = '';
+    el.style.cssText = `position:absolute; left:50%; top:24%; transform:translate(-50%,-50%);
+      pointer-events:none; opacity:0; transition:opacity .18s; white-space:nowrap;
+      font:800 22px/1.3 system-ui,sans-serif; color:#fff; text-align:center;
+      text-shadow:0 2px 10px rgba(0,0,0,.7), 0 0 3px rgba(0,0,0,.95);`;
+    hud.appendChild(el);            // 追加子元素，绝不写 hud.textContent
+    let hide: ReturnType<typeof setTimeout> | undefined;
+    return (text: string, color: number): void => {
+      el.textContent = text;
+      el.style.color = `#${color.toString(16).padStart(6, '0')}`;
+      el.style.opacity = '1';
+      clearTimeout(hide);
+      hide = setTimeout(() => { el.style.opacity = '0'; }, 1600);
+    };
+  })();
+
   // 这两个系统必须在**动画循环开始之前**就存在。
   //
   // 它们原本声明在循环后面，于是头几帧里 `swarm.update(...)` 访问的是一个
@@ -321,6 +344,40 @@ async function start(): Promise<void> {
   // 本身是奖励的一部分，两种掉落物都该有。
   const coins = makeCoins(world.scene);
   const heroBar = new HeroBar(world.scene);
+  const crates = new Crates(world.scene);
+
+  /** 正在生效的那个增益，和还剩多久。 */
+  let buff: { kind: BuffKind; left: number } | null = null;
+  /** 「全图掉落飞向你」是靠**临时**把吸取半径拉到全图实现的，这个数是还要
+   *  维持多少**秒**。
+   *
+   *  第一版写的是「维持 2 帧」，实测**一颗都没收到**：掉落物是按帧朝玩家飞的，
+   *  而磁吸的最大速度是 17 格/秒 —— 两帧（约 0.03 秒）只够挪半格，十四格外的
+   *  东西根本没动。这东西要的是**一段飞行时间**，不是一个瞬间的开关，而「几帧」
+   *  这个单位把这件事问错了。
+   *
+   *  1.6 秒：17 格/秒 足够把这个取景里看得见的掉落全都收回来，而且**看得见
+   *  它们飞过来** —— 那一下本身就是奖励的一部分。 */
+  let vacuumLeft = 0;
+
+  /** 脚下那个圈 —— **它才是「我现在带着什么」的主要渠道**。
+   *
+   *  从 Balaboo 搬的判断，原话很准：「字只在屏幕上待一瞬，而脚下那个圈要陪你
+   *  走完整段时间。」角落里挂一个图标加倒计时是**要你专门去读**的东西，而这个
+   *  类型整局的眼睛都在主角身上。
+   *
+   *  自己一个 mesh，显示/隐藏而不是建了再扔：它一次活好几秒，而 `vfx` 装的是
+   *  一秒内就没的东西。 */
+  const buffRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.42, 0.55, 36).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.85,
+      side: THREE.DoubleSide, depthWrite: false,
+    }),
+  );
+  buffRing.visible = false;
+  buffRing.renderOrder = 3;
+  world.scene.add(buffRing);
 
   // 反馈层。**两套，而且分工是按频率分的，不是按好看程度分的。**
   //
@@ -398,6 +455,13 @@ async function start(): Promise<void> {
    *
    *  量别的东西的探针不该同时在打一局游戏。 */
   let god = false;
+  /** 探针用：别让箱子自己出现。
+   *
+   *  **箱子会污染所有别的测量**，而且是以最难看出来的方式：一个 `wipe` 在你
+   *  量「400 只敌人的绘制开销」时刚好刷出来，场上瞬间清空，量到的数字比空场
+   *  还低；一个 `freeze` 会让「敌人走多快」量到 0。这不是探针之间互相污染，
+   *  是**游戏系统在污染探针**，所以关掉它的开关得在游戏这边。 */
+  let cratesOff = false;
   /** 尾迹武器要**选到了才有**。这是升级池里唯一一个「开一样新东西」的选项，
    *  也是这个游戏现在唯一的第二把武器。 */
   let hasTrail = false;
@@ -411,6 +475,14 @@ async function start(): Promise<void> {
    *  **要在这里抄一份，因为升级是直接改武器对象上的字段的。** 重开一局如果不
    *  还原，玩家会带着上一局的六把刀和七跳闪电开局 —— 而这种 bug 不报错、不
    *  崩溃，只是让第二局变成另一个游戏。 */
+  /** 吸取半径**该**是多少。
+   *
+   *  和 `gems.magnet` 分开，因为「全图吸取」会临时把 `gems.magnet` 顶到 400
+   *  再还原 —— 还原成什么，得有个地方记着，不能从被改过的那个字段反推。
+   *  （升级项的 `level` 也是从这个数算的，否则道具生效的那两帧里，
+   *  「吸引」会显示成满级。） */
+  let magnetBase = gems.magnet;
+
   const WEAPON_BASE = {
     blades: blades.count, trail: trail.life, bolt: bolt.shots,
     shock: shock.half, chain: chain.jumps, magnet: gems.magnet,
@@ -466,6 +538,7 @@ async function start(): Promise<void> {
     // 掉落物用 Kenney Platformer Kit 里的现成模型（和场景里的树、箱子同一套）。
     gems.load(manifest, 'jewel'),
     coins.load(manifest, 'coin-gold'),
+    crates.load(manifest, 'crate'),
     // 贴图要在第一次放特效**之前**到位。`TextureLoader.load` 是异步的，材质
     // 建好时图还没来 —— 而在加色混合下，空贴图采样出来是黑的，黑加到屏幕上
     // 就是看不见。这条是 `vfx.ts` 里记着的：第一次施放画了十个完全正确、
@@ -517,18 +590,23 @@ async function start(): Promise<void> {
     runGold = 0;
     hasTrail = hasBolt = hasShock = hasChain = false;
     speedMult = 1;
-    setSpeed(PLAYER_SPEED);
+    applySpeed();
 
     blades.count = WEAPON_BASE.blades;
     trail.life = WEAPON_BASE.trail;
     bolt.shots = WEAPON_BASE.bolt;
     shock.half = WEAPON_BASE.shock;
     chain.jumps = WEAPON_BASE.chain;
-    gems.magnet = coins.magnet = WEAPON_BASE.magnet;
+    magnetBase = WEAPON_BASE.magnet;
+    gems.magnet = coins.magnet = magnetBase;
+    vacuumLeft = 0;
 
+    buff = null;
+    buffRing.visible = false;
     swarm.clear();
     gems.clear();
     coins.clear();
+    crates.clear();
     sparks.clear();
     slashes.clear();
     dmgNums.clear();
@@ -602,11 +680,11 @@ async function start(): Promise<void> {
       get level() { return hasChain ? chain.jumps - 2 : 0; }, max: 4,
       take: () => { if (hasChain) chain.jumps += 1; else hasChain = true; } },
     { id: 'magnet', title: '吸引', body: '经验从更远的地方飞过来 —— 你能少走几趟险路',
-      get level() { return Math.round((gems.magnet - 3.2) / 1.3); }, max: 3,
-      take: () => { gems.magnet += 1.3; } },
+      get level() { return Math.round((magnetBase - WEAPON_BASE.magnet) / 1.3); }, max: 3,
+      take: () => { magnetBase += 1.3; gems.magnet = coins.magnet = magnetBase; } },
     { id: 'boots', title: '疾行', body: '跑得快 8% —— 跑是这个游戏唯一的防御',
       get level() { return Math.round((speedMult - 1) / 0.08); }, max: 4,
-      take: () => { speedMult += 0.08; setSpeed(PLAYER_SPEED * speedMult); } },
+      take: () => { speedMult += 0.08; applySpeed(); } },
     { id: 'vigor', title: '体魄', body: '血上限 +25，并且补满',
       get level() { return Math.round((hpMax - PLAYER_HP) / 25); }, max: 3,
       take: () => { hpMax += 25; hp = hpMax; } },
@@ -624,6 +702,15 @@ async function start(): Promise<void> {
   const speedField = (character as unknown as { opts?: { speed?: number } }).opts;
   const canSetSpeed = typeof speedField?.speed === 'number';
   const setSpeed = (v: number): void => { if (speedField) speedField.speed = v; };
+  /** 把「升级买来的速度」和「道具临时给的速度」乘在一起，写回控制器。
+   *
+   *  **一处计算，两个来源。** 各自直接写 `speed` 的话，道具结束时把速度「还原」
+   *  成 `PLAYER_SPEED` 会顺手抹掉玩家升级买来的那几级 —— 而那种 bug 不报错，
+   *  只是玩家某一刻突然变慢了，说不清为什么。 */
+  const HASTE = 1.6;
+  const applySpeed = (): void => {
+    setSpeed(PLAYER_SPEED * speedMult * (buff?.kind.id === 'haste' ? HASTE : 1));
+  };
   if (!canSetSpeed) {
     console.warn('[survivor] 控制器没有可写的 speed，「疾行」不进升级池');
     pool.splice(pool.findIndex((o) => o.id === 'boots'), 1);
@@ -747,13 +834,52 @@ async function start(): Promise<void> {
         // 能跨两级，用 `if` 的话多出来的那一级会被默默吞掉。
         const got = gems.update(dt, p.x, p.z, now / 1000);
         xp += got;
-        // 金币和经验共用吸取半径（「吸引」这一项同时加两个）—— 它们在玩家
-        // 眼里是同一个动作：走过去，东西飞过来。
-        coins.magnet = gems.magnet;
         const picked = coins.update(dt, p.x, p.z, now / 1000);
         // 捡到金币就存 —— `save()` 自己会合并 500ms 内的多次调用，所以一把
         // 金币同时飞进来只写一次。
         if (picked > 0) { gold += picked; runGold += picked; save(); }
+
+        // 箱子。**立刻结算的和持续一段的，是给玩家的两种不同东西**：前者是
+        // 一次已经发生完的事，后者是你现在握着、要花掉的一段时间。所以只有
+        // 后者戴圈、有倒计时。
+        const took = cratesOff ? null : crates.update(dt, p.x, p.z, now / 1000);
+        if (took) {
+          banner(took.label, took.color);
+          audio.play(SFX.levelUp);
+          ring(vfx, new THREE.Vector3(p.x, 0.05, p.z),
+            { color: took.color, from: 0.6, to: 4.4, life: 0.6 });
+          sparks.burst(p.x, 0.6, p.z,
+            { count: 30, color: took.color, color2: 0xffffff, speed: 4.2, up: 1.2, life: 0.8 });
+          if (took.id === 'wipe') {
+            // 一扫而空要**走正常的死亡流程**，不是把数组清掉 —— 掉落、爆裂、
+            // 击杀计数、经验全都挂在 `onDeath` 上，绕过它等于一次什么都不给的
+            // 清屏，而那是这张表里最像奖励的一项。
+            for (let i = swarm.foes.length - 1; i >= 0; i--) {
+              if (swarm.hit(i, 1e9)) kills += 1;
+            }
+          } else if (took.id === 'vacuum') {
+            // 把全图掉落一次性吸过来：临时把吸取半径拉到很大，下一帧还原。
+            gems.magnet = coins.magnet = 400;
+            vacuumLeft = 1.6;
+          } else {
+            buff = { kind: took, left: BUFF_SECONDS };
+            applySpeed();     // `haste` 靠它生效
+          }
+        }
+        if (vacuumLeft > 0) {
+          vacuumLeft -= dt;
+          if (vacuumLeft <= 0) gems.magnet = coins.magnet = magnetBase;
+        }
+
+        // buff 倒计时。
+        if (buff) {
+          buff.left -= dt;
+          if (buff.left <= 0) {
+            banner('效果结束', 0xcfd6dd);
+            buff = null;
+            applySpeed();     // 还原时要带上升级买来的那几级，见 `applySpeed`
+          }
+        }
         if (got > 0 || picked > 0) audio.play(SFX.gem);
         while (xp >= xpNeed) {
           xp -= xpNeed;
@@ -769,7 +895,7 @@ async function start(): Promise<void> {
         }
 
         // 接触伤害。贴着你的每一只都在扣血。
-        if (swarm.touching > 0 && !god) {
+        if (swarm.touching > 0 && !god && buff?.kind.id !== 'shield') {
           hp -= Math.min(swarm.touching, CONTACT_CAP) * CONTACT_DPS * dt;
           // 挨打要有反馈，而**这是唯一一个玩家在被围着时还看得见的**：血条在
           // 左上角，而屏幕中间全是敌人。所以受伤在脚底下炸一圈红的，就在眼睛
@@ -804,7 +930,10 @@ async function start(): Promise<void> {
         }
       }
 
-      swarm.update(dt, p.x, p.z, world.camera.quaternion, world.camera);
+      // `freeze` 就是**把敌群的那一帧 dt 设成 0**：它们不走、不贴身，但照样
+      // 挨打、照样死。定住的敌人仍然是靶子，这正是这个道具的用法。
+      swarm.update(buff?.kind.id === 'freeze' ? 0 : dt,
+                   p.x, p.z, world.camera.quaternion, world.camera);
       // 粒子和特效**不受 `over` 影响**：倒下那一刻的爆炸要放完，不然死亡
       // 反馈自己被死亡掐掉了。
       sparks.update(dt, world.camera.quaternion);
@@ -816,6 +945,17 @@ async function start(): Promise<void> {
       // 一个已经结束的状态。
       if (over && hp <= 0) heroBar.hide();
       else heroBar.update(dt, p.x, p.y, p.z, hp, hpMax, world.camera.quaternion);
+
+      // 脚下那个圈：颜色说是哪一个，**闪烁的频率说还剩多久**。最后两秒开始
+      // 急闪 —— 「快没了」是个要在余光里收到的信号，不是一个要去读的数字。
+      buffRing.visible = !!buff;
+      if (buff) {
+        buffRing.position.set(p.x, p.y + 0.04, p.z);
+        (buffRing.material as THREE.MeshBasicMaterial).color.setHex(buff.kind.color);
+        const urgent = buff.left < 2;
+        (buffRing.material as THREE.MeshBasicMaterial).opacity =
+          urgent ? 0.35 + 0.55 * Math.abs(Math.sin(now / 90)) : 0.85;
+      }
     }
 
     world.update(dt);                        // animation + physics + follow camera
@@ -903,6 +1043,11 @@ async function start(): Promise<void> {
       swarm,
       spawn: (n: number) => swarm.spawn(n, 8, 18, character.position.x, character.position.z, 30, FOE_SPEED),
       /** 一局的状态，探针读它。 */
+      /** 箱子和增益 —— 探针读它。 */
+      crates: () => crates.list,
+      putCrate: (x: number, z: number, id: string) => crates.put(x, z, id),
+      buff: () => (buff ? { id: buff.kind.id, left: +buff.left.toFixed(2) } : null),
+      buffRingOn: () => buffRing.visible,
       run: () => ({ clock: runClock, kills, level, xp, xpNeed, hp, hpMax, over, paused,
                     alive: swarm.foes.length, gems: gems.count, coins: coins.count,
                     gold, elites, hasTrail, blades: blades.count,
@@ -925,6 +1070,8 @@ async function start(): Promise<void> {
       setLevelsOff: (on: boolean) => { levelsOff = on; },
       /** 量别的东西时别被打死 —— 见 `god`。 */
       setGod: (on: boolean) => { god = on; },
+      /** 量别的东西时别让箱子自己刷出来 —— 见 `cratesOff`。 */
+      setCratesOff: (on: boolean) => { cratesOff = on; if (on) crates.clear(); },
       clearFoes: () => swarm.clear(),
       /** 清掉地上的掉落物。**探针必须有这个** —— 「刚掉的那颗在不在」不能靠
        *  总数的增减去推：上一轮留在地上的宝石这会儿正被吸走，一加一减，
