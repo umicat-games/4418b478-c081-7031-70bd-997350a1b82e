@@ -24,6 +24,15 @@ import { loadModelAsset, type Manifest3D } from '@umicat/three-sdk';
  *     做的是同一件事、同一个理由。
  *   - **血条要自己面向相机。** 每实例烘进相机朝向，而不是每只做一次四元数
  *     运算 —— 400 只那是 1200 次。
+ *
+ * **杂兵没有血条**，只有精英和 boss 有。几百条血条是噪音，而且玩家根本不对
+ * 单只杂兵做决策 —— 武器是自动的、免费的，「这只还剩多少」不是任何决定的
+ * 输入。（Polarity 里每只都有血条是对的，因为那里每次攻击都要花魔法值，
+ * 出手前确实要判断划不划算。同一个元素在两个游戏里的答案相反，取决于它
+ * 喂给哪个决定。）
+ *
+ * 机制留着，`elite` 一打开就有。没有精英时两个血条 mesh 的 `count` 是 0，
+ * 不花任何代价。
  */
 
 /** 池子上限。超过这个数的生成会被丢掉而不是悄悄扩容：一次分配好，帧里不碰
@@ -42,6 +51,8 @@ interface Foe {
   obj: THREE.Object3D | null;
   /** 每把武器上一次打中这只的时间。见 `damageNear`。 */
   lastHit: Record<string, number>;
+  /** 精英/boss。只有它们头上有血条。 */
+  elite: boolean;
 }
 
 const BODY_Y = 0.42;          // 飞碟离地高度
@@ -126,7 +137,7 @@ export class Swarm {
     this.mode = mode;
     for (const f of this.foes) {
       if (f.obj) { this.clones.remove(f.obj); f.obj = null; }
-      if (mode === 'clone') f.obj = this.makeClone();
+      if (mode === 'clone') f.obj = this.makeClone(f.elite);
     }
     this.bodies.count = mode === 'instanced' ? this.foes.length : 0;
     this.barBack.count = this.barFill.count = mode === 'instanced' ? this.foes.length : 0;
@@ -134,13 +145,13 @@ export class Swarm {
 
   getMode(): SwarmMode { return this.mode; }
 
-  private makeClone(): THREE.Object3D {
+  private makeClone(withBar: boolean): THREE.Object3D {
     // `clone(true)` 共享材质 —— 这正是「每只一个克隆」这条路上受击闪光必须
     // 先克隆材质的原因，也正是它贵的地方。这里只为对比，不做闪光。
     const o = this.proto.clone(true);
-    // 血条也要有，**否则 A/B 比的是两件不同的事**：实例化那边画了血条而
-    // 克隆这边没画，测出来的差距里有一部分只是少画了东西。Balaboo 的每只
-    // 敌人就是本体一个 mesh 加血条两个。
+    // 血条只有精英有 —— 两种模式用同一条规则，否则 A/B 比的是两件不同的事：
+    // 一边画了血条另一边没画，差距里就掺了「少画了东西」。
+    if (!withBar) { this.clones.add(o); return o; }
     const quad = new THREE.PlaneGeometry(1, 1);
     const back = new THREE.Mesh(quad, new THREE.MeshBasicMaterial({ color: 0x121820, depthWrite: false }));
     const fill = new THREE.Mesh(quad, new THREE.MeshBasicMaterial({ color: 0x4ade5b, depthWrite: false }));
@@ -162,7 +173,8 @@ export class Swarm {
       const f: Foe = {
         x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r,
         hp, maxHp: hp, speed: speed * (0.85 + Math.random() * 0.3),
-        flash: 0, lastHit: {}, obj: this.mode === 'clone' ? this.makeClone() : null,
+        flash: 0, lastHit: {}, elite: false,
+        obj: this.mode === 'clone' ? this.makeClone(false) : null,
       };
       this.foes.push(f);
     }
@@ -244,7 +256,7 @@ export class Swarm {
     }
     // `n` 是写进去的实例数，和敌人下标是两回事 —— 屏幕外的敌人照样要走位，
     // 只是不占实例槽。
-    let n = 0;
+    let n = 0, bn = 0;
     for (let i = 0; i < this.foes.length; i++) {
       const f = this.foes[i];
       if (f.flash > 0) f.flash = Math.max(0, f.flash - dt);
@@ -271,19 +283,22 @@ export class Swarm {
         this.col.setRGB(1, 1 - k * 0.75, 1 - k * 0.75);
         this.bodies.setColorAt(n, this.col);
 
-        // 血条。相机朝向直接烘进实例矩阵 —— 每只单独做一次四元数运算，
-        // 400 只就是 1200 次，而这里每帧只有一个朝向。
+        n += 1;
+        // 血条只给精英。`bn` 和 `n` 是两个计数 —— 杂兵占敌人槽但不占血条槽。
+        if (!f.elite) continue;
+        // 相机朝向直接烘进实例矩阵 —— 每只单独做一次四元数运算，400 只就是
+        // 1200 次，而这里每帧只有一个朝向。
         const frac = Math.max(0, f.hp / f.maxHp);
         this.pos.set(f.x, BODY_Y + BAR_Y, f.z);
         this.scl.set(BAR_W, BAR_H, 1);
-        this.barBack.setMatrixAt(n, this.m.compose(this.pos, camQuat, this.scl));
+        this.barBack.setMatrixAt(bn, this.m.compose(this.pos, camQuat, this.scl));
         // 左对齐：缩放后往左挪半个缺口，这样是从右边空的。
         this.pos.set(f.x - (BAR_W * (1 - frac)) / 2, BODY_Y + BAR_Y, f.z);
         this.scl.set(BAR_W * frac, BAR_H * 0.74, 1);
-        this.barFill.setMatrixAt(n, this.m.compose(this.pos, camQuat, this.scl));
+        this.barFill.setMatrixAt(bn, this.m.compose(this.pos, camQuat, this.scl));
         this.col.setRGB(frac > 0.5 ? 0.29 : 1, frac > 0.25 ? 0.87 : 0.29, 0.35);
-        this.barFill.setColorAt(n, this.col);
-        n += 1;
+        this.barFill.setColorAt(bn, this.col);
+        bn += 1;
       } else if (f.obj) {
         f.obj.position.set(f.x, BODY_Y, f.z);
         f.obj.rotation.y = Math.atan2(dx, dz);
@@ -299,8 +314,8 @@ export class Swarm {
     if (instanced) {
       // `count` 是这一帧真正画的数量，不是敌人总数。
       this.bodies.count = n;
-      this.barBack.count = n;
-      this.barFill.count = n;
+      this.barBack.count = bn;
+      this.barFill.count = bn;
       this.bodies.instanceMatrix.needsUpdate = true;
       this.barBack.instanceMatrix.needsUpdate = true;
       this.barFill.instanceMatrix.needsUpdate = true;
