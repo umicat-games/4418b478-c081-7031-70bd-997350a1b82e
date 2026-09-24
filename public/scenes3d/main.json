@@ -1,208 +1,7718 @@
 {
   "schemaVersion": 1,
   "id": "main",
-  "name": "Main",
+  "name": "空间站停机坪",
   "environment": {
-    "background": "#8fc9e8"
+    "background": "#04060d",
+    "fog": {
+      "color": "#04060d",
+      "near": 20,
+      "far": 48
+    }
   },
   "gravity": {
-    "x": 0.0,
-    "y": -4.1692,
-    "z": 0.0
+    "x": 0,
+    "y": -9.81,
+    "z": 0
   },
   "lights": [
     {
+      "id": "hemi",
+      "kind": "hemisphere",
+      "color": "#5a7fb5",
+      "groundColor": "#11141f",
+      "intensity": 0.75
+    },
+    {
       "id": "sun",
       "kind": "directional",
-      "intensity": 2.1,
+      "color": "#d8ecff",
+      "intensity": 2,
       "position": {
-        "x": 3.4,
-        "y": 5.95,
-        "z": 2.55
+        "x": 9,
+        "y": 16,
+        "z": 7
       },
       "castShadow": true
     },
     {
-      "id": "sky",
-      "kind": "hemisphere",
-      "intensity": 1.1,
-      "color": "#cfe8ff",
-      "groundColor": "#6a6a55"
+      "id": "core-cyan",
+      "kind": "point",
+      "color": "#22d3ee",
+      "intensity": 40,
+      "position": {
+        "x": 0,
+        "y": 4.5,
+        "z": 0
+      }
+    },
+    {
+      "id": "gate-magenta-n",
+      "kind": "point",
+      "color": "#e879f9",
+      "intensity": 18,
+      "position": {
+        "x": 0,
+        "y": 2.5,
+        "z": -9
+      }
+    },
+    {
+      "id": "gate-magenta-s",
+      "kind": "point",
+      "color": "#e879f9",
+      "intensity": 18,
+      "position": {
+        "x": 0,
+        "y": 2.5,
+        "z": 9
+      }
     }
   ],
   "entities": [
     {
-      "id": "ground",
-      "primitive": {
-        "kind": "plane",
-        "size": {
-          "x": 12.75,
-          "y": 0.425,
-          "z": 12.75
-        },
-        "color": "#7f8a6a"
-      },
+      "id": "floor-0",
       "transform": {
         "position": {
-          "x": 0.0,
-          "y": 0.0,
-          "z": 0.0
+          "x": -9.5,
+          "y": 0,
+          "z": -9.5
         }
       },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-1",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-2",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-3",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-4",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-5",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-6",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-7",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-8",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-9",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-10",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-11",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-12",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-13",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-14",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-15",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-16",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-17",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-18",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-19",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-20",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-21",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-22",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-23",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-24",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-25",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-26",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-27",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-28",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-29",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-30",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-31",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-32",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-33",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-34",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-35",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-36",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-37",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-38",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-39",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-40",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-41",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-42",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-43",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-44",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-45",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-46",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-47",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-48",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-49",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-50",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-51",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-52",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-53",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-54",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-55",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-56",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-57",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-58",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-59",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-60",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-61",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-62",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-63",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-64",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-65",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-66",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-67",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-68",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-69",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-70",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-71",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-72",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-73",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-74",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-75",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-76",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-77",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-78",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-79",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-80",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-81",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-82",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-83",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-84",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-85",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-86",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-87",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-88",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-89",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-90",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-91",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-92",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-93",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-94",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-95",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-96",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-97",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-98",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-99",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-100",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-101",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-102",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-103",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-104",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-105",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-106",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-107",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-108",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-109",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-110",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-111",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-112",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-113",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-114",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-115",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-116",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-117",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-118",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-119",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-120",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-121",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-122",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-123",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-124",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-125",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-126",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-127",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-128",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-129",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-130",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-131",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-132",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-133",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-134",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-135",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-136",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-137",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-138",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-139",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-140",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-141",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-142",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-143",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-144",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-145",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-146",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-147",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-148",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-149",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-150",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-151",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-152",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-153",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-154",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-155",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-156",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-157",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-158",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-159",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-160",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-161",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-162",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-163",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-164",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-165",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-166",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-167",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-168",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-169",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-170",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-171",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-172",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-173",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-174",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-175",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-176",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-177",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-178",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-179",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-180",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-181",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-182",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-183",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-184",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-185",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-186",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-187",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-188",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-189",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-190",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-191",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-192",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-193",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-194",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-195",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-196",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-197",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-198",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-199",
+      "transform": {
+        "position": {
+          "x": -0.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-200",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-201",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-202",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-203",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-204",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-205",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-206",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-207",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-208",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-209",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-210",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-211",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-212",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-213",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-214",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-215",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-216",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-217",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-218",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-219",
+      "transform": {
+        "position": {
+          "x": 0.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-220",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-221",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-222",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-223",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-224",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-225",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-226",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-227",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-228",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-229",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-230",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-231",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-232",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-233",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-234",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-235",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-236",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-237",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-238",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-239",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-240",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-241",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-242",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-243",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-244",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-245",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-246",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-247",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-248",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-249",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-250",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-251",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-252",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-253",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-254",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-255",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-256",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-257",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-258",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-259",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-260",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-261",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-262",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-263",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-264",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-265",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-266",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-267",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-268",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-269",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-270",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-271",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-272",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-273",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-274",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-275",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-276",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-277",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-278",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-279",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-280",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-281",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-282",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-283",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-284",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-285",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-286",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-287",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-288",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-289",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-290",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-291",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-292",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-293",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-294",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-295",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-296",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-297",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-298",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-299",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-300",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-301",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-302",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-303",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-304",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-305",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-306",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-307",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-308",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-309",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-310",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-311",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-312",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-313",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-314",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-315",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-316",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-317",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-318",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-319",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-320",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-321",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-322",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-323",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-324",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-325",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-326",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-327",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-328",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-329",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-330",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-331",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-332",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-333",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-334",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-335",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-336",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-337",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-338",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-339",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-340",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-341",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-342",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-343",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-344",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-345",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-346",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-347",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-348",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-349",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-350",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-351",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-352",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-353",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-354",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-355",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-356",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-357",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-358",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-359",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-360",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-361",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-362",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-363",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-364",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-365",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-366",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-367",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-368",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-369",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-370",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-371",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-372",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-373",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-374",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-375",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-376",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-377",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-378",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-379",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-380",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-381",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-382",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-383",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-384",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-385",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-386",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-387",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-388",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-389",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": -0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-390",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 0.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-391",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-392",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 2.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-393",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 3.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-394",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 4.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-395",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-396",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 6.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-397",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 7.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-398",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 8.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-399",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0,
+          "z": 9.5
+        }
+      },
+      "modelAssetId": "floor",
+      "castShadow": false
+    },
+    {
+      "id": "floor-collider",
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0.15,
+          "z": 0
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 20,
+          "y": 0.3,
+          "z": 20
+        }
+      },
+      "visible": false,
       "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 10,
+            "y": 0.15,
+            "z": 10
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-400",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-401",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-402",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-403",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-404",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-405",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-406",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-407",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-408",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-409",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-410",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-411",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-412",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-413",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-414",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-415",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-416",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-417",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-418",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-419",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-420",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-421",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-422",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-423",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-424",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-425",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-426",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-427",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-428",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-429",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-430",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-431",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-432",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-433",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-434",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-435",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-436",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-437",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-438",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-439",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-440",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-441",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-442",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-443",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-444",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-445",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-446",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-447",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-448",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-449",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-450",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-451",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-452",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-453",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-454",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-455",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-456",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-457",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-458",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-459",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-460",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-461",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-462",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-463",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-464",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-465",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-466",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-467",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-468",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-469",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 0.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-470",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-471",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall",
+      "castShadow": false
+    },
+    {
+      "id": "wall-472",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-473",
+      "transform": {
+        "position": {
+          "x": -9.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-474",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-475",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-476",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-477",
+      "transform": {
+        "position": {
+          "x": -8.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-478",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-479",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-480",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-481",
+      "transform": {
+        "position": {
+          "x": -7.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-482",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-483",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-484",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-485",
+      "transform": {
+        "position": {
+          "x": -6.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-486",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-487",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-488",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-489",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-490",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-491",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-492",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-493",
+      "transform": {
+        "position": {
+          "x": -4.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-494",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-495",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-496",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-497",
+      "transform": {
+        "position": {
+          "x": -3.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-498",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-499",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-500",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-501",
+      "transform": {
+        "position": {
+          "x": -2.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-502",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-503",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-504",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-505",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-506",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-507",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-508",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-509",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-510",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-511",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-512",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-513",
+      "transform": {
+        "position": {
+          "x": 2.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-514",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-515",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 2.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-516",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-517",
+      "transform": {
+        "position": {
+          "x": 3.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-518",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-519",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 3.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-520",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-521",
+      "transform": {
+        "position": {
+          "x": 4.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-522",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-523",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 4.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-524",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-525",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-526",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-527",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 5.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-528",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-529",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-530",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-531",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 6.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-532",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-533",
+      "transform": {
+        "position": {
+          "x": 7.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-534",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-535",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 7.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-536",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-537",
+      "transform": {
+        "position": {
+          "x": 8.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-538",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-539",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 8.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-540",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 1.8,
+          "z": -10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-541",
+      "transform": {
+        "position": {
+          "x": 9.5,
+          "y": 1.8,
+          "z": 10
+        }
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-542",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-543",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 9.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "wall"
+    },
+    {
+      "id": "wall-n-w",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 1.3,
+          "z": -10
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 9,
+          "y": 2,
+          "z": 0.6
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 4.5,
+            "y": 1,
+            "z": 0.3
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-n-e",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 1.3,
+          "z": -10
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 9,
+          "y": 2,
+          "z": 0.6
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 4.5,
+            "y": 1,
+            "z": 0.3
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-s-w",
+      "transform": {
+        "position": {
+          "x": -5.5,
+          "y": 1.3,
+          "z": 10
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 9,
+          "y": 2,
+          "z": 0.6
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 4.5,
+            "y": 1,
+            "z": 0.3
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-s-e",
+      "transform": {
+        "position": {
+          "x": 5.5,
+          "y": 1.3,
+          "z": 10
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 9,
+          "y": 2,
+          "z": 0.6
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 4.5,
+            "y": 1,
+            "z": 0.3
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-e-n",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.3,
+          "z": -5.5
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.6,
+          "y": 2,
+          "z": 9
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.3,
+            "y": 1,
+            "z": 4.5
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-e-s",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.3,
+          "z": 5.5
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.6,
+          "y": 2,
+          "z": 9
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.3,
+            "y": 1,
+            "z": 4.5
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-w-n",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.3,
+          "z": -5.5
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.6,
+          "y": 2,
+          "z": 9
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.3,
+            "y": 1,
+            "z": 4.5
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "wall-w-s",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.3,
+          "z": 5.5
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.6,
+          "y": 2,
+          "z": 9
+        }
+      },
+      "visible": false,
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.3,
+            "y": 1,
+            "z": 4.5
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-544",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0.8,
+          "z": -10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-545",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 1.8,
+          "z": -10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "pillar-546",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0.8,
+          "z": -10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-547",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 1.8,
+          "z": -10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "pillar-548",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0.8,
+          "z": 10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-549",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 1.8,
+          "z": 10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "pillar-550",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0.8,
+          "z": 10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-551",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 1.8,
+          "z": 10
+        },
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "pillar-552",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-553",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "pillar-554",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-555",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 1.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "pillar-556",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-557",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": -1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "pillar-558",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.25
+          }
+        },
+        "body": "fixed"
+      }
+    },
+    {
+      "id": "pillar-559",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 1.8,
+          "z": 1.5
+        },
+        "rotation": [
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      },
+      "modelAssetId": "pillar"
+    },
+    {
+      "id": "container-tall-560",
+      "transform": {
+        "position": {
+          "x": -4,
+          "y": 0.3,
+          "z": -4
+        }
+      },
+      "modelAssetId": "container-tall",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.4,
+            "y": 0.45,
+            "z": 0.4
+          }
+        },
         "body": "fixed",
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 6.375,
-            "y": 0.0213,
-            "z": 6.375
-          }
+        "offset": {
+          "x": 0,
+          "y": 0.45,
+          "z": 0
         }
       }
     },
     {
-      "id": "wall_north",
-      "name": "wall_north",
+      "id": "container-tall-561",
       "transform": {
         "position": {
-          "x": 0,
-          "y": 0.425,
-          "z": -6.275
+          "x": -4,
+          "y": 0.3,
+          "z": 4
         }
       },
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 12.75,
-          "y": 0.85,
-          "z": 0.2
-        },
-        "color": "#7a6a55"
-      },
+      "modelAssetId": "container-tall",
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 6.375,
-            "y": 0.425,
-            "z": 0.1
+            "x": 0.4,
+            "y": 0.45,
+            "z": 0.4
           }
         },
-        "body": "fixed"
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.45,
+          "z": 0
+        }
       }
     },
     {
-      "id": "wall_south",
-      "name": "wall_south",
+      "id": "container-tall-562",
       "transform": {
         "position": {
-          "x": 0,
-          "y": 0.425,
-          "z": 6.275
+          "x": 4,
+          "y": 0.3,
+          "z": -4
         }
       },
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 12.75,
-          "y": 0.85,
-          "z": 0.2
-        },
-        "color": "#7a6a55"
-      },
+      "modelAssetId": "container-tall",
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 6.375,
-            "y": 0.425,
-            "z": 0.1
+            "x": 0.4,
+            "y": 0.45,
+            "z": 0.4
           }
         },
-        "body": "fixed"
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.45,
+          "z": 0
+        }
       }
     },
     {
-      "id": "wall_west",
-      "name": "wall_west",
+      "id": "container-tall-563",
       "transform": {
         "position": {
-          "x": -6.275,
-          "y": 0.425,
+          "x": 4,
+          "y": 0.3,
+          "z": 4
+        }
+      },
+      "modelAssetId": "container-tall",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.4,
+            "y": 0.45,
+            "z": 0.4
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.45,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "container-wide-564",
+      "transform": {
+        "position": {
+          "x": 6.5,
+          "y": 0.3,
           "z": 0
         }
       },
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 0.2,
-          "y": 0.85,
-          "z": 12.75
-        },
-        "color": "#7a6a55"
-      },
+      "modelAssetId": "container-wide",
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 0.1,
-            "y": 0.425,
-            "z": 6.375
-          }
-        },
-        "body": "fixed"
-      }
-    },
-    {
-      "id": "wall_east",
-      "name": "wall_east",
-      "transform": {
-        "position": {
-          "x": 6.275,
-          "y": 0.425,
-          "z": 0
-        }
-      },
-      "primitive": {
-        "kind": "box",
-        "size": {
-          "x": 0.2,
-          "y": 0.85,
-          "z": 12.75
-        },
-        "color": "#7a6a55"
-      },
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.1,
-            "y": 0.425,
-            "z": 6.375
-          }
-        },
-        "body": "fixed"
-      }
-    },
-    {
-      "id": "tree_a",
-      "name": "tree_a",
-      "modelAssetId": "tree",
-      "transform": {
-        "position": {
-          "x": -3.2,
-          "y": 0.0,
-          "z": -3.0
-        }
-      },
-      "collider": {
-        "shape": {
-          "kind": "box",
-          "halfExtents": {
-            "x": 0.09,
+            "x": 0.3,
             "y": 0.35,
-            "z": 0.09
+            "z": 0.3
           }
         },
         "body": "fixed",
@@ -214,23 +7724,22 @@
       }
     },
     {
-      "id": "tree_b",
-      "name": "tree_b",
-      "modelAssetId": "tree-pine",
+      "id": "container-wide-565",
       "transform": {
         "position": {
-          "x": -4.4,
-          "y": 0.0,
-          "z": -1.4
+          "x": -6.5,
+          "y": 0.3,
+          "z": 0
         }
       },
+      "modelAssetId": "container-wide",
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 0.09,
+            "x": 0.3,
             "y": 0.35,
-            "z": 0.09
+            "z": 0.3
           }
         },
         "body": "fixed",
@@ -242,174 +7751,573 @@
       }
     },
     {
-      "id": "rocks_a",
-      "name": "rocks_a",
-      "modelAssetId": "rocks",
+      "id": "container-wide-566",
       "transform": {
         "position": {
-          "x": 3.4,
-          "y": 0.0,
-          "z": -3.2
+          "x": 0,
+          "y": 0.3,
+          "z": 6.5
         }
       },
+      "modelAssetId": "container-wide",
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 0.22,
-            "y": 0.14,
+            "x": 0.3,
+            "y": 0.35,
+            "z": 0.3
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.35,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "container-wide-567",
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0.3,
+          "z": -6.5
+        }
+      },
+      "modelAssetId": "container-wide",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.3,
+            "y": 0.35,
+            "z": 0.3
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.35,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "container-568",
+      "transform": {
+        "position": {
+          "x": 2.8,
+          "y": 0.3,
+          "z": -7
+        },
+        "rotation": [
+          0,
+          0.19866933079506122,
+          0,
+          0.9800665778412416
+        ]
+      },
+      "modelAssetId": "container",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.29,
+            "y": 0.3,
+            "z": 0.29
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.3,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "container-569",
+      "transform": {
+        "position": {
+          "x": -2.8,
+          "y": 0.3,
+          "z": 7
+        },
+        "rotation": [
+          0,
+          -0.14943813247359922,
+          0,
+          0.9887710779360422
+        ]
+      },
+      "modelAssetId": "container",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.29,
+            "y": 0.3,
+            "z": 0.29
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.3,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "container-570",
+      "transform": {
+        "position": {
+          "x": 7,
+          "y": 0.3,
+          "z": 2.8
+        },
+        "rotation": [
+          0,
+          0.09983341664682815,
+          0,
+          0.9950041652780257
+        ]
+      },
+      "modelAssetId": "container",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.29,
+            "y": 0.3,
+            "z": 0.29
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.3,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "container-571",
+      "transform": {
+        "position": {
+          "x": -7,
+          "y": 0.3,
+          "z": -2.8
+        },
+        "rotation": [
+          0,
+          -0.24740395925452294,
+          0,
+          0.9689124217106447
+        ]
+      },
+      "modelAssetId": "container",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.29,
+            "y": 0.3,
+            "z": 0.29
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.3,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "crate-572",
+      "transform": {
+        "position": {
+          "x": -3,
+          "y": 0.3,
+          "z": 1.5
+        }
+      },
+      "modelAssetId": "crate",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.4,
+            "y": 0.15,
+            "z": 0.5
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.15,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "crate-573",
+      "transform": {
+        "position": {
+          "x": 3,
+          "y": 0.3,
+          "z": -1.5
+        }
+      },
+      "modelAssetId": "crate",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.4,
+            "y": 0.15,
+            "z": 0.5
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.15,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "crate-574",
+      "transform": {
+        "position": {
+          "x": 1.5,
+          "y": 0.3,
+          "z": 5.5
+        }
+      },
+      "modelAssetId": "crate",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.4,
+            "y": 0.15,
+            "z": 0.5
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.15,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "crate-575",
+      "transform": {
+        "position": {
+          "x": -1.5,
+          "y": 0.3,
+          "z": -5.5
+        }
+      },
+      "modelAssetId": "crate",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.4,
+            "y": 0.15,
+            "z": 0.5
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.15,
+          "z": 0
+        }
+      }
+    },
+    {
+      "id": "computer-576",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0.3,
+          "z": -9.2
+        }
+      },
+      "modelAssetId": "computer",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.33,
             "z": 0.22
           }
         },
         "body": "fixed",
         "offset": {
           "x": 0,
-          "y": 0.14,
+          "y": 0.33,
           "z": 0
         }
       }
     },
     {
-      "id": "crate_a",
-      "name": "crate_a",
-      "modelAssetId": "crate",
+      "id": "computer-577",
       "transform": {
         "position": {
-          "x": 1.4,
-          "y": 0.0,
-          "z": -2.2
+          "x": -5,
+          "y": 0.3,
+          "z": 9.2
+        },
+        "rotation": [
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "modelAssetId": "computer"
+    },
+    {
+      "id": "computer-578",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0.3,
+          "z": -9.2
         }
       },
+      "modelAssetId": "computer",
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
             "x": 0.2,
-            "y": 0.2,
-            "z": 0.2
+            "y": 0.33,
+            "z": 0.22
           }
         },
         "body": "fixed",
         "offset": {
           "x": 0,
-          "y": 0.2,
+          "y": 0.33,
           "z": 0
         }
       }
     },
     {
-      "id": "barrel_a",
-      "name": "barrel_a",
-      "modelAssetId": "barrel",
+      "id": "computer-579",
       "transform": {
         "position": {
-          "x": 2.2,
-          "y": 0.0,
-          "z": -2.4
+          "x": -1,
+          "y": 0.3,
+          "z": 9.2
+        },
+        "rotation": [
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "modelAssetId": "computer"
+    },
+    {
+      "id": "computer-580",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0.3,
+          "z": -9.2
         }
       },
+      "modelAssetId": "computer",
       "collider": {
         "shape": {
           "kind": "box",
           "halfExtents": {
-            "x": 0.17,
-            "y": 0.22,
-            "z": 0.17
+            "x": 0.2,
+            "y": 0.33,
+            "z": 0.22
           }
         },
         "body": "fixed",
         "offset": {
           "x": 0,
-          "y": 0.22,
+          "y": 0.33,
           "z": 0
         }
       }
     },
     {
-      "id": "coin_a",
-      "name": "coin_a",
-      "modelAssetId": "coin-gold",
+      "id": "computer-581",
       "transform": {
         "position": {
-          "x": 0.0,
-          "y": 0.35,
-          "z": -1.2
-        }
-      }
+          "x": 3,
+          "y": 0.3,
+          "z": 9.2
+        },
+        "rotation": [
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "modelAssetId": "computer"
     },
     {
-      "id": "flag_a",
-      "name": "flag_a",
-      "modelAssetId": "flag",
+      "id": "computer-582",
       "transform": {
         "position": {
-          "x": -1.6,
-          "y": 0.0,
-          "z": -3.6
-        }
-      }
-    },
-    {
-      "id": "ladder_a",
-      "name": "ladder_a",
-      "modelAssetId": "ladder",
-      "transform": {
-        "position": {
-          "x": 4.2,
-          "y": 0.0,
-          "z": 0.4
-        }
-      }
-    },
-    {
-      "id": "platform_a",
-      "name": "platform_a",
-      "modelAssetId": "platform",
-      "transform": {
-        "position": {
-          "x": 2.6,
-          "y": 0.45,
-          "z": 1.2
-        }
-      }
-    },
-    {
-      "id": "spring_a",
-      "name": "spring_a",
-      "modelAssetId": "spring",
-      "transform": {
-        "position": {
-          "x": -2.4,
-          "y": 0.0,
-          "z": 1.6
-        }
-      }
-    },
-    {
-      "id": "hero",
-      "modelAssetId": "hero",
-      "name": "hero",
-      "transform": {
-        "position": {
-          "x": 0.0,
-          "y": 0.0,
-          "z": 1.7
+          "x": 6,
+          "y": 0.3,
+          "z": -9.2
         }
       },
-      "animation": {
-        "play": "idle",
-        "loop": true
+      "modelAssetId": "computer",
+      "collider": {
+        "shape": {
+          "kind": "box",
+          "halfExtents": {
+            "x": 0.2,
+            "y": 0.33,
+            "z": 0.22
+          }
+        },
+        "body": "fixed",
+        "offset": {
+          "x": 0,
+          "y": 0.33,
+          "z": 0
+        }
       }
+    },
+    {
+      "id": "computer-583",
+      "transform": {
+        "position": {
+          "x": 7,
+          "y": 0.3,
+          "z": 9.2
+        },
+        "rotation": [
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "modelAssetId": "computer"
+    },
+    {
+      "id": "player-spawn",
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0.65,
+          "z": 6
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "gate-north",
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0.3,
+          "z": -8.2
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "gate-south",
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0.3,
+          "z": 8.2
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "gate-east",
+      "transform": {
+        "position": {
+          "x": 8.2,
+          "y": 0.3,
+          "z": 0
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        }
+      },
+      "visible": false
+    },
+    {
+      "id": "gate-west",
+      "transform": {
+        "position": {
+          "x": -8.2,
+          "y": 0.3,
+          "z": 0
+        }
+      },
+      "primitive": {
+        "kind": "box",
+        "size": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        }
+      },
+      "visible": false
     }
   ],
   "camera": {
-    "kind": "follow",
-    "target": "hero",
-    "offset": {
-      "x": 0.0,
-      "y": 1.105,
-      "z": 2.3375
-    },
-    "fov": 55
+    "kind": "fixed",
+    "fov": 75
   }
 }

@@ -33,53 +33,58 @@
       }
     },
     {
-      "id": "tree",
-      "path": "kit/platformer/tree.glb",
+      "id": "gun-pistol",
+      "path": "assets/weapons/blaster-h.glb",
       "importScale": 1
     },
     {
-      "id": "tree-pine",
-      "path": "kit/platformer/tree-pine.glb",
+      "id": "gun-rifle",
+      "path": "assets/weapons/blaster-a.glb",
       "importScale": 1
     },
     {
-      "id": "rocks",
-      "path": "kit/platformer/rocks.glb",
+      "id": "gun-heavy",
+      "path": "assets/weapons/blaster-p.glb",
       "importScale": 1
     },
     {
       "id": "crate",
-      "path": "kit/platformer/crate.glb",
+      "path": "assets/weapons/crate-medium.glb",
       "importScale": 1
     },
     {
-      "id": "barrel",
-      "path": "kit/platformer/barrel.glb",
+      "id": "floor",
+      "path": "assets/env/floor.glb",
       "importScale": 1
     },
     {
-      "id": "coin-gold",
-      "path": "kit/platformer/coin-gold.glb",
+      "id": "wall",
+      "path": "assets/env/wall.glb",
       "importScale": 1
     },
     {
-      "id": "flag",
-      "path": "kit/platformer/flag.glb",
+      "id": "pillar",
+      "path": "assets/env/wall-pillar.glb",
       "importScale": 1
     },
     {
-      "id": "ladder",
-      "path": "kit/platformer/ladder.glb",
+      "id": "container",
+      "path": "assets/env/container.glb",
       "importScale": 1
     },
     {
-      "id": "platform",
-      "path": "kit/platformer/platform.glb",
+      "id": "container-wide",
+      "path": "assets/env/container-wide.glb",
       "importScale": 1
     },
     {
-      "id": "spring",
-      "path": "kit/platformer/spring.glb",
+      "id": "container-tall",
+      "path": "assets/env/container-tall.glb",
+      "importScale": 1
+    },
+    {
+      "id": "computer",
+      "path": "assets/env/computer.glb",
       "importScale": 1
     }
   ]

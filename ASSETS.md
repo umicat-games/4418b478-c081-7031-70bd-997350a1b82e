@@ -55,6 +55,27 @@ its scenery. Without the file the model still loads and animates — it just
 renders **grey**, with a single console line, which is exactly the kind of
 failure that ships.
 
+## The space kit, and a gap worth closing
+
+`public/assets/env/`, `public/assets/weapons/` and `public/audio/` were added
+with STARHOLD and are **not recorded below**. This file is the licence record
+for everything shipped to a player's browser, so a pack that is in `public/`
+and not in here is an unanswered question rather than a tidy-up.
+
+What can be said from the files themselves: every model carries
+`generator: UnityGLTF` and a `colormap` material, which is the same signature
+as the known-CC0 kits already here, and each directory keeps its OWN
+`Textures/colormap.png` — four palettes in this repo, four different files,
+which is the rule below being followed rather than the trap beside it.
+
+What CANNOT be said from the files: which packs they are. The names read as
+Kenney's (`blaster-*`, `wall-pillar`, `laserSmall_000.ogg` is Kenney's audio
+naming convention) but a `.glb` carries no author and no licence, so this is a
+strong guess and not a record. **Whoever added them should name the packs
+here.** The test to apply is the one that took `Fox.glb` out: not "may I use
+this in a game" but "may this be redistributed from a public CDN, as a
+toolkit" — CC0 answers yes and most other licences do not.
+
 ## The prop kit
 
 `public/kit/` holds 86 ready models — Kenney's Platformer set, **CC0** — with a

@@ -1,0 +1,109 @@
+/* 《星港防线》HUD 样式：科幻青色主题。全部作用域在 .sh-root 下。 */
+.sh-root {
+  position: absolute; inset: 0; pointer-events: none;
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #dff6ff; overflow: hidden;
+}
+.sh-hidden { display: none !important; }
+
+/* 准星 */
+.sh-crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.sh-crosshair > div { position: absolute; background: rgba(220, 250, 255, 0.9); }
+.sh-ch-dot { width: 3px; height: 3px; left: -1.5px; top: -1.5px; border-radius: 50%; }
+.sh-ch-t, .sh-ch-b { width: 2px; height: 8px; left: -1px; transition: all 0.08s; }
+.sh-ch-l, .sh-ch-r { width: 8px; height: 2px; top: -1px; transition: all 0.08s; }
+.sh-ch-t { top: -14px; } .sh-ch-b { top: 6px; }
+.sh-ch-l { left: -14px; } .sh-ch-r { left: 6px; }
+.sh-crosshair.sh-firing .sh-ch-t { top: -18px; }
+.sh-crosshair.sh-firing .sh-ch-b { top: 10px; }
+.sh-crosshair.sh-firing .sh-ch-l { left: -18px; }
+.sh-crosshair.sh-firing .sh-ch-r { left: 10px; }
+
+/* 命中标记 */
+.sh-hitmarker { position: absolute; left: 50%; top: 50%; opacity: 0; }
+.sh-hitmarker > div { position: absolute; width: 2px; height: 9px; background: #fff; }
+.sh-hm-a { transform: translate(-8px, -12px) rotate(-45deg); }
+.sh-hm-b { transform: translate(6px, -12px) rotate(45deg); }
+.sh-hm-c { transform: translate(-8px, 4px) rotate(45deg); }
+.sh-hm-d { transform: translate(6px, 4px) rotate(-45deg); }
+.sh-hitmarker.sh-kill > div { background: #ff4d4d; height: 12px; }
+.sh-hitmarker.sh-show { animation: sh-hm 0.18s ease-out; }
+@keyframes sh-hm { 0% { opacity: 1; transform: scale(1.4); } 100% { opacity: 0; transform: scale(0.9); } }
+
+/* 血条 */
+.sh-hp { position: absolute; left: 24px; bottom: 24px; width: 240px; }
+.sh-hp-label { font-size: 12px; letter-spacing: 4px; color: #7fd8e8; margin-bottom: 4px; }
+.sh-hp-bar { height: 14px; background: rgba(10, 30, 40, 0.7); border: 1px solid rgba(127, 216, 232, 0.4); border-radius: 3px; overflow: hidden; }
+.sh-hp-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #22d3ee, #67e8f9); transition: width 0.15s; }
+.sh-hp-fill.sh-low { background: linear-gradient(90deg, #ef4444, #f87171); }
+.sh-hp-text { font-size: 22px; font-weight: 700; margin-top: 2px; text-shadow: 0 0 8px rgba(34, 211, 238, 0.6); }
+
+/* 弹药 */
+.sh-ammo { position: absolute; right: 24px; bottom: 24px; text-align: right; }
+.sh-weapon { font-size: 13px; letter-spacing: 3px; color: #7fd8e8; }
+.sh-ammo-nums { font-weight: 800; text-shadow: 0 0 10px rgba(34, 211, 238, 0.6); }
+.sh-mag { font-size: 40px; }
+.sh-reserve { font-size: 18px; color: #9fb8c8; margin-left: 6px; }
+.sh-reload-tip { font-size: 13px; color: #ffd34d; margin-top: 4px; opacity: 0; transition: opacity 0.2s; }
+.sh-reload-tip.sh-show { opacity: 1; animation: sh-blink 0.7s infinite; }
+@keyframes sh-blink { 50% { opacity: 0.35; } }
+
+/* 波次 */
+.sh-wave { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); text-align: center; }
+.sh-wave-num { font-size: 20px; font-weight: 800; letter-spacing: 6px; text-shadow: 0 0 12px rgba(232, 121, 249, 0.7); }
+.sh-wave-left { font-size: 13px; color: #c9a2e8; margin-top: 2px; }
+
+/* 分数 */
+.sh-score { position: absolute; top: 16px; right: 24px; text-align: right; }
+.sh-score-num { font-size: 28px; font-weight: 800; text-shadow: 0 0 10px rgba(34, 211, 238, 0.6); }
+.sh-score-best { font-size: 12px; color: #9fb8c8; }
+
+/* 中央横幅 */
+.sh-banner { position: absolute; top: 30%; left: 0; right: 0; text-align: center; opacity: 0; }
+.sh-banner-t { font-size: 44px; font-weight: 900; letter-spacing: 12px; text-shadow: 0 0 24px rgba(34, 211, 238, 0.8); }
+.sh-banner-s { font-size: 16px; color: #9fd8e8; margin-top: 8px; letter-spacing: 4px; }
+.sh-banner.sh-show { animation: sh-banner 2.2s ease-out; }
+@keyframes sh-banner { 0% { opacity: 0; transform: scale(1.15); } 12% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 受伤红屏 */
+.sh-vignette { position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(220, 30, 30, 0.55) 100%); }
+
+/* 底部提示 */
+.sh-lockhint { position: absolute; bottom: 88px; left: 0; right: 0; text-align: center;
+  font-size: 14px; color: #cfe9f2; opacity: 0; transition: opacity 0.3s; text-shadow: 0 1px 4px #000; }
+.sh-lockhint.sh-show { opacity: 0.9; }
+
+/* 飘字 */
+.sh-float { position: absolute; transform: translate(-50%, -50%); font-weight: 800; font-size: 18px;
+  color: #ffd34d; text-shadow: 0 0 8px rgba(0, 0, 0, 0.8); pointer-events: none;
+  animation: sh-float 0.9s ease-out forwards; }
+.sh-float.sh-heal { color: #6dffa8; }
+@keyframes sh-float { 0% { opacity: 0; margin-top: 0; } 15% { opacity: 1; } 100% { opacity: 0; margin-top: -46px; } }
+
+/* 覆盖层 */
+.sh-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(2, 6, 12, 0.72); backdrop-filter: blur(3px); pointer-events: auto; }
+.sh-card { text-align: center; padding: 36px 48px; border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 10px; background: rgba(4, 12, 20, 0.85); box-shadow: 0 0 40px rgba(34, 211, 238, 0.15);
+  max-width: min(92vw, 520px); }
+.sh-title { font-size: 52px; font-weight: 900; letter-spacing: 14px; margin-bottom: 4px;
+  background: linear-gradient(180deg, #a5f3fc, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sh-title-sm { font-size: 36px; font-weight: 900; letter-spacing: 10px; margin-bottom: 12px; color: #a5f3fc; }
+.sh-subtitle { font-size: 13px; letter-spacing: 5px; color: #7fd8e8; margin-bottom: 16px; }
+.sh-desc { font-size: 15px; line-height: 1.7; color: #cfe9f2; margin-bottom: 20px; }
+.sh-btn { pointer-events: auto; cursor: pointer; font-size: 18px; font-weight: 700; letter-spacing: 6px;
+  color: #04121a; background: linear-gradient(180deg, #67e8f9, #22d3ee); border: none; border-radius: 6px;
+  padding: 14px 42px; margin: 4px 0 16px; transition: transform 0.1s, box-shadow 0.2s; }
+.sh-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 24px rgba(34, 211, 238, 0.5); }
+.sh-controls { font-size: 13px; line-height: 2; color: #9fb8c8; }
+.sh-start-best, .sh-over-best { font-size: 14px; color: #ffd34d; margin-top: 4px; min-height: 20px; }
+.sh-over-score { font-size: 30px; font-weight: 800; margin: 8px 0; color: #fff; }
+
+@media (max-width: 700px) {
+  .sh-title { font-size: 36px; letter-spacing: 8px; }
+  .sh-banner-t { font-size: 30px; letter-spacing: 6px; }
+  .sh-hp { width: 150px; left: 12px; bottom: 12px; }
+  .sh-ammo { right: 12px; bottom: 12px; }
+  .sh-mag { font-size: 30px; }
+}
