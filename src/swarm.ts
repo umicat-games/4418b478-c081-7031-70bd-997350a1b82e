@@ -92,6 +92,12 @@ const FLASH_SECONDS = 0.16;
  *
  *  时间也拉长了一点：0.12 秒比 0.09 秒多几帧，而「看得见」一半是位移、
  *  一半是**它花了几帧走完**。 */
+/** 敌人的绝对速度上限。
+ *
+ *  **兜底，不是调参旋钮。** 玩家是 4.6，这里留出 17% 的余量 —— 跑得掉，但只
+ *  是跑得掉。曲线和随机系数都可能被调，而「有没有敌人追得上玩家」这件事太
+ *  重要，不该依赖两个数相乘之后碰巧没超。 */
+const SPEED_CAP = 3.85;
 const KNOCK_DIST = 0.45;
 const KNOCK_TAU = 0.12;
 const KNOCK_SPEED = KNOCK_DIST / KNOCK_TAU;
@@ -129,7 +135,8 @@ export class Swarm {
    *  和 `onDeath` 分开，因为它们喂的是两个不同的反馈：死亡是爆裂 + 掉落，
    *  命中是那道白光 + 往后退一下。一次命中同时触发两个的情况（被打死）是
    *  对的 —— 你既看见了这一刀落在哪儿，也看见了它死。 */
-  onDamage: ((x: number, z: number, killed: boolean, elite: boolean) => void) | null = null;
+  onDamage: ((x: number, z: number, amount: number, killed: boolean,
+              elite: boolean) => void) | null = null;
   private mode: SwarmMode = 'instanced';
 
   private geom!: THREE.BufferGeometry;
@@ -259,7 +266,13 @@ export class Swarm {
         // 速度**有分布**，不是人人一个数。快的那些能咬住你、逼你改方向，
         // 慢的堆成墙 —— 一群速度完全一样的敌人会保持队形，那读起来像一堵
         // 平移的墙，而不是一群在追你的东西。
-        hp, maxHp: hp, speed: speed * (0.78 + Math.random() * 0.5),
+        //
+        // 但**分布要封顶**。曲线自己封在 3.4，而这里再乘一个随机系数，所以
+        // 真正决定「有没有敌人追得上玩家」的是乘完之后那个数 —— 上一版曲线
+        // 封 4.2、系数上界 1.28，实际最快 5.4，比玩家的 4.6 还快，而曲线那边
+        // 的注释还写着「刻意低于玩家」。封在乘之前等于没封。
+        // 速度**有分布**，但分布要收着，而且要有硬上限 —— 见下。
+        hp, maxHp: hp, speed: Math.min(SPEED_CAP, speed * (0.82 + Math.random() * 0.30)),
         flash: 0, lastHit: {}, elite: false, kx: 0, kz: 0, wobble: 0,
         obj: this.mode === 'clone' ? this.makeClone(false) : null,
       };
@@ -309,7 +322,7 @@ export class Swarm {
       this.knock(f, x, z);
       const died = this.hit(i, amount);
       if (died) killed += 1;
-      this.onDamage?.(fx, fz, died, elite);
+      this.onDamage?.(fx, fz, amount, died, elite);
     }
     return killed;
   }
@@ -353,7 +366,7 @@ export class Swarm {
     const fx = f.x, fz = f.z, elite = f.elite;
     this.knock(f, fromX ?? this.px, fromZ ?? this.pz);
     const died = this.hit(i, amount);
-    this.onDamage?.(fx, fz, died, elite);
+    this.onDamage?.(fx, fz, amount, died, elite);
     return died;
   }
 

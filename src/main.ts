@@ -10,6 +10,7 @@ import { Swarm } from './swarm';
 import { InfiniteGround } from './ground';
 import { OrbitBlades, TrailBurn, HomingBolt, ShockLance, ChainLightning } from './weapons';
 import { Sparks, Slashes } from './sparks';
+import { DamageNumbers } from './damagenums';
 import { Vfx, ring, preloadAtlas } from './vfx';
 import { createAudio, SFX } from './audio';
 import { readoutPlate } from './hud';
@@ -325,6 +326,8 @@ async function start(): Promise<void> {
   // 每次命中的那道白光。形状是 Balaboo 那道「两边窄中间宽」的线，实现换成了
   // 实例化池 —— 理由写在 `sparks.ts` 的 `Slashes` 上：后段每秒上百次命中。
   const slashes = new Slashes(world.scene);
+  // 伤害数字。也是一个池子、一次绘制 —— 每个字形一个实例，字形下标逐实例给。
+  const dmgNums = new DamageNumbers(world.scene);
   const vfx = new Vfx(world.scene, () => world.camera);
   const audio = createAudio();
 
@@ -406,9 +409,12 @@ async function start(): Promise<void> {
   // **挂在敌群上，不挂在各把武器里。** 五把武器都会打人，写在武器里就是五份
   // 同样的代码，而漏掉一把会变成「某些武器打上去没反应」这种玄学。这里是唯一
   // 一个知道「有东西挨打了」的地方 —— 和 `onDeath` 同一个道理。
-  swarm.onDamage = (x, z, killed, elite) => {
+  swarm.onDamage = (x, z, amount, killed, elite) => {
     // 打死的那一下不划白光：紧接着就是爆裂和掉落，再叠一道光只是糊在一起。
     if (!killed) slashes.cut(x, 0.55, z, elite ? 0xffe2b0 : 0xffd9c2, elite ? 0.7 : 0);
+    // 伤害数字。`add` 自己会把近处、同一瞬间的几下并成一个数 —— 后段每秒
+    // 上百次命中，一命中一个数字是一面读不了的数字墙。
+    dmgNums.add(x, z, amount);
   };
 
   void Promise.all([
@@ -661,6 +667,7 @@ async function start(): Promise<void> {
       // 反馈自己被死亡掐掉了。
       sparks.update(dt, world.camera.quaternion);
       slashes.update(dt, world.camera.quaternion);
+      dmgNums.update(dt, world.camera.quaternion);
       vfx.update(dt);
       readout.set(runClock, kills, swarm.foes.length, hp, level, xp, xpNeed, gold, over);
       // 血条跟着人走。**倒下之后收起来** —— 一条挂在尸体上的空血条是在报告
@@ -742,7 +749,8 @@ async function start(): Promise<void> {
         o.take();
         return { id, level: o.level };
       },
-      fx: () => ({ sparks: sparks.live, slashes: slashes.live, vfx: vfx.count }),
+      fx: () => ({ sparks: sparks.live, slashes: slashes.live,
+                   nums: dmgNums.live, vfx: vfx.count }),
       /** 真正被画出来的那几个实例化网格 —— 探针要读画面，不读状态。 */
       swarmMeshes: () => swarm.meshes,
       /** 敌人被打退了多少 —— 「稍微退一下」只能量，不能看。 */
@@ -768,6 +776,10 @@ async function start(): Promise<void> {
       /** 量单个系统时把三选一按住 —— 它会暂停整局。 */
       setLevelsOff: (on: boolean) => { levelsOff = on; },
       clearFoes: () => swarm.clear(),
+      /** 清掉地上的掉落物。**探针必须有这个** —— 「刚掉的那颗在不在」不能靠
+       *  总数的增减去推：上一轮留在地上的宝石这会儿正被吸走，一加一减，
+       *  刚掉的那颗看起来就像从没存在过。 */
+      clearDrops: () => { gems.clear(); coins.clear(); },
       setMode: (m: 'instanced' | 'clone') => swarm.setMode(m),
       foeCount: () => swarm.foes.length,
       /** 渲染器自己的统计。「这套架构能画多少」只能问它，不能算。 */

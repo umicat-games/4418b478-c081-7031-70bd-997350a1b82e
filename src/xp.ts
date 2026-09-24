@@ -22,12 +22,37 @@ const MAX = 600;
  *  就是奖励的一部分。不做吸取的话，玩家得精确踩在每一颗上面，于是「走位」这件
  *  本来属于躲避的事，被捡东西占用了。 */
 const PICK = 0.6;
-const MAGNET_BASE = 3.2;
+/** 吸取半径。
+ *
+ *  **3.2 是个 bug，虽然它是"掉落物不见了"的样子报出来的。** 环刃杀敌的范围是
+ *  离玩家 0.30~1.80 格，而 3.2 把整个范围罩住了 —— 每一颗宝石掉下来的**那一
+ *  帧**就已经在吸取半径里，眨眼就飞进玩家身体。于是掉落**全都在掉**（探针量
+ *  到 200/200），但地上从来没有东西，玩家看到的是「打死敌人不掉东西」。
+ *
+ *  探针那句「每只都掉经验」是真的，也是没用的：它验的是掉落发生了，不是
+ *  **掉落看得见**。和击退那次是同一个错。
+ *
+ *  1.4 比环刃的外沿（1.80）小，所以在刀圈外缘死掉的敌人，宝石会**留在地上**，
+ *  你得走过去。吸血鬼幸存者里基础拾取半径也很小 —— 满地的宝石正是那个画面。 */
+const MAGNET_BASE = 1.4;
+/** 掉出来那一下：飞多久、飞多远。
+ *
+ *  **这才是真正让掉落看得见的那半。** 只把吸取半径调小，死在你脚边的敌人
+ *  掉的东西照样是瞬间消失；而这个类型里大部分敌人正是死在你脚边。
+ *
+ *  所以掉落先**弹出去**：从尸体上抛一小段弧，这段时间里磁吸完全不生效。
+ *  0.42 秒足够眼睛注册到"有东西出来了"，短到不影响手感。 */
+const POP_TIME = 0.42;
+const POP_DIST = 0.85;
 
 /** 升到下一级要多少。`level` 是当前等级（从 1 开始）。 */
 export const xpToNext = (level: number): number => 5 + (level - 1) * 8;
 
-interface Gem { x: number; z: number; value: number; t: number; }
+interface Gem {
+  x: number; z: number; value: number; t: number;
+  /** 弹出去那一下的起点、方向和剩余时间。`pop <= 0` 就是已经落地了。 */
+  sx: number; sz: number; tx: number; tz: number; pop: number;
+}
 
 /** 地上可以捡的东西，一种一个池子。
  *
@@ -70,7 +95,13 @@ export class Pickups {
 
   drop(x: number, z: number, value = 1): void {
     if (this.gems.length >= MAX) return;
-    this.gems.push({ x, z, value, t: 0 });
+    const a = Math.random() * Math.PI * 2;
+    const r = POP_DIST * (0.55 + Math.random() * 0.7);
+    this.gems.push({
+      x, z, value, t: 0,
+      sx: x, sz: z, tx: x + Math.cos(a) * r, tz: z + Math.sin(a) * r,
+      pop: POP_TIME,
+    });
   }
 
   get count(): number { return this.gems.length; }
@@ -82,6 +113,23 @@ export class Pickups {
     for (let i = this.gems.length - 1; i >= 0; i--) {
       const g = this.gems[i];
       g.t += dt;
+
+      // 还在弹出去的路上：走自己的弧，**不理磁吸，也捡不起来**。
+      if (g.pop > 0) {
+        g.pop = Math.max(0, g.pop - dt);
+        const k = 1 - g.pop / POP_TIME;
+        // 缓出 —— 弹出去是被炸飞的，该是快出慢停，不是匀速平移。
+        const e = 1 - (1 - k) * (1 - k);
+        g.x = g.sx + (g.tx - g.sx) * e;
+        g.z = g.sz + (g.tz - g.sz) * e;
+        // 抛物线：中途最高。
+        const hop = Math.sin(Math.PI * k) * 0.55;
+        this.pos.set(g.x, 0.24 + hop, g.z);
+        this.q.setFromAxisAngle(this.up, now * this.spin + g.t);
+        this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+        continue;
+      }
+
       const dx = px - g.x, dz = pz - g.z;
       const d = Math.hypot(dx, dz) || 1;
 
@@ -113,10 +161,12 @@ export class Pickups {
 
 /** 经验宝石：蓝的，八面体，慢慢转。 */
 export const makeGems = (scene: THREE.Scene): Pickups => new Pickups(scene, {
-  geometry: new THREE.OctahedronGeometry(0.16),
+  // 0.16 在这个取景下只有五六个像素 —— 和「掉了没掉」一样，小到看不见就
+  // 等于没有。0.24 大约是主角身高的三分之一。
+  geometry: new THREE.OctahedronGeometry(0.24),
   material: new THREE.MeshStandardMaterial({
-    color: 0x5fe0ff, emissive: 0x1a6fa8, emissiveIntensity: 0.9,
-    roughness: 0.2, metalness: 0,
+    color: 0x7fe9ff, emissive: 0x2f9fd8, emissiveIntensity: 1.5,
+    roughness: 0.15, metalness: 0,
   }),
   spin: 1.6, bob: 0.05,
 });
@@ -127,7 +177,7 @@ export const makeGems = (scene: THREE.Scene): Pickups => new Pickups(scene, {
  *  在缩略图尺寸上分不出来。立着转，它每转半圈会闪一次宽窄变化，那个节奏本身
  *  就是「这是一枚硬币」。 */
 export const makeCoins = (scene: THREE.Scene): Pickups => {
-  const g = new THREE.CylinderGeometry(0.17, 0.17, 0.045, 14).rotateX(Math.PI / 2);
+  const g = new THREE.CylinderGeometry(0.23, 0.23, 0.06, 14).rotateX(Math.PI / 2);
   return new Pickups(scene, {
     geometry: g,
     material: new THREE.MeshStandardMaterial({
