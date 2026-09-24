@@ -8,6 +8,7 @@ import {
 import { createGameAudio, SOUNDS, type SoundName } from './audio';
 import { HUD } from './hud';
 import { Effects } from './effects';
+import { initLang, t } from './i18n';
 import { Player, type CombatHooks } from './player';
 import { EnemyManager, type Enemy, type Obstacle, type SpawnTemplate } from './enemies';
 import { WaveDirector } from './waves';
@@ -73,6 +74,12 @@ export class Game {
   private async boot(canvas: HTMLCanvasElement): Promise<void> {
     // 1) 平台
     this.umicat = await ThreeUmicat.init();
+    // 语言在任何文字被创建之前定下来 —— HUD 是在构造时就把静态串写进 DOM 的，
+    // 晚一步就会先用默认语言画一遍再改，玩家看得见那一下闪烁。
+    //
+    // 用宿主给的 `locale` 而不是 `navigator.language`：玩家可以在 umicat 里把
+    // 界面切成英文而浏览器仍是中文，那时该跟宿主走。
+    initLang(this.umicat.locale);
     // 2) 物理
     await RAPIER.init();
     // 3) 场景（设计数据）
@@ -293,7 +300,7 @@ export class Game {
       this.input.press('KeyW');
     } else {
       this.player.requestLock();
-      this.hud.setLockHint(this.player.isTouch ? '左侧摇杆移动 · 右侧滑动旋转视角' : '');
+      this.hud.setLockHint(this.player.isTouch ? t('touch_hint') : '');
     }
   }
 
@@ -318,7 +325,7 @@ export class Game {
   private onLockFailed(): void {
     // 指针锁定不可用（iframe 没授权等）：降级为右键拖拽视角，游戏继续
     if (this.state === 'playing') {
-      this.hud.setLockHint('鼠标锁定不可用：按住右键拖拽旋转视角');
+      this.hud.setLockHint(t('lock_unavailable'));
     }
   }
 
@@ -418,7 +425,8 @@ export class Game {
   }
 
   private onWaveStart(n: number): void {
-    this.hud.showBanner(`第 ${n} 波`, n === 1 ? '守住停机坪！' : `${this.waves.waveSizeCurrent} 个敌人正在接近`);
+    this.hud.showBanner(t('wave_n', { n }),
+      n === 1 ? t('hold_the_pad') : t('incoming', { n: this.waves.waveSizeCurrent }));
     this.playSound('wave');
     if (n > 1) {
       this.player.heal(25);
@@ -430,7 +438,7 @@ export class Game {
     const bonus = 40 * n;
     this.score += bonus;
     this.hud.setScore(this.score, this.best);
-    this.hud.showBanner('区域已清空', `波次奖励 +${bonus}`);
+    this.hud.showBanner(t('area_clear'), t('wave_bonus', { bonus }));
     if (this.score > this.best) {
       this.best = this.score;
       void this.umicat.saves.set(SAVE_KEY_BEST, this.best);
@@ -496,7 +504,7 @@ export class Game {
           this.hud.floatText('+30', window.innerWidth / 2, window.innerHeight * 0.55, 'sh-heal');
         } else {
           this.player.addReserveAmmo();
-          this.hud.floatText('弹药补充', window.innerWidth / 2, window.innerHeight * 0.55, 'sh-heal');
+          this.hud.floatText(t('ammo_refill'), window.innerWidth / 2, window.innerHeight * 0.55, 'sh-heal');
         }
         this.playSound('pickup');
       }

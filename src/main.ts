@@ -1,4 +1,5 @@
 import { Game } from './game/game';
+import { initLang, t } from './game/i18n';
 
 /**
  * 《星港防线 STARHOLD》—— 空间站波次生存 FPS。
@@ -21,7 +22,10 @@ void start().catch((err) => {
   if (hud) {
     const d = document.createElement('div');
     d.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ff8080;background:#0a0d16;font-size:16px;padding:24px;text-align:center;';
-    d.textContent = `启动失败：${String(err)}`;
+    // 这条在 SDK 起来之前就可能要显示，那时没有宿主 locale 可问 ——
+    // 所以它跟着浏览器语言走，这是唯一一条这样做的串。
+    initLang(navigator.language);
+    d.textContent = t('boot_failed', { err: String(err) });
     hud.appendChild(d);
   }
   console.error('[starhold] 启动失败', err);

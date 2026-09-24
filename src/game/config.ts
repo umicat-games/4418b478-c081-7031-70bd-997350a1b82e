@@ -44,8 +44,9 @@ export interface SplashDef { radius: number; damage: number }
 
 export interface WeaponDef {
   id: 'pistol' | 'rifle' | 'heavy';
-  /** 显示名 */
-  name: string;
+  /** i18n 表里的 key，不是显示名本身 —— 显示名由 `t()` 在用到的那一刻取，
+   *  因为玩家可以中途换语言，而一个在启动时就定下来的字符串换不了。 */
+  nameKey: string;
   /** manifest 里的模型 id */
   modelId: 'gun-pistol' | 'gun-rifle' | 'gun-heavy';
   damage: number;
@@ -71,19 +72,19 @@ export interface WeaponDef {
 
 export const WEAPONS: WeaponDef[] = [
   {
-    id: 'pistol', name: '脉冲手枪', modelId: 'gun-pistol',
+    id: 'pistol', nameKey: 'weapon_pistol', modelId: 'gun-pistol',
     damage: 30, headshotMult: 2, interval: 0.32, auto: false,
     mag: -1, reserve: -1, reloadTime: 0, spread: 0.006, kick: 0.014,
     tracerColor: 0x66eeff, sound: 'shoot_pistol',
   },
   {
-    id: 'rifle', name: '突击步枪', modelId: 'gun-rifle',
+    id: 'rifle', nameKey: 'weapon_rifle', modelId: 'gun-rifle',
     damage: 13, headshotMult: 2, interval: 0.105, auto: true,
     mag: 30, reserve: 150, reloadTime: 1.5, spread: 0.022, kick: 0.02,
     tracerColor: 0xffd34d, sound: 'shoot_rifle',
   },
   {
-    id: 'heavy', name: '重型爆能炮', modelId: 'gun-heavy',
+    id: 'heavy', nameKey: 'weapon_heavy', modelId: 'gun-heavy',
     damage: 85, headshotMult: 1.5, interval: 1.0, auto: false,
     mag: 5, reserve: 20, reloadTime: 2.3, spread: 0.008, kick: 0.05,
     tracerColor: 0xff7b33, sound: 'shoot_heavy',
@@ -105,6 +106,7 @@ export interface RangedDef {
 
 export interface EnemyDef {
   id: 'scout' | 'trooper' | 'brute';
+  /** 内部标签，**从不显示给玩家**（所以不进 i18n 表）。 */
   name: string;
   hp: number;
   /** 移动速度（米/秒） */

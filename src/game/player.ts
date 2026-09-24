@@ -10,6 +10,7 @@ import {
   type WeaponDef,
 } from './config';
 import type { GameAudio } from '@umicat/three-sdk';
+import { t } from './i18n';
 import { SOUNDS } from './audio';
 import type { Effects } from './effects';
 import type { HUD } from './hud';
@@ -467,7 +468,7 @@ export class Player {
     // HUD
     this.hud.setHealth(this.hp, PLAYER_HP);
     this.hud.setAmmo(
-      w.def.name,
+      t(w.def.nameKey),
       w.def.mag < 0 ? null : w.mag,
       w.def.reserve < 0 ? null : w.reserve,
     );

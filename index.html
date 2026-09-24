@@ -1,5 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<!-- `lang` 的初值不重要：`i18n.ts` 在定下语言之后会改写它。写 en 而不是
+     zh-CN，是因为一个还没被改写的值应该是「未知」的那个默认，而不是某种
+     具体语言 —— 万一改写没跑，中文页面标着 en 比英文页面标着 zh-CN 更容易
+     被发现。 -->
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />

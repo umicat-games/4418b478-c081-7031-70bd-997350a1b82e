@@ -42,6 +42,42 @@ accidents:
 nothing, and trimesh colliders on dynamic bodies — at load, because every one of
 them otherwise shows up as a blank screen an hour later.
 
+## Language (zh-CN / en)
+
+`src/game/i18n.ts` — a strings table plus `t()`, following the platform's
+`game-i18n` convention (Catopia has the same file).
+
+**The language comes from `umicat.locale`, not `navigator.language`.** Those
+differ in practice: a player can set umicat's own UI to English while their
+browser stays Chinese, and the one they chose is the host's. Standalone — no
+host — the SDK already falls back to the browser, so reading the host value is
+correct in both cases.
+
+**`initLang` runs immediately after `ThreeUmicat.init()`, before the HUD is
+constructed.** The HUD writes its static strings into the DOM at construction
+time, so initialising the language later means drawing one language and then
+correcting it, which the player sees as a flicker.
+
+`HUD.retext()` rewrites every static string and is what makes the toggle a
+LANGUAGE SWITCH rather than a startup choice. Anything dynamic (wave, score,
+ammo) comes right on the next frame through its own setter. Add a string and
+you add it in two places: the table, and `retext()` if it is static.
+
+Two things deliberately NOT in the table:
+
+- **Enemy names.** `ENEMY_TYPES[].name` is an internal label and has never been
+  shown to a player. Translating it would be maintaining a table nobody reads.
+- **`场景缺少实体 {id}`** and friends — thrown errors aimed at whoever is
+  building the game, not at whoever is playing it.
+
+`boot_failed` is the one string resolved from the browser's language, because
+it can be shown before the SDK exists to be asked.
+
+**No tofu risk here, and it is worth knowing why.** All text is DOM (`hud.ts`
+builds `<div>`s), so it goes through system fonts and CJK renders. The trap
+this platform has recorded is bitmap text in the engine — if a damage number
+ever gets drawn into the 3D scene, that is where □□□ comes from.
+
 ## Building
 
 ```bash

@@ -107,3 +107,21 @@
   .sh-ammo { right: 12px; bottom: 12px; }
   .sh-mag { font-size: 30px; }
 }
+
+/* 语言开关：标题卡片上的一个安静的小按钮。
+   刻意不做成主按钮 —— 玩家来这里是为了开打，不是为了选语言，而语言多半
+   已经跟着平台设对了。 */
+.sh-lang {
+  margin-top: 14px;
+  padding: 6px 16px;
+  font: 600 13px/1 system-ui, sans-serif;
+  letter-spacing: .04em;
+  color: #9fd8ff;
+  background: transparent;
+  border: 1px solid rgba(159, 216, 255, .38);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sh-lang:hover { background: rgba(159, 216, 255, .12); color: #d7f1ff; }
+.sh-lang:active { background: rgba(159, 216, 255, .22); }
