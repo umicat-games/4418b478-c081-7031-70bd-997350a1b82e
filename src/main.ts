@@ -25,6 +25,38 @@ const SAVE_KEY = 'progress';
 // seconds of walking dropped the player through the edge and kept going, and
 // because the position was being saved they were restored mid-plunge on the
 // next load. A world without a floor under its floor strands people.
+/**
+ * 相机。**Balaboo 的角度和镜头，只是站得更远。**
+ *
+ * 三个数写在一处，而且在游戏代码里不在场景 JSON 里：场景的 `camera` 只是
+ * 个起始值，SDK 把它当「起始角度和距离」读，调它要改 JSON、重跑生成器、
+ * 重新部署。这里改一个常量就行。
+ *
+ * - `PITCH` 39° 和 `FOV` 55 都是 Balaboo 的原值（它的 offset 是 y5.2/z6.4）。
+ * - `RADIUS` 从 8.25 拉到 12，这是唯一动的一个。
+ *
+ * **为什么只动半径。** 想看得更宽有两条路，量过之后它们差别很大：
+ *
+ *   - 放宽 FOV：视野确实大（fov 85 能看到 40 格），但透视畸变跟着放大，
+ *     远处敌人掉到 **5.6 像素**，而且边缘和身边的距离读数不一致 —— 这个
+ *     类型整局都在判断「能不能从两只之间钻过去」。
+ *   - 拉远：视野和半径近似成正比，物体大小成反比，透视不变。
+ *
+ * 实测（横屏手机 852×393，同角度同 FOV）：
+ *
+ *     半径 8.25 → 看见 20.5 格，主角 25.5px，远处敌人 14.1px   ← Balaboo
+ *     半径 12   → 看见 29.5 格，主角 17.6px，远处敌人  9.8px   ← 这里
+ *     半径 14   → 看见 34 格，  主角 15.1px，远处敌人  8.4px
+ *
+ * 一次失败的尝试留在这里当记录：先前试过「拉远 + 收窄 FOV」，以为能又宽又
+ * 压平透视 —— 结果 FOV 收得比半径加得还快，**反而更窄了**（15 格）。在这个
+ * 尺度上「看多远」主要由 FOV 决定，两件事不能一起动还指望只有好处。
+ *
+ * 这些数字都是「一只敌人」的。真正要判断的是**一群**敌人读不读得出来，那要
+ * 等场上真有几百只才能定 —— 所以 12 是起点不是结论，14 就在旁边。
+ */
+const CAM = { pitchDeg: 39, radius: 12, fov: 55 };
+
 const SPAWN = { x: 0, y: 0.4, z: 1.7 };
 const RESPAWN_BELOW_Y = -5;
 
@@ -191,12 +223,57 @@ async function start(): Promise<void> {
     if (Math.hypot(dir.x, dir.z) > 0 && character.grounded) save();
 
     world.update(dt);                        // animation + physics + follow camera
+    // 相机放在 `world.update` **之后**，因为 SDK 的跟随相机每帧都会重写
+    // `camera.position` —— 在它之前摆位等于没摆。
+    placeCamera();
     renderer.render(world.scene, world.camera);
   });
 
+  /** 把相机摆到 `CAM` 说的地方，盯住主角。
+   *
+   *  SDK 的跟随相机是从场景的 offset 推出半径和俯角的，而它没有在运行时改
+   *  半径的接口（`orbit` 只动偏航和俯角）。与其为了调一个数就去改 JSON、
+   *  重跑生成器、重新部署，不如在这里接管 —— 幸存者类本来也要自己的相机。 */
+  const camPitch = CAM.pitchDeg * (Math.PI / 180);
+  function placeCamera(): void {
+    const cam = world.camera as THREE.PerspectiveCamera;
+    if (cam.fov !== CAM.fov) { cam.fov = CAM.fov; cam.updateProjectionMatrix(); }
+    const p = character.position;
+    cam.position.set(p.x, p.y + Math.sin(camPitch) * CAM.radius,
+                     p.z + Math.cos(camPitch) * CAM.radius);
+    cam.lookAt(p.x, p.y, p.z);
+  }
+
   // Handy while developing; harmless in a published build.
   Object.assign(window as unknown as Record<string, unknown>,
-    { __game: { umicat, world, character, input, animator, locomotion: () => animator?.action || character.state } as unknown });
+    { __game: { umicat, world, character, input, animator,
+      locomotion: () => animator?.action || character.state,
+      /** 调相机用：改完立刻生效，不用重新部署。 */
+      cam: CAM,
+      setCam: (o: Partial<typeof CAM>) => Object.assign(CAM, o),
+      /** 这个取景下，要读的东西有多大、看得见多远 —— 「更宽」的代价只能
+       *  这样量，不能靠看。 */
+      view: () => {
+        const cam = world.camera as THREE.PerspectiveCamera;
+        cam.updateMatrixWorld(true);
+        const h = (document.getElementById('game') as HTMLCanvasElement).clientHeight;
+        const px = (x: number, z: number, top: number) => {
+          const a = new THREE.Vector3(x, 0, z).project(cam);
+          const b = new THREE.Vector3(x, top, z).project(cam);
+          return +(Math.abs(b.y - a.y) / 2 * h).toFixed(1);
+        };
+        const p = character.position;
+        // 从主角往外找，最远还有多少格落在画面内 —— 也就是能看见多远的敌人。
+        let reach = 0;
+        for (let d = 1; d <= 40; d += 0.5) {
+          const v = new THREE.Vector3(p.x, 0, p.z - d).project(cam);
+          if (Math.abs(v.x) > 1 || Math.abs(v.y) > 1) break;
+          reach = d;
+        }
+        return { ...CAM, heroPx: px(p.x, p.z, 0.72),
+                 foePx: px(p.x, p.z - reach * 0.7, 0.68), reachAhead: reach };
+      },
+    } as unknown });
 }
 
 void start().catch((err) => {
