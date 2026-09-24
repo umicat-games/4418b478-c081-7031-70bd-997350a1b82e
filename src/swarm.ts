@@ -541,6 +541,11 @@ export class Swarm {
       this.bodies.count = n;
       this.barBack.count = bn;
       this.barFill.count = bn;
+      // **空的实例化网格照样是一次绘制**（渲染器仍然调 `drawElementsInstanced`，
+      // 只是实例数为 0）。血条只给精英，而精英是每 75 秒一只 —— 也就是说这
+      // 两次绘制**一局里绝大部分时间都是白付的**。整关预算 20，现在用到 19。
+      this.bodies.visible = n > 0;
+      this.barBack.visible = this.barFill.visible = bn > 0;
       this.bodies.instanceMatrix.needsUpdate = true;
       this.barBack.instanceMatrix.needsUpdate = true;
       this.barFill.instanceMatrix.needsUpdate = true;

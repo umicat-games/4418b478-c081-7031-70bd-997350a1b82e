@@ -234,6 +234,23 @@ them otherwise shows up as a blank screen an hour later.
 再兜一道（现在 `Swarm` 里有 `SPEED_CAP`）。同理，量的时候要量**生成出来的
 那个对象**，不是量生成它的那条曲线。
 
+## 掉落物和景物都从 `public/kit/` 拿
+
+`public/kit/index.json` 是目录，按 `category` 分好了。掉落物在 `pickup` 下：
+`coin-gold` / `coin-silver` / `coin-bronze` / `jewel` / `heart` / `star` / `key`，
+全是 **Kenney Platformer Kit**（CC0），和场景里的树、箱子同一套。金币用的
+`coin-gold` 就是 Balaboo 用的那一个。
+
+**尺寸按包围盒归一化，别写死 `scale`。** 「我想要它多高」是设计决定，「这个
+模型原本多大」不是——写死的话换个模型就要重猜。（实测 Kenney 这几个本来就贴着
+这个世界单位：`jewel` 0.333×0.370×0.288，`coin-gold` 0.400×0.400×0.175，主角
+0.72。）
+
+从 kit 抽几何体做实例化时，**记得把节点变换烘进几何**（`Swarm.load` 和
+`Pickups.load` 都这么做）：模型里那个 mesh 节点上可能带平移，不烘的话所有实例
+整体偏移，而偏移量恰好等于那个没人注意的节点变换。再 `geom.center()`，否则
+模型自带的偏心会变成「宝石飘在尸体旁边一点点」。
+
 ## 探针之间不能互相污染
 
 同一个页面里跑一串测量，上一段留下的状态会让下一段读到假数字。已经踩过的：

@@ -63,6 +63,16 @@
       "importScale": 1
     },
     {
+      "id": "heart",
+      "path": "kit/platformer/heart.glb",
+      "importScale": 1
+    },
+    {
+      "id": "jewel",
+      "path": "kit/platformer/jewel.glb",
+      "importScale": 1
+    },
+    {
       "id": "flag",
       "path": "kit/platformer/flag.glb",
       "importScale": 1

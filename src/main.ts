@@ -420,6 +420,9 @@ async function start(): Promise<void> {
   void Promise.all([
     ground.load(manifest, 'td-tile', 'td-tree').then(() => ground.update(SPAWN.x, SPAWN.z)),
     swarm.load(manifest, 'td-ufo-a'),
+    // 掉落物用 Kenney Platformer Kit 里的现成模型（和场景里的树、箱子同一套）。
+    gems.load(manifest, 'jewel'),
+    coins.load(manifest, 'coin-gold'),
     // 贴图要在第一次放特效**之前**到位。`TextureLoader.load` 是异步的，材质
     // 建好时图还没来 —— 而在加色混合下，空贴图采样出来是黑的，黑加到屏幕上
     // 就是看不见。这条是 `vfx.ts` 里记着的：第一次施放画了十个完全正确、
@@ -749,6 +752,8 @@ async function start(): Promise<void> {
         o.take();
         return { id, level: o.level };
       },
+      /** 掉落物模型的原始尺寸 —— 确认拿到的是哪个模型、朝向对不对。 */
+      dropSizes: () => ({ gem: gems.modelSize, coin: coins.modelSize }),
       fx: () => ({ sparks: sparks.live, slashes: slashes.live,
                    nums: dmgNums.live, vfx: vfx.count }),
       /** 真正被画出来的那几个实例化网格 —— 探针要读画面，不读状态。 */

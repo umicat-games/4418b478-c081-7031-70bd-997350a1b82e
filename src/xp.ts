@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { loadModelAsset, type Manifest3D } from '@umicat/three-sdk';
 
 /**
  * 经验宝石，和升级的门槛。
@@ -63,8 +64,10 @@ interface Gem {
  *
  *  不同的只有长什么样和捡到之后算什么 —— 那两件事由构造参数和调用方决定。 */
 export class Pickups {
-  private mesh!: THREE.InstancedMesh;
+  private mesh: THREE.InstancedMesh | null = null;
   private gems: Gem[] = [];
+  /** 模型里那个网格的原始尺寸，归一化用，也给探针读。 */
+  private size = new THREE.Vector3();
 
   /** 吸取半径。升级可以加它 —— 加吸取半径改变的是**你能走多险**，
    *  而不是某个数字变大。 */
@@ -80,17 +83,52 @@ export class Pickups {
   private readonly scl = new THREE.Vector3(1, 1, 1);
   private readonly up = new THREE.Vector3(0, 1, 0);
 
-  constructor(scene: THREE.Scene, look: {
-    geometry: THREE.BufferGeometry; material: THREE.Material;
-    spin?: number; bob?: number;
-  }) {
+  constructor(private readonly scene: THREE.Scene,
+              private readonly look: { spin?: number; bob?: number; tall?: number }) {
     this.spin = look.spin ?? 1.6;
     this.bob = look.bob ?? 0.05;
-    this.mesh = new THREE.InstancedMesh(look.geometry, look.material, MAX);
+  }
+
+  /**
+   * 从 kit 里拿一个模型来当掉落物。
+   *
+   * **尺寸按包围盒归一化，不写死缩放。** Kenney 的模型各自为自己的场景做的大小
+   * （金币是给横版平台游戏用的），写死一个 `scale` 等于在猜，而且换一个模型就
+   * 又要重猜一次。这里量出它自己的高，再缩到我们想要的那个高 —— 想要多高是个
+   * 设计决定（主角 0.72），模型原本多大不是。
+   *
+   * 抽几何 + 材质那几行和 `Swarm.load` 是同一套，包括**把节点变换烘进几何**
+   * 这个坑：模型里那个 mesh 节点上可能带平移，不烘的话所有实例会整体偏移，
+   * 而偏移量恰好等于那个没人注意的节点变换。
+   */
+  async load(manifest: Manifest3D, modelId: string): Promise<void> {
+    const { object } = await loadModelAsset(manifest, modelId, { assetBase: '' });
+    object.updateWorldMatrix(true, true);
+    let src: THREE.Mesh | null = null;
+    object.traverse((o) => { if (!src && (o as THREE.Mesh).isMesh) src = o as THREE.Mesh; });
+    if (!src) throw new Error(`${modelId} 里没有 mesh`);
+    const mesh = src as THREE.Mesh;
+
+    const geom = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+    geom.computeBoundingBox();
+    geom.boundingBox!.getSize(this.size);
+    // 以自己的中心为原点，否则模型自带的偏心会变成「宝石飘在尸体旁边一点点」。
+    geom.center();
+    const tall = this.look.tall ?? 0.34;
+    const k = tall / Math.max(this.size.x, this.size.y, this.size.z);
+    geom.scale(k, k, k);
+
+    const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material).clone();
+    this.mesh = new THREE.InstancedMesh(geom, mat, MAX);
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = false;
     this.mesh.count = 0;
-    scene.add(this.mesh);
+    this.scene.add(this.mesh);
+  }
+
+  /** 原始模型的尺寸 —— 探针读它来确认拿到的是哪个模型、朝向对不对。 */
+  get modelSize(): { x: number; y: number; z: number } {
+    return { x: +this.size.x.toFixed(3), y: +this.size.y.toFixed(3), z: +this.size.z.toFixed(3) };
   }
 
   drop(x: number, z: number, value = 1): void {
@@ -108,6 +146,10 @@ export class Pickups {
 
   /** 走一帧。返回这一帧捡到多少经验。 */
   update(dt: number, px: number, pz: number, now: number): number {
+    // 动画循环比 `load()` 先起来。没有这道门就是头几帧每帧一条
+    // `Cannot read properties of null` —— 游戏照跑，控制台在刷屏。
+    const mesh = this.mesh;
+    if (!mesh) return 0;
     let got = 0;
     let n = 0;
     for (let i = this.gems.length - 1; i >= 0; i--) {
@@ -126,7 +168,7 @@ export class Pickups {
         const hop = Math.sin(Math.PI * k) * 0.55;
         this.pos.set(g.x, 0.24 + hop, g.z);
         this.q.setFromAxisAngle(this.up, now * this.spin + g.t);
-        this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+        mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
         continue;
       }
 
@@ -148,42 +190,35 @@ export class Pickups {
 
       this.pos.set(g.x, 0.28 + Math.sin(now * 2.4 + g.t) * this.bob, g.z);
       this.q.setFromAxisAngle(this.up, now * this.spin + g.t);
-      this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+      mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
     }
-    this.mesh.count = n;
-    this.mesh.visible = n > 0;   // 空的实例化网格仍然要一次绘制，见 `sparks.ts`
-    this.mesh.instanceMatrix.needsUpdate = true;
+    mesh.count = n;
+    mesh.visible = n > 0;        // 空的实例化网格仍然要一次绘制，见 `sparks.ts`
+    mesh.instanceMatrix.needsUpdate = true;
     return got;
   }
 
-  clear(): void { this.gems.length = 0; this.mesh.count = 0; }
+  clear(): void { this.gems.length = 0; if (this.mesh) this.mesh.count = 0; }
 }
 
-/** 经验宝石：蓝的，八面体，慢慢转。 */
-export const makeGems = (scene: THREE.Scene): Pickups => new Pickups(scene, {
-  // 0.16 在这个取景下只有五六个像素 —— 和「掉了没掉」一样，小到看不见就
-  // 等于没有。0.24 大约是主角身高的三分之一。
-  geometry: new THREE.OctahedronGeometry(0.24),
-  material: new THREE.MeshStandardMaterial({
-    color: 0x7fe9ff, emissive: 0x2f9fd8, emissiveIntensity: 1.5,
-    roughness: 0.15, metalness: 0,
-  }),
-  spin: 1.6, bob: 0.05,
-});
-
-/** 金币：金的，**立着**的薄圆片，转得快。
+/**
+ * 两种掉落物，都来自 **Kenney 的 Platformer Kit**（`public/kit/platformer/`，
+ * CC0），和场景里的树、箱子是同一套 —— 这本身就是选它的理由之一：同一个美术
+ * 包里的东西放在一起自然是对的，自己搓的几何体再怎么调色都像是外来的。
  *
- *  立着是关键 —— 一枚平躺在地上的圆片从这个俯角看过去就是一个圆点，和宝石
- *  在缩略图尺寸上分不出来。立着转，它每转半圈会闪一次宽窄变化，那个节奏本身
- *  就是「这是一枚硬币」。 */
-export const makeCoins = (scene: THREE.Scene): Pickups => {
-  const g = new THREE.CylinderGeometry(0.23, 0.23, 0.06, 14).rotateX(Math.PI / 2);
-  return new Pickups(scene, {
-    geometry: g,
-    material: new THREE.MeshStandardMaterial({
-      color: 0xffc843, emissive: 0x8a5a05, emissiveIntensity: 0.55,
-      roughness: 0.28, metalness: 0.75,
-    }),
-    spin: 4.2, bob: 0.07,
-  });
-};
+ * 那个 kit 里有一整个 `pickup` 分类（`public/kit/index.json` 可查）：
+ * `coin-gold` / `coin-silver` / `coin-bronze` / `jewel` / `heart` / `star` /
+ * `key`。金币用 `coin-gold`（Balaboo 用的就是这一个），经验用 `jewel`。
+ * 三色金币留着给将来的面值分级，`heart` 留给回血掉落。
+ */
+
+/** 经验宝石：Kenney 的 `jewel`，慢慢转。 */
+export const makeGems = (scene: THREE.Scene): Pickups =>
+  new Pickups(scene, { spin: 1.6, bob: 0.05, tall: 0.34 });
+
+/** 金币：Kenney 的 `coin-gold`，转得快一点。
+ *
+ *  金币比宝石稍大一点点，因为它更稀有（9%）—— 稀有的东西值得更显眼，
+ *  而且这样两种掉落物在余光里也分得开。 */
+export const makeCoins = (scene: THREE.Scene): Pickups =>
+  new Pickups(scene, { spin: 4.2, bob: 0.07, tall: 0.4 });
