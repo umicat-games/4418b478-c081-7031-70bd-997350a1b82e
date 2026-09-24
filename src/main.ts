@@ -474,9 +474,33 @@ async function start(): Promise<void> {
     // loading; nothing was loading. `newSession` now clears the conversation
     // in this same tick and writes its note behind us.
     newGame();
+    /**
+     * **The conversation is cleared BEFORE the counter that tracks it.**
+     *
+     * `spoken` is how many of the coach's lines have already been said out
+     * loud, and `redrawChat()` speaks anything past it. Setting it to 0 while
+     * the LAST game's conversation is still in `coach.messages` — which is
+     * what these three lines used to do, in this order — makes the redraw
+     * find unspoken lines and put the most recent one in the speech bubble.
+     *
+     * That is a brand new, empty board with the previous game's last sentence
+     * floating over it, ringing a point that has nothing on it, offering to
+     * play a move from a position that no longer exists. Reported twice as
+     * "the assistant is talking about my old game", and it is not the
+     * assistant: no model is called on this path at all. The game is reading
+     * its own transcript back.
+     *
+     * It needs a saved conversation to bite, which is why it showed up after
+     * walking out of a game mid-way and coming back — `coach.load()` restores
+     * the thread, and starting a new game then re-speaks the end of it.
+     *
+     * `newSession()` empties `messages` synchronously before its first await,
+     * so by the time the counter is reset there is nothing left to speak.
+     */
+    void coach.newSession();
+    speech.hide();
     spoken = 0;
     redrawChat();
-    void coach.newSession();
     void remark(
       'A new game has just started; the student plays Black and moves first. One line: greet them if '
       + 'you have not yet, and say the one thing worth knowing before the first move. Do not recap the '

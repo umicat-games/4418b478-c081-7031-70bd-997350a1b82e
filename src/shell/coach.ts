@@ -62,6 +62,20 @@ export interface AssistantSpec<Ctx> {
   execute(name: string, args: Record<string, unknown>, say: (text: string) => void, note: (text: string) => void): boolean;
   /** The prompt that turns a conversation into the running note. */
   summaryPrompt(previous: string, transcript: string): string;
+  /**
+   * Last pass over the note before it is kept — only the game knows what a
+   * coordinate looks like on its board.
+   *
+   * The note is the long memory: it outlives the game it was written in and
+   * is handed to the model at the start of the NEXT one, where the board is
+   * empty and it is the only thing on the table. Measured from a real game: a
+   * note that the student "likes to play K13 and L13 to connect groups" came
+   * back on move one of a fresh board as "good, this stone is close to L13 —
+   * they are connected", with the point ringed. The model was not inventing;
+   * it was reading its notes aloud, and nothing in them said they were about
+   * somewhere else.
+   */
+  scrubNote?(note: string): string;
 }
 
 export class Coach<Ctx> {
@@ -227,7 +241,10 @@ export class Coach<Ctx> {
       prompt: this.spec.summaryPrompt(this.profile.summary || '(none yet)', transcript),
       maxTokens: 300,
     });
-    if (res.ok && res.text.trim()) this.profile.summary = res.text.trim();
+    if (res.ok && res.text.trim()) {
+      const note = res.text.trim();
+      this.profile.summary = this.spec.scrubNote ? this.spec.scrubNote(note) : note;
+    }
     return this.profile.summary;
   }
 

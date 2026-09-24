@@ -98,6 +98,12 @@ export function othelloAssistant(hooks: AssistantHooks): AssistantSpec<Context> 
           here_for: profile.mode,
           games_played: profile.gamesPlayed,
           what_you_know_about_them: profile.summary || '(you have not met them before)',
+          // Said out loud, because the alternative is the model working it
+          // out — and it does not work it out, it narrates. What it narrated
+          // was its own notes, as if they described the board in front of
+          // the student.
+          note: 'These notes are about the PERSON, from games that are finished. '
+            + 'Nothing in them is on the board now; the board is below.',
         },
         settings: { opponent_level: profile.level },
         notation: 'Columns are a-h from the left, rows are 1-8 from the TOP. a1 is the top-left corner.',
@@ -160,6 +166,10 @@ export function othelloAssistant(hooks: AssistantHooks): AssistantSpec<Context> 
       };
     },
 
+    /** See `Coach.summarise`: a coordinate in the note is a coordinate from a
+     *  board that no longer exists, and the note is read when the next board
+     *  is empty. The prompt asks; this is what makes it a rule. */
+    scrubNote: (note) => note.replace(/\\b[a-h][1-8]\\b/g, 'a square'),
     summaryPrompt(previous, transcript) {
       return `Here is an Othello coach's running note on a student, and the most recent conversation.\n\n`
         + `PREVIOUS NOTE:\n${previous}\n\n`
@@ -167,7 +177,12 @@ export function othelloAssistant(hooks: AssistantHooks): AssistantSpec<Context> 
         + `Write the updated note: at most 120 words, third person, factual. Cover what the student is here `
         + `for, roughly how strong they are and on what evidence, whether they have understood that discs `
         + `are not the point until the end, and anything they keep getting wrong. Keep anything from the `
-        + `previous note that still holds. Reply with the note only.`;
+        + `previous note that still holds. `
+        + `NO COORDINATES, no specific moves and no particular groups: this note is read at the `
+        + `start of the NEXT game, where none of that is on the board, and quoting it reads as a `
+        + `description of the position in front of the student. Write about the PERSON — what they `
+        + `understand, what they keep getting wrong, what they are working on. `
+        + `Reply with the note only.`;
     },
   };
 }
