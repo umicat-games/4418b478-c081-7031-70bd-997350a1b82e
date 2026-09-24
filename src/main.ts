@@ -67,7 +67,18 @@ const CAM = { pitchDeg: 39, radius: 10, fov: 55 };
 /** 玩家和敌人的速度。比值比绝对值重要 —— 见 `CharacterController3D` 那里
  *  的注释。 */
 const PLAYER_SPEED = 4.6;
-const FOE_SPEED = 2.8;
+/** 敌人的基准速度。
+ *
+ *  **比值决定一切，而 1.64 倍太大了。** 先前定 2.8 的理由是「把一团敌人拉成
+ *  一条尾巴」—— 实测那个比值拉出来的不是尾巴，是彻底甩掉：直线跑三十秒，
+ *  身边只剩三只，血满的、击杀零，全程没交手。
+ *
+ *  算一下就清楚：被超过之后敌人以 4.6 − 2.8 = **1.8 格/秒**掉队，尾巴一瞬间
+ *  就散了。3.5 的话只掉 1.1，尾巴跟得住；迎面来的以 8.1 逼近而不是 7.4。
+ *
+ *  吸血鬼幸存者里敌人只比玩家稍慢（快的品种还能追上），所以你没法一走了之，
+ *  只能穿插走位 —— 那才是这个类型要玩家做的事。 */
+const FOE_SPEED = 3.5;
 
 /** 一局 15 分钟（见 docs/DESIGN.md）。 */
 const RUN_SECONDS = 15 * 60;
@@ -78,16 +89,26 @@ const RUN_SECONDS = 15 * 60;
  *  玩家会觉得是游戏在作弊而不是自己站错了位置。 */
 const SPAWN_RING = [26, 34] as const;
 const SPAWN_EVERY = 0.9;      // 秒
-const SPAWN_BATCH = 3;
+const SPAWN_BATCH = 4;
 const FOE_HP = 24;
 
 /** 玩家的血，和贴身挨打的代价。
  *
- *  伤害按**贴着你的敌人数量**算，不是「有没有被碰到」—— 一只和十只贴着你
- *  代价一样的话，「被包围」就不是一件要躲的事了，而被包围正是这个类型唯一
- *  的输法。 */
+ *  伤害跟着**贴身的敌人数量**走，但**有上限**。
+ *
+ *  两件事都要成立，而第一版只做对了一件：一只和十只代价一样的话，「被包围」
+ *  就不值得躲，而被包围是这个类型唯一的输法；但**线性叠加在高端是错的** ——
+ *  4/秒/只 × 十只 = 40 HP/秒，满血 2.5 秒清空。实测站着不动 **19 秒就倒**，
+ *  而一直走直线永远不掉血：游戏只奖励一种打法，另一种直接处决。
+ *
+ *  吸血鬼幸存者给受伤设了上限（无尽模式的描述里提到「玩家的单次受伤上限每轮
+ *  −1」），所以被五十只围住不会瞬间蒸发 —— 围住你的是**压力**，不是处决。
+ *
+ *  上限取 3 只：一只贴着是 2/秒（可以忽略），三只以上都是 6/秒，满血约 17 秒。
+ *  够长到能反应过来往外挤，够短到不能站着不动。 */
 const PLAYER_HP = 100;
-const CONTACT_DPS = 4;
+const CONTACT_DPS = 2;
+const CONTACT_CAP = 3;
 
 const SPAWN = { x: 0, y: 0.4, z: 1.7 };
 const RESPAWN_BELOW_Y = -5;
@@ -320,13 +341,17 @@ async function start(): Promise<void> {
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
           spawnTimer = SPAWN_EVERY;
-          swarm.spawn(SPAWN_BATCH, SPAWN_RING[0], SPAWN_RING[1], p.x, p.z, FOE_HP, FOE_SPEED);
+          // 朝玩家正在跑的方向偏着生成 —— 见 `Swarm.spawn`：不这样的话
+          // 「跑」是免费的，加多少怪都只是让身后的尾巴更长。
+          const moving = Math.hypot(dir.x, dir.z) > 0.1;
+          swarm.spawn(SPAWN_BATCH, SPAWN_RING[0], SPAWN_RING[1], p.x, p.z, FOE_HP, FOE_SPEED,
+            moving ? Math.atan2(dir.x, dir.z) : undefined);
         }
         kills += blades.update(dt, p.x, p.z, swarm, now / 1000);
 
         // 接触伤害。贴着你的每一只都在扣血。
         if (swarm.touching > 0) {
-          hp -= swarm.touching * CONTACT_DPS * dt;
+          hp -= Math.min(swarm.touching, CONTACT_CAP) * CONTACT_DPS * dt;
           if (hp <= 0) { hp = 0; over = true; }
         }
       }

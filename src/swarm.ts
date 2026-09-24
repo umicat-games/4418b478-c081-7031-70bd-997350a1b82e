@@ -61,6 +61,9 @@ const BAR_W = 0.62, BAR_H = 0.09;
 const FLASH_SECONDS = 0.16;
 /** 敌人贴到多近就停。 */
 export const CONTACT = 0.7;
+/** 多大比例生成在移动方向上，以及那个扇形有多宽。 */
+const AHEAD_SHARE = 0.55;
+const AHEAD_CONE = Math.PI * 0.8;
 
 export class Swarm {
   readonly foes: Foe[] = [];
@@ -164,15 +167,33 @@ export class Swarm {
     return o;
   }
 
-  spawn(n: number, ringMin: number, ringMax: number, cx: number, cz: number, hp: number, speed: number): void {
+  /** 在玩家周围的环上放 `n` 只。
+   *
+   *  `heading` 是玩家正在移动的方向（弧度），给了就**偏向那一侧生成**。
+   *
+   *  这条是「有没有压力」的关键，不是刷怪数量。玩家速度 4.6、敌人 2.8，
+   *  所以往任何方向跑都能制造一个真空 —— **跑是免费的**，再怎么加量也只是
+   *  让身后的尾巴更长。偏向移动方向生成之后，跑意味着**撞进新的一批里**，
+   *  于是「往哪跑」重新变成一个选择。吸血鬼幸存者不需要专门做这件事，因为
+   *  它在屏幕四周生成而玩家总在移动，效果是一样的。 */
+  spawn(n: number, ringMin: number, ringMax: number, cx: number, cz: number,
+        hp: number, speed: number, heading?: number): void {
     for (let i = 0; i < n && this.foes.length < MAX; i++) {
       // 在玩家周围的一个环上 —— 幸存者类的敌人是从四面八方围过来的，
       // 生成在视野外、走进来。
-      const a = Math.random() * Math.PI * 2;
+      //
+      // 一部分偏向前方，一部分仍然是四面八方：全放前面会变成「往回跑就没事」，
+      // 那只是把同一个漏洞换了个方向。
+      const a = heading !== undefined && Math.random() < AHEAD_SHARE
+        ? heading + (Math.random() - 0.5) * AHEAD_CONE
+        : Math.random() * Math.PI * 2;
       const r = ringMin + Math.random() * (ringMax - ringMin);
       const f: Foe = {
         x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r,
-        hp, maxHp: hp, speed: speed * (0.85 + Math.random() * 0.3),
+        // 速度**有分布**，不是人人一个数。快的那些能咬住你、逼你改方向，
+        // 慢的堆成墙 —— 一群速度完全一样的敌人会保持队形，那读起来像一堵
+        // 平移的墙，而不是一群在追你的东西。
+        hp, maxHp: hp, speed: speed * (0.78 + Math.random() * 0.5),
         flash: 0, lastHit: {}, elite: false,
         obj: this.mode === 'clone' ? this.makeClone(false) : null,
       };
