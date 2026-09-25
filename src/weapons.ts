@@ -588,15 +588,29 @@ export class ChainLightning {
     for (let j = 0; j <= this.jumps && f; j++) {
       this.hit.add(f);
       const tx = f.x, tz = f.z;
+      // **一跳四片，而这是免费的** —— `quads()` 把整个列表做成**一个**网格，
+      // 多叠几层不多一次绘制。看不清的时候，先想还能往同一个网格里塞什么，
+      // 而不是先想把某个数再调大。
+      const A = new THREE.Vector3(fx, fy, fz);
+      const B = new THREE.Vector3(tx, 0.55, tz);
       list.push(
-        // **宽。** `vfx.ts` 里 `lightning()` 的原注释写着：「贴图里的电弧是一根
-        // 细线躺在一张基本空白的 256px 方片中间，所以一个世界单位宽的方片只画
-        // 出三分之一单位的电 —— 第一版要了 0.75，得到三根铅笔线。」
-        // 而我就是抄了 0.75 —— 玩家的原话是「只闻其声不见其影」。
-        { at: new THREE.Vector3(fx, fy, fz), to: new THREE.Vector3(tx, 0.55, tz),
-          frame: bolt[j % bolt.length], w: 1.9, h: 1, mode: 'beam' },
-        { at: new THREE.Vector3(tx, 0.55, tz), frame: FRAME.starBurst,
-          w: 1.5, h: 1.5, mode: 'face' },
+        // ① 宽而软的一层：负责「这里有东西」。
+        //
+        // `vfx.ts` 里 `lightning()` 的原注释写着：「贴图里的电弧是一根细线躺在
+        // 一张基本空白的 256px 方片中间，所以一个世界单位宽的方片只画出三分之
+        // 一单位的电 —— 第一版要了 0.75，得到三根铅笔线。」我抄的就是 0.75，
+        // 玩家说「只闻其声不见其影」；改成 1.9 之后还是看不清，现在外层 3.4。
+        { at: A.clone(), to: B.clone(),
+          frame: j % 2 ? FRAME.strandA : FRAME.strandB, w: 3.4, h: 1, mode: 'beam' },
+        // ② 窄而锐的一层压在上面。加色混合下两层一叠，芯子自然更亮 ——
+        //    外软内亮才像电；单独一层无论调多宽都像一条带子。
+        { at: A.clone(), to: B.clone(),
+          frame: bolt[j % bolt.length], w: 1.5, h: 1, mode: 'beam' },
+        // ③ 命中的星芒。
+        { at: B.clone(), frame: FRAME.starBurst, w: 2.0, h: 2.0, mode: 'face' },
+        // ④ 脚下一圈 —— 贴地的东西不会被敌人挡住，是「打到了谁」最稳的那层。
+        { at: new THREE.Vector3(tx, 0.06, tz), frame: FRAME.glowRing,
+          w: 1.9, h: 1.9, mode: 'ground' },
       );
       // 火星跟着弧一起换色 —— 弧是粉的而火星还是蓝的话，一次施法看起来像
       // 两件事叠在一起。
@@ -612,22 +626,29 @@ export class ChainLightning {
     if (list.length) {
       let flick = 0;
       quads(this.vfx, list, {
-        // 弧本身活得久一点：0.26 秒在一屏乱动的东西里是一闪而过。放慢了频率
-        // 之后更该让每一次看得清楚。
         // 绿通道给到 **0**：草地的绿是 0.78，加色之后只要我们自己不再往绿上加，
         // 它就停在 0.78 而不是顶到 1 —— 芯子因此是粉白而不是纯白，色相留得住。
         // （0xff2a8c 的绿是 0.165，加完 0.945，几乎就白了。）
-        life: 0.4, color: 0xff0095,
-        alpha: (k) => (k < 0.2 ? 1 : Math.max(0, 1 - ((k - 0.2) / 0.8) ** 0.6)),
+        //
+        // **寿命对着声音定。** 那个 clip 裁完之后本体在前 0.8 秒（见
+        // `audio.ts`），画面也活 0.8 秒，两边同时开始、同时结束。
+        life: 0.8, color: 0xff0095,
+        // 前 45% 保持满亮再淡出。上一版 0.2 就开始掉、指数还是 0.6（掉得很快），
+        // 于是「看得见」的窗口只有一瞬。
+        alpha: (k) => (k < 0.45 ? 1 : Math.max(0, 1 - (k - 0.45) / 0.55)),
         step: (qs, _k, dt) => {
           // 闪一下。照搬 `arcBetween` 里的做法：每 40ms 换一张 bolt 贴图，
           // 不换的话它是一根静止的光棍，不是电。
           flick += dt;
-          if (flick < 0.04) return;
+          if (flick < 0.045) return;
           flick = 0;
-          for (let i = 0; i < qs.length; i += 2) {
-            qs[i].frame = bolt[Math.floor(Math.random() * bolt.length)];
-            qs[i].w = 1.6 + Math.random() * 0.7;
+          // 两层都要换，而且**步长是 4**（一跳四片）—— 按 2 走会去改星芒和
+          // 地圈的 frame，那两个不是电弧。
+          for (let i = 0; i + 1 < qs.length; i += 4) {
+            qs[i].frame = Math.random() < 0.5 ? FRAME.strandA : FRAME.strandB;
+            qs[i].w = 3.0 + Math.random() * 1.0;
+            qs[i + 1].frame = bolt[Math.floor(Math.random() * bolt.length)];
+            qs[i + 1].w = 1.3 + Math.random() * 0.6;
           }
         },
       });

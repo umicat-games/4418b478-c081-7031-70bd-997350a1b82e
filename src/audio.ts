@@ -37,16 +37,24 @@ const CLIPS: Record<string, AudioClipSpec> = {
   // 节流略大于各自的冷却，免得一次齐射响三声。
   'cannon-shot': { volume: 0.32, throttle: 200 },                        // 追踪弹
   'fire-magic-wand-sound-effect.mp3': { volume: 0.4, throttle: 500 },    // 前向冲击
-  // 链式闪电。**换过一次**：原来是 `lightning-magic-wand-sound-effect.mp3`，
-  // 4.0 秒长，而这把武器每 1.3 秒放一次 —— 同一段声音有三份叠在一起，听起来
-  // 是一团糊的嗡嗡，而不是一次施法。新的这个 2.06 秒，叠不到两份。
+  // 链式闪电。用的是 `magic-attack-sound.mp3` **裁过头的那一版**。
   //
-  // **音量是量出来的，不是听出来的**（这张表一贯如此）：按「最响的那四分之一」
-  // 算 RMS，新 0.2028、旧 0.2769，所以 0.42 × (0.2769/0.2028) ≈ 0.57。
-  // 整段 RMS 会被前后的静音拉低，长度不同的两个 clip 那样比是不可比的。
+  // 玩家报的是「显示已经放完了，音效还在播」，而**根因不是"太长"，是"慢起"**。
+  // 量一下包络就看见了：原始 clip 前 0.4 秒几乎无声，最响的地方在 0.6~0.9 秒
+  // —— 而画面那道弧 0.4 秒就没了。声音的冲击落在画面**之后**，于是两边对不上。
   //
-  // （顺带：旧那个的峰值是 1.121，本身就已经削顶了。）
-  'magic-attack-sound.mp3': { volume: 0.57, throttle: 400 },               // 链式闪电
+  //     原始：  0.0s ▁ 0.2s ▂ 0.4s ▃ 0.6s ██ 0.8s ██ 1.0s ▅ 1.4s ▁ 2.0s ▁
+  //     裁完：  0.0s ▅ 0.2s ██ 0.4s ██ 0.6s ▅ 0.8s ▁
+  //
+  // 所以砍掉开头那 0.40 秒、留 1.30 秒、尾部 0.15 秒淡出（`ffmpeg`）。
+  // **一个瞬发动作的声音，冲击必须在开头。** 画面那边的寿命也拉到了 0.8 秒，
+  // 两边同时开始、同时结束。
+  //
+  // 音量照旧是量出来的：裁完「最响那四分之一」的 RMS 是 0.2181，而基准（旧的
+  // lightning clip）是 0.2769 @ 0.42 —— 0.42 × (0.2769/0.2181) ≈ 0.53。
+  //
+  // 原始文件留在 `public/audio/magic-attack-sound.mp3`，没动。
+  'magic-attack.mp3': { volume: 0.53, throttle: 400 },                     // 链式闪电
   // 挨打。**这个不能节流得太狠** —— 它是玩家唯一一个"我正在掉血"的耳朵信号，
   // 而被围住的时候屏幕上全是敌人，血条在角落里。
   'hero-hurt': { volume: 0.6, throttle: 420 },
@@ -66,7 +74,7 @@ export const SFX = {
   kill: 'enemy-die',
   bolt: 'cannon-shot',
   shock: 'fire-magic-wand-sound-effect.mp3',
-  chain: 'magic-attack-sound.mp3',
+  chain: 'magic-attack.mp3',
   hurt: 'hero-hurt',
   gem: 'coin',
   levelUp: 'upgrade',
