@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>Gesture lab</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { height: 100%; overflow: hidden; background: #10131a; color: #e8ecf4;
+        font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; touch-action: none; }
+      #pad { position: fixed; inset: 0; z-index: 1; }
+      #ink { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+      .bar { position: fixed; left: 0; right: 0; z-index: 3; padding: 10px 12px;
+        background: rgba(16,19,26,.9); backdrop-filter: blur(6px); }
+      #top { top: 0; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #242a36; }
+      #bottom { bottom: 0; border-top: 1px solid #242a36; max-height: 52vh; overflow: auto; }
+      button { font: inherit; color: #e8ecf4; background: #1d2330; border: 1px solid #2f3746;
+        border-radius: 6px; padding: 6px 10px; }
+      button.on { background: #2b6cb0; border-color: #3b82f6; }
+      #prompt { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+      #prompt svg { width: 34px; height: 34px; }
+      #verdict { font-size: 22px; width: 1.2em; text-align: center; }
+      table { border-collapse: collapse; margin-top: 8px; }
+      th, td { border: 1px solid #2a3140; padding: 3px 7px; text-align: right; }
+      th { color: #8b97ab; font-weight: 500; }
+      td.hit { background: #14361f; }
+      td.miss { background: #3a1a1a; }
+      .dim { color: #7d8798; }
+      .feat { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 14px; margin-top: 6px; }
+      .row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+      h4 { font-size: 12px; color: #8b97ab; font-weight: 600; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="ink"></canvas>
+    <div id="pad"></div>
+    <div class="bar" id="top">
+      <button id="mode-drill" class="on">Drill</button>
+      <button id="mode-free">Free</button>
+      <button id="rerun">Re-run</button>
+      <button id="export">Export</button>
+      <button id="clear">Clear</button>
+      <span id="prompt"></span>
+      <span id="verdict"></span>
+    </div>
+    <div class="bar" id="bottom"></div>
+    <script type="module" src="/src/gesture/lab.ts"></script>
+  </body>
+</html>

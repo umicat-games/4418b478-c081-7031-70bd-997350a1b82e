@@ -6,6 +6,11 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
+      // Two pages: the game, and the gesture lab at /lab.html. The lab is a
+      // measuring instrument, not a demo — it ships with the build so the
+      // recogniser can be tuned on a real phone against the real browser, which
+      // is the only place the numbers that matter come from.
+      input: { main: 'index.html', lab: 'lab.html' },
       output: {
         // three and the physics WASM rarely change between game patches, so
         // splitting them lets the browser keep them cached across rebuilds.

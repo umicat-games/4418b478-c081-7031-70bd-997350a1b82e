@@ -226,3 +226,58 @@ fetch** — Edit mode must never pay for or trigger either. Mirrors 2D's
 `?umicatEdit=1` (ADR-021); the 3D SDK has no central game-boot wrapper the way
 `createUmicatGame` is for Phaser, so every 3D game's own `main.ts` has to carry
 this branch by hand, same as the screenshot/recording lines above it.
+
+## The gesture recogniser
+
+This game is played by drawing glyphs, not by walking around, so two things in
+the table above are inverted for it: **the platform's touch zones have to be
+turned off** (`new Input3D({ touch: false, jump: false, look: false })`) because
+the left half of the screen is a thumbstick by default and here the whole screen
+is a drawing surface, and the drawing itself is read from raw pointer events.
+
+| | |
+|---|---|
+| `src/gesture/recognize.ts` | features → glyph, pure, no DOM |
+| `src/gesture/capture.ts` | pointer events → committed gestures |
+| `src/gesture/lab.ts`, `lab.html` | the tuning instrument, at `/lab.html` |
+| `tools/gesture-bench.mjs` | synthetic regression, `node tools/gesture-bench.mjs <bundle>` |
+
+**A recogniser tuned by feel is a recogniser nobody can change.** Every
+threshold trades accuracy on one glyph for accuracy on another, and neither side
+of that trade is visible from drawing a few shapes and liking the result. The
+lab keeps every sample it is given and Re-run replays the whole corpus through
+the current code, so a threshold change is a before/after confusion matrix. The
+bench does the same against synthetic strokes and catches the other failure —
+a feature that is simply wrong, which shows up as a whole class collapsing.
+
+**Reject, never guess.** The classic stroke recognisers ($1, $P) return the
+NEAREST template, so a tap or a scribble still deletes a tile. Here a false
+accept costs the player a move and a rejection costs them 300ms, so the
+classifier has an accept floor and a margin, and `Result.reason` says which one
+turned the answer down.
+
+**Only the cross waits.** It is the one glyph drawn in two strokes, so it is the
+only reason to hold a finished stroke on a timer. Everything else commits on
+pen-up. Putting the multi-stroke window on every gesture would add a dead spot
+between every move in a game made of tempo.
+
+**Resampling a sparse stroke to 64 points with straight lines makes a polygon,
+and a polygon has corners.** A circle flicked in 150ms arrives as ~12 raw
+samples, and linear up-resampling put a detected corner at every one of them —
+12% of fast circles came back as triangles. `densify()` runs a centripetal
+Catmull-Rom through the raw points first, for sparse strokes only. Fixing this
+alone took the mid-noise bench from 84.5% to 97%.
+
+**Corner count and radius swing are the same evidence twice, so they are added,
+not multiplied.** Both measure "does this closed shape have vertices". A fast
+triangle is rounded enough that corner detection finds two instead of three; as
+a product that zeroed the score and the shape was rejected even though its
+radius still swung like a triangle's. Closure and turning DO multiply — those
+are independent conditions that all have to hold.
+
+**Circle and triangle are the only real confusion, and speed is what causes
+it.** Careful and normal strokes classify at ~99% and ~96%; a small fast rounded
+triangle and a lumpy fast circle are the same stroke, and `radialVar`
+distributions overlap (0.30 vs 0.25). Narrowing the candidates to the two live
+tiles fixes most pairings and does nothing for this one — `tools/gesture-bench.mjs`
+prints accuracy per pairing for exactly that reason.
