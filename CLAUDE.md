@@ -1,50 +1,63 @@
 # Glyph Drop — a gesture match-3
 
-Draw the mark on one of the two outlined tiles at the bottom of the well. It
-goes, the stack falls, three-or-more of a kind clears itself, and the well tops
-up from above. A three.js game on the Umicat platform; this file is what the
-agent reads first.
+Draw any of the four marks. It clears every tile of that glyph in the lowest row
+holding one; the stack falls; three-or-more of a kind clears itself and cascades;
+tiles rain in from above. The run ends when the well has no room left. A three.js
+game on the Umicat platform; this file is what the agent reads first.
 
 | | |
 |---|---|
-| `src/main.ts` | scene, loop, input, the move/cascade sequence |
-| `src/board.ts` | the rules, with no three.js in them — `tools/board-test.mjs` checks them |
-| `src/gesture/` | the recogniser and the pointer layer — see "The gesture recogniser" below |
+| `src/main.ts` | scene, loop, input, the move/cascade sequence, the rain |
+| `src/board.ts` | the rules, with no three.js in them |
+| `src/gesture/` | the recogniser and the pointer layer — see "The gesture recogniser" |
 | `src/glyphs.ts` | one definition of each mark, used by tile faces and HUD chips alike |
 | `public/scenes3d/main.json` | the well (back panel, floor, rails) as authored design data |
 
 ```bash
-npm run dev                         # play it
+npm run dev                            # play it
 npm run build && npx vite preview --port 5199 &
-node tools/pw-smoke.mjs             # headless: does drawing actually clear tiles
-node tools/board-test.mjs <bundle>  # the rules
-node tools/gesture-bench.mjs <bundle>
+node tools/pw-smoke.mjs                # headless: does drawing actually clear tiles
+node tools/board-test.mjs <bundle>     # the rules
+node tools/sim.mjs <bundle>            # the economy, 400 moves at a time
+node tools/gesture-bench.mjs <bundle>  # the recogniser
 ```
 
 ## Things this game learned the hard way
 
-**Refill must not create matches.** Topping the well up with uniformly random
-glyphs looked obviously right and made the board play itself: 54 cells of four
-glyphs throw up three-in-a-row constantly, so a clear set off a cascade that set
-off a refill that set off another cascade. A smoke run scored 67,000 and filled
-the well without the player drawing anything. Chains are supposed to come from
-the fall after a clear.
+**The economy has a feedback loop nobody guesses at, so it is simulated rather
+than tuned by taste.** A fuller board gives wider matches and more chains, so
+removal rises with fill and the well actively resists topping out. Three designs
+died to this before `tools/sim.mjs` existed: one where the well drained to
+nothing in half a minute, one where it filled regardless of how well it was
+played, and one where "replace what you clear by hand, chains are free" sat flat
+forever because chains fire on only 9% of moves — a tenth of what intuition says.
+The numbers in `main.ts` (3.2 tiles owed per move, +0.022 per move after) come
+from that simulator, where good play lasts ~380 moves and careless play ~245.
+**Change one of them and re-run it.**
 
-**Difficulty counts MOVES, not tiles cleared.** Counting tiles made a good chain
-punish the player — one lucky cascade jumped the floor four rows, so playing well
-ended the run faster than playing badly.
+**Nothing the rain drops completes a match.** The player's clear is the only
+thing that starts a cascade. A dealer that hands out chains both takes the credit
+and runs away with itself — a smoke run once scored 67,000 and filled the well
+without a single gesture being drawn.
 
-**The target pair sweeps; it does not sit at the bottom-left.** "The two lowest
-tiles" ties across the whole bottom row every turn, the tie-break always resolves
-left, and only that one column ever drained and refilled — the right half of the
-board became a wall nothing touched. A cursor that advances past whatever was
-just cleared circulates every column, and the player reads it the same way.
+**Telling the player what to draw is not a game.** The first version ringed two
+target tiles and asked the player to copy them, which is a reaction test wearing
+a puzzle's clothes. Free choice of glyph is what created a decision; clearing the
+whole row's worth at once, scored `n²` and divided by depth, is what made the
+decision worth making.
 
-**A gesture drawn mid-cascade is queued, never punished.** Chains take a few
-hundred ms and a player in rhythm draws through them. The queued glyph applies if
-it matches the new pair and is discarded silently if it does not — charging a
-miss for tiles that were not on screen when the stroke started is punishing the
-player for the animation.
+**Survival differentiates play only about 1.6×; the score is where skill lives.**
+Worth knowing before adding anything meant to reward good play — the honest
+place to put it is scoring and chains, not the stack.
+
+**A gesture drawn mid-cascade is queued, and a queued gesture that no longer
+matches is dropped silently.** Chains take a few hundred ms and a player in
+rhythm draws through them; charging a miss for a board that changed under the
+stroke is punishing the player for the animation.
+
+**"Nothing happened" is the one response a player cannot learn from.** A board of
+twenty tiles genuinely runs out of a mark sometimes, so drawing one that is not
+there says so.
 
 **`Input3D` is never constructed here**, so there is no platform control layer at
 all and the z-indexes in `index.html` start at 1 instead of stepping around 10.

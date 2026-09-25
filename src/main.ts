@@ -10,41 +10,64 @@ import * as B from './board';
 import { GLYPH_COLOR, glyphSvg, glyphTexture } from './glyphs';
 
 /**
- * Glyph Drop — a gesture-driven match-3 in a Tetris well.
+ * Glyph Drop — a gesture match-3 in a Tetris well.
  *
- * Draw the mark on one of the two ringed tiles at the bottom; it goes, the stack
- * falls, three-in-a-row goes on its own, and the well refills from above.
+ * Draw any of the four marks. It clears every tile of that glyph in the lowest
+ * row holding one; the stack falls; three-or-more of a kind clears itself and
+ * cascades. The run ends when the well has no room left.
  *
- * Three structural decisions worth knowing before changing anything here:
+ * **Every clear owes the rain a few tiles back, and the number rises as the run
+ * goes.** That is the whole economy, and it is tuned in `tools/sim.mjs` rather
+ * than by taste, because it has a feedback loop nobody would guess at: a fuller
+ * board gives wider matches and more chains, so removal rises with fill and the
+ * well fights being filled. A clock drip on top of it means standing still also
+ * loses.
+ *
+ * What makes it a game rather than a copying exercise is that the player picks
+ * the glyph. Scoring is `n²` for how many came out at once, divided by how far
+ * up the row was, so a gesture is never wasted but the row on the floor is the
+ * one worth having — and the second-order read, which is where the depth is, is
+ * what the columns above will land on once that row drops out.
+ *
+ * It also balances itself. Spam the mark you draw most reliably and the board
+ * runs out of that mark, so your clears shrink until you use the others.
+ *
+ * Structural notes that are decisions, not accidents:
  *
  * **`Input3D` is never constructed.** On touch it claims the left half of the
  * screen for a thumbstick and the right half for the camera; this game needs the
- * whole screen as paper. Not constructing it means no platform control layer
- * exists at all, which is why the z-indexes in `index.html` start at 1 instead
- * of stepping around 10.
+ * whole screen as paper. Nothing constructs the platform control layer, which is
+ * why `index.html`'s z-indexes start at 1 instead of stepping around 10.
  *
- * **The recogniser is told what the board expects.** Only the two ringed tiles
- * are live, so at most two glyphs mean anything, and `recognize()` takes that as
- * `expect` — a 4-class decision becomes a 2-class one and the accept threshold
- * relaxes with it. Measured, not assumed: see `tools/gesture-bench.mjs`.
+ * **Nothing the rain drops completes a match.** The player's clear is the only
+ * thing that starts a cascade. A dealer that hands out chains both takes the
+ * credit and runs away with itself — a smoke run once scored 67,000 and filled
+ * the well without a single gesture.
  *
- * **A gesture drawn mid-cascade is queued, not dropped, and never punished.**
- * Chains take a few hundred ms and a player in rhythm draws through them. The
- * queued glyph is applied if it matches the NEW bottom two and silently
- * discarded if it does not — charging a miss for tiles that were not on screen
- * when the stroke started would be punishing the player for the animation.
+ * **A gesture drawn mid-cascade is queued, and a queued gesture that no longer
+ * matches is dropped silently.** Chains take a few hundred ms and a player in
+ * rhythm draws through them; charging a miss for a board that changed under the
+ * stroke is punishing the player for the animation.
  */
 
 const PITCH = 1.0;
 const TILE = 0.93;
-const FALL_G = -44;            // units/s^2, in tiles — snappy, not floaty
+const FALL_G = -44;             // units/s², in tiles — snappy, not floaty
 const CLEAR_MS = 165;
-const START_ROWS = 5;
+const OPENING_ROWS = 4;
+const RAIN_MS = 130;            // gap between tiles while the well is owed some
+const RAIN_PER_MOVE = 3.2;      // tiles the rain owes for every clear made
+const RAIN_GROWTH = 0.022;      // ...and how much that rises per move
+const RAIN_FLOOR = 14;          // below this the well is topped up regardless
+const DRIP_MS = 4500;           // first gap between free tiles, on the clock
+const DRIP_MIN_MS = 1300;
+const DRIP_DECAY = 0.985;       // per successful move
+const FLOW_MS = 2500;           // how long a combo stays alive
 const SAVE_KEY = 'progress';
 
 const VIEW_W = B.COLS * PITCH + 1.5;
-const VIEW_H = B.ROWS * PITCH + 1.8;
-const CENTER_Y = (B.ROWS * PITCH) / 2;
+const VIEW_H = B.ROWS * PITCH + 2.8;
+const CENTER_Y = (B.ROWS * PITCH) / 2 + 0.45;
 
 const xOf = (col: number) => (col - (B.COLS - 1) / 2) * PITCH;
 const yOf = (row: number) => row * PITCH + PITCH / 2;
@@ -58,7 +81,6 @@ interface View {
   y: number;
   vy: number;
   squash: number;
-  z: number;
   dying: number;
 }
 
@@ -68,9 +90,8 @@ async function start(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  // No shadows on purpose. Every tile is a flat face on a flat wall lit from the
-  // front, so a shadow map would double the draw count for a picture nobody can
-  // see — the exact trade CLAUDE.md warns about for a board of tiles.
+  // No shadows. Every tile is a flat face on a flat wall lit from the front, so
+  // a shadow map would double the draw count for a picture nobody can see.
   renderer.shadowMap.enabled = false;
   setupScreenshotListener(renderer);
   setupRecordingListener(renderer);
@@ -81,11 +102,10 @@ async function start(): Promise<void> {
     return;
   }
 
-  // The well — back panel, floor, rails — is authored design data, so the
-  // editor's Edit tab renders exactly the set the game plays in. The tiles are
-  // the part that is not design data and never could be, so they are built here.
-  // No `rapier` is passed: nothing in this game is simulated, tiles are animated
-  // toward grid cells, and a physics world would only be a 2MB liability.
+  // The well — back panel, floor, rails — is authored design data, so the Edit
+  // tab renders exactly the set the game plays in. The tiles are the part that
+  // is not design data and never could be. No `rapier`: nothing is simulated
+  // here, tiles are animated toward grid cells.
   const [manifest, scene3d] = await Promise.all([
     fetch('scenes3d/manifest.json').then((r) => r.json() as Promise<Manifest3D>),
     fetch('scenes3d/main.json').then((r) => r.json() as Promise<Scene3D>),
@@ -105,44 +125,51 @@ async function start(): Promise<void> {
     extension: '.ogg',
   });
 
-  // ---- tile look -----------------------------------------------------------
+  // ---- tile look ----------------------------------------------------------
   const geo = new THREE.BoxGeometry(TILE, TILE, TILE);
-  const matCache = new Map<Glyph, THREE.Material[]>();
-  const matsFor = (g: Glyph): THREE.Material[] => {
-    const hit = matCache.get(g);
+  const matCache = new Map<string, THREE.Material[]>();
+  function matsFor(g: Glyph, ghost = false): THREE.Material[] {
+    const key = `${g}${ghost ? ':ghost' : ''}`;
+    const hit = matCache.get(key);
     if (hit) return hit;
     const side = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(GLYPH_COLOR[g]).multiplyScalar(0.52), roughness: 0.75, metalness: 0,
+      color: new THREE.Color(GLYPH_COLOR[g]).multiplyScalar(0.52),
+      roughness: 0.75, metalness: 0,
+      transparent: ghost, opacity: ghost ? 0.2 : 1,
     });
-    const front = new THREE.MeshStandardMaterial({ map: glyphTexture(g), roughness: 0.62, metalness: 0 });
+    const front = new THREE.MeshStandardMaterial({
+      map: glyphTexture(g), roughness: 0.62, metalness: 0,
+      transparent: ghost, opacity: ghost ? 0.45 : 1,
+    });
     // BoxGeometry material order is +X −X +Y −Y +Z −Z, so index 4 is the face
     // turned towards the camera — the only one the player ever reads.
     const mats = [side, side, side, side, front, side];
-    matCache.set(g, mats);
+    matCache.set(key, mats);
     return mats;
-  };
+  }
   const dyingMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-  // An outline around the tile, not a ring in front of it. A torus wide enough
-  // to read had to be wider than the tile, so two adjacent targets — which is
-  // the normal case — drew two overlapping circles over each other's glyph, and
-  // the mark the player is supposed to copy was the thing being covered up.
-  const ringGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(PITCH * 0.99, PITCH * 0.99, TILE * 1.03));
-  const rings = [0, 1].map(() => {
-    const m = new THREE.LineSegments(ringGeo, new THREE.LineBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.95,
-    }));
-    m.visible = false;
-    scene.add(m);
-    return m;
-  });
+  // The tile that is about to fall, hanging over the column it will fall into.
+  // Half the planning in this game is "what is coming", and without this the
+  // rain is something that happens to the player rather than something they can
+  // play around.
+  const ghost = new THREE.Mesh(geo, matsFor('circle', true));
+  ghost.visible = false;
+  scene.add(ghost);
+
+  // The line the well fills to. A loss the player cannot see coming is a loss
+  // they read as unfair, even when the board was in plain view the whole time.
+  const dangerGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-B.COLS / 2, B.ROWS * PITCH, 0.5),
+    new THREE.Vector3(B.COLS / 2, B.ROWS * PITCH, 0.5),
+  ]);
+  scene.add(new THREE.Line(dangerGeo, new THREE.LineBasicMaterial({
+    color: 0xff6b5a, transparent: true, opacity: 0.55,
+  })));
 
   // ---- state --------------------------------------------------------------
   const grid = B.emptyGrid();
   const views = new Map<number, View>();
-  let targetIds = new Set<number>();
-  /** Which column the sweeping pair starts at — see `board.targets`. */
-  let cursor = 0;
   let score = 0;
   let best = 0;
   let cleared = 0;
@@ -152,21 +179,36 @@ async function start(): Promise<void> {
   let over = false;
   let queued: Glyph | null = null;
   let shake = 0;
+  let flow = 0;
+  let flowUntil = 0;
+  let dripTimer = 0;
+  let rainTimer = 0;
+  /**
+   * Tiles the rain still has to deliver, carried as a fraction.
+   *
+   * Two things put tiles here: every clear owes `RAIN_PER_MOVE`, rising as the
+   * run goes, and the clock drips one in on its own. The first is the pressure
+   * you can play against — the second is the pressure you cannot, which is what
+   * stops the game becoming a turn-based puzzle with no reason to hurry.
+   *
+   * The numbers come from `tools/sim.mjs`, not from taste. The economy has a
+   * strong negative feedback nobody would guess at: a fuller board gives wider
+   * matches and more chains, so removal rises with fill and the well resists
+   * ever topping out. The first three attempts all sat flat forever — one drained
+   * to nothing in half a minute, one filled regardless of how well it was played.
+   * At 3.2 + 0.022 the simulator has good play lasting ~380 moves and careless
+   * play ~245, which is a gap worth having.
+   */
+  let owed = 0;
+  let upcoming: { col: number; glyph: Glyph } | null = null;
   const rng = () => Math.random();
 
   const saved = await umicat.saves.get<{ best: number }>(SAVE_KEY);
   best = saved?.best ?? 0;
 
-  /**
-   * How full the well is kept — and, since the well is always exactly this full,
-   * the whole difficulty curve and the loss condition in one number.
-   *
-   * Counted in MOVES, not in tiles cleared. Tiles cleared was the first attempt
-   * and it made a good chain punish the player: one lucky cascade could clear
-   * thirty tiles and jump the floor four rows, so playing well ended the run
-   * faster than playing badly. A miss costs about eight moves' worth.
-   */
-  const baseHeight = () => Math.min(B.ROWS, START_ROWS + Math.floor((moves + misses * 8) / 25));
+  const dripInterval = () => Math.max(DRIP_MIN_MS, DRIP_MS * DRIP_DECAY ** moves);
+  const rainPerMove = () => RAIN_PER_MOVE + RAIN_GROWTH * moves;
+  const multiplier = () => Math.min(4, 1 + Math.max(0, flow - 1) * 0.25);
 
   // ---- DOM ----------------------------------------------------------------
   const scoreEl = document.getElementById('score')!;
@@ -179,18 +221,17 @@ async function start(): Promise<void> {
   const hintEl = document.getElementById('hint')!;
   const overEl = document.getElementById('over')!;
 
-  function updateHud(targets: { tile: B.Tile }[]): void {
+  function updateHud(): void {
     scoreNum.textContent = String(score);
-    bestEl.textContent = `最高 ${Math.max(best, score)}`;
-    // Rebuild only when the pair actually changes: this runs on every settle and
-    // innerHTML on every one of them throws away the DOM the CSS transition on
-    // the chips is animating.
-    const key = targets.map((t) => t.tile.glyph).join(',');
+    bestEl.textContent = flow > 1
+      ? `连击 ×${multiplier().toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}`
+      : `最高 ${Math.max(best, score)}`;
+    const key = upcoming ? upcoming.glyph : '';
     if (chipsEl.dataset.key === key) return;
     chipsEl.dataset.key = key;
-    chipsEl.innerHTML = targets
-      .map(({ tile }) => `<span class="chip" style="border-color:${GLYPH_COLOR[tile.glyph]}">${glyphSvg(tile.glyph, GLYPH_COLOR[tile.glyph], 10)}</span>`)
-      .join('');
+    chipsEl.innerHTML = upcoming
+      ? `<span class="chip" style="border-color:${GLYPH_COLOR[upcoming.glyph]}">${glyphSvg(upcoming.glyph, GLYPH_COLOR[upcoming.glyph], 10)}</span>`
+      : '';
   }
 
   let flashTimer = 0;
@@ -203,12 +244,6 @@ async function start(): Promise<void> {
   }
 
   // ---- view sync ----------------------------------------------------------
-  function makeView(tile: B.Tile, col: number, row: number, dropFrom: number): View {
-    const mesh = new THREE.Mesh(geo, matsFor(tile.glyph));
-    scene.add(mesh);
-    return { tile, mesh, col, row, y: dropFrom, vy: 0, squash: 0, z: 0, dying: 0 };
-  }
-
   function sync(): void {
     // Fresh tiles enter from above the well, stacked in the order they will
     // land, so a column being topped up looks like a column being topped up
@@ -230,7 +265,9 @@ async function start(): Promise<void> {
         let v = views.get(t.id);
         if (!v) {
           const above = yOf(B.ROWS) + 1.1 + (r - lowestFresh[c]) * PITCH;
-          v = makeView(t, c, r, t.fresh ? above : yOf(r));
+          const mesh = new THREE.Mesh(geo, matsFor(t.glyph));
+          scene.add(mesh);
+          v = { tile: t, mesh, col: c, row: r, y: t.fresh ? above : yOf(r), vy: 0, squash: 0, dying: 0 };
           views.set(t.id, v);
           t.fresh = false;
         }
@@ -241,10 +278,7 @@ async function start(): Promise<void> {
     for (const [id, v] of views) {
       if (!live.has(id) && v.dying <= 0) { scene.remove(v.mesh); views.delete(id); }
     }
-
-    const targets = B.targets(grid, cursor);
-    targetIds = new Set(targets.map((t) => t.tile.id));
-    updateHud(targets);
+    updateHud();
   }
 
   function kill(ids: Set<number>): void {
@@ -256,7 +290,7 @@ async function start(): Promise<void> {
     }
   }
 
-  /** Resolves when nothing is falling and nothing is mid-death. The guard is
+  /** Resolves when nothing is falling and nothing is mid-death. The deadline is
    *  there so a rule bug can only make the game feel odd, never hang it. */
   function settled(): Promise<void> {
     return new Promise((res) => {
@@ -272,82 +306,99 @@ async function start(): Promise<void> {
     });
   }
 
-  // ---- the loop that resolves a move --------------------------------------
+  // ---- the rain -----------------------------------------------------------
+  function queueNext(): void {
+    upcoming = B.nextDrop(grid, rng);
+    updateHud();
+  }
+
+  function rain(): void {
+    // Re-checked rather than trusted: the column the ghost has been hanging over
+    // may have filled up since it was chosen.
+    if (!upcoming || B.height(grid, upcoming.col) >= B.ROWS) queueNext();
+    if (!upcoming) { void finish(); return; }
+    B.drop(grid, upcoming.col, upcoming.glyph);
+    sync();
+    queueNext();
+    if (!upcoming) void finish();
+  }
+
+  // ---- resolving a move ---------------------------------------------------
   async function cascade(): Promise<number> {
     let chain = 0;
-    for (let guard = 0; guard < 60; guard++) {
+    for (let guard = 0; guard < 40; guard++) {
       await settled();
       const groups = B.findGroups(grid);
-      if (groups.length) {
-        chain++;
-        const ids = new Set(groups.flat().map((t) => t.id));
-        score += ids.size * (10 + 8 * chain);
-        cleared += ids.size;
-        audio.play(chain > 1 ? 'upgrade' : 'coin');
-        if (chain > 1) flash(`连锁 ×${chain}`, '#ffd76a');
-        kill(ids);
-        await wait(CLEAR_MS);
-        B.remove(grid, ids);
-        B.applyGravity(grid);
-        sync();
-        continue;
-      }
-      // Topped up so that it lands no match of its own. Random refill was tried
-      // first and the board played itself: 54 cells of four glyphs throws up
-      // three-in-a-row constantly, so every clear set off a cascade that set off
-      // a refill that set off another cascade — a smoke run scored 67,000 and
-      // filled the well without the player doing anything. Chains are supposed
-      // to come from the FALL after a clear, which is the mechanic; chains that
-      // come from the dealer are just the game playing itself.
-      if (B.refill(grid, baseHeight(), rng, true).length) { sync(); continue; }
-      return chain;
+      if (!groups.length) return chain;
+      chain++;
+      const ids = new Set(groups.flat().map((t) => t.id));
+      score += Math.round(ids.size * (10 + 8 * chain) * multiplier());
+      cleared += ids.size;
+      audio.play(chain > 1 ? 'upgrade' : 'coin');
+      flash(chain > 1 ? `连锁 ×${chain}` : `${ids.size} 连`, '#ffd76a');
+      kill(ids);
+      await wait(CLEAR_MS);
+      B.remove(grid, ids);
+      B.applyGravity(grid);
+      sync();
     }
     return chain;
   }
 
-  async function apply(matched: B.Tile[], furthest: number): Promise<void> {
+  async function apply(match: { row: number; tiles: B.Tile[] }): Promise<void> {
     busy = true;
-    cursor = B.advance(cursor, furthest);
     moves++;
-    score += matched.length * 12;
-    cleared += matched.length;
+    const now = performance.now();
+    flow = now < flowUntil ? flow + 1 : 1;
+    flowUntil = now + FLOW_MS;
+
+    const n = match.tiles.length;
+    // Width squared, depth divided. Never wasted, rarely equal.
+    const points = Math.round((10 * n * n * multiplier()) / (1 + match.row));
+    score += points;
+    cleared += n;
+    owed += rainPerMove();
     audio.play('coin');
-    if (matched.length > 1) flash('双消', '#9be7ff');
-    const ids = new Set(matched.map((t) => t.id));
-    kill(ids);
+    if (n > 1) flash(`${n} 连 +${points}`, '#9be7ff');
+
+    kill(new Set(match.tiles.map((t) => t.id)));
     await wait(CLEAR_MS);
-    B.remove(grid, ids);
+    B.remove(grid, new Set(match.tiles.map((t) => t.id)));
     B.applyGravity(grid);
     sync();
     await cascade();
     busy = false;
 
-    if (B.isLost(grid)) { finish(); return; }
     const q = queued;
     queued = null;
-    // Silently, if it no longer fits: the player aimed at tiles that have since
-    // been cleared out from under them.
     if (q) commit(q, true);
   }
 
   function commit(glyph: Glyph, fromQueue = false): void {
-    const pair = B.targets(grid, cursor);
-    const hits = pair.map((t, k) => ({ ...t, k })).filter((t) => t.tile.glyph === glyph);
-    if (!hits.length) {
+    const match = B.lowestMatch(grid, glyph);
+    if (!match) {
+      // The board holds none of that glyph. Say so: "nothing happened" is the
+      // one response a player cannot learn from, and a board of twenty tiles
+      // genuinely can run out of a mark without anyone noticing.
       if (fromQueue) return;
       misses++;
+      flow = 0;
       shake = 0.22;
       audio.play('denied');
-      updateHud(pair);
+      flash('场上没有这个', '#ff9b8a');
+      updateHud();
       return;
     }
-    void apply(hits.map((h) => h.tile), hits[hits.length - 1].k);
+    void apply(match);
   }
 
   function onGesture(r: Result): void {
     if (over) return;
     hintEl.style.opacity = '0';
     if (!r.glyph) {
+      // A refused stroke costs nothing but the moment it took. It is not a
+      // wrong answer, and sounding like one teaches players to distrust the
+      // recogniser for something they did not do.
       shake = 0.12;
       audio.play('ui-press');
       return;
@@ -357,8 +408,10 @@ async function start(): Promise<void> {
   }
 
   async function finish(): Promise<void> {
+    if (over) return;
     over = true;
     capture.setEnabled(false);
+    ghost.visible = false;
     best = Math.max(best, score);
     document.getElementById('over-score')!.textContent = String(score);
     document.getElementById('over-best')!.textContent = `最高 ${best}`;
@@ -370,9 +423,11 @@ async function start(): Promise<void> {
     for (const v of views.values()) scene.remove(v.mesh);
     views.clear();
     for (let r = 0; r < B.ROWS; r++) for (let c = 0; c < B.COLS; c++) grid[r][c] = null;
-    score = 0; cleared = 0; moves = 0; misses = 0; queued = null; over = false; busy = false; cursor = 0;
-    B.refill(grid, START_ROWS, rng, true);
+    score = 0; cleared = 0; moves = 0; misses = 0; queued = null;
+    over = false; busy = false; flow = 0; dripTimer = 0; rainTimer = 0; owed = 0;
+    B.refill(grid, OPENING_ROWS, rng, true);
     sync();
+    queueNext();
     overEl.style.display = 'none';
     capture.setEnabled(true);
   }
@@ -384,7 +439,7 @@ async function start(): Promise<void> {
   const capture = new GestureCapture({
     el: document.getElementById('draw') as HTMLElement,
     minSize: Math.max(38, Math.min(innerWidth, innerHeight) * 0.07),
-    expect: () => B.targets(grid, cursor).map((t) => t.tile.glyph),
+    expect: () => B.present(grid),
     onChange: (strokes) => {
       ink.clearRect(0, 0, innerWidth, innerHeight);
       ink.lineWidth = 9;
@@ -415,9 +470,9 @@ async function start(): Promise<void> {
     inkCanvas.style.height = `${h}px`;
     ink.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Frame the whole well, whichever of the two dimensions runs out first. A
-    // fixed camera distance is what makes a portrait phone show a board with
-    // its sides cut off, and the sides are where the columns are.
+    // Frame the whole well, whichever dimension runs out first. A fixed camera
+    // distance is what makes a portrait phone show a board with its sides cut
+    // off, and the sides are where the columns are.
     camera.aspect = w / h;
     const half = THREE.MathUtils.degToRad(camera.fov) / 2;
     const forHeight = VIEW_H / 2 / Math.tan(half);
@@ -438,13 +493,34 @@ async function start(): Promise<void> {
     last = now;
     clock += dt;
 
+    // The rain holds its breath during a cascade. Tiles arriving in the middle
+    // of one are unreadable, and worse, they land on a board that is still
+    // rearranging itself.
+    if (!over && !busy) {
+      // A well this empty has nothing left to read, so it is topped up whatever
+      // the rate says. It engages near zero and never at playing heights: a
+      // floor under the board, not a hand on the scales.
+      const short = RAIN_FLOOR - B.count(grid);
+      if (short > 0 && owed < short) owed = short;
+
+      if (owed >= 1) {
+        rainTimer += dt * 1000;
+        if (rainTimer >= RAIN_MS) { rainTimer = 0; owed -= 1; rain(); }
+      } else {
+        rainTimer = 0;
+        dripTimer += dt * 1000;
+        if (dripTimer >= dripInterval()) { dripTimer = 0; owed += 1; }
+      }
+    }
+    if (flow > 0 && now > flowUntil) { flow = 0; updateHud(); }
+
     for (const [id, v] of views) {
       if (v.dying > 0) {
         v.dying -= dt;
         const k = Math.max(0, v.dying / (CLEAR_MS / 1000));
         v.mesh.scale.setScalar(0.15 + 0.95 * k);
         v.mesh.rotation.z += dt * 7 * (1 - k);
-        v.mesh.position.set(xOf(v.col), v.y, v.z);
+        v.mesh.position.set(xOf(v.col), v.y, 0);
         if (v.dying <= 0) { scene.remove(v.mesh); views.delete(id); }
         continue;
       }
@@ -462,26 +538,23 @@ async function start(): Promise<void> {
       }
       if (v.squash > 0) v.squash = Math.max(0, v.squash - dt * 0.85);
 
-      // A ringed tile stands forward out of the wall. Depth is the one cue a
-      // flat-on camera still has, and it survives being colour-blind.
-      const wantZ = targetIds.has(id) ? 0.26 : 0;
-      v.z += (wantZ - v.z) * Math.min(1, dt * 12);
-
       const sq = v.squash;
       v.mesh.scale.set(1 + sq * 0.7, 1 - sq * 1.5, 1 + sq * 0.7);
       v.mesh.rotation.z = 0;
-      v.mesh.position.set(xOf(v.col), v.y - sq * 0.75 * PITCH * 0.5, v.z);
+      v.mesh.position.set(xOf(v.col), v.y - sq * 0.375 * PITCH, 0);
     }
 
-    const targets = [...targetIds].map((id) => views.get(id)).filter(Boolean) as View[];
-    rings.forEach((ring, i) => {
-      const v = targets[i];
-      ring.visible = !!v && !over;
-      if (!v) return;
-      const pulse = 1 + Math.sin(clock * 5.5 + i * 1.2) * 0.05;
-      ring.scale.setScalar(pulse);
-      ring.position.set(xOf(v.col), v.y, v.z + 0.62);
-    });
+    if (upcoming && !over) {
+      ghost.visible = true;
+      ghost.material = matsFor(upcoming.glyph, true);
+      const ready = owed >= 1 ? 1 : Math.min(1, dripTimer / dripInterval());
+      ghost.position.set(xOf(upcoming.col), yOf(B.ROWS) + 0.95, 0);
+      // Tightening as its moment approaches, so "something is about to land
+      // there" is legible without reading a timer.
+      ghost.scale.setScalar(0.78 + ready * 0.22);
+    } else {
+      ghost.visible = false;
+    }
 
     if (shake > 0) {
       shake = Math.max(0, shake - dt);
@@ -493,14 +566,15 @@ async function start(): Promise<void> {
     renderer.render(scene, camera);
   });
 
-  B.refill(grid, START_ROWS, rng, true);
+  B.refill(grid, OPENING_ROWS, rng, true);
   sync();
+  queueNext();
   setTimeout(() => { hintEl.style.opacity = '0'; }, 7000);
 
   // The probe every Umicat game exposes, so a headless run can assert on game
   // state instead of on pixels. `tools/pw-smoke.mjs` reads it.
   (window as unknown as Record<string, unknown>).__game = {
-    targets: () => B.targets(grid, cursor).map((t) => t.tile.glyph),
+    present: () => B.present(grid),
     score: () => score,
     misses: () => misses,
     cleared: () => cleared,
@@ -509,7 +583,8 @@ async function start(): Promise<void> {
     over: () => over,
     tiles: () => views.size,
     height: () => Math.max(...Array.from({ length: B.COLS }, (_, c) => B.height(grid, c))),
-    cursor: () => cursor,
+    upcoming: () => (upcoming ? upcoming.glyph : null),
+    owed: () => owed,
   };
 }
 

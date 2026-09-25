@@ -63,35 +63,77 @@ export function findGroups(g: Grid, min = 3): Tile[][] {
 }
 
 /**
- * The two tiles the player may clear: the bottom of column `cursor` and of the
- * next non-empty column after it.
+ * What a drawn glyph clears: every tile of that glyph in the LOWEST row that
+ * contains one.
  *
- * The first version took the two lowest tiles outright, which sounds like the
- * same thing and is not. Refilling keeps every column at the same height, so
- * "lowest" was a tie across the whole bottom row every single turn, the
- * tie-break always resolved left, and the pair never moved off the bottom-left
- * corner. Only that one column ever drained and refilled — the right half of the
- * board became a frozen wall that nothing but a lucky chain ever touched.
+ * Two earlier rules and why they lost. **Two ringed targets** told the player
+ * what to draw, which left them no decision at all — it was a reaction test
+ * wearing a puzzle's clothes. **One tile per gesture** gave the decision back
+ * but made it thin, because clearing a single cell rarely changes the shape of
+ * anything.
  *
- * A cursor that advances past whatever was just cleared sweeps the pair across
- * the bottom instead, so every column circulates. The player still reads it the
- * same way (two ringed tiles at the bottom, draw one of them) and it costs them
- * no decision, because the choice was always WHICH GLYPH, never which column.
+ * Clearing the whole row's worth at once is what makes the choice interesting:
+ * the first thing to read is which glyph the floor row holds most of, and the
+ * second is what the columns above would land on once it drops. Scoring handles
+ * the rest — `n²` for width, divided by depth, so a gesture is never wasted but
+ * the one sitting on the floor is the one worth having.
  */
-export function targets(g: Grid, cursor: number, n = 2): { tile: Tile; col: number }[] {
-  const out: { tile: Tile; col: number }[] = [];
-  for (let k = 0; k < COLS && out.length < n; k++) {
-    const col = (cursor + k) % COLS;
-    const tile = g[0][col];
-    if (tile) out.push({ tile, col });
+export function lowestMatch(g: Grid, glyph: Glyph): { row: number; tiles: Tile[] } | null {
+  for (let r = 0; r < ROWS; r++) {
+    const tiles: Tile[] = [];
+    for (let c = 0; c < COLS; c++) if (g[r][c]?.glyph === glyph) tiles.push(g[r][c]!);
+    if (tiles.length) return { row: r, tiles };
   }
-  return out;
+  return null;
 }
 
-/** Where the cursor goes after clearing the target at offset `k` of the pair.
- *  Past the furthest one cleared, so the sweep only ever moves forward — a tile
- *  stepped over comes round again next lap rather than holding the pair up. */
-export const advance = (cursor: number, k: number): number => (cursor + k + 1) % COLS;
+/** Every glyph still on the board. Fed to the recogniser as `expect`, which
+ *  narrows nothing while all four are present and starts helping once the board
+ *  runs out of one — and refuses to "recognise" a glyph that could not be
+ *  cleared even if it were drawn perfectly. */
+export function present(g: Grid): Glyph[] {
+  const seen = new Set<Glyph>();
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const t = g[r][c]; if (t) seen.add(t.glyph); }
+  return [...seen];
+}
+
+/**
+ * The next tile to fall: which column, and which glyph.
+ *
+ * Biased towards the shorter columns, or the rain piles into one place and the
+ * run ends on a coin flip rather than on how the player played. The glyph avoids
+ * completing a three-in-a-row where it will land, for the reason the refill
+ * already learned: a chain the dealer handed over is not a chain anyone earned,
+ * and the cascades it sets off run away.
+ *
+ * Null means every column is full — there is nowhere left to put anything, which
+ * is the end of the run.
+ */
+export function nextDrop(g: Grid, rng: () => number): { col: number; glyph: Glyph } | null {
+  const room: { col: number; weight: number }[] = [];
+  let total = 0;
+  for (let c = 0; c < COLS; c++) {
+    const h = height(g, c);
+    if (h >= ROWS) continue;
+    const weight = (ROWS - h) ** 1.6;
+    room.push({ col: c, weight });
+    total += weight;
+  }
+  if (!room.length) return null;
+  let roll = rng() * total;
+  let col = room[room.length - 1].col;
+  for (const r of room) { roll -= r.weight; if (roll <= 0) { col = r.col; break; } }
+  return { col, glyph: safeGlyph(g, height(g, col), col, rng, 3) };
+}
+
+/** Put a tile on top of a column's stack. */
+export function drop(g: Grid, col: number, glyph: Glyph): Tile | null {
+  const r = height(g, col);
+  if (r >= ROWS) return null;
+  const t = newTile(glyph, true);
+  g[r][col] = t;
+  return t;
+}
 
 export function remove(g: Grid, ids: Set<number>): void {
   for (let r = 0; r < ROWS; r++) {
@@ -153,4 +195,17 @@ export const findAt = (g: Grid, id: number): { row: number; col: number } | null
   return null;
 };
 
-export const isLost = (g: Grid): boolean => g[ROWS - 1].some((t) => t !== null);
+/** No room left anywhere. The well filling to the top IS the loss condition, so
+ *  this is asked by trying to place the next tile, not by watching a line. */
+/** How many tiles are on the board. The rain reads it to know whether the well
+ *  has run so empty that there is nothing left to play. */
+export const count = (g: Grid): number => {
+  let n = 0;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (g[r][c]) n++;
+  return n;
+};
+
+export const isFull = (g: Grid): boolean => {
+  for (let c = 0; c < COLS; c++) if (height(g, c) < ROWS) return false;
+  return true;
+};

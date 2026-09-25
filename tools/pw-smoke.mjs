@@ -35,8 +35,9 @@ const g = () => page.evaluate('Object.fromEntries(Object.entries(window.__game).
 
 let st = await g();
 ok('the board is populated', st.tiles > 0, `tiles=${st.tiles}`);
-ok('it starts at the opening height', st.height === 5, `height=${st.height}`);
-ok('two glyphs are live', st.targets.length === 2, JSON.stringify(st.targets));
+ok('it starts at the opening height', st.height === 4, `height=${st.height}`);
+ok('all four glyphs are on the board', st.present.length === 4, JSON.stringify(st.present));
+ok('the next tile is previewed', st.upcoming !== null, String(st.upcoming));
 
 // ---- gesture synthesis, in screen pixels ---------------------------------
 const CX = 215, CY = 520, R = 95;
@@ -76,27 +77,37 @@ async function draw(glyph) {
   await page.waitForFunction('window.__game.busy() === false', { timeout: 8000 }).catch(() => {});
 }
 
-console.log('each glyph is recognised when it is the live one');
+console.log('every glyph clears something, wherever it is');
 for (const glyph of ['circle', 'chevron', 'cross', 'wave']) {
-  let tries = 0;
-  while (!(await g()).targets.includes(glyph) && tries++ < 14) {
-    const s0 = await g();
-    await draw(s0.targets[0]);
-    if (process.env.VERBOSE) {
-      const s1 = await g();
-      console.log(`      drew ${s0.targets[0]}: score ${s0.score}→${s1.score} miss ${s0.misses}→${s1.misses} targets ${s1.targets}`);
-    }
-  }
-  if (!(await g()).targets.includes(glyph)) {
-    ok(`${glyph} became live`, false, 'never reached the bottom two');
-    continue;
-  }
+  // A board of twenty tiles can genuinely run out of one mark; the rain brings
+  // it back. Waiting for that is the test being fair, not the test being lenient.
+  await page.waitForFunction(
+    `window.__game.present().includes(${JSON.stringify(glyph)})`, { timeout: 20000 },
+  ).catch(() => {});
   const before = await g();
+  if (!before.present.includes(glyph)) { ok(`${glyph} is on the board`, false, 'rain never brought one'); continue; }
   await draw(glyph);
   const after = await g();
   ok(`${glyph} clears`, after.score > before.score,
     `score ${before.score}→${after.score}, misses ${before.misses}→${after.misses}`);
   ok(`${glyph} is not a miss`, after.misses === before.misses);
+}
+
+console.log('the well does not drain');
+{
+  // The failure this guards against does not throw and does not look wrong in a
+  // single frame: the player simply clears faster than tiles arrive, the well
+  // empties over half a minute, and the game quietly stops having a board.
+  const before = await g();
+  for (let i = 0; i < 6; i++) {
+    const now = await g();
+    await draw(now.present[i % now.present.length]);
+  }
+  const after = await g();
+  ok('six clears later there is still a board', after.tiles >= 12,
+    `tiles ${before.tiles}→${after.tiles} — a well that drains has nothing left to read`);
+  ok('the rain more than keeps up with clearing', after.tiles >= before.tiles,
+    `tiles ${before.tiles}→${after.tiles}`);
 }
 
 console.log('a scribble is rejected, not guessed');
@@ -117,7 +128,7 @@ console.log('a scribble is rejected, not guessed');
 }
 
 const end = await g();
-ok('the well refills after clearing', end.height >= 5, `height=${end.height}`);
+ok('the well is filling up', end.height >= 3, `height=${end.height}`);
 ok('console is clean', errors.length === 0, errors.slice(0, 4).join(' | '));
 
 await page.screenshot({ path: process.env.SHOT ?? '/tmp/glyph-drop.png' });

@@ -543,7 +543,12 @@ export function recognize(strokes: Stroke[], opts: RecognizeOptions = {}): Resul
   // accepting any gesture at all whenever the bottom pair matched. Nothing
   // errored; it just went dead, which is the worst way for a rule to be wrong.
   const pool = opts.expect ? [...new Set(opts.expect)] : [];
-  if (pool.length) {
+  // Only when the board has genuinely narrowed the field. A pool holding all
+  // four glyphs carries no prior, so running the relaxed pass over it would not
+  // be "the benefit of the doubt" — it would just be a lower bar, trading
+  // rejections (which cost the player a moment) for wrong glyphs (which clear a
+  // tile they did not choose).
+  if (pool.length && pool.length < GLYPHS.length) {
     const relaxed = pick(scores, pool, ACCEPT_EXPECTED, pool.length > 1 ? MARGIN_EXPECTED : 0);
     if (relaxed.glyph) {
       return { glyph: relaxed.glyph, confidence: relaxed.score, scores, features: f, reason: explain(relaxed.glyph, f), pending: false };

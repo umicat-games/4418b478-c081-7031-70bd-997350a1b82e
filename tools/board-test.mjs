@@ -57,20 +57,63 @@ console.log('groups');
     new Set(groups.flat().map((t) => t.id)).size === groups.flat().length);
 }
 
-console.log('targets');
+console.log('matching');
 {
-  const g = make(['....xx', 'ovxwwo']);
-  const t0 = B.targets(g, 0);
-  ok('the pair starts at the cursor column',
-    t0.map((x) => x.tile.glyph).join() === 'circle,chevron', JSON.stringify(t0.map((x) => x.tile.glyph)));
-  const t2 = B.targets(g, 2);
-  ok('and moves with it',
-    t2.map((x) => x.tile.glyph).join() === 'cross,wave', JSON.stringify(t2.map((x) => x.tile.glyph)));
-  ok('the sweep wraps', B.targets(g, 5)[1].col === 0);
-  const sparse = make(['..x...', 'o.x...']);
-  ok('an empty column is stepped over, not stalled on',
-    B.targets(sparse, 1).map((x) => x.col).join() === '2,0', JSON.stringify(B.targets(sparse, 1).map((x) => x.col)));
-  ok('advancing goes past the furthest cleared', B.advance(4, 1) === 0 && B.advance(0, 0) === 1);
+  const g = make(['oooooo', 'wwxwww', 'ovxwwo']);
+  const m = B.lowestMatch(g, 'wave');
+  ok('matches the lowest row holding the glyph', m.row === 0, JSON.stringify(m && m.row));
+  ok('and takes every one of them in that row', m.tiles.length === 2, String(m && m.tiles.length));
+  // Bottom two rows hold no circle at all; the pair up top is the match.
+  const up = B.lowestMatch(make(['oo....', 'wwxwww', 'wvxwwv']), 'circle');
+  ok('climbs past rows that do not hold it', up.row === 2 && up.tiles.length === 2,
+    JSON.stringify(up && { row: up.row, n: up.tiles.length }));
+  const high = B.lowestMatch(make(['oooooo', 'wwwwww']), 'circle');
+  ok('a glyph only found higher up still matches', high.row === 1 && high.tiles.length === 6,
+    JSON.stringify(high && { row: high.row, n: high.tiles.length }));
+  ok('a glyph that is not on the board does not match',
+    B.lowestMatch(make(['wwwwww']), 'cross') === null);
+  ok('present() lists exactly what is there',
+    B.present(make(['ovvv..'])).sort().join() === 'chevron,circle');
+}
+
+console.log('the rain');
+{
+  let s = 11;
+  const rng = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
+  const g = make(['....x.', 'oxwvox']);
+  const n = B.nextDrop(g, rng);
+  ok('picks a column with room', n && B.height(g, n.col) < B.ROWS, JSON.stringify(n));
+  // Fire it a lot: the bias is towards short columns, so the tall one must not
+  // be the one that keeps getting fed.
+  const counts = new Array(B.COLS).fill(0);
+  for (let i = 0; i < 400; i++) counts[B.nextDrop(g, rng).col]++;
+  ok('and leans towards the shorter ones', counts[4] > counts[0] * 1.15,
+    `col0(tall)=${counts[0]} col4(short)=${counts[4]}`);
+
+  // 200 rained tiles must never hand out a free three-in-a-row.
+  const live = B.emptyGrid();
+  B.refill(live, 3, rng, true);
+  let dealt = 0;
+  for (let i = 0; i < 200; i++) {
+    const d = B.nextDrop(live, rng);
+    if (!d) break;
+    B.drop(live, d.col, d.glyph);
+    B.applyGravity(live);
+    if (B.findGroups(live).length) { dealt++; }
+    B.remove(live, new Set(B.findGroups(live).flat().map((t) => t.id)));
+    B.applyGravity(live);
+  }
+  ok('never deals a match itself', dealt === 0, `${dealt} free matches dealt`);
+}
+
+console.log('the end');
+{
+  ok('an empty well is not full', B.isFull(B.emptyGrid()) === false);
+  const packed = B.emptyGrid();
+  let s2 = 3;
+  B.refill(packed, B.ROWS, () => ((s2 = (s2 * 1103515245 + 12345) >>> 0) / 4294967296));
+  ok('a packed well is', B.isFull(packed) === true);
+  ok('and has nowhere left to drop', B.nextDrop(packed, Math.random) === null);
 }
 
 console.log('chain resolution');
@@ -78,7 +121,7 @@ console.log('chain resolution');
   // Clearing the bottom-left circle drops the cross onto two crosses.
   const g = make(['x.....', 'x.....', 'oxx...']);
   const before = B.findGroups(g).length;
-  B.remove(g, new Set([B.targets(g, 0)[0].tile.id]));
+  B.remove(g, new Set(B.lowestMatch(g, 'circle').tiles.map((t) => t.id)));
   B.applyGravity(g);
   const after = B.findGroups(g);
   ok('no group before the clear', before === 0);
