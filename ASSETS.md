@@ -111,3 +111,17 @@ via `animator.play(name)` and hand control back.
 The manifest maps the ones a game reaches for by semantic name; the rest are
 reachable by their raw clip name. **`run` is called `sprint` inside the file** —
 which is why clips are mapped by meaning and never guessed.
+
+## Audio
+
+`public/audio/` holds five effects taken from the sibling `survivor` project
+(`coin`, `upgrade`, `denied`, `build`, `ui-press`), which sourced them from CC0
+libraries. They are placeholders chosen for timing rather than for character —
+`coin` is the clear, `upgrade` is a chain, `denied` is a wrong glyph, `build` is
+a tile landing, `ui-press` is a stroke the recogniser refused.
+
+The split between the last two is the one worth keeping when these are replaced.
+A refused stroke and a wrong glyph are different mistakes: one costs the player
+nothing and should sound like nothing much, the other costs a move and should
+sound like it. Giving them the same sound teaches players that the recogniser is
+unreliable when in fact they drew the wrong shape.

@@ -1,32 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Umicat Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>Glyph Drop</title>
     <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { height: 100%; overflow: hidden; background: #000; }
+      * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { height: 100%; overflow: hidden; background: #0c1017;
+        font: 500 15px/1.4 system-ui, -apple-system, "PingFang SC", sans-serif; color: #e9eef7;
+        /* The whole screen is a drawing surface, so nothing may scroll, zoom or
+           pull-to-refresh under the finger. */
+        touch-action: none; overscroll-behavior: none; }
       canvas { display: block; width: 100%; height: 100%; }
-      /* Simple text HUD. A 3D game's UI is DOM on the web — there is no reason
-         to draw a score with triangles. */
-      #hud {
-        /* Above the platform's on-screen controls, which are a full-screen
-           layer at z-index 10. A HUD is the game's own first-class UI, and a
-           button in it — a mute toggle, a shop tab — is otherwise unreachable
-           on a phone while looking perfectly normal. The SDK also keeps its
-           zones out of the top of the screen, but that is a default sized for
-           a short HUD, not a guarantee. */
-        z-index: 20;
-        position: fixed; left: 16px; top: 14px; pointer-events: none;
-        font: 600 16px/1.5 system-ui, sans-serif; color: #fff;
-        text-shadow: 0 2px 6px rgba(0,0,0,.55); max-width: 80vw;
-      }
+
+      /* z-order, bottom up: the 3D board, the ink, the invisible surface that
+         collects strokes, the HUD, the dialog. There is no platform control
+         layer in this game — `Input3D` is never constructed, because the left
+         half of the screen being a thumbstick is exactly wrong here. */
+      #game { position: fixed; inset: 0; z-index: 1; }
+      #ink  { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+      #draw { position: fixed; inset: 0; z-index: 3; }
+      #hud  { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+      #over { position: fixed; inset: 0; z-index: 9; display: none;
+        align-items: center; justify-content: center; background: rgba(8,11,17,.82); }
+
+      #bar { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 16px; right: 16px;
+        display: flex; align-items: flex-start; gap: 12px; }
+      #score { font-size: 30px; font-weight: 700; letter-spacing: .5px; text-shadow: 0 2px 10px #000a; }
+      #score small { display: block; font-size: 12px; font-weight: 500; opacity: .55; letter-spacing: 0; }
+      #chips { margin-left: auto; display: flex; gap: 8px; }
+      .chip { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+        background: #1b2230; border: 1.5px solid #2f3a4f; box-shadow: 0 4px 14px #0007; }
+      .chip svg { width: 30px; height: 30px; }
+      #flash { position: absolute; left: 0; right: 0; top: 34%; text-align: center;
+        font-size: 34px; font-weight: 800; opacity: 0; transition: opacity .18s;
+        text-shadow: 0 3px 18px #000c; }
+      #hint { position: absolute; left: 20px; right: 20px; bottom: max(26px, env(safe-area-inset-bottom));
+        text-align: center; opacity: .62; font-size: 14px; transition: opacity .5s; }
+
+      .card { background: #151b26; border: 1px solid #2b3446; border-radius: 18px;
+        padding: 26px 30px; text-align: center; min-width: 250px; box-shadow: 0 20px 60px #000b; }
+      .card h2 { font-size: 21px; margin-bottom: 4px; }
+      .card p { opacity: .65; font-size: 14px; margin-bottom: 18px; }
+      .card b { font-size: 40px; display: block; margin: 10px 0 2px; }
+      button { font: 600 16px/1 system-ui, sans-serif; color: #0c1017; background: #e9eef7;
+        border: 0; border-radius: 10px; padding: 13px 26px; }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
-    <div id="hud"></div>
+    <canvas id="ink"></canvas>
+    <div id="draw"></div>
+    <div id="hud">
+      <div id="bar">
+        <div id="score">0<small>最高 0</small></div>
+        <div id="chips"></div>
+      </div>
+      <div id="flash"></div>
+      <div id="hint">画出下方高亮方块上的符号</div>
+    </div>
+    <div id="over">
+      <div class="card">
+        <h2>堆到顶了</h2>
+        <b id="over-score">0</b>
+        <p id="over-best">最高 0</p>
+        <button id="again">再来一局</button>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

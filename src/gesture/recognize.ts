@@ -1,5 +1,5 @@
 /**
- * Gesture recognition for the four tile glyphs — circle, triangle, cross, wave.
+ * Gesture recognition for the four tile glyphs — circle, chevron, cross, wave.
  *
  * WHY NOT $1 / $P. The classic stroke recognizers (Wobbrock's $1, $P) match a
  * resampled path against templates and return the NEAREST one. Nearest-of-four
@@ -10,18 +10,23 @@
  * reason that produced it (`reason`) so a miss can be explained instead of
  * re-tuned by feel.
  *
- * The four glyphs also differ TOPOLOGICALLY, not just in shape:
- *   circle   — one stroke, closed, no corners, even radius
- *   triangle — one stroke, closed, three corners, radius swings vertex-to-edge
- *   cross    — two straight strokes that intersect at a wide angle
- *   wave     — one stroke, open, wide, two or more alternating humps
- * Features read those differences directly, which is why this beats template
- * distance on a set this small — and why it can say "closed but only 1 corner,
- * that's a circle not a triangle" out loud.
+ * The four glyphs differ TOPOLOGICALLY, not just in shape, and that is the whole
+ * reason this works:
+ *   circle  — one stroke, CLOSED, no corners
+ *   chevron — one stroke, open, ONE sharp corner, two straight legs
+ *   cross    — TWO straight strokes that intersect
+ *   wave    — one stroke, open, SMOOTH, two or more alternating humps
+ * No two of them share a row. The set started with a triangle instead of the
+ * chevron and that was the one real accuracy problem in it: a triangle is a
+ * closed loop with corners, a circle is a closed loop without, and a triangle
+ * drawn fast is rounded enough that the distinction stops being measurable —
+ * bench said 16% when the two were the only live candidates. A chevron is the
+ * same gesture MINUS the closing stroke, which costs nothing to draw and moves
+ * it into an empty row of the table.
  */
 
-export type Glyph = 'circle' | 'triangle' | 'cross' | 'wave';
-export const GLYPHS: Glyph[] = ['circle', 'triangle', 'cross', 'wave'];
+export type Glyph = 'circle' | 'chevron' | 'cross' | 'wave';
+export const GLYPHS: Glyph[] = ['circle', 'chevron', 'cross', 'wave'];
 
 export interface Pt { x: number; y: number; t: number }
 export type Stroke = Pt[];
@@ -39,6 +44,24 @@ export interface Features {
   turning: number;
   corners: number;
   cornerAngles: number[];
+  /** The sharpest windowed turn found, in degrees. Diagnostic only — see `bend`. */
+  cornerAngle: number;
+  /**
+   * Angle between the leading third of the stroke and the trailing third, in
+   * degrees. This is how a chevron's apex is measured, and `cornerAngle` is not,
+   * because the corner detector's window ATTENUATES a real corner: a perfectly
+   * ordinary ∧ with a 115° interior angle bends by 65° and was being measured at
+   * 49°, right on the detection threshold, so a fifth of them were rejected. Two
+   * chords far either side of the bend give the true angle and do not care about
+   * noise near the apex at all.
+   */
+  bend: number;
+  /**
+   * The straighter-is-higher measure of the two halves either side of that
+   * corner, worst half. A chevron is two straight legs and a bent wave is not,
+   * which is what keeps "one sharp bend" from eating "one gentle hump".
+   */
+  legStraightness: number;
   /** (p90-p10)/mean of the distance from the centroid. Circle ~0.2, triangle ~0.6. */
   radialVar: number;
   /** alternating significant extrema across the dominant axis. A tilde has 2. */
@@ -208,7 +231,7 @@ function angleBetween(ax: number, ay: number, bx: number, by: number): number {
 /** Corners as local maxima of turn-over-a-window. A window, not a per-point
  *  derivative: a single-point angle is dominated by sampling noise, and a
  *  hand-drawn corner is rounded over several points anyway. */
-function findCorners(pts: Pt[], cyclic: boolean): { count: number; angles: number[] } {
+function findCorners(pts: Pt[], cyclic: boolean): { count: number; angles: number[]; indices: number[]; peak: number } {
   const n = pts.length;
   const k = Math.max(2, Math.round(n / 14));
   const turn = new Array<number>(n).fill(0);
@@ -224,6 +247,7 @@ function findCorners(pts: Pt[], cyclic: boolean): { count: number; angles: numbe
   // Non-maximum suppression, or one rounded corner reads as four.
   const span = Math.round(k * 1.6);
   const angles: number[] = [];
+  const indices: number[] = [];
   for (let i = 0; i < n; i++) {
     if (turn[i] < CORNER_ANGLE) continue;
     let best = true;
@@ -232,9 +256,22 @@ function findCorners(pts: Pt[], cyclic: boolean): { count: number; angles: numbe
       if (idx < 0 || idx >= n || idx === i) continue;
       if (turn[idx] > turn[i]) { best = false; break; }
     }
-    if (best) angles.push(turn[i]);
+    if (best) { angles.push(turn[i]); indices.push(i); }
   }
-  return { count: angles.length, angles };
+  let peak = 0;
+  for (let i = 0; i < n; i++) if (turn[i] > turn[peak]) peak = i;
+  return { count: angles.length, angles, indices, peak };
+}
+
+/** chord/path of each half either side of `at`, worst half. A corner too close
+ *  to an end is not a bend in the stroke, it is a hook on the end of one, so it
+ *  scores 0 rather than reporting a leg three points long as perfectly straight. */
+function legs(pts: Pt[], at: number): number {
+  const n = pts.length;
+  if (at < n * 0.2 || at > n * 0.8) return 0;
+  const a = pts.slice(0, at + 1), b = pts.slice(at);
+  const q = (seg: Pt[]) => (seg.length > 1 ? dist(seg[0], seg[seg.length - 1]) / (pathLength(seg) || 1) : 0);
+  return Math.min(q(a), q(b));
 }
 
 /** Dominant axis by PCA. The bbox major axis lies about a tilted wave. */
@@ -315,7 +352,25 @@ export function extract(strokes: Stroke[]): Features {
   const loop = closed
     ? smooth(resample(closing.length < 24 ? densify(closing) : closing, N))
     : first;
-  const { count: corners, angles: cornerAngles } = findCorners(loop, closed);
+  const { count: corners, angles: cornerAngles, indices: cornerAt, peak } = findCorners(loop, closed);
+  let cornerAngle = 0;
+  cornerAngles.forEach((a) => { if (a > cornerAngle) cornerAngle = a; });
+
+  // Where the stroke bends most, WITHOUT asking whether it bends enough to be a
+  // corner. Gating the split on the corner threshold meant a chevron too wide to
+  // register a corner also reported perfectly-unstraight legs, so two terms
+  // failed together on one measurement — the same mistake as multiplying corner
+  // count by radius swing, in a different place.
+  const legStraightness = closed ? 0 : legs(loop, peak);
+
+  const third = Math.max(2, Math.round(first.length * 0.35));
+  let bend = 0;
+  if (first.length > 2 * third) {
+    const ax = first[third].x - first[0].x, ay = first[third].y - first[0].y;
+    const n1 = first.length - 1;
+    const bx = first[n1].x - first[n1 - third].x, by = first[n1].y - first[n1 - third].y;
+    if ((ax || ay) && (bx || by)) bend = angleBetween(ax, ay, bx, by) * DEG;
+  }
 
   let turning = 0;
   for (const s of rs) {
@@ -369,6 +424,9 @@ export function extract(strokes: Stroke[]): Features {
     turning,
     corners,
     cornerAngles: cornerAngles.map((a) => Math.round(a)),
+    cornerAngle: Math.round(cornerAngle),
+    bend: Math.round(bend),
+    legStraightness,
     radialVar,
     humps,
     progress,
@@ -381,7 +439,7 @@ export function extract(strokes: Stroke[]): Features {
 }
 
 function score(f: Features): Record<Glyph, number> {
-  const s: Record<Glyph, number> = { circle: 0, triangle: 0, cross: 0, wave: 0 };
+  const s: Record<Glyph, number> = { circle: 0, chevron: 0, cross: 0, wave: 0 };
   const one = f.strokeCount === 1;
 
   if (one) {
@@ -389,20 +447,28 @@ function score(f: Features): Record<Glyph, number> {
     const turnS = fall(Math.abs(f.turning - 1), 0.22, 0.60);
 
     // Corner COUNT and radius SWING measure the same thing two ways, so they are
-    // added, not multiplied. Multiplying them was the bench's worst finding: a
-    // fast triangle is rounded enough that corner detection finds two corners or
-    // one, the count term went to 0.1, and a shape whose radius still swung like
-    // a triangle's was rejected outright. A gate that can only be satisfied one
-    // way fails whenever that one way is the noisy one. Closure and turning DO
-    // multiply — those are independent conditions that all have to hold.
+    // added, not multiplied: a gate that can only be satisfied one way fails
+    // whenever that one way is the noisy one. Closure and turning DO multiply —
+    // those are independent conditions that all have to hold.
     const cornerlessS = f.corners === 0 ? 1 : f.corners === 1 ? 0.8 : f.corners === 2 ? 0.35 : 0.1;
-    const corneredS = f.corners === 3 ? 1 : f.corners === 2 ? 0.8 : f.corners === 4 ? 0.6 : 0.25;
 
     s.circle = closedS * turnS
       * (0.45 * cornerlessS + 0.55 * fall(f.radialVar, 0.30, 0.55));
 
-    s.triangle = closedS * turnS
-      * (0.45 * corneredS + 0.55 * ramp(f.radialVar, 0.26, 0.46));
+    // One bend, sharp, with a straight leg either side of it. No orientation
+    // term on purpose: nothing else in the set occupies "open with exactly one
+    // sharp corner", so a chevron drawn tilted, upside down (∨) or on its side
+    // (<) is still unambiguous, and refusing those would only invent a failure.
+    s.chevron = ramp(f.closure, 0.38, 0.62)
+      * ramp(f.bend, 36, 58)
+      * ramp(f.legStraightness, 0.78, 0.93)
+      // A chevron is ONE bend, not a run of them. `humps` counts alternating
+      // excursions across the dominant axis, and a wave has two.
+      * (f.humps <= 1 ? 1 : 0.15)
+      // More than two detected corners means a zigzag, not a chevron. One or
+      // none is fine — the bend is already measured, this only rules out extra
+      // bends the other terms cannot see.
+      * (f.corners <= 1 ? 1 : f.corners === 2 ? 0.5 : 0.1);
 
     s.wave = ramp(f.closure, 0.32, 0.58)
       * (f.humps >= 3 ? 1 : f.humps === 2 ? 0.95 : 0.10)
@@ -440,7 +506,7 @@ export function recognize(strokes: Stroke[], opts: RecognizeOptions = {}): Resul
   const blank: Features = extract(usable.length ? usable : [[{ x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }]]);
 
   if (!usable.length) {
-    return { glyph: null, confidence: 0, scores: { circle: 0, triangle: 0, cross: 0, wave: 0 }, features: blank, reason: 'nothing drawn', pending: false };
+    return { glyph: null, confidence: 0, scores: { circle: 0, chevron: 0, cross: 0, wave: 0 }, features: blank, reason: 'nothing drawn', pending: false };
   }
 
   const f = extract(usable);
@@ -458,28 +524,56 @@ export function recognize(strokes: Stroke[], opts: RecognizeOptions = {}): Resul
   // commit the instant the finger leaves the glass.
   const pending = f.strokeCount === 1 && f.straightness > 0.88 && f.crossings === 0;
 
-  const pool = opts.expect?.length ? opts.expect : GLYPHS;
+  // Strict first, relaxed second, and that order is the whole trick.
+  //
+  // A stroke that is unmistakably a circle is reported as a circle even when no
+  // circle is live — the player gets told what they drew, and the game can
+  // answer with a miss. Only when the four-class decision is genuinely unsure
+  // does the board's expectation get to break the tie, which is where narrowing
+  // to the live tiles belongs: as the benefit of the doubt, not as a filter that
+  // relabels clear input.
+  const strict = pick(scores, GLYPHS, ACCEPT, MARGIN);
+  if (strict.glyph) {
+    return { glyph: strict.glyph, confidence: strict.score, scores, features: f, reason: explain(strict.glyph, f), pending: false };
+  }
+
+  // Deduplicated, because the two live tiles are frequently the SAME glyph and a
+  // duplicated candidate made the margin check compare a glyph against itself:
+  // best minus second was exactly 0, every margin failed, and the game stopped
+  // accepting any gesture at all whenever the bottom pair matched. Nothing
+  // errored; it just went dead, which is the worst way for a rule to be wrong.
+  const pool = opts.expect ? [...new Set(opts.expect)] : [];
+  if (pool.length) {
+    const relaxed = pick(scores, pool, ACCEPT_EXPECTED, pool.length > 1 ? MARGIN_EXPECTED : 0);
+    if (relaxed.glyph) {
+      return { glyph: relaxed.glyph, confidence: relaxed.score, scores, features: f, reason: explain(relaxed.glyph, f), pending: false };
+    }
+    return { glyph: null, confidence: relaxed.score, scores, features: f, reason: relaxed.reason, pending };
+  }
+  return { glyph: null, confidence: strict.score, scores, features: f, reason: strict.reason, pending };
+}
+
+/** Argmax within `pool`, subject to an accept floor and a margin over the
+ *  runner-up. A single-candidate pool has no runner-up, so pass margin 0. */
+function pick(scores: Record<Glyph, number>, pool: Glyph[], accept: number, margin: number) {
   const ranked = [...pool].sort((a, b) => scores[b] - scores[a]);
   const best = ranked[0];
   const second = ranked[1];
-  const bestScore = scores[best] ?? 0;
-  const secondScore = second ? scores[second] : 0;
-  const accept = opts.expect?.length ? ACCEPT_EXPECTED : ACCEPT;
-  const margin = opts.expect?.length ? MARGIN_EXPECTED : MARGIN;
-
-  if (bestScore < accept) {
-    return { glyph: null, confidence: bestScore, scores, features: f, reason: `best ${best}=${bestScore.toFixed(2)} under ${accept}`, pending };
+  const score = scores[best] ?? 0;
+  const runnerUp = second ? scores[second] : 0;
+  if (score < accept) {
+    return { glyph: null, score, reason: `best ${best}=${score.toFixed(2)} under ${accept}` };
   }
-  if (bestScore - secondScore < margin) {
-    return { glyph: null, confidence: bestScore, scores, features: f, reason: `${best} ${bestScore.toFixed(2)} vs ${second} ${secondScore.toFixed(2)} — too close`, pending };
+  if (score - runnerUp < margin) {
+    return { glyph: null, score, reason: `${best} ${score.toFixed(2)} vs ${second} ${runnerUp.toFixed(2)} — too close` };
   }
-  return { glyph: best, confidence: bestScore, scores, features: f, reason: explain(best, f), pending: false };
+  return { glyph: best as Glyph, score, reason: '' };
 }
 
 function explain(g: Glyph, f: Features): string {
   switch (g) {
     case 'circle': return `closed (gap ${f.closure.toFixed(2)}), ${f.corners} corners, even radius (${f.radialVar.toFixed(2)})`;
-    case 'triangle': return `closed, ${f.corners} corners at ${f.cornerAngles.join('/')}°, radius swings ${f.radialVar.toFixed(2)}`;
+    case 'chevron': return `open (gap ${f.closure.toFixed(2)}), bends ${f.bend}°, legs ${f.legStraightness.toFixed(2)} straight`;
     case 'cross': return f.strokeCount === 2
       ? `2 straight strokes (${f.straightness.toFixed(2)}) crossing at ${Math.round(f.strokeAngle)}°`
       : `one stroke crossing itself ${f.crossings}×`;

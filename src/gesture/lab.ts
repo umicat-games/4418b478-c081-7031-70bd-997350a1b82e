@@ -35,7 +35,13 @@ let last: { r: Result; expected: Result | null } | null = null;
 let startedAt = 0;
 
 function load(): Sample[] {
-  try { return JSON.parse(localStorage.getItem(STORE) ?? '[]') as Sample[]; } catch { return []; }
+  try {
+    const all = JSON.parse(localStorage.getItem(STORE) ?? '[]') as Sample[];
+    // The glyph set has changed once already (triangle → chevron) and it will
+    // change again. A corpus row labelled with a glyph that no longer exists has
+    // no column to land in, and the confusion matrix would throw on it.
+    return all.filter((s) => (GLYPHS as string[]).includes(s.target));
+  } catch { return []; }
 }
 function save(): void {
   // Round the coordinates: a corpus of raw floats is four times the size for
@@ -84,7 +90,7 @@ function drawTrail(strokes: Stroke[]): void {
 
 const ICONS: Record<Glyph, string> = {
   circle: '<circle cx="17" cy="17" r="12" fill="none" stroke="currentColor" stroke-width="3"/>',
-  triangle: '<path d="M17 5 L30 29 L4 29 Z" fill="none" stroke="currentColor" stroke-width="3"/>',
+  chevron: '<path d="M4 25 L17 8 L30 25" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>',
   cross: '<path d="M6 6 L28 28 M28 6 L6 28" fill="none" stroke="currentColor" stroke-width="3"/>',
   wave: '<path d="M3 17 q7 -11 14 0 q7 11 14 0" fill="none" stroke="currentColor" stroke-width="3"/>',
 };
@@ -97,7 +103,7 @@ function renderPrompt(): void {
 
 function matrix(rows: Sample[], useExpect: boolean) {
   const m: Record<string, Record<string, number>> = {};
-  for (const g of GLYPHS) { m[g] = { circle: 0, triangle: 0, cross: 0, wave: 0, reject: 0 }; }
+  for (const g of GLYPHS) { m[g] = { circle: 0, chevron: 0, cross: 0, wave: 0, reject: 0 }; }
   let hit = 0, reject = 0;
   for (const s of rows) {
     const r = recognize(s.strokes, useExpect ? { expect: decoyFor(s.target) } : {});
@@ -137,7 +143,8 @@ function render(): void {
     const rows: [string, string | number][] = [
       ['strokes', f.strokeCount], ['raw pts', f.rawPoints], ['size', Math.round(f.size)],
       ['aspect', f.aspect.toFixed(2)], ['closure', f.closure.toFixed(2)], ['turning', f.turning.toFixed(2)],
-      ['corners', `${f.corners} [${f.cornerAngles.join(',')}]`], ['radialVar', f.radialVar.toFixed(2)],
+      ['corners', `${f.corners} [${f.cornerAngles.join(',')}]`], ['legs', f.legStraightness.toFixed(2)],
+      ['radialVar', f.radialVar.toFixed(2)], ['progress', f.progress.toFixed(2)],
       ['humps', f.humps], ['axisTilt', Math.round(f.axisTilt)], ['crossings', f.crossings],
       ['straightness', f.straightness.toFixed(2)], ['strokeAngle', Math.round(f.strokeAngle)],
       ['lengthRatio', f.lengthRatio.toFixed(2)],

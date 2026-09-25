@@ -1,4 +1,57 @@
-# Umicat 3D game
+# Glyph Drop — a gesture match-3
+
+Draw the mark on one of the two outlined tiles at the bottom of the well. It
+goes, the stack falls, three-or-more of a kind clears itself, and the well tops
+up from above. A three.js game on the Umicat platform; this file is what the
+agent reads first.
+
+| | |
+|---|---|
+| `src/main.ts` | scene, loop, input, the move/cascade sequence |
+| `src/board.ts` | the rules, with no three.js in them — `tools/board-test.mjs` checks them |
+| `src/gesture/` | the recogniser and the pointer layer — see "The gesture recogniser" below |
+| `src/glyphs.ts` | one definition of each mark, used by tile faces and HUD chips alike |
+| `public/scenes3d/main.json` | the well (back panel, floor, rails) as authored design data |
+
+```bash
+npm run dev                         # play it
+npm run build && npx vite preview --port 5199 &
+node tools/pw-smoke.mjs             # headless: does drawing actually clear tiles
+node tools/board-test.mjs <bundle>  # the rules
+node tools/gesture-bench.mjs <bundle>
+```
+
+## Things this game learned the hard way
+
+**Refill must not create matches.** Topping the well up with uniformly random
+glyphs looked obviously right and made the board play itself: 54 cells of four
+glyphs throw up three-in-a-row constantly, so a clear set off a cascade that set
+off a refill that set off another cascade. A smoke run scored 67,000 and filled
+the well without the player drawing anything. Chains are supposed to come from
+the fall after a clear.
+
+**Difficulty counts MOVES, not tiles cleared.** Counting tiles made a good chain
+punish the player — one lucky cascade jumped the floor four rows, so playing well
+ended the run faster than playing badly.
+
+**The target pair sweeps; it does not sit at the bottom-left.** "The two lowest
+tiles" ties across the whole bottom row every turn, the tie-break always resolves
+left, and only that one column ever drained and refilled — the right half of the
+board became a wall nothing touched. A cursor that advances past whatever was
+just cleared circulates every column, and the player reads it the same way.
+
+**A gesture drawn mid-cascade is queued, never punished.** Chains take a few
+hundred ms and a player in rhythm draws through them. The queued glyph applies if
+it matches the new pair and is discarded silently if it does not — charging a
+miss for tiles that were not on screen when the stroke started is punishing the
+player for the animation.
+
+**`Input3D` is never constructed here**, so there is no platform control layer at
+all and the z-indexes in `index.html` start at 1 instead of stepping around 10.
+On touch that class claims the left half of the screen for a thumbstick and the
+right half for the camera; this game needs the whole screen as paper.
+
+## The platform underneath
 
 A three.js game on the Umicat platform. This file is what the agent reads first.
 

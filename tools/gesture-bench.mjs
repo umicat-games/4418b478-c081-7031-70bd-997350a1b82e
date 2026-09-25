@@ -41,37 +41,32 @@ function circle({ n, noise, sloppy }) {
   return [jitter(pts, noise)];
 }
 
-function triangle({ n, noise, sloppy }) {
-  const R = rng(70, 150), cx = rng(150, 250), cy = rng(150, 250);
-  const a0 = rng(0, 6.28), dir = rnd() < 0.5 ? 1 : -1;
-  const v = [0, 1, 2].map((k) => {
-    const a = a0 + dir * k * 2.094;
-    return { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) };
+function chevron({ n, noise, sloppy }) {
+  const L = rng(70, 150), ax = rng(150, 250), ay = rng(140, 220);
+  // Interior angle 50deg-115deg. Wider than that and the apex deviates by less
+  // than the corner threshold, which is the honest answer: a 150deg "chevron" is
+  // a wobbly line and should be refused rather than guessed at.
+  const half = rng(0.44, 1.0);
+  const flip = rnd() < 0.5 ? 1 : -1;          // caret or V
+  const rot = rng(-0.45, 0.45) * sloppy;      // drawn tilted
+  const dir = rnd() < 0.5;                    // left leg first or right leg first
+  const rotate = (x, y) => ({
+    x: ax + x * Math.cos(rot) - y * Math.sin(rot),
+    y: ay + x * Math.sin(rot) + y * Math.cos(rot),
   });
-  const start = Math.floor(rng(0, 3));
-  const loop = [0, 1, 2, 3].map((k) => v[(start + k) % 3]);
-  const gap = rng(0, 0.22) * sloppy;               // stops short of the start
+  const leg = (sign) => rotate(sign * L * Math.sin(half), flip * L * Math.cos(half));
+  const a = leg(dir ? -1 : 1), b = leg(dir ? 1 : -1);
+  const apex = rotate(0, 0);
   const pts = [];
-  const per = Math.floor(n / 3);
-  for (let e = 0; e < 3; e++) {
-    const a = loop[e], b = loop[e + 1];
-    const upto = e === 2 ? 1 - gap : 1;
-    // <= per on the LAST edge only: every other edge's endpoint is the next
-    // edge's first point, but dropping it on the last one left the shape short
-    // by a quarter of an edge on top of `gap`, and at 4 points per edge that is
-    // a third of the perimeter missing. The recogniser was being scored on
-    // triangles that were genuinely open (closure 0.34) and was right to reject
-    // them — a generator bug reading as a recogniser failure.
-    for (let i = 0; i < per + (e === 2 ? 1 : 0); i++) {
-      const u = (i / per) * upto;
-      pts.push(P(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u, pts.length));
-    }
+  const per = Math.max(3, Math.floor(n / 2));
+  for (let i = 0; i < per; i++) {
+    const u = i / per;
+    pts.push(P(a.x + (apex.x - a.x) * u, a.y + (apex.y - a.y) * u, pts.length));
   }
-  // Rounded corners: a hand does not stop at a vertex. The window is capped
-  // against the point count — smoothing 12 points over a +-5 window does not
-  // model a fast triangle, it models a blob, and it was scoring the recogniser
-  // against shapes no hand produces (closure 0.85 on a "closed" triangle gave
-  // it away).
+  for (let i = 0; i <= per; i++) {
+    const u = i / per;
+    pts.push(P(apex.x + (b.x - apex.x) * u, apex.y + (b.y - apex.y) * u, pts.length));
+  }
   const w = Math.max(1, Math.min(3, Math.floor(pts.length / 6), Math.round(sloppy * 2)));
   return [jitter(smooth(pts, w), noise)];
 }
@@ -112,7 +107,7 @@ function wave({ n, noise, sloppy }) {
   return [jitter(pts, noise)];
 }
 
-const GEN = { circle, triangle, cross, wave };
+const GEN = { circle, chevron, cross, wave };
 const CASES = [
   { name: 'careful  (40 pts, low noise)', n: 40, noise: 1.2, sloppy: 0.5 },
   { name: 'normal   (28 pts, mid noise)', n: 28, noise: 2.6, sloppy: 1.0 },
@@ -171,7 +166,7 @@ for (const c of CASES) {
     const fs = [];
     for (let i = 0; i < 60; i++) fs.push(recognize(GEN[g](c), {}).features);
     const avg = (k) => (fs.reduce((a, f) => a + f[k], 0) / fs.length).toFixed(2);
-    console.log(`       ${['closure','turning','corners','radialVar','humps','progress','aspect','crossings','straightness']
+    console.log(`       ${['closure','turning','corners','bend','legStraightness','radialVar','humps','progress','aspect','straightness']
       .map((k) => `${k}=${avg(k)}`).join(' ')}`);
   }
   pairTable(c);
