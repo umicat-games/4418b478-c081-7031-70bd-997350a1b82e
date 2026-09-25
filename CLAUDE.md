@@ -385,3 +385,41 @@ the game actually promises.
 **A test assertion on a fluctuating quantity needs a band, not a knife edge.**
 "the well never dips by a single tile" failed on a big cascade, which is the
 game working.
+
+**A feature that measures two things at once will eventually be asked about the
+wrong one.** `radialVar` — radius spread from the centroid — was there to answer
+"does this closed outline have vertices", and it also answers "is this outline
+circular", because an ellipse's radius genuinely varies from minor axis to
+major. So a 2:1 oval scored like a shape with corners and a circle had to be
+drawn perfectly round to be accepted. It is now measured after the bounding box
+is squared off, which leaves it blind to eccentricity and still sharp on
+corners.
+
+**Delete a gate when the thing it separated is gone.** The circle carried a
+corner COUNT to tell it from the triangle. The triangle was replaced by the
+chevron, which is open — so nothing else in the set is closed, and the count was
+only costing ovals their score, because an ellipse's ends are real high
+curvature and register as corners.
+
+**Redundant evidence is summed; independent conditions are multiplied.** This is
+the third time it has bitten. The chevron gated on leg straightness AND hump
+count AND corner count — three ways of measuring "one clean bend" — as a
+product. On a perfectly good fast ∧ each sat near 0.8 and four of them
+multiplied to 0.35, under the accept floor: nothing was wrong, everything was
+slightly unsure, and 30% were turned down for it. Summed, the same strokes pass
+at 91%. Closure and bend stay multiplicative because they genuinely are
+independent conditions.
+
+**The multi-stroke window is 800ms, and it can afford to be.** At 300ms people's
+second stroke arrived after their first had been thrown away. A lone straight
+line means nothing in this game, so a long window only delays discarding one —
+and the one real cost, a stroke that was never meant to join the one before it,
+is handled in `capture.ts`: two strokes that do not read as a cross are retried
+as just the newest.
+
+**A generator that cannot draw the complaint cannot test the fix.** The bench
+drew perfectly round circles and straight-legged chevrons, and reported 100% on
+shapes no hand produces. Both were reported broken by a human before the bench
+could see anything wrong. When a real player reports a miss, the first move is
+to make the generator able to produce what they drew — the numbers before that
+are measuring the wrong population.

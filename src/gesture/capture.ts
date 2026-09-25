@@ -11,9 +11,17 @@ import { recognize, type Glyph, type Result, type Stroke, type Pt } from './reco
  * "the stroke continues outside the element" behaviour with nothing to leak.
  *
  * **Only the cross waits.** Committing every gesture on a timer would put a
- * ~300ms dead spot between every move in a game whose whole appeal is tempo.
- * So a finished stroke is recognised immediately and only held when it is a
- * lone straight line — the one thing that might be half of an X.
+ * dead spot between every move in a game whose whole appeal is tempo. So a
+ * finished stroke is recognised immediately and only held when it is a lone
+ * straight line — the one thing that might be half of an X.
+ *
+ * That wait is deliberately LONG (800ms), because it costs almost nothing. A
+ * lone straight line means nothing in this game, so the only thing a long window
+ * delays is throwing one away — and the first version's 300ms was short enough
+ * that people's second stroke arrived after their first had already been
+ * discarded. The one real cost of a long window is a stroke that was never meant
+ * to join the one before it, and `up` handles that directly: two strokes that do
+ * not read as a cross are retried as just the newest one.
  */
 export interface GestureCaptureOptions {
   /** Where pointerdown is read. Coordinates are relative to its bounding box. */
@@ -23,7 +31,7 @@ export interface GestureCaptureOptions {
   onChange?: (strokes: Stroke[], live: boolean) => void;
   /** The glyphs that mean something right now — see `RecognizeOptions.expect`. */
   expect?: () => Glyph[] | undefined;
-  /** How long a lone straight stroke waits for its partner. */
+  /** How long a lone straight stroke waits for its partner. Default 800ms. */
   multiStrokeWindowMs?: number;
   minSize?: number;
 }
@@ -109,12 +117,37 @@ export class GestureCapture {
     this.opts.onChange?.([...this.strokes], false);
 
     const r = this.evaluate();
-    if (this.strokes.length >= 2 || !r.pending) { this.commit(r); return; }
+    if (r.glyph) { this.commit(r); return; }
+
+    if (this.strokes.length >= 2) {
+      // Two strokes that are not a cross. Almost always this is a first stroke
+      // the player abandoned — they drew something, paused, and started again —
+      // and joining it to the new one turns a perfectly good gesture into a
+      // rejection. Retrying with only the newest stroke is what lets the wait
+      // above be long enough to actually catch a slow X.
+      const alone = this.recognizeOne(stroke);
+      this.strokes = [stroke];
+      this.opts.onChange?.([...this.strokes], false);
+      if (alone.glyph) { this.commit(alone); return; }
+      if (alone.pending) { this.arm(); return; }
+      this.commit(alone);
+      return;
+    }
+
+    if (r.pending) { this.arm(); return; }
+    this.commit(r);
+  };
+
+  private arm(): void {
     this.timer = window.setTimeout(() => {
       this.timer = null;
       this.commit(this.evaluate());
-    }, this.opts.multiStrokeWindowMs ?? 300);
-  };
+    }, this.opts.multiStrokeWindowMs ?? 800);
+  }
+
+  private recognizeOne(stroke: Stroke): Result {
+    return recognize([stroke], { expect: this.opts.expect?.(), minSize: this.opts.minSize });
+  }
 
   /** A finger that left the glass mid-stroke drew half a shape; half a shape
    *  recognised is a move the player did not make. */

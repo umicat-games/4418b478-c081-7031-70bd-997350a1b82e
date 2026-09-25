@@ -62,7 +62,9 @@ export interface Features {
    * which is what keeps "one sharp bend" from eating "one gentle hump".
    */
   legStraightness: number;
-  /** (p90-p10)/mean of the distance from the centroid. Circle ~0.2, triangle ~0.6. */
+  /** (p90-p10)/mean of the distance from the centroid, measured after the
+   *  bounding box is squared off — so it reports CORNERS, not eccentricity, and
+   *  an oval reads the same as a circle. */
   radialVar: number;
   /** alternating significant extrema across the dominant axis. A tilde has 2. */
   humps: number;
@@ -385,7 +387,19 @@ export function extract(strokes: Stroke[]): Features {
   let cx = 0, cy = 0;
   for (const p of all) { cx += p.x; cy += p.y; }
   cx /= all.length; cy /= all.length;
-  const radii = all.map((p) => Math.hypot(p.x - cx, p.y - cy)).sort((a, b) => a - b);
+
+  // Radii measured on points scaled so the bounding box is SQUARE. Without
+  // that, this feature conflates two different things — "does the outline have
+  // vertices" (what it is for) and "is the outline circular" (what it is not) —
+  // because an ellipse's radius genuinely varies from its minor axis to its
+  // major one. A 2:1 oval scored the same spread as a shape with corners, which
+  // is why a circle had to be drawn perfectly round to be accepted at all.
+  // Normalising turns any ellipse back into a circle and leaves a corner a
+  // corner. The floor on the divisor keeps a near-flat stroke from exploding;
+  // nothing closed enough to be scored as a circle gets near it.
+  const sx = 1 / Math.max(bb.w, size * 0.15);
+  const sy = 1 / Math.max(bb.h, size * 0.15);
+  const radii = all.map((p) => Math.hypot((p.x - cx) * sx, (p.y - cy) * sy)).sort((a, b) => a - b);
   const pick = (q: number) => radii[Math.min(radii.length - 1, Math.floor(q * radii.length))];
   const rMean = radii.reduce((a, b) => a + b, 0) / radii.length || 1;
   const radialVar = (pick(0.9) - pick(0.1)) / rMean;
@@ -446,14 +460,20 @@ function score(f: Features): Record<Glyph, number> {
     const closedS = fall(f.closure, 0.16, 0.40);
     const turnS = fall(Math.abs(f.turning - 1), 0.22, 0.60);
 
-    // Corner COUNT and radius SWING measure the same thing two ways, so they are
-    // added, not multiplied: a gate that can only be satisfied one way fails
-    // whenever that one way is the noisy one. Closure and turning DO multiply —
-    // those are independent conditions that all have to hold.
-    const cornerlessS = f.corners === 0 ? 1 : f.corners === 1 ? 0.8 : f.corners === 2 ? 0.35 : 0.1;
-
+    // Closed, one loop's worth of turning, and no vertices. There is no corner
+    // COUNT in here any more: it was carrying the circle-versus-triangle
+    // distinction and the triangle was replaced by the chevron, which is open —
+    // so nothing else in the set is closed and the count was only costing
+    // ovals. An ellipse's ends are genuinely high curvature and register as one
+    // or two corners, which dropped its score by two thirds for being oval,
+    // which is exactly the complaint. `radialVar` — now measured with the
+    // bounding box squared off — still catches a closed shape with real
+    // vertices, and it is the honest feature for it.
     s.circle = closedS * turnS
-      * (0.45 * cornerlessS + 0.55 * fall(f.radialVar, 0.30, 0.55));
+      * fall(f.radialVar, 0.32, 0.60)
+      // A closed zigzag is not a circle; four-plus detected corners is the only
+      // case that still needs saying out loud.
+      * (f.corners <= 3 ? 1 : 0.55);
 
     // One bend, sharp, with a straight leg either side of it. No orientation
     // term on purpose: nothing else in the set occupies "open with exactly one
@@ -466,20 +486,18 @@ function score(f: Features): Record<Glyph, number> {
       // fairly straight halves meeting at a sharp angle, which is otherwise
       // exactly the chevron description.
       * ramp(f.bend, 36, 58) * fall(f.bend, 140, 168)
-      // Loose, because `bend` now carries the separation. It was 0.78-0.93 and
-      // that threw out 30% of fast chevrons: a finger bows its legs, and a bowed
-      // leg drawn in twelve samples measures 0.68 straight.
-      * ramp(f.legStraightness, 0.62, 0.85)
-      // A chevron is ONE bend, not a run of them — but this used to be the ONLY
-      // thing keeping a chevron from scoring as a wave, and `humps` is one
-      // noisy integer: a ∧ with slightly unequal legs registers two excursions
-      // across its own axis and lost 85% of its score for it. Now that `bend`
-      // separates the two classes properly, this can go back to being a hint.
-      * (f.humps <= 1 ? 1 : 0.5)
-      // More than two detected corners means a zigzag, not a chevron. One or
-      // none is fine — the bend is already measured, this only rules out extra
-      // bends the other terms cannot see.
-      * (f.corners <= 1 ? 1 : f.corners === 2 ? 0.5 : 0.1);
+      // Straight legs, one hump, few corners: three ways of measuring the SAME
+      // thing — "one clean bend rather than a run of wiggles" — so they are
+      // summed, not multiplied. As a product each sat around 0.8 on a perfectly
+      // good fast ∧ and four of them multiplied down to 0.35, under the accept
+      // floor: nothing was wrong, everything was slightly unsure, and 30% were
+      // turned down for it. Closure and bend above stay multiplicative, because
+      // those are the two independent conditions that genuinely have to hold —
+      // they are what separate a chevron from a circle (closed) and from a wave
+      // (barely bends at all).
+      * (0.50 * ramp(f.legStraightness, 0.58, 0.86)
+        + 0.30 * (f.humps <= 1 ? 1 : 0.35)
+        + 0.20 * (f.corners <= 1 ? 1 : f.corners === 2 ? 0.6 : 0.15));
 
     s.wave = ramp(f.closure, 0.32, 0.58)
       * (f.humps >= 3 ? 1 : f.humps === 2 ? 0.95 : 0.10)
@@ -596,7 +614,7 @@ function pick(scores: Record<Glyph, number>, pool: Glyph[], accept: number, marg
 
 function explain(g: Glyph, f: Features): string {
   switch (g) {
-    case 'circle': return `closed (gap ${f.closure.toFixed(2)}), ${f.corners} corners, even radius (${f.radialVar.toFixed(2)})`;
+    case 'circle': return `closed (gap ${f.closure.toFixed(2)}), no vertices (${f.radialVar.toFixed(2)})`;
     case 'chevron': return `open (gap ${f.closure.toFixed(2)}), bends ${f.bend}°, legs ${f.legStraightness.toFixed(2)} straight`;
     case 'cross': return f.strokeCount === 2
       ? `2 straight strokes (${f.straightness.toFixed(2)}) crossing at ${Math.round(f.strokeAngle)}°`

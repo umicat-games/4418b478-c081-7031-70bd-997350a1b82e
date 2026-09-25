@@ -29,14 +29,22 @@ const smooth = (pts, w) => pts.map((p, i) => {
 
 function circle({ n, noise, sloppy }) {
   const R = rng(60, 140), cx = rng(150, 250), cy = rng(150, 250);
+  // Nobody draws a circle round. Up to 2:1 either way, at any tilt — the shape
+  // the player reported as being refused, and one the old generator could not
+  // produce, so the bench happily reported 100% on circles no hand draws.
+  const squash = rng(0.5, 1.0), tilt = rng(0, 3.14);
   const a0 = rng(0, 6.28), dir = rnd() < 0.5 ? 1 : -1;
   const gap = rng(-0.35, 0.55) * sloppy;           // over/under-shooting the join
   const wob = rng(0, 0.18) * sloppy, wf = Math.floor(rng(2, 4));
   const pts = [];
+  const flip = rnd() < 0.5;
   for (let i = 0; i < n; i++) {
     const u = i / (n - 1), a = a0 + dir * (6.283 + gap) * u;
     const r = R * (1 + wob * Math.sin(a * wf));
-    pts.push(P(cx + r * Math.cos(a), cy + r * Math.sin(a), i));
+    const ex = r * Math.cos(a) * (flip ? squash : 1);
+    const ey = r * Math.sin(a) * (flip ? 1 : squash);
+    pts.push(P(cx + ex * Math.cos(tilt) - ey * Math.sin(tilt),
+               cy + ex * Math.sin(tilt) + ey * Math.cos(tilt), i));
   }
   return [jitter(pts, noise)];
 }
