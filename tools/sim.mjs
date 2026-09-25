@@ -44,8 +44,8 @@ function anyMove(g) {
   return opts.length ? opts[Math.floor(rng() * opts.length)] : null;
 }
 
-function run({ rainPerMove, rainGrowth, policy, openingRows, floor, moves = 500, every = 50 }) {
-  seed = 12345;
+function run({ rainPerMove, rainGrowth, policy, openingRows, floor, moves = 500, every = 50, startSeed = 12345 }) {
+  seed = startSeed;
   const g = B.emptyGrid();
   B.refill(g, openingRows, rng, true);
   let owed = 0, chainTiles = 0, manualTiles = 0, chains = 0;
@@ -86,23 +86,53 @@ function run({ rainPerMove, rainGrowth, policy, openingRows, floor, moves = 500,
 }
 
 const CAP = B.COLS * B.ROWS;
-console.log(`well is ${B.COLS}x${B.ROWS} = ${CAP} cells, opening 4 rows = 24\n`);
-console.log('policy  rain/move  growth  | outcome    tiles every 40 moves');
-for (const policy of ['best', 'any']) {
-  for (const rainPerMove of [3.0, 3.4, 3.8]) {
-    for (const rainGrowth of [0.01, 0.02, 0.03]) {
-      const r = run({ rainPerMove, rainGrowth, policy, openingRows: 4, floor: 14, moves: 400, every: 40 });
-      console.log(
-        `${policy.padEnd(7)} ${String(rainPerMove).padEnd(10)} ${String(rainGrowth).padEnd(7)} | ` +
-        `${r.end.padEnd(10)} ${r.trace.slice(0, 10).join(' ')}`,
-      );
-    }
+console.log(`well is ${B.COLS}x${B.ROWS} = ${CAP} cells\n`);
+
+// The equilibrium, measured with the floor switched OFF. With it on, a rate
+// that is too low still reads as "held" — the floor is quietly doing the
+// holding, and the board sits at exactly the floor, which is the sparse,
+// nothing-to-read board the whole rate is supposed to prevent.
+console.log('steady state with NO floor and no growth — where does the well settle?');
+console.log('rain/move | best play        | careless play');
+for (const rainPerMove of [3.2, 4.0, 4.6, 5.2, 5.8, 6.4]) {
+  const cells = ['best', 'any'].map((policy) => {
+    const r = run({ rainPerMove, rainGrowth: 0, policy, openingRows: 4, floor: 0, moves: 400, every: 20 });
+    const tail = r.trace.slice(-10);
+    const mean = tail.reduce((a, b) => a + b, 0) / tail.length;
+    return `${mean.toFixed(0).padStart(2)} tiles (${(mean / CAP * 100).toFixed(0)}% full, ` +
+      `${(mean / B.COLS).toFixed(1)} rows)${r.end === 'held' ? '' : ' ' + r.end}`;
+  });
+  console.log(`   ${String(rainPerMove).padEnd(6)} | ${cells[0].padEnd(16)} | ${cells[1]}`);
+}
+
+console.log('\nwith the floor back on, how long does a run last?');
+console.log('rain/move  growth | best play      | careless play');
+for (const rainPerMove of [5.0, 5.2, 5.6]) {
+  for (const rainGrowth of [0.02, 0.035, 0.05]) {
+    const cells = ['best', 'any'].map((policy) => {
+      const r = run({ rainPerMove, rainGrowth, policy, openingRows: 4, floor: 10, moves: 600, every: 40 });
+      return `${r.end === 'held' ? 'held 600+' : r.end.replace('FULL @', 'ends @')} moves`;
+    });
+    console.log(`  ${String(rainPerMove).padEnd(9)} ${String(rainGrowth).padEnd(6)} | ${cells[0].padEnd(14)} | ${cells[1]}`);
   }
 }
-const ref = run({ rainPerMove: 3.4, rainGrowth: 0.02, policy: 'best', openingRows: 4, floor: 14, every: 40 });
-const bad = run({ rainPerMove: 3.4, rainGrowth: 0.02, policy: 'any', openingRows: 4, floor: 14, every: 40 });
-console.log(`\nat 3.4 + 0.02:`);
-console.log(`  playing well : lasts ${ref.moves} moves, chain on ${(ref.chains / ref.moves * 100).toFixed(0)}% of them, ` +
-  `${(ref.manualTiles / ref.moves).toFixed(2)}+${(ref.chainTiles / ref.moves).toFixed(2)} tiles/move`);
-console.log(`  playing badly: lasts ${bad.moves} moves, chain on ${(bad.chains / bad.moves * 100).toFixed(0)}% of them, ` +
-  `${(bad.manualTiles / bad.moves).toFixed(2)}+${(bad.chainTiles / bad.moves).toFixed(2)} tiles/move`);
+
+// One seed is a coin flip — the single-seed table above put 5.2/0.02 at a 3x
+// skill gap and 5.6/0.02 at 1.04x, which is noise, not signal.
+console.log('\naveraged over 7 seeds — run length in moves');
+console.log('rain/move  growth | best play  careless play  skill gap');
+for (const rainPerMove of [4.8, 5.0, 5.2]) {
+  for (const rainGrowth of [0.02, 0.03, 0.04]) {
+    const mean = (policy) => {
+      const xs = [];
+      for (let k = 0; k < 7; k++) {
+        xs.push(run({ rainPerMove, rainGrowth, policy, openingRows: 4, floor: 10,
+                      moves: 800, every: 40, startSeed: 1000 + k * 7919 }).moves);
+      }
+      return xs.reduce((a, b) => a + b, 0) / xs.length;
+    };
+    const good = mean('best'), bad = mean('any');
+    console.log(`  ${String(rainPerMove).padEnd(9)} ${String(rainGrowth).padEnd(6)} | ` +
+      `${good.toFixed(0).padStart(9)}  ${bad.toFixed(0).padStart(13)}  ${(good / bad).toFixed(2)}x`);
+  }
+}

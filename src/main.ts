@@ -55,10 +55,11 @@ const TILE = 0.93;
 const FALL_G = -44;             // units/s², in tiles — snappy, not floaty
 const CLEAR_MS = 165;
 const OPENING_ROWS = 4;
-const RAIN_MS = 130;            // gap between tiles while the well is owed some
-const RAIN_PER_MOVE = 3.2;      // tiles the rain owes for every clear made
-const RAIN_GROWTH = 0.022;      // ...and how much that rises per move
-const RAIN_FLOOR = 14;          // below this the well is topped up regardless
+const RAIN_MS = 110;            // gap between tiles while the well is owed some
+const RAIN_CATCHUP_MS = 450;    // ...and how long the whole backlog may take
+const RAIN_PER_MOVE = 5.2;      // tiles the rain owes for every clear made
+const RAIN_GROWTH = 0.03;       // ...and how much that rises per move
+const RAIN_FLOOR = 10;          // below this the well is topped up regardless
 const DRIP_MS = 4500;           // first gap between free tiles, on the clock
 const DRIP_MIN_MS = 1300;
 const DRIP_DECAY = 0.985;       // per successful move
@@ -191,20 +192,40 @@ async function start(): Promise<void> {
    * you can play against — the second is the pressure you cannot, which is what
    * stops the game becoming a turn-based puzzle with no reason to hurry.
    *
-   * The numbers come from `tools/sim.mjs`, not from taste. The economy has a
-   * strong negative feedback nobody would guess at: a fuller board gives wider
-   * matches and more chains, so removal rises with fill and the well resists
-   * ever topping out. The first three attempts all sat flat forever — one drained
-   * to nothing in half a minute, one filled regardless of how well it was played.
-   * At 3.2 + 0.022 the simulator has good play lasting ~380 moves and careless
-   * play ~245, which is a gap worth having.
+   * The numbers come from `tools/sim.mjs`, not from taste, and they have been
+   * wrong twice. The economy has a strong negative feedback nobody would guess
+   * at: a fuller board gives wider matches and more chains, so removal rises
+   * with fill and the well resists ever topping out. Earlier attempts drained
+   * the well to nothing in half a minute, or filled it regardless of how well it
+   * was played.
+   *
+   * The second mistake is the one worth remembering. At 3.2 the simulator said
+   * "held" and it was `RAIN_FLOOR` doing the holding: the true equilibrium was
+   * BELOW the floor, so the well sat at exactly the emergency minimum — 15
+   * tiles, two and a half rows, nothing to read — and it took the headless smoke
+   * run to notice. Measure a steady state with the floor switched OFF, or the
+   * safety net reports the number you wanted to hear.
+   *
+   * At 5.2 the well settles around 27 tiles (4.4 rows). Growth of 0.03 ends a
+   * run at ~210 moves played well and ~130 played carelessly, averaged over
+   * seven seeds — one seed is a coin flip and said 3.0x where seven say 1.6x.
    */
   let owed = 0;
   let upcoming: { col: number; glyph: Glyph } | null = null;
   const rng = () => Math.random();
 
-  const saved = await umicat.saves.get<{ best: number }>(SAVE_KEY);
-  best = saved?.best ?? 0;
+  // A save is untrusted input the moment it is read back, and `??` checks the
+  // wrong thing: it catches a MISSING save, never a malformed one. The sibling
+  // 3D games learned this the expensive way — a debounced write can serialise a
+  // field as `undefined`, which `JSON.stringify` DROPS rather than writing
+  // `null`, and a `NaN` survives `??` entirely. There it reached Rapier and
+  // killed the boot on every load until the row was cleared by hand; here there
+  // is no physics to crash, so it would instead show `最高 NaN` forever and
+  // poison every high score after it, which is quieter and no easier to
+  // diagnose. Guarded on BOTH ends because they fix different halves: the read
+  // self-heals a row that is already bad, the write stops a new one being made.
+  const saved = await umicat.saves.get<{ best?: number }>(SAVE_KEY);
+  best = Number.isFinite(saved?.best) ? (saved!.best as number) : 0;
 
   const dripInterval = () => Math.max(DRIP_MIN_MS, DRIP_MS * DRIP_DECAY ** moves);
   const rainPerMove = () => RAIN_PER_MOVE + RAIN_GROWTH * moves;
@@ -416,7 +437,7 @@ async function start(): Promise<void> {
     document.getElementById('over-score')!.textContent = String(score);
     document.getElementById('over-best')!.textContent = `最高 ${best}`;
     overEl.style.display = 'flex';
-    await umicat.saves.set(SAVE_KEY, { best });
+    if (Number.isFinite(best)) await umicat.saves.set(SAVE_KEY, { best });
   }
 
   function reset(): void {
@@ -504,8 +525,18 @@ async function start(): Promise<void> {
       if (short > 0 && owed < short) owed = short;
 
       if (owed >= 1) {
+        // The gap shortens with the backlog, so the board on screen keeps up
+        // with the board in the model. At a fixed 110ms a move owing five tiles
+        // needs 570ms to deliver them, which is longer than a player in rhythm
+        // leaves between strokes — the debt built up, the well LOOKED drained
+        // while the economy was fine, and then it all arrived at once. The
+        // economy is untouched by this; only how fast the rain catches up is.
         rainTimer += dt * 1000;
-        if (rainTimer >= RAIN_MS) { rainTimer = 0; owed -= 1; rain(); }
+        if (rainTimer >= Math.min(RAIN_MS, RAIN_CATCHUP_MS / owed)) {
+          rainTimer = 0;
+          owed -= 1;
+          rain();
+        }
       } else {
         rainTimer = 0;
         dripTimer += dt * 1000;

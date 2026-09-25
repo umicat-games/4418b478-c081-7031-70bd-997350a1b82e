@@ -103,6 +103,11 @@ console.log('the well does not drain');
     const now = await g();
     await draw(now.present[i % now.present.length]);
   }
+  // Let the rain finish paying what the clears owe before counting: the debt is
+  // real board state, it just has not landed yet, and measuring mid-shower reads
+  // as a drained well.
+  await page.waitForFunction('window.__game.owed() < 1', { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(300);
   const after = await g();
   ok('six clears later there is still a board', after.tiles >= 12,
     `tiles ${before.tiles}→${after.tiles} — a well that drains has nothing left to read`);

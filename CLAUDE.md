@@ -31,9 +31,25 @@ died to this before `tools/sim.mjs` existed: one where the well drained to
 nothing in half a minute, one where it filled regardless of how well it was
 played, and one where "replace what you clear by hand, chains are free" sat flat
 forever because chains fire on only 9% of moves — a tenth of what intuition says.
-The numbers in `main.ts` (3.2 tiles owed per move, +0.022 per move after) come
-from that simulator, where good play lasts ~380 moves and careless play ~245.
-**Change one of them and re-run it.**
+The numbers in `main.ts` (5.2 tiles owed per move, +0.03 per move after) come
+from that simulator. **Change one of them and re-run it.**
+
+**Measure a steady state with `RAIN_FLOOR` switched off.** The rate was set to
+3.2 on a simulator run that said "held", and the floor was doing the holding: the
+true equilibrium was below it, so the well sat at exactly the emergency minimum
+— 15 tiles, two and a half rows, nothing to read. A safety net will always report
+the number you wanted to hear. At 5.2 the well genuinely settles around 27 tiles.
+
+**One seed is a coin flip.** The same sweep put one setting at a 3.0× skill gap
+on seed 12345 and 1.35× averaged over seven. Anything used to choose a number
+runs multi-seed.
+
+**The economy is how many tiles; `RAIN_CATCHUP_MS` is how fast they arrive, and
+they are not the same knob.** At a fixed 110ms gap, a move owing five tiles needs
+570ms to deliver them — longer than a player in rhythm leaves between strokes. The
+debt built up, the well LOOKED drained while the economy was perfectly fine, and
+then the whole backlog arrived at once. The delivery gap shortens with the
+backlog now. When the board looks wrong, check `owed` before touching a rate.
 
 **Nothing the rain drops completes a match.** The player's clear is the only
 thing that starts a cascade. A dealer that hands out chains both takes the credit
@@ -46,7 +62,8 @@ a puzzle's clothes. Free choice of glyph is what created a decision; clearing th
 whole row's worth at once, scored `n²` and divided by depth, is what made the
 decision worth making.
 
-**Survival differentiates play only about 1.6×; the score is where skill lives.**
+**Survival differentiates play only about 1.6× (seven-seed mean); the score is
+where skill lives.**
 Worth knowing before adding anything meant to reward good play — the honest
 place to put it is scoring and chains, not the stack.
 
