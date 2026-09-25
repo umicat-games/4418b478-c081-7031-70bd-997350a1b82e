@@ -460,11 +460,22 @@ function score(f: Features): Record<Glyph, number> {
     // sharp corner", so a chevron drawn tilted, upside down (∨) or on its side
     // (<) is still unambiguous, and refusing those would only invent a failure.
     s.chevron = ramp(f.closure, 0.38, 0.62)
-      * ramp(f.bend, 36, 58)
-      * ramp(f.legStraightness, 0.78, 0.93)
-      // A chevron is ONE bend, not a run of them. `humps` counts alternating
-      // excursions across the dominant axis, and a wave has two.
-      * (f.humps <= 1 ? 1 : 0.15)
+      // Bent, but not folded in half. The lower bound is what a ∧ is; the upper
+      // one is what it is not — a stroke that comes back on itself at 170° is a
+      // hairpin or a circle that failed to close, and both of those have two
+      // fairly straight halves meeting at a sharp angle, which is otherwise
+      // exactly the chevron description.
+      * ramp(f.bend, 36, 58) * fall(f.bend, 140, 168)
+      // Loose, because `bend` now carries the separation. It was 0.78-0.93 and
+      // that threw out 30% of fast chevrons: a finger bows its legs, and a bowed
+      // leg drawn in twelve samples measures 0.68 straight.
+      * ramp(f.legStraightness, 0.62, 0.85)
+      // A chevron is ONE bend, not a run of them — but this used to be the ONLY
+      // thing keeping a chevron from scoring as a wave, and `humps` is one
+      // noisy integer: a ∧ with slightly unequal legs registers two excursions
+      // across its own axis and lost 85% of its score for it. Now that `bend`
+      // separates the two classes properly, this can go back to being a hint.
+      * (f.humps <= 1 ? 1 : 0.5)
       // More than two detected corners means a zigzag, not a chevron. One or
       // none is fine — the bend is already measured, this only rules out extra
       // bends the other terms cannot see.
@@ -480,7 +491,15 @@ function score(f: Features): Record<Glyph, number> {
       // exactly the waves people draw most emphatically. Net-over-total travel
       // along the axis says the same thing about shape without saying anything
       // about amplitude.
-      * ramp(f.progress, 0.62, 0.84);
+      * ramp(f.progress, 0.62, 0.84)
+      // A wave is SMOOTH; a chevron turns a corner. This gate was here once as
+      // `cornerAngle` — the windowed corner measure — and it cost a quarter of
+      // all waves, so it came out. That was the right removal of the wrong
+      // thing: `bend` measures the same idea from two chords far either side of
+      // the middle, and on the bench a wave bends 2-6° where a chevron bends
+      // 96-99°. Taking it out left the two classes separated only by a noisy
+      // integer (`humps`), which is exactly how a ∧ ends up scoring as a ~.
+      * fall(f.bend, 34, 62);
 
     // One-stroke X: the player never lifted, so the path crosses itself and
     // still has two long straight legs. It must be OPEN — this term was `fall`

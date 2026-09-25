@@ -59,7 +59,7 @@ const RAIN_MS = 110;            // gap between tiles while the well is owed some
 const RAIN_CATCHUP_MS = 450;    // ...and how long the whole backlog may take
 const RAIN_PER_MOVE = 5.2;      // tiles the rain owes for every clear made
 const RAIN_GROWTH = 0.03;       // ...and how much that rises per move
-const RAIN_FLOOR = 10;          // below this the well is topped up regardless
+const RAIN_FLOOR = 14;          // below this the well is topped up regardless
 const DRIP_MS = 4500;           // first gap between free tiles, on the clock
 const DRIP_MIN_MS = 1300;
 const DRIP_DECAY = 0.985;       // per successful move
@@ -519,8 +519,12 @@ async function start(): Promise<void> {
     // rearranging itself.
     if (!over && !busy) {
       // A well this empty has nothing left to read, so it is topped up whatever
-      // the rate says. It engages near zero and never at playing heights: a
-      // floor under the board, not a hand on the scales.
+      // the rate says. The real equilibrium is 27 tiles, so this never engages
+      // in normal play — it is a floor under the board, not a hand on the
+      // scales. Keep it well clear of that equilibrium, and keep in mind that
+      // whatever it guarantees is the MOST any test may assert: it was 10 while
+      // the smoke run demanded 12, so the run failed on the game behaving
+      // exactly as specified.
       const short = RAIN_FLOOR - B.count(grid);
       if (short > 0 && owed < short) owed = short;
 

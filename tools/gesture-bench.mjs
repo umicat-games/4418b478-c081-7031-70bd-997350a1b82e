@@ -57,16 +57,23 @@ function chevron({ n, noise, sloppy }) {
   const leg = (sign) => rotate(sign * L * Math.sin(half), flip * L * Math.cos(half));
   const a = leg(dir ? -1 : 1), b = leg(dir ? 1 : -1);
   const apex = rotate(0, 0);
+  // Bowed legs, because a finger does not draw a straight line. This is the
+  // shape the player actually reported as being read as a wave, and a generator
+  // that only makes geometric chevrons cannot reproduce the complaint.
+  const bow = rng(-0.16, 0.16) * sloppy;
   const pts = [];
   const per = Math.max(3, Math.floor(n / 2));
-  for (let i = 0; i < per; i++) {
-    const u = i / per;
-    pts.push(P(a.x + (apex.x - a.x) * u, a.y + (apex.y - a.y) * u, pts.length));
-  }
-  for (let i = 0; i <= per; i++) {
-    const u = i / per;
-    pts.push(P(apex.x + (b.x - apex.x) * u, apex.y + (b.y - apex.y) * u, pts.length));
-  }
+  const leg2 = (from, to, count, inclusive) => {
+    const nx = -(to.y - from.y), ny = to.x - from.x;   // normal to the leg
+    for (let i = 0; i < count + (inclusive ? 1 : 0); i++) {
+      const u = i / count;
+      const k = bow * 4 * u * (1 - u);                 // zero at both ends
+      pts.push(P(from.x + (to.x - from.x) * u + nx * k,
+                 from.y + (to.y - from.y) * u + ny * k, pts.length));
+    }
+  };
+  leg2(a, apex, per, false);
+  leg2(apex, b, per, true);
   const w = Math.max(1, Math.min(3, Math.floor(pts.length / 6), Math.round(sloppy * 2)));
   return [jitter(smooth(pts, w), noise)];
 }

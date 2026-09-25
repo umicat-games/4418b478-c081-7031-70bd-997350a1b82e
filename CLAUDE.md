@@ -364,3 +364,24 @@ triangle and a lumpy fast circle are the same stroke, and `radialVar`
 distributions overlap (0.30 vs 0.25). Narrowing the candidates to the two live
 tiles fixes most pairings and does nothing for this one — `tools/gesture-bench.mjs`
 prints accuracy per pairing for exactly that reason.
+
+**A ∧ read as a ~ was a gate I deleted, not a bad glyph.** `bend` — the angle
+between the leading third of the stroke and the trailing third — measures 2-6°
+on a wave and 96-99° on a chevron, which is about as separated as two features
+get. It was in the wave score once as `cornerAngle` (the WINDOWED corner
+measure), that version cost a quarter of all waves, and removing it was the
+right removal of the wrong thing: the chord-based `bend` has none of the
+window's attenuation. Without it the two classes were separated only by `humps`,
+one noisy integer, and a ∧ with slightly unequal legs registers two excursions
+across its own axis. Chevron-read-as-wave is 0% on the bench in all three noise
+conditions now.
+
+**Whatever `RAIN_FLOOR` guarantees is the most any test may assert.** The floor
+was 10 tiles while the smoke run demanded 12, so the run failed on the game
+behaving exactly as specified. The floor is now 14, far below the measured
+equilibrium of 27, so it stays an emergency net and the assertion is something
+the game actually promises.
+
+**A test assertion on a fluctuating quantity needs a band, not a knife edge.**
+"the well never dips by a single tile" failed on a big cascade, which is the
+game working.
