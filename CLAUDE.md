@@ -584,3 +584,27 @@ fetch** — Edit mode must never pay for or trigger either. Mirrors 2D's
 `?umicatEdit=1` (ADR-021); the 3D SDK has no central game-boot wrapper the way
 `createUmicatGame` is for Phaser, so every 3D game's own `main.ts` has to carry
 this branch by hand, same as the screenshot/recording lines above it.
+
+**A save is untrusted input, and `?? SPAWN` checks the wrong thing.** It guards
+against a MISSING save, never a malformed one — and the malformed one is what
+happened. `save()` reads `character.position` on a 500ms debounce; if that fires
+after the character or its rigid body has gone, a coordinate comes back
+`undefined`, and `JSON.stringify` DROPS that key rather than writing `null`. The
+next load reads `{y, z}` with no `x`: truthy, so `saved ?? SPAWN` hands it to
+Rapier, which throws `"translation components must be numbers"`. The whole boot
+fails — Edit mode included — and since the bad row is in the database it fails
+again on every load until someone clears it.
+
+`src/save.ts` owns both ends now, and they fix different halves: validating on
+READ self-heals a row that is already broken, validating on WRITE stops a new one
+being made. It is a separate file from `main.ts` because this row carries the
+run's gold and both records alongside the position — the template refuses the
+whole write when the position is bad, which here would throw away a session's
+earnings over one coordinate. So the position and the progress are validated
+separately and a bad position is simply omitted; the next load starts at SPAWN
+with the gold intact. `tools/save-test.mjs` runs the shapes that actually broke
+it (a dropped axis, NaN, a numeric string) — `node tools/save-test.mjs` after
+bundling `src/save.ts`.
+
+The same class of bug applies to any field added to that row. Validate what
+comes back, not whether it is there.

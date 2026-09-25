@@ -7,6 +7,7 @@ import {
   type Scene3D, type Manifest3D, type LoadedScene3D,
 } from '@umicat/three-sdk';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
+import { readSave, writeSave, type SaveRow } from './save';
 import { Swarm } from './swarm';
 import { InfiniteGround } from './ground';
 import { OrbitBlades, TrailBurn, HomingBolt, ShockLance, ChainLightning } from './weapons';
@@ -177,17 +178,17 @@ async function start(): Promise<void> {
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
 
   const hero = world.entities.get('hero')!;
-  const saved = (await umicat.saves.get<{
-    x: number; y: number; z: number;
-    gold?: number; bestClock?: number; bestKills?: number;
-  }>(SAVE_KEY)) ?? null;
+  // `?? SPAWN` used to be the only guard here and it checked the wrong thing —
+  // see src/save.ts. A row that is truthy but missing `x` crashed the boot on
+  // every load until it was cleared by hand.
+  const saved = readSave(await umicat.saves.get<SaveRow>(SAVE_KEY), SPAWN);
 
   // Sized for THIS character and this world's unit. The capsule's total height
   // is 2*halfHeight + 2*radius = 0.72, which is the character's own height —
   // a collider that does not match the model is how a character ends up
   // floating, sunk, or catching on things that are not there.
   const character = new CharacterController3D(world.world, RAPIER, {
-    position: saved ?? SPAWN,
+    position: { x: saved.x, y: saved.y, z: saved.z },
     halfHeight: 0.2,
     radius: 0.16,
     // 跑得过大部分敌人，因为跑就是这个类型唯一的防御动作。
@@ -252,9 +253,11 @@ async function start(): Promise<void> {
   const save = (): void => {
     clearTimeout(pending);
     pending = setTimeout(() => {
-      const p = character.position;
+      // The progress goes in either way; the position only if every axis is
+      // really a number. Writing one that is not is how the save that would
+      // not boot got written in the first place.
       void umicat.saves.set(SAVE_KEY,
-        { x: p.x, y: p.y, z: p.z, gold, bestClock, bestKills });
+        writeSave(character.position, { gold, bestClock, bestKills }));
     }, 500);
   };
 
@@ -429,11 +432,11 @@ async function start(): Promise<void> {
    *  却什么都换不到的数字，正是这个项目一直在反对的那种「升级了但没变化」。
    *  金币在吸血鬼幸存者里是**局外**货币（买永久强化），所以它的去处是一个
    *  局间商店，那是下一步，不是这一步。 */
-  let gold = saved?.gold ?? 0;
+  let gold = saved.gold;
   /** 这一局捡了多少（`gold` 是跨局总数）。 */
   let runGold = 0;
-  let bestClock = saved?.bestClock ?? 0;
-  let bestKills = saved?.bestKills ?? 0;
+  let bestClock = saved.bestClock;
+  let bestKills = saved.bestKills;
   let hp = PLAYER_HP;
   let hpMax = PLAYER_HP;
   let level = 1;
