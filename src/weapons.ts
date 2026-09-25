@@ -517,7 +517,7 @@ export class ChainLightning {
   /** 跳几次。**这把的升级轴** —— 看得见（弧一条一条连出去），而且它改变的
    *  是"这一团我能吃掉多少"，不是一个数字。 */
   jumps = 3;
-  private _interval = 1.3;
+  private _interval = 2.2;
   /** 隔多久开一次火。
    *
    *  **写成 getter/setter，因为改它必须同时收住正在倒数的冷却。** 直接改字段
@@ -528,7 +528,13 @@ export class ChainLightning {
   get interval(): number { return this._interval; }
   set interval(v: number) { this._interval = v; this.timer = Math.min(this.timer, v); }
 
-  damage = 26;
+  /** 一跳打多少。
+   *
+   *  **和 `interval` 是一对**：间隔从 1.3 拉到 2.2（慢了 1.69 倍），伤害就
+   *  跟着 ×1.69 —— 每秒期望伤害不变，变的是**节奏**。放得少而每一下更重，
+   *  这把武器才有"它刚刚响过"和"它快好了"的区别；一秒多放一次的东西是背景
+   *  音，玩家不会围绕它做任何决定。 */
+  damage = 44;
   /** 第一跳找多远，之后每跳能跨多远。 */
   range = 12;
   jumpRange = 3.4;
@@ -570,17 +576,32 @@ export class ChainLightning {
     // 一次，八次绘制变一次，画面一模一样。
     const list: Quad[] = [];
     const bolt = [FRAME.boltA, FRAME.boltB, FRAME.strandA, FRAME.strandB];
+    // **洋红，不是纯红。**
+    //
+    // 这层是加色混合的（贴图黑底无 alpha，只能加色 —— 见 `TrailBurn` 的构造
+    // 函数），而草地大约 (0.35, 0.78, 0.45)：绿通道本来就高，加纯红
+    // (1, 0.1, 0.1) 之后是 (1, 0.88, 0.55)，一片发黄的白，和草地只差亮度。
+    //
+    // 洋红加在**草地最弱的两个通道**（红和蓝）上，绿通道几乎不动 —— 于是
+    // 弧是粉的、草是绿的，两个色相分得开。想在绿底上做对比度，方向是补色，
+    // 不是"更红"。
     for (let j = 0; j <= this.jumps && f; j++) {
       this.hit.add(f);
       const tx = f.x, tz = f.z;
       list.push(
+        // **宽。** `vfx.ts` 里 `lightning()` 的原注释写着：「贴图里的电弧是一根
+        // 细线躺在一张基本空白的 256px 方片中间，所以一个世界单位宽的方片只画
+        // 出三分之一单位的电 —— 第一版要了 0.75，得到三根铅笔线。」
+        // 而我就是抄了 0.75 —— 玩家的原话是「只闻其声不见其影」。
         { at: new THREE.Vector3(fx, fy, fz), to: new THREE.Vector3(tx, 0.55, tz),
-          frame: bolt[j % bolt.length], w: 0.75, h: 1, mode: 'beam' },
+          frame: bolt[j % bolt.length], w: 1.9, h: 1, mode: 'beam' },
         { at: new THREE.Vector3(tx, 0.55, tz), frame: FRAME.starBurst,
-          w: 0.85, h: 0.85, mode: 'face' },
+          w: 1.5, h: 1.5, mode: 'face' },
       );
+      // 火星跟着弧一起换色 —— 弧是粉的而火星还是蓝的话，一次施法看起来像
+      // 两件事叠在一起。
       this.sparks.burst(tx, 0.55, tz,
-        { count: 7, color: 0xd6f0ff, color2: 0x6fb6ff, speed: 3, life: 0.36 });
+        { count: 10, color: 0xff6ab0, color2: 0xffd0ea, speed: 3.2, life: 0.4 });
       if (swarm.hitFoe(f, dmg)) killed += 1;
       dmg *= this.falloff;
       fx = tx; fz = tz; fy = 0.55;
@@ -591,7 +612,12 @@ export class ChainLightning {
     if (list.length) {
       let flick = 0;
       quads(this.vfx, list, {
-        life: 0.26, color: 0xbfe4ff,
+        // 弧本身活得久一点：0.26 秒在一屏乱动的东西里是一闪而过。放慢了频率
+        // 之后更该让每一次看得清楚。
+        // 绿通道给到 **0**：草地的绿是 0.78，加色之后只要我们自己不再往绿上加，
+        // 它就停在 0.78 而不是顶到 1 —— 芯子因此是粉白而不是纯白，色相留得住。
+        // （0xff2a8c 的绿是 0.165，加完 0.945，几乎就白了。）
+        life: 0.4, color: 0xff0095,
         alpha: (k) => (k < 0.2 ? 1 : Math.max(0, 1 - ((k - 0.2) / 0.8) ** 0.6)),
         step: (qs, _k, dt) => {
           // 闪一下。照搬 `arcBetween` 里的做法：每 40ms 换一张 bolt 贴图，
@@ -601,7 +627,7 @@ export class ChainLightning {
           flick = 0;
           for (let i = 0; i < qs.length; i += 2) {
             qs[i].frame = bolt[Math.floor(Math.random() * bolt.length)];
-            qs[i].w = 0.62 + Math.random() * 0.45;
+            qs[i].w = 1.6 + Math.random() * 0.7;
           }
         },
       });
