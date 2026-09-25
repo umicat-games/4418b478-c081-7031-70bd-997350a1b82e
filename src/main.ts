@@ -28,6 +28,19 @@ const SAVE_KEY = 'progress';
 const SPAWN = { x: 0, y: 0.4, z: 1.7 };
 const RESPAWN_BELOW_Y = -5;
 
+// A save is untrusted input the moment it's read back — `??` only catches a
+// MISSING save (null/undefined), not a malformed one. A save written while a
+// coordinate was `undefined` (e.g. read after the character was torn down)
+// serializes with that key silently dropped by `JSON.stringify`, so the
+// object comes back truthy but incomplete — `{y, z}` with no `x` — and
+// `saved ?? SPAWN` happily hands it to Rapier, which throws "translation
+// components must be numbers" and the whole game fails to boot. Trust a
+// saved position only once every axis is confirmed to actually be a number.
+function isVec3(v: unknown): v is { x: number; y: number; z: number } {
+  const p = v as { x?: unknown; y?: unknown; z?: unknown } | null;
+  return !!p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
+}
+
 async function start(): Promise<void> {
   // 1) The platform. Do this first: reading the save before the first frame is
   //    what makes a reload resume instead of restart.
@@ -74,7 +87,8 @@ async function start(): Promise<void> {
   const world = await loadScene3D(scene3d, manifest, { assetBase: '', rapier: RAPIER });
 
   const hero = world.entities.get('hero')!;
-  const saved = (await umicat.saves.get<{ x: number; y: number; z: number }>(SAVE_KEY)) ?? null;
+  const savedRaw = await umicat.saves.get<{ x: number; y: number; z: number }>(SAVE_KEY);
+  const saved = isVec3(savedRaw) ? savedRaw : null;
 
   // Sized for THIS character and this world's unit. The capsule's total height
   // is 2*halfHeight + 2*radius = 0.72, which is the character's own height —
@@ -138,7 +152,7 @@ async function start(): Promise<void> {
     clearTimeout(pending);
     pending = setTimeout(() => {
       const p = character.position;
-      void umicat.saves.set(SAVE_KEY, { x: p.x, y: p.y, z: p.z });
+      if (isVec3(p)) void umicat.saves.set(SAVE_KEY, { x: p.x, y: p.y, z: p.z });
     }, 500);
   };
 

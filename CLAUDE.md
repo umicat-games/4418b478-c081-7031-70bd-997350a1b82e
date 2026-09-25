@@ -211,6 +211,25 @@ same as every 3D game before 0.16.0. `preserveDrawingBuffer` is what actually
 matters for screenshots — without it `canvas.toDataURL()` can come back
 blank depending on exactly when the browser clears the drawing buffer.
 
+**A save is untrusted input, not just a missing one (fixed 2026-09-25).**
+`saved ?? SPAWN` only guards against `saved` being `null`/`undefined` — it
+does nothing if `saved` is a truthy object missing a field. That happened in
+practice: `save()` reads `character.position.x/y/z` on a 500ms debounce, and
+if that fires after the character/rigid body has already gone away, a
+`Rapier` coordinate can come back `undefined` — which `JSON.stringify` drops
+from the object entirely rather than writing `null`. The next load reads back
+`{y, z}` with no `x`, `saved ?? SPAWN` picks the truthy-but-incomplete object,
+and `CharacterController3D`'s Rapier body construction throws `"The
+translation components must be numbers"` — the whole game fails to boot, Edit
+mode included, and the broken save persists across every future load until
+something clears it. Fixed with an `isVec3` guard on BOTH ends: reading
+(`saved ?? SPAWN` → `isVec3(savedRaw) ? savedRaw : null`, then `?? SPAWN`) so
+a bad row already sitting in the database self-heals to `SPAWN` on next load,
+and writing (`save()` only calls `umicat.saves.set` when `isVec3(p)`) so a bad
+value can't be written again. If you add more fields to what gets saved, the
+same class of bug applies to them — validate on the way back in, not just on
+presence.
+
 **The Game Editor's "Edit" tab now works on this game too (0.17.0 /
 `EditorDesignPlayer3D`).** Same reason renderer construction can't move: the
 platform boots this game with `?umicatEdit=1` on the URL when the user opens
