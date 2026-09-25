@@ -539,6 +539,8 @@ async function start(): Promise<void> {
     gems.load(manifest, 'jewel'),
     coins.load(manifest, 'coin-gold'),
     crates.load(manifest, 'crate'),
+    // 追踪弹用 kit 里的箭（Balaboo 用的那一个），不再是程序生成的圆锥。
+    bolt.load(manifest, 'td-ammo-arrow'),
     // 贴图要在第一次放特效**之前**到位。`TextureLoader.load` 是异步的，材质
     // 建好时图还没来 —— 而在加色混合下，空贴图采样出来是黑的，黑加到屏幕上
     // 就是看不见。这条是 `vfx.ts` 里记着的：第一次施放画了十个完全正确、

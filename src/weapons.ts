@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Swarm, Foe } from './swarm';
 import type { Sparks } from './sparks';
+import { loadModelAsset, type Manifest3D } from '@umicat/three-sdk';
 import { type Vfx, type Quad, quads, FRAME, atlas, setFrameUv } from './vfx';
 
 /**
@@ -243,7 +244,7 @@ export class TrailBurn {
  *  那是链式闪电的活。
  */
 export class HomingBolt {
-  private mesh!: THREE.InstancedMesh;
+  private mesh: THREE.InstancedMesh | null = null;
   private bolts: { x: number; z: number; vx: number; vz: number;
                    target: Foe | null; life: number }[] = [];
 
@@ -285,17 +286,56 @@ export class HomingBolt {
   /** 一次齐射里已经被认领的目标。复用同一个 Set，免得每次开火都分配一个。 */
   private readonly claimed = new Set<Foe>();
 
-  constructor(scene: THREE.Scene, private readonly sparks: Sparks) {
-    const g = new THREE.ConeGeometry(0.1, 0.34, 6).rotateX(Math.PI / 2);
-    const m = new THREE.MeshStandardMaterial({
-      color: 0xfff0b0, emissive: 0xffb43c, emissiveIntensity: 1.4,
-      roughness: 0.4, metalness: 0,
-    });
-    this.mesh = new THREE.InstancedMesh(g, m, 64);
+  constructor(private readonly scene: THREE.Scene, private readonly sparks: Sparks) {}
+
+  /**
+   * 弹体用 kit 里的箭（`td-ammo-arrow`，Balaboo 用的就是这一个）。
+   *
+   * 原来是程序生成的一个圆锥 —— 能看，但和场上别的东西（全是 Kenney 的模型）
+   * 不是一路货色。这和掉落物换成 `coin-gold`/`jewel` 是同一件事：**kit 里有
+   * 现成的就别自己搓**。
+   *
+   * 朝向**从包围盒推**，不写死：箭在自己的坐标系里躺在哪根轴上是模型的事，
+   * 而这里要的是「最长的那根轴指向飞行方向」。写死一个 `rotateX`，换个模型
+   * 就又要重猜一次。
+   */
+  async load(manifest: Manifest3D, modelId = 'td-ammo-arrow'): Promise<void> {
+    const { object } = await loadModelAsset(manifest, modelId, { assetBase: '' });
+    object.updateWorldMatrix(true, true);
+    let src: THREE.Mesh | null = null;
+    object.traverse((o) => { if (!src && (o as THREE.Mesh).isMesh) src = o as THREE.Mesh; });
+    if (!src) throw new Error(`${modelId} 里没有 mesh`);
+    const mesh = src as THREE.Mesh;
+
+    const geom = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+    geom.computeBoundingBox();
+    const size = new THREE.Vector3();
+    geom.boundingBox!.getSize(size);
+    geom.center();
+    // 把最长的那根轴转到 +Z —— 绘制时用 `atan2(vx, vz)` 定偏航，也就是让
+    // 模型的 +Z 对准速度方向。
+    if (size.x >= size.y && size.x >= size.z) geom.rotateY(Math.PI / 2);
+    else if (size.y >= size.z) geom.rotateX(-Math.PI / 2);
+    const k = 0.62 / Math.max(size.x, size.y, size.z);
+    geom.scale(k, k, k);
+    this.size = size.clone();
+
+    const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material).clone();
+    this.mesh = new THREE.InstancedMesh(geom, mat, 64);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
-    scene.add(this.mesh);
+    this.scene.add(this.mesh);
   }
+
+  /** 模型原始尺寸，探针读它确认拿到的是哪个模型。 */
+  size = new THREE.Vector3();
+  /** 箭头朝前还是朝后差一个 180°，**包围盒分不出来**（它只知道哪根轴最长，
+   *  不知道尖在哪一头），只能看一眼定。第一次猜 `true`，截图里箭是倒着飞的
+   *  —— 银色的箭头在尾巴上 —— 所以是 `false`。
+   *
+   *  留成一个有名字的字段而不是写死在公式里，正因为它是**要靠看来定的那一半**：
+   *  探针和调试能当场翻，不用重新部署一轮。 */
+  flip = false;
 
   /** 挑一个目标：先精英，再最近的，且跳过这次齐射已经认领的。 */
   private pick(swarm: Swarm, x: number, z: number): Foe | null {
@@ -311,6 +351,10 @@ export class HomingBolt {
   }
 
   update(dt: number, px: number, pz: number, swarm: Swarm, now: number): number {
+    // 动画循环比 `load()` 先起来。没有这道门就是头几帧每帧一条
+    // `Cannot read properties of null`，而游戏照跑、控制台在刷屏。
+    const mesh = this.mesh;
+    if (!mesh) return 0;
     this.timer -= dt;
     if (this.timer <= 0) {
       this.timer = this.interval;
@@ -363,8 +407,8 @@ export class HomingBolt {
         continue;
       }
       this.pos.set(b.x, 0.55, b.z);
-      this.q.setFromAxisAngle(this.up, Math.atan2(b.vx, b.vz));
-      this.mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
+      this.q.setFromAxisAngle(this.up, Math.atan2(b.vx, b.vz) + (this.flip ? Math.PI : 0));
+      mesh.setMatrixAt(n++, this.m.compose(this.pos, this.q, this.scl));
       // 一条细细的尾迹。每发每帧一颗，不是每帧一把 —— 三千颗的池子经得起
       // 这个，但经不起一发一把。
       if (Math.random() < 0.6) {
@@ -373,9 +417,9 @@ export class HomingBolt {
       }
       void now;
     }
-    this.mesh.count = n;
-    this.mesh.visible = n > 0;
-    this.mesh.instanceMatrix.needsUpdate = true;
+    mesh.count = n;
+    mesh.visible = n > 0;        // 见 `sparks.ts`：空的实例化网格也要一次绘制
+    mesh.instanceMatrix.needsUpdate = true;
     return killed;
   }
 }
