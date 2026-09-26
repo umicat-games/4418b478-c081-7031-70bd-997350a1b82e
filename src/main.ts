@@ -143,7 +143,7 @@ async function start(): Promise<void> {
   // Write into a CHILD, never `hud.textContent` — that wipes every child the
   // HUD has, which is how the on-screen touch controls used to disappear.
   const greeting = document.createElement('div');
-  greeting.textContent = umicat.user ? `Hello, ${umicat.user.name}` : 'Playing as a guest';
+  greeting.textContent = umicat.user ? `Hello, mcp test, ${umicat.user.name}` : 'Playing as a guest';
   hud.appendChild(greeting);
 
   // Saving every frame would hammer the host; coalesce instead.
